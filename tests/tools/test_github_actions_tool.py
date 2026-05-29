@@ -277,3 +277,18 @@ line 1
     assert result["match_strategy"] == "step_name"
     assert result["step_name"] == "Deploy"
     assert "A" * 1000 in result["log_text"]
+
+
+def test_extract_step_log_includes_trailing_annotations() -> None:
+    result = extract_step_log(
+        """##[group]Checkout
+line 1
+##[endgroup]
+##[group]Deploy
+line 2
+##[endgroup]
+##[error]Process completed with exit code 1.
+"""
+    )
+    assert result["step_name"] == "ungrouped"
+    assert "Process completed with exit code 1." in result["log_text"]

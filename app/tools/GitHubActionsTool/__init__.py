@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 from app.integrations.github_mcp import call_github_mcp_tool
@@ -15,8 +14,6 @@ from app.tools.GitHubSearchCodeTool import (
 )
 from app.tools.tool_decorator import tool
 from app.tools.utils.code_host_unavailable import code_host_unavailable_payload
-
-logger = logging.getLogger(__name__)
 
 
 def _structured_value(result: dict[str, Any]) -> Any:
@@ -165,16 +162,21 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+UNGROUPED_SECTION_NAME = "ungrouped"
+
+
 def _extract_log_sections(log_text: str) -> list[dict[str, str]]:
     """Extract sections from GitHub Actions log output (marked by ##[group]/##[endgroup])."""
     sections: list[dict[str, str]] = []
     current_name = ""
     current_lines: list[str] = []
+    trailing_lines: list[str] = []
     saw_group = False
 
     for line in log_text.splitlines():
         if line.startswith("##[group]"):
             saw_group = True
+            trailing_lines = []
             if current_name or current_lines:
                 sections.append(
                     {"name": current_name or "step", "text": "\n".join(current_lines).strip()}
@@ -192,9 +194,13 @@ def _extract_log_sections(log_text: str) -> list[dict[str, str]]:
             continue
         if current_name:
             current_lines.append(line)
+        elif saw_group:
+            trailing_lines.append(line)
 
     if current_name or current_lines:
         sections.append({"name": current_name or "step", "text": "\n".join(current_lines).strip()})
+    if saw_group and trailing_lines:
+        sections.append({"name": UNGROUPED_SECTION_NAME, "text": "\n".join(trailing_lines).strip()})
 
     if not saw_group:
         return [{"name": "full-log", "text": log_text.strip()}]
@@ -225,7 +231,10 @@ def extract_step_log(
         match_strategy = "step_number"
 
     if selected is None:
-        selected = sections[0] if sections else {"name": "full-log", "text": log_text.strip()}
+        if sections and sections[-1].get("name") == UNGROUPED_SECTION_NAME:
+            selected = sections[-1]
+        else:
+            selected = sections[0] if sections else {"name": "full-log", "text": log_text.strip()}
 
     text = selected.get("text", "")
 
@@ -447,9 +456,8 @@ def list_github_actions_active_runs(
         runs_raw = _extract_list(result, ("workflow_runs", "runs"))
         for run in runs_raw:
             run_id = run.get("id")
-            if run_id not in seen_ids:
-                if run_id is not None:
-                    seen_ids.add(run_id)
+            if run_id is not None and run_id not in seen_ids:
+                seen_ids.add(run_id)
                 combined.append(_normalize_run(run))
 
     combined.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
