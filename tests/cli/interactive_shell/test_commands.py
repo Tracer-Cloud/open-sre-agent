@@ -1324,6 +1324,128 @@ class TestInvestigateFileCommand:
 # Task 4 — Session-state commands
 
 
+class TestResumeCommand:
+    """Tests for /resume command — session rotation and context restoration."""
+
+    def test_apply_resume_rotates_session_and_restores_context(
+        self, tmp_path: Path
+    ) -> None:
+        """_apply_resume_data must flush the current session, rotate to a new one,
+        and restore cli_agent_messages + accumulated_context from the old session."""
+        import json
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        session = ReplSession()
+        old_id = session.session_id
+
+        with patch(
+            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            return_value=tmp_path,
+        ):
+            SessionStore.open_session(session)
+            session.record("chat", "pre-resume turn")
+
+            data = {
+                "session_id": "old-abc-123456",
+                "name": "Old Chat",
+                "cli_agent_messages": [("user", "hello"), ("assistant", "hi")],
+                "accumulated_context": {"service": "redis"},
+                "history": [{"type": "turn", "kind": "chat", "text": "hello"}],
+                "turn_details": [],
+                "has_snapshot": True,
+            }
+            console, buf = _capture()
+            result = _apply_resume_data(data, session, console)
+
+            # Old session file must be finalized
+            old_records = [
+                json.loads(line)
+                for line in (tmp_path / f"{old_id}.jsonl").read_text().splitlines()
+                if line.strip()
+            ]
+            assert old_records[-1]["type"] == "session_end"
+
+            # New session file is created for the continuation session
+            new_file = tmp_path / f"{session.session_id}.jsonl"
+            assert new_file.exists()
+
+        assert result is True
+        assert session.session_id != old_id
+        assert session.cli_agent_messages == [("user", "hello"), ("assistant", "hi")]
+        assert session.accumulated_context == {"service": "redis"}
+        assert session.resumed_from_name == "Old Chat"
+        output = buf.getvalue()
+        assert "resumed session" in output
+        assert "old-abc" in output
+
+    def test_apply_resume_noop_when_no_messages_or_context(self) -> None:
+        """When the session has no conversation, _apply_resume_data must return
+        early without rotating the session."""
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+
+        session = ReplSession()
+        old_id = session.session_id
+
+        data: dict = {
+            "session_id": "empty-sid",
+            "name": "",
+            "cli_agent_messages": [],
+            "accumulated_context": {},
+            "history": [],
+            "turn_details": [],
+            "has_snapshot": False,
+        }
+        console, buf = _capture()
+        _apply_resume_data(data, session, console)
+
+        assert session.session_id == old_id
+        assert "no conversation to resume" in buf.getvalue()
+
+    def test_apply_resume_displays_history_in_repl_format(
+        self, tmp_path: Path
+    ) -> None:
+        """History display must use `❯ user` / `● assistant` REPL format rather
+        than the old `you / sre` compact text format."""
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+
+        data = {
+            "session_id": "display-test-abc",
+            "name": "My Session",
+            "cli_agent_messages": [
+                ("user", "what is opensre?"),
+                ("assistant", "OpenSRE is a tool"),
+            ],
+            "accumulated_context": {},
+            "history": [],
+            "turn_details": [],
+            "has_snapshot": True,
+        }
+        session = ReplSession()
+        console, buf = _capture()
+
+        with patch(
+            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            return_value=tmp_path,
+        ):
+            _apply_resume_data(data, session, console)
+
+        output = buf.getvalue()
+        # New format uses ❯ for user messages and ● assistant header
+        assert "❯" in output
+        assert "assistant" in output
+        # Old compact format ("you  " / "sre  ") must not appear
+        assert "you  " not in output
+        assert "sre  " not in output
+        # Content is present
+        assert "what is opensre?" in output
+        assert "OpenSRE is a tool" in output
+
+
 class TestHistoryCommand:
     def test_empty_history_says_so(
         self,
