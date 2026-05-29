@@ -10,16 +10,12 @@ See [AGENTS.md](AGENTS.md) for the full repo map and contribution rules.
 
 | Goal | Command |
 | --- | --- |
-| Scoped tests (recommended) | `make test-scope` |
 | Full unit suite + coverage | `make test-cov` |
-| Integration checks | `make verify-integrations` |
 | Single RCA scenario | `make test-rca FILE=<fixture>` |
 | All E2E scenarios | `make test-rca` or `make test-full` |
 | Synthetic (no live infra) | `make test-synthetic` |
 
-The fastest local loop is `make test-scope` (maps changed files to the minimal pytest invocation) or `make test-cov` for the full unit suite. Both skip live-infra paths (Kubernetes, EKS, chaos) that only run in CI.
-
-> For pre-push readiness (lint, format, typecheck), see [CI.md](CI.md) — that file is the single source of truth for push/PR checks.
+`make test-cov` is the default local loop — skips live-infra paths (Kubernetes, EKS, chaos) that only run in CI. For pre-push checks (lint, format, typecheck, scoped tests), see [CI.md](CI.md).
 
 ---
 

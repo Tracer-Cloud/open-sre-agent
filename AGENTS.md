@@ -170,12 +170,10 @@ Full testing guide: **[TESTING.md](TESTING.md)** — commands, test layout, live
 
 Quick reference:
 
-- Scoped tests (recommended): `make test-scope`
-- Full unit suite: `make test-cov`
-- Integration checks: `make verify-integrations`
+- Local unit suite: `make test-cov`
 - E2E / RCA: `make test-rca FILE=<name>`
 - Live REPL behavior (slash commands, session display): use `ReplDriver` — see [TESTING.md § Live REPL Testing](TESTING.md#live-repl-testing--repldriver)
-- Pre-push (lint, format, typecheck): see [CI.md](CI.md)
+- Pre-push (lint, format, typecheck, scoped tests): see [CI.md](CI.md)
 
 ## 5. Footguns (common mistakes to avoid)
 
