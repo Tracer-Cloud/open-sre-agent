@@ -326,23 +326,15 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
     data = SessionStore.load_session(prefix)
 
     if data is None:
-        # Check whether prefix is ambiguous (multiple matches)
-        sessions_dir = None
-        try:
-            from app.constants import OPENSRE_HOME_DIR
-
-            sessions_dir = OPENSRE_HOME_DIR / "sessions"
-        except Exception:
-            pass
-        if sessions_dir and sessions_dir.exists():
-            matches = [p for p in sessions_dir.glob("*.jsonl") if p.stem.startswith(prefix)]
-            if len(matches) > 1:
-                console.print(
-                    f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {len(matches)} sessions — "
-                    "use more characters.[/]"
-                )
-                return True
-        console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+        # Distinguish "not found" from "ambiguous prefix" using a single store query.
+        n = SessionStore.count_prefix_matches(prefix)
+        if n > 1:
+            console.print(
+                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
+                "use more characters.[/]"
+            )
+        else:
+            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
         return True
 
     messages = data.get("cli_agent_messages") or []
@@ -356,9 +348,20 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
             f"[{DIM}]session {short_id} has no conversation to resume "
             "(no chat turns or context found).[/]"
         )
+        if not data.get("turn_details") and not has_snapshot:
+            console.print(
+                f"[{DIM}]tip: turn_detail records are only written when prompt logging is enabled.[/]"
+            )
         return True
 
-    # Restore conversation context into the current session.
+    # Warn if replacing an active conversation — cli_agent_messages is fully replaced.
+    existing = session.cli_agent_messages
+    if existing:
+        console.print(
+            f"[{WARNING}]current session has {len(existing)} messages — "
+            "they will be replaced by the resumed context.[/]"
+        )
+
     session.cli_agent_messages = list(messages)
     session.accumulated_context = dict(context)
 
@@ -374,9 +377,6 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         )
     console.print(f"[{DIM}]conversation context loaded — continue asking questions.[/]")
     return True
-
-
-_RESUME_FIRST_ARGS: tuple[tuple[str, str], ...] = ()  # dynamic — session ID prefixes
 
 
 COMMANDS: list[SlashCommand] = [
@@ -419,7 +419,7 @@ COMMANDS: list[SlashCommand] = [
         notes=(
             "Restores cli_agent_messages and accumulated infra context from the chosen session.",
             "The first 8 characters of a session ID (shown by /sessions) are enough.",
-            "Does not replace turns already in the current session.",
+            "Replaces the current session's LLM conversation context; warns if messages exist.",
         ),
     ),
 ]

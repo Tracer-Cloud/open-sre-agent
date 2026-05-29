@@ -74,6 +74,11 @@ class PromptRecorder:
     ) -> PromptRecorder | None:
         config = PromptLogConfig.load()
         if not config.enabled or route_kind not in _SUPPORTED_ROUTE_KINDS:
+            # When prompt logging is fully disabled, no recorder is created and
+            # no turn_detail records are written to the session file. This means
+            # the crash-recovery fallback in load_session() will produce empty
+            # cli_agent_messages for sessions that crashed before flush(). The
+            # conversation_snapshot written at clean exit is unaffected.
             return None
         return cls(
             config=config,

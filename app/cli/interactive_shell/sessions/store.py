@@ -283,6 +283,20 @@ class SessionStore:
         return results[:n]
 
     @staticmethod
+    def count_prefix_matches(prefix: str) -> int:
+        """Return how many session files whose stem starts with prefix.
+
+        Used by /resume to distinguish 'not found' (0) from 'ambiguous' (>1)
+        without re-scanning the directory with a fragile inline import.
+        """
+        sessions_dir = _sessions_dir()
+        if not sessions_dir.exists():
+            return 0
+        with contextlib.suppress(OSError):
+            return sum(1 for p in sessions_dir.glob("*.jsonl") if p.stem.startswith(prefix))
+        return 0
+
+    @staticmethod
     def load_session(session_id_prefix: str) -> dict[str, Any] | None:
         """Load a session file and extract conversation data for /resume.
 

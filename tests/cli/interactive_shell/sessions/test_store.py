@@ -457,6 +457,33 @@ def test_load_session_includes_history_and_turn_details(tmp_path: Path) -> None:
     assert data["turn_details"][0]["response"] == "hi"
 
 
+def test_count_prefix_matches_returns_correct_count(tmp_path: Path) -> None:
+    for _ in range(3):
+        sid = str(uuid.uuid4())
+        (tmp_path / f"{sid}.jsonl").write_text(
+            json.dumps(
+                {
+                    "type": "session_start",
+                    "session_id": sid,
+                    "started_at": "2024-01-01T10:00:00+00:00",
+                }
+            )
+            + "\n"
+        )
+    with _patch_dir(tmp_path):
+        # Full UUID prefix matches exactly one
+        first_sid = list(tmp_path.glob("*.jsonl"))[0].stem
+        assert SessionStore.count_prefix_matches(first_sid[:8]) == 1
+        # Very short prefix may match multiple — no assertion on count, just that it doesn't raise
+        count = SessionStore.count_prefix_matches("")
+        assert count == 3
+
+
+def test_count_prefix_matches_returns_zero_for_missing_dir(tmp_path: Path) -> None:
+    with _patch_dir(tmp_path / "missing"):
+        assert SessionStore.count_prefix_matches("abc") == 0
+
+
 def test_load_session_matches_full_id(tmp_path: Path) -> None:
     session = _make_session()
     with _patch_dir(tmp_path):

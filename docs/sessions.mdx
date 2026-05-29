@@ -181,6 +181,20 @@ If the prefix matches multiple sessions, `/resume` asks for more characters. If 
 
 Each file is named after its UUID session ID. Files are plain text and human-readable.
 
+## /resume and prompt logging
+
+`turn_detail` records (prompt + response per LLM turn) are written by the prompt logging layer. If prompt logging is fully disabled (`OPENSRE_PROMPT_LOG_DISABLED=1`), no `turn_detail` records are written during the session. The `conversation_snapshot` record written at clean exit (`/exit` or `/reset`) is **not** affected by this setting — it is always written when `cli_agent_messages` is non-empty.
+
+Concretely:
+
+| Scenario | `/resume` result |
+| --- | --- |
+| Clean exit with chat turns | Full context from `conversation_snapshot` |
+| Crash before exit (logging enabled) | Partial context from `turn_detail` fallback |
+| Crash before exit (logging disabled) | No conversation context recoverable |
+
+If `/resume` reports "no conversation to resume" for a session that had chat turns, check whether prompt logging was disabled during that session.
+
 ## What is NOT stored
 
 - Secrets or credentials — session text is stored as typed; enable prompt log redaction if needed
