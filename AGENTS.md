@@ -75,17 +75,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 - `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.
 
-`tests/` is organized by capability boundary rather than by framework:
-
-- `tests/tools/` — Tool behavior, registry, and helper coverage.
-- `tests/integrations/` — Integration config, verification, store, selector, and client tests.
-- `tests/e2e/` — Live end-to-end scenarios against real services and infrastructure.
-- `tests/synthetic/` — Fixture-driven synthetic RCA scenarios with no live infrastructure.
-- `tests/deployment/` — Deployment validation and infrastructure lifecycle tests.
-- `tests/chaos_engineering/` — Chaos lab and experiment orchestration tests and assets.
-- `tests/cli/` — CLI-specific behavior, smoke tests, and command wiring.
-- `tests/utils/` — Shared test utilities, fixtures, and local helpers.
-- `tests/nodes/`, `tests/services/`, `tests/remote/`, `tests/sandbox/`, `tests/guardrails/`, `tests/entrypoints/` — Feature-specific coverage for the corresponding app layers.
+`tests/` — organized by capability boundary; full layout in [TESTING.md § Test Layout](TESTING.md#test-layout).
 
 ## 2. Entry Points
 
@@ -180,11 +170,12 @@ Full testing guide: **[TESTING.md](TESTING.md)** — commands, test layout, live
 
 Quick reference:
 
-- Unit tests: `make test-cov`
-- Integration tests: `make verify-integrations`
+- Scoped tests (recommended): `make test-scope`
+- Full unit suite: `make test-cov`
+- Integration checks: `make verify-integrations`
 - E2E / RCA: `make test-rca FILE=<name>`
-- Lint + typecheck: `make check`
 - Live REPL behavior (slash commands, session display): use `ReplDriver` — see [TESTING.md § Live REPL Testing](TESTING.md#live-repl-testing--repldriver)
+- Pre-push (lint, format, typecheck): see [CI.md](CI.md)
 
 ## 5. Footguns (common mistakes to avoid)
 
