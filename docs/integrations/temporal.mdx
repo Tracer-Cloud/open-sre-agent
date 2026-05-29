@@ -1,0 +1,108 @@
+# Temporal
+
+OpenSRE integrates with [Temporal](https://temporal.io) to investigate failed workflows,
+diagnose activity timeouts, identify missing workers, and surface root causes during
+production incidents.
+
+## Overview
+
+Temporal is a durable workflow platform used for long-running, fault-tolerant business
+processes. When workflows fail — due to activity timeouts, worker crashes, or retried
+exhaustion — the evidence is spread across workflow history events, task queue state,
+and namespace metrics.
+
+OpenSRE's Temporal integration pulls all of this into a single RCA investigation.
+
+## Setup
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `TEMPORAL_HOST` | `localhost` | Temporal server hostname |
+| `TEMPORAL_PORT` | `7233` | gRPC/HTTP-API port |
+| `TEMPORAL_NAMESPACE` | `default` | Namespace to query |
+| `TEMPORAL_API_KEY` | *(none)* | API key (required for Temporal Cloud) |
+| `TEMPORAL_TLS` | `false` | Set to `true` for Temporal Cloud or TLS-enabled self-hosted |
+
+### Self-hosted Temporal
+
+```bash
+export TEMPORAL_HOST=temporal.internal.example.com
+export TEMPORAL_PORT=7233
+export TEMPORAL_NAMESPACE=production
+```
+
+### Temporal Cloud
+
+```bash
+export TEMPORAL_HOST=<account>.tmprl.cloud
+export TEMPORAL_PORT=7233
+export TEMPORAL_NAMESPACE=<namespace>.<account-id>
+export TEMPORAL_API_KEY=<your-api-key>
+export TEMPORAL_TLS=true
+```
+
+## Tools
+
+OpenSRE exposes four tools for Temporal investigation:
+
+### `temporal_list_workflows`
+
+Lists recent workflow executions with their status and failure reason.
+
+**Useful for:** Finding all failed or stuck workflows in a namespace at a glance.
+
+```
+ExecutionStatus='Failed'
+WorkflowType='OrderWorkflow' AND ExecutionStatus='Running'
+StartTime > '2024-01-01T00:00:00Z'
+```
+
+### `temporal_workflow_history`
+
+Fetches the full event history for a specific workflow run, including every activity
+attempt, retry, timeout, and failure cause with stack traces.
+
+**Useful for:** Diagnosing *why* a specific workflow failed — seeing exactly which
+activity timed out, how many retries were attempted, and the final failure message.
+
+### `temporal_task_queue`
+
+Fetches poller info and worker health for a task queue.
+
+**Useful for:** Investigating workflow stuck in `Running` state — if no workers are
+polling a task queue, workflows wait indefinitely.
+
+### `temporal_namespace_metrics`
+
+Fetches namespace-level summary: registration state, retention period, and cluster info.
+
+**Useful for:** Getting a high-level health overview of a Temporal namespace at the
+start of an investigation.
+
+## Example investigation
+
+```
+opensre investigate "Temporal order workflows are stuck and not completing"
+```
+
+OpenSRE will:
+
+1. Call `temporal_namespace_metrics` to confirm the namespace is healthy
+2. Call `temporal_list_workflows` with `ExecutionStatus='Running'` to find stuck workflows
+3. Call `temporal_task_queue` to check if workers are polling
+4. Call `temporal_workflow_history` on a representative stuck workflow to find the root cause
+5. Synthesise a root cause report: e.g. *"Workers stopped polling payment-task-queue at 14:32 UTC. 47 OrderWorkflow executions are stuck waiting for the ProcessPayment activity. Last worker heartbeat was 6 minutes ago — likely a worker pod OOMKill."*
+
+## Supported Temporal versions
+
+This integration uses the [Temporal HTTP API](https://docs.temporal.io/api-reference/overview)
+which is available in Temporal Server v1.20+ and all Temporal Cloud namespaces.
+
+## Roadmap
+
+- Batch workflow termination tool
+- Search attribute filtering
+- Schedule (cron workflow) inspection
+- Worker deployment version tracking

@@ -74,6 +74,7 @@ class EffectiveIntegrations(StrictConfigModel):
     incident_io: EffectiveIntegrationEntry | None = None
     notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None
+    temporal: EffectiveIntegrationEntry | None = None
     posthog: EffectiveIntegrationEntry | None = None
     kafka: EffectiveIntegrationEntry | None = None
     clickhouse: EffectiveIntegrationEntry | None = None

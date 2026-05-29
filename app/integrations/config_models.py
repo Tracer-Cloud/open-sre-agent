@@ -889,3 +889,13 @@ class PrefectIntegrationConfig(StrictConfigModel):
     _normalize_strs = field_validator("api_key", "account_id", "workspace_id", mode="before")(
         normalize_str()
     )
+
+class TemporalIntegrationConfig(StrictConfigModel):
+    host: str = "localhost"
+    port: int = 7233
+    namespace: str = "default"
+    api_key: str = ""
+    tls: bool = False
+    _normalize_strs = field_validator("host", "namespace", "api_key", mode="before")(
+        normalize_str()
+    )

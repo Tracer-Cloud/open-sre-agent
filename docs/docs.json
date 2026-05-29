@@ -149,7 +149,8 @@
               "postgresql",
               "prefect",
               "rabbitmq",
-              "rds"
+              "rds",
+              "temporal"
             ]
           }
         ]
