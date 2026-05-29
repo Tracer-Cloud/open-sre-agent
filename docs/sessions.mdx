@@ -21,7 +21,7 @@ Sessions are stored as JSONL files under `~/.opensre/sessions/`. They are writte
 | REPL starts | `session_start` record written immediately; file created at `~/.opensre/sessions/<session-id>.jsonl` |
 | Each interaction | One `turn` stub appended for stats |
 | Each LLM reply | One `turn_detail` record appended with full prompt + response |
-| `/reset` | Current session closed (`conversation_snapshot` + `session_end` written); new session file opened with a fresh ID |
+| `/new` | Current session closed (`conversation_snapshot` + `session_end` written); new session file opened with a fresh ID, LLM context carried forward |
 | REPL exits | `conversation_snapshot` + `session_end` written; file deleted if no turns were recorded |
 | REPL crash | File remains with all turns up to the crash but no `session_end` — stats computed from turn records; `/resume` falls back to `turn_detail` records |
 
@@ -57,7 +57,7 @@ Turn `kind` values:
 | `chat` | Free-text message routed to the LLM assistant |
 | `alert` | Investigation triggered by an alert payload |
 | `incoming_alert` | Alert received via the HTTP listener |
-| `slash` | Slash command (`/status`, `/reset`, etc.) |
+| `slash` | Slash command (`/status`, `/new`, etc.) |
 | `shell` | Shell command executed via the terminal runtime |
 
 **`turn_detail` — full prompt + response (written after each LLM turn)**
@@ -78,7 +78,7 @@ Turn `kind` values:
 `turn_detail` kind values mirror `turn` kinds: `chat`, `alert`, `follow_up`.
 These records make session files self-contained — `/resume` can restore conversation context from them even without a `conversation_snapshot`.
 
-**`conversation_snapshot` — written at clean exit or `/reset`**
+**`conversation_snapshot` — written at clean exit or `/new`**
 
 ```json
 {
@@ -183,7 +183,7 @@ Each file is named after its UUID session ID. Files are plain text and human-rea
 
 ## /resume and prompt logging
 
-`turn_detail` records (prompt + response per LLM turn) are written by the prompt logging layer. If prompt logging is fully disabled (`OPENSRE_PROMPT_LOG_DISABLED=1`), no `turn_detail` records are written during the session. The `conversation_snapshot` record written at clean exit (`/exit` or `/reset`) is **not** affected by this setting — it is always written when `cli_agent_messages` is non-empty.
+`turn_detail` records (prompt + response per LLM turn) are written by the prompt logging layer. If prompt logging is fully disabled (`OPENSRE_PROMPT_LOG_DISABLED=1`), no `turn_detail` records are written during the session. The `conversation_snapshot` record written at clean exit (`/exit` or `/new`) is **not** affected by this setting — it is always written when `cli_agent_messages` is non-empty.
 
 Concretely:
 

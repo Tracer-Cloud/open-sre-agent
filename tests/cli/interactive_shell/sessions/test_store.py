@@ -593,23 +593,23 @@ def test_load_session_matches_full_id(tmp_path: Path) -> None:
     assert data["session_id"] == session.session_id
 
 
-# ── /reset lifecycle ──────────────────────────────────────────────────────────
+# ── /new lifecycle ────────────────────────────────────────────────────────────
 
 
-def test_reset_closes_old_session_and_opens_new(tmp_path: Path) -> None:
+def test_new_closes_old_session_and_opens_new(tmp_path: Path) -> None:
     session = _make_session()
     with _patch_dir(tmp_path):
         SessionStore.open_session(session)
-        session.record("chat", "pre-reset question")
+        session.record("chat", "pre-new question")
         sid1 = session.session_id
 
-        # Simulate /reset
+        # Simulate /new (flush → clear → open_session)
         SessionStore.flush(session)
         session.clear()
         SessionStore.open_session(session)
         sid2 = session.session_id
 
-        session.record("chat", "post-reset question")
+        session.record("chat", "post-new question")
 
     assert sid1 != sid2
     # Old session file has session_end

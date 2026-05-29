@@ -68,7 +68,6 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/context",
         "/agents",
         "/compact",
-        "/reset",
         "/welcome",
         "/sessions",
         "/resume",

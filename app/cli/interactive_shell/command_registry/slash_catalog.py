@@ -209,12 +209,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/new": _mcp(
         "Start a new session while preserving the current LLM conversation context and "
-        "accumulated infra context. Unlike /reset (which clears everything), /new keeps "
-        "the conversation thread so you can continue seamlessly in a fresh session file.",
+        "accumulated infra context. Rotates the session ID and resets all session state "
+        "while keeping the conversation thread so you can continue seamlessly in a fresh session file.",
         "User wants to continue a conversation in a new session after /resume",
         "User asks to start a new session without losing their current conversation",
         anti_examples=(
-            "User wants to clear everything and start fresh (use /reset)",
+            "User wants to clear the screen (use /clear)",
             "User asks to list sessions (use /sessions)",
         ),
     ),
@@ -228,12 +228,8 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User types /resume with no argument to pick from a list",
         anti_examples=(
             "User asks to list sessions (use /sessions)",
-            "User asks to reset the current session (use /reset)",
+            "User asks to start a new session keeping context (use /new)",
         ),
-    ),
-    "/reset": _mcp(
-        "Clear session state while preserving trust mode.",
-        "User asks to reset session state or start fresh in the REPL",
     ),
     "/save": _mcp(
         "Save the last investigation report to a file path. Requires confirmation.",

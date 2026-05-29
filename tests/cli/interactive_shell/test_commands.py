@@ -153,18 +153,18 @@ class TestDispatchSlash:
         assert "default config:" in output
         assert "anthropic does not use reasoning-effort overrides" in output
 
-    def test_reset_clears_session(self) -> None:
+    def test_new_clears_session(self) -> None:
         session = ReplSession()
         session.record("alert", "test")
         session.last_state = {"x": 1}
         session.trust_mode = True
         console, _ = _capture()
 
-        dispatch_slash("/reset", session, console)
+        dispatch_slash("/new", session, console)
 
         assert session.history == []
         assert session.last_state is None
-        assert session.trust_mode is True  # reset keeps trust mode
+        assert session.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
         session = ReplSession()

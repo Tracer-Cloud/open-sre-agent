@@ -1,4 +1,4 @@
-"""Slash commands: session control and status (/status, /reset, /clear, /trust, …)."""
+"""Slash commands: session control and status (/status, /new, /clear, /trust, …)."""
 
 from __future__ import annotations
 
@@ -41,22 +41,13 @@ def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool
     return True
 
 
-def _cmd_reset(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.sessions.store import SessionStore
-
-    SessionStore.flush(session)  # close current session file
-    session.clear()  # rotate session_id + started_at, clears all context
-    SessionStore.open_session(session)  # open new session file immediately
-    console.print(f"[{DIM}]session state cleared — new session started.[/]")
-    return True
-
-
 def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
     """Start a new session while preserving the current LLM conversation context.
 
-    Unlike /reset (which clears everything), /new keeps cli_agent_messages and
+    Unlike /clear (which only clears the screen), /new rotates the session ID
+    and resets all session state while keeping cli_agent_messages and
     accumulated_context so a resumed or in-progress conversation continues
-    seamlessly in a fresh session file with a new session ID.
+    seamlessly in a fresh session file.
     """
     from app.cli.interactive_shell.sessions.store import SessionStore
 
@@ -561,7 +552,6 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
-    SlashCommand("/reset", "Clear session state.", _cmd_reset, notes=("Trust mode is preserved.",)),
     SlashCommand(
         "/trust",
         "Manage trust mode.",
@@ -608,7 +598,7 @@ COMMANDS: list[SlashCommand] = [
         "Start a new session while keeping the current conversation context.",
         _cmd_new,
         notes=(
-            "Unlike /reset, /new preserves cli_agent_messages and accumulated infra context.",
+            "Unlike /clear, /new rotates the session ID and resets state while keeping LLM context.",
             "Use after /resume to continue a conversation in a clean session file.",
         ),
     ),

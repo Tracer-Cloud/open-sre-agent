@@ -4,7 +4,7 @@ Design: incremental writes.
 - open_session()       — writes session_start immediately when the REPL starts
 - append_turn()        — appends a turn stub (kind + text) for stats counting
 - append_turn_detail() — appends a full turn record (prompt + response) for /resume
-- flush()              — writes conversation_snapshot + session_end on exit or /reset;
+- flush()              — writes conversation_snapshot + session_end on exit or /new;
                          deletes the file if no turns were recorded (empty session)
 - load_recent()        — returns up to n session summaries for /sessions display
 - load_session()       — reads a full session file and extracts conversation for /resume
@@ -79,7 +79,7 @@ class SessionStore:
     def open_session(session: ReplSession) -> None:
         """Write session_start record, creating the session file on disk.
 
-        Called once at REPL start and again after every /reset (which rotates
+        Called once at REPL start and again after every /new (which rotates
         the session_id). Suppresses all I/O errors so the REPL never crashes.
         """
         with contextlib.suppress(Exception):
@@ -161,7 +161,7 @@ class SessionStore:
         """Write conversation_snapshot + session_end and close the session file.
 
         Idempotent: no-ops if session_end is already the last line, so
-        double-calling (e.g. /reset flow + entrypoint finally) is safe.
+        double-calling (e.g. /new flow + entrypoint finally) is safe.
         If no turns were recorded the file is deleted instead.
         Writes a conversation_snapshot record before session_end so /resume
         can restore cli_agent_messages and accumulated_context exactly.
