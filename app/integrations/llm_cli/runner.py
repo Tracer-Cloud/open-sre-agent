@@ -248,9 +248,9 @@ class CLIBackedLLMClient:
             # Replace the raw exit-code message with an actionable description
             # when a known failure category is detected (quota, auth, context,
             # network). Unknown failures fall through with the raw message.
-            hint = classify_llm_failure(out, err, proc.returncode)
-            if hint:
-                base = f"{self._adapter.name}: {hint} (exit {proc.returncode})"
+            failure_hint = classify_llm_failure(out, err, proc.returncode)
+            if failure_hint is not None:
+                base = f"{self._adapter.name}: {failure_hint} (exit {proc.returncode})"
             if auth_probe_unclear:
                 message = (
                     f"{base}\n\n"

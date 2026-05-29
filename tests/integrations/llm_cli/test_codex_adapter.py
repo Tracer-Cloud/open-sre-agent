@@ -464,7 +464,12 @@ def test_cli_backed_client_invoke_raises_cli_authentication_required_when_logged
 def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_trailing_period(
     mock_run: MagicMock,
 ) -> None:
-    """When explain_failure ends with '.', avoid composing '..'."""
+    """No double period in the composed error message.
+
+    When stderr contains an auth-related term ('unauthorized'), the failure
+    classifier replaces the raw exit-code text with a clean, actionable message
+    — so neither the original trailing period nor a '..' can appear.
+    """
     from app.integrations.llm_cli.runner import CLIBackedLLMClient
 
     mock_adapter = MagicMock()
@@ -499,7 +504,9 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
     msg = str(exc_info.value)
     assert ".." not in msg
-    assert "code 1." in msg
+    # "unauthorized" in stderr → classifier produces a clean auth hint instead
+    # of the raw "exited with code 1." text.
+    assert "authentication failed" in msg or "(exit 1)" in msg
     assert "Auth status could not be verified" in msg
 
 
