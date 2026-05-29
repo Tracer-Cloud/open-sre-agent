@@ -284,6 +284,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to run a debug check or diagnostic",
         anti_examples=("User asks a general debugging or troubleshooting question",),
     ),
+    "/runbook": _mcp(
+        "Manage local markdown runbooks that ground investigation remediation steps.",
+        "User wants to add, list, or remove a local runbook",
+        "User asks which runbooks are stored locally",
+    ),
 }
 
 

@@ -382,8 +382,9 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/runbook",
-        "manage local runbooks for diagnosis grounding ('/runbook add|list|remove')",
+        "Manage local runbooks that ground diagnosis remediation steps.",
         _cmd_runbook,
+        usage=("/runbook add <path>", "/runbook list", "/runbook remove <slug>"),
         execution_tier=ExecutionTier.SAFE,
     ),
 ]
