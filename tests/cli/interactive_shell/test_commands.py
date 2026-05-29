@@ -1325,11 +1325,11 @@ class TestInvestigateFileCommand:
 
 
 class TestResumeCommand:
-    """Tests for /resume command — session rotation and context restoration."""
+    """Tests for /resume command — session adoption and context restoration."""
 
-    def test_apply_resume_rotates_session_and_restores_context(self, tmp_path: Path) -> None:
-        """_apply_resume_data must flush the current session, rotate to a new one,
-        and restore cli_agent_messages + accumulated_context from the old session."""
+    def test_apply_resume_adopts_target_session_and_restores_context(self, tmp_path: Path) -> None:
+        """_apply_resume_data must flush the current session, adopt the target ID,
+        reopen its file, and restore cli_agent_messages + accumulated_context."""
         import json
         from unittest.mock import patch
 
@@ -1338,6 +1338,7 @@ class TestResumeCommand:
 
         session = ReplSession()
         old_id = session.session_id
+        target_id = "old-abc-1234567890"
 
         with patch(
             "app.cli.interactive_shell.sessions.store._sessions_dir",
@@ -1346,35 +1347,65 @@ class TestResumeCommand:
             SessionStore.open_session(session)
             session.record("chat", "pre-resume turn")
 
-            data = {
-                "session_id": "old-abc-123456",
-                "name": "Old Chat",
-                "cli_agent_messages": [("user", "hello"), ("assistant", "hi")],
-                "accumulated_context": {"service": "redis"},
-                "history": [{"type": "turn", "kind": "chat", "text": "hello"}],
-                "turn_details": [],
-                "has_snapshot": True,
-            }
-            console, buf = _capture()
-            result = _apply_resume_data(data, session, console)
+            # Pre-create a finalized target session file to resume into.
+            target_path = tmp_path / f"{target_id}.jsonl"
+            target_path.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "session_start",
+                                "session_id": target_id,
+                                "started_at": "2026-05-29T10:00:00+00:00",
+                            }
+                        ),
+                        json.dumps({"type": "turn", "kind": "chat", "text": "hello"}),
+                        json.dumps(
+                            {
+                                "type": "conversation_snapshot",
+                                "cli_agent_messages": [["user", "hello"], ["assistant", "hi"]],
+                                "accumulated_context": {"service": "redis"},
+                            }
+                        ),
+                        json.dumps({"type": "session_end", "total_turns": 1}),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
-            # Old session file must be finalized
+            data = SessionStore.load_session(target_id[:8])
+            assert data is not None
+
+            console, buf = _capture()
+            slash_command = f"/resume {target_id[:8]}"
+            result = _apply_resume_data(data, session, console, slash_command=slash_command)
+
+            # Current (empty-ish) session file must be finalized without /resume turn
             old_records = [
                 json.loads(line)
                 for line in (tmp_path / f"{old_id}.jsonl").read_text().splitlines()
                 if line.strip()
             ]
             assert old_records[-1]["type"] == "session_end"
+            assert not any(r.get("kind") == "slash" for r in old_records if r.get("type") == "turn")
 
-            # New session file is created for the continuation session
-            new_file = tmp_path / f"{session.session_id}.jsonl"
-            assert new_file.exists()
+            # Target session is reopened — slash turn recorded on resumed session
+            assert session.session_id == target_id
+            target_records = [
+                json.loads(line)
+                for line in target_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            assert target_records[0]["type"] == "session_start"
+            assert target_records[-1]["type"] == "turn"
+            assert target_records[-1]["kind"] == "slash"
+            assert target_records[-1]["text"].startswith("/resume")
 
         assert result is True
-        assert session.session_id != old_id
+        assert session.session_id == target_id
         assert session.cli_agent_messages == [("user", "hello"), ("assistant", "hi")]
         assert session.accumulated_context == {"service": "redis"}
-        assert session.resumed_from_name == "Old Chat"
         output = buf.getvalue()
         assert "resumed session" in output
         assert "old-abc" in output
@@ -1403,21 +1434,24 @@ class TestResumeCommand:
         assert "no conversation to resume" in buf.getvalue()
 
     def test_apply_resume_displays_history_in_repl_format(self, tmp_path: Path) -> None:
-        """History display must use `❯ user` / `● assistant` REPL format rather
-        than the old `you / sre` compact text format."""
+        """History display uses REPL turn order and includes slash commands."""
         from unittest.mock import patch
 
         from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from app.cli.interactive_shell.sessions.store import SessionStore
 
         data = {
-            "session_id": "display-test-abc",
+            "session_id": "display-test-abc123456789",
             "name": "My Session",
             "cli_agent_messages": [
                 ("user", "what is opensre?"),
                 ("assistant", "OpenSRE is a tool"),
             ],
             "accumulated_context": {},
-            "history": [],
+            "history": [
+                {"type": "turn", "kind": "slash", "text": "/status"},
+                {"type": "turn", "kind": "chat", "text": "what is opensre?"},
+            ],
             "turn_details": [],
             "has_snapshot": True,
         }
@@ -1428,18 +1462,47 @@ class TestResumeCommand:
             "app.cli.interactive_shell.sessions.store._sessions_dir",
             return_value=tmp_path,
         ):
+            SessionStore.open_session(session)
             _apply_resume_data(data, session, console)
 
         output = buf.getvalue()
-        # New format uses ❯ for user messages and ● assistant header
         assert "❯" in output
         assert "assistant" in output
-        # Old compact format ("you  " / "sre  ") must not appear
+        assert "$ /status" in output
         assert "you  " not in output
         assert "sre  " not in output
-        # Content is present
         assert "what is opensre?" in output
         assert "OpenSRE is a tool" in output
+
+
+    def test_planner_llm_error_persisted_to_cli_agent_messages(self) -> None:
+        """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
+            PlannerLLMError,
+        )
+        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+            execute_cli_actions,
+        )
+
+        session = ReplSession()
+        console, _ = _capture()
+
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
+
+        with patch(
+            "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions._plan_actions",
+            side_effect=_raise,
+        ):
+            execute_cli_actions("check cpu usage", session, console)
+
+        # The error turn must be recorded in cli_agent_messages for /resume
+        assert len(session.cli_agent_messages) == 2
+        assert session.cli_agent_messages[0] == ("user", "check cpu usage")
+        assert session.cli_agent_messages[1][0] == "assistant"
+        assert "quota" in session.cli_agent_messages[1][1]
 
 
 class TestHistoryCommand:

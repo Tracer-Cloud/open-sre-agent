@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 
 from rich.console import Console
@@ -278,6 +279,23 @@ def _format_duration(duration_secs: int | None) -> str:
     return f"{h}h {m}m"
 
 
+def _record_resume_slash(
+    session: ReplSession,
+    args: list[str],
+    *,
+    ok: bool = True,
+    picked_id: str | None = None,
+) -> None:
+    """Record /resume in the active session file after identity is settled."""
+    if picked_id:
+        text = f"/resume {picked_id[:8]}"
+    elif args:
+        text = f"/resume {' '.join(args)}"
+    else:
+        text = "/resume"
+    session.record("slash", text, ok=ok)
+
+
 def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
@@ -377,10 +395,88 @@ def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
     if picked is None or picked == "done":
         return True
 
-    return _do_resume(picked, session, console)
+    slash_command = f"/resume {picked[:8]}"
+    if not _do_resume(picked, session, console, slash_command=slash_command):
+        _record_resume_slash(session, [], picked_id=picked, ok=False)
+    return True
 
 
-def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bool:
+_HISTORY_DISPLAY_CHAT_KINDS: frozenset[str] = frozenset(
+    {"chat", "cli_agent", "cli_help", "follow_up", "alert", "incoming_alert"}
+)
+
+
+def _response_for_prompt(turn_details: list[dict], prompt: str) -> str:
+    for detail in turn_details:
+        if detail.get("prompt") == prompt:
+            return str(detail.get("response") or "")
+    return ""
+
+
+def _render_resumed_session_history(
+    console: Console,
+    *,
+    history: list[dict],
+    turn_details: list[dict],
+    messages: list[tuple[str, str]],
+) -> None:
+    """Render prior session activity in REPL turn order, including slash commands."""
+    from rich.markdown import Markdown
+
+    from app.cli.interactive_shell.ui.streaming import render_response_header
+    from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
+
+    if not history and not messages:
+        return
+
+    console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
+
+    if history:
+        assistant_by_user: dict[str, str] = {}
+        pending_user: str | None = None
+        for role, text in messages:
+            if role == "user":
+                pending_user = text
+            elif role == "assistant" and pending_user is not None:
+                assistant_by_user.setdefault(pending_user, text)
+                pending_user = None
+
+        for rec in history:
+            kind = rec.get("kind", "")
+            text = rec.get("text") or ""
+            if kind == "slash":
+                console.print(f"[bold]$ {escape(text)}[/bold]")
+                continue
+            if kind not in _HISTORY_DISPLAY_CHAT_KINDS or not text:
+                continue
+            console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
+            response = _response_for_prompt(turn_details, text) or assistant_by_user.get(text, "")
+            if response:
+                render_response_header(console, "assistant")
+                with console.use_theme(MARKDOWN_THEME):
+                    console.print(Markdown(response, code_theme="ansi_dark"))
+        console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
+        return
+
+    seen_prompts: set[str] = set()
+    for role, text in messages:
+        if role == "user" and text not in seen_prompts:
+            console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
+            seen_prompts.add(text)
+        elif role == "assistant":
+            render_response_header(console, "assistant")
+            with console.use_theme(MARKDOWN_THEME):
+                console.print(Markdown(text, code_theme="ansi_dark"))
+    console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
+
+
+def _apply_resume_data(
+    data: dict,
+    session: ReplSession,
+    console: Console,
+    *,
+    slash_command: str | None = None,
+) -> bool:
     """Apply loaded session data into the running session and print a summary."""
     messages = data.get("cli_agent_messages") or []
     context = data.get("accumulated_context") or {}
@@ -408,13 +504,24 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
             "they will be replaced by the resumed context.[/]"
         )
 
-    # Rotate to a fresh continuation session so the resumed context has a clean
-    # home and /sessions shows a clear chain.  Flush the current session first
-    # (preserving its own history on disk); empty sessions are deleted by flush().
+    from datetime import datetime
+
     from app.cli.interactive_shell.sessions.store import SessionStore
 
-    SessionStore.flush(session)
-    session.clear()
+    target_sid = sid
+    if session.session_id != target_sid:
+        # Close the current session file before switching identity.
+        SessionStore.flush(session)
+        session.clear(rotate_identity=False)
+        session.session_id = target_sid
+        started_raw = data.get("started_at")
+        if started_raw:
+            with contextlib.suppress(Exception):
+                session.started_at = datetime.fromisoformat(started_raw).timestamp()
+        SessionStore.reopen_session(target_sid)
+    else:
+        session.clear(rotate_identity=False)
+        session.session_id = target_sid
 
     # Restore LLM conversation thread so the next prompt has full prior context.
     session.cli_agent_messages = list(messages)
@@ -426,40 +533,6 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
     if history:
         session.history = list(history) + session.history
 
-    # Store the resumed session's name so /sessions can display it for the current
-    # session before it has accumulated its own first turn.
-    session.resumed_from_name = name
-
-    SessionStore.open_session(session)
-
-    # ── Print full conversation so the user knows what context was loaded ──────
-    # Merge turn_detail records (all recorded turns, full text) with
-    # cli_agent_messages from the snapshot (captures turns that may not have a
-    # matching turn_detail — e.g. processed before enrichment, or Codex path).
-    # Result: the user sees every exchange that happened in the session.
-    turn_details = data.get("turn_details") or []
-    display_pairs: list[tuple[str, str]] = []
-    seen_prompts: set[str] = set()
-
-    for td in turn_details:
-        if td.get("kind") in ("chat", "cli_agent", "cli_help", "follow_up", "alert"):
-            prompt = td.get("prompt") or ""
-            response = td.get("response") or ""
-            if prompt:
-                display_pairs.append(("user", prompt))
-                seen_prompts.add(prompt)
-            if response:
-                display_pairs.append(("assistant", response))
-
-    # Append any snapshot messages not already covered by turn_detail records.
-    for role, text in messages:
-        if role == "user" and text not in seen_prompts:
-            display_pairs.append(("user", text))
-            seen_prompts.add(text)
-        elif role == "assistant" and display_pairs and display_pairs[-1][0] == "user":
-            # Only append assistant reply if the preceding user turn was just added.
-            display_pairs.append(("assistant", text))
-
     source = "snapshot" if has_snapshot else "turn records"
     name_str = f" · {escape(name)}" if name else ""
     console.print(
@@ -467,33 +540,32 @@ def _apply_resume_data(data: dict, session: ReplSession, console: Console) -> bo
         f"[{DIM}]({len(messages)} messages in context from {source})[/]"
     )
 
-    # Display conversation history in the same REPL format used for new turns so
-    # the user sees a continuous flow: `❯ prompt` / `● assistant` for each pair.
-    if display_pairs:
-        from rich.markdown import Markdown
-
-        from app.cli.interactive_shell.ui.streaming import render_response_header
-        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
-
-        console.print(f"[{DIM}]─── conversation history ─────────────────────────────────[/]")
-        for role, text in display_pairs:
-            if role == "user":
-                console.print(f"[bold {HIGHLIGHT}]❯[/] {escape(text)}")
-            else:
-                render_response_header(console, "assistant")
-                with console.use_theme(MARKDOWN_THEME):
-                    console.print(Markdown(text, code_theme="ansi_dark"))
-        console.print(f"[{DIM}]─────────────────────────────────────────────────────────[/]")
+    _render_resumed_session_history(
+        console,
+        history=history,
+        turn_details=data.get("turn_details") or [],
+        messages=list(messages),
+    )
 
     if context:
         console.print(
             f"[{DIM}]accumulated context restored:[/] "
             + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
         )
+
+    if slash_command:
+        session.record("slash", slash_command)
+
     return True
 
 
-def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
+def _do_resume(
+    prefix: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    slash_command: str | None = None,
+) -> bool:
     """Load session by ID prefix and restore context into the running session."""
     from app.cli.interactive_shell.sessions.store import SessionStore
 
@@ -507,8 +579,8 @@ def _do_resume(prefix: str, session: ReplSession, console: Console) -> bool:
             )
         else:
             console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
-        return True
-    return _apply_resume_data(data, session, console)
+        return False
+    return _apply_resume_data(data, session, console, slash_command=slash_command)
 
 
 def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -518,6 +590,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
     if not args:
         console.print(f"[{DIM}]usage: /resume <session-id-prefix>[/]")
         console.print(f"[{DIM}]run /sessions to list session IDs.[/]")
+        _record_resume_slash(session, args)
         return True
 
     prefix = args[0].strip()
@@ -528,6 +601,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
             f"[{DIM}]session {prefix[:8]} is the current session — "
             "run /sessions to pick a previous one.[/]"
         )
+        _record_resume_slash(session, args)
         return True
 
     data = None
@@ -551,6 +625,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
                 f"[{WARNING}]'{escape(prefix)}' matches {len(candidates)} sessions by name — "
                 "use a session ID prefix or be more specific.[/]"
             )
+            _record_resume_slash(session, args, ok=False)
             return True
 
     if data is None:
@@ -562,9 +637,12 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
             )
         else:
             console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+        _record_resume_slash(session, args, ok=False)
         return True
 
-    return _apply_resume_data(data, session, console)
+    slash_command = f"/resume {' '.join(args)}" if args else "/resume"
+    _apply_resume_data(data, session, console, slash_command=slash_command)
+    return True
 
 
 COMMANDS: list[SlashCommand] = [

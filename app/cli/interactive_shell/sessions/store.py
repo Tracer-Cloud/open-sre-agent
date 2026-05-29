@@ -6,6 +6,7 @@ Design: incremental writes.
 - append_turn_detail() — appends a full turn record (prompt + response) for /resume
 - flush()              — writes conversation_snapshot + session_end on exit or /new;
                          deletes the file if no turns were recorded (empty session)
+- reopen_session()     — strips trailing session_end so /resume can append to the file
 - load_recent()        — returns up to n session summaries for /sessions display
 - load_session()       — reads a full session file and extracts conversation for /resume
 
@@ -95,6 +96,25 @@ class SessionStore:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     @staticmethod
+    def _session_is_finalized(path: Path) -> bool:
+        if not path.exists():
+            return False
+        with contextlib.suppress(Exception):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            if not lines:
+                return False
+            with contextlib.suppress(json.JSONDecodeError):
+                return json.loads(lines[-1]).get("type") == "session_end"
+        return False
+
+    @staticmethod
+    def _ensure_session_open(session_id: str) -> None:
+        """Reopen a finalized session file so append paths can continue writing."""
+        path = _session_path(session_id)
+        if SessionStore._session_is_finalized(path):
+            SessionStore.reopen_session(session_id)
+
+    @staticmethod
     def append_turn(session: ReplSession, kind: str, text: str) -> None:
         """Append a turn stub to the session file for stats counting.
 
@@ -106,6 +126,7 @@ class SessionStore:
             path = _session_path(session.session_id)
             if not path.exists():
                 return
+            SessionStore._ensure_session_open(session.session_id)
             record = {
                 "type": "turn",
                 "kind": kind,
@@ -231,6 +252,41 @@ class SessionStore:
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def reopen_session(session_id: str) -> None:
+        """Reopen a finalized session file so new turns append to the same file.
+
+        Strips trailing ``conversation_snapshot`` and ``session_end`` records
+        written by :meth:`flush`. No-op when the file is missing or still open.
+        """
+        with contextlib.suppress(Exception):
+            path = _session_path(session_id)
+            if not path.exists():
+                return
+
+            lines = path.read_text(encoding="utf-8").splitlines()
+            if not lines:
+                return
+
+            changed = False
+            with contextlib.suppress(json.JSONDecodeError):
+                if json.loads(lines[-1]).get("type") == "session_end":
+                    lines.pop()
+                    changed = True
+
+            if lines:
+                with contextlib.suppress(json.JSONDecodeError):
+                    if json.loads(lines[-1]).get("type") == "conversation_snapshot":
+                        lines.pop()
+                        changed = True
+
+            if not changed:
+                return
+
+            with path.open("w", encoding="utf-8") as fh:
+                for line in lines:
+                    fh.write(line + "\n")
 
     @staticmethod
     def load_recent(n: int = 20) -> list[dict[str, Any]]:

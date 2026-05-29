@@ -200,8 +200,8 @@ class ReplSession:
             if value:
                 self.accumulated_context[key] = value
 
-    def clear(self) -> None:
-        """Reset the session to a fresh state (used by /new)."""
+    def clear(self, *, rotate_identity: bool = True) -> None:
+        """Reset the session to a fresh state (used by /new and /resume)."""
         self.history_generation += 1
         self.history.clear()
         self.resumed_from_name = ""
@@ -235,9 +235,10 @@ class ReplSession:
         self.pending_prompt_default = None
         self.last_synthetic_observation_path = None
         # trust_mode and reasoning_effort are intentionally preserved across /new
-        # Rotate session identity so the new post-reset session gets its own ID and file.
-        self.session_id = str(uuid.uuid4())
-        self.started_at = time.time()
+        if rotate_identity:
+            # Rotate session identity so the new post-reset session gets its own ID and file.
+            self.session_id = str(uuid.uuid4())
+            self.started_at = time.time()
 
     def record_intervention(self, kind: InterventionKind) -> None:
         """Increment the per-kind intervention counter (Ctrl-C or correction)."""

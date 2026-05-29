@@ -58,9 +58,11 @@ _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
 
-def _load_env() -> dict[str, str]:
+def _load_env(*, home: str | None = None) -> dict[str, str]:
     """Merge .env into a copy of the current environment."""
     env = dict(os.environ)
+    if home is not None:
+        env["HOME"] = home
     env_file = _REPO_ROOT / ".env"
     if env_file.exists():
         env.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
@@ -75,9 +77,11 @@ class ReplDriver:
         *,
         startup_wait: float = 6.0,
         cwd: Path | None = None,
+        home: Path | None = None,
     ) -> None:
         self._startup_wait = startup_wait
         self._cwd = str(cwd or _REPO_ROOT)
+        self._home = str(home) if home is not None else None
         self._master: int | None = None
         self._proc: subprocess.Popen[bytes] | None = None
         self._raw: bytes = b""
@@ -94,7 +98,7 @@ class ReplDriver:
                 stdin=slave,
                 stdout=slave,
                 stderr=slave,
-                env=_load_env(),
+                env=_load_env(home=self._home),
                 cwd=self._cwd,
             )
         finally:

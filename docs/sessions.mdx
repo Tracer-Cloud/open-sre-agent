@@ -43,6 +43,8 @@ When you want to continue a past investigation or conversation, use `/resume` wi
 /resume 9b2e4f7a
 ```
 
+In a TTY, bare `/resume` opens an interactive picker of recent sessions. New turns after a resume append to that same session file — `/resume` does not create a duplicate entry in `/sessions`.
+
 OpenSRE restores the conversation so the assistant remembers what you were working on. It displays the past exchanges so you can see where you left off, then lets you continue typing:
 
 ```

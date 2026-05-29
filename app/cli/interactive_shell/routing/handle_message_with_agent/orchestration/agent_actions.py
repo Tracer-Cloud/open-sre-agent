@@ -164,10 +164,21 @@ def _render_plan_denied(console: Console) -> None:
     )
 
 
+_CLI_AGENT_MSG_CAP = 24  # mirrors _MAX_CLI_AGENT_TURNS * 2 in cli_agent.py
+
+
 def _render_planner_llm_error(console: Console, message: str) -> None:
     console.print()
     render_response_header(console, "assistant")
     console.print(f"[yellow]{escape(message)}[/]")
+
+
+def _persist_error_turn(session: ReplSession, user_text: str, error_text: str) -> None:
+    """Record a failed assistant turn in cli_agent_messages so /resume can display it."""
+    session.cli_agent_messages.append(("user", user_text))
+    session.cli_agent_messages.append(("assistant", error_text))
+    if len(session.cli_agent_messages) > _CLI_AGENT_MSG_CAP:
+        session.cli_agent_messages[:] = session.cli_agent_messages[-_CLI_AGENT_MSG_CAP:]
 
 
 def _tool_args_for_action(action: PlannedAction) -> dict[str, Any]:
@@ -287,7 +298,9 @@ def execute_cli_actions(
         try:
             plan = _coerce_action_plan_decision(_plan_actions(message, session))
         except PlannerLLMError as exc:
-            _render_planner_llm_error(console, str(exc))
+            error_text = str(exc)
+            _render_planner_llm_error(console, error_text)
+            _persist_error_turn(session, message, error_text)
             session.record("cli_agent", message, ok=False)
             return True
     plan = _enforce_plan_fail_closed_policy(plan)
@@ -344,7 +357,9 @@ def execute_cli_actions_with_metrics(
         try:
             plan = _coerce_action_plan_decision(_plan_actions(message, session))
         except PlannerLLMError as exc:
-            _render_planner_llm_error(console, str(exc))
+            error_text = str(exc)
+            _render_planner_llm_error(console, error_text)
+            _persist_error_turn(session, message, error_text)
             session.record("cli_agent", message, ok=False)
             capture_terminal_actions_executed(
                 planned_count=0,

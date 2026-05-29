@@ -246,6 +246,50 @@ def test_flush_is_idempotent(tmp_path: Path) -> None:
     assert len(end_records) == 1, "flush() must be idempotent — only one session_end"
 
 
+def test_append_turn_reopens_finalized_session(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        session.record("chat", "hello")
+        SessionStore.flush(session)
+        session.record("slash", "/status")
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    types = [r["type"] for r in records]
+    assert types.count("session_end") == 0
+    assert records[-1] == {"type": "turn", "kind": "slash", "text": "/status"}
+
+
+def test_reopen_session_strips_trailing_end_and_snapshot(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        session.record("chat", "hello")
+        SessionStore.flush(session)
+        SessionStore.reopen_session(session.session_id)
+        session.record("chat", "continued")
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    types = [r["type"] for r in records]
+    assert types.count("session_end") == 0
+    assert types.count("conversation_snapshot") == 0
+    assert types[-1] == "turn"
+    assert records[-1]["text"] == "continued"
+
+
+def test_reopen_session_noop_for_open_session(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        session.record("chat", "hello")
+        SessionStore.reopen_session(session.session_id)
+        session.record("chat", "still open")
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    assert records[-1]["text"] == "still open"
+    assert all(r["type"] != "session_end" for r in records)
+
+
 # ── session.record() wiring ───────────────────────────────────────────────────
 
 
