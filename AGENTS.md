@@ -57,8 +57,6 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.
 
-`tests/` — organized by capability boundary; full layout in [TESTING.md § Test Layout](TESTING.md#test-layout).
-
 ## 2. Entry Points
 
 ### Adding a Tool
