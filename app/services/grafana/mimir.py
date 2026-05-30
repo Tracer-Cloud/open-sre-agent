@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
+
+import httpx
+
+from app.services._error_helpers import capture_service_error
 
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
+
+logger = logging.getLogger(__name__)
 
 
 class MimirMixin:
@@ -63,16 +70,18 @@ class MimirMixin:
                 "query": query,
                 "account_id": self.account_id,
             }
-        except Exception as e:
-            error_msg = str(e)
-            response_text = ""
-            if hasattr(e, "response") and e.response is not None:
-                response_text = e.response.text[:300]
-                error_msg = f"Mimir query failed: {e.response.status_code}"
-
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_mimir"
+            )
             return {
                 "success": False,
-                "error": error_msg,
-                "response": response_text,
+                "error": f"Mimir query failed: {exc.response.status_code}",
+                "response": exc.response.text[:300],
                 "metrics": [],
             }
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_mimir"
+            )
+            return {"success": False, "error": str(exc), "metrics": []}
