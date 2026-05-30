@@ -38,7 +38,7 @@ from app.agents.conflicts import (
 from app.agents.coordination import BranchClaims
 from app.agents.discovery import registered_and_discovered_agents
 from app.agents.lifecycle import TerminateResult, terminate
-from app.agents.registry import AgentRegistry
+from app.agents.registry import AgentRecord, AgentRegistry
 from app.agents.tail import AttachSession, AttachUnsupported, attach
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
@@ -60,9 +60,9 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("bus", "live-tail the cross-agent context bus"),
     ("claim", "claim a branch for an agent"),
     ("conflicts", "show file-write conflicts between local AI agents"),
-    ("kill", "SIGTERM → SIGKILL a local agent by PID"),
+    ("kill", "SIGTERM → SIGKILL a local agent by PID or name"),
     ("release", "release a branch claim"),
-    ("trace", "live tail of an agent's stdout by pid"),
+    ("trace", "live tail of an agent's stdout by PID or name"),
     ("graph", "render the wait-on dependency graph as a tree"),
     ("wait", "mark <pid> as waiting on another pid: /agent wait <pid> --on <other-pid>"),
 )
@@ -128,6 +128,37 @@ def _display_path(path: Path) -> str:
 
 def _print_config_error(console: Console, exc: ValidationError) -> None:
     console.print(f"[{ERROR}]agents.yaml has invalid contents:[/] {escape(str(exc))}")
+
+
+def _resolve_agent_arg(arg: str, registry: AgentRegistry) -> tuple[int, AgentRecord | None]:
+    """Resolve a slash-command agent target from either PID or registered name.
+
+    Numeric args keep the existing PID behavior when they are not present
+    in the registry, so downstream pid_exists / attach / terminate code can
+    render its current "no such pid" or permission messages unchanged.
+    """
+    text = arg.strip()
+    try:
+        pid = int(text)
+    except ValueError:
+        pid = None
+
+    if pid is not None and pid > 0:
+        return pid, registry.get(pid)
+
+    matches = [record for record in registry.list() if record.name == text]
+    if len(matches) == 1:
+        record = matches[0]
+        return record.pid, record
+    if len(matches) > 1:
+        pids = ", ".join(str(record.pid) for record in sorted(matches, key=lambda r: r.pid))
+        raise ValueError(
+            f"ambiguous agent name {text!r}: {len(matches)} registered agents (pids: {pids})"
+        )
+
+    if pid is not None:
+        return pid, None
+    raise ValueError(f"invalid pid or unknown agent name: {text}")
 
 
 def _cmd_agents_list(console: Console) -> bool:
@@ -357,15 +388,16 @@ def _cmd_agents_kill(
     positional = [a for a in args if a != "--force"]
 
     if not positional:
-        console.print(f"[{ERROR}]usage:[/] /agents kill <pid> [--force]")
+        console.print(f"[{ERROR}]usage:[/] /agents kill <pid|name> [--force]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    raw_pid = positional[0]
+    raw_target = positional[0]
+    registry = AgentRegistry()
     try:
-        pid = int(raw_pid)
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(raw_pid)} is not an integer")
+        pid, record = _resolve_agent_arg(raw_target, registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -374,9 +406,6 @@ def _cmd_agents_kill(
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    # Look up agent name from registry for friendlier output.
-    registry = AgentRegistry()
-    record = registry.get(pid)
     label = f"{record.name} (pid {pid})" if record else f"pid {pid}"
 
     if not force:
@@ -494,24 +523,24 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
 
 
 def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -> bool:
-    """Live-tail an agent's stdout by pid; see :func:`_render_live_tail`.
+    """Live-tail an agent's stdout by pid or name; see :func:`_render_live_tail`.
 
     Validates eagerly (``attach()`` raises :class:`AttachUnsupported`
-    synchronously on bad pid / unsupported fd type / missing file) so
+    synchronously on bad target / unsupported fd type / missing file) so
     we never enter the ``Live`` block on a target we cannot tail.
     """
     if len(args) != 1:
-        console.print(f"[{ERROR}]usage:[/] /agents trace <pid>")
+        console.print(f"[{ERROR}]usage:[/] /agents trace <pid|name>")
         session.mark_latest(ok=False, kind="slash")
         return True
+    registry = AgentRegistry()
     try:
-        pid = int(args[0])
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        pid, record = _resolve_agent_arg(args[0], registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}")
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    record = AgentRegistry().get(pid)
     label = f"{record.name} (pid {pid})" if record else f"pid {pid}"
 
     try:

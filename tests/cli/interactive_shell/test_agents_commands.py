@@ -15,6 +15,7 @@ from app.agents.conflicts import (
     FileWriteConflict,
     render_conflicts,
 )
+from app.agents.lifecycle import TerminateResult
 from app.agents.registry import AgentRecord, AgentRegistry
 from app.agents.tail import AttachUnsupported, TailBuffer
 from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -502,15 +503,15 @@ class TestAgentsTrace:
         assert dispatch_slash("/agents trace", sess_obj, console) is True
         out = buf.getvalue().lower()
         assert "usage" in out
-        assert "<pid>" in out
+        assert "<pid|name>" in out
         assert sess_obj.history[-1]["ok"] is False
 
-    def test_non_numeric_pid_rejected(self) -> None:
+    def test_unknown_name_rejected(self) -> None:
         sess_obj = ReplSession()
         console, buf = _capture()
         assert dispatch_slash("/agents trace abc", sess_obj, console) is True
         out = buf.getvalue().lower()
-        assert "invalid pid" in out
+        assert "invalid pid or unknown agent name" in out
         assert sess_obj.history[-1]["ok"] is False
 
     def test_too_many_args_rejected(self) -> None:
@@ -561,6 +562,43 @@ class TestAgentsTrace:
         out = buf.getvalue()
         assert "claude-code" in out
         assert "8421" in out
+
+    def test_known_name_resolves_to_registered_pid(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        seen: list[int] = []
+
+        def _attach(pid: int) -> _FakeSession:
+            seen.append(pid)
+            return _FakeSession(chunks=[])
+
+        monkeypatch.setattr(agents_mod, "attach", _attach)
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace claude-code", sess_obj, console) is True
+        out = buf.getvalue()
+        assert seen == [8421]
+        assert "claude-code" in out
+        assert "8421" in out
+
+    def test_ambiguous_name_lists_candidate_pids(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="claude-code", pid=9001, command="claude"))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents trace claude-code", sess_obj, console) is True
+        out = buf.getvalue().lower()
+        assert "ambiguous agent name" in out
+        assert "8421" in out
+        assert "9001" in out
+        assert sess_obj.history[-1]["ok"] is False
 
     def test_renders_chunks_through_live(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Two chunks then StopIteration: the handler should append them
@@ -641,6 +679,36 @@ class TestAgentsTrace:
         out = buf.getvalue()
         assert "process exited" not in out
         assert "trace ended" in out
+
+
+class TestAgentsKill:
+    def test_known_name_resolves_to_registered_pid(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        seen: list[int] = []
+
+        def _terminate(pid: int) -> TerminateResult:
+            seen.append(pid)
+            return TerminateResult(pid=pid, exited=True, signal_sent="SIGTERM", elapsed_seconds=0.1)
+
+        monkeypatch.setattr(agents_mod, "terminate", _terminate)
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents kill claude-code --force", sess_obj, console) is True
+        out = buf.getvalue()
+        assert seen == [8421]
+        assert "Process exited" in out
+        assert AgentRegistry(path=tmp_path / "agents.jsonl").get(8421) is None
+
+    def test_unknown_name_rejected(self) -> None:
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents kill missing-agent --force", sess_obj, console) is True
+        assert "invalid pid or unknown agent name" in buf.getvalue().lower()
+        assert sess_obj.history[-1]["ok"] is False
 
 
 class TestAgentsWait:
