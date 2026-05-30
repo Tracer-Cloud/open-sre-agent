@@ -25,14 +25,38 @@ slug: "quickstart"
       </Tab>
     </Tabs>
 
+    If the binary install fails on an older Linux host, run from source with `uv`:
+
+    ```bash
+    git clone https://github.com/Tracer-Cloud/opensre.git
+    cd opensre
+    uv sync --frozen --extra dev
+    uv run opensre --version
+    ```
+
+    See [SETUP.md](https://github.com/Tracer-Cloud/opensre/blob/main/SETUP.md) for the full source setup.
+
   </Step>
 
   <Step title="Onboard">
-    Run the onboarding wizard to configure your LLM provider and connect your integrations (Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, Sentry):
+    Choose an onboarding path:
 
-    ```bash
-    opensre onboard
-    ```
+    <Tabs>
+      <Tab title="Local LLM (no API key)">
+        Recommended for first-time evaluation. This configures OpenSRE with Ollama so you can try the product before adding hosted LLM credentials.
+
+        ```bash
+        opensre onboard local_llm
+        ```
+      </Tab>
+      <Tab title="Hosted LLM">
+        Configure Anthropic, OpenAI, Bedrock, or another hosted provider, then connect integrations such as Grafana, Datadog, Honeycomb, Coralogix, Slack, AWS, GitHub MCP, and Sentry.
+
+        ```bash
+        opensre onboard
+        ```
+      </Tab>
+    </Tabs>
 
   </Step>
 
@@ -80,4 +104,4 @@ opensre uninstall --yes
 
 - **Docker is not running**: Start Docker Desktop, OrbStack, or Colima before running setup.
 - **`make` is missing**: Install it via your package manager (`brew install make` on macOS, `choco install make` on Windows).
-- **No local LLM provider is configured**: Run `opensre onboard` to select and configure your LLM credentials.
+- **No local LLM provider is configured**: Run `opensre onboard local_llm` for a no-API-key Ollama setup, or `opensre onboard` to select and configure hosted LLM credentials.

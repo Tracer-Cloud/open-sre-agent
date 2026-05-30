@@ -114,6 +114,17 @@ Windows (PowerShell):
 irm https://install.opensre.com | iex
 ```
 
+If the binary install fails on an older Linux host, run from source with `uv`:
+
+```bash
+git clone https://github.com/Tracer-Cloud/opensre.git
+cd opensre
+uv sync --frozen --extra dev
+uv run opensre --version
+```
+
+See [SETUP.md](SETUP.md) for the full source setup.
+
 <!--
 ```bash
 pipx install opensre
@@ -123,7 +134,15 @@ pipx install opensre
 
 ## Quick Start
 
-Configure once, then pick how you want to run investigations:
+Configure once, then pick how you want to run investigations.
+
+For first-time evaluation with a local LLM and no API key:
+
+```bash
+opensre onboard local_llm
+```
+
+For Anthropic, OpenAI, Bedrock, or another hosted provider:
 
 ```bash
 opensre onboard
