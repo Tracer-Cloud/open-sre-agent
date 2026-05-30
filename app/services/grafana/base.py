@@ -8,11 +8,14 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-import requests
+import httpx
 
+from app.services._error_helpers import capture_service_error
 from app.services.grafana.config import GrafanaAccountConfig
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEOUT = 10
 
 
 def _extract_datasource_uid(rule: dict) -> str:
@@ -50,6 +53,7 @@ class GrafanaClientBase:
 
     def __init__(self, config: GrafanaAccountConfig):
         self._config = config
+        self._client: httpx.Client | None = None
         self.account_id = config.account_id
         self.instance_url = config.instance_url
         self.read_token = config.read_token
@@ -63,6 +67,37 @@ class GrafanaClientBase:
     @property
     def is_configured(self) -> bool:
         return self._config.is_configured
+
+    def _get_client(self) -> httpx.Client:
+        if self._client is None:
+            headers = self._build_auth_headers()
+            self._client = httpx.Client(
+                headers=headers,
+                follow_redirects=True,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+        return self._client
+
+    def close(self) -> None:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self) -> GrafanaClientBase:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def _build_auth_headers(self) -> dict[str, str]:
+        if self.username and self.password:
+            credentials = base64.b64encode(
+                f"{self.username}:{self.password}".encode()
+            ).decode()
+            return {"Authorization": f"Basic {credentials}"}
+        if self.read_token:
+            return {"Authorization": f"Bearer {self.read_token}"}
+        return {}
 
     def _build_datasource_url(self, datasource_uid: str, path: str) -> str:
         return f"{self.instance_url}/api/datasources/proxy/uid/{datasource_uid}{path}"
@@ -131,7 +166,7 @@ class GrafanaClientBase:
     }
 
     # UIDs/names containing these substrings are internal/secondary datasources
-    # that should be deprioritized in favour of the primary ones.
+    # that should be deprioritised in favour of the primary ones.
     _DEPRIORITIZE_KEYWORDS = ("alert", "state-history", "ml-", "usage-insights")
 
     # UIDs/names containing these substrings are strong signals for primary datasources.
@@ -142,33 +177,16 @@ class GrafanaClientBase:
     }
 
     def discover_datasource_uids(self) -> dict[str, str]:
-        """Discover datasource UIDs by querying GET /api/datasources.
-
-        Iterates all datasources returned by the user's Grafana instance and
-        picks the best one matching each type (loki, tempo, prometheus).
-        Selection priority:
-        1. Datasource marked ``isDefault``
-        2. Datasource whose uid/name contains a primary hint (e.g. "logs" for loki)
-        3. Datasource whose uid/name does NOT contain deprioritized keywords
-        4. First datasource of that type (fallback)
-
-        Returns:
-            Dict with keys loki_uid, tempo_uid, mimir_uid (only present if found).
-        """
+        """Discover datasource UIDs by querying GET /api/datasources."""
         if not self.instance_url or not self.is_configured:
             return {}
 
         url = f"{self.instance_url}/api/datasources"
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
+            response = self._get_client().get(url, timeout=_DEFAULT_TIMEOUT)
             response.raise_for_status()
             datasources = response.json()
 
-            # Collect all candidates per type, then pick the best one.
             candidates: dict[str, list[dict]] = {key: [] for key in self._TYPE_MAP.values()}
 
             for ds in datasources:
@@ -222,7 +240,10 @@ class GrafanaClientBase:
                     hinted = [
                         d
                         for d in non_deprioritized
-                        if any(h in d["uid"].lower() or h in d["name"].lower() for h in hints)
+                        if any(
+                            h in d["uid"].lower() or h in d["name"].lower()
+                            for h in hints
+                        )
                     ]
                     if hinted:
                         result[result_key] = hinted[0]["uid"]
@@ -238,8 +259,15 @@ class GrafanaClientBase:
 
             logger.info("[grafana] Discovered datasource UIDs: %s", result)
             return result
-        except Exception as e:
-            logger.warning("[grafana] Failed to discover datasource UIDs: %s", e)
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "[grafana] Failed to discover datasource UIDs (HTTP %s): %s",
+                exc.response.status_code,
+                exc,
+            )
+            return {}
+        except Exception as exc:
+            logger.warning("[grafana] Failed to discover datasource UIDs: %s", exc)
             return {}
 
     def query_loki_label_values(self, label: str = "service_name") -> list[str]:
@@ -262,11 +290,7 @@ class GrafanaClientBase:
         """Query Grafana alert rules, optionally filtered by folder title."""
         url = f"{self.instance_url}/api/ruler/grafana/api/v1/rules"
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
+            response = self._get_client().get(url, timeout=_DEFAULT_TIMEOUT)
             response.raise_for_status()
             data = response.json()
 
@@ -284,24 +308,25 @@ class GrafanaClientBase:
                                 "condition": rule.get("grafana_alert", {}).get("condition", ""),
                                 "datasource_uid": _extract_datasource_uid(rule),
                                 "queries": _extract_rule_queries(rule),
-                                "state": rule.get("grafana_alert", {}).get("current_state", ""),
+                                "state": rule.get("grafana_alert", {}).get(
+                                    "current_state", ""
+                                ),
                                 "no_data_state": rule.get("grafana_alert", {}).get(
                                     "no_data_state", ""
                                 ),
                             }
                         )
             return rules
-        except Exception as e:
-            logger.warning("[grafana] Failed to query alert rules: %s", e)
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_alert_rules"
+            )
             return []
-
-    def _get_auth_headers(self) -> dict[str, str]:
-        if self.username and self.password:
-            credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
-            return {"Authorization": f"Basic {credentials}"}
-        if not self.read_token:
-            return {}
-        return {"Authorization": f"Bearer {self.read_token}"}
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_alert_rules"
+            )
+            return []
 
     def _make_request(
         self,
@@ -309,12 +334,7 @@ class GrafanaClientBase:
         params: dict[str, str] | None = None,
         timeout: int = 10,
     ) -> dict[str, Any]:
-        response = requests.get(
-            url,
-            headers=self._get_auth_headers(),
-            params=params,
-            timeout=timeout,
-        )
+        response = self._get_client().get(url, params=params, timeout=timeout)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         return result
