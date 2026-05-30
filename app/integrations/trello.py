@@ -4,16 +4,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from app.integrations._validation_helpers import report_validation_failure
+from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TRELLO_BASE_URL = "https://api.trello.com/1"
 
 
-class TrelloConfig(BaseModel):
+class TrelloConfig(StrictConfigModel):
     """Normalized Trello connection settings."""
 
     base_url: str = DEFAULT_TRELLO_BASE_URL

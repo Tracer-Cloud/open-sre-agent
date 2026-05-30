@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from app.integrations.trello import (
     DEFAULT_TRELLO_BASE_URL,
@@ -38,6 +39,25 @@ def test_build_trello_config_defaults() -> None:
     assert config.board_id == ""
     assert config.list_id == ""
     assert config.timeout_seconds == 15.0
+
+
+def test_trello_config_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError):
+        TrelloConfig(api_key="k", token="t", bogus_field="x")  # type: ignore[call-arg]
+
+
+def test_trello_config_strips_string_fields() -> None:
+    config = TrelloConfig(
+        api_key="  key  ",
+        token="  token  ",
+        board_id="  board  ",
+        list_id="  list  ",
+    )
+
+    assert config.api_key == "key"
+    assert config.token == "token"
+    assert config.board_id == "board"
+    assert config.list_id == "list"
 
 
 def test_trello_config_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
