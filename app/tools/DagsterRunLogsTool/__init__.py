@@ -26,7 +26,9 @@ from app.tools.tool_decorator import tool
         "always a generic DagsterExecutionStepExecutionError). If "
         "`summary.truncated` is true, the run produced more events than "
         "the inspection cap (`summary.events_examined`); treat the "
-        "failure_count as a LOWER BOUND and hedge your diagnosis."
+        "failure_count as a LOWER BOUND and hedge your diagnosis. If "
+        "`summary.fetch_error` is set, a mid-pagination error stopped "
+        "the fetch early; the failures shown are a partial set."
     ),
     source="dagster",
     surfaces=("investigation", "chat"),

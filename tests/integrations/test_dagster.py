@@ -896,6 +896,148 @@ class TestExtractStepFailures:
         # Must be chronological (100, 200, 300), NOT non-failures-first (100, 300, 200).
         assert timestamps == [100, 200, 300]
 
+    def test_get_run_logs_mid_pagination_error_preserves_collected_failures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If page N>1 returns an error, failures already collected from
+        earlier pages should be preserved."""
+        failure_event = {
+            "__typename": "ExecutionStepFailureEvent",
+            "stepKey": "page_1_op",
+            "timestamp": "100",
+            "error": {
+                "className": "DagsterExecutionStepExecutionError",
+                "cause": {"className": "ValueError", "message": "boom"},
+            },
+        }
+        pages = [
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [failure_event],
+                        "cursor": "page-2",
+                        "hasMore": True,
+                    }
+                }
+            },
+            {"error": "Request to Dagster failed: timeout after 10s"},
+        ]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return pages.pop(0)
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="partial")
+
+        # Page-1 failure preserved
+        assert result["summary"]["failure_count"] == 1
+        assert result["summary"]["failures"][0]["step_key"] == "page_1_op"
+        # Truncation flag set because fetch was incomplete.
+        assert result["summary"]["truncated"] is True
+        # fetch_error signals partial fetch with the original error message.
+        assert result["summary"]["fetch_error"] == ("Request to Dagster failed: timeout after 10s")
+
+    def test_get_run_logs_first_page_error_still_propagates_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First-page errors have no accumulated data to save.
+        so the raw envelope propagates unchanged."""
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return {"error": "Request to Dagster failed: connection refused"}
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="dead")
+
+        assert result == {"error": "Request to Dagster failed: connection refused"}
+        assert "summary" not in result
+
+    def test_get_run_logs_mid_pagination_non_event_response_preserves_collected_failures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If page N>1 returns a non-EventConnection failures already collected from
+        earlier pages should be preserved."""
+        failure_event = {
+            "__typename": "ExecutionStepFailureEvent",
+            "stepKey": "page_1_op",
+            "timestamp": "100",
+            "error": {
+                "className": "DagsterExecutionStepExecutionError",
+                "cause": {"className": "ValueError", "message": "boom"},
+            },
+        }
+        pages = [
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [failure_event],
+                        "cursor": "page-2",
+                        "hasMore": True,
+                    }
+                }
+            },
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "RunNotFoundError",
+                        "message": "Run not found",
+                    }
+                }
+            },
+        ]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return pages.pop(0)
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="vanished")
+
+        # Page-1 failure preserved
+        assert result["summary"]["failure_count"] == 1
+        assert result["summary"]["failures"][0]["step_key"] == "page_1_op"
+        assert result["summary"]["truncated"] is True
+        # fetch_error names the unexpected typename.
+        assert "RunNotFoundError" in result["summary"]["fetch_error"]
+        assert "page 2" in result["summary"]["fetch_error"]
+
     def test_get_run_logs_page_cap_safety_net(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A server that says ``hasMore=true`` forever must terminate at
         ``MAX_RUN_LOG_PAGES``; ``truncated`` is set to signal incomplete fetch."""

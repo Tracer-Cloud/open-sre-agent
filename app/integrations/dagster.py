@@ -175,10 +175,10 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
     kept events adjacent to failures (which typically land later in the
     stream). Pagination continues until ``hasMore=false`` so all failures
     in the run are surfaced; ``MAX_RUN_LOG_PAGES`` is a safety net for
-    outsized runs. ``summary`` reports ``failure_count`` (from kept failure
-    events), ``events_examined`` (total events returned), and ``truncated``
-    (true if older non-failures were dropped from the window or the page
-    cap stopped further pagination).
+    outsized runs.
+
+    A mid-pagination error preserves the failures already collected and surfaces
+    ``summary.fetch_error`` so callers know the data is partial.
     """
     failure_events: list[dict[str, Any]] = []
     non_failure_events: deque[dict[str, Any]] = deque(maxlen=MAX_NON_FAILURE_RUN_LOG_EVENTS)
@@ -187,6 +187,7 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
     cursor: str | None = None
     pages_fetched = 0
     page_cap_reached = False
+    fetch_error: str | None = None
 
     with _client(config) as c:
         while True:
@@ -198,11 +199,28 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
             )
             pages_fetched += 1
             if "error" in page:
-                return page
+                if pages_fetched == 1:
+                    # First-page: nothing collected yet,
+                    # propagate the raw envelope as-is.
+                    return page
+                # Mid-pagination error: preserve accumulated failures, signal
+                # partial fetch via summary.fetch_error.
+                fetch_error = page["error"]
+                break
             data = page.get("data") or {}
             logs_for_run = data.get("logsForRun") or {}
             if logs_for_run.get("__typename") != "EventConnection":
-                return page
+                if pages_fetched == 1:
+                    # First-page non-event response (e.g. RunNotFoundError,
+                    # PythonError): nothing collected yet, propagate as-is.
+                    return page
+                # Mid-pagination non-event response: preserve accumulated failures,
+                # signal partial via summary.fetch_error.
+                fetch_error = (
+                    f"unexpected response type on page {pages_fetched}: "
+                    f"{logs_for_run.get('__typename')}"
+                )
+                break
             for event in logs_for_run.get("events") or []:
                 if event.get("__typename") in _FAILURE_EVENT_TYPES:
                     failure_events.append(event)
@@ -217,7 +235,7 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
                 break
 
     window_overflowed = non_failure_seen > MAX_NON_FAILURE_RUN_LOG_EVENTS
-    truncated = window_overflowed or page_cap_reached
+    truncated = window_overflowed or page_cap_reached or (fetch_error is not None)
     # Sort by timestamp to preserve causal chronology. otherwise, a
     # downstream skip event in non_failure_events would appear BEFORE
     # the upstream failure in failure_events in the returned array
@@ -231,6 +249,8 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
     summary = _extract_step_failures({"events": failure_events})
     summary["events_examined"] = len(aggregated_events)
     summary["truncated"] = truncated
+    if fetch_error is not None:
+        summary["fetch_error"] = fetch_error
     return {"data": {"logsForRun": aggregated}, "summary": summary}
 
 
