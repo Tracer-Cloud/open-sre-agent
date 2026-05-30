@@ -23,7 +23,10 @@ from app.tools.tool_decorator import tool
         "is greater than 1, surface ALL failures in your diagnosis as "
         "distinct root causes, do not pick only one. The underlying "
         "user-code exception lives in `cause_message` (the wrapper is "
-        "always a generic DagsterExecutionStepExecutionError)."
+        "always a generic DagsterExecutionStepExecutionError). If "
+        "`summary.truncated` is true, the run produced more events than "
+        "the inspection cap (`summary.events_examined`); treat the "
+        "failure_count as a LOWER BOUND and hedge your diagnosis."
     ),
     source="dagster",
     surfaces=("investigation", "chat"),

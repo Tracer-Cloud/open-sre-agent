@@ -9,6 +9,7 @@ helper defaults.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +20,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DAGSTER_TIMEOUT_S = 10
 DEFAULT_DAGSTER_MAX_RESULTS = 25
+DEFAULT_DAGSTER_RUN_LOG_PAGE_SIZE = 250
+# Sliding window of the most recent non-failure events kept from a run log;
+# bounds LLM context bloat. Older non-failures are evicted so the kept window
+# stays adjacent to the (typically later-in-stream) failures, preserving
+# diagnostic context. Failure events are ALWAYS retained regardless of this cap.
+MAX_NON_FAILURE_RUN_LOG_EVENTS = 1500
+# Safety net on pagination depth; bounds HTTP latency for outsized runs.
+# 100 pages * 250 events = up to 25,000 events scanned .
+MAX_RUN_LOG_PAGES = 100
+_FAILURE_EVENT_TYPES = frozenset({"ExecutionStepFailureEvent", "RunFailureEvent"})
 
 
 class DagsterConfig(StrictConfigModel):
@@ -147,16 +158,66 @@ def _extract_step_failures(logs_for_run: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
-    """Fetch event logs for a run; enriches the response with a ``summary`` field
-    pre-counting step failures (see ``_extract_step_failures``).
+    """Fetch event logs for a run; failure events are kept in full, non-failure
+    events are held in a sliding window of the most recent
+    ``MAX_NON_FAILURE_RUN_LOG_EVENTS`` to bound LLM context while keeping the
+    kept events adjacent to failures (which typically land later in the
+    stream). Pagination continues until ``hasMore=false`` so all failures
+    in the run are surfaced; ``MAX_RUN_LOG_PAGES`` is a safety net for
+    outsized runs. ``summary`` reports ``failure_count`` (from kept failure
+    events), ``events_examined`` (total events returned), and ``truncated``
+    (true if older non-failures were dropped from the window or the page
+    cap stopped further pagination).
     """
+    failure_events: list[dict[str, Any]] = []
+    non_failure_events: deque[dict[str, Any]] = deque(maxlen=MAX_NON_FAILURE_RUN_LOG_EVENTS)
+    non_failure_seen = 0
+    last_cursor: str | None = None
+    cursor: str | None = None
+    pages_fetched = 0
+    page_cap_reached = False
+
     with _client(config) as c:
-        result = c.get_run_logs(run_id=run_id)
-    data = result.get("data") or {}
-    logs_for_run = data.get("logsForRun") or {}
-    if logs_for_run.get("__typename") == "EventConnection":
-        result["summary"] = _extract_step_failures(logs_for_run)
-    return result
+        while True:
+            if pages_fetched >= MAX_RUN_LOG_PAGES:
+                page_cap_reached = True
+                break
+            page = c.get_run_logs(
+                run_id=run_id, limit=DEFAULT_DAGSTER_RUN_LOG_PAGE_SIZE, cursor=cursor
+            )
+            pages_fetched += 1
+            if "error" in page:
+                return page
+            data = page.get("data") or {}
+            logs_for_run = data.get("logsForRun") or {}
+            if logs_for_run.get("__typename") != "EventConnection":
+                return page
+            for event in logs_for_run.get("events") or []:
+                if event.get("__typename") in _FAILURE_EVENT_TYPES:
+                    failure_events.append(event)
+                else:
+                    non_failure_seen += 1
+                    non_failure_events.append(event)  # deque auto-evicts oldest when full
+            last_cursor = logs_for_run.get("cursor")
+            if not logs_for_run.get("hasMore"):
+                break
+            cursor = last_cursor
+            if cursor is None:
+                break
+
+    window_overflowed = non_failure_seen > MAX_NON_FAILURE_RUN_LOG_EVENTS
+    truncated = window_overflowed or page_cap_reached
+    aggregated_events = list(non_failure_events) + failure_events
+    aggregated = {
+        "__typename": "EventConnection",
+        "events": aggregated_events,
+        "cursor": last_cursor,
+        "hasMore": truncated,
+    }
+    summary = _extract_step_failures({"events": failure_events})
+    summary["events_examined"] = len(aggregated_events)
+    summary["truncated"] = truncated
+    return {"data": {"logsForRun": aggregated}, "summary": summary}
 
 
 def list_assets_with_materialization(

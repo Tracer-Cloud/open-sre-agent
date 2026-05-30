@@ -54,8 +54,8 @@ query ListRuns($limit: Int!, $statuses: [RunStatus!], $pipelineName: String) {
 # Fetch a run's event log via top-level logsForRun (preferred over
 # runOrError.eventConnection); events are a DagsterRunEvent union.
 GET_RUN_LOGS = """
-query GetRunLogs($runId: ID!, $limit: Int) {
-  logsForRun(runId: $runId, limit: $limit) {
+query GetRunLogs($runId: ID!, $limit: Int, $afterCursor: String) {
+  logsForRun(runId: $runId, limit: $limit, afterCursor: $afterCursor) {
     __typename
     ... on EventConnection {
       events {

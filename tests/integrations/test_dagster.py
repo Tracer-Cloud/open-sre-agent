@@ -378,6 +378,36 @@ class TestGetRunLogs:
         variables = captured[0]["variables"]
         assert variables["runId"] == "abc-123"
 
+    def test_sends_after_cursor_variable_when_cursor_passed(self) -> None:
+        """Pin the GraphQL variable name: Dagster's logsForRun field expects
+        ``afterCursor``, not ``cursor``. A wrong name silently passes our
+        mock-based pagination tests but fails against a real Dagster server
+        with ``Unknown argument 'cursor' on field 'logsForRun'``."""
+        captured: list[dict[str, Any]] = []
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            captured.append(_read_request_body(request))
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "logsForRun": {
+                            "__typename": "EventConnection",
+                            "events": [],
+                            "cursor": None,
+                            "hasMore": False,
+                        }
+                    }
+                },
+            )
+
+        client = DagsterClient(endpoint="http://x", http_client=_mock_client(handler=_handler))
+        client.get_run_logs(run_id="abc-123", cursor="page-2-cursor")
+        variables = captured[0]["variables"]
+        # Must be `afterCursor` per Dagster's schema, never `cursor`.
+        assert variables.get("afterCursor") == "page-2-cursor"
+        assert "cursor" not in variables
+
     def test_run_not_found_union_member_propagates(self) -> None:
         client = DagsterClient(
             endpoint="http://x",
@@ -594,6 +624,299 @@ class TestExtractStepFailures:
         result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="missing")
 
         assert "summary" not in result
+
+    def test_get_run_logs_paginates_until_has_more_false(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A run spanning multiple pages: every page's failures must roll up into
+        the summary"""
+
+        def _failure_event(step_key: str, exc_class: str) -> dict[str, Any]:
+            return {
+                "__typename": "ExecutionStepFailureEvent",
+                "stepKey": step_key,
+                "timestamp": "1",
+                "error": {
+                    "className": "DagsterExecutionStepExecutionError",
+                    "cause": {"className": exc_class, "message": f"{exc_class} on {step_key}"},
+                },
+            }
+
+        pages = [
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [_failure_event("op_a", "TimeoutError")],
+                        "cursor": "page-2-cursor",
+                        "hasMore": True,
+                    }
+                }
+            },
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [_failure_event("op_b", "PermissionError")],
+                        "cursor": "end",
+                        "hasMore": False,
+                    }
+                }
+            },
+        ]
+
+        captured_cursors: list[str | None] = []
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            captured_cursors.append(cursor)
+            return pages.pop(0)
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="run-1")
+
+        # Pagination drove 2 calls, with the second using the cursor from the first.
+        assert captured_cursors == [None, "page-2-cursor"]
+        # Both failures are present in the aggregated summary.
+        assert result["summary"]["failure_count"] == 2
+        assert [f["step_key"] for f in result["summary"]["failures"]] == ["op_a", "op_b"]
+        # Truncation flag is false when we reached has_more=False naturally.
+        assert result["summary"]["truncated"] is False
+        assert result["summary"]["events_examined"] == 2
+
+    def test_get_run_logs_caps_non_failure_events_but_keeps_late_failures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Load-bearing guarantee: a failure that arrives AFTER the non-failure
+        event cap is hit must still be collected and surfaced in the summary."""
+        from app.integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
+
+        def _benign(i: int) -> dict[str, Any]:
+            return {"__typename": "EngineEvent", "stepKey": None, "timestamp": str(i)}
+
+        late_failure = {
+            "__typename": "ExecutionStepFailureEvent",
+            "stepKey": "deep_step",
+            "timestamp": "9999",
+            "error": {
+                "className": "DagsterExecutionStepExecutionError",
+                "cause": {"className": "RuntimeError", "message": "found past the cap"},
+            },
+        }
+
+        # Page 1: enough benign events to fill the cap exactly.
+        # Page 2: one more benign (discarded — cap reached) plus the late failure.
+        pages = [
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [_benign(i) for i in range(MAX_NON_FAILURE_RUN_LOG_EVENTS)],
+                        "cursor": "page-2",
+                        "hasMore": True,
+                    }
+                }
+            },
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [_benign(99999), late_failure],
+                        "cursor": "end",
+                        "hasMore": False,
+                    }
+                }
+            },
+        ]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return pages.pop(0)
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="late-fail")
+
+        # Failure past the non-failure cap was captured.
+        assert result["summary"]["failure_count"] == 1
+        assert result["summary"]["failures"][0]["step_key"] == "deep_step"
+        # Truncation flag still raised because non-failure data is incomplete.
+        assert result["summary"]["truncated"] is True
+        # Aggregated events = capped non-failure (1500) + all failures (1) = 1501.
+        assert result["summary"]["events_examined"] == MAX_NON_FAILURE_RUN_LOG_EVENTS + 1
+
+    def test_get_run_logs_sliding_window_drops_oldest_non_failures(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When more non-failure events arrive than the window can hold, the
+        OLDEST events are evicted (FIFO). This keeps the surviving context
+        adjacent to failures (which typically land later in the stream),
+        rather than at the run's chronological start."""
+        from app.integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
+
+        def _benign(i: int) -> dict[str, Any]:
+            return {"__typename": "EngineEvent", "stepKey": None, "timestamp": str(i)}
+
+        # Page 1 fills the window exactly; page 2 adds 2 more, forcing the
+        # 2 oldest to evict.
+        pages = [
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [_benign(i) for i in range(MAX_NON_FAILURE_RUN_LOG_EVENTS)],
+                        "cursor": "page-2",
+                        "hasMore": True,
+                    }
+                }
+            },
+            {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [
+                            _benign(MAX_NON_FAILURE_RUN_LOG_EVENTS),
+                            _benign(MAX_NON_FAILURE_RUN_LOG_EVENTS + 1),
+                        ],
+                        "cursor": "end",
+                        "hasMore": False,
+                    }
+                }
+            },
+        ]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return pages.pop(0)
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="sliding")
+
+        events = result["data"]["logsForRun"]["events"]
+        timestamps = [e["timestamp"] for e in events]
+
+        # The kept window is exactly the cap size.
+        assert len(events) == MAX_NON_FAILURE_RUN_LOG_EVENTS
+        # Two newest events are present (most recent context preserved).
+        assert timestamps[-1] == str(MAX_NON_FAILURE_RUN_LOG_EVENTS + 1)
+        assert timestamps[-2] == str(MAX_NON_FAILURE_RUN_LOG_EVENTS)
+        # Two oldest events were evicted from the window.
+        assert "0" not in timestamps
+        assert "1" not in timestamps
+        # Truncation flag set because the window overflowed.
+        assert result["summary"]["truncated"] is True
+
+    def test_get_run_logs_page_cap_safety_net(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A server that says ``hasMore=true`` forever must terminate at
+        ``MAX_RUN_LOG_PAGES``; ``truncated`` is set to signal incomplete fetch."""
+        from app.integrations.dagster import MAX_RUN_LOG_PAGES
+
+        pages_served = [0]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            pages_served[0] += 1
+            return {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [
+                            {"__typename": "EngineEvent", "stepKey": None, "timestamp": "1"}
+                        ],
+                        "cursor": f"page-{pages_served[0]}",
+                        "hasMore": True,
+                    }
+                }
+            }
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="runaway")
+
+        assert pages_served[0] == MAX_RUN_LOG_PAGES
+        assert result["summary"]["truncated"] is True
+        assert result["data"]["logsForRun"]["hasMore"] is True
+
+    def test_get_run_logs_exits_when_has_more_true_but_cursor_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Defensive: a buggy server that says ``hasMore=true`` but returns no
+        cursor should not loop forever; the helper exits the loop safely."""
+        called = [0]
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            called[0] += 1
+            return {
+                "data": {
+                    "logsForRun": {
+                        "__typename": "EventConnection",
+                        "events": [],
+                        "cursor": None,
+                        "hasMore": True,
+                    }
+                }
+            }
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="buggy")
+
+        assert called[0] == 1
+        assert result["summary"]["failure_count"] == 0
+        assert result["summary"]["truncated"] is False
 
 
 # --- TestComputeRunDurations -----------------------------------------------
@@ -958,13 +1281,21 @@ class TestIntegrationHelpers:
     def test_get_run_logs_routes_to_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[dict[str, Any]] = []
 
-        def fake_get_run_logs(self: DagsterClient, *, run_id: str) -> dict[str, Any]:
-            calls.append({"run_id": run_id})
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            calls.append({"run_id": run_id, "limit": limit, "cursor": cursor})
             return {"data": {"routed": True}}
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         result = get_run_logs(DagsterConfig(endpoint="http://x"), run_id="abc")
-        assert calls == [{"run_id": "abc"}]
+        # The first (and only) call has cursor=None and the default page size.
+        assert calls == [{"run_id": "abc", "limit": 250, "cursor": None}]
+        # Non-EventConnection payload propagates as-is, no pagination.
         assert result == {"data": {"routed": True}}
 
     def test_list_assets_routes_to_client(self, monkeypatch: pytest.MonkeyPatch) -> None:

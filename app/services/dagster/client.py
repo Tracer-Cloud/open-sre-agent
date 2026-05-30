@@ -122,9 +122,14 @@ class DagsterClient:
             variables["pipelineName"] = job_name
         return self._post(LIST_RUNS, variables)
 
-    def get_run_logs(self, *, run_id: str, limit: int = 250) -> dict[str, Any]:
-        """Issue the GetRunLogs query for a specific run id."""
-        return self._post(GET_RUN_LOGS, {"runId": run_id, "limit": limit})
+    def get_run_logs(
+        self, *, run_id: str, limit: int = 250, cursor: str | None = None
+    ) -> dict[str, Any]:
+        """Issue the GetRunLogs query for a specific run id (single page)."""
+        variables: dict[str, Any] = {"runId": run_id, "limit": limit}
+        if cursor is not None:
+            variables["afterCursor"] = cursor
+        return self._post(GET_RUN_LOGS, variables)
 
     def list_assets_with_materialization(self, *, limit: int = 25) -> dict[str, Any]:
         """Issue the ListAssets query and return the parsed payload."""
