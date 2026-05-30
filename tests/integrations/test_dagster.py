@@ -838,6 +838,64 @@ class TestExtractStepFailures:
         # Truncation flag set because the window overflowed.
         assert result["summary"]["truncated"] is True
 
+    def test_get_run_logs_aggregated_events_sorted_chronologically(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Aggregated events must preserve chronological order even when a
+        non-failure event (e.g. a downstream skip) lands AFTER the upstream
+        failure that caused it."""
+        page = {
+            "data": {
+                "logsForRun": {
+                    "__typename": "EventConnection",
+                    "events": [
+                        # T=100: upstream step started
+                        {"__typename": "EngineEvent", "stepKey": "start", "timestamp": "100"},
+                        # T=200: upstream step FAILED (kept in failure_events)
+                        {
+                            "__typename": "ExecutionStepFailureEvent",
+                            "stepKey": "upstream_op",
+                            "timestamp": "200",
+                            "error": {
+                                "className": "DagsterExecutionStepExecutionError",
+                                "cause": {"className": "ValueError", "message": "boom"},
+                            },
+                        },
+                        # T=300: downstream step skipped (kept in non_failure_events)
+                        {
+                            "__typename": "EngineEvent",
+                            "stepKey": "downstream_op",
+                            "timestamp": "300",
+                        },
+                    ],
+                    "cursor": "end",
+                    "hasMore": False,
+                }
+            }
+        }
+
+        def fake_get_run_logs(
+            self: DagsterClient,
+            *,
+            run_id: str,
+            limit: int = 250,
+            cursor: str | None = None,
+        ) -> dict[str, Any]:
+            return page
+
+        from app.integrations import dagster as dagster_module
+        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+
+        monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
+        monkeypatch.setattr(
+            dagster_module, "_client", lambda cfg: DagsterClient(endpoint=cfg.endpoint)
+        )
+        result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="ordering")
+        events = result["data"]["logsForRun"]["events"]
+        timestamps = [int(e["timestamp"]) for e in events]
+        # Must be chronological (100, 200, 300), NOT non-failures-first (100, 300, 200).
+        assert timestamps == [100, 200, 300]
+
     def test_get_run_logs_page_cap_safety_net(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A server that says ``hasMore=true`` forever must terminate at
         ``MAX_RUN_LOG_PAGES``; ``truncated`` is set to signal incomplete fetch."""

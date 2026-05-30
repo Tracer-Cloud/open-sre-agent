@@ -130,6 +130,17 @@ def list_runs(
     return _compute_run_durations(result)
 
 
+def _event_timestamp(event: dict[str, Any]) -> float:
+    """Numeric timestamp for sorting; defaults to 0.0 for missing/malformed values."""
+    ts = event.get("timestamp")
+    if ts is None:
+        return 0.0
+    try:
+        return float(ts)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _extract_step_failures(logs_for_run: dict[str, Any]) -> dict[str, Any]:
     """Roll up step-level failures from a Dagster event log.
 
@@ -207,7 +218,10 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
 
     window_overflowed = non_failure_seen > MAX_NON_FAILURE_RUN_LOG_EVENTS
     truncated = window_overflowed or page_cap_reached
-    aggregated_events = list(non_failure_events) + failure_events
+    # Sort by timestamp to preserve causal chronology. otherwise, a
+    # downstream skip event in non_failure_events would appear BEFORE
+    # the upstream failure in failure_events in the returned array
+    aggregated_events = sorted(list(non_failure_events) + failure_events, key=_event_timestamp)
     aggregated = {
         "__typename": "EventConnection",
         "events": aggregated_events,
