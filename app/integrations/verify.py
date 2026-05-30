@@ -30,6 +30,7 @@ _verify_grafana = _adapters._verify_grafana
 _verify_helm = _adapters._verify_helm
 _verify_honeycomb = _adapters._verify_honeycomb
 _verify_incident_io = _adapters._verify_incident_io
+_verify_jenkins = _adapters._verify_jenkins
 _verify_kafka = _adapters._verify_kafka
 _verify_mariadb = _adapters._verify_mariadb
 _verify_mongodb = _adapters._verify_mongodb
@@ -175,6 +176,7 @@ __all__ = [
     "_verify_helm",
     "_verify_honeycomb",
     "_verify_incident_io",
+    "_verify_jenkins",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",

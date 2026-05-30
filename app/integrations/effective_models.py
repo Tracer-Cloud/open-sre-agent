@@ -99,3 +99,4 @@ class EffectiveIntegrations(StrictConfigModel):
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
     signoz: EffectiveIntegrationEntry | None = None
+    jenkins: EffectiveIntegrationEntry | None = None

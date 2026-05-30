@@ -24,6 +24,7 @@ from app.integrations._verification_adapters import (
     _verify_helm,
     _verify_honeycomb,
     _verify_incident_io,
+    _verify_jenkins,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -133,6 +134,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=15,
         verify_order=None,
+    ),
+    IntegrationSpec(
+        service="jenkins",
+        verifier=_verify_jenkins,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
     ),
     IntegrationSpec(
         service="mongodb",

@@ -25,6 +25,7 @@ from app.integrations.config_models import (
     TracerIntegrationConfig,
 )
 from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
 from app.integrations.mongodb import build_mongodb_config, validate_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config, validate_mongodb_atlas_config
@@ -596,6 +597,11 @@ _verify_bitbucket = build_validation_verifier(
     build_config=_build_bitbucket_config,
     validate_config=_validate_bitbucket_config,
 )
+_verify_jenkins = build_validation_verifier(
+    "jenkins",
+    build_config=build_jenkins_config,
+    validate_config=validate_jenkins_config,
+)
 
 _verify_datadog = build_probe_verifier(
     "datadog",
@@ -692,6 +698,7 @@ __all__ = [
     "_verify_honeycomb",
     "_verify_helm",
     "_verify_incident_io",
+    "_verify_jenkins",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",
