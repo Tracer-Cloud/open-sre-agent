@@ -5,14 +5,16 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import requests
+import httpx
 
-from app.utils.errors import report_exception
+from app.services._error_helpers import capture_service_error
 
 if TYPE_CHECKING:
     from app.services.grafana.base import GrafanaClientBase
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEOUT = 10
 
 
 class TempoMixin:
@@ -75,19 +77,21 @@ class TempoMixin:
                 "service_name": service_name,
                 "account_id": self.account_id,
             }
-        except Exception as e:
-            error_msg = str(e)
-            response_text = ""
-            if hasattr(e, "response") and e.response is not None:
-                response_text = e.response.text[:300]
-                error_msg = f"Tempo query failed: {e.response.status_code}"
-
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_tempo"
+            )
             return {
                 "success": False,
-                "error": error_msg,
-                "response": response_text,
+                "error": f"Tempo query failed: {exc.response.status_code}",
+                "response": exc.response.text[:300],
                 "traces": [],
             }
+        except Exception as exc:
+            capture_service_error(
+                exc, logger=logger, integration="grafana", method="query_tempo"
+            )
+            return {"success": False, "error": str(exc), "traces": []}
 
     def _get_trace_details(  # type: ignore[misc]
         self: GrafanaClientBase,
@@ -107,11 +111,7 @@ class TempoMixin:
         )
 
         try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
+            response = self._get_client().get(url, timeout=_DEFAULT_TIMEOUT)
 
             if response.status_code == 200:
                 trace_data = response.json()
@@ -123,7 +123,9 @@ class TempoMixin:
                             for scope in batch["scopeSpans"]:
                                 if "spans" in scope:
                                     for span in scope["spans"]:
-                                        attributes = self._extract_span_attributes(span)  # type: ignore[attr-defined]
+                                        attributes = self._extract_span_attributes(  # type: ignore[attr-defined]
+                                            span
+                                        )
                                         spans.append(
                                             {
                                                 "name": span.get("name", "unknown"),
@@ -132,17 +134,23 @@ class TempoMixin:
                                         )
 
                 return {"spans": spans}
-        except Exception as exc:
-            report_exception(
+
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
                 exc,
                 logger=logger,
-                message="Failed to fetch Tempo trace spans",
-                severity="warning",
-                tags={
-                    "surface": "service_client",
-                    "integration": "grafana",
-                    "component": "app.services.grafana.tempo",
-                },
+                integration="grafana",
+                method="get_trace_details",
+                extras={"trace_id": trace_id},
+            )
+            return {"spans": []}
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="grafana",
+                method="get_trace_details",
                 extras={"trace_id": trace_id},
             )
             return {"spans": []}
