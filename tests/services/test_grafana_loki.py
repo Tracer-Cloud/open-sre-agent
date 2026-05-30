@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from app.services.grafana.loki import LokiMixin
@@ -178,7 +179,7 @@ class TestQueryLokiNotConfigured:
 class TestQueryLokiExceptions:
     """Exceptions surface as a stable failure envelope."""
 
-    def test_plain_exception_returns_str_error_and_empty_response(self) -> None:
+    def test_plain_exception_returns_str_error(self) -> None:
         host = _FakeLokiHost()
         host.make_request_mock.side_effect = RuntimeError("connection refused")
 
@@ -187,17 +188,19 @@ class TestQueryLokiExceptions:
         assert result == {
             "success": False,
             "error": "connection refused",
-            "response": "",
             "logs": [],
         }
 
-    def test_exception_with_response_includes_status_and_truncated_text(self) -> None:
+    def test_httpx_status_error_includes_status_and_truncated_text(self) -> None:
         host = _FakeLokiHost()
 
         long_text = "x" * 500
-        response = MagicMock(status_code=502, text=long_text)
-        err = RuntimeError("bad gateway")
-        err.response = response  # type: ignore[attr-defined]
+        mock_response = MagicMock(status_code=502, text=long_text)
+        err = httpx.HTTPStatusError(
+            "bad gateway",
+            request=MagicMock(),
+            response=mock_response,
+        )
         host.make_request_mock.side_effect = err
 
         result = host.query_loki(_QUERY)
@@ -207,18 +210,6 @@ class TestQueryLokiExceptions:
         assert result["response"] == long_text[:300]
         assert len(result["response"]) == 300
         assert result["logs"] == []
-
-    def test_exception_with_none_response_falls_back_to_str_error(self) -> None:
-        host = _FakeLokiHost()
-        err = RuntimeError("transport error")
-        err.response = None  # type: ignore[attr-defined]
-        host.make_request_mock.side_effect = err
-
-        result = host.query_loki(_QUERY)
-
-        assert result["success"] is False
-        assert result["error"] == "transport error"
-        assert result["response"] == ""
 
 
 # ---------------------------------------------------------------------------
