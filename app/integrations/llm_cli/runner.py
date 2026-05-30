@@ -30,7 +30,6 @@ from app.integrations.llm_cli.errors import (
     CLIInterruptedError,
     CLITimeoutError,
 )
-from app.integrations.llm_cli.failure_classifier import classify_llm_failure
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.text import flatten_messages_to_prompt
 from app.llm_reasoning_effort import get_active_reasoning_effort
@@ -245,12 +244,6 @@ class CLIBackedLLMClient:
                     auth_hint=self._adapter.auth_hint,
                     detail=base,
                 )
-            # Replace the raw exit-code message with an actionable description
-            # when a known failure category is detected (quota, auth, context,
-            # network). Unknown failures fall through with the raw message.
-            failure_hint = classify_llm_failure(out, err, proc.returncode)
-            if failure_hint is not None:
-                base = f"{self._adapter.name}: {failure_hint} (exit {proc.returncode})"
             if auth_probe_unclear:
                 message = (
                     f"{base}\n\n"

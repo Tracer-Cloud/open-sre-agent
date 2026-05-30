@@ -224,25 +224,27 @@ class OpenCodeAdapter:
         return (stdout or "").strip()
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
         err = (stderr or "").strip()
         out = (stdout or "").strip()
-        bits = [f"opencode run exited with code {returncode}"]
-
-        # Check for common auth errors
         combined = (err + " " + out).lower()
+        extra: tuple[str, ...] = ()
         if "not authenticated" in combined or ("auth" in combined and "failed" in combined):
-            bits.append("Authentication failed. Run: opencode auth login")
+            extra = ("Authentication failed. Run: opencode auth login",)
         elif "model" in combined and ("not found" in combined or "invalid" in combined):
-            bits.append(
-                "Model not found. Check OPENCODE_MODEL format: provider/model (e.g., openai/gpt-5.4-mini)"
+            extra = (
+                "Model not found. Check OPENCODE_MODEL format: "
+                "provider/model (e.g., openai/gpt-5.4-mini)",
             )
         elif "rate limit" in combined or "quota" in combined:
-            bits.append(
-                "Rate limited or quota exceeded. Try again later or check your provider plan"
-            )
+            extra = ("Rate limited or quota exceeded. Try again later or check your provider plan",)
 
-        if err:
-            bits.append(err[:2000])
-        elif out:
-            bits.append(out[:2000])
-        return ". ".join(bits)
+        return explain_cli_failure(
+            exit_label="opencode run",
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+            extra_messages=extra,
+            always_include_output_snippet=bool(extra),
+        )
