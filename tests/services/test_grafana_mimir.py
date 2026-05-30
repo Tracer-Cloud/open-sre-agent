@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import httpx
+
 from app.services.grafana.mimir import MimirMixin
 
 
@@ -108,23 +110,22 @@ def test_query_mimir_exception_handling():
 
 
 def test_query_mimir_http_exception_handling():
+    """Test HTTPStatusError exception formatting."""
     client = DummyMimirClient()
 
-    # 1. Create a fake HTTP response object
     mock_response = MagicMock()
     mock_response.status_code = 502
     mock_response.text = "Bad Gateway: Mimir database is unreachable"
 
-    # 2. Create a generic exception, but attach our fake response to it
-    mock_exception = Exception("HTTP Error")
-    mock_exception.response = mock_response
-
-    # 3. Force the mock client to crash using our custom exception
+    mock_exception = httpx.HTTPStatusError(
+        "HTTP Error",
+        request=MagicMock(),
+        response=mock_response,
+    )
     client._make_request.side_effect = mock_exception
 
     result = client.query_mimir("cpu_usage_total")
 
-    # 4. Verify it hit lines 69-71 and correctly formatted the error
     assert result["success"] is False
     assert result["error"] == "Mimir query failed: 502"
     assert result["response"] == "Bad Gateway: Mimir database is unreachable"
