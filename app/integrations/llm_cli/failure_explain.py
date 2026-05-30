@@ -44,8 +44,8 @@ _SILENT_FAILURE_HINT = (
 )
 
 
-def classify_cli_failure_hint(stdout: str, stderr: str, returncode: int) -> str | None:
-    """Return a short actionable hint for a known failure category, or None."""
+def classify_cli_failure_category_hint(stdout: str, stderr: str, _returncode: int) -> str | None:
+    """Return a category hint (quota/auth/context/network) when output matches."""
     combined = f"{stdout}\n{stderr}".strip()
 
     if _QUOTA_RE.search(combined):
@@ -59,7 +59,16 @@ def classify_cli_failure_hint(stdout: str, stderr: str, returncode: int) -> str 
         )
     if _NETWORK_RE.search(combined):
         return "network error — check connectivity and provider status"
+    return None
 
+
+def classify_cli_failure_hint(stdout: str, stderr: str, returncode: int) -> str | None:
+    """Return a short actionable hint for a known failure category, or None."""
+    category = classify_cli_failure_category_hint(stdout, stderr, returncode)
+    if category is not None:
+        return category
+
+    combined = f"{stdout}\n{stderr}".strip()
     if returncode not in (0, 130) and (
         not combined or (len(combined) < 120 and not _ERROR_KEYWORD_RE.search(combined))
     ):
@@ -102,12 +111,14 @@ def explain_cli_failure(
                 bits.append(out[:2000])
         return ". ".join(bits)
 
-    hint = classify_cli_failure_hint(stdout, stderr, returncode)
-    if hint:
-        bits.append(hint)
-    elif err:
-        bits.append(err[:2000])
+    category = classify_cli_failure_category_hint(stdout, stderr, returncode)
+    if err:
+        bits.append(category if category else err[:2000])
     elif out:
-        bits.append(out[:2000])
+        bits.append(category if category else out[:2000])
+    else:
+        hint = classify_cli_failure_hint(stdout, stderr, returncode)
+        if hint:
+            bits.append(hint)
 
     return ". ".join(bits)

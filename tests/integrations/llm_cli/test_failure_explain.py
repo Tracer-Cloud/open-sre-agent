@@ -40,3 +40,14 @@ def test_explain_cli_failure_generic_quota() -> None:
     )
     assert "codex exec exited with code 1" in msg
     assert "quota or rate limit" in msg
+
+
+def test_explain_cli_failure_prefers_stdout_over_silent_hint() -> None:
+    msg = explain_cli_failure(
+        exit_label="claude -p",
+        stdout="some output",
+        stderr="",
+        returncode=2,
+    )
+    assert "some output" in msg
+    assert "quota exhausted" not in msg
