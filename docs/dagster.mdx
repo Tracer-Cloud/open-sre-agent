@@ -64,7 +64,7 @@ Credentials are automatically persisted to `~/.opensre/integrations.json` with `
 
 **API token:**
 
-1. Click the user avatar (top right) → **Organization Settings**
+1. Click the user menu (your icon) → **Organization Settings**
 2. Open the **Tokens** tab
 3. Click **+ Create user token**, give it a name like `opensre-integration`
 4. Copy the token immediately (Dagster+ shows it once and never again)
@@ -77,25 +77,11 @@ User Tokens inherit the user's per-deployment role. A user account that has at l
 
 When OpenSRE investigates a Dagster-related alert, five diagnostic tools are available:
 
-### List runs
-
-Lists recent pipeline/job runs with status (`SUCCESS`, `FAILURE`, `STARTED`, `CANCELING`, `CANCELED`, `QUEUED`, etc.), job name, start and end timestamps, and creation time. Optionally filtered by status.
-
-### Get run logs
-
-Fetches the full event log for a specific run id, including `ExecutionStepFailureEvent` and `RunFailureEvent` entries with the underlying exception. The `error.cause` field surfaces the user-code exception (e.g. `ValueError: missing column foo`) separately from Dagster's wrapper `DagsterExecutionStepExecutionError`, so RCAs cite the actual user-code failure rather than the framework's wrapper.
-
-### List assets with materialization
-
-Lists Dagster assets and the timestamp + run id of each asset's most recent materialization. Useful for spotting stale or never-materialized assets when an alert mentions specific data outputs.
-
-### List sensor ticks
-
-Fetches recent tick history for a Dagster sensor, including tick status, skip reasons, and errors. Identifying a sensor in Dagster's API requires all three `SensorSelector` coordinates (repository location, repository, sensor name); each is exposed as a tool input.
-
-### List schedule ticks
-
-Fetches recent tick history for a Dagster schedule. Same `InstigationTick` shape as sensors. Identifying a schedule requires all three `ScheduleSelector` coordinates (repository location, repository, schedule name); each is exposed as a tool input.
+- **List runs** — recent pipeline/job runs with status, job name, timestamps, and pre-computed duration; filterable by status and job name
+- **Get run logs** — event log for a specific run with `ExecutionStepFailureEvent` and `RunFailureEvent` entries; surfaces user-code exceptions from `error.cause` (e.g. the `ValueError` underlying Dagster's `DagsterExecutionStepExecutionError` wrapper) and pre-counts multi-step failures
+- **List assets with materialization** — Dagster assets with their latest materialization timestamp + run id; useful for spotting stale or never-materialized assets
+- **List sensor ticks** — recent tick history for a sensor (identified by full `SensorSelector` triplet: repository location, repository, sensor name)
+- **List schedule ticks** — recent tick history for a schedule (identified by full `ScheduleSelector` triplet: repository location, repository, schedule name)
 
 ## Verify
 
