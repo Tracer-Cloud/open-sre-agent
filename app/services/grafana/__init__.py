@@ -75,6 +75,7 @@ def get_grafana_client_from_credentials(
     # Auto-discover actual datasource UIDs from the user's Grafana instance
     discovered = client.discover_datasource_uids()
     if discovered:
+        client.close()
         config = GrafanaAccountConfig(
             account_id=account_id,
             instance_url=endpoint.rstrip("/"),
