@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.scheduler.claim_store import try_claim
+from app.scheduler.claim_store import get_runs, try_claim
 from app.scheduler.store import add_task, get_task, list_tasks, remove_task, update_task
 from app.scheduler.types import Provider, ScheduledTask, TaskKind
 
@@ -83,9 +83,6 @@ class TestStore:
 
         assert remove_task(task.id, store_path) is True
 
-        # Runs are gone
-        from app.scheduler.claim_store import get_runs
-
         assert get_runs(task.id, db_path=db_path) == []
 
     def test_remove_task_cascade_does_not_affect_other_tasks(self, store_path: Path) -> None:
@@ -112,8 +109,6 @@ class TestStore:
         try_claim("task-b", "2026-01-01T09:00", db_path=db_path)
 
         assert remove_task("task-a", store_path) is True
-
-        from app.scheduler.claim_store import get_runs
 
         assert get_runs("task-a", db_path=db_path) == []
         assert len(get_runs("task-b", db_path=db_path)) == 1

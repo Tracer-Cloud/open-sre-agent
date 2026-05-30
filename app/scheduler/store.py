@@ -9,7 +9,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from app.constants import OPENSRE_HOME_DIR
-from app.scheduler.claim_store import delete_runs
+from app.scheduler.claim_store import _DB_FILENAME, delete_runs
 from app.scheduler.types import ScheduledTask
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
 
     # Cascade: remove orphaned TaskRun records from the SQLite claim store.
     # Derive the DB path from the same directory as the JSON store.
-    db_path = path.with_name("scheduler.db")
+    db_path = path.with_name(_DB_FILENAME)
     try:
         deleted = delete_runs(task_id, db_path)
         if deleted:
