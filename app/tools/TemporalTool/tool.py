@@ -15,7 +15,11 @@ import logging
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from app.integrations.temporal import TemporalConfig, load_temporal_config_from_env
+from app.integrations.temporal import (
+    TemporalConfig,
+    load_temporal_config_from_env,
+    load_temporal_config_from_integration,
+)
 from app.services.temporal.client import TemporalClient, TemporalClientError
 
 logger = logging.getLogger(__name__)
@@ -121,9 +125,7 @@ class TemporalListWorkflowsTool(BaseTool):
 
             # Surface failure reason if present
             if status in ("FAILED", "TIMED_OUT", "TERMINATED"):
-                memo = ex.get("memo", {}).get("fields", {})
-                if memo:
-                    entry["memo"] = memo
+                entry["hint"] = "Use temporal_workflow_history to fetch the failure reason and stack trace."
 
             results.append(entry)
 
@@ -292,15 +294,34 @@ class TemporalNamespaceMetricsTool(BaseTool):
 
 #Factory
 
-def get_temporal_tools(config: TemporalConfig | None = None) -> list[BaseTool]:
-    """Return all Temporal tools wired to the given (or env-loaded) config."""
-    return [
-        TemporalListWorkflowsTool(config=config),
-        TemporalWorkflowHistoryTool(config=config),
-        TemporalTaskQueueTool(config=config),
-        TemporalNamespaceMetricsTool(config=config),
-    ]
+def get_temporal_tools(
+    config: TemporalConfig | None = None,
+    integration_config: object | None = None,
+) -> list[BaseTool]:
+    """Return all Temporal tools wired to the given config.
 
+    Priority:
+        1. Explicit TemporalConfig passed directly
+        2. TemporalIntegrationConfig from the registry
+        3. Environment variables fallback
+    """
+    if config is not None:
+        resolved = config
+    elif integration_config is not None:
+        from app.integrations.config_models import TemporalIntegrationConfig
+        if isinstance(integration_config, TemporalIntegrationConfig):
+            resolved = load_temporal_config_from_integration(integration_config)
+        else:
+            resolved = load_temporal_config_from_env()
+    else:
+        resolved = load_temporal_config_from_env()
+
+    return [
+        TemporalListWorkflowsTool(config=resolved),
+        TemporalWorkflowHistoryTool(config=resolved),
+        TemporalTaskQueueTool(config=resolved),
+        TemporalNamespaceMetricsTool(config=resolved),
+    ]
 # Helpers
 
 

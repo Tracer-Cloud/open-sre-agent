@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -39,7 +40,7 @@ class TemporalClient:
     def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self.config.base_url}{path}"
         try:
-            with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=self.config.tls) as client:
+            with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
                 response = client.get(url, headers=self._headers, params=params or {})
             response.raise_for_status()
             return response.json()  # type: ignore[no-any-return]
@@ -55,7 +56,7 @@ class TemporalClient:
     def _post(self, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self.config.base_url}{path}"
         try:
-            with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=self.config.tls) as client:
+            with httpx.Client(timeout=DEFAULT_TIMEOUT) as client:
                 response = client.post(url, headers=self._headers, json=body or {})
             response.raise_for_status()
             return response.json()  # type: ignore[no-any-return]
@@ -79,7 +80,7 @@ class TemporalClient:
             query: Temporal visibility query e.g. ``ExecutionStatus='Failed'``.
             page_size: Max results (capped at 50).
         """
-        ns = self.config.namespace
+        ns = quote(self.config.namespace, safe="")
         body: dict[str, Any] = {"pageSize": min(page_size, MAX_PAGE_SIZE)}
         if query:
             body["query"] = query
@@ -93,20 +94,20 @@ class TemporalClient:
         max_event_count: int = 100,
     ) -> list[dict[str, Any]]:
         """Fetch event history for a specific workflow run."""
-        ns = self.config.namespace
-        path = (
-            f"/api/v1/namespaces/{ns}/workflows/{workflow_id}"
-            f"/runs/{run_id}/history"
-        )
+        ns = quote(self.config.namespace, safe="")
+        wid = quote(workflow_id, safe="")
+        rid = quote(run_id, safe="")
+        path = f"/api/v1/namespaces/{ns}/workflows/{wid}/runs/{rid}/history"
         data = self._get(path, params={"maximumPageSize": max_event_count})
         return list(data.get("history", {}).get("events", []))
 
     def list_task_queues(self, task_queue: str) -> dict[str, Any]:
         """Fetch pollers and status for a task queue."""
-        ns = self.config.namespace
-        return self._get(f"/api/v1/namespaces/{ns}/task-queues/{task_queue}")
+        ns = quote(self.config.namespace, safe="")
+        tq = quote(task_queue, safe="")
+        return self._get(f"/api/v1/namespaces/{ns}/task-queues/{tq}")
 
     def get_namespace_metrics(self) -> dict[str, Any]:
         """Fetch namespace-level summary (open workflows, error counts)."""
-        ns = self.config.namespace
+        ns = quote(self.config.namespace, safe="")
         return self._get(f"/api/v1/namespaces/{ns}")
