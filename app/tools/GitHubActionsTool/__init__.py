@@ -207,7 +207,9 @@ def extract_step_log(
     step_name: str = "",
     step_number: int | None = None,
 ) -> dict[str, Any]:
-    """Extract a likely step log from a full GitHub Actions job log dump."""
+    """Extract a likely step log from a full GitHub Actions job log dump.
+    Returns ungrouped_sections list for agent to see all intermediate content.
+    """
     sections = _extract_log_sections(log_text)
     selected: dict[str, str] | None = None
     match_strategy = "full-log"
@@ -232,10 +234,17 @@ def extract_step_log(
 
     text = selected.get("text", "")
 
+    # Collect all ungrouped sections for agent to see all context (core fix)
+    ungrouped_sections = [
+        {"text": s.get("text", "")} for s in sections if s.get("name") == UNGROUPED_SECTION_NAME
+    ]
+
     return {
         "step_name": selected.get("name", ""),
         "match_strategy": match_strategy,
         "log_text": text,
+        "ungrouped_sections": ungrouped_sections,
+        "ungrouped_count": len(ungrouped_sections),
         "sections": [
             {"name": section.get("name", ""), "chars": len(section.get("text", ""))}
             for section in sections

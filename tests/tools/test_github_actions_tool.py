@@ -318,4 +318,3 @@ final runner summary
 
     assert result["step_name"] == "ungrouped"
     assert result["log_text"] == "final runner summary"
-
