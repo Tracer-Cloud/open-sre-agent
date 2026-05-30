@@ -131,8 +131,8 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
 
     if sub in ("list", "ls"):
         prepare_repl_output_line()
-        with console.status(f"[{DIM}]Verifying integrations…[/]", spinner="dots"):
-            results = repl_data.load_verified_integrations()
+        repl_print(console, f"[{DIM}]Verifying integrations…[/]")
+        results = repl_data.load_verified_integrations()
         render_integrations_table(console, results)
         return True
 
