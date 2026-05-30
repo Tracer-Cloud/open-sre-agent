@@ -51,3 +51,27 @@ def test_explain_cli_failure_prefers_stdout_over_silent_hint() -> None:
     )
     assert "some output" in msg
     assert "quota exhausted" not in msg
+
+
+def test_explain_cli_failure_empty_extra_messages_falls_through() -> None:
+    msg = explain_cli_failure(
+        exit_label="codex exec",
+        stdout="",
+        stderr="rate limit exceeded",
+        returncode=1,
+        extra_messages=("",),
+    )
+    assert "quota or rate limit" in msg
+
+
+def test_explain_cli_failure_always_include_output_snippet_without_extra() -> None:
+    msg = explain_cli_failure(
+        exit_label="copilot -p",
+        stdout="model error details",
+        stderr="",
+        returncode=1,
+        always_include_output_snippet=True,
+    )
+    assert "copilot -p exited with code 1" in msg
+    assert "model error details" in msg
+    assert "quota or rate limit" not in msg

@@ -22,7 +22,7 @@ def format_repl_duration(duration_secs: int | None) -> str:
 
 
 def format_repl_timestamp(
-    value: str | datetime | float | None,
+    value: str | datetime | int | float | None,
     *,
     style: ReplTimestampStyle = "table",
     fallback: str = "—",

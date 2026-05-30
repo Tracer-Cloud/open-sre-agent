@@ -102,13 +102,25 @@ def explain_cli_failure(
     out = (stdout or "").strip()
     bits: list[str] = [f"{exit_label} exited with code {returncode}"]
     bits.extend(msg for msg in extra_messages if msg)
+    has_extra = len(bits) > 1
 
-    if extra_messages:
+    if has_extra:
         if always_include_output_snippet:
             if err:
                 bits.append(err[:2000])
             elif out:
                 bits.append(out[:2000])
+        return ". ".join(bits)
+
+    if always_include_output_snippet:
+        if err:
+            bits.append(err[:2000])
+        elif out:
+            bits.append(out[:2000])
+        else:
+            hint = classify_cli_failure_hint(stdout, stderr, returncode)
+            if hint:
+                bits.append(hint)
         return ". ".join(bits)
 
     category = classify_cli_failure_category_hint(stdout, stderr, returncode)
