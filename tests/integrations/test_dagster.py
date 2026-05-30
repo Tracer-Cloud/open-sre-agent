@@ -1083,7 +1083,7 @@ class TestExtractStepFailures:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Defensive: a buggy server that says ``hasMore=true`` but returns no
-        cursor should not loop forever; the helper exits the loop safely."""
+        cursor should exit the loop safely and signal partial fetch"""
         called = [0]
 
         def fake_get_run_logs(
@@ -1114,9 +1114,12 @@ class TestExtractStepFailures:
         )
         result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="buggy")
 
+        # Loop exited safely after one call (no infinite loop).
         assert called[0] == 1
-        assert result["summary"]["failure_count"] == 0
-        assert result["summary"]["truncated"] is False
+        # Truncation signal raised because pagination ended mid-stream.
+        assert result["summary"]["truncated"] is True
+        assert "hasMore=true" in result["summary"]["fetch_error"]
+        assert "no cursor" in result["summary"]["fetch_error"]
 
 
 # --- TestComputeRunDurations -----------------------------------------------

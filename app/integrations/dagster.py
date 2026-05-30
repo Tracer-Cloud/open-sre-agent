@@ -232,6 +232,10 @@ def get_run_logs(config: DagsterConfig, *, run_id: str) -> dict[str, Any]:
                 break
             cursor = last_cursor
             if cursor is None:
+                fetch_error = (
+                    f"server returned hasMore=true but no cursor on page {pages_fetched}; "
+                    "event log may be incomplete"
+                )
                 break
 
     window_overflowed = non_failure_seen > MAX_NON_FAILURE_RUN_LOG_EVENTS
