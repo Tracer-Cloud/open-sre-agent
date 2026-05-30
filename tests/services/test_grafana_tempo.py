@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock
+
+import httpx
 
 from app.services.grafana.tempo import TempoMixin
 
@@ -14,17 +16,17 @@ class FakeGrafanaClient(TempoMixin):
         self.is_configured = is_configured
         self.account_id = "test-account-123"
         self.tempo_datasource_uid = "tempo-uid-abc"
+        self._client = MagicMock()
 
     def _build_datasource_url(self, uid: str, path: str) -> str:
         return f"https://grafana.fake/api/datasources/uid/{uid}{path}"
 
     def _make_request(self, url: str, params: dict | None = None) -> dict:
         del url, params
-        # To be mocked in tests
         return {}
 
-    def _get_auth_headers(self) -> dict:
-        return {"Authorization": "Bearer fake-token"}
+    def _get_client(self) -> MagicMock:
+        return self._client
 
 
 class TestTempoMixin:
@@ -48,21 +50,22 @@ class TestTempoMixin:
 
         assert result["success"] is False
         assert result["error"] == "Connection timeout"
-        assert result["response"] == ""
         assert result["traces"] == []
 
     def test_query_tempo_http_exception_with_response(self):
-        """Test exception handling when the exception contains a response object."""
+        """Test exception handling with HTTPStatusError."""
         client = FakeGrafanaClient()
 
-        class MockResponse:
-            status_code = 403
-            text = "Permission denied for this datasource"
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Permission denied for this datasource"
 
-        class MockException(Exception):
-            response = MockResponse()
-
-        client._make_request = Mock(side_effect=MockException("HTTP Error"))
+        err = httpx.HTTPStatusError(
+            "HTTP Error",
+            request=MagicMock(),
+            response=mock_response,
+        )
+        client._make_request = Mock(side_effect=err)
 
         result = client.query_tempo(service_name="auth-service")
 
@@ -70,8 +73,7 @@ class TestTempoMixin:
         assert result["error"] == "Tempo query failed: 403"
         assert "Permission denied" in result["response"]
 
-    @patch("app.services.grafana.tempo.requests.get")
-    def test_query_tempo_successful_trace_parsing(self, mock_requests_get):
+    def test_query_tempo_successful_trace_parsing(self):
         """Test a successful trace query and the subsequent span parsing."""
         client = FakeGrafanaClient()
 
@@ -89,7 +91,7 @@ class TestTempoMixin:
             }
         )
 
-        # Mock the trace details response (from requests.get in _get_trace_details)
+        # Mock the trace details response (from _get_client().get in _get_trace_details)
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -114,7 +116,7 @@ class TestTempoMixin:
                 }
             ]
         }
-        mock_requests_get.return_value = mock_response
+        client._client.get.return_value = mock_response
 
         # Execute
         result = client.query_tempo(service_name="auth-service")
@@ -139,11 +141,10 @@ class TestTempoMixin:
         assert span["attributes"]["db.system"] == "postgresql"
         assert span["attributes"]["http.status_code"] == 200
 
-    @patch("app.services.grafana.tempo.requests.get")
-    def test_get_trace_details_network_failure(self, mock_requests_get):
+    def test_get_trace_details_network_failure(self):
         """Test _get_trace_details graceful degradation on network error."""
         client = FakeGrafanaClient()
-        mock_requests_get.side_effect = Exception("Requests connection error")
+        client._client.get.side_effect = Exception("Requests connection error")
 
         result = client._get_trace_details(trace_id="trace-123")
 
@@ -172,15 +173,18 @@ class TestTempoMixin:
         assert "empty_value" not in attributes
         assert "" not in attributes
 
-    @patch("app.services.grafana.tempo.requests.get")
-    def test_get_trace_details_non_200_status(self, mock_requests_get):
+    def test_get_trace_details_non_200_status(self):
         """Test _get_trace_details when the API returns a non-200 status."""
         client = FakeGrafanaClient()
 
-        # Setup mock to return a 404 status code
         mock_response = Mock()
         mock_response.status_code = 404
-        mock_requests_get.return_value = mock_response
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=MagicMock(),
+            response=mock_response,
+        )
+        client._client.get.return_value = mock_response
 
         result = client._get_trace_details(trace_id="trace-123")
 
