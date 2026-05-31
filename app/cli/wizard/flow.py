@@ -1687,28 +1687,6 @@ def _configure_telegram() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
-def _configure_signoz() -> tuple[str, str]:
-    _, credentials = _integration_defaults("signoz")
-    while True:
-        url = _prompt_value(
-            "SigNoz URL (e.g. http://localhost:8080 for local Docker)",
-            default=_string_value(credentials.get("url")),
-        )
-        api_key = _prompt_value(
-            "SigNoz API key (Settings → Service Accounts → Keys)",
-            default=_string_value(credentials.get("api_key")),
-            secret=True,
-        )
-        with _console.status("Validating SigNoz integration...", spinner="dots"):
-            result = validate_signoz_integration(url=url, api_key=api_key)
-        _render_integration_result("SigNoz", result)
-        if result.ok:
-            upsert_integration("signoz", {"credentials": {"url": url, "api_key": api_key}})
-            env_path = sync_env_values({"SIGNOZ_URL": url})
-            return "SigNoz", str(env_path)
-        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
-
-
 def _configure_tempo() -> tuple[str, str]:
     _, credentials = _integration_defaults("tempo")
     _console.print(
@@ -1999,11 +1977,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Query logs and indices from OpenSearch or Elasticsearch clusters",
         ),
         Choice(
-            value="signoz",
-            label="SigNoz",
-            hint="Query logs, metrics, and traces from SigNoz",
-        ),
-        Choice(
             value="tempo",
             label="Grafana Tempo",
             hint="Query distributed traces from a standalone Tempo backend",
@@ -2046,7 +2019,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "openclaw": _configure_openclaw,
         "opensearch": _configure_opensearch,
         "splunk": _configure_splunk,
-        "signoz": _configure_signoz,
         "tempo": _configure_tempo,
     }
     _SERVICE_LABELS = {
@@ -2071,7 +2043,6 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "notion": "notion",
         "openclaw": "openclaw",
         "opensearch": "opensearch",
-        "signoz": "signoz",
         "tempo": "grafana tempo",
     }
 

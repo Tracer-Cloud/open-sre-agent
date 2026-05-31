@@ -6,7 +6,6 @@ from pathlib import Path
 
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
-from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -16,6 +15,7 @@ from app.integrations.models import (
     IncidentIoIntegrationConfig,
 )
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig
@@ -492,7 +492,13 @@ def validate_tempo_integration(
     """Validate Tempo connectivity via the tag-search endpoint."""
     try:
         config = build_tempo_config(
-            {"url": url, "api_key": api_key, "username": username, "password": password, "org_id": org_id}
+            {
+                "url": url,
+                "api_key": api_key,
+                "username": username,
+                "password": password,
+                "org_id": org_id,
+            }
         )
     except Exception as err:
         return IntegrationHealthResult(ok=False, detail=f"Tempo config invalid: {err}")
