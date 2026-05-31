@@ -269,6 +269,7 @@ class TemporalNamespaceMetricsTool(BaseTool):
         client = _make_client(self.config)
         try:
             data = client.get_namespace_metrics()
+            count_data = client.get_workflow_count()
         except TemporalClientError as exc:
             return f"Error fetching namespace metrics: {exc}"
 
@@ -284,6 +285,7 @@ class TemporalNamespaceMetricsTool(BaseTool):
             "active_cluster": replication.get("activeClusterName", ""),
             "clusters": replication.get("clusters", []),
             "data": ns_info.get("data", {}),
+            "open_workflow_count": count_data.get("count" , 0),
         }
 
         return json.dumps(result, indent=2)

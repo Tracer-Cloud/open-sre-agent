@@ -355,6 +355,7 @@ class TestTemporalNamespaceMetricsTool:
                 "clusters": [{"clusterName": "us-east"}],
             },
         }
+        mock_client.get_workflow_count.return_value = {"count": 42}
         mock_client_cls.return_value = mock_client
 
         tool = TemporalNamespaceMetricsTool()
@@ -363,6 +364,7 @@ class TestTemporalNamespaceMetricsTool:
         assert parsed["namespace"] == "production"
         assert parsed["active_cluster"] == "us-east"
         assert parsed["retention_days"] == "72h"
+        assert parsed["open_workflow_count"] == 42
 
 
 class TestGetTemporalTools:

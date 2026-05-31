@@ -111,3 +111,8 @@ class TemporalClient:
         """Fetch namespace-level summary (open workflows, error counts)."""
         ns = quote(self.config.namespace, safe="")
         return self._get(f"/api/v1/namespaces/{ns}")
+
+    def get_workflow_count(self) -> dict[str, Any]:
+        """Fetch open workflow count for the namespace."""
+        ns = quote(self.config.namespace, safe="")
+        return self._get(f"/api/v1/namespaces/{ns}/workflows/count")
