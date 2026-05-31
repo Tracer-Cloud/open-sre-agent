@@ -863,6 +863,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_hermes_session_topology",
         "get_host_metrics",
         "get_jenkins_build_log",
+        "get_jenkins_pipeline_stages",
         "get_kafka_consumer_group_lag",
         "get_kafka_topic_health",
         "get_lambda_configuration",

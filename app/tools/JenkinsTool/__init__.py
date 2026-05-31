@@ -219,6 +219,80 @@ def get_jenkins_build_log(
 
 
 # ---------------------------------------------------------------------------
+# get_jenkins_pipeline_stages
+# ---------------------------------------------------------------------------
+
+
+def _get_jenkins_pipeline_stages_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+    jk = sources.get("jenkins", {})
+    return {
+        "job_name": jk.get("job_name", ""),
+        "build_number": jk.get("build_number", 0),
+        **_jenkins_creds(jk),
+    }
+
+
+@tool(
+    name="get_jenkins_pipeline_stages",
+    source="jenkins",
+    description="List the pipeline stages of a Jenkins build with per-stage status and duration.",
+    use_cases=[
+        "Identifying which pipeline stage failed in a deployment",
+        "Seeing how long each stage took to spot a slow or stuck stage",
+    ],
+    requires=["job_name", "build_number"],
+    surfaces=("investigation", "chat"),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "job_name": {"type": "string"},
+            "build_number": {"type": "integer"},
+            "jenkins_url": {"type": "string"},
+            "jenkins_user": {"type": "string"},
+            "jenkins_token": {"type": "string"},
+        },
+        "required": ["job_name", "build_number"],
+    },
+    outputs={
+        "stages": "Pipeline stages with name, status, and duration",
+        "is_pipeline": "False for freestyle jobs (no stages)",
+    },
+    is_available=_jenkins_available,
+    extract_params=_get_jenkins_pipeline_stages_extract_params,
+)
+def get_jenkins_pipeline_stages(
+    job_name: str,
+    build_number: int,
+    jenkins_url: str | None = None,
+    jenkins_user: str | None = None,
+    jenkins_token: str | None = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    """List the pipeline stages of a Jenkins build."""
+    client = _resolve_client(jenkins_url, jenkins_user, jenkins_token)
+    if client is None:
+        return _not_configured("stages")
+    with client:
+        result = client.get_pipeline_stages(job_name, build_number)
+    if not result.get("success"):
+        return {
+            "source": "jenkins",
+            "available": False,
+            "error": result.get("error", "unknown error"),
+            "stages": [],
+        }
+    return {
+        "source": "jenkins",
+        "available": True,
+        "job": result.get("job", job_name),
+        "build_number": result.get("build_number", build_number),
+        "is_pipeline": result.get("is_pipeline", False),
+        "status": result.get("status", ""),
+        "stages": result.get("stages", []),
+    }
+
+
+# ---------------------------------------------------------------------------
 # list_jenkins_jobs
 # ---------------------------------------------------------------------------
 

@@ -88,6 +88,7 @@ def test_jenkins_tools_are_registered() -> None:
     assert names == {
         "list_jenkins_builds",
         "get_jenkins_build_log",
+        "get_jenkins_pipeline_stages",
         "list_jenkins_jobs",
         "list_jenkins_running_builds",
     }

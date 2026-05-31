@@ -19,6 +19,7 @@ During an investigation (or in chat), the agent can call these tools:
 
 - **`list_jenkins_builds`** — Recent builds for a job with status (SUCCESS / FAILURE / RUNNING / ABORTED) and timestamp.
 - **`get_jenkins_build_log`** — The console log for a specific build, to read the failing step or error.
+- **`get_jenkins_pipeline_stages`** — Per-stage status and duration for a Pipeline build (empty for freestyle jobs).
 - **`list_jenkins_jobs`** — All jobs with their last-build status.
 - **`list_jenkins_running_builds`** — Builds currently in progress across all jobs.
 
@@ -84,6 +85,7 @@ time, fetches its console log, and surfaces the failing step in the RCA.
 | Connectivity check | `GET {JENKINS_URL}/api/json` |
 | Recent builds | `GET {JENKINS_URL}/job/<job>/api/json?tree=builds[number,result,timestamp,duration,url,building]` |
 | Build console log | `GET {JENKINS_URL}/job/<job>/<number>/consoleText` |
+| Pipeline stages | `GET {JENKINS_URL}/job/<job>/<number>/wfapi/describe` (Pipeline Stage View) |
 | Job list | `GET {JENKINS_URL}/api/json?tree=jobs[name,url,color,lastBuild[...]]` |
 
 ## Troubleshooting

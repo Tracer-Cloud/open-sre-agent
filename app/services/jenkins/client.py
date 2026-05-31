@@ -84,6 +84,16 @@ def _shape_build(job_name: str, build: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _shape_stage(stage: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one Pipeline Stage View stage into our stable output shape."""
+    return {
+        "name": stage.get("name", ""),
+        "status": stage.get("status", ""),
+        "duration_ms": stage.get("durationMillis", 0),
+        "start_time": _iso_from_ms(stage.get("startTimeMillis")),
+    }
+
+
 class JenkinsClient:
     """Synchronous client for the Jenkins REST API."""
 
@@ -186,6 +196,48 @@ class JenkinsClient:
             return self._error("get_build_log", exc, {"job": job_name, "build": build_number})
         except Exception as exc:
             return self._error("get_build_log", exc, {"job": job_name, "build": build_number})
+
+    def get_pipeline_stages(self, job_name: str, build_number: int) -> dict[str, Any]:
+        """Fetch pipeline stages for a build via the Stage View API (wfapi).
+
+        Freestyle jobs (and servers without the Pipeline Stage View plugin) have
+        no stages: those return ``is_pipeline=False`` with an empty stage list
+        rather than an error.
+        """
+        safe_name = _safe_job_name(job_name)
+        if not safe_name:
+            return {"success": False, "error": "invalid job name"}
+        try:
+            number = int(build_number)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "invalid build number"}
+
+        try:
+            resp = self._get_client().get(f"/job/{safe_name}/{number}/wfapi/describe")
+            if resp.status_code == 404:
+                # Not a Pipeline job, or the Stage View plugin is absent.
+                return {
+                    "success": True,
+                    "job": safe_name,
+                    "build_number": number,
+                    "is_pipeline": False,
+                    "stages": [],
+                }
+            resp.raise_for_status()
+            data = resp.json()
+            stages = [_shape_stage(s) for s in data.get("stages", []) if isinstance(s, dict)]
+            return {
+                "success": True,
+                "job": safe_name,
+                "build_number": number,
+                "is_pipeline": True,
+                "status": data.get("status", ""),
+                "stages": stages,
+            }
+        except httpx.HTTPStatusError as exc:
+            return self._error("get_pipeline_stages", exc, {"job": job_name, "build": build_number})
+        except Exception as exc:
+            return self._error("get_pipeline_stages", exc, {"job": job_name, "build": build_number})
 
     def list_jobs(self) -> dict[str, Any]:
         """List all jobs with their last-build status (decoded from the color field)."""

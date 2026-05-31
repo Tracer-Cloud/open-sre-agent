@@ -270,6 +270,41 @@ class TestGetBuildLog:
         assert "invalid build number" in result["error"]
 
 
+class TestGetPipelineStages:
+    def test_parses_stages_for_pipeline_build(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {
+            "name": "#5",
+            "status": "FAILED",
+            "stages": [
+                {"name": "Build", "status": "SUCCESS", "durationMillis": 1200},
+                {"name": "Deploy", "status": "FAILED", "durationMillis": 800},
+            ],
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/job/pipe/5/wfapi/describe"
+            return httpx.Response(200, json=payload)
+
+        client = _client_with_handler(handler, monkeypatch)
+        result = client.get_pipeline_stages("pipe", 5)
+        assert result["success"]
+        assert result["is_pipeline"] is True
+        assert [s["name"] for s in result["stages"]] == ["Build", "Deploy"]
+        assert result["stages"][1]["status"] == "FAILED"
+
+    def test_freestyle_404_returns_empty_not_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _client_with_handler(lambda _: httpx.Response(404, text="Not Found"), monkeypatch)
+        result = client.get_pipeline_stages("demo-fail", 4)
+        assert result["success"] is True
+        assert result["is_pipeline"] is False
+        assert result["stages"] == []
+
+    def test_invalid_build_number(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _client_with_handler(lambda _: httpx.Response(200, json={}), monkeypatch)
+        result = client.get_pipeline_stages("pipe", "abc")  # type: ignore[arg-type]
+        assert not result["success"]
+
+
 class TestListJobs:
     def test_decodes_color_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         payload = {
@@ -401,6 +436,7 @@ class TestTools:
         assert names == {
             "list_jenkins_builds",
             "get_jenkins_build_log",
+            "get_jenkins_pipeline_stages",
             "list_jenkins_jobs",
             "list_jenkins_running_builds",
         }
