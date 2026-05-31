@@ -12,6 +12,7 @@ Start with::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json as _json
 import logging
 import os
@@ -48,6 +49,13 @@ from app.analytics.cli import capture_investigation_failed, track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
 from app.cli.support.errors import OpenSREError
+from app.integrations.messaging_security import (
+    audit_log_inbound_message,
+    authorize_inbound_message,
+    complete_pairing,
+    load_identity_policy,
+    save_identity_policy,
+)
 from app.remote.error_reporting import report_remote_exception
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -201,12 +209,23 @@ class InvestigationMeta(BaseModel):
     alert_name: str
 
 
+class DiscordUser(BaseModel):
+    id: str
+    username: str
+
+
+class DiscordMember(BaseModel):
+    user: DiscordUser
+
+
 class DiscordInteraction(BaseModel):
     type: int
     data: dict[str, Any] | None = None
     token: str | None = None
     application_id: str | None = None
     channel_id: str | None = None
+    member: DiscordMember | None = None
+    user: DiscordUser | None = None
 
 
 class DeepHealthCheck(BaseModel):
@@ -268,12 +287,61 @@ def _discord_post_followup(
 
 
 async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
-    """Background task: run investigation from a Discord slash command and post results."""
+    """Background task: run investigation from a Discord slash command and post results after validation."""
+    user_id = None
+    if interaction.user:
+        user_id = interaction.user.id
+    elif interaction.member:
+        user_id = interaction.member.user.id
+    user_id = user_id or "unknown"
+    app_id = interaction.application_id or _DISCORD_APPLICATION_ID
+
     # Extract the alert value from slash command options
     options = (interaction.data or {}).get("options", [])
     alert_raw = next(
         (str(opt.get("value", "")) for opt in options if opt.get("name") == "alert"), ""
     )
+
+    # 2. Check Security Policy
+    record, policy = load_identity_policy("discord")
+    auth_result = authorize_inbound_message(
+        policy=policy,
+        user_id=user_id,
+        chat_id=interaction.channel_id,
+        message_text=alert_raw,
+    )
+
+    message_hash = hashlib.sha256(alert_raw.encode("utf-8")).hexdigest() if alert_raw else None
+    audit_log_inbound_message(
+        platform="discord",
+        user_id=user_id,
+        chat_id=interaction.channel_id,
+        message_hash=message_hash,
+        authorized=auth_result.allowed,
+        reason=auth_result.reason,
+    )
+
+    # 3. Handle Pairing Attempts
+    if auth_result.is_pairing_attempt:
+        parts = alert_raw.strip().split()
+        code = parts[1] if len(parts) > 1 else ""
+
+        success, message = complete_pairing(policy=policy, user_id=user_id, code=code)
+        save_identity_policy("discord", record, policy)
+
+        if app_id and interaction.token:
+            _discord_post_followup(app_id, interaction.token, content=message)
+        return
+
+    # 4. Handle Rejected Senders
+    if not auth_result.allowed:
+        if app_id and interaction.token:
+            _discord_post_followup(
+                app_id,
+                interaction.token,
+                content=f"Access denied: {auth_result.reason}",
+            )
+        return
 
     # Accept JSON alert payload or plain-text description
     try:
@@ -292,7 +360,6 @@ async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
     except Exception as exc:
         capture_exception(exc)
         logger.exception("[discord] background investigation failed")
-        app_id = interaction.application_id or _DISCORD_APPLICATION_ID
         if app_id and interaction.token:
             _discord_post_followup(
                 app_id,
@@ -320,7 +387,6 @@ async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
     }
 
     # Post via interaction followup webhook (the deferred response requires this)
-    app_id = interaction.application_id or _DISCORD_APPLICATION_ID
     if app_id and interaction.token:
         await asyncio.to_thread(_discord_post_followup, app_id, interaction.token, embeds=[embed])
 

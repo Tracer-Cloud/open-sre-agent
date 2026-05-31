@@ -23,6 +23,7 @@ from enum import StrEnum
 
 from pydantic import Field
 
+from app.integrations.store import get_integration, upsert_instance
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -356,3 +357,93 @@ def audit_log_inbound_message(
         reason,
         message_hash or "N/A",
     )
+
+
+def load_identity_policy(service: str) -> tuple[dict | None, MessagingIdentityPolicy]:
+    """Load the integration record and its identity policy."""
+    record = get_integration(service)
+    if record is None:
+        return None, MessagingIdentityPolicy()
+
+    credentials = record.get("credentials", {})
+    raw_policy = credentials.get("identity_policy")
+    if raw_policy and isinstance(raw_policy, dict):
+        policy = MessagingIdentityPolicy.model_validate(raw_policy)
+    else:
+        policy = MessagingIdentityPolicy()
+    return record, policy
+
+
+def save_identity_policy(
+    service: str, record: dict | None, policy: MessagingIdentityPolicy
+) -> None:
+    """Persist the identity policy back into the integration store.
+
+    Uses upsert_instance for both new and existing records to ensure a
+    consistent code path. When no record exists, upsert_instance creates
+    one automatically.
+    """
+    if record is None:
+        # No existing record — upsert_instance will create one.
+        upsert_instance(
+            service,
+            {
+                "name": "default",
+                "tags": {},
+                "credentials": {"identity_policy": policy.model_dump(mode="json")},
+            },
+        )
+    else:
+        # Read the existing instance name and credentials, merge the policy,
+        # and write back only that instance.
+        instances = record.get("instances", [])
+        first_instance = instances[0] if instances else {}
+        instance_name = (
+            first_instance.get("name", "default") if isinstance(first_instance, dict) else "default"
+        )
+        credentials = dict(record.get("credentials", {}))
+        credentials["identity_policy"] = policy.model_dump(mode="json")
+        upsert_instance(
+            service,
+            {
+                "name": instance_name,
+                "tags": first_instance.get("tags", {}) if isinstance(first_instance, dict) else {},
+                "credentials": credentials,
+            },
+            record_id=record.get("id"),
+        )
+
+
+def verify_slack_signature(
+    *,
+    signing_secret: str,
+    timestamp: str,
+    body: bytes,
+    signature: str,
+) -> bool:
+    """Verify the authenticity of an incoming Slack Events API request.
+
+    Prevents forged requests by computing HMAC-SHA256 of 'v0:{timestamp}:{body}'
+    and doing a constant-time comparison against the 'X-Slack-Signature' header.
+    """
+    if not signing_secret:
+        logger.warning("Slack signing secret is empty; rejecting signature verification.")
+        return False
+
+    # Prevent replay attacks: Reject requests older than 5 minutes (300 seconds)
+    try:
+        ts_float = float(timestamp)
+        if abs(time.time() - ts_float) > 300:
+            logger.warning("Slack request timestamp %s is outside the valid window.", timestamp)
+            return False
+    except ValueError:
+        logger.warning("Invalid Slack request timestamp header: %r", timestamp)
+        return False
+
+    sig_basestring = f"v0:{timestamp}:".encode() + body
+    computed = (
+        "v0="
+        + hmac.HMAC(signing_secret.encode("utf-8"), sig_basestring, hashlib.sha256).hexdigest()
+    )
+
+    return hmac.compare_digest(computed, signature)

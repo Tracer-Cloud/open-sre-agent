@@ -352,3 +352,151 @@ class TestMessagingPlatform:
         assert MessagingPlatform.TELEGRAM.value == "telegram"
         assert MessagingPlatform.SLACK.value == "slack"
         assert MessagingPlatform.DISCORD.value == "discord"
+
+
+# ---------------------------------------------------------------------------
+# Slack signature verification & policy store helper tests
+# ---------------------------------------------------------------------------
+
+
+class TestVerifySlackSignature:
+    def test_verify_slack_signature_valid(self) -> None:
+        import hashlib
+        import hmac
+
+        from app.integrations.messaging_security import verify_slack_signature
+
+        secret = "slack_secret_123"
+        ts = str(int(time.time()))
+        body = b"token=gIkuvaNzQIHg97ATvDxqgjtO&team_id=T0001"
+
+        # Calculate valid signature
+        sig_basestring = f"v0:{ts}:".encode() + body
+        sig = "v0=" + hmac.HMAC(secret.encode("utf-8"), sig_basestring, hashlib.sha256).hexdigest()
+
+        assert (
+            verify_slack_signature(signing_secret=secret, timestamp=ts, body=body, signature=sig)
+            is True
+        )
+
+    def test_verify_slack_signature_invalid(self) -> None:
+        from app.integrations.messaging_security import verify_slack_signature
+
+        secret = "slack_secret_123"
+        ts = str(int(time.time()))
+        body = b"some body content"
+
+        assert (
+            verify_slack_signature(
+                signing_secret=secret, timestamp=ts, body=body, signature="v0=invalid_hex_signature"
+            )
+            is False
+        )
+
+    def test_verify_slack_signature_missing_secret(self) -> None:
+        from app.integrations.messaging_security import verify_slack_signature
+
+        ts = str(int(time.time()))
+        body = b"some body content"
+
+        assert (
+            verify_slack_signature(
+                signing_secret="", timestamp=ts, body=body, signature="v0=whatever"
+            )
+            is False
+        )
+
+    def test_verify_slack_signature_replay_attack_rejected(self) -> None:
+        import hashlib
+        import hmac
+
+        from app.integrations.messaging_security import verify_slack_signature
+
+        secret = "slack_secret_123"
+        # 6 minutes ago
+        ts = str(int(time.time()) - 360)
+        body = b"replay payload"
+
+        sig_basestring = f"v0:{ts}:".encode() + body
+        sig = "v0=" + hmac.HMAC(secret.encode("utf-8"), sig_basestring, hashlib.sha256).hexdigest()
+
+        assert (
+            verify_slack_signature(signing_secret=secret, timestamp=ts, body=body, signature=sig)
+            is False
+        )
+
+
+class TestIdentityPolicyStoreHelpers:
+    def test_load_identity_policy_no_record(self) -> None:
+        from unittest.mock import patch
+
+        from app.integrations.messaging_security import load_identity_policy
+
+        with patch("app.integrations.messaging_security.get_integration", return_value=None):
+            record, policy = load_identity_policy("slack")
+            assert record is None
+            assert isinstance(policy, MessagingIdentityPolicy)
+            assert policy.inbound_enabled is False
+
+    def test_load_identity_policy_with_record(self) -> None:
+        from unittest.mock import patch
+
+        from app.integrations.messaging_security import load_identity_policy
+
+        fake_record = {
+            "id": "rec-123",
+            "credentials": {
+                "identity_policy": {"allowed_user_ids": ["U123"], "inbound_enabled": True}
+            },
+        }
+
+        with patch("app.integrations.messaging_security.get_integration", return_value=fake_record):
+            record, policy = load_identity_policy("slack")
+            assert record == fake_record
+            assert policy.allowed_user_ids == ["U123"]
+            assert policy.inbound_enabled is True
+
+    def test_save_identity_policy_new_record(self) -> None:
+        from unittest.mock import patch
+
+        from app.integrations.messaging_security import save_identity_policy
+
+        policy = MessagingIdentityPolicy(allowed_user_ids=["U999"], inbound_enabled=True)
+
+        with patch("app.integrations.messaging_security.upsert_instance") as mock_upsert:
+            save_identity_policy("slack", None, policy)
+            mock_upsert.assert_called_once_with(
+                "slack",
+                {
+                    "name": "default",
+                    "tags": {},
+                    "credentials": {"identity_policy": policy.model_dump(mode="json")},
+                },
+            )
+
+    def test_save_identity_policy_existing_record(self) -> None:
+        from unittest.mock import patch
+
+        from app.integrations.messaging_security import save_identity_policy
+
+        fake_record = {
+            "id": "rec-123",
+            "instances": [{"name": "prod-bot", "tags": {"env": "prod"}}],
+            "credentials": {"bot_token": "xoxb-123"},
+        }
+        policy = MessagingIdentityPolicy(allowed_user_ids=["U999"], inbound_enabled=True)
+
+        with patch("app.integrations.messaging_security.upsert_instance") as mock_upsert:
+            save_identity_policy("slack", fake_record, policy)
+            mock_upsert.assert_called_once_with(
+                "slack",
+                {
+                    "name": "prod-bot",
+                    "tags": {"env": "prod"},
+                    "credentials": {
+                        "bot_token": "xoxb-123",
+                        "identity_policy": policy.model_dump(mode="json"),
+                    },
+                },
+                record_id="rec-123",
+            )

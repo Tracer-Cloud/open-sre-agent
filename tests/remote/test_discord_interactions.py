@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from nacl.signing import SigningKey
+
+from app.integrations.messaging_security import AuthorizationResult
 
 _INTERACTION_TOKEN = "test-interaction-token"
 
@@ -207,6 +210,10 @@ async def test_run_discord_investigation_posts_followup_on_success(
 
     monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
     monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr(
+        "app.remote.server.authorize_inbound_message",
+        lambda **_kw: AuthorizationResult(allowed=True, reason="Test bypass"),
+    )
 
     await _run_discord_investigation(interaction)
 
@@ -243,6 +250,10 @@ async def test_run_discord_investigation_parses_plain_text_alert(
 
     monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
     monkeypatch.setattr("app.remote.server._discord_post_followup", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        "app.remote.server.authorize_inbound_message",
+        lambda **_kw: AuthorizationResult(allowed=True, reason="Test bypass"),
+    )
 
     await _run_discord_investigation(interaction)
 
@@ -275,6 +286,10 @@ async def test_run_discord_investigation_posts_failure_message_on_exception(
 
     monkeypatch.setattr("app.remote.server._execute_investigation", _raise)
     monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr(
+        "app.remote.server.authorize_inbound_message",
+        lambda **_kw: AuthorizationResult(allowed=True, reason="Test bypass"),
+    )
 
     await _run_discord_investigation(interaction)
 
@@ -308,6 +323,10 @@ async def test_run_discord_investigation_noise_uses_grey_color(
 
     monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
     monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr(
+        "app.remote.server.authorize_inbound_message",
+        lambda **_kw: AuthorizationResult(allowed=True, reason="Test bypass"),
+    )
 
     await _run_discord_investigation(interaction)
 
@@ -352,3 +371,152 @@ def test_discord_post_followup_warns_on_non_200(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("httpx.post", _fake_post)
     # Should not raise
     _discord_post_followup("app-id", "token", content="hello")
+
+
+# ---------------------------------------------------------------------------
+# Discord inbound security policy & pairing tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_discord_investigation_blocked_by_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.integrations.messaging_security import MessagingIdentityPolicy
+    from app.remote.server import DiscordInteraction, _run_discord_investigation
+
+    interaction = DiscordInteraction(
+        type=2,
+        token=_INTERACTION_TOKEN,
+        application_id="app-id",
+        channel_id="chan-1",
+        user={"id": "unpaired-user-id", "username": "unpaired"},
+        data={"options": [{"name": "alert", "value": "CPU spike"}]},
+    )
+
+    policy = MessagingIdentityPolicy(
+        inbound_enabled=True,
+        require_dm_pairing=True,
+        allowed_user_ids=[],
+    )
+
+    execute_called = False
+    followup_messages = []
+
+    def _fake_load(*_a: Any) -> tuple[dict | None, MessagingIdentityPolicy]:
+        return None, policy
+
+    def _fake_execute(**_kw: Any) -> tuple[dict[str, Any], str, str, str]:
+        nonlocal execute_called
+        execute_called = True
+        return {}, "CPU spike", "default", "high"
+
+    def _fake_followup(_app_id: str, _token: str, *, content: str = "", **_kw: Any) -> None:
+        followup_messages.append(content)
+
+    monkeypatch.setattr("app.remote.server.load_identity_policy", _fake_load)
+    monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
+    monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+
+    await _run_discord_investigation(interaction)
+
+    assert execute_called is False
+    assert len(followup_messages) == 1
+    assert "Access denied" in followup_messages[0]
+    assert "No users have been paired" in followup_messages[0]
+
+
+@pytest.mark.asyncio
+async def test_run_discord_investigation_success_when_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.integrations.messaging_security import MessagingIdentityPolicy
+    from app.remote.server import DiscordInteraction, _run_discord_investigation
+
+    interaction = DiscordInteraction(
+        type=2,
+        token=_INTERACTION_TOKEN,
+        application_id="app-id",
+        channel_id="chan-1",
+        member={"user": {"id": "allowed-user-id", "username": "allowed"}},
+        data={"options": [{"name": "alert", "value": "CPU spike"}]},
+    )
+
+    policy = MessagingIdentityPolicy(
+        inbound_enabled=True,
+        require_dm_pairing=True,
+        allowed_user_ids=["allowed-user-id"],
+    )
+
+    execute_called = False
+
+    def _fake_load(*_a: Any) -> tuple[dict | None, MessagingIdentityPolicy]:
+        return None, policy
+
+    def _fake_execute(**_kw: Any) -> tuple[dict[str, Any], str, str, str]:
+        nonlocal execute_called
+        execute_called = True
+        return (
+            {"root_cause": "leak", "report": "fixed", "is_noise": False},
+            "CPU spike",
+            "default",
+            "high",
+        )
+
+    monkeypatch.setattr("app.remote.server.load_identity_policy", _fake_load)
+    monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
+    monkeypatch.setattr("app.remote.server._discord_post_followup", lambda *_a, **_kw: None)
+
+    await _run_discord_investigation(interaction)
+
+    assert execute_called is True
+
+
+@pytest.mark.asyncio
+async def test_run_discord_investigation_pairing_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.integrations.messaging_security import MessagingIdentityPolicy, hash_pairing_code
+    from app.remote.server import DiscordInteraction, _run_discord_investigation
+
+    code = "PAIR99"
+    interaction = DiscordInteraction(
+        type=2,
+        token=_INTERACTION_TOKEN,
+        application_id="app-id",
+        channel_id="chan-1",
+        user={"id": "pairing-user-id", "username": "pairing"},
+        data={"options": [{"name": "alert", "value": f"/pair {code}"}]},
+    )
+
+    policy = MessagingIdentityPolicy(
+        inbound_enabled=True,
+        require_dm_pairing=True,
+        pairing_secret_hash=hash_pairing_code(code),
+        pairing_created_at=time.time(),
+    )
+
+    saved_policy = None
+    followup_messages = []
+
+    def _fake_load(*_a: Any) -> tuple[dict | None, MessagingIdentityPolicy]:
+        return {"id": "rec-123"}, policy
+
+    def _fake_save(_platform: str, _record: dict | None, pol: MessagingIdentityPolicy) -> None:
+        nonlocal saved_policy
+        saved_policy = pol
+
+    def _fake_followup(_app_id: str, _token: str, *, content: str = "", **_kw: Any) -> None:
+        followup_messages.append(content)
+
+    monkeypatch.setattr("app.remote.server.load_identity_policy", _fake_load)
+    monkeypatch.setattr("app.remote.server.save_identity_policy", _fake_save)
+    monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+
+    await _run_discord_investigation(interaction)
+
+    assert len(followup_messages) == 1
+    assert "Pairing successful" in followup_messages[0]
+    assert saved_policy is not None
+    assert "pairing-user-id" in saved_policy.allowed_user_ids
+    assert saved_policy.pairing_secret_hash is None
