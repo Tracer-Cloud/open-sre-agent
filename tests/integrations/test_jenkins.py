@@ -24,6 +24,7 @@ from app.services.jenkins import make_jenkins_client
 from app.services.jenkins.client import (
     JenkinsClient,
     _iso_from_ms,
+    _job_api_path,
     _safe_job_name,
     _status_from_color,
 )
@@ -85,10 +86,11 @@ class TestJenkinsConfig:
         cfg = JenkinsConfig(base_url="http://x", username="alice", api_token="secret")
         assert cfg.auth == ("alice", "secret")
 
-    def test_is_configured_requires_url_and_token(self) -> None:
-        assert JenkinsConfig(base_url="http://x", api_token="t").is_configured
-        assert not JenkinsConfig(base_url="http://x").is_configured
-        assert not JenkinsConfig(base_url="", api_token="t").is_configured
+    def test_is_configured_requires_url_username_and_token(self) -> None:
+        assert JenkinsConfig(base_url="http://x", username="u", api_token="t").is_configured
+        assert not JenkinsConfig(base_url="http://x", api_token="t").is_configured  # no username
+        assert not JenkinsConfig(base_url="http://x", username="u").is_configured  # no token
+        assert not JenkinsConfig(username="u", api_token="t").is_configured  # no url
 
     def test_timeout_zero_raises(self) -> None:
         with pytest.raises(ValidationError):
@@ -132,9 +134,14 @@ class TestValidateConfig:
         assert "base URL" in result.detail
 
     def test_fails_without_token(self) -> None:
-        result = validate_jenkins_config(JenkinsConfig(base_url="http://x"))
+        result = validate_jenkins_config(JenkinsConfig(base_url="http://x", username="u"))
         assert not result.ok
         assert "token" in result.detail
+
+    def test_fails_without_username(self) -> None:
+        result = validate_jenkins_config(JenkinsConfig(base_url="http://x", api_token="t"))
+        assert not result.ok
+        assert "username" in result.detail
 
     def test_passes_on_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
@@ -143,7 +150,7 @@ class TestValidateConfig:
             lambda *_, **__: _FakeResponse({"nodeName": "controller"}),
         )
         result = validate_jenkins_config(
-            JenkinsConfig(base_url="http://jenkins.local", api_token="t")
+            JenkinsConfig(base_url="http://jenkins.local", username="u", api_token="t")
         )
         assert result.ok
         assert "controller" in result.detail
@@ -188,11 +195,16 @@ class TestHelpers:
     def test_status_from_color_unknown(self) -> None:
         assert _status_from_color("") == ("UNKNOWN", False)
 
-    def test_safe_job_name_rejects_traversal(self) -> None:
+    def test_safe_job_name_validates(self) -> None:
         assert _safe_job_name("demo-fail") == "demo-fail"
+        assert _safe_job_name("team/payment-service") == "team/payment-service"  # folder
         assert _safe_job_name("../etc") is None
-        assert _safe_job_name("a/b") is None
+        assert _safe_job_name("a\\b") is None
         assert _safe_job_name("") is None
+
+    def test_job_api_path_maps_folders(self) -> None:
+        assert _job_api_path("demo") == "job/demo"
+        assert _job_api_path("team/payment-service") == "job/team/job/payment-service"
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +248,28 @@ class TestListBuilds:
         result = client.list_builds("../evil")
         assert not result["success"]
         assert "invalid job name" in result["error"]
+
+    def test_folder_job_maps_to_nested_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/job/team/job/svc/api/json"
+            return httpx.Response(200, json=_BUILDS_PAYLOAD)
+
+        client = _client_with_handler(handler, monkeypatch)
+        result = client.list_builds("team/svc")
+        assert result["success"]
+        assert result["job"] == "team/svc"
+
+    def test_server_side_cap_in_tree_query(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["tree"] = request.url.params.get("tree", "")
+            return httpx.Response(200, json=_BUILDS_PAYLOAD)
+
+        client = _client_with_handler(handler, monkeypatch)
+        client.list_builds("demo", limit=5)
+        # range specifier caps the server response (no full-history transfer)
+        assert "{0,5}" in captured["tree"]
 
     def test_http_error_returns_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = _client_with_handler(lambda _: httpx.Response(404, text="nope"), monkeypatch)

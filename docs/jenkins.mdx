@@ -46,9 +46,11 @@ Or use environment variables:
 
 ```bash
 export JENKINS_URL="http://localhost:8080"
-export JENKINS_USER="your-username"
+export JENKINS_USER="your-username"        # required — Basic auth is username:token
 export JENKINS_API_TOKEN="<your-api-token>"
 ```
+
+> Folder-organized jobs are supported — pass the full path, e.g. `team/payment-service`.
 
 ### 3. Verify connectivity
 

@@ -36,7 +36,9 @@ class JenkinsConfig(StrictConfigModel):
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.base_url and self.api_token)
+        # Jenkins Basic auth sends username:api_token — an empty username yields
+        # a ":token" pair that Jenkins rejects with 401, so require all three.
+        return bool(self.base_url and self.username and self.api_token)
 
     @property
     def auth(self) -> tuple[str, str]:
@@ -96,6 +98,8 @@ def validate_jenkins_config(config: JenkinsConfig) -> JenkinsValidationResult:
 
     if not config.base_url:
         return JenkinsValidationResult(ok=False, detail="Jenkins base URL is required.")
+    if not config.username:
+        return JenkinsValidationResult(ok=False, detail="Jenkins username is required.")
     if not config.api_token:
         return JenkinsValidationResult(ok=False, detail="Jenkins API token is required.")
 

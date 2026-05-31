@@ -35,13 +35,27 @@ _COLOR_STATUS = {
 
 
 def _safe_job_name(raw: str) -> str | None:
-    """Reject empty, oversized, or traversal-prone job names before building a URL path."""
-    cleaned = (raw or "").strip()
+    """Validate a job name (top-level or folder path) before building a URL path.
+
+    Rejects empty, oversized, or traversal-prone names. A '/' separates folder
+    segments (e.g. ``team/payment-service``), which ``_job_api_path`` maps to
+    Jenkins' nested ``/job/`` path. The returned value is the display name.
+    """
+    cleaned = (raw or "").strip().strip("/")
     if not cleaned or len(cleaned) > _MAX_JOB_NAME_LEN:
         return None
-    if ".." in cleaned or "/" in cleaned or "\\" in cleaned:
+    if ".." in cleaned or "\\" in cleaned:
         return None
     return cleaned
+
+
+def _job_api_path(name: str) -> str:
+    """Map a validated job name to its Jenkins API path.
+
+    ``payment-service`` -> ``job/payment-service``;
+    ``team/payment-service`` -> ``job/team/job/payment-service`` (folder jobs).
+    """
+    return "/".join(f"job/{seg}" for seg in name.split("/") if seg)
 
 
 def _iso_from_ms(value: object) -> str:
@@ -138,9 +152,15 @@ class JenkinsClient:
         safe_name = _safe_job_name(job_name)
         if not safe_name:
             return {"success": False, "error": "invalid job name"}
-        tree = "builds[number,result,timestamp,duration,url,building]"
+        # Cap the server-side fetch so we never transfer a job's full history.
+        # With a status filter we pull a wider window so the filter has enough
+        # rows to work with; otherwise fetch just what the caller asked for.
+        fetch_count = 50 if status else max(1, min(limit, 50))
+        tree = f"builds[number,result,timestamp,duration,url,building]{{0,{fetch_count}}}"
         try:
-            resp = self._get_client().get(f"/job/{safe_name}/api/json", params={"tree": tree})
+            resp = self._get_client().get(
+                f"/{_job_api_path(safe_name)}/api/json", params={"tree": tree}
+            )
             resp.raise_for_status()
             data = resp.json()
             builds = [
@@ -179,7 +199,7 @@ class JenkinsClient:
             return {"success": False, "error": "invalid build number"}
 
         try:
-            resp = self._get_client().get(f"/job/{safe_name}/{number}/consoleText")
+            resp = self._get_client().get(f"/{_job_api_path(safe_name)}/{number}/consoleText")
             resp.raise_for_status()
             text = resp.text
             truncated = len(text) > max_chars
@@ -213,7 +233,7 @@ class JenkinsClient:
             return {"success": False, "error": "invalid build number"}
 
         try:
-            resp = self._get_client().get(f"/job/{safe_name}/{number}/wfapi/describe")
+            resp = self._get_client().get(f"/{_job_api_path(safe_name)}/{number}/wfapi/describe")
             if resp.status_code == 404:
                 # Not a Pipeline job, or the Stage View plugin is absent.
                 return {

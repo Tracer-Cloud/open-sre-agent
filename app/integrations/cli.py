@@ -834,8 +834,8 @@ def _setup_jenkins() -> None:
     username = _p("Jenkins username")
     api_token = _p("Jenkins API token", secret=True)
 
-    if not (base_url and api_token):
-        _die("Jenkins URL and API token are required.")
+    if not (base_url and username and api_token):
+        _die("Jenkins URL, username, and API token are required.")
 
     upsert_integration(
         "jenkins",
