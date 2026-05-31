@@ -366,6 +366,31 @@ class TestTemporalNamespaceMetricsTool:
         assert parsed["retention_days"] == "72h"
         assert parsed["open_workflow_count"] == 42
 
+    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    def test_namespace_info_returned_even_if_count_fails(self, mock_client_cls: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_client.get_namespace_metrics.return_value = {
+            "namespaceInfo": {
+                "name": "production",
+                "state": "Registered",
+                "description": "Production namespace",
+            },
+            "config": {"workflowExecutionRetentionTtl": "72h"},
+            "replicationConfig": {
+                "activeClusterName": "us-east",
+                "clusters": [{"clusterName": "us-east"}],
+            },
+        }
+        mock_client.get_workflow_count.side_effect = TemporalClientError("endpoint not found")
+        mock_client_cls.return_value = mock_client
+
+        tool = TemporalNamespaceMetricsTool()
+        result = tool._run()
+        parsed = json.loads(result)
+        assert parsed["namespace"] == "production"
+        assert parsed["active_cluster"] == "us-east"
+        assert parsed["retention_days"] == "72h"
+        assert parsed["open_workflow_count"] is None
 
 class TestGetTemporalTools:
     def test_returns_four_tools(self) -> None:
