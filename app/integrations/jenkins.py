@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class JenkinsConfig(StrictConfigModel):
     """Normalized Jenkins connection settings."""
 
-    base_url: str
+    base_url: str = ""
     username: str = ""
     api_token: str = ""
     timeout_seconds: float = Field(default=15.0, gt=0)
