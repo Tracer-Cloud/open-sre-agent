@@ -312,15 +312,6 @@ async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
     )
 
     message_hash = hashlib.sha256(alert_raw.encode("utf-8")).hexdigest() if alert_raw else None
-    audit_log_inbound_message(
-        platform="discord",
-        user_id=user_id,
-        chat_id=interaction.channel_id,
-        message_hash=message_hash,
-        authorized=auth_result.allowed,
-        reason=auth_result.reason,
-    )
-
     # 3. Handle Pairing Attempts
     if auth_result.is_pairing_attempt:
         parts = alert_raw.strip().split()
@@ -329,9 +320,29 @@ async def _run_discord_investigation(interaction: DiscordInteraction) -> None:
         success, message = complete_pairing(policy=policy, user_id=user_id, code=code)
         save_identity_policy("discord", record, policy)
 
+        # Log actual cryptographic verification outcome!
+        audit_log_inbound_message(
+            platform="discord",
+            user_id=user_id,
+            chat_id=interaction.channel_id,
+            message_hash=message_hash,
+            authorized=success,
+            reason=f"Pairing attempt: {message}",
+        )
+
         if app_id and interaction.token:
             _discord_post_followup(app_id, interaction.token, content=message)
         return
+
+    # Log audit trail for regular commands
+    audit_log_inbound_message(
+        platform="discord",
+        user_id=user_id,
+        chat_id=interaction.channel_id,
+        message_hash=message_hash,
+        authorized=auth_result.allowed,
+        reason=auth_result.reason,
+    )
 
     # 4. Handle Rejected Senders
     if not auth_result.allowed:
