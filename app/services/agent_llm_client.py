@@ -727,9 +727,33 @@ def get_agent_llm() -> _AgentClientType:
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "deepseek", "gemini", "nvidia", "minimax", "groq", "ollama"):
+    elif provider in (
+        "openrouter",
+        "deepseek",
+        "gemini",
+        "nvidia",
+        "minimax",
+        "groq",
+        "ollama",
+        "custom-openai",
+    ):
         # All OpenAI-compatible providers
         _agent_client = _create_openai_compat_client(settings, provider)
+    elif provider == "custom-anthropic":
+        from anthropic import Anthropic
+
+        from app.config import DEFAULT_MAX_TOKENS
+        from app.llm_credentials import resolve_llm_api_key
+
+        # base_url, model, and API key presence are enforced by LLMSettings validation.
+        base_url = settings.custom_anthropic_base_url.rstrip("/")
+        api_key = resolve_llm_api_key("CUSTOM_ANTHROPIC_API_KEY")
+        custom_client = Anthropic(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
+        _agent_client = AnthropicAgentClient(
+            model=settings.custom_anthropic_reasoning_model,
+            max_tokens=settings.max_tokens or DEFAULT_MAX_TOKENS,
+            client=custom_client,
+        )
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG
         from app.services.llm_client import _is_anthropic_bedrock_model
@@ -790,6 +814,16 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
             base_url=f"{host}/v1",
             api_key_env="OLLAMA_API_KEY",
             api_key_default="ollama",
+        )
+    if provider == "custom-openai":
+        # base_url, model, and API key presence are enforced by LLMSettings validation.
+        from app.config import DEFAULT_MAX_TOKENS
+
+        return OpenAIAgentClient(
+            model=settings.custom_openai_reasoning_model,
+            max_tokens=settings.max_tokens or DEFAULT_MAX_TOKENS,
+            base_url=settings.custom_openai_base_url.rstrip("/"),
+            api_key_env="CUSTOM_OPENAI_API_KEY",
         )
     base_url, api_key_env, model = provider_map[provider]
     return OpenAIAgentClient(model=model, base_url=base_url, api_key_env=api_key_env)

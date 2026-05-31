@@ -371,6 +371,93 @@ def test_anthropic_llm_client_reads_secure_local_api_key(monkeypatch) -> None:
     assert _FakeAnthropic.last_api_key == "stored-anthropic-key"
 
 
+class _BaseURLCapturingAnthropic:
+    """Anthropic double that records the api_key and base_url it was built with."""
+
+    def __init__(self, *, api_key: str, timeout: float, base_url: str | None = None) -> None:
+        self.api_key = api_key
+        self.timeout = timeout
+        self.base_url = base_url
+        self.messages = _FakeAnthropicMessages()
+
+
+def test_custom_anthropic_client_keeps_base_url_and_custom_key(monkeypatch) -> None:
+    """Regression: the custom-anthropic provider must keep its base_url and use
+    CUSTOM_ANTHROPIC_API_KEY — not ANTHROPIC_API_KEY — even after _ensure_client()
+    refreshes credentials on the first invoke.
+
+    Before the fix, LLMClient was hardwired to ANTHROPIC_API_KEY: _ensure_client()
+    raised "Missing ANTHROPIC_API_KEY" (the normal case for these users) or
+    rebuilt the client and dropped the base_url override.
+    """
+    from app.config import LLMSettings
+
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-anthropic",
+            "custom_anthropic_api_key": "sk-ant-custom",
+            "custom_anthropic_base_url": "https://proxy.example.com",
+            "custom_anthropic_reasoning_model": "claude-proxy-model",
+            "custom_anthropic_classification_model": "claude-proxy-model",
+            "custom_anthropic_toolcall_model": "claude-proxy-model",
+        }
+    )
+    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: "sk-ant-custom" if env_var == "CUSTOM_ANTHROPIC_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "Anthropic", _BaseURLCapturingAnthropic)
+
+    client = llm_client._create_llm_client("reasoning")
+    # _ensure_client() runs on every invoke; pre-fix this raised on the missing
+    # ANTHROPIC_API_KEY and/or rebuilt the client without the base_url.
+    client._ensure_client()
+
+    assert client._model == "claude-proxy-model"
+    assert client._api_key_env == "CUSTOM_ANTHROPIC_API_KEY"
+    assert client._client.api_key == "sk-ant-custom"
+    assert client._client.base_url == "https://proxy.example.com"
+
+
+def test_custom_anthropic_client_keeps_base_url_after_key_rotation(monkeypatch) -> None:
+    """Regression: when _ensure_client() rebuilds the client after a credential
+    rotation, the custom base_url must be re-applied. Before the fix the rebuild
+    constructed a plain Anthropic(api_key=...) and silently dropped the override.
+    """
+    from app.config import LLMSettings
+
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-anthropic",
+            "custom_anthropic_api_key": "sk-ant-key-1",
+            "custom_anthropic_base_url": "https://proxy.example.com",
+            "custom_anthropic_reasoning_model": "claude-proxy-model",
+            "custom_anthropic_classification_model": "claude-proxy-model",
+            "custom_anthropic_toolcall_model": "claude-proxy-model",
+        }
+    )
+    state = {"key": "sk-ant-key-1"}
+    monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(
+        llm_client,
+        "resolve_llm_api_key",
+        lambda env_var: state["key"] if env_var == "CUSTOM_ANTHROPIC_API_KEY" else "",
+    )
+    monkeypatch.setattr(llm_client, "Anthropic", _BaseURLCapturingAnthropic)
+
+    client = llm_client._create_llm_client("reasoning")
+    assert client._client.base_url == "https://proxy.example.com"
+
+    # Rotate the credential so the next _ensure_client() rebuilds the client.
+    state["key"] = "sk-ant-key-2"
+    client._ensure_client()
+
+    assert client._client.api_key == "sk-ant-key-2"  # rebuilt with the rotated key
+    assert client._client.base_url == "https://proxy.example.com"  # override preserved
+
+
 def test_minimax_llm_client_reads_api_key_and_base_url(monkeypatch) -> None:
     monkeypatch.setattr(
         llm_client,

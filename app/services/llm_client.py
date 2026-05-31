@@ -158,15 +158,34 @@ class LLMResponse:
 
 class LLMClient:
     def __init__(
-        self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
+        self,
+        *,
+        model: str,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        base_url: str | None = None,
+        api_key_env: str = "ANTHROPIC_API_KEY",
     ) -> None:
-        api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+        self._api_key_env = api_key_env
+        self._base_url = base_url
+        api_key = resolve_llm_api_key(api_key_env)
         self._api_key = api_key
-        self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+        self._client = self._build_client(api_key)
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._bound_tools: list[dict[str, Any]] = []
+
+    def _build_client(self, api_key: str) -> Anthropic:
+        """Construct an Anthropic client, applying the optional base_url override.
+
+        ``base_url`` is only forwarded when set so the default Anthropic path
+        keeps its original call shape; custom-anthropic providers (LiteLLM, vLLM
+        proxies, etc.) supply a base_url that must survive credential refreshes.
+        """
+        if self._base_url:
+            return Anthropic(api_key=api_key, base_url=self._base_url, timeout=_CLIENT_TIMEOUT_SEC)
+        return Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
 
     def with_config(self, **_kwargs) -> LLMClient:
         return self
@@ -179,14 +198,14 @@ class LLMClient:
         return self
 
     def _ensure_client(self) -> None:
-        api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+        api_key = resolve_llm_api_key(self._api_key_env)
         if not api_key:
             raise RuntimeError(
-                "Missing ANTHROPIC_API_KEY. Set it in your environment, .env, or secure local keychain before running LLM steps."
+                f"Missing {self._api_key_env}. Set it in your environment, .env, or secure local keychain before running LLM steps."
             )
         if api_key != self._api_key:
             self._api_key = api_key
-            self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+            self._client = self._build_client(api_key)
 
     def _build_request_kwargs(self, prompt_or_messages: Any) -> dict[str, Any]:
         """Refresh credentials, normalize messages, apply guardrails, and build API kwargs.
@@ -233,7 +252,7 @@ class LLMClient:
                 break
             except AuthenticationError as err:
                 raise RuntimeError(
-                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
+                    f"Anthropic authentication failed. Check {self._api_key_env} in your environment or .env."
                 ) from err
             except NotFoundError as err:
                 raise RuntimeError(
@@ -307,7 +326,7 @@ class LLMClient:
                 return
             except AuthenticationError as err:
                 raise RuntimeError(
-                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
+                    f"Anthropic authentication failed. Check {self._api_key_env} in your environment or .env."
                 ) from err
             except NotFoundError as err:
                 raise RuntimeError(
@@ -1362,6 +1381,30 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             base_url=f"{host}/v1",
             api_key_env="OLLAMA_API_KEY",
             api_key_default="ollama",
+        )
+    elif provider == "custom-openai":
+        # base_url, model, and API key presence are enforced by LLMSettings
+        # validation, so this branch can assume a configured endpoint.
+        from app.config import DEFAULT_MAX_TOKENS
+
+        return OpenAILLMClient(
+            model=_select_model(settings, "custom_openai", model_type),
+            model_fallback=_fallback_model("custom_openai"),
+            max_tokens=settings.max_tokens or DEFAULT_MAX_TOKENS,
+            base_url=settings.custom_openai_base_url.rstrip("/"),
+            api_key_env="CUSTOM_OPENAI_API_KEY",
+        )
+    elif provider == "custom-anthropic":
+        # base_url, model, and API key presence are enforced by LLMSettings
+        # validation. LLMClient resolves CUSTOM_ANTHROPIC_API_KEY itself and the
+        # base_url override survives credential refreshes via _build_client.
+        from app.config import DEFAULT_MAX_TOKENS
+
+        return LLMClient(
+            model=_select_model(settings, "custom_anthropic", model_type),
+            max_tokens=settings.max_tokens or DEFAULT_MAX_TOKENS,
+            base_url=settings.custom_anthropic_base_url.rstrip("/"),
+            api_key_env="CUSTOM_ANTHROPIC_API_KEY",
         )
     elif provider == "bedrock":
         from app.config import BEDROCK_LLM_CONFIG

@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import LLMSettings, has_credentials_for_active_llm_provider, resolve_llm_settings
+from app.config import (
+    CUSTOM_ANTHROPIC_REASONING_MODEL,
+    CUSTOM_OPENAI_REASONING_MODEL,
+    LLMSettings,
+    has_credentials_for_active_llm_provider,
+    resolve_llm_settings,
+)
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -19,6 +25,123 @@ def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
 def test_llm_settings_require_api_key_for_selected_provider() -> None:
     with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
         LLMSettings.model_validate({"provider": "openai"})
+
+
+def test_llm_settings_custom_providers_have_no_default_model() -> None:
+    """Custom providers target a BYO endpoint, so they ship no default model — a
+    hard-coded default would silently send an identifier the endpoint does not
+    serve and fail with a confusing model-not-found error."""
+    assert CUSTOM_OPENAI_REASONING_MODEL == ""
+    assert CUSTOM_ANTHROPIC_REASONING_MODEL == ""
+
+
+def test_llm_settings_custom_openai_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-openai",
+            "custom_openai_api_key": "sk-custom-test",
+            "custom_openai_base_url": "https://api.example.com/v1",
+            "custom_openai_reasoning_model": "my-local-model",
+            "custom_openai_classification_model": "my-local-model",
+            "custom_openai_toolcall_model": "my-local-model",
+        }
+    )
+    assert settings.provider == "custom-openai"
+    assert settings.custom_openai_api_key == "sk-custom-test"
+    assert settings.custom_openai_base_url == "https://api.example.com/v1"
+    assert settings.custom_openai_reasoning_model == "my-local-model"
+
+
+def test_llm_settings_require_custom_openai_api_key() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_API_KEY"):
+        LLMSettings.model_validate({"provider": "custom-openai"})
+
+
+def test_llm_settings_require_custom_openai_base_url() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_BASE_URL"):
+        LLMSettings.model_validate(
+            {"provider": "custom-openai", "custom_openai_api_key": "sk-custom-test"}
+        )
+
+
+def test_llm_settings_require_custom_openai_model() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_MODEL"):
+        LLMSettings.model_validate(
+            {
+                "provider": "custom-openai",
+                "custom_openai_api_key": "sk-custom-test",
+                "custom_openai_base_url": "https://api.example.com/v1",
+            }
+        )
+
+
+def test_llm_settings_reject_custom_openai_partial_tier_model() -> None:
+    """A lone per-tier override must not satisfy the model requirement: the
+    classification/toolcall tiers would be left empty and only fail at their
+    first call. Setting CUSTOM_OPENAI_MODEL (which fills every tier) is required."""
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_MODEL"):
+        LLMSettings.model_validate(
+            {
+                "provider": "custom-openai",
+                "custom_openai_api_key": "sk-custom-test",
+                "custom_openai_base_url": "https://api.example.com/v1",
+                "custom_openai_reasoning_model": "only-reasoning",
+            }
+        )
+
+
+def test_llm_settings_custom_anthropic_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-anthropic",
+            "custom_anthropic_api_key": "sk-ant-custom",
+            "custom_anthropic_base_url": "https://api.example.com",
+            "custom_anthropic_reasoning_model": "my-proxy-model",
+            "custom_anthropic_classification_model": "my-proxy-model",
+            "custom_anthropic_toolcall_model": "my-proxy-model",
+        }
+    )
+    assert settings.provider == "custom-anthropic"
+    assert settings.custom_anthropic_api_key == "sk-ant-custom"
+    assert settings.custom_anthropic_base_url == "https://api.example.com"
+    assert settings.custom_anthropic_reasoning_model == "my-proxy-model"
+
+
+def test_llm_settings_require_custom_anthropic_api_key() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_API_KEY"):
+        LLMSettings.model_validate({"provider": "custom-anthropic"})
+
+
+def test_llm_settings_require_custom_anthropic_base_url() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_BASE_URL"):
+        LLMSettings.model_validate(
+            {"provider": "custom-anthropic", "custom_anthropic_api_key": "sk-ant-custom"}
+        )
+
+
+def test_llm_settings_require_custom_anthropic_model() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_MODEL"):
+        LLMSettings.model_validate(
+            {
+                "provider": "custom-anthropic",
+                "custom_anthropic_api_key": "sk-ant-custom",
+                "custom_anthropic_base_url": "https://api.example.com",
+            }
+        )
+
+
+def test_llm_settings_reject_custom_anthropic_partial_tier_model() -> None:
+    """A lone per-tier override must not satisfy the model requirement; setting
+    CUSTOM_ANTHROPIC_MODEL (which fills every tier) is required."""
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_MODEL"):
+        LLMSettings.model_validate(
+            {
+                "provider": "custom-anthropic",
+                "custom_anthropic_api_key": "sk-ant-custom",
+                "custom_anthropic_base_url": "https://api.example.com",
+                "custom_anthropic_reasoning_model": "only-reasoning",
+            }
+        )
 
 
 def test_llm_settings_from_env_uses_secure_local_api_key(monkeypatch) -> None:

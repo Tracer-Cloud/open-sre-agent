@@ -147,6 +147,19 @@ BEDROCK_TOOLCALL_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Custom providers point at a bring-your-own endpoint (LiteLLM, vLLM, LocalAI,
+# internal gateways), so there is no safe default model name — a hard-coded
+# default would silently send an identifier the endpoint does not serve and fail
+# with a confusing model-not-found error. These default to empty and the user
+# must configure CUSTOM_*_MODEL; LLMSettings validation enforces it up front.
+CUSTOM_OPENAI_REASONING_MODEL = ""
+CUSTOM_OPENAI_CLASSIFICATION_MODEL = ""
+CUSTOM_OPENAI_TOOLCALL_MODEL = ""
+
+CUSTOM_ANTHROPIC_REASONING_MODEL = ""
+CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL = ""
+CUSTOM_ANTHROPIC_TOOLCALL_MODEL = ""
+
 LLMProvider = Literal[
     "anthropic",
     "openai",
@@ -166,6 +179,8 @@ LLMProvider = Literal[
     "opencode",
     "kimi",
     "copilot",
+    "custom-openai",
+    "custom-anthropic",
 ]
 
 KEYLESS_LLM_PROVIDERS = frozenset(
@@ -191,6 +206,8 @@ LLM_PROVIDER_API_KEY_ENVS = {
     "nvidia": "NVIDIA_API_KEY",
     "minimax": "MINIMAX_API_KEY",
     "groq": "GROQ_API_KEY",
+    "custom-openai": "CUSTOM_OPENAI_API_KEY",
+    "custom-anthropic": "CUSTOM_ANTHROPIC_API_KEY",
 }
 DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS: tuple[str, ...] = ("openai", "anthropic")
 
@@ -227,6 +244,10 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
         "nvidia_api_key": resolve_llm_api_key("NVIDIA_API_KEY"),
         "minimax_api_key": resolve_llm_api_key("MINIMAX_API_KEY"),
         "groq_api_key": resolve_llm_api_key("GROQ_API_KEY"),
+        "custom_openai_api_key": resolve_llm_api_key("CUSTOM_OPENAI_API_KEY"),
+        "custom_anthropic_api_key": resolve_llm_api_key("CUSTOM_ANTHROPIC_API_KEY"),
+        "custom_openai_base_url": os.getenv("CUSTOM_OPENAI_BASE_URL", "").strip(),
+        "custom_anthropic_base_url": os.getenv("CUSTOM_ANTHROPIC_BASE_URL", "").strip(),
         "anthropic_reasoning_model": os.getenv(
             "ANTHROPIC_REASONING_MODEL", ANTHROPIC_REASONING_MODEL
         ).strip()
@@ -351,6 +372,36 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             "BEDROCK_TOOLCALL_MODEL", BEDROCK_TOOLCALL_MODEL
         ).strip()
         or BEDROCK_TOOLCALL_MODEL,
+        "custom_openai_reasoning_model": os.getenv(
+            "CUSTOM_OPENAI_REASONING_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_REASONING_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_REASONING_MODEL,
+        "custom_openai_classification_model": os.getenv(
+            "CUSTOM_OPENAI_CLASSIFICATION_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_CLASSIFICATION_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_CLASSIFICATION_MODEL,
+        "custom_openai_toolcall_model": os.getenv(
+            "CUSTOM_OPENAI_TOOLCALL_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_TOOLCALL_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_TOOLCALL_MODEL,
+        "custom_anthropic_reasoning_model": os.getenv(
+            "CUSTOM_ANTHROPIC_REASONING_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_REASONING_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_REASONING_MODEL,
+        "custom_anthropic_classification_model": os.getenv(
+            "CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL,
+        "custom_anthropic_toolcall_model": os.getenv(
+            "CUSTOM_ANTHROPIC_TOOLCALL_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_TOOLCALL_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_TOOLCALL_MODEL,
         "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
         or DEFAULT_OLLAMA_MODEL,
         "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
@@ -383,6 +434,10 @@ class LLMSettings(StrictConfigModel):
     nvidia_api_key: str = ""
     minimax_api_key: str = ""
     groq_api_key: str = ""
+    custom_openai_api_key: str = ""
+    custom_anthropic_api_key: str = ""
+    custom_openai_base_url: str = ""
+    custom_anthropic_base_url: str = ""
     ollama_model: str = DEFAULT_OLLAMA_MODEL
     ollama_host: str = DEFAULT_OLLAMA_HOST
     anthropic_reasoning_model: str = ANTHROPIC_REASONING_MODEL
@@ -412,6 +467,12 @@ class LLMSettings(StrictConfigModel):
     bedrock_reasoning_model: str = BEDROCK_REASONING_MODEL
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
+    custom_openai_reasoning_model: str = CUSTOM_OPENAI_REASONING_MODEL
+    custom_openai_classification_model: str = CUSTOM_OPENAI_CLASSIFICATION_MODEL
+    custom_openai_toolcall_model: str = CUSTOM_OPENAI_TOOLCALL_MODEL
+    custom_anthropic_reasoning_model: str = CUSTOM_ANTHROPIC_REASONING_MODEL
+    custom_anthropic_classification_model: str = CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL
+    custom_anthropic_toolcall_model: str = CUSTOM_ANTHROPIC_TOOLCALL_MODEL
     max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, gt=0)
 
     @field_validator("ollama_host", mode="before")
@@ -445,6 +506,8 @@ class LLMSettings(StrictConfigModel):
             "opencode",
             "kimi",
             "copilot",
+            "custom-openai",
+            "custom-anthropic",
         )
         if provider in valid_providers:
             return provider
@@ -470,12 +533,58 @@ class LLMSettings(StrictConfigModel):
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
             "groq": self.groq_api_key,
+            "custom-openai": self.custom_openai_api_key,
+            "custom-anthropic": self.custom_anthropic_api_key,
         }
         if provider_to_key[self.provider]:
             return self
 
         env_var = get_llm_provider_api_key_env(self.provider)
         raise ValueError(f"LLM provider '{self.provider}' requires {env_var} to be set.")
+
+    @model_validator(mode="after")
+    def _require_custom_provider_endpoint(self) -> "LLMSettings":
+        """Custom providers target a bring-your-own endpoint, so there is no safe
+        default base URL or model. Require the base URL and a model for *every*
+        tier at settings-load time rather than failing at first inference with a
+        confusing connection / model-not-found error.
+
+        Setting ``CUSTOM_*_MODEL`` populates all three tiers; per-tier overrides
+        layer on top. Checking every tier (not just reasoning) closes the gap
+        where a lone ``CUSTOM_*_REASONING_MODEL`` would leave the classification
+        and toolcall tiers empty and only surface at their first call.
+        """
+        custom_requirements = {
+            "custom-openai": (
+                self.custom_openai_base_url,
+                (
+                    self.custom_openai_reasoning_model,
+                    self.custom_openai_classification_model,
+                    self.custom_openai_toolcall_model,
+                ),
+                "CUSTOM_OPENAI_BASE_URL",
+                "CUSTOM_OPENAI_MODEL",
+            ),
+            "custom-anthropic": (
+                self.custom_anthropic_base_url,
+                (
+                    self.custom_anthropic_reasoning_model,
+                    self.custom_anthropic_classification_model,
+                    self.custom_anthropic_toolcall_model,
+                ),
+                "CUSTOM_ANTHROPIC_BASE_URL",
+                "CUSTOM_ANTHROPIC_MODEL",
+            ),
+        }
+        requirement = custom_requirements.get(self.provider)
+        if requirement is None:
+            return self
+        base_url, tier_models, base_url_env, model_env = requirement
+        if not base_url:
+            raise ValueError(f"LLM provider '{self.provider}' requires {base_url_env} to be set.")
+        if not all(tier_models):
+            raise ValueError(f"LLM provider '{self.provider}' requires {model_env} to be set.")
+        return self
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
