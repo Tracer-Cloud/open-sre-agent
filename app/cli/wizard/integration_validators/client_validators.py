@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -478,6 +479,25 @@ def validate_splunk_integration(
         ok=False,
         detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
     )
+
+
+def validate_tempo_integration(
+    *,
+    url: str,
+    api_key: str = "",
+    username: str = "",
+    password: str = "",
+    org_id: str = "",
+) -> IntegrationHealthResult:
+    """Validate Tempo connectivity via the tag-search endpoint."""
+    try:
+        config = build_tempo_config(
+            {"url": url, "api_key": api_key, "username": username, "password": password, "org_id": org_id}
+        )
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"Tempo config invalid: {err}")
+    result = validate_tempo_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
 def validate_opensearch_integration(
