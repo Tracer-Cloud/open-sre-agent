@@ -127,6 +127,7 @@
               "gitlab",
               "google-docs",
               "helm",
+              "jenkins",
               "jira",
               "vercel"
             ]
