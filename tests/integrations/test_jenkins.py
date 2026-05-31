@@ -348,15 +348,18 @@ class _FakeToolClient:
 
 class TestTools:
     def test_availability_requires_verified_connection(self) -> None:
-        from app.tools.JenkinsTool import _jenkins_available, _list_jenkins_builds_available
+        from app.tools.JenkinsTool import _jenkins_available
 
         assert not _jenkins_available({"jenkins": {}})
+        assert not _jenkins_available({"jenkins": {"connection_verified": False}})
         assert _jenkins_available({"jenkins": {"connection_verified": True}})
-        # build tool also requires a job_name
-        assert not _list_jenkins_builds_available({"jenkins": {"connection_verified": True}})
-        assert _list_jenkins_builds_available(
-            {"jenkins": {"connection_verified": True, "job_name": "demo"}}
-        )
+
+    def test_build_tool_extract_params_soft_defaults_job_name(self) -> None:
+        from app.tools.JenkinsTool import _list_jenkins_builds_extract_params
+
+        # job_name absent from sources -> empty default (LLM supplies it as a tool arg)
+        params = _list_jenkins_builds_extract_params({"jenkins": {"connection_verified": True}})
+        assert params["job_name"] == ""
 
     def test_creds_mapping_from_source_dict(self) -> None:
         from app.tools.JenkinsTool import _jenkins_creds

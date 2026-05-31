@@ -61,15 +61,12 @@ def _not_configured(payload_key: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _list_jenkins_builds_available(sources: dict[str, dict]) -> bool:
-    jk = sources.get("jenkins", {})
-    return bool(_jenkins_available(sources) and jk.get("job_name"))
-
-
 def _list_jenkins_builds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    jk = sources["jenkins"]
+    # job_name is supplied by the LLM (a required tool arg); provide it as a
+    # default only if the resolved source already carries one.
+    jk = sources.get("jenkins", {})
     return {
-        "job_name": jk["job_name"],
+        "job_name": jk.get("job_name", ""),
         "limit": 10,
         "status": jk.get("status", ""),
         **_jenkins_creds(jk),
@@ -107,7 +104,7 @@ def _list_jenkins_builds_extract_params(sources: dict[str, dict]) -> dict[str, A
         "builds": "Recent builds with status, timestamp, duration, and url",
         "failed_builds": "Subset of builds in FAILURE state",
     },
-    is_available=_list_jenkins_builds_available,
+    is_available=_jenkins_available,
     extract_params=_list_jenkins_builds_extract_params,
 )
 def list_jenkins_builds(
@@ -147,15 +144,11 @@ def list_jenkins_builds(
 # ---------------------------------------------------------------------------
 
 
-def _get_jenkins_build_log_available(sources: dict[str, dict]) -> bool:
-    jk = sources.get("jenkins", {})
-    return bool(_jenkins_available(sources) and jk.get("job_name"))
-
-
 def _get_jenkins_build_log_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    jk = sources["jenkins"]
+    # job_name and build_number are supplied by the LLM (required tool args).
+    jk = sources.get("jenkins", {})
     return {
-        "job_name": jk["job_name"],
+        "job_name": jk.get("job_name", ""),
         "build_number": jk.get("build_number", 0),
         **_jenkins_creds(jk),
     }
@@ -186,7 +179,7 @@ def _get_jenkins_build_log_extract_params(sources: dict[str, dict]) -> dict[str,
         "log": "Console log text (tail-truncated for large logs)",
         "truncated": "Whether the log was truncated",
     },
-    is_available=_get_jenkins_build_log_available,
+    is_available=_jenkins_available,
     extract_params=_get_jenkins_build_log_extract_params,
 )
 def get_jenkins_build_log(
