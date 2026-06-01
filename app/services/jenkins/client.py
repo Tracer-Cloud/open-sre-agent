@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.integrations.jenkins import JenkinsConfig
 from app.services._error_helpers import capture_service_error
@@ -391,6 +392,6 @@ def make_jenkins_client(
         return None
     try:
         config = JenkinsConfig(base_url=url, username=user, api_token=token)
-    except Exception:
+    except ValidationError:
         return None
     return JenkinsClient(config)
