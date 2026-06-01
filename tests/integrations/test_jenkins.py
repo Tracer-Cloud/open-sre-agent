@@ -476,6 +476,23 @@ class TestTools:
         assert JenkinsTool._resolve_client("http://x", "u", "t") == "client"
         assert seen[-1] == ("http://x", "u", "t")
 
+    def test_resolve_client_env_path_requires_complete_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.tools import JenkinsTool
+
+        # env has url+token but no username -> jenkins_config_from_env returns a
+        # config, but it is not is_configured, so no client is built.
+        incomplete = JenkinsConfig(base_url="http://x", api_token="t")
+        assert not incomplete.is_configured
+        monkeypatch.setattr(JenkinsTool, "jenkins_config_from_env", lambda: incomplete)
+        called: list = []
+        monkeypatch.setattr(
+            JenkinsTool, "make_jenkins_client", lambda *a: called.append(a) or "client"
+        )
+        assert JenkinsTool._resolve_client(None, None, None) is None
+        assert called == []
+
     def test_not_configured_when_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.tools import JenkinsTool
 

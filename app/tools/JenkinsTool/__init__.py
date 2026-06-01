@@ -47,7 +47,10 @@ def _resolve_client(
             jenkins_token,
         )
     env = jenkins_config_from_env()
-    if env is None:
+    # jenkins_config_from_env only requires url+token, so guard on is_configured
+    # (which also requires username) to avoid building an empty-username client
+    # that would 401 — same completeness check as load_env_integrations.
+    if env is None or not env.is_configured:
         return None
     return make_jenkins_client(env.base_url, env.username, env.api_token)
 
