@@ -213,8 +213,6 @@ class JenkinsClient:
                 "failed_builds": failed,
                 "total": len(builds),
             }
-        except httpx.HTTPStatusError as exc:
-            return self._error("list_builds", exc, {"job": job_name, "status": status})
         except Exception as exc:
             return self._error("list_builds", exc, {"job": job_name, "status": status})
 
@@ -246,8 +244,6 @@ class JenkinsClient:
                 "log": log,
                 "truncated": truncated,
             }
-        except httpx.HTTPStatusError as exc:
-            return self._error("get_build_log", exc, {"job": job_name, "build": build_number})
         except Exception as exc:
             return self._error("get_build_log", exc, {"job": job_name, "build": build_number})
 
@@ -287,8 +283,6 @@ class JenkinsClient:
                 "status": data.get("status", ""),
                 "stages": stages,
             }
-        except httpx.HTTPStatusError as exc:
-            return self._error("get_pipeline_stages", exc, {"job": job_name, "build": build_number})
         except Exception as exc:
             return self._error("get_pipeline_stages", exc, {"job": job_name, "build": build_number})
 
@@ -322,8 +316,6 @@ class JenkinsClient:
                 "total": len(jobs),
                 "truncated": len(jobs) >= _MAX_JOBS,
             }
-        except httpx.HTTPStatusError as exc:
-            return self._error("list_jobs", exc, {})
         except Exception as exc:
             return self._error("list_jobs", exc, {})
 
@@ -351,8 +343,6 @@ class JenkinsClient:
                 "total": len(running),
                 "truncated": len(jobs) >= _MAX_JOBS,
             }
-        except httpx.HTTPStatusError as exc:
-            return self._error("list_running_builds", exc, {})
         except Exception as exc:
             return self._error("list_running_builds", exc, {})
 

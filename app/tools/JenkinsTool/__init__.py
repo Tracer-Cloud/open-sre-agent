@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.integrations.jenkins import jenkins_config_from_env
-from app.services.jenkins import make_jenkins_client
+from app.services.jenkins import JenkinsClient, make_jenkins_client
 from app.tools.tool_decorator import tool
 
 
@@ -32,7 +32,7 @@ def _resolve_client(
     jenkins_url: str | None,
     jenkins_user: str | None,
     jenkins_token: str | None,
-):
+) -> JenkinsClient | None:
     """Build a client from explicit args, falling back to env-var config.
 
     Requires BOTH url and token to be explicitly present to take the explicit
