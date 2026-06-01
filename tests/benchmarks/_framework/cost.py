@@ -1,7 +1,7 @@
 """Per-LLM cost accounting + hard-cap budget enforcement.
 
-Separate input/output token pricing per model (Anthropic, OpenAI, DeepSeek,
-Qwen) — important because most providers charge output tokens 3-5x what they
+Separate input/output token pricing per model (Anthropic, OpenAI, DeepSeek)
+— important because most providers charge output tokens 3-5x what they
 charge input tokens, so input/output-aggregate pricing under-counts.
 
 The framework wires this in two places:
