@@ -380,7 +380,7 @@ def test_minimax_llm_client_reads_api_key_and_base_url(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
 
     client = llm_client.OpenAILLMClient(
-        model="MiniMax-M2.7",
+        model="MiniMax-M3",
         base_url="https://api.minimax.io/v1",
         api_key_env="MINIMAX_API_KEY",
         temperature=1.0,
@@ -400,7 +400,7 @@ def test_minimax_llm_client_temperature_is_set(monkeypatch) -> None:
     monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAI)
 
     client = llm_client.OpenAILLMClient(
-        model="MiniMax-M2.7",
+        model="MiniMax-M3",
         base_url="https://api.minimax.io/v1",
         api_key_env="MINIMAX_API_KEY",
         temperature=1.0,
