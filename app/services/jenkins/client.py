@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_JOB_NAME_LEN = 256
 _MAX_LOG_CHARS = 50_000
+# Cap the number of jobs fetched from the root API so a server with thousands
+# of jobs cannot blow past the request timeout. list_jobs/list_running_builds
+# report whether the cap truncated the result.
+_MAX_JOBS = 200
 
 # Jenkins encodes a job's last-build status in a "color" field (a legacy ball-color scheme).
 _COLOR_STATUS = {
@@ -260,8 +264,11 @@ class JenkinsClient:
             return self._error("get_pipeline_stages", exc, {"job": job_name, "build": build_number})
 
     def list_jobs(self) -> dict[str, Any]:
-        """List all jobs with their last-build status (decoded from the color field)."""
-        tree = "jobs[name,url,color,lastBuild[number,result,timestamp,url]]"
+        """List jobs with their last-build status (decoded from the color field).
+
+        Capped at ``_MAX_JOBS``; ``truncated`` is True when more jobs exist.
+        """
+        tree = f"jobs[name,url,color,lastBuild[number,result,timestamp,url]]{{0,{_MAX_JOBS}}}"
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
@@ -282,28 +289,41 @@ class JenkinsClient:
                         "last_build_at": _iso_from_ms((last or {}).get("timestamp")),
                     }
                 )
-            return {"success": True, "jobs": jobs, "total": len(jobs)}
+            return {
+                "success": True,
+                "jobs": jobs,
+                "total": len(jobs),
+                "truncated": len(jobs) >= _MAX_JOBS,
+            }
         except httpx.HTTPStatusError as exc:
             return self._error("list_jobs", exc, {})
         except Exception as exc:
             return self._error("list_jobs", exc, {})
 
     def list_running_builds(self) -> dict[str, Any]:
-        """List builds currently in progress across all jobs."""
-        tree = "jobs[name,builds[number,building,result,timestamp,url]{0,5}]"
+        """List builds currently in progress across all jobs.
+
+        Scans up to ``_MAX_JOBS`` jobs (5 most-recent builds each); ``truncated``
+        is True when more jobs exist than were scanned.
+        """
+        tree = f"jobs[name,builds[number,building,result,timestamp,url]{{0,5}}]{{0,{_MAX_JOBS}}}"
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
             data = resp.json()
+            jobs = [job for job in data.get("jobs", []) if isinstance(job, dict)]
             running = []
-            for job in data.get("jobs", []):
-                if not isinstance(job, dict):
-                    continue
+            for job in jobs:
                 name = job.get("name", "")
                 for build in job.get("builds", []):
                     if isinstance(build, dict) and build.get("building"):
                         running.append(_shape_build(name, build))
-            return {"success": True, "running_builds": running, "total": len(running)}
+            return {
+                "success": True,
+                "running_builds": running,
+                "total": len(running),
+                "truncated": len(jobs) >= _MAX_JOBS,
+            }
         except httpx.HTTPStatusError as exc:
             return self._error("list_running_builds", exc, {})
         except Exception as exc:

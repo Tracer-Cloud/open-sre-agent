@@ -340,6 +340,18 @@ class TestGetPipelineStages:
 
 
 class TestListJobs:
+    def test_caps_job_count_in_tree(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["tree"] = request.url.params.get("tree", "")
+            return httpx.Response(200, json={"jobs": []})
+
+        client = _client_with_handler(handler, monkeypatch)
+        result = client.list_jobs()
+        assert "{0,200}" in captured["tree"]
+        assert result["truncated"] is False
+
     def test_decodes_color_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         payload = {
             "jobs": [
@@ -372,11 +384,20 @@ class TestListRunningBuilds:
                 }
             ]
         }
-        client = _client_with_handler(lambda _: httpx.Response(200, json=payload), monkeypatch)
+        captured: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["tree"] = request.url.params.get("tree", "")
+            return httpx.Response(200, json=payload)
+
+        client = _client_with_handler(handler, monkeypatch)
         result = client.list_running_builds()
         assert result["total"] == 1
         assert result["running_builds"][0]["number"] == 5
         assert result["running_builds"][0]["status"] == "RUNNING"
+        # both the per-job build cap and the job-count cap are present
+        assert "{0,5}" in captured["tree"]
+        assert "{0,200}" in captured["tree"]
 
 
 class TestMakeClient:
@@ -435,6 +456,25 @@ class TestTools:
 
         creds = _jenkins_creds({"base_url": "http://x", "username": "u", "api_token": "t"})
         assert creds == {"jenkins_url": "http://x", "jenkins_user": "u", "jenkins_token": "t"}
+
+    def test_resolve_client_needs_both_url_and_token_explicitly(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.tools import JenkinsTool
+
+        seen: list[tuple] = []
+        monkeypatch.setattr(JenkinsTool, "jenkins_config_from_env", lambda: None)
+        monkeypatch.setattr(
+            JenkinsTool,
+            "make_jenkins_client",
+            lambda url, user, token: seen.append((url, user, token)) or "client",
+        )
+        # only url, no token -> falls through to env (None here), explicit path skipped
+        assert JenkinsTool._resolve_client("http://x", None, None) is None
+        assert seen == []
+        # both present -> explicit path
+        assert JenkinsTool._resolve_client("http://x", "u", "t") == "client"
+        assert seen[-1] == ("http://x", "u", "t")
 
     def test_not_configured_when_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.tools import JenkinsTool

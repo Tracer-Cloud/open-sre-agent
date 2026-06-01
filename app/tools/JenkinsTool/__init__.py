@@ -33,13 +33,18 @@ def _resolve_client(
     jenkins_user: str | None,
     jenkins_token: str | None,
 ):
-    """Build a client from explicit args, falling back to env-var config."""
-    if any([jenkins_url, jenkins_token]):
+    """Build a client from explicit args, falling back to env-var config.
+
+    Requires BOTH url and token to be explicitly present to take the explicit
+    path; a half-supplied pair falls through to env resolution rather than
+    silently mixing an explicit URL with an env token (or vice versa).
+    """
+    if all([jenkins_url, jenkins_token]):
         env = jenkins_config_from_env()
         return make_jenkins_client(
-            jenkins_url or (env.base_url if env else ""),
+            jenkins_url,
             jenkins_user or (env.username if env else ""),
-            jenkins_token or (env.api_token if env else ""),
+            jenkins_token,
         )
     env = jenkins_config_from_env()
     if env is None:
@@ -347,6 +352,7 @@ def list_jenkins_jobs(
         "available": True,
         "jobs": result.get("jobs", []),
         "total": result.get("total", 0),
+        "truncated": result.get("truncated", False),
     }
 
 
@@ -405,4 +411,5 @@ def list_jenkins_running_builds(
         "available": True,
         "running_builds": result.get("running_builds", []),
         "total": result.get("total", 0),
+        "truncated": result.get("truncated", False),
     }
