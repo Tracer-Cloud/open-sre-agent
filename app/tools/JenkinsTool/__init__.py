@@ -41,11 +41,11 @@ def _resolve_client(
     """
     if all([jenkins_url, jenkins_token]):
         env = jenkins_config_from_env()
-        return make_jenkins_client(
-            jenkins_url,
-            jenkins_user or (env.username if env else ""),
-            jenkins_token,
-        )
+        effective_user = jenkins_user or (env.username if env else "")
+        # make_jenkins_client returns None when the username is empty, so an
+        # explicit URL+token without a resolvable username surfaces a clean
+        # "not configured" error rather than a 401.
+        return make_jenkins_client(jenkins_url, effective_user, jenkins_token)
     env = jenkins_config_from_env()
     # jenkins_config_from_env only requires url+token, so guard on is_configured
     # (which also requires username) to avoid building an empty-username client

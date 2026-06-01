@@ -98,6 +98,10 @@ def validate_jenkins_config(config: JenkinsConfig) -> JenkinsValidationResult:
 
     if not config.base_url:
         return JenkinsValidationResult(ok=False, detail="Jenkins base URL is required.")
+    if not config.api_base_url.startswith(("http://", "https://")):
+        return JenkinsValidationResult(
+            ok=False, detail="Jenkins base URL must start with http:// or https://."
+        )
     if not config.username:
         return JenkinsValidationResult(ok=False, detail="Jenkins username is required.")
     if not config.api_token:

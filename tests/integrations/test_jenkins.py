@@ -139,9 +139,18 @@ class TestValidateConfig:
         assert "token" in result.detail
 
     def test_fails_without_username(self) -> None:
-        result = validate_jenkins_config(JenkinsConfig(base_url="http://x", api_token="t"))
+        result = validate_jenkins_config(
+            JenkinsConfig(base_url="http://x", username="", api_token="t")
+        )
         assert not result.ok
         assert "username" in result.detail
+
+    def test_fails_on_missing_scheme(self) -> None:
+        result = validate_jenkins_config(
+            JenkinsConfig(base_url="localhost:8080", username="u", api_token="t")
+        )
+        assert not result.ok
+        assert "http" in result.detail.lower()
 
     def test_passes_on_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
@@ -198,9 +207,23 @@ class TestHelpers:
     def test_safe_job_name_validates(self) -> None:
         assert _safe_job_name("demo-fail") == "demo-fail"
         assert _safe_job_name("team/payment-service") == "team/payment-service"  # folder
+        assert _safe_job_name("  team / svc  ") == "team/svc"  # trims segments
         assert _safe_job_name("../etc") is None
         assert _safe_job_name("a\\b") is None
+        assert _safe_job_name("a//b") is None  # empty segment
+        assert _safe_job_name("team/ /svc") is None  # whitespace-only segment
         assert _safe_job_name("") is None
+
+    def test_coerce_build_number(self) -> None:
+        from app.services.jenkins.client import _coerce_build_number
+
+        assert _coerce_build_number(4) == 4
+        assert _coerce_build_number("7") == 7
+        assert _coerce_build_number(0) is None
+        assert _coerce_build_number(-1) is None
+        assert _coerce_build_number("abc") is None
+        assert _coerce_build_number(None) is None
+        assert _coerce_build_number(True) is None  # bool is not a build number
 
     def test_job_api_path_maps_folders(self) -> None:
         assert _job_api_path("demo") == "job/demo"
@@ -277,6 +300,22 @@ class TestListBuilds:
         assert not result["success"]
         assert "404" in result["error"]
 
+    def test_handles_non_dict_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _client_with_handler(
+            lambda _: httpx.Response(200, json=["unexpected"]), monkeypatch
+        )
+        result = client.list_builds("demo")
+        assert result["success"] is True
+        assert result["builds"] == []
+
+    def test_handles_null_builds_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _client_with_handler(
+            lambda _: httpx.Response(200, json={"builds": None}), monkeypatch
+        )
+        result = client.list_builds("demo")
+        assert result["success"] is True
+        assert result["builds"] == []
+
 
 class TestGetBuildLog:
     def test_returns_log(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -301,7 +340,13 @@ class TestGetBuildLog:
         client = _client_with_handler(lambda _: httpx.Response(200, text=""), monkeypatch)
         result = client.get_build_log("demo", "abc")  # type: ignore[arg-type]
         assert not result["success"]
-        assert "invalid build number" in result["error"]
+
+    def test_rejects_nonpositive_build_number(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _client_with_handler(lambda _: httpx.Response(200, text=""), monkeypatch)
+        zero = client.get_build_log("demo", 0)
+        assert not zero["success"]
+        assert "invalid build number" in zero["error"]
+        assert not client.get_build_log("demo", -3)["success"]
 
 
 class TestGetPipelineStages:
@@ -403,8 +448,10 @@ class TestListRunningBuilds:
 class TestMakeClient:
     def test_returns_none_without_creds(self) -> None:
         assert make_jenkins_client("", api_token="") is None
-        assert make_jenkins_client("http://x", api_token="") is None
-        assert make_jenkins_client("", api_token="t") is None
+        assert make_jenkins_client("http://x", "u", "") is None  # no token
+        assert make_jenkins_client("", "u", "t") is None  # no url
+        assert make_jenkins_client("http://x", "", "t") is None  # no username
+        assert make_jenkins_client("http://x", None, "t") is None  # username defaults to None
 
     def test_builds_client_with_creds(self) -> None:
         client = make_jenkins_client("http://jenkins.local", "alice", "tok")
@@ -492,6 +539,16 @@ class TestTools:
         )
         assert JenkinsTool._resolve_client(None, None, None) is None
         assert called == []
+
+    def test_resolve_client_explicit_path_without_username_returns_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.tools import JenkinsTool
+
+        # url + token explicitly present but no username (and no env) -> the
+        # factory refuses to build an empty-username client -> None.
+        monkeypatch.setattr(JenkinsTool, "jenkins_config_from_env", lambda: None)
+        assert JenkinsTool._resolve_client("http://x", None, "t") is None
 
     def test_not_configured_when_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.tools import JenkinsTool

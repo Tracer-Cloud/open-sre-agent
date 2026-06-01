@@ -41,16 +41,21 @@ _COLOR_STATUS = {
 def _safe_job_name(raw: str) -> str | None:
     """Validate a job name (top-level or folder path) before building a URL path.
 
-    Rejects empty, oversized, or traversal-prone names. A '/' separates folder
-    segments (e.g. ``team/payment-service``), which ``_job_api_path`` maps to
-    Jenkins' nested ``/job/`` path. The returned value is the display name.
+    A '/' separates folder segments (e.g. ``team/payment-service``), which
+    ``_job_api_path`` maps to Jenkins' nested ``/job/`` path. Rejects empty,
+    oversized, traversal-prone, or malformed names (empty/whitespace segments,
+    backslashes). Each segment is trimmed; the normalized display name is
+    returned.
     """
     cleaned = (raw or "").strip().strip("/")
     if not cleaned or len(cleaned) > _MAX_JOB_NAME_LEN:
         return None
     if ".." in cleaned or "\\" in cleaned:
         return None
-    return cleaned
+    segments = [segment.strip() for segment in cleaned.split("/")]
+    if any(not segment for segment in segments):
+        return None
+    return "/".join(segments)
 
 
 def _job_api_path(name: str) -> str:
@@ -58,8 +63,9 @@ def _job_api_path(name: str) -> str:
 
     ``payment-service`` -> ``job/payment-service``;
     ``team/payment-service`` -> ``job/team/job/payment-service`` (folder jobs).
+    Input is assumed already validated by ``_safe_job_name``.
     """
-    return "/".join(f"job/{seg}" for seg in name.split("/") if seg)
+    return "/".join(f"job/{segment}" for segment in name.split("/"))
 
 
 def _iso_from_ms(value: object) -> str:
@@ -110,6 +116,32 @@ def _shape_stage(stage: dict[str, Any]) -> dict[str, Any]:
         "duration_ms": stage.get("durationMillis", 0),
         "start_time": _iso_from_ms(stage.get("startTimeMillis")),
     }
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    """Coerce a decoded JSON value to a dict (defends against malformed responses)."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_dict_list(value: object) -> list[dict[str, Any]]:
+    """Coerce a decoded JSON value to a list of dicts, dropping non-dict items."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _coerce_build_number(value: object) -> int | None:
+    """Coerce a build number to a positive int, or None if invalid.
+
+    Jenkins build numbers start at 1; reject zero/negative and non-numeric input.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 1 else None
 
 
 class JenkinsClient:
@@ -166,10 +198,8 @@ class JenkinsClient:
                 f"/{_job_api_path(safe_name)}/api/json", params={"tree": tree}
             )
             resp.raise_for_status()
-            data = resp.json()
-            builds = [
-                _shape_build(safe_name, b) for b in data.get("builds", []) if isinstance(b, dict)
-            ]
+            data = _as_dict(resp.json())
+            builds = [_shape_build(safe_name, b) for b in _as_dict_list(data.get("builds"))]
             if status:
                 wanted = status.strip().upper()
                 builds = [b for b in builds if b["status"] == wanted]
@@ -197,9 +227,8 @@ class JenkinsClient:
         safe_name = _safe_job_name(job_name)
         if not safe_name:
             return {"success": False, "error": "invalid job name"}
-        try:
-            number = int(build_number)
-        except (TypeError, ValueError):
+        number = _coerce_build_number(build_number)
+        if number is None:
             return {"success": False, "error": "invalid build number"}
 
         try:
@@ -231,9 +260,8 @@ class JenkinsClient:
         safe_name = _safe_job_name(job_name)
         if not safe_name:
             return {"success": False, "error": "invalid job name"}
-        try:
-            number = int(build_number)
-        except (TypeError, ValueError):
+        number = _coerce_build_number(build_number)
+        if number is None:
             return {"success": False, "error": "invalid build number"}
 
         try:
@@ -248,8 +276,8 @@ class JenkinsClient:
                     "stages": [],
                 }
             resp.raise_for_status()
-            data = resp.json()
-            stages = [_shape_stage(s) for s in data.get("stages", []) if isinstance(s, dict)]
+            data = _as_dict(resp.json())
+            stages = [_shape_stage(s) for s in _as_dict_list(data.get("stages"))]
             return {
                 "success": True,
                 "job": safe_name,
@@ -272,21 +300,19 @@ class JenkinsClient:
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
-            data = resp.json()
+            data = _as_dict(resp.json())
             jobs = []
-            for job in data.get("jobs", []):
-                if not isinstance(job, dict):
-                    continue
+            for job in _as_dict_list(data.get("jobs")):
                 status, building = _status_from_color(job.get("color"))
-                last = job.get("lastBuild") if isinstance(job.get("lastBuild"), dict) else {}
+                last = _as_dict(job.get("lastBuild"))
                 jobs.append(
                     {
                         "name": job.get("name", ""),
                         "url": job.get("url", ""),
                         "status": status,
                         "building": building,
-                        "last_build_number": (last or {}).get("number"),
-                        "last_build_at": _iso_from_ms((last or {}).get("timestamp")),
+                        "last_build_number": last.get("number"),
+                        "last_build_at": _iso_from_ms(last.get("timestamp")),
                     }
                 )
             return {
@@ -310,13 +336,13 @@ class JenkinsClient:
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
-            data = resp.json()
-            jobs = [job for job in data.get("jobs", []) if isinstance(job, dict)]
+            data = _as_dict(resp.json())
+            jobs = _as_dict_list(data.get("jobs"))
             running = []
             for job in jobs:
                 name = job.get("name", "")
-                for build in job.get("builds", []):
-                    if isinstance(build, dict) and build.get("building"):
+                for build in _as_dict_list(job.get("builds")):
+                    if build.get("building"):
                         running.append(_shape_build(name, build))
             return {
                 "success": True,
@@ -351,14 +377,20 @@ def make_jenkins_client(
     username: str | None = None,
     api_token: str | None = None,
 ) -> JenkinsClient | None:
-    """Build a configured JenkinsClient, returning None if base URL or token is absent."""
+    """Build a configured JenkinsClient.
+
+    Returns None unless URL, username, and token are all present. Jenkins Basic
+    auth sends ``username:api_token``; an empty username yields a ``:token`` pair
+    that Jenkins rejects with 401, so the factory refuses to build such a client
+    — every caller gets a clean "not configured" path instead of a 401.
+    """
     url = (base_url or "").strip()
+    user = (username or "").strip()
     token = (api_token or "").strip()
-    if not url or not token:
+    if not (url and user and token):
         return None
     try:
-        return JenkinsClient(
-            JenkinsConfig(base_url=url, username=(username or "").strip(), api_token=token)
-        )
+        config = JenkinsConfig(base_url=url, username=user, api_token=token)
     except Exception:
         return None
+    return JenkinsClient(config)
