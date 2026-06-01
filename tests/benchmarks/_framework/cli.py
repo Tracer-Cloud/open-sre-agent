@@ -153,7 +153,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return EXIT_UNKNOWN_ADAPTER
 
-    runner = BenchmarkRunner(config=config, adapter=adapter)
+    runner = BenchmarkRunner(config=config, adapter=adapter, config_path=path)
 
     try:
         outcome = runner.run_without_integrity() if args.dev else runner.run()

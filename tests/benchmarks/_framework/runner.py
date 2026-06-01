@@ -114,6 +114,7 @@ class BenchmarkRunner:
         integrity_guard: IntegrityGuard | None = None,
         cost_tracker: CostTracker | None = None,
         dispatcher: LLMDispatcher | None = None,
+        config_path: Path | None = None,
     ) -> None:
         self.config = config
         self.adapter = adapter
@@ -121,6 +122,10 @@ class BenchmarkRunner:
         self.cost = cost_tracker or CostTracker(budget_usd=config.cost_budget_usd)
         self.dispatcher = dispatcher or LLMDispatcher()
         self._opensre_sha = _git_sha()
+        # Where the YAML was loaded from. Threaded into capture_provenance so
+        # the run dir's provenance.json inlines the config content + sha256.
+        # None when the runner is constructed inline (e.g. unit tests).
+        self._config_path = config_path
 
     # ----------------------------------------------------------------------- #
     # Public API                                                              #
@@ -179,6 +184,7 @@ class BenchmarkRunner:
             adapter=self.adapter,
             run_id=run_id,
             started_at=started_at,
+            config_path=self._config_path,
         )
         (output_dir / "provenance.json").write_text(
             json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",

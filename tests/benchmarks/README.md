@@ -35,11 +35,11 @@ guide.
 
 ## Running from GitHub CI
 
-Trigger from **Actions → "Bench run (manual)" → Run workflow**. Fill in
-config path, dev_mode toggle, cost cap. Artifacts upload as
+Trigger from **Actions → "Benchmark run (manual)" → Run workflow**. Fill in
+the config path and the dev_mode toggle. Artifacts upload as
 `bench-results-<run-id>.zip` (30-day retention).
 
 One-time setup before the first CI run: add repo secrets `ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` (only the ones your config needs).
 Workflow lives at
-[../../.github/workflows/bench-run.yml](../../.github/workflows/bench-run.yml).
+[../../.github/workflows/benchmark-run.yml](../../.github/workflows/benchmark-run.yml).

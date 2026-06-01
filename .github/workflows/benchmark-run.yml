@@ -1,10 +1,10 @@
 name: Benchmark run (manual)
 
 # Manually-triggered benchmark run. Costs real money — caller picks the
-# config, mode, and cost cap. Never auto-triggered.
+# config and dev_mode flag. Never auto-triggered.
 #
 # Trigger from the GitHub UI:
-#   Actions → "Bench run (manual)" → Run workflow → fill inputs
+#   Actions → "Benchmark run (manual)" → Run workflow → fill inputs
 
 on:
   workflow_dispatch:
@@ -52,10 +52,18 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # Bind workflow inputs to env vars rather than interpolating them
+          # directly into the run: script. GitHub Actions expands ${{ ... }}
+          # at YAML-parse time (before the shell sees it), so a malicious
+          # value like ``foo.yml"; rm -rf / "`` would inject shell commands.
+          # Env-var expansion happens inside the shell, which respects the
+          # double-quote around "$CONFIG_PATH".
+          CONFIG_PATH: ${{ inputs.config }}
+          DEV_FLAG: ${{ inputs.dev_mode == true && '--dev' || '' }}
         run: |
           uv run python -m tests.benchmarks._framework.cli run \
-            "${{ inputs.config }}" \
-            ${{ inputs.dev_mode == true && '--dev' || '' }}
+            "$CONFIG_PATH" \
+            $DEV_FLAG
 
       - name: Upload artifacts
         if: always()
