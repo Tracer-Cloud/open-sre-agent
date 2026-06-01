@@ -762,9 +762,9 @@ def remote(ctx: click.Context, url: str | None, api_key: str | None) -> None:
 
 
 @remote.group(name="ops")
-@click.option("--provider", "ops_provider", default=None, help="Remote provider (e.g. railway).")
-@click.option("--project", "ops_project", default=None, help="Provider project ID/name.")
-@click.option("--service", "ops_service", default=None, help="Provider service ID/name.")
+@click.option("--provider", "ops_provider", default=None, help="Remote ops provider (e.g. railway).")
+@click.option("--project", "ops_project", default=None, help="Provider project ID or name.")
+@click.option("--service", "ops_service", default=None, help="Provider service ID or name.")
 @click.pass_context
 def remote_ops(
     ctx: click.Context,

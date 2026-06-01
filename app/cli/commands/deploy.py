@@ -373,9 +373,9 @@ def deploy_railway(
 
 
 @deploy.command(name="langsmith")
-@click.option("--api-key", default=None, help="LangSmith API key")
-@click.option("--build-only", is_flag=True, help="Build without deploy")
-@click.option("--deployment-name", default=None, help="Deployment name")
+@click.option("--api-key", default=None, help="LangSmith API key.")
+@click.option("--build-only", is_flag=True, help="Build without deploying.")
+@click.option("--deployment-name", default=None, help="Deployment name.")
 def deploy_langsmith(api_key: str | None, build_only: bool, deployment_name: str | None) -> None:
     """Deploy OpenSRE to LangSmith."""
 
