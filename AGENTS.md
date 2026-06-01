@@ -141,7 +141,7 @@ Basic steps:
 - If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
-- If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.
+- If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
@@ -164,12 +164,4 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 
 ## 6. New Integration Checklist
 
-When adding a new integration, a PR is only ready when:
-
-- Integration code added under `app/integrations/<name>/`
-- Tool(s) added under `app/tools/` with proper typing
-- Unit/mock tests added under `tests/integrations/`
-- Docs added under `docs/` and registered in `docs/docs.json` `pages`
-- Screenshot or demo GIF showing the integration working
-- E2E or synthetic test added
-- CI checks pass (see [CI.md](CI.md))
+Follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the single definition of done for all tool and integration work.
