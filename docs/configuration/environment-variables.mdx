@@ -272,6 +272,12 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `MONGODB_ATLAS_PRIVATE_KEY` | | MongoDB Atlas private API key | `integrations/_catalog_impl` |
 | `MONGODB_ATLAS_PROJECT_ID` | | MongoDB Atlas project ID | `integrations/_catalog_impl` |
 | `MONGODB_ATLAS_BASE_URL` | `https://cloud.mongodb.com/api/atlas/v2` | MongoDB Atlas API base URL | `.env.example` |
+| `REDIS_HOST` | | Redis host | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_PORT` | `6379` | Redis port | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_USERNAME` | | Redis ACL username (Redis 6+) | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_PASSWORD` | | Redis password | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_DATABASE` | `0` | Redis database number | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_SSL` | `false` | Connect using TLS | `integrations/redis`, `integrations/_catalog_impl` |
 | `POSTGRESQL_HOST` | | PostgreSQL host | `integrations/_catalog_impl` |
 | `POSTGRESQL_PORT` | `5432` | PostgreSQL port | `integrations/_catalog_impl` |
 | `POSTGRESQL_DATABASE` | | PostgreSQL database name | `integrations/_catalog_impl` |
