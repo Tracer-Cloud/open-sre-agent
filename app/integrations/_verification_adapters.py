@@ -34,6 +34,7 @@ from app.integrations.mysql import build_mysql_config, validate_mysql_config
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
+from app.integrations.redis import build_redis_config, validate_redis_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
@@ -530,6 +531,11 @@ _verify_dagster = build_validation_verifier(
     build_config=build_dagster_config,
     validate_config=validate_dagster_config,
 )
+_verify_redis = build_validation_verifier(
+    "redis",
+    build_config=build_redis_config,
+    validate_config=validate_redis_config,
+)
 _verify_betterstack = build_validation_verifier(
     "betterstack",
     build_config=build_betterstack_config,
@@ -717,6 +723,7 @@ __all__ = [
     "_verify_postgresql",
     "_verify_dagster",
     "_verify_rabbitmq",
+    "_verify_redis",
     "_verify_sentry",
     "_verify_signoz",
     "_verify_slack",

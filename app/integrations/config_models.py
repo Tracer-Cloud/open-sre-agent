@@ -520,6 +520,22 @@ class MongoDBIntegrationConfig(StrictConfigModel):
     )
 
 
+class RedisIntegrationConfig(StrictConfigModel):
+    """Normalized Redis credentials used by resolution and verification flows."""
+
+    host: str
+    port: int = 6379
+    username: str = ""
+    password: str = ""
+    db: int = 0
+    ssl: bool = False
+    integration_id: str = ""
+
+    _normalize_host = field_validator("host", mode="before")(normalize_str())
+    _normalize_username = field_validator("username", mode="before")(normalize_str())
+    _normalize_password = field_validator("password", mode="before")(normalize_str())
+
+
 class MongoDBAtlasIntegrationConfig(StrictConfigModel):
     """Normalized MongoDB Atlas API credentials used by resolution and verification flows."""
 

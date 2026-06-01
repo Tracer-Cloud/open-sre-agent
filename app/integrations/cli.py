@@ -490,6 +490,49 @@ def _setup_mongodb() -> None:
     )
 
 
+def _setup_redis() -> None:
+    host = _p("Host (e.g. localhost or redis.example.net)")
+    port_input = _p("Port", default="6379")
+    username = _p("Username (leave blank unless using Redis ACLs)")
+    password = _p("Password (leave blank if not set)", secret=True)
+    db_input = _p("Database number", default="0")
+    ssl_choice = questionary.select(
+        "Use TLS?",
+        choices=[
+            questionary.Choice("No", value="0"),
+            questionary.Choice("Yes", value="1"),
+        ],
+        instruction="(use arrow keys)",
+    ).ask()
+    if ssl_choice is None:
+        print("\nAborted.")
+        sys.exit(1)
+    ssl = ssl_choice == "1"
+    if not host:
+        _die("host is required.")
+    try:
+        port = int(port_input)
+    except (TypeError, ValueError):
+        _die(f"port: {port_input} is invalid")
+    try:
+        db = int(db_input)
+    except (TypeError, ValueError):
+        _die(f"db: {db_input} is invalid")
+    upsert_integration(
+        "redis",
+        {
+            "credentials": {
+                "host": host,
+                "port": port,
+                "username": username,
+                "password": password,
+                "db": db,
+                "ssl": ssl,
+            }
+        },
+    )
+
+
 def _register_discord_slash_command(application_id: str, bot_token: str) -> None:
     import httpx
 
@@ -876,6 +919,7 @@ _HANDLERS: dict[str, Any] = {
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "redis": _setup_redis,
     "signoz": _setup_signoz,
     "jenkins": _setup_jenkins,
 }

@@ -52,6 +52,7 @@ from app.integrations.rds import (
     build_rds_config,
     rds_config_from_env,
 )
+from app.integrations.redis import build_redis_config
 from app.integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     SKIP_CLASSIFIED_SERVICES,
@@ -390,6 +391,25 @@ def _classify_service_instance(
             return None, None
         if mongodb_config.connection_string:
             return mongodb_config.model_dump(), "mongodb"
+        return None, None
+
+    if key == "redis":
+        try:
+            redis_config = build_redis_config(
+                {
+                    "host": credentials.get("host", ""),
+                    "port": credentials.get("port", 6379),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "db": credentials.get("db", 0),
+                    "ssl": credentials.get("ssl", False),
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if redis_config.host:
+            return redis_config.model_dump(), "redis"
         return None, None
 
     if key == "postgresql":
@@ -1285,6 +1305,25 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _active_env_record(
                 "mongodb",
                 mongodb_config.model_dump(exclude={"integration_id"}),
+            )
+        )
+
+    redis_host = os.getenv("REDIS_HOST", "").strip()
+    if redis_host:
+        redis_config = build_redis_config(
+            {
+                "host": redis_host,
+                "port": safe_int(os.getenv("REDIS_PORT", "6379"), 6379),
+                "username": os.getenv("REDIS_USERNAME", "").strip(),
+                "password": os.getenv("REDIS_PASSWORD", "").strip(),
+                "db": safe_int(os.getenv("REDIS_DATABASE", "0"), 0),
+                "ssl": os.getenv("REDIS_SSL", "false").strip().lower() in ("true", "1", "yes"),
+            }
+        )
+        integrations.append(
+            _active_env_record(
+                "redis",
+                redis_config.model_dump(exclude={"integration_id"}),
             )
         )
 
