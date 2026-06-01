@@ -53,7 +53,6 @@ class TokenPricing:
 # Anthropic: claude pricing pages
 # OpenAI: platform.openai.com/docs/pricing
 # DeepSeek: api-docs.deepseek.com/quick_start/pricing
-# Qwen (via Together AI): together.ai/pricing
 #
 # IMPORTANT: verify current rates before any large run. The
 # benchmark report should record the rates used.
@@ -73,10 +72,6 @@ PRICING_TABLE: dict[str, TokenPricing] = {
     "gpt-4o-mini-2024-07-18": TokenPricing(0.15, 0.60),
     # DeepSeek
     "deepseek-chat-v3.2": TokenPricing(0.27, 1.10),
-    # Qwen (via Together AI; approx, varies by host)
-    "Qwen/Qwen3-235B": TokenPricing(0.90, 0.90),
-    "Qwen/Qwen3-14B": TokenPricing(0.20, 0.20),
-    "Qwen/Qwen3-8B": TokenPricing(0.20, 0.20),
 }
 
 
