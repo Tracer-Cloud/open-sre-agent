@@ -848,6 +848,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_github_file_contents",
         "get_github_repository_tree",
         "get_gitlab_file",
+        "get_hermes_adapter_catalog",
         "get_hermes_approval_events",
         "get_hermes_audit_trail",
         "get_hermes_config",

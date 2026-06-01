@@ -4,6 +4,8 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.config import has_credentials_for_active_llm_provider
@@ -15,6 +17,8 @@ from tests.synthetic.hermes_rca.scenario_loader import (
     load_scenario,
 )
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
+
+HISTORY_DIR = SUITE_DIR / "benchmark_history"
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Useful for deterministic local/CI checks without provider keys."
         ),
     )
+    parser.add_argument(
+        "--write-history",
+        action="store_true",
+        help="Write a timestamped Hermes benchmark history snapshot.",
+    )
     return parser.parse_args(argv)
 
 
@@ -160,6 +169,30 @@ def _offline_result(fixture: HermesScenarioFixture) -> dict[str, Any]:
         "mode": "offline",
         "error": "" if passed else f"missing required evidence sources: {missing_sources}",
     }
+
+
+def _write_history_snapshot(results: list[dict[str, Any]]) -> Path:
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+    failed = sum(1 for item in results if item["status"] != "pass")
+    passed = len(results) - failed
+    pass_rate = passed / len(results) if results else 0.0
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    path = HISTORY_DIR / f"{timestamp}.json"
+
+    payload = {
+        "timestamp": timestamp,
+        "suite": "hermes_rca",
+        "total": len(results),
+        "passed": passed,
+        "failed": failed,
+        "pass_rate": pass_rate,
+        "results": results,
+    }
+
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -206,8 +239,20 @@ def main(argv: list[str] | None = None) -> int:
     failed = sum(1 for item in results if item["status"] != "pass")
     passed = len(results) - failed
 
+    history_path = _write_history_snapshot(results) if args.write_history else None
+
     if args.json:
-        print(json.dumps({"results": results, "passed": passed, "failed": failed}, indent=2))
+        print(
+            json.dumps(
+                {
+                    "results": results,
+                    "passed": passed,
+                    "failed": failed,
+                    "history_path": str(history_path) if history_path is not None else None,
+                },
+                indent=2,
+            )
+        )
     else:
         for item in results:
             print(f"[{item['status'].upper()}] {item['scenario_id']} ({item['mode']})")
@@ -216,6 +261,9 @@ def main(argv: list[str] | None = None) -> int:
             if item.get("error"):
                 print(f"  error: {item['error']}")
         print(f"\nResults: {passed}/{len(results)} passed")
+
+        if history_path is not None:
+            print(f"History snapshot: {history_path}")
 
     return 0 if failed == 0 else 1
 

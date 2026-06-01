@@ -38,6 +38,8 @@ VALID_HERMES_FAILURE_MODES = frozenset(
         "missing_audit_trail",
         "missing_rbac",
         "missing_credential_isolation",
+        # Part 5/5
+        "surface_attribution",
     }
 )
 
@@ -45,6 +47,7 @@ VALID_HERMES_EVIDENCE_SOURCES = frozenset(
     {
         "hermes_session_log",
         "hermes_provider_traffic",
+        "hermes_adapter_catalog",
         "hermes_config",
         "hermes_runtime_state",
         "hermes_message_history",
@@ -67,6 +70,7 @@ VALID_HERMES_TRAJECTORY_ACTIONS = frozenset(
     {
         "get_hermes_session_log",
         "get_hermes_provider_traffic",
+        "get_hermes_adapter_catalog",
         "get_hermes_config",
         "get_hermes_message_history",
         "get_hermes_kv_cache_state",
@@ -121,6 +125,14 @@ class HermesSessionEvent(TypedDict, total=False):
 class HermesSessionLogFixture(TypedDict):
     session_id: str
     events: list[HermesSessionEvent]
+
+
+class HermesAdapterCatalogFixture(TypedDict):
+    messaging_adapters: list[str]
+    llm_providers: list[str]
+    execution_backends: list[str]
+    build_version: str
+    registered_at: str
 
 
 class HermesMessageEntry(TypedDict):
@@ -225,6 +237,7 @@ class HermesScenarioMetadataSchema(TypedDict):
 class HermesScenarioEvidence:
     hermes_session_log: HermesSessionLogFixture | None
     hermes_provider_traffic: dict[str, Any] | None
+    hermes_adapter_catalog: HermesAdapterCatalogFixture | None
     hermes_config: dict[str, Any] | None
     hermes_runtime_state: HermesRuntimeStateFixture | None
     hermes_message_history: HermesMessageHistoryFixture | None
@@ -313,6 +326,22 @@ def validate_hermes_provider_traffic(data: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"{cctx}:response: 'duration_ms' must be an integer")
 
     return data
+
+
+def validate_hermes_adapter_catalog(data: dict[str, Any]) -> HermesAdapterCatalogFixture:
+    ctx = "hermes_adapter_catalog.json"
+
+    for field in ("messaging_adapters", "llm_providers", "execution_backends"):
+        value = data.get(field)
+        if not isinstance(value, list) or not value:
+            raise ValueError(f"{ctx}: '{field}' must be a non-empty list")
+        if not all(isinstance(item, str) and item.strip() for item in value):
+            raise ValueError(f"{ctx}: all '{field}' entries must be non-empty strings")
+
+    _require_str(data, "build_version", ctx)
+    _require_str(data, "registered_at", ctx)
+
+    return data  # type: ignore[return-value]
 
 
 def validate_hermes_config(data: dict[str, Any]) -> dict[str, Any]:
