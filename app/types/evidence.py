@@ -30,6 +30,7 @@ EvidenceSource = Literal[
     "vercel",
     "opsgenie",
     "incident_io",
+    "pagerduty",
     "jira",
     "elasticsearch",
     "prefect",

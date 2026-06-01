@@ -72,6 +72,7 @@ class EffectiveIntegrations(StrictConfigModel):
     vercel: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
+    pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
     notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None

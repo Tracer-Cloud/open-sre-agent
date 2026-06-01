@@ -46,6 +46,7 @@ from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.pagerduty import PagerDutyClient, PagerDutyConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
@@ -639,6 +640,11 @@ _verify_opsgenie = build_probe_verifier(
     build_config=OpsGenieConfig.model_validate,
     client_factory=OpsGenieClient,
 )
+_verify_pagerduty = build_probe_verifier(
+    "pagerduty",
+    build_config=PagerDutyConfig.model_validate,
+    client_factory=PagerDutyClient,
+)
 _verify_incident_io = build_probe_verifier(
     "incident_io",
     build_config=IncidentIoIntegrationConfig.model_validate,
@@ -714,6 +720,7 @@ __all__ = [
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",
+    "_verify_pagerduty",
     "_verify_postgresql",
     "_verify_dagster",
     "_verify_rabbitmq",

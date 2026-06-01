@@ -27,6 +27,7 @@ DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
     "eu": "https://api.eu.opsgenie.com",
 }
 DEFAULT_INCIDENT_IO_BASE_URL = "https://api.incident.io"
+DEFAULT_PAGERDUTY_BASE_URL = "https://api.pagerduty.com"
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +206,25 @@ class OpsGenieIntegrationConfig(StrictConfigModel):
     def headers(self) -> dict[str, str]:
         return {
             "Authorization": f"GenieKey {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
+class PagerDutyIntegrationConfig(StrictConfigModel):
+    """PagerDuty config"""
+
+    api_key: str
+    base_url: str = DEFAULT_PAGERDUTY_BASE_URL
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(
+        normalize_url(DEFAULT_PAGERDUTY_BASE_URL)
+    )
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Token token={self.api_key}",
             "Content-Type": "application/json",
         }
 

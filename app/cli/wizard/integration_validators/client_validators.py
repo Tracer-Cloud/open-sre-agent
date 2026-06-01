@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
+from app.integrations.config_models import PagerDutyIntegrationConfig
 from app.integrations.dagster import build_dagster_config, validate_dagster_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
 from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
@@ -25,6 +26,7 @@ from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.pagerduty import PagerDutyClient
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.vercel import VercelClient, VercelConfig
 
@@ -449,6 +451,34 @@ def validate_opsgenie_integration(
         return IntegrationHealthResult(
             ok=False,
             detail=f"OpsGenie validation failed: {err}",
+        )
+
+
+def validate_pagerduty_integration(
+    *,
+    api_key: str,
+    base_url: str,
+) -> IntegrationHealthResult:
+    """Validate Pagerduty connectivity by listing alerts."""
+    if not api_key:
+        return IntegrationHealthResult(ok=False, detail="PagerDuty API key is required.")
+    try:
+        config = PagerDutyIntegrationConfig(api_key=api_key, base_url=base_url)
+        with PagerDutyClient(config) as client:
+            result = client.list_incidents(limit=1)
+        if result.get("success"):
+            return IntegrationHealthResult(
+                ok=True,
+                detail="Connected to PagerDuty; API key accepted.",
+            )
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"PagerDuty validation failed: {result.get('error', 'unknown error')}",
+        )
+    except Exception as err:
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"PagerDuty validation failed: {str(err).replace(api_key, '[REDACTED]')}",
         )
 
 

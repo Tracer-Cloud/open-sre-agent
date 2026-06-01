@@ -29,6 +29,7 @@ from app.cli.interactive_shell.ui.theme import (
 from app.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from app.cli.wizard.env_sync import sync_env_secret, sync_env_values, sync_provider_env
 from app.cli.wizard.integration_health import IntegrationHealthResult
+from app.cli.wizard.integration_validators.client_validators import validate_pagerduty_integration
 from app.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from app.cli.wizard.prompts import select as select_prompt
 from app.cli.wizard.store import get_store_path, load_local_config, save_local_config
@@ -1632,6 +1633,31 @@ def _configure_opsgenie() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_pagerduty() -> tuple[str, str]:
+    _, credentials = _integration_defaults("pagerduty")
+    while True:
+        api_key = _prompt_value(
+            "PagerDuty API key",
+            default=_string_value(credentials.get("api_key")),
+            secret=True,
+        )
+        base_url = _prompt_value(
+            "PagerDuty API base URL (press Enter to use default)",
+            default=_string_value(credentials.get("base_url"), "https://api.pagerduty.com"),
+        )
+        with _console.status("Validating PagerDuty integration...", spinner="dots"):
+            result = validate_pagerduty_integration(api_key=api_key, base_url=base_url)
+        _render_integration_result("PagerDuty", result)
+        if result.ok:
+            upsert_integration(
+                "pagerduty",
+                {"credentials": {"api_key": api_key, "base_url": base_url}},
+            )
+            env_path = sync_env_values({})
+            return "PagerDuty", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_incident_io() -> tuple[str, str]:
     _, credentials = _integration_defaults("incident_io")
     while True:
@@ -2007,6 +2033,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint="Investigate alerts and triage state from OpsGenie",
         ),
         Choice(
+            value="pagerduty",
+            label="PagerDuty",
+            hint="Fetch incidents, on-call schedules, and service topology from PagerDuty",
+        ),
+        Choice(
             value="incident_io",
             label="incident.io",
             hint="Read incident context and updates from incident.io",
@@ -2062,6 +2093,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": _configure_jira,
         "alertmanager": _configure_alertmanager,
         "opsgenie": _configure_opsgenie,
+        "pagerduty": _configure_pagerduty,
         "incident_io": _configure_incident_io,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
@@ -2088,6 +2120,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "jira": "jira",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",
+        "pagerduty": "pagerduty",
         "incident_io": "incident.io",
         "notion": "notion",
         "openclaw": "openclaw",

@@ -621,7 +621,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=25,
+                stagger_j=26,
             ),
         ],
         timeout=30.0,
@@ -715,7 +715,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 PtyAction(
                     expect="Choose an integration to configure",
                     send=b"\r",
-                    stagger_j=25,
+                    stagger_j=26,
                 ),
             ],
             timeout=pty_timeout,
