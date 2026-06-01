@@ -61,6 +61,7 @@ from tests.benchmarks._framework.llm_dispatch import (
     ModelVersionMismatch,
     UnknownLLM,
 )
+from tests.benchmarks._framework.provenance import capture_provenance
 from tests.benchmarks._framework.reporting import render_report_dir
 
 # --------------------------------------------------------------------------- #
@@ -169,6 +170,21 @@ class BenchmarkRunner:
         cells: list[_CellResult] = []
         aborted = False
         abort_reason: str | None = None
+
+        # Capture provenance before any LLM call so reviewers can audit
+        # exactly what code + config + env produced the report. Failure is
+        # FATAL — a run without provenance has no reproducibility story.
+        provenance = capture_provenance(
+            config=self.config,
+            adapter=self.adapter,
+            run_id=run_id,
+            started_at=started_at,
+        )
+        (output_dir / "provenance.json").write_text(
+            json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"  ✓ wrote {output_dir / 'provenance.json'}")
 
         cases = list(
             self.adapter.load_cases(
@@ -455,29 +471,38 @@ def _aggregate_per_stratum(
 
     Shape: {stratum: {f"{mode}/{llm}": {metric: median_value}}}
 
-    For v1, only the `all` stratum is populated. Phase D adds seen/unseen
-    tagging which extends to multi-stratum.
+    Strata populated:
+      - ``all``                          — every cell
+      - ``seen-shape`` / ``unseen-shape`` — Phase D tag from
+        ``BenchmarkCase.seen_shape``; mid-shape cells appear only in ``all``
+      - ``held-out`` / ``optimize``      — generalization-gate split from
+        ``BenchmarkCase.metadata["is_held_out"]``; required by integrity
+        Mechanism 8 so reports can compute ``held_out_lift / optimize_lift``
+        per the pre-registration's ``generalization_gate`` clause
     """
     by_stratum_mode_llm: dict[str, dict[str, dict[str, list[float]]]] = {"all": {}}
 
     for cell in cells:
         key = f"{cell.mode}/{cell.llm}"
-        all_bucket = by_stratum_mode_llm["all"].setdefault(key, {m: [] for m in metrics})
-        for m in metrics:
-            all_bucket[m].append(cell.score.metrics.get(m, 0.0))
-        # Per-stratum (seen-shape, unseen-shape, mid-shape) — only when tagged
+
+        def append_to(stratum: str, _cell: _CellResult = cell, _key: str = key) -> None:
+            bucket = by_stratum_mode_llm.setdefault(stratum, {}).setdefault(
+                _key, {m: [] for m in metrics}
+            )
+            for m in metrics:
+                bucket[m].append(_cell.score.metrics.get(m, 0.0))
+
+        append_to("all")
         if cell.case.seen_shape is True:
-            stratum_bucket = by_stratum_mode_llm.setdefault("seen-shape", {}).setdefault(
-                key, {m: [] for m in metrics}
-            )
-            for m in metrics:
-                stratum_bucket[m].append(cell.score.metrics.get(m, 0.0))
+            append_to("seen-shape")
         elif cell.case.seen_shape is False:
-            stratum_bucket = by_stratum_mode_llm.setdefault("unseen-shape", {}).setdefault(
-                key, {m: [] for m in metrics}
-            )
-            for m in metrics:
-                stratum_bucket[m].append(cell.score.metrics.get(m, 0.0))
+            append_to("unseen-shape")
+
+        held_out = cell.case.metadata.get("is_held_out") if cell.case.metadata else None
+        if held_out is True:
+            append_to("held-out")
+        elif held_out is False:
+            append_to("optimize")
 
     return {
         stratum: {
