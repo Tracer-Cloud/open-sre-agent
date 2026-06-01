@@ -56,6 +56,8 @@ dependencies = [
     "google-auth>=2.0.0,<3.0.0",
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
+    # Redis
+    "redis>=5.0.0,<6.0.0",
     # Signature verfication for discord
     "PyNaCl>=1.5.0",
     # MariaDB
