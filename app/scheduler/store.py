@@ -106,8 +106,7 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
             logger.info("Cascade-deleted %d run(s) for removed task %s", deleted, task_id)
     except Exception:  # noqa: BLE001
         logger.warning(
-            "Failed to cascade-delete runs for task %s (DB: %s); "
-            "orphaned runs may remain",
+            "Failed to cascade-delete runs for task %s (DB: %s); orphaned runs may remain",
             task_id,
             db_path,
             exc_info=True,
