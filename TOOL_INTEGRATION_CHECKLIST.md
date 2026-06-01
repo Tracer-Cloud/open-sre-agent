@@ -23,7 +23,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 ### Contract and implementation
 
 - [ ] Pick the simplest shape that fits the tool (`@tool(...)` for lightweight tools, richer class only when needed)
-- [ ] Metadata is complete and accurate: `name`, `description`, `source`, `surfaces`, `requires`, and any `use_cases` / `outputs`
+- [ ] Metadata is complete and accurate: `name`, `description`, `source`, `surfaces`, `requires`, and any `use_cases` / `outputs` / `retrieval_controls`
 - [ ] `input_schema` matches the actual runtime arguments and required fields
 - [ ] `is_available` only returns `True` when the tool can genuinely run
 - [ ] `extract_params` maps resolved integration state into tool args correctly
@@ -31,6 +31,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
 - [ ] Reusable transport/parsing logic lives in `app/services/` or `app/tools/utils/` rather than being copied into the tool body
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
+- [ ] Output that may contain secrets, tokens, or PII is run through `app/masking/` before being returned
 
 ### Live payload parsing
 
@@ -40,6 +41,7 @@ If the tool parses API, MCP, log, or webhook payloads:
 - [ ] Handle alternate field names used in live payloads
 - [ ] Handle missing or partial fields without returning unusable output
 - [ ] Preserve important context when truncating, tailing, paginating, or flattening data
+- [ ] Upstream 429 / 5xx responses are handled and return a clear, investigation-friendly error rather than raising
 - [ ] Add at least one regression test using a realistic fixture payload
 
 Common failure modes to consider:
@@ -66,16 +68,17 @@ Common failure modes to consider:
 
 ### Core completeness
 
-- [ ] Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape
+- [ ] Integration config, normalization, and validators are in place under `app/integrations/<name>.py`
 - [ ] Catalog resolution / env loading is wired correctly
 - [ ] Verification path is wired in `app/integrations/verify.py` and adapters/registry as needed
-- [ ] Add or update the service client only when the integration needs direct remote calls
-- [ ] Wire the tool layer after the config path is stable
+- [ ] Service client is added under `app/services/<name>/client.py` (only if the integration needs direct remote calls)
+- [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
 - [ ] `opensre onboard` parity is added or intentionally documented as out of scope
-- [ ] Add docs and tests together so the integration is understandable and verifiable
-- [ ] If a new `docs/` page is added, register it in `docs/docs.json`
-- [ ] Run `make verify-integrations` before treating the integration as complete
+- [ ] Any new required env vars or credentials are added to `.env.example` (never `.env`)
+- [ ] Docs and tests are added together so the integration is understandable and verifiable
+- [ ] If a new `docs/` page is added, it is registered in `docs/docs.json`
+- [ ] `make verify-integrations` passes
 
 ## 3. Investigation wiring checklist
 
@@ -117,15 +120,11 @@ For tools that list, search, or inspect resources:
 
 Green tests are not enough if they only cover idealized mocks.
 
-### Demo / proof
+### Final gate (new integrations only)
 
-For a new integration, a PR is only ready when it includes:
+Before the PR is ready for review, verify all of the above are complete **and**:
 
-- [ ] Integration code added under `app/integrations/<name>/`
-- [ ] Tool(s) added under `app/tools/` with proper typing
-- [ ] Unit/mock tests added under `tests/integrations/`
-- [ ] Docs added under `docs/` and registered in `docs/docs.json`
-- [ ] Screenshot or demo GIF showing the integration working
+- [ ] Screenshot or demo GIF showing the integration working end-to-end
 - [ ] E2E or synthetic test added
 - [ ] `make verify-integrations` passes
 - [ ] CI checks pass (see [CI.md](CI.md))
