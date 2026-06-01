@@ -1,8 +1,12 @@
-name: bench (build + push image)
+name: Benchmark image — build + push to ECR
 
-# Builds infra/bench/Dockerfile.bench and pushes the resulting image to ECR. Triggered
-# automatically on changes to the bench code (or the Dockerfile itself) and
-# manually via workflow_dispatch.
+# Builds infra/bench/Dockerfile.bench and pushes the resulting image to the
+# opensre-bench ECR repository. The bench container is what
+# `Benchmark run (manual)` invokes on AWS Fargate, so this workflow's
+# output is the input to that one.
+#
+# Triggered automatically on changes to the bench code (or the Dockerfile
+# itself) and manually via workflow_dispatch.
 #
 # After the image is pushed, update the task definition by re-applying the
 # Terraform with the new tag:

@@ -1,5 +1,10 @@
 # Running a benchmark
 
+## Where the corpus lives
+
+- **Hugging Face (upstream):** [tracer-cloud/cloud-ops-bench-dataset](https://huggingface.co/datasets/tracer-cloud/cloud-ops-bench-dataset)
+- **AWS S3 mirror:** `s3://cloud-ops-bench-dataset/<hf-revision-sha>/` — the same corpus, revision-pinned, used by the Fargate bench task at startup (faster than HF, no rate limits, no `HF_TOKEN` needed at runtime). Populated by `make mirror-cloudopsbench-s3`.
+
 ```bash
 # One-time setup
 make install
@@ -35,7 +40,7 @@ guide.
 
 ## Running from GitHub CI
 
-Trigger from **Actions → "Benchmark run (manual)" → Run workflow**. Fill in
+Trigger from **Actions → "Benchmark — run on Fargate" → Run workflow**. Fill in
 the config path and the dev_mode toggle. Artifacts upload as
 `bench-results-<run-id>.zip` (30-day retention).
 
