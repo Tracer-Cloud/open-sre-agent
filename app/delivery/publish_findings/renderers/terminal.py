@@ -289,7 +289,7 @@ def _render_rich_confidence_block(
     console.print()
     band_upper = confidence_band.upper() if confidence_band else ""
     band_style = {"HIGH": "bold green", "MEDIUM": "bold yellow", "LOW": "bold red"}.get(
-        band_upper, f"bold {TEXT}"
+        band_upper, "bold white"
     )
     score_str = (
         f" ({int(validity_score * 100)}%)"
