@@ -15,6 +15,7 @@ Examples of files that qualify:
 - `README.md`
 - `TESTING.md`
 - `TOOL_INTEGRATION_CHECKLIST.md`
+- `docs/**/*.md`
 - `docs/**/*.mdx`
 - `docs/docs.json`
 
