@@ -428,11 +428,13 @@ def list_github_actions_active_runs(
 
     # Check for errors
     if queued_result.get("is_error") or in_progress_result.get("is_error"):
-        error_msg = (
-            queued_result.get("text")
-            or in_progress_result.get("text")
-            or "Failed to list active runs"
-        )
+        error_texts = []
+        for result in (queued_result, in_progress_result):
+            if result.get("is_error") and result.get("text"):
+                error_texts.append(result.get("text"))
+
+        error_msg = " | ".join(error_texts) if error_texts else "Failed to list active runs"
+
         return code_host_unavailable_payload(
             source="github",
             integration_name="GitHub Actions",
