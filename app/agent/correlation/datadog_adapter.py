@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.correlation.upstream import (
+from app.agent.correlation.upstream import (
     LogSignal,
     MetricSeries,
 )

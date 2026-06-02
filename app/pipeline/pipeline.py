@@ -63,8 +63,8 @@ def _candidate_services_from_state(state: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
-    from app.correlation.datadog_adapter import DatadogCorrelationAdapter
-    from app.correlation.datadog_provider import (
+    from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
+    from app.agent.correlation.datadog_provider import (
         DatadogCorrelationQueries,
         DatadogUpstreamEvidenceProvider,
     )
@@ -140,9 +140,9 @@ def run_connected_investigation(state: AgentState) -> AgentState:
     which are merged in. Pure function: inputs in, state out.
     """
     from app.agent.context import resolve_integrations
+    from app.agent.correlation.node import node_correlate_upstream
     from app.agent.extract import extract_alert
     from app.agent.investigation import ConnectedInvestigationAgent
-    from app.correlation.node import node_correlate_upstream
     from app.delivery import deliver
     from app.utils.sentry_sdk import capture_exception
 

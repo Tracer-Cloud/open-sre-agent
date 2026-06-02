@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, cast
 
+from app.agent.correlation.providers import NoopUpstreamEvidenceProvider
+from app.agent.correlation.runtime import build_runtime_correlation
+from app.agent.correlation.upstream import UpstreamEvidenceBundle
 from app.cli.support.output import get_tracker
-from app.correlation.providers import NoopUpstreamEvidenceProvider
-from app.correlation.runtime import build_runtime_correlation
-from app.correlation.upstream import UpstreamEvidenceBundle
 from app.state import InvestigationState
 from app.utils.tracing import traceable
 

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from app.correlation.datadog_adapter import DatadogCorrelationAdapter
-from app.correlation.datadog_provider import (
+from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
+from app.agent.correlation.datadog_provider import (
     DatadogCorrelationQueries,
     DatadogUpstreamEvidenceProvider,
 )
-from app.correlation.providers import (
+from app.agent.correlation.providers import (
     NoopUpstreamEvidenceProvider,
     QueryBackedUpstreamEvidenceProvider,
 )
-from app.correlation.upstream import (
+from app.agent.correlation.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

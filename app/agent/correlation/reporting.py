@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from app.correlation.models import CorrelatedSignal, UpstreamCandidate
+from app.agent.correlation.models import CorrelatedSignal, UpstreamCandidate
 
 
 @dataclass(frozen=True)

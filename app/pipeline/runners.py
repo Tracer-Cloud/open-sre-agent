@@ -259,7 +259,7 @@ async def astream_investigation(
             )
 
             # --- upstream correlation ---
-            from app.correlation.node import node_correlate_upstream
+            from app.agent.correlation.node import node_correlate_upstream
             from app.pipeline.pipeline import _build_correlation_config
 
             _put(

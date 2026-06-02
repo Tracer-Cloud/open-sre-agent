@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.correlation.upstream import UpstreamEvidenceBundle
+from app.agent.correlation.upstream import UpstreamEvidenceBundle
 from app.pipeline.pipeline import (
     _build_correlation_config,
     _candidate_services_from_state,

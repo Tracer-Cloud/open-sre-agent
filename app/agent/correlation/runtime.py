@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.correlation.models import CorrelatedSignal, UpstreamCandidate
-from app.correlation.reporting import build_correlation_report, correlation_report_to_payload
-from app.correlation.scoring import (
+from app.agent.correlation.models import CorrelatedSignal, UpstreamCandidate
+from app.agent.correlation.reporting import build_correlation_report, correlation_report_to_payload
+from app.agent.correlation.scoring import (
     TopologyNode,
     metric_to_time_series,
     rank_upstream_candidates,
@@ -14,7 +14,7 @@ from app.correlation.scoring import (
     score_time_window_correlation,
     score_topology_adjacency,
 )
-from app.correlation.upstream import UpstreamEvidenceBundle
+from app.agent.correlation.upstream import UpstreamEvidenceBundle
 
 
 @dataclass(frozen=True)

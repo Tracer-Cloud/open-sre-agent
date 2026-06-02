@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.correlation.node import node_correlate_upstream
-from app.correlation.upstream import MetricSeries, UpstreamEvidenceBundle
+from app.agent.correlation.node import node_correlate_upstream
+from app.agent.correlation.upstream import MetricSeries, UpstreamEvidenceBundle
 
 
 class RecordingProvider:
