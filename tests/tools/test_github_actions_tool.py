@@ -298,6 +298,7 @@ line 2
     # When no step is requested, it falls back to parsing the full log
     assert result["step_name"] == "full-log"
     assert result["match_strategy"] == "full-log"
+    assert "line 2" in result["log_text"]
     assert "Process completed with exit code 1." in result["log_text"]
 
 

@@ -57,6 +57,8 @@ def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
         jobs_raw = json_result["jobs"]
         if isinstance(jobs_raw, dict) and "jobs" in jobs_raw:
             return [_normalize_job(job) for job in jobs_raw["jobs"] if isinstance(job, dict)]
+        else:
+            return [_normalize_job(job) for job in json_result["jobs"] if isinstance(job, dict)]
     return []
 
 
@@ -194,35 +196,43 @@ def extract_step_log(
     step_name: str = "",
     step_number: int | None = None,
 ) -> dict[str, Any]:
-    """Extract a likely step log from a full GitHub Actions job log dump.
-    Returns ungrouped_sections list for agent to see all intermediate content.
-    """
+    """Extract the log text for a specific step in a GitHub Actions job log,
+    using grouping markers if available."""
     sections = _extract_log_sections(log_text)
     selected: dict[str, str] | None = None
     match_strategy = "full-log"
+    selected_idx = -1
 
     if step_name:
         needle = step_name.strip().lower()
-        for section in sections:
+        for i, section in enumerate(sections):
             if needle and needle in section.get("name", "").lower():
                 selected = section
                 match_strategy = "step_name"
+                selected_idx = i
                 break
 
     if selected is None and step_number is not None and 1 <= step_number <= len(sections):
         group_counter = 0
-        for section in sections:
+        for i, section in enumerate(sections):
             if section.get("name") != UNGROUPED_SECTION_NAME:
                 group_counter += 1
             if group_counter == step_number:
                 selected = section
                 match_strategy = "step_number"
+                selected_idx = i
                 break
 
     if selected is None:
         selected = {"name": "full-log", "text": log_text.strip()}
 
     text = selected.get("text", "")
+
+    # Merge trailing ungrouped annotations into the matched step log
+    if selected_idx != -1 and selected_idx + 1 < len(sections):
+        next_section = sections[selected_idx + 1]
+        if next_section.get("name") == UNGROUPED_SECTION_NAME:
+            text += "\n" + next_section.get("text", "")
 
     return {
         "step_name": selected.get("name", ""),
