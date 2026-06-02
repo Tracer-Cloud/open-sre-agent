@@ -17,6 +17,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
+from rich.file_proxy import FileProxy
 from rich.markup import escape
 
 from app.agents.sampler import start_sampler
@@ -132,7 +133,7 @@ class StreamingConsole(Console):
         high column. Rich output that follows (tables, follow-up status lines,
         section rules) must start at column zero or lines appear broken.
         """
-        if not self._spinner.streaming:
+        if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):
             from app.cli.interactive_shell.ui.choice_menu import (
                 ensure_tty_column_zero,
                 prepare_repl_output_line,

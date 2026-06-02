@@ -157,7 +157,7 @@ def execute_routed_turn(
         if not cmd_text:
             cmd_text = text.strip()
         try:
-            should_continue = dispatch_slash(cmd_text, session, console)
+            should_continue = dispatch_slash(cmd_text, session, console, confirm_fn=confirm_fn)
         except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
