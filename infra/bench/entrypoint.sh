@@ -52,5 +52,27 @@ if [ "$CORPUS_FILE_COUNT" -eq 0 ]; then
   exit 1
 fi
 
-echo "→ Invoking bench CLI: python -m tests.benchmarks._framework.cli $*"
+# Bench CLI invocation has two valid shapes:
+#
+#   1. ECS RunTask (production path) — the workflow injects BENCH_CONFIG +
+#      BENCH_DEV_FLAG as containerOverrides env vars. The Dockerfile CMD
+#      ["--help"] is left in place, so "$@" would be just "--help" — not
+#      what we want. We construct the real invocation from the env vars
+#      and the bench framework's CLI subcommand schema.
+#
+#   2. Local `docker run` (developer path) — the operator passes
+#      positional args directly (e.g. `docker run … run /cfg.yml --dev`).
+#      BENCH_CONFIG is unset, so we fall through to "$@".
+#
+# Without this branch the env-var path silently runs `--help` and exits 0,
+# leaving the workflow green and the operator confused about why no bench
+# happened.
+if [ -n "${BENCH_CONFIG:-}" ]; then
+  echo "→ Invoking bench CLI from env: cli run ${BENCH_CONFIG} ${BENCH_DEV_FLAG:-}"
+  # BENCH_DEV_FLAG is either '--dev' or '' — left unquoted so empty value
+  # expands to no arg at all (vs an empty-string positional).
+  exec python -m tests.benchmarks._framework.cli run "$BENCH_CONFIG" ${BENCH_DEV_FLAG:-}
+fi
+
+echo "→ Invoking bench CLI from CMD/args: python -m tests.benchmarks._framework.cli $*"
 exec python -m tests.benchmarks._framework.cli "$@"
