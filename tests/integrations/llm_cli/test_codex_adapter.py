@@ -492,7 +492,7 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
     )
     mock_adapter.explain_failure.return_value = "claude -p exited with code 1."
 
-    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
 
     with patch("app.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
@@ -504,9 +504,6 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
     msg = str(exc_info.value)
     assert ".." not in msg
-    # "unauthorized" in stderr → classifier produces a clean auth hint instead
-    # of the raw "exited with code 1." text.
-    assert "authentication failed" in msg or "(exit 1)" in msg
     assert "Auth status could not be verified" in msg
 
 

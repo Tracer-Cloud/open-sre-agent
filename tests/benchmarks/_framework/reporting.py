@@ -60,17 +60,31 @@ def render_report_dir(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     cases_dir = run_dir / "cases"
     cells = _load_cells(cases_dir) if cases_dir.exists() else []
+    provenance = _load_provenance(run_dir / "provenance.json")
 
     out: dict[str, Path] = {}
     if "markdown" in formats:
         md_path = run_dir / "report.md"
-        md_path.write_text(_render_markdown(report, cells), encoding="utf-8")
+        md_path.write_text(_render_markdown(report, cells, provenance), encoding="utf-8")
         out["markdown"] = md_path
     if "html" in formats:
         html_path = run_dir / "report.html"
-        html_path.write_text(_render_html(report, cells), encoding="utf-8")
+        html_path.write_text(_render_html(report, cells, provenance), encoding="utf-8")
         out["html"] = html_path
     return out
+
+
+def _load_provenance(path: Path) -> dict[str, Any] | None:
+    """Optional — provenance is recommended but not required for re-rendering."""
+    if not path.exists():
+        return None
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if isinstance(loaded, dict):
+        return loaded
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +150,11 @@ def _summarize(values: list[float]) -> tuple[float, float, float, int]:
 # --------------------------------------------------------------------------- #
 
 
-def _render_markdown(report: dict[str, Any], cells: list[dict[str, Any]]) -> str:
+def _render_markdown(
+    report: dict[str, Any],
+    cells: list[dict[str, Any]],
+    provenance: dict[str, Any] | None = None,
+) -> str:
     """Render the report as plain CommonMark."""
     lines: list[str] = []
     lines.append(f"# Benchmark Run — {report.get('run_id', '(unknown)')}")
@@ -156,6 +174,10 @@ def _render_markdown(report: dict[str, Any], cells: list[dict[str, Any]]) -> str
         f"{cost.get('total_tokens_in', 0):,} in / {cost.get('total_tokens_out', 0):,} out)"
     )
     lines.append("")
+
+    # --- Provenance (Mechanism 5: reproducibility) ---
+    if provenance is not None:
+        lines.extend(_render_provenance_markdown(provenance))
 
     # --- COI disclosure (Mechanism 10) ---
     coi = (report.get("coi_disclosure") or "").strip()
@@ -331,7 +353,11 @@ code { font-family: "SF Mono", Monaco, Menlo, Consolas, monospace; font-size: 0.
 """
 
 
-def _render_html(report: dict[str, Any], cells: list[dict[str, Any]]) -> str:
+def _render_html(
+    report: dict[str, Any],
+    cells: list[dict[str, Any]],
+    provenance: dict[str, Any] | None = None,
+) -> str:
     """Render a self-contained HTML report. No external CSS or JS."""
 
     def esc(s: Any) -> str:
@@ -360,6 +386,10 @@ def _render_html(report: dict[str, Any], cells: list[dict[str, Any]]) -> str:
         f"({cost.get('total_calls', 0)} calls)</dd>"
     )
     parts.append("</dl>")
+
+    # Provenance section (Mechanism 5)
+    if provenance is not None:
+        parts.extend(_render_provenance_html(provenance, esc))
 
     # COI
     coi = (report.get("coi_disclosure") or "").strip()
@@ -469,3 +499,127 @@ def _render_html(report: dict[str, Any], cells: list[dict[str, Any]]) -> str:
 
     parts.append("</body></html>")
     return "\n".join(parts) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# Provenance renderers — surface "what exact code + config + env ran"          #
+# --------------------------------------------------------------------------- #
+
+
+def _render_provenance_markdown(prov: dict[str, Any]) -> list[str]:
+    """Markdown section with the highest-leverage provenance fields.
+
+    Full content (config YAML, pre-reg YAML, full env) stays in
+    ``provenance.json`` — the report just summarizes so reviewers know what
+    to look for. Keep this short.
+    """
+    lines: list[str] = []
+    code = prov.get("code", {})
+    env = prov.get("environment", {})
+    dataset = prov.get("dataset", {})
+    config_section = prov.get("config", {})
+    pre_reg = prov.get("pre_registration", {})
+
+    lines.append("## Provenance (Mechanism 5: reproducibility)")
+    lines.append("")
+    dirty_marker = " **(DIRTY — uncommitted changes)**" if code.get("opensre_dirty") else ""
+    lines.append(
+        f"- **Code**: `{code.get('opensre_short_sha', '?')}` on "
+        f"`{code.get('opensre_branch', '?')}`{dirty_marker}"
+    )
+    if code.get("opensre_dirty") and code.get("opensre_changed_files"):
+        changed = code["opensre_changed_files"]
+        files_str = ", ".join(f"`{f}`" for f in changed[:5])
+        suffix = f" (+{len(changed) - 5} more)" if len(changed) > 5 else ""
+        lines.append(f"  - Changed files: {files_str}{suffix}")
+    if config_section.get("path"):
+        lines.append(
+            f"- **Config**: `{config_section['path']}` "
+            f"(sha256 `{(config_section.get('sha256') or '?')[:12]}…`)"
+        )
+    if pre_reg.get("path"):
+        lines.append(
+            f"- **Pre-registration**: `{pre_reg['path']}` "
+            f"(sha256 `{(pre_reg.get('sha256') or '?')[:12]}…`)"
+        )
+    if dataset.get("hf_dataset"):
+        rev = dataset.get("hf_revision") or "(unpinned)"
+        lines.append(f"- **Dataset**: {dataset['hf_dataset']} @ `{rev}`")
+    lines.append(
+        f"- **Python**: {env.get('python_version', '?')} "
+        f"({env.get('python_implementation', '?')}) on {env.get('platform', '?')}"
+    )
+    key_packages = env.get("key_packages", {})
+    if key_packages:
+        pkg_str = ", ".join(
+            f"{name} {version}" for name, version in sorted(key_packages.items()) if version
+        )
+        if pkg_str:
+            lines.append(f"- **Key packages**: {pkg_str}")
+    lines.append("")
+    lines.append(
+        "_Full provenance — config + pre-registration contents, every package "
+        "version, allowlisted env vars — lives in `provenance.json` in this "
+        "run directory._"
+    )
+    lines.append("")
+    return lines
+
+
+def _render_provenance_html(prov: dict[str, Any], esc: Any) -> list[str]:
+    code = prov.get("code", {})
+    env = prov.get("environment", {})
+    dataset = prov.get("dataset", {})
+    config_section = prov.get("config", {})
+    pre_reg = prov.get("pre_registration", {})
+
+    parts: list[str] = []
+    parts.append("<h2>Provenance (Mechanism 5: reproducibility)</h2>")
+    parts.append('<dl class="meta">')
+
+    dirty_pill = ' <span class="pill bad">DIRTY</span>' if code.get("opensre_dirty") else ""
+    parts.append(
+        f"<dt>Code</dt><dd><code>{esc(code.get('opensre_short_sha', '?'))}</code> "
+        f"on <code>{esc(code.get('opensre_branch', '?'))}</code>{dirty_pill}</dd>"
+    )
+
+    if code.get("opensre_dirty") and code.get("opensre_changed_files"):
+        changed = code["opensre_changed_files"]
+        files_html = ", ".join(f"<code>{esc(f)}</code>" for f in changed[:5])
+        suffix = f" (+{len(changed) - 5} more)" if len(changed) > 5 else ""
+        parts.append(f"<dt>Changed files</dt><dd>{files_html}{esc(suffix)}</dd>")
+
+    if config_section.get("path"):
+        sha = (config_section.get("sha256") or "?")[:12]
+        parts.append(
+            f"<dt>Config</dt><dd><code>{esc(config_section['path'])}</code> "
+            f"<small>(sha256 <code>{esc(sha)}…</code>)</small></dd>"
+        )
+    if pre_reg.get("path"):
+        sha = (pre_reg.get("sha256") or "?")[:12]
+        parts.append(
+            f"<dt>Pre-registration</dt><dd><code>{esc(pre_reg['path'])}</code> "
+            f"<small>(sha256 <code>{esc(sha)}…</code>)</small></dd>"
+        )
+    if dataset.get("hf_dataset"):
+        rev = dataset.get("hf_revision") or "(unpinned)"
+        parts.append(
+            f"<dt>Dataset</dt><dd>{esc(dataset['hf_dataset'])} @ <code>{esc(rev)}</code></dd>"
+        )
+    parts.append(
+        f"<dt>Python</dt><dd>{esc(env.get('python_version', '?'))} "
+        f"({esc(env.get('python_implementation', '?'))}) on "
+        f"{esc(env.get('platform', '?'))}</dd>"
+    )
+    key_packages = env.get("key_packages", {})
+    pkg_items = sorted((n, v) for n, v in key_packages.items() if v)
+    if pkg_items:
+        pkg_str = ", ".join(f"{esc(n)} {esc(v)}" for n, v in pkg_items)
+        parts.append(f"<dt>Key packages</dt><dd>{pkg_str}</dd>")
+    parts.append("</dl>")
+    parts.append(
+        "<p><small>Full provenance — config + pre-registration contents, "
+        "every package version, allowlisted env vars — lives in "
+        "<code>provenance.json</code> in this run directory.</small></p>"
+    )
+    return parts

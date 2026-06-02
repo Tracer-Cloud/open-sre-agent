@@ -28,6 +28,7 @@ from app.cli.interactive_shell.ui.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
+from app.cli.interactive_shell.ui.time_format import format_repl_duration, format_repl_timestamp
 from app.llm_reasoning_effort import (
     REASONING_EFFORT_OPTIONS,
     describe_reasoning_effort_default,
@@ -268,18 +269,6 @@ _EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _format_duration(duration_secs: int | None) -> str:
-    if duration_secs is None:
-        return "—"
-    if duration_secs < 60:
-        return f"{duration_secs}s"
-    if duration_secs < 3600:
-        return f"{duration_secs // 60}m {duration_secs % 60}s"
-    h = duration_secs // 3600
-    m = (duration_secs % 3600) // 60
-    return f"{h}h {m}m"
-
-
 def _record_resume_slash(
     session: ReplSession,
     args: list[str],
@@ -331,12 +320,7 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
         else:
             name_col = escape(name) if name else f"[{DIM}]—[/]"
 
-        started_raw = entry.get("started_at") or ""
-        try:
-            started_dt = datetime.fromisoformat(started_raw)
-            started_str = started_dt.astimezone().strftime("%Y-%m-%d %H:%M")
-        except Exception:
-            started_str = started_raw[:16] if started_raw else "—"
+        started_str = format_repl_timestamp(entry.get("started_at"), style="table")
 
         duration_secs = entry.get("duration_secs")
         if is_current:
@@ -358,7 +342,7 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
             short_id,
             name_col,
             started_str,
-            _format_duration(duration_secs),
+            format_repl_duration(duration_secs),
             str(total) if total is not None else "—",
             str(investigations) if investigations is not None else "—",
         )
@@ -369,8 +353,6 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
 
 def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from datetime import datetime
-
     from app.cli.interactive_shell.sessions.store import SessionStore
 
     entries = [e for e in SessionStore.load_recent(10) if e["session_id"] != session.session_id]
@@ -383,11 +365,7 @@ def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
         sid = entry["session_id"]
         short_id = sid[:8]
         name = entry.get("name") or f"[{short_id}]"
-        started_raw = entry.get("started_at") or ""
-        try:
-            started_str = datetime.fromisoformat(started_raw).astimezone().strftime("%m-%d %H:%M")
-        except Exception:
-            started_str = "—"
+        started_str = format_repl_timestamp(entry.get("started_at"), style="compact")
         label = f"{name[:40]:<40}  {short_id}  {started_str}"
         choices.append((sid, label))
     choices.append(("done", "done"))

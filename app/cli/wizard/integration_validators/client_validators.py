@@ -7,6 +7,7 @@ from pathlib import Path
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from app.integrations.dagster import build_dagster_config, validate_dagster_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -323,6 +324,20 @@ def validate_dagster_integration(
     """Validate Dagster connectivity via a GraphQL version probe."""
     config = build_dagster_config({"endpoint": endpoint, "api_token": api_token})
     result = validate_dagster_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
+
+
+def validate_jenkins_integration(
+    *,
+    base_url: str,
+    username: str,
+    api_token: str,
+) -> IntegrationHealthResult:
+    """Validate Jenkins connectivity with a server-info query."""
+    config = build_jenkins_config(
+        {"base_url": base_url, "username": username, "api_token": api_token}
+    )
+    result = validate_jenkins_config(config)
     return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 

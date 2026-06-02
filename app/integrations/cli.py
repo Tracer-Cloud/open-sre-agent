@@ -829,6 +829,26 @@ def _setup_signoz() -> None:
     )
 
 
+def _setup_jenkins() -> None:
+    base_url = _p("Jenkins URL (e.g. http://localhost:8080)")
+    username = _p("Jenkins username")
+    api_token = _p("Jenkins API token", secret=True)
+
+    if not (base_url and username and api_token):
+        _die("Jenkins URL, username, and API token are required.")
+
+    upsert_integration(
+        "jenkins",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "username": username,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -857,6 +877,7 @@ _HANDLERS: dict[str, Any] = {
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
     "signoz": _setup_signoz,
+    "jenkins": _setup_jenkins,
 }
 
 

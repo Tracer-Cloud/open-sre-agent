@@ -131,8 +131,31 @@ def get_runs(task_id: str, limit: int = 20, db_path: Path | None = None) -> list
         conn.close()
 
 
+def delete_runs(task_id: str, db_path: Path | None = None) -> int:
+    """Delete all task-run records for a given task ID.
+
+    Returns the number of deleted rows. Safe to call when no DB or table
+    exists (returns 0). Idempotent — subsequent calls return 0.
+    """
+    path = db_path or _default_db_path()
+    if not path.exists():
+        return 0
+    conn = _connect(path)
+    try:
+        _ensure_schema(conn)
+        cursor = conn.execute(
+            "DELETE FROM task_runs WHERE task_id = ?",
+            (task_id,),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
 __all__ = [
     "complete_run",
+    "delete_runs",
     "get_runs",
     "try_claim",
 ]

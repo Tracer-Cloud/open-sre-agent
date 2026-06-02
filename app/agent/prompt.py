@@ -91,6 +91,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "argocd": ["eks"],
     "splunk": ["splunk"],
     "signoz": ["signoz"],
+    "jenkins": ["jenkins"],
 }
 
 # Generic fallback sources — always secondary, never primary.

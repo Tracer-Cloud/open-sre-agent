@@ -34,6 +34,7 @@ EvidenceSource = Literal[
     "elasticsearch",
     "prefect",
     "gitlab",
+    "jenkins",
     "bitbucket",
     "openclaw",
     "mysql",

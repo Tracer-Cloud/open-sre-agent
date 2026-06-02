@@ -15,7 +15,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
-| MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
+| MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M3`                                  | `MiniMax-M2.7-highspeed`                        |
 | Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
@@ -149,9 +149,9 @@ Uses NVIDIA's OpenAI-compatible API at `https://integrate.api.nvidia.com/v1`. Br
 export LLM_PROVIDER=minimax
 export MINIMAX_API_KEY=...
 # Optional override (single value applies to both slots if set):
-export MINIMAX_MODEL=MiniMax-M2.7
+export MINIMAX_MODEL=MiniMax-M3
 # Or per-slot:
-export MINIMAX_REASONING_MODEL=MiniMax-M2.7
+export MINIMAX_REASONING_MODEL=MiniMax-M3
 export MINIMAX_TOOLCALL_MODEL=MiniMax-M2.7-highspeed
 ```
 
