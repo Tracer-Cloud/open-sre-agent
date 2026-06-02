@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 
 _MAX_JOB_NAME_LEN = 256
 _MAX_LOG_CHARS = 50_000
-# Cap the number of jobs fetched from the root API so a server with thousands
-# of jobs cannot blow past the request timeout. list_jobs/list_running_builds
+# Cap the number of jobs returned by discovery so a server with thousands of
+# jobs cannot blow past the request timeout. list_jobs/list_running_builds
 # report whether the cap truncated the result.
 _MAX_JOBS = 200
+# Jenkins folders nest jobs; descend this many levels when discovering jobs.
+# Realistic folder hierarchies are 1-3 deep, so this comfortably covers them.
+_MAX_FOLDER_DEPTH = 10
 
 # Jenkins encodes a job's last-build status in a "color" field (a legacy ball-color scheme).
 _COLOR_STATUS = {
@@ -129,6 +132,39 @@ def _as_dict_list(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _nested_jobs_tree(leaf_fields: str, depth: int) -> str:
+    """Build a Jenkins ``tree`` query that descends folders ``depth`` levels.
+
+    Each level requests ``leaf_fields`` plus a nested ``jobs[...]`` for the next
+    level, so folder-organized jobs are returned alongside top-level ones.
+    """
+    tree = leaf_fields
+    for _ in range(max(0, depth - 1)):
+        tree = f"{leaf_fields},jobs[{tree}]"
+    return f"jobs[{tree}]"
+
+
+def _flatten_jobs(raw_jobs: list[dict[str, Any]], prefix: str = "") -> list[tuple[str, dict]]:
+    """Flatten a (possibly nested) Jenkins jobs tree into ``(full_path, job)`` pairs.
+
+    A node with a nested ``jobs`` list is a folder and is recursed into; its
+    children's names are prefixed with ``folder/`` so the path matches what
+    ``_job_api_path`` expects. Leaf jobs are returned with their full path.
+    """
+    flat: list[tuple[str, dict]] = []
+    for job in raw_jobs:
+        name = str(job.get("name", "")).strip()
+        if not name:
+            continue
+        full_path = f"{prefix}{name}"
+        nested = job.get("jobs")
+        if isinstance(nested, list):
+            flat.extend(_flatten_jobs(_as_dict_list(nested), prefix=f"{full_path}/"))
+        else:
+            flat.append((full_path, job))
+    return flat
 
 
 def _coerce_build_number(value: object) -> int | None:
@@ -289,20 +325,24 @@ class JenkinsClient:
     def list_jobs(self) -> dict[str, Any]:
         """List jobs with their last-build status (decoded from the color field).
 
-        Capped at ``_MAX_JOBS``; ``truncated`` is True when more jobs exist.
+        Recurses Jenkins folders up to ``_MAX_FOLDER_DEPTH`` (folder jobs are
+        reported by their full ``folder/job`` path), capped at ``_MAX_JOBS``;
+        ``truncated`` is True when the cap or depth limit dropped jobs.
         """
-        tree = f"jobs[name,url,color,lastBuild[number,result,timestamp,url]]{{0,{_MAX_JOBS}}}"
+        leaf = "name,url,color,lastBuild[number,result,timestamp,url]"
+        tree = _nested_jobs_tree(leaf, _MAX_FOLDER_DEPTH)
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
             data = _as_dict(resp.json())
+            flat = _flatten_jobs(_as_dict_list(data.get("jobs")))
             jobs = []
-            for job in _as_dict_list(data.get("jobs")):
+            for full_path, job in flat[:_MAX_JOBS]:
                 status, building = _status_from_color(job.get("color"))
                 last = _as_dict(job.get("lastBuild"))
                 jobs.append(
                     {
-                        "name": job.get("name", ""),
+                        "name": full_path,
                         "url": job.get("url", ""),
                         "status": status,
                         "building": building,
@@ -314,7 +354,7 @@ class JenkinsClient:
                 "success": True,
                 "jobs": jobs,
                 "total": len(jobs),
-                "truncated": len(jobs) >= _MAX_JOBS,
+                "truncated": len(flat) > _MAX_JOBS,
             }
         except Exception as exc:
             return self._error("list_jobs", exc, {})
@@ -322,26 +362,28 @@ class JenkinsClient:
     def list_running_builds(self) -> dict[str, Any]:
         """List builds currently in progress across all jobs.
 
-        Scans up to ``_MAX_JOBS`` jobs (5 most-recent builds each); ``truncated``
-        is True when more jobs exist than were scanned.
+        Recurses Jenkins folders up to ``_MAX_FOLDER_DEPTH`` (5 most-recent builds
+        per job), scanning at most ``_MAX_JOBS`` jobs; ``truncated`` is True when
+        the cap or depth limit dropped jobs. Running builds are reported by their
+        full ``folder/job`` path.
         """
-        tree = f"jobs[name,builds[number,building,result,timestamp,url]{{0,5}}]{{0,{_MAX_JOBS}}}"
+        leaf = "name,builds[number,building,result,timestamp,url]{0,5}"
+        tree = _nested_jobs_tree(leaf, _MAX_FOLDER_DEPTH)
         try:
             resp = self._get_client().get("/api/json", params={"tree": tree})
             resp.raise_for_status()
             data = _as_dict(resp.json())
-            jobs = _as_dict_list(data.get("jobs"))
+            flat = _flatten_jobs(_as_dict_list(data.get("jobs")))
             running = []
-            for job in jobs:
-                name = job.get("name", "")
+            for full_path, job in flat[:_MAX_JOBS]:
                 for build in _as_dict_list(job.get("builds")):
                     if build.get("building"):
-                        running.append(_shape_build(name, build))
+                        running.append(_shape_build(full_path, build))
             return {
                 "success": True,
                 "running_builds": running,
                 "total": len(running),
-                "truncated": len(jobs) >= _MAX_JOBS,
+                "truncated": len(flat) > _MAX_JOBS,
             }
         except Exception as exc:
             return self._error("list_running_builds", exc, {})

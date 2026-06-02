@@ -385,7 +385,7 @@ class TestGetPipelineStages:
 
 
 class TestListJobs:
-    def test_caps_job_count_in_tree(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_tree_descends_folders(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, str] = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -394,8 +394,32 @@ class TestListJobs:
 
         client = _client_with_handler(handler, monkeypatch)
         result = client.list_jobs()
-        assert "{0,200}" in captured["tree"]
+        # nested jobs[...] in the tree means folders are descended
+        assert captured["tree"].count("jobs[") > 1
         assert result["truncated"] is False
+
+    def test_flattens_folder_jobs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {
+            "jobs": [
+                {"name": "top", "url": "ut", "color": "blue", "lastBuild": {"number": 2}},
+                {
+                    "name": "team",
+                    "jobs": [
+                        {
+                            "name": "payment-service",
+                            "url": "up",
+                            "color": "red",
+                            "lastBuild": {"number": 7},
+                        }
+                    ],
+                },
+            ]
+        }
+        client = _client_with_handler(lambda _: httpx.Response(200, json=payload), monkeypatch)
+        result = client.list_jobs()
+        statuses = {j["name"]: j["status"] for j in result["jobs"]}
+        # folder job reported by its full folder/job path
+        assert statuses == {"top": "SUCCESS", "team/payment-service": "FAILURE"}
 
     def test_decodes_color_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         payload = {
@@ -440,9 +464,36 @@ class TestListRunningBuilds:
         assert result["total"] == 1
         assert result["running_builds"][0]["number"] == 5
         assert result["running_builds"][0]["status"] == "RUNNING"
-        # both the per-job build cap and the job-count cap are present
+        # per-job build cap present, and the tree descends folders
         assert "{0,5}" in captured["tree"]
-        assert "{0,200}" in captured["tree"]
+        assert captured["tree"].count("jobs[") > 1
+
+    def test_running_builds_in_folder(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {
+            "jobs": [
+                {
+                    "name": "team",
+                    "jobs": [
+                        {
+                            "name": "deploy",
+                            "builds": [
+                                {
+                                    "number": 9,
+                                    "building": True,
+                                    "timestamp": 1780150032692,
+                                    "url": "u9",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        client = _client_with_handler(lambda _: httpx.Response(200, json=payload), monkeypatch)
+        result = client.list_running_builds()
+        assert result["total"] == 1
+        assert result["running_builds"][0]["job"] == "team/deploy"
+        assert result["running_builds"][0]["number"] == 9
 
 
 class TestMakeClient:
