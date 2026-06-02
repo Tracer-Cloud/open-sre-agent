@@ -513,8 +513,8 @@ def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
 def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     # One `j` per keypress (burst writes are not separate keys). The select list wraps;
     # from the first option, len(choices)-1 steps reach "Skip for now" without wrapping past it.
-    # 23 integrations + "Skip for now" = 24 choices. OpenSearch is at index 22;
-    # 23 j's lands on "Skip for now" at index 23.
+    # 24 integrations + "Skip for now" = 25 choices; "Skip for now" is the last
+    # option at index 24, so 24 j's reach it from the first option.
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
@@ -526,7 +526,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=23,
+                stagger_j=24,
             ),
         ],
         timeout=30.0,

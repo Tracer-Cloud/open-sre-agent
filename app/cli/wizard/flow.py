@@ -114,6 +114,12 @@ def validate_gitlab_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_jenkins_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_jenkins_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_sentry_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_sentry_integration as _validate
 
@@ -1244,6 +1250,43 @@ def _configure_gitlab() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_jenkins() -> tuple[str, str]:
+    _, credentials = _integration_defaults("jenkins")
+
+    while True:
+        base_url = _prompt_value(
+            "Jenkins URL (e.g. http://localhost:8080)",
+            default=_string_value(credentials.get("base_url")),
+        )
+        username = _prompt_value(
+            "Jenkins username",
+            default=_string_value(credentials.get("username")),
+        )
+        api_token = _prompt_value(
+            "Jenkins API token",
+            default=_string_value(credentials.get("api_token")),
+            secret=True,
+        )
+
+        with _console.status("Validating Jenkins integration...", spinner="dots"):
+            result = validate_jenkins_integration(
+                base_url=base_url, username=username, api_token=api_token
+            )
+        _render_integration_result("Jenkins", result)
+        if result.ok:
+            credentials = {"base_url": base_url, "username": username, "api_token": api_token}
+            upsert_integration("jenkins", {"credentials": credentials})
+            sync_env_secret("JENKINS_API_TOKEN", api_token)
+            env_path = sync_env_values(
+                {
+                    "JENKINS_URL": base_url,
+                    "JENKINS_USER": username,
+                }
+            )
+            return "Jenkins", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_sentry() -> tuple[str, str]:
     _, credentials = _integration_defaults("sentry")
     guidance = get_sentry_auth_recommendations()
@@ -1879,6 +1922,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         ),
         Choice(value="gitlab", label="Gitlab", hint="Let the agent inspect repos, PRs, and issues"),
         Choice(
+            value="jenkins",
+            label="Jenkins",
+            hint="Correlate failed builds and deployments with incidents",
+        ),
+        Choice(
             value="google_docs",
             label="Google Docs",
             hint="Create shareable incident postmortem reports",
@@ -1958,6 +2006,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
         "gitlab": _configure_gitlab,
+        "jenkins": _configure_jenkins,
         "google_docs": _configure_google_docs,
         "vercel": _configure_vercel,
         "betterstack": _configure_betterstack,
@@ -1983,6 +2032,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "github": "github mcp",
         "sentry": "sentry",
         "gitlab": "gitlab",
+        "jenkins": "jenkins",
         "google_docs": "google docs",
         "vercel": "vercel",
         "jira": "jira",

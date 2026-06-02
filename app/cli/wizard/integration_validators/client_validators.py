@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -311,6 +312,20 @@ def validate_gitlab_integration(
     """Validate Gitlab connectivity with an users api."""
     config = build_gitlab_config({"base_url": base_url, "auth_token": auth_token})
     result = validate_gitlab_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
+
+
+def validate_jenkins_integration(
+    *,
+    base_url: str,
+    username: str,
+    api_token: str,
+) -> IntegrationHealthResult:
+    """Validate Jenkins connectivity with a server-info query."""
+    config = build_jenkins_config(
+        {"base_url": base_url, "username": username, "api_token": api_token}
+    )
+    result = validate_jenkins_config(config)
     return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
