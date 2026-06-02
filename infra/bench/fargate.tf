@@ -90,6 +90,9 @@ resource "aws_ecs_task_definition" "bench" {
       environment = [
         { name = "AWS_REGION", value = var.region },
         { name = "BENCH_RESULTS_BUCKET", value = aws_s3_bucket.results.bucket },
+        # entrypoint.sh reads these two and runs `aws s3 sync` before the CLI
+        { name = "BENCH_CORPUS_S3_BUCKET", value = var.corpus_bucket_name },
+        { name = "BENCH_CORPUS_HF_REVISION", value = var.corpus_hf_revision },
         { name = "DEEPSEEK_BASE_URL", value = "https://api.deepseek.com" },
       ]
 
