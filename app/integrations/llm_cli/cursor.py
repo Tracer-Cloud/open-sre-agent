@@ -212,23 +212,25 @@ class CursorAdapter:
         return result
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
         err = (stderr or "").strip()
         out = (stdout or "").strip()
         text = f"{err}\n{out}"
-
-        bits = [f"cursor agent exited with code {returncode}"]
-
+        extra: tuple[str, ...] = ()
         if "Authentication required" in text or "Not logged in" in text:
-            bits.append("Not logged in. Run: agent login.")
+            extra = ("Not logged in. Run: agent login.",)
         elif "Workspace Trust Required" in text:
-            bits.append("Workspace trust required. The adapter uses --trust for headless runs.")
+            extra = ("Workspace trust required. The adapter uses --trust for headless runs.",)
         elif "Named models unavailable" in text:
-            bits.append(
-                "Model unavailable for this account. Use CURSOR_MODEL=auto or omit the model override."
+            extra = (
+                "Model unavailable for this account. Use CURSOR_MODEL=auto or omit the model override.",
             )
-        elif err:
-            bits.append(err[:2000])
-        elif out:
-            bits.append(out[:2000])
 
-        return ". ".join(bits)
+        return explain_cli_failure(
+            exit_label="cursor agent",
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+            extra_messages=extra,
+        )

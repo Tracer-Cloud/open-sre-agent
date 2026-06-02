@@ -5,7 +5,7 @@ import re
 from rich.console import Console
 from rich.text import Text
 
-from app.cli.interactive_shell.ui.theme import BRAND, DIM, TEXT, WARNING
+from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from app.cli.support.output import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,10 +71,11 @@ _BOLD_RE = re.compile(r"\*\*?([^*]+)\*\*?")
 
 
 def _render_rich_section_heading(console: Console, title: str) -> None:
+    from rich.rule import Rule
+
     console.print()
-    t = Text()
-    t.append(f"  {title}", style=f"bold {TEXT}")
-    console.print(t)
+    console.print(Rule(f"[bold {HIGHLIGHT}] {title} [/]", style=DIM, align="left"))
+    console.print()
 
 
 def _render_rich_bullet(console: Console, line: str, *, indent: int = 4) -> None:

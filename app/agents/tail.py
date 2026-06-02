@@ -283,8 +283,12 @@ class AttachSession:
 
         # Open + seek before spawning the thread so any OSError surfaces
         # at the call site, not inside the iterator.
+        # SIM115 suppressed: the file handle is stored on self and kept open
+        # for the lifetime of the background reader thread (_reader_loop).
+        # A with-block would close it immediately on __init__ exit, before
+        # the thread has read anything. The fd is closed in close() / __del__.
         try:
-            self._fd = open(target.path, "rb", buffering=0)  # noqa: SIM115
+            self._fd = open(target.path, "rb", buffering=0)
         except OSError as exc:
             raise AttachUnsupported(f"cannot open {target.path}: {exc.strerror or exc}") from exc
         try:

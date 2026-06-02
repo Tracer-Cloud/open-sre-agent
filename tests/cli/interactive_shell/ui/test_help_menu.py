@@ -156,11 +156,11 @@ def test_draw_help_menu_uses_bounded_viewport_and_category_context(monkeypatch) 
 
 def test_draw_help_menu_expands_selected_command_inline(monkeypatch) -> None:
     command = SlashCommand(
-        "/reset",
-        "Clear session state.",
+        "/new",
+        "Start a new session keeping conversation context.",
         lambda *_args: True,
-        usage=("/reset",),
-        notes=("Trust mode is preserved.",),
+        usage=("/new",),
+        notes=("Unlike /clear, /new preserves the LLM conversation context.",),
     )
     rows = help_menu._flatten_help_rows([("Session", [command])])
     out = io.StringIO()
@@ -176,12 +176,12 @@ def test_draw_help_menu_expands_selected_command_inline(monkeypatch) -> None:
     )
 
     plain = _ANSI_RE.sub("", out.getvalue())
-    assert "/reset" in plain
-    assert "> ▾ /reset" in plain
-    assert "│ Clear session state." in plain
+    assert "/new" in plain
+    assert "> ▾ /new" in plain
+    assert "│ Start a new session" in plain
     assert help_menu._render_grid_row("", "usage:", 90) in plain
     assert "usage:" in plain
-    assert "Trust mode is preserved." in plain
+    assert "LLM conversation context" in plain
 
 
 def test_draw_help_menu_marks_expandable_and_plain_commands(monkeypatch) -> None:

@@ -45,6 +45,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "mongodb": ["mongodb", "mongodb_atlas"],
     "snowflake": ["snowflake"],
     "clickhouse": ["clickhouse"],
+    "dagster": ["dagster"],
     "rabbitmq": ["rabbitmq"],
     "supabase": ["supabase"],
     "opensearch": ["opensearch"],
@@ -53,6 +54,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "azure": ["azure", "azure_sql"],
     "splunk": ["splunk"],
     "signoz": ["signoz"],
+    "jenkins": ["jenkins"],
 }
 
 # Callback type: called with (event_kind, data_dict) during the agent loop.

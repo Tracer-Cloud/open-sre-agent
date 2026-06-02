@@ -1,0 +1,74 @@
+name: Benchmark run (manual)
+
+# Manually-triggered benchmark run. Costs real money — caller picks the
+# config and dev_mode flag. Never auto-triggered.
+#
+# Trigger from the GitHub UI:
+#   Actions → "Benchmark run (manual)" → Run workflow → fill inputs
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Path to YAML config'
+        required: true
+        default: 'tests/benchmarks/configs/example.yml'
+      dev_mode:
+        description: 'Dev mode (skip integrity gates, no pre-reg needed)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Download Cloud-OpsBench corpus
+        run: make download-cloudopsbench-hf
+
+      - name: Run benchmark
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # Bind workflow inputs to env vars rather than interpolating them
+          # directly into the run: script. GitHub Actions expands ${{ ... }}
+          # at YAML-parse time (before the shell sees it), so a malicious
+          # value like ``foo.yml"; rm -rf / "`` would inject shell commands.
+          # Env-var expansion happens inside the shell, which respects the
+          # double-quote around "$CONFIG_PATH".
+          CONFIG_PATH: ${{ inputs.config }}
+          DEV_FLAG: ${{ inputs.dev_mode == true && '--dev' || '' }}
+        run: |
+          uv run python -m tests.benchmarks._framework.cli run \
+            "$CONFIG_PATH" \
+            $DEV_FLAG
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-${{ github.run_id }}
+          path: .bench-results/
+          retention-days: 30

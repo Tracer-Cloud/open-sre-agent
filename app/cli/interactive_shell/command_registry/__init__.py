@@ -65,6 +65,10 @@ _MERGED_SEQUENCE = tuple(
 
 SLASH_COMMANDS: dict[str, SlashCommand] = {cmd.name: cmd for cmd in _MERGED_SEQUENCE}
 
+# Slash commands that adopt a different session file must record the turn after
+# the handler settles session identity (see /resume).
+_DEFER_SLASH_RECORDING: frozenset[str] = frozenset({"/resume"})
+
 
 def dispatch_slash(
     command_line: str,
@@ -143,7 +147,8 @@ def dispatch_slash(
             session.record("slash", stripped, ok=False)
             return True
     if policy_precleared:
-        session.record("slash", stripped, ok=True)
+        if name not in _DEFER_SLASH_RECORDING:
+            session.record("slash", stripped, ok=True)
         return cmd.handler(session, console, args)
     tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
     policy = evaluate_slash_tier(tier)
@@ -157,7 +162,8 @@ def dispatch_slash(
     ):
         session.record("slash", stripped, ok=False)
         return True
-    session.record("slash", stripped, ok=True)
+    if name not in _DEFER_SLASH_RECORDING:
+        session.record("slash", stripped, ok=True)
     return cmd.handler(session, console, args)
 
 

@@ -47,6 +47,21 @@ class HermesBackend(Protocol):
     def get_filesystem_state(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
         pass
 
+    def get_audit_trail(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
+    def get_approval_events(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
+    def get_rbac_state(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
+    def get_credential_state(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
+    def get_workflow_run(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
 
 class FixtureHermesBackend:
     """Backend that serves evidence from ``HermesScenarioFixture`` in tool envelopes."""
@@ -252,6 +267,74 @@ class FixtureHermesBackend:
             "files": list(evidence.get("files", [])),
             "backups_present": bool(evidence.get("backups_present", False)),
             "vcs_present": bool(evidence.get("vcs_present", False)),
+            "error": None,
+        }
+
+    def get_audit_trail(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_audit_trail
+        if evidence is None:
+            return self._missing("audit_trail")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "policy": dict(evidence.get("policy", {})),
+            "events": list(evidence.get("events", [])),
+            "summary": dict(evidence.get("summary", {})),
+            "error": None,
+        }
+
+    def get_approval_events(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_approval_events
+        if evidence is None:
+            return self._missing("approval_events")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "events": list(evidence.get("events", [])),
+            "error": None,
+        }
+
+    def get_rbac_state(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_rbac_state
+        if evidence is None:
+            return self._missing("rbac_state")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "tenants": list(evidence.get("tenants", [])),
+            "observed_accesses": list(evidence.get("observed_accesses", [])),
+            "error": None,
+        }
+
+    def get_credential_state(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_credential_state
+        if evidence is None:
+            return self._missing("credential_state")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "mode": str(evidence.get("mode", "")),
+            "in_memory_credential_count": int(evidence.get("in_memory_credential_count", 0)),
+            "outbound_calls": list(evidence.get("outbound_calls", [])),
+            "error": None,
+        }
+
+    def get_workflow_run(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_workflow_run
+        if evidence is None:
+            return self._missing("workflow_run")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "workflow_id": str(evidence.get("workflow_id", "")),
+            "input_hash": str(evidence.get("input_hash", "")),
+            "runs": list(evidence.get("runs", [])),
+            "diverging_steps": list(evidence.get("diverging_steps", [])),
             "error": None,
         }
 

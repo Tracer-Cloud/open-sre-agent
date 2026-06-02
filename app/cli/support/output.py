@@ -214,6 +214,16 @@ _tool_detail_toggle_callbacks: list[Callable[[], None]] = []
 # absolute bottom of the final RCA report. Cleared once consumed.
 _completed_footer_snapshot: tuple[str, float, str, str] | None = None
 
+# Callback registered by the REPL dispatch loop so the investigation display
+# can suppress the prompt-level braille spinner once it takes over rendering.
+_prompt_suppress_fn: Callable[[], None] | None = None
+
+
+def set_prompt_suppress_fn(fn: Callable[[], None] | None) -> None:
+    """Register (or clear) the callback that hides the REPL prompt spinner."""
+    global _prompt_suppress_fn
+    _prompt_suppress_fn = fn
+
 
 def _capture_footer_snapshot(display: Any) -> None:
     """Record the phase footer fields visible the moment a live display stops."""
@@ -396,8 +406,8 @@ def render_event(
         else:
             t.append(f"{glyph}  ", style=f"bold {HIGHLIGHT}")
             msg_style = TEXT
-        t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-        t.append("  ")
+        t.append(badge_label, style=f"bold {badge_color}")
+        t.append("  ·  ", style=DIM)
         t.append(message, style=msg_style)
         if insight:
             t.append(f"  ↳ {insight}", style=BRAND)
@@ -414,7 +424,7 @@ def render_event(
 # Live event-log display
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SPINNER_FRAMES = ("◐", "◓", "◑", "◒")
+_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 _FRAME_SECS = 0.10
 _TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
 
@@ -588,12 +598,12 @@ class _LiveRenderable:
                 t = Text()
                 t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
                 t.append(f"{frame}  ", style=SECONDARY)
-                t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-                t.append("  ")
+                t.append(badge_label, style=f"bold {badge_color}")
+                t.append("  ·  ", style=DIM)
                 t.append(label, style=f"bold {TEXT}")
                 if subtext:
                     t.append(f"  ↳ {subtext}", style=BRAND)
-                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=WARNING)
+                t.append(f"  {_fmt_timing(int(elapsed_step * 1000))}", style=SECONDARY)
                 yield t
 
             # Divider + footer.
@@ -755,8 +765,8 @@ class _EventLogDisplay:
             t = Text()
             t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
             t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
-            t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-            t.append("  ")
+            t.append(badge_label, style=f"bold {badge_color}")
+            t.append("  ·  ", style=DIM)
             t.append(label, style=f"bold {TEXT}")
             if msg:
                 t.append(f"  {msg}", style=BRAND)
@@ -817,8 +827,8 @@ def _build_progress_step_text(
         t.append("◐  ", style=SECONDARY)
     else:
         t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
-    t.append(f"[{badge_label}]", style=f"bold {badge_color}")
-    t.append("  ")
+    t.append(badge_label, style=f"bold {badge_color}")
+    t.append("  ·  ", style=DIM)
     t.append(label, style=f"bold {TEXT}")
     msg = _humanise_message(message or "")
     if msg:
@@ -839,6 +849,7 @@ class _ReplEventLogDisplay:
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
         self._console = Console(highlight=False)
+        self._prompt_suppressed = False
 
     def stop(self) -> None:
         _capture_footer_snapshot(self)
@@ -850,6 +861,9 @@ class _ReplEventLogDisplay:
         self._console.print(line)
 
     def step_start(self, node_name: str) -> None:
+        if not self._prompt_suppressed and _prompt_suppress_fn is not None:
+            self._prompt_suppressed = True
+            _prompt_suppress_fn()
         with self._lock:
             self._active_steps[node_name] = {
                 "t0": time.monotonic(),
@@ -1319,18 +1333,24 @@ def render_investigation_header(
 ) -> None:
     sev_color = ERROR if severity.lower() == "critical" else WARNING
     fields = [
-        ("  Alert      ", alert_name, f"bold {TEXT}"),
-        ("  Pipeline   ", pipeline_name, BRAND),
-        ("  Severity   ", severity, f"bold {sev_color}"),
+        ("Alert     ", alert_name, f"bold {TEXT}"),
+        ("Pipeline  ", pipeline_name, BRAND),
+        ("Severity  ", severity, f"bold {sev_color}"),
     ]
     if alert_id:
-        fields.append(("  Alert ID   ", alert_id, SECONDARY))
+        fields.append(("Alert ID  ", alert_id, SECONDARY))
 
     if get_output_format() == "rich":
         console = _get_console()
         console.print()
         for label, value, style in fields:
-            console.print(Text.assemble((label, SECONDARY), (value, style)))
+            console.print(
+                Text.assemble(
+                    ("  ┃  ", f"bold {BRAND}"),
+                    (label, SECONDARY),
+                    (value, style),
+                )
+            )
         console.print()
     else:
         print()

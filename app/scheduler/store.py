@@ -9,6 +9,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from app.constants import OPENSRE_HOME_DIR
+from app.scheduler.claim_store import _DB_FILENAME, delete_runs
 from app.scheduler.types import ScheduledTask
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,13 @@ def add_task(task: ScheduledTask, store_path: Path | None = None) -> ScheduledTa
 
 
 def remove_task(task_id: str, store_path: Path | None = None) -> bool:
-    """Remove a task by ID. Returns True if found and removed."""
+    """Remove a task by ID and cascade-delete its run records.
+
+    Returns True if the task was found and removed from the JSON store.
+    Cascade deletion of ``TaskRun`` records in the SQLite claim store is
+    best-effort — a warning is logged on failure but the return value
+    reflects only the JSON-store result.
+    """
     path = store_path or _default_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
@@ -89,6 +96,22 @@ def remove_task(task_id: str, store_path: Path | None = None) -> bool:
         if len(raw) == original_len:
             return False
         _save_raw(path, raw)
+
+    # Cascade: remove orphaned TaskRun records from the SQLite claim store.
+    # Derive the DB path from the same directory as the JSON store.
+    db_path = path.with_name(_DB_FILENAME)
+    try:
+        deleted = delete_runs(task_id, db_path)
+        if deleted:
+            logger.info("Cascade-deleted %d run(s) for removed task %s", deleted, task_id)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Failed to cascade-delete runs for task %s (DB: %s); orphaned runs may remain",
+            task_id,
+            db_path,
+            exc_info=True,
+        )
+
     return True
 
 

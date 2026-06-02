@@ -323,13 +323,11 @@ class CopilotAdapter:
         return (stdout or "").strip()
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
         err = (stderr or "").strip()
         out = (stdout or "").strip()
-        bits = [f"copilot -p exited with code {returncode}"]
         text = f"{err}\n{out}".lower()
-        # Match only specific auth phrases so we never mask a real error that
-        # happens to contain the substring "login" (e.g. "Your current login:
-        # alice — Error: model 'X' not found in your plan").
         auth_markers = (
             "not logged in",
             "not authenticated",
@@ -338,11 +336,12 @@ class CopilotAdapter:
             "unauthorized",
             "401",
         )
-        is_auth_error = any(marker in text for marker in auth_markers)
-        if err:
-            bits.append(err[:2000])
-        elif out:
-            bits.append(out[:2000])
-        if is_auth_error:
-            bits.append(_AUTH_HINT)
-        return ". ".join(bits)
+        extra = (_AUTH_HINT,) if any(marker in text for marker in auth_markers) else ()
+        return explain_cli_failure(
+            exit_label="copilot -p",
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+            extra_messages=extra,
+            always_include_output_snippet=True,
+        )

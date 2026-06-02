@@ -1,4 +1,4 @@
-"""Programmatic SDK entry point — public API for running investigations."""
+"""Programmatic SDK helper — public API for running investigations."""
 
 from __future__ import annotations
 

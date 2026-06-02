@@ -1,1 +1,1 @@
-"""Application entry points — CLI, MCP server, programmatic SDK."""
+"""Application entry points — CLI and MCP server."""

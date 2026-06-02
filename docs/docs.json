@@ -86,6 +86,7 @@
               "remote-runtime-investigation",
               "masking",
               "interactive-shell-privacy",
+              "sessions",
               "agents",
               "cron",
               "multi-instance-integrations"
@@ -127,6 +128,7 @@
               "gitlab",
               "google-docs",
               "helm",
+              "jenkins",
               "jira",
               "vercel"
             ]
@@ -147,6 +149,7 @@
             "group": "Data and workflow systems",
             "pages": [
               "clickhouse",
+              "dagster",
               "kafka",
               "mariadb",
               "mongodb",

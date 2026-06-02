@@ -337,6 +337,131 @@ def get_hermes_filesystem_state(
     return cast(dict[str, Any], backend.get_filesystem_state(session_id=session_id))
 
 
+@tool(
+    name="get_hermes_audit_trail",
+    source="hermes",
+    description="Get Hermes audit policy and observed audit-chain/signature state.",
+    use_cases=["Diagnose missing cryptographic audit trails and broken hash chains"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_audit_trail(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_audit_trail")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_audit_trail(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_approval_events",
+    source="hermes",
+    description="Get Hermes approval prompts and destructive-command approval outcomes.",
+    use_cases=["Diagnose destructive commands that ran without explicit approval"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_approval_events(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_approval_events")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_approval_events(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_rbac_state",
+    source="hermes",
+    description="Get Hermes tenant scopes and observed cross-tenant access checks.",
+    use_cases=["Diagnose missing RBAC checks and cross-tenant memory/context access"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_rbac_state(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_rbac_state")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_rbac_state(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_credential_state",
+    source="hermes",
+    description="Get Hermes credential isolation mode and outbound credential usage.",
+    use_cases=["Diagnose in-process credential exposure and missing credential proxy isolation"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_credential_state(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_credential_state")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_credential_state(session_id=session_id))
+
+
+@tool(
+    name="get_hermes_workflow_run",
+    source="hermes",
+    description="Get Hermes deterministic workflow run comparison state.",
+    use_cases=["Diagnose non-deterministic workflow output drift across same-input runs"],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_workflow_run(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_workflow_run")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_workflow_run(session_id=session_id))
+
+
 __all__ = [
     "get_hermes_session_log",
     "get_hermes_provider_traffic",
@@ -350,4 +475,9 @@ __all__ = [
     "get_hermes_routing_decisions",
     "get_hermes_memory_state",
     "get_hermes_filesystem_state",
+    "get_hermes_audit_trail",
+    "get_hermes_approval_events",
+    "get_hermes_rbac_state",
+    "get_hermes_credential_state",
+    "get_hermes_workflow_run",
 ]

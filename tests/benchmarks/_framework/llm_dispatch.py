@@ -49,8 +49,7 @@ class LLMProvider(StrEnum):
 
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
-    BEDROCK = "bedrock"
-    # DeepSeek + Qwen go through openai-compatible APIs from third-party hosts
+    # DeepSeek goes through an openai-compatible API at api.deepseek.com
     OPENAI_COMPATIBLE = "openai_compatible"
     OPENSRE_DEFAULT = "opensre_default"
 

@@ -51,7 +51,13 @@ ignore = [
 # CLI entry points
 "app/cli/__main__.py" = ["ARG001"]
 
-# stderr buffer outlives the function — closed in a watcher thread's `finally`,
-# so a `with` block at the call site would close it before the subprocess runs.
+# stderr/stdout buffers outlive the function — closed in a watcher thread's `finally`,
+# so a `with` block at the call site would close them before the subprocess runs.
 "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/action_executor/synthetic_tasks.py" = ["SIM115"]
+"app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/action_executor/background_tasks.py" = ["SIM115"]
+
+# self._fd is opened in __init__ and must remain open for the lifetime of the
+# background reader thread (_reader_loop). A with-block would close the fd when
+# __init__ exits — before the thread reads anything. The fd is closed in close().
+"app/agents/tail.py" = ["SIM115"]
 

@@ -47,7 +47,7 @@ def start_background_cli_task(
     console.print(f"[bold]$ {display_command}[/bold]")
     task = session.task_registry.create(kind, command=display_command)
     task.mark_running()
-    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg]
         max_size=_SYNTHETIC_DIAG_CHARS * 2
     )
     pty_fds: tuple[int, int] | None = None
@@ -58,7 +58,7 @@ def start_background_cli_task(
             pty_fds = None
     stdout_buf: tempfile.SpooledTemporaryFile[bytes] | None = None  # type: ignore[type-arg]
     if pty_fds is None:
-        stdout_buf = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg] # noqa: SIM115
+        stdout_buf = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg]
             max_size=_MAX_COMMAND_OUTPUT_CHARS
         )
     subprocess_env = _subprocess_env_with_aligned_width(console)

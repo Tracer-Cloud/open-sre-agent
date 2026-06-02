@@ -19,6 +19,23 @@ from app.cli.interactive_shell.ui.help_menu import (
     render_section_detail,
 )
 
+QUICK_ACCESS_COMMANDS: list[str] = [
+    "/investigate",
+    "/integrations",
+    "/model",
+    "/health",
+    "/watch",
+    "/status",
+    "/help",
+]
+
+
+def _quick_access_section() -> HelpSection:
+    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
+
+    cmds = [SLASH_COMMANDS[n] for n in QUICK_ACCESS_COMMANDS if n in SLASH_COMMANDS]
+    return ("Quick Access", cmds)
+
 
 def _raw_help_sections() -> list[HelpSection]:
     from app.cli.interactive_shell.command_registry.agents import COMMANDS as AGENTS_CMDS
@@ -36,6 +53,7 @@ def _raw_help_sections() -> list[HelpSection]:
     from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_CMDS
 
     return [
+        _quick_access_section(),
         ("Help", list(COMMANDS)),
         ("Session", list(SESSION_CMDS)),
         ("Integrations & Models", list(INT_CMDS) + list(MODEL_CMDS)),
@@ -49,17 +67,27 @@ def _raw_help_sections() -> list[HelpSection]:
     ]
 
 
+_QUICK_ACCESS_SECTION_NAME = "Quick Access"
+
+
 def _help_sections() -> list[HelpSection]:
-    """Return user-visible help sections with duplicate command names hidden."""
+    """Return user-visible help sections with duplicate command names hidden.
+
+    The "Quick Access" section is intentionally exempted from the dedup set so
+    its curated commands remain visible in their canonical sections too (e.g.
+    ``/help investigation`` still contains ``/investigate``).
+    """
     seen: set[str] = set()
     sections: list[HelpSection] = []
     for section_name, commands in _raw_help_sections():
         visible: list[SlashCommand] = []
+        is_quick_access = section_name == _QUICK_ACCESS_SECTION_NAME
         for command in commands:
             if command.name in seen:
                 continue
-            seen.add(command.name)
             visible.append(command)
+            if not is_quick_access:
+                seen.add(command.name)
         sections.append((section_name, visible))
     return sections
 
@@ -142,4 +170,4 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand("/?", "Shortcut for /help.", _cmd_help, execution_tier=ExecutionTier.EXEMPT),
 ]
 
-__all__ = ["COMMANDS"]
+__all__ = ["COMMANDS", "QUICK_ACCESS_COMMANDS"]
