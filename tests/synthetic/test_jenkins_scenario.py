@@ -80,6 +80,15 @@ def fixture_client(monkeypatch: pytest.MonkeyPatch) -> _FixtureJenkinsClient:
     return client
 
 
+def test_jenkins_alert_source_maps_to_tools() -> None:
+    """A jenkins-sourced alert auto-seeds and prioritizes the jenkins tools."""
+    from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
+    from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
+
+    assert seed_map.get("jenkins") == ["jenkins"]
+    assert priority_map.get("jenkins") == ["jenkins"]
+
+
 def test_jenkins_tools_are_registered() -> None:
     """The four Jenkins tools are discoverable for investigations and chat."""
     from app.tools.registry import get_registered_tools
