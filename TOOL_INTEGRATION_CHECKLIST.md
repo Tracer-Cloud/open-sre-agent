@@ -113,8 +113,10 @@ For tools that list, search, or inspect resources:
 
 - [ ] Unit tests for config/normalization
 - [ ] Tool contract tests or equivalent schema/metadata coverage
+- [ ] Runtime registry/discovery test proves the tool is visible on the expected surface(s)
 - [ ] Runtime behavior tests for success and failure paths
 - [ ] At least one realistic fixture for live payload parsing if external payloads are involved
+- [ ] If investigation-relevant, at least one test proves the planner/agent can discover or invoke the tool through the normal runtime path
 - [ ] Synthetic or scenario coverage when the planner/investigation loop depends on the tool
 - [ ] Update `tests/integrations/` when integration wiring changes
 
