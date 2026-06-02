@@ -16,12 +16,7 @@ from app.tools.tool_decorator import tool
 from app.tools.utils.code_host_unavailable import code_host_unavailable_payload
 
 
-def _structured_value(result: dict[str, Any]) -> Any:
-    """Extract structured value from MCP tool result."""
-    structured = result.get("structured_content")
-    if structured is not None:
-        return structured
-
+def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | list[Any] | str | None:
     text = str(result.get("text") or "").strip()
     if not text:
         return None
@@ -32,53 +27,45 @@ def _structured_value(result: dict[str, Any]) -> Any:
         return text
 
 
-def _extract_list(result: dict[str, Any], keys: tuple[str, ...]) -> list[dict[str, Any]]:
+def _extract_list(result: dict[str, Any], key: str) -> list[dict[str, Any]]:
     """Extract list of items from MCP tool result."""
-    structured = _structured_value(result)
+    json_result = _extract_json_text(result)
     items: list[Any] = []
-    if isinstance(structured, list):
-        items = structured
-    elif isinstance(structured, dict):
-        for key in keys:
-            value = structured.get(key)
-            if isinstance(value, list):
-                items = value
-                break
+    if isinstance(json_result, dict):
+        value = json_result.get(key)
+        if isinstance(value, list):
+            items = value
     return [item for item in items if isinstance(item, dict)]
 
 
 def _extract_dict(result: dict[str, Any], keys: tuple[str, ...] = ()) -> dict[str, Any]:
     """Extract dict from MCP tool result."""
-    structured = _structured_value(result)
-    if isinstance(structured, dict):
+    json_result = _extract_json_text(result)
+    if isinstance(json_result, dict):
         for key in keys:
-            nested = structured.get(key)
-            if isinstance(nested, dict):
-                return nested
-        return structured
-    if isinstance(structured, list):
-        for item in structured:
-            if isinstance(item, dict):
-                return item
+            value = json_result.get(key)
+            if isinstance(value, dict):
+                return value
+        return json_result
     return {}
+
+
+def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract workflow jobs from MCP tool result."""
+    json_result = _extract_json_text(result)
+    if isinstance(json_result, dict) and "jobs" in json_result:
+        jobs_raw = json_result["jobs"]
+        if isinstance(jobs_raw, dict) and "jobs" in jobs_raw:
+            return [_normalize_job(job) for job in jobs_raw["jobs"] if isinstance(job, dict)]
+    return []
 
 
 def _extract_log_text(result: dict[str, Any]) -> str:
     """Extract log text from MCP tool result."""
-    structured = _structured_value(result)
-    if isinstance(structured, str):
-        return structured.strip()
-    if isinstance(structured, dict):
-        for key in ("log_text", "text", "content", "output"):
-            value = structured.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-            if isinstance(value, list):
-                parts = [str(item).strip() for item in value if str(item).strip()]
-                if parts:
-                    return "\n".join(parts)
-    text = str(result.get("text") or "").strip()
-    return text
+    json_result = _extract_json_text(result)
+    if isinstance(json_result, dict) and "logs_content" in json_result:
+        return str(json_result["logs_content"] or "").strip()
+    return str(result.get("text") or "").strip()
 
 
 def _normalize_step(step: dict[str, Any]) -> dict[str, Any]:
@@ -223,32 +210,24 @@ def extract_step_log(
                 break
 
     if selected is None and step_number is not None and 1 <= step_number <= len(sections):
-        selected = sections[step_number - 1]
-        match_strategy = "step_number"
+        group_counter = 0
+        for section in sections:
+            if section.get("name") != UNGROUPED_SECTION_NAME:
+                group_counter += 1
+            if group_counter == step_number:
+                selected = section
+                match_strategy = "step_number"
+                break
 
     if selected is None:
-        if sections and sections[-1].get("name") == UNGROUPED_SECTION_NAME:
-            selected = sections[-1]
-        else:
-            selected = sections[0] if sections else {"name": "full-log", "text": log_text.strip()}
+        selected = {"name": "full-log", "text": log_text.strip()}
 
     text = selected.get("text", "")
-
-    # Collect all ungrouped sections for agent to see all context (core fix)
-    ungrouped_sections = [
-        {"text": s.get("text", "")} for s in sections if s.get("name") == UNGROUPED_SECTION_NAME
-    ]
 
     return {
         "step_name": selected.get("name", ""),
         "match_strategy": match_strategy,
-        "log_text": text,
-        "ungrouped_sections": ungrouped_sections,
-        "ungrouped_count": len(ungrouped_sections),
-        "sections": [
-            {"name": section.get("name", ""), "chars": len(section.get("text", ""))}
-            for section in sections
-        ],
+        "log_text": text
     }
 
 
@@ -351,7 +330,7 @@ def list_github_actions_workflow_runs(
     assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
 
     if payload.get("available"):
-        workflow_runs_raw = _extract_list(result, ("workflow_runs", "runs"))
+        workflow_runs_raw = _extract_list(result, "workflow_runs")
         workflow_runs = [_normalize_run(item) for item in workflow_runs_raw]
         payload["workflow_runs"] = workflow_runs
         payload["total"] = len(workflow_runs)
@@ -456,7 +435,7 @@ def list_github_actions_active_runs(
     seen_ids: set[Any] = set()
 
     for result in (queued_result, in_progress_result):
-        runs_raw = _extract_list(result, ("workflow_runs", "runs"))
+        runs_raw = _extract_list(result, "workflow_runs")
         for run in runs_raw:
             run_id = run.get("id")
             if run_id is not None and run_id not in seen_ids:
@@ -533,8 +512,7 @@ def list_github_actions_run_jobs(
     assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
 
     if payload.get("available"):
-        jobs_raw = _extract_list(result, ("jobs", "workflow_jobs"))
-        jobs = [_normalize_job(item) for item in jobs_raw]
+        jobs = _extract_workflow_jobs(result)
         payload["jobs"] = jobs
         payload["total"] = len(jobs)
     else:
@@ -619,7 +597,14 @@ def get_github_actions_step_log(
             empty_value="",
         ) | {"error": job_result.get("text")}
 
-    job = _extract_dict(job_result, ("workflow_job", "job"))
+    job = _extract_json_text(job_result)
+    if not isinstance(job, dict):
+        return code_host_unavailable_payload(
+            source="github",
+            integration_name="GitHub Actions",
+            empty_key="log_text",
+            empty_value="",
+        ) | {"error": "Unexpected job metadata format"}
 
     # Fetch job logs
     log_result = call_github_mcp_tool(

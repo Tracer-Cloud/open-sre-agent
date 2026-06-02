@@ -48,8 +48,8 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                 "tool": tool,
                 "arguments": arguments,
                 "is_error": False,
-                "text": "",
-                "structured_content": {"total_count": 0, "workflow_runs": []},
+                "text": '{"total_count": 0, "workflow_runs": []}',
+                "structured_content": None,
                 "content": [],
             }
         if status == "in_progress":
@@ -57,8 +57,7 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                 "tool": tool,
                 "arguments": arguments,
                 "is_error": False,
-                "text": "",
-                "structured_content": {
+                "text": """{
                     "total_count": 1,
                     "workflow_runs": [
                         {
@@ -68,22 +67,22 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                             "head_branch": "main",
                             "event": "push",
                             "status": "in_progress",
-                            "conclusion": None,
+                            "conclusion": null,
                             "created_at": "2026-05-27T11:00:00Z",
                             "actor": {"login": "dev"},
                             "triggering_actor": {"login": "dev"},
-                            "pull_requests": [],
+                            "pull_requests": []
                         }
-                    ],
-                },
+                    ]
+                }""",
+                "structured_content": None,
                 "content": [],
             }
         return {
             "tool": tool,
             "arguments": arguments,
             "is_error": False,
-            "text": "",
-            "structured_content": {
+            "text": """{
                 "total_count": 1,
                 "workflow_runs": [
                     {
@@ -97,10 +96,11 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                         "created_at": "2026-05-27T10:00:00Z",
                         "actor": {"login": "release-bot"},
                         "triggering_actor": {"login": "release-bot"},
-                        "pull_requests": [],
+                        "pull_requests": []
                     }
-                ],
-            },
+                ]
+            }""",
+            "structured_content": None,
             "content": [],
         }
 
@@ -109,33 +109,35 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
             "tool": tool,
             "arguments": arguments,
             "is_error": False,
-            "text": "",
-            "structured_content": {
-                "total_count": 1,
-                "jobs": [
-                    {
-                        "id": 9001,
-                        "run_id": 101,
-                        "name": "deploy",
-                        "status": "completed",
-                        "conclusion": "failure",
-                        "steps": [
-                            {
-                                "name": "Checkout",
-                                "status": "completed",
-                                "conclusion": "success",
-                                "number": 1,
-                            },
-                            {
-                                "name": "Deploy",
-                                "status": "completed",
-                                "conclusion": "failure",
-                                "number": 2,
-                            },
-                        ],
-                    }
-                ],
-            },
+            "text": """{
+                "jobs": {
+                    "total_count": 1,
+                    "jobs": [
+                        {
+                            "id": 9001,
+                            "run_id": 101,
+                            "name": "deploy",
+                            "status": "completed",
+                            "conclusion": "failure",
+                            "steps": [
+                                {
+                                    "name": "Checkout",
+                                    "status": "completed",
+                                    "conclusion": "success",
+                                    "number": 1
+                                },
+                                {
+                                    "name": "Deploy",
+                                    "status": "completed",
+                                    "conclusion": "failure",
+                                    "number": 2
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }""",
+            "structured_content": None,
             "content": [],
         }
 
@@ -144,8 +146,7 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
             "tool": tool,
             "arguments": arguments,
             "is_error": False,
-            "text": "",
-            "structured_content": {
+            "text": """{
                 "id": 9001,
                 "run_id": 101,
                 "name": "deploy",
@@ -156,11 +157,17 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
                         "name": "Checkout",
                         "status": "completed",
                         "conclusion": "success",
-                        "number": 1,
+                        "number": 1
                     },
-                    {"name": "Deploy", "status": "completed", "conclusion": "failure", "number": 2},
-                ],
-            },
+                    {
+                        "name": "Deploy",
+                        "status": "completed",
+                        "conclusion": "failure",
+                        "number": 2
+                    }
+                ]
+            }""",
+            "structured_content": None,
             "content": [],
         }
 
@@ -169,14 +176,12 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
             "tool": tool,
             "arguments": arguments,
             "is_error": False,
-            "text": """##[group]Checkout
-Cloning repository
-##[endgroup]
-##[group]Deploy
-kubectl apply -f manifests/
-Error: secret rotation broke production deploy
-##[endgroup]
-""",
+            "text": """{
+                "job_id": 109,
+                "logs_content": "##[group]Checkout\nCloning repository\n##[endgroup]\n##[group]Deploy\nkubectl apply -f manifests/\nError: secret rotation broke production deploy\n##[endgroup]",
+                "message": "Job logs content retrieved successfully",
+                "original_length": 2000
+            }""",
             "structured_content": None,
             "content": [],
         }
@@ -263,7 +268,7 @@ def test_get_step_log_happy_path() -> None:
     assert "kubectl apply" in result["log_text"]
 
 
-def test_extract_step_log_prefers_step_name_and_truncates() -> None:
+def test_extract_step_log_prefers_step_name() -> None:
     result = extract_step_log(
         """##[group]Checkout
 line 1
@@ -290,7 +295,9 @@ line 2
 ##[error]Process completed with exit code 1.
 """
     )
-    assert result["step_name"] == "ungrouped"
+    # When no step is requested, it falls back to parsing the full log
+    assert result["step_name"] == "full-log"
+    assert result["match_strategy"] == "full-log"
     assert "Process completed with exit code 1." in result["log_text"]
 
 
@@ -308,13 +315,8 @@ final runner summary
 """
     )
 
-    assert result["sections"] == [
-        {"name": "ungrouped", "chars": len("runner setup before groups")},
-        {"name": "Checkout", "chars": len("line 1")},
-        {"name": "ungrouped", "chars": len("annotation between groups")},
-        {"name": "Deploy", "chars": len("line 2")},
-        {"name": "ungrouped", "chars": len("final runner summary")},
-    ]
-
-    assert result["step_name"] == "ungrouped"
-    assert result["log_text"] == "final runner summary"
+    assert result["step_name"] == "full-log"
+    assert result["match_strategy"] == "full-log"
+    assert "runner setup before groups" in result["log_text"]
+    assert "annotation between groups" in result["log_text"]
+    assert "final runner summary" in result["log_text"]
