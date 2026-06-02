@@ -13,7 +13,7 @@ echo "ANTHROPIC_API_KEY=sk-..." >> .env   # plus OPENAI_API_KEY, DEEPSEEK_API_KE
 
 # Smoke run on 5 scenarios (dev mode skips integrity gates, still calls real LLMs)
 uv run python -m tests.benchmarks._framework.cli run \
-    tests/benchmarks/configs/example.yml --dev
+    tests/benchmarks/configs/cloudopsbench_smoke.yml --dev
 
 # Artifacts land in .bench-results/example/<run-id>/:
 #   report.json        ← machine-readable

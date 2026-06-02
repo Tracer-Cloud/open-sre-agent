@@ -3,8 +3,8 @@
 # exist and be committed to git before the run starts.
 #
 # Run with:
-#   uv run python -m tests.benchmarks._framework.cli validate tests/benchmarks/configs/example.yml
-#   uv run python -m tests.benchmarks._framework.cli run tests/benchmarks/configs/example.yml --dev
+#   uv run python -m tests.benchmarks._framework.cli validate tests/benchmarks/configs/cloudopsbench_smoke.yml
+#   uv run python -m tests.benchmarks._framework.cli run tests/benchmarks/configs/cloudopsbench_smoke.yml --dev
 #
 # Remove --dev for production runs (enables IntegrityGuard).
 
@@ -43,7 +43,7 @@ output_dir: .bench-results/example/
 # Pre-registration — Phase 0 integrity gate. Path must exist + be non-empty
 # AND be committed to git before the run. See:
 # ~/DevBox/opensre-notes/opensre-benchmark-framework.md § 0
-pre_registration_path: tests/benchmarks/configs/preregistrations/example.yml
+pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_smoke.yml
 
 filters:
   # Filter to a small slice for first runs. Remove these for the full grid.

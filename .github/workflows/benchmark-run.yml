@@ -26,7 +26,7 @@ on:
       config:
         description: 'Path to YAML config inside the container'
         required: true
-        default: 'tests/benchmarks/configs/example.yml'
+        default: 'tests/benchmarks/configs/cloudopsbench_smoke.yml'
       dev_mode:
         description: 'Dev mode (skip integrity gates, no pre-reg needed)'
         type: boolean
