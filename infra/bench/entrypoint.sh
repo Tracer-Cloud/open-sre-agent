@@ -37,7 +37,20 @@ aws s3 sync \
   --no-progress \
   --region "${AWS_REGION:-us-east-1}"
 END=$(date +%s)
-echo "→ Corpus ready in $((END - START))s ($(find "$CORPUS_DEST" -type f | wc -l) files)"
+
+# `aws s3 sync` exits 0 even when the source prefix is empty or absent —
+# without an explicit count check, the bench CLI would then start against
+# an empty corpus and fail with a confusing "case not found" downstream
+# error. Fail loudly here with a precise diagnostic instead.
+CORPUS_FILE_COUNT=$(find "$CORPUS_DEST" -type f | wc -l | tr -d ' ')
+echo "→ Corpus ready in $((END - START))s (${CORPUS_FILE_COUNT} files)"
+
+if [ "$CORPUS_FILE_COUNT" -eq 0 ]; then
+  echo "FATAL: s3://${CORPUS_BUCKET}/${CORPUS_REV}/ contained no files." >&2
+  echo "Run \`HF_TOKEN=... make mirror-cloudopsbench-s3\` from a developer machine" >&2
+  echo "with BENCH_S3_BUCKET=${CORPUS_BUCKET} to seed this revision." >&2
+  exit 1
+fi
 
 echo "→ Invoking bench CLI: python -m tests.benchmarks._framework.cli $*"
 exec python -m tests.benchmarks._framework.cli "$@"

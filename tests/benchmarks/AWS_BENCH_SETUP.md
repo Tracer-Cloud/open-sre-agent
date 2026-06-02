@@ -1,9 +1,13 @@
 # Setting up AWS bench (one-time)
 
 The benchmark runs on AWS Fargate so you don't tie up your laptop or a
-GitHub-hosted runner for hours. This is the five-step setup before
-**Benchmark run (manual)** can launch anything. Do each step once;
-re-runs of the actual benchmark only need step 5.
+GitHub-hosted runner for hours. This is the six-step setup before
+**Benchmark — run on Fargate** can launch anything. Do each step once;
+re-runs of the actual benchmark only need step 6.
+
+> **Whenever the upstream HF dataset gets a new revision**, re-run step 5
+> (mirror to S3) AND bump `corpus_hf_revision` in `infra/bench/variables.tf`
+> (or pass it as `-var=corpus_hf_revision=<new-sha>` to `terraform apply`).
 
 ## 1. Apply Terraform
 
@@ -57,16 +61,36 @@ echo "BENCH_SECURITY_GROUP_ID       = $(terraform output -raw security_group_id)
 Paste each value into a new repo variable with the matching name.
 `AWS_ACCOUNT_ID` is already set (the seed-secret workflow uses it).
 
-## 5. Launch a benchmark
+## 5. Mirror the Cloud-OpsBench corpus to S3
+
+The Fargate task pulls the corpus from S3 at startup (not from Hugging
+Face — same-region S3 sync is ~30 s vs ~10 min HF rate-limited download).
+Seed the S3 prefix once from a developer machine:
+
+```bash
+# From the repo root
+export HF_TOKEN=hf_...           # see tests/benchmarks/README.md
+make download-cloudopsbench-hf   # local copy of the dataset
+make mirror-cloudopsbench-s3     # auto-detects HF revision SHA + uploads
+                                 # to s3://cloud-ops-bench-dataset/<sha>/
+```
+
+The output prints the HF revision SHA. If it differs from the default in
+`infra/bench/variables.tf` (`corpus_hf_revision`), update the default or
+override per apply: `terraform apply -var=corpus_hf_revision=<sha>`.
+
+The corpus bucket needs to exist before this step. Create it once if
+you don't have it: `aws s3 mb s3://cloud-ops-bench-dataset --region us-east-1`.
+
+## 6. Launch a benchmark
 
 ```bash
 gh workflow run benchmark-run.yml \
-    -f image_tag=latest \
     -f config=tests/benchmarks/configs/example.yml \
     -f dev_mode=true
 ```
 
-Or use the GitHub UI: Actions → **Benchmark run (manual)** → Run workflow.
+Or use the GitHub UI: Actions → **Benchmark — run on Fargate** → Run workflow.
 
 The workflow exits as soon as the task launches. Watch live logs with:
 
