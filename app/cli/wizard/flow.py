@@ -90,6 +90,12 @@ def validate_coralogix_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_dagster_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_dagster_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_slack_webhook(**kwargs):
     from app.cli.wizard.integration_health import validate_slack_webhook as _validate
 
@@ -857,6 +863,41 @@ def _configure_coralogix() -> tuple[str, str]:
                 }
             )
             return "Coralogix", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_dagster() -> tuple[str, str]:
+    _, credentials = _integration_defaults("dagster")
+    _console.print("\n[bold]Dagster Integration[/bold]")
+    _console.print(
+        f"[{SECONDARY}]Dagster webserver URL. "
+        f"OSS local dev: http://localhost:3000. "
+        f"Dagster+: https://<deployment>.dagster.cloud/<env>. "
+        f"API token required for Dagster+; leave blank for unauthenticated OSS.[/]\n"
+    )
+    while True:
+        endpoint = _prompt_value(
+            "Dagster webserver URL",
+            default=_string_value(credentials.get("endpoint"), "http://localhost:3000"),
+        )
+        api_token = _prompt_value(
+            "Dagster API token (optional for OSS)",
+            default=_string_value(credentials.get("api_token")),
+            secret=True,
+            allow_empty=True,
+        )
+        with _console.status("Validating Dagster integration...", spinner="dots"):
+            result = validate_dagster_integration(endpoint=endpoint, api_token=api_token)
+        _render_integration_result("Dagster", result)
+        if result.ok:
+            upsert_integration(
+                "dagster",
+                {"credentials": {"endpoint": endpoint, "api_token": api_token}},
+            )
+            if api_token:
+                sync_env_secret("DAGSTER_API_TOKEN", api_token)
+            env_path = sync_env_values({"DAGSTER_ENDPOINT": endpoint})
+            return "Dagster", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
@@ -1891,6 +1932,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             ),
         ),
         Choice(
+            value="dagster",
+            label="Dagster",
+            hint="Pipeline runs, asset materializations, and tick history",
+        ),
+        Choice(
             value="betterstack",
             label="Better Stack Telemetry",
             hint="Query logs from Better Stack (ClickHouse SQL over HTTP)",
@@ -1960,6 +2006,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "gitlab": _configure_gitlab,
         "google_docs": _configure_google_docs,
         "vercel": _configure_vercel,
+        "dagster": _configure_dagster,
         "betterstack": _configure_betterstack,
         "jira": _configure_jira,
         "alertmanager": _configure_alertmanager,
@@ -1985,6 +2032,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "gitlab": "gitlab",
         "google_docs": "google docs",
         "vercel": "vercel",
+        "dagster": "dagster",
         "jira": "jira",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",

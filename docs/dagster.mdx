@@ -15,7 +15,20 @@ OpenSRE uses the Dagster GraphQL API to investigate data-pipeline incidents, fet
 
 ## Setup
 
-### Option 1: Interactive CLI
+### Option 1: Onboarding wizard
+
+```bash
+opensre onboard
+```
+
+Pick **Dagster** from the integration menu. The wizard asks for:
+
+- **Dagster webserver URL** — `http://localhost:3000` for OSS local dev, or `https://<deployment>.dagster.cloud/<env>` for Dagster+ (the client appends `/graphql` itself, so either form is fine)
+- **Dagster API token** — required for Dagster+; leave blank for unauthenticated OSS
+
+The wizard validates the endpoint with a GraphQL `version` probe before saving, writes `DAGSTER_ENDPOINT` to your `.env`, and persists the API token (when provided) to your system keychain.
+
+### Option 2: Legacy CLI
 
 ```bash
 opensre integrations setup dagster
@@ -23,7 +36,7 @@ opensre integrations setup dagster
 
 You will be prompted for the GraphQL endpoint and (optional) API token.
 
-### Option 2: Environment variables
+### Option 3: Manual configuration
 
 Add to your `.env`:
 
@@ -37,9 +50,7 @@ DAGSTER_API_TOKEN=...
 | `DAGSTER_ENDPOINT` | — | **Required.** Base URL of the dagster-webserver. The client appends `/graphql` itself, so paste any of `https://host/deployment`, `https://host/deployment/`, `https://host/deployment/graphql` — all collapse to the same canonical base. |
 | `DAGSTER_API_TOKEN` | _(empty)_ | Required for Dagster+ deployments. Leave empty for unauthenticated local OSS Dagster. Sent as the `Dagster-Cloud-Api-Token` header. |
 
-### Option 3: Persistent store
-
-Credentials are automatically persisted to `~/.opensre/integrations.json` with `0o600` permissions:
+Credentials configured via Options 1 and 2 are also persisted to `~/.opensre/integrations.json` with `0o600` permissions:
 
 ```json
 {

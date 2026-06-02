@@ -25,6 +25,7 @@ from app.services.dagster import DagsterClient
 from app.tools.DagsterAssetsTool import list_dagster_assets
 from app.tools.DagsterRunLogsTool import get_dagster_run_logs
 from app.tools.DagsterRunsTool import list_dagster_runs
+from app.tools.DagsterSchedulesTool import list_dagster_schedule_ticks
 from app.tools.DagsterSensorsTool import list_dagster_sensor_ticks
 
 pytestmark = pytest.mark.synthetic
@@ -171,6 +172,42 @@ _FIXTURE_LIST_SENSOR_TICKS = {
     }
 }
 
+# A FAILURE schedule tick errors during evaluation (e.g. invalid cron), so it
+# fails BEFORE launching a run; hence runIds is empty.
+_FIXTURE_LIST_SCHEDULE_TICKS = {
+    "data": {
+        "scheduleOrError": {
+            "__typename": "Schedule",
+            "name": "daily_etl_schedule",
+            "scheduleState": {
+                "ticks": [
+                    {
+                        "id": "sch-tick-001",
+                        "status": "SUCCESS",
+                        "timestamp": 1779820000.0,
+                        "endTimestamp": 1779820002.0,
+                        "runIds": ["run-001"],
+                        "skipReason": None,
+                        "error": None,
+                    },
+                    {
+                        "id": "sch-tick-002",
+                        "status": "FAILURE",
+                        "timestamp": 1779906400.0,
+                        "endTimestamp": 1779906401.0,
+                        "runIds": [],
+                        "skipReason": None,
+                        "error": {
+                            "message": "ScheduleExecutionError: cron expression invalid",
+                            "stack": ["..."],
+                        },
+                    },
+                ]
+            },
+        }
+    }
+}
+
 
 def _make_mock_dagster_client(query_to_response: dict[str, dict[str, Any]]) -> httpx.Client:
     """Build an httpx.Client whose transport routes each POST to the right canned response.
@@ -202,6 +239,7 @@ def patched_dagster_client(monkeypatch: pytest.MonkeyPatch) -> None:
             "GetRunLogs": _FIXTURE_GET_RUN_LOGS,
             "ListAssets": _FIXTURE_LIST_ASSETS,
             "SensorTicks": _FIXTURE_LIST_SENSOR_TICKS,
+            "ScheduleTicks": _FIXTURE_LIST_SCHEDULE_TICKS,
         }
     )
 
@@ -291,3 +329,19 @@ def test_dagster_sensor_ticks_synthetic_scenario(patched_dagster_client: None) -
     failure_ticks = [t for t in ticks if t["status"] == "FAILURE"]
     assert len(failure_ticks) == 1
     assert "external API unreachable" in failure_ticks[0]["error"]["message"]
+
+
+def test_dagster_schedule_ticks_synthetic_scenario(patched_dagster_client: None) -> None:
+    """Schedule tick history surfaces a recent FAILURE tick with the underlying error message."""
+    result = list_dagster_schedule_ticks(
+        endpoint="https://example.dagster.cloud/prod",
+        api_token="test-token",
+        repository_location_name="my_code_location",
+        repository_name="my_repo",
+        schedule_name="daily_etl_schedule",
+        limit=5,
+    )
+    ticks = result["data"]["scheduleOrError"]["scheduleState"]["ticks"]
+    failure_ticks = [t for t in ticks if t["status"] == "FAILURE"]
+    assert len(failure_ticks) == 1
+    assert "cron expression invalid" in failure_ticks[0]["error"]["message"]
