@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.config import LLMSettings, has_credentials_for_active_llm_provider, resolve_llm_settings
+from app.config import (
+    ANTHROPIC_REASONING_MODEL,
+    OPENAI_REASONING_MODEL,
+    LLMSettings,
+    has_credentials_for_active_llm_provider,
+    resolve_llm_settings,
+)
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -111,7 +117,7 @@ def test_llm_settings_custom_openai_provider_accepted() -> None:
     assert settings.provider == "custom-openai"
     assert settings.custom_openai_base_url == "http://localhost:4000/v1"
     # Tier defaults mirror the OpenAI tier defaults when unset.
-    assert settings.custom_openai_reasoning_model == "gpt-5.4-mini"
+    assert settings.custom_openai_reasoning_model == OPENAI_REASONING_MODEL
 
 
 def test_llm_settings_custom_anthropic_provider_accepted() -> None:
@@ -124,7 +130,8 @@ def test_llm_settings_custom_anthropic_provider_accepted() -> None:
     )
     assert settings.provider == "custom-anthropic"
     assert settings.custom_anthropic_base_url == "https://proxy.example.com"
-    assert settings.custom_anthropic_reasoning_model == "claude-opus-4-7"
+    # Tier defaults mirror the Anthropic tier defaults when unset.
+    assert settings.custom_anthropic_reasoning_model == ANTHROPIC_REASONING_MODEL
 
 
 def test_llm_settings_require_custom_openai_api_key() -> None:
@@ -145,6 +152,16 @@ def test_llm_settings_require_custom_anthropic_base_url() -> None:
     with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_BASE_URL"):
         LLMSettings.model_validate(
             {"provider": "custom-anthropic", "custom_anthropic_api_key": "sk-ant-custom"}
+        )
+
+
+def test_llm_settings_require_custom_anthropic_api_key() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_API_KEY"):
+        LLMSettings.model_validate(
+            {
+                "provider": "custom-anthropic",
+                "custom_anthropic_base_url": "https://proxy.example.com",
+            }
         )
 
 

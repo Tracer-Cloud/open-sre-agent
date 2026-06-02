@@ -743,10 +743,11 @@ def get_agent_llm() -> _AgentClientType:
         from anthropic import Anthropic
 
         from app.config import CUSTOM_ANTHROPIC_LLM_CONFIG
-        from app.llm_credentials import resolve_llm_api_key
 
+        # settings is the single source of truth: the key was already resolved and
+        # validated during LLMSettings construction, so reuse it here.
         client = Anthropic(
-            api_key=resolve_llm_api_key("CUSTOM_ANTHROPIC_API_KEY"),
+            api_key=settings.custom_anthropic_api_key,
             base_url=settings.custom_anthropic_base_url,
             timeout=_CLIENT_TIMEOUT_SEC,
         )
@@ -816,7 +817,7 @@ def _create_openai_compat_client(settings: Any, provider: str) -> OpenAIAgentCli
             api_key_env="OLLAMA_API_KEY",
             api_key_default="ollama",
         )
-    if provider == "custom-openai":
+    elif provider == "custom-openai":
         # Base URL is user-supplied (LiteLLM / vLLM / LocalAI / gateway), not a
         # hard-coded constant like the other OpenAI-compatible providers.
         return OpenAIAgentClient(
