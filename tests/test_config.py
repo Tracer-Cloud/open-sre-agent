@@ -100,6 +100,75 @@ def test_llm_settings_from_env_minimax(monkeypatch) -> None:
     assert settings.minimax_api_key == "mm-stored-key"
 
 
+def test_llm_settings_custom_openai_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-openai",
+            "custom_openai_api_key": "sk-custom",
+            "custom_openai_base_url": "http://localhost:4000/v1",
+        }
+    )
+    assert settings.provider == "custom-openai"
+    assert settings.custom_openai_base_url == "http://localhost:4000/v1"
+    # Tier defaults mirror the OpenAI tier defaults when unset.
+    assert settings.custom_openai_reasoning_model == "gpt-5.4-mini"
+
+
+def test_llm_settings_custom_anthropic_provider_accepted() -> None:
+    settings = LLMSettings.model_validate(
+        {
+            "provider": "custom-anthropic",
+            "custom_anthropic_api_key": "sk-ant-custom",
+            "custom_anthropic_base_url": "https://proxy.example.com",
+        }
+    )
+    assert settings.provider == "custom-anthropic"
+    assert settings.custom_anthropic_base_url == "https://proxy.example.com"
+    assert settings.custom_anthropic_reasoning_model == "claude-opus-4-7"
+
+
+def test_llm_settings_require_custom_openai_api_key() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_API_KEY"):
+        LLMSettings.model_validate(
+            {"provider": "custom-openai", "custom_openai_base_url": "http://localhost:4000/v1"}
+        )
+
+
+def test_llm_settings_require_custom_openai_base_url() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_OPENAI_BASE_URL"):
+        LLMSettings.model_validate(
+            {"provider": "custom-openai", "custom_openai_api_key": "sk-custom"}
+        )
+
+
+def test_llm_settings_require_custom_anthropic_base_url() -> None:
+    with pytest.raises(ValidationError, match="CUSTOM_ANTHROPIC_BASE_URL"):
+        LLMSettings.model_validate(
+            {"provider": "custom-anthropic", "custom_anthropic_api_key": "sk-ant-custom"}
+        )
+
+
+def test_llm_settings_from_env_custom_openai_per_tier_overrides(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "custom-openai")
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://gateway:4000/v1")
+    # CUSTOM_OPENAI_MODEL is the single-model fallback; the per-tier var wins for its tier.
+    monkeypatch.setenv("CUSTOM_OPENAI_MODEL", "shared-model")
+    monkeypatch.setenv("CUSTOM_OPENAI_REASONING_MODEL", "reasoner-model")
+    monkeypatch.setattr(
+        "app.config.resolve_llm_api_key",
+        lambda env_var: "sk-stored" if env_var == "CUSTOM_OPENAI_API_KEY" else "",
+    )
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "custom-openai"
+    assert settings.custom_openai_api_key == "sk-stored"
+    assert settings.custom_openai_base_url == "http://gateway:4000/v1"
+    assert settings.custom_openai_reasoning_model == "reasoner-model"
+    assert settings.custom_openai_classification_model == "shared-model"
+    assert settings.custom_openai_toolcall_model == "shared-model"
+
+
 @pytest.mark.parametrize(
     "raw_host, expected",
     [

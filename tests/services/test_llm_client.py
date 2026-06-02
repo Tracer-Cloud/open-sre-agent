@@ -15,7 +15,7 @@ class _FakeAnthropicMessages:
 class _FakeAnthropic:
     last_api_key: str | None = None
 
-    def __init__(self, *, api_key: str, timeout: float) -> None:
+    def __init__(self, *, api_key: str, timeout: float, **_kwargs: object) -> None:
         _FakeAnthropic.last_api_key = api_key
         self.timeout = timeout
         self.messages = _FakeAnthropicMessages()
@@ -456,7 +456,7 @@ def _make_capturing_anthropic(
             return _StreamCM()
 
     class _Anthropic:
-        def __init__(self, *, api_key: str, timeout: float) -> None:
+        def __init__(self, *, api_key: str, timeout: float, **_kwargs: object) -> None:
             self.api_key = api_key
             self.timeout = timeout
             self.messages = _Messages()
@@ -1142,6 +1142,43 @@ def test_create_llm_client_deepseek_reasoning_sets_toolcall_fallback(monkeypatch
         llm_client.reset_llm_singletons()
 
 
+def test_create_llm_client_custom_openai_uses_supplied_base_url(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "custom-openai")
+    monkeypatch.setenv("CUSTOM_OPENAI_API_KEY", "sk-custom")
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")
+    monkeypatch.setenv("CUSTOM_OPENAI_REASONING_MODEL", "my-reasoner")
+    monkeypatch.setenv("CUSTOM_OPENAI_TOOLCALL_MODEL", "my-toolcall")
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, llm_client.OpenAILLMClient)
+        assert client._model == "my-reasoner"
+        assert client._model_fallback == "my-toolcall"
+        assert client._base_url == "http://localhost:4000/v1"
+        assert client._api_key_env == "CUSTOM_OPENAI_API_KEY"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
+def test_create_llm_client_custom_anthropic_uses_supplied_base_url(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "custom-anthropic")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_API_KEY", "sk-ant-custom")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_BASE_URL", "https://proxy.example.com")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_REASONING_MODEL", "claude-proxy")
+    monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropic)
+    llm_client.reset_llm_singletons()
+    try:
+        client = llm_client._create_llm_client("reasoning")
+
+        assert isinstance(client, llm_client.LLMClient)
+        assert client._model == "claude-proxy"
+        assert client._base_url == "https://proxy.example.com"
+        assert client._api_key_env == "CUSTOM_ANTHROPIC_API_KEY"
+    finally:
+        llm_client.reset_llm_singletons()
+
+
 def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
     """Investigation uses ``_create_llm_client`` → registry → ``CLIBackedLLMClient``."""
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")
@@ -1266,7 +1303,7 @@ class _NotFoundMessages:
 
 
 class _NotFoundAnthropic:
-    def __init__(self, *, api_key: str, timeout: float) -> None:
+    def __init__(self, *, api_key: str, timeout: float, **_kwargs: object) -> None:
         del api_key, timeout
         self.messages = _NotFoundMessages("not-a-real-model-xyz")
 
@@ -2245,7 +2282,7 @@ class _BadRequestMessages:
 
 
 class _UsageLimitAnthropic:
-    def __init__(self, *, api_key: str, timeout: float) -> None:
+    def __init__(self, *, api_key: str, timeout: float, **_kwargs: object) -> None:
         del api_key, timeout
         self.messages = _BadRequestMessages(_USAGE_LIMIT_BODY)
 

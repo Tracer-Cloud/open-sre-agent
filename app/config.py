@@ -130,6 +130,22 @@ GROQ_REASONING_MODEL = "llama-3.3-70b-versatile"
 GROQ_CLASSIFICATION_MODEL = "llama-3.3-70b-versatile"
 GROQ_TOOLCALL_MODEL = "llama-3.1-8b-instant"
 
+# Custom OpenAI-compatible endpoint model constants (LiteLLM / vLLM / LocalAI /
+# internal gateways). Base URL and API key are supplied via env; the model
+# defaults mirror the OpenAI tier defaults and are overridable per tier via
+# CUSTOM_OPENAI_{REASONING,CLASSIFICATION,TOOLCALL}_MODEL or CUSTOM_OPENAI_MODEL.
+CUSTOM_OPENAI_REASONING_MODEL = OPENAI_REASONING_MODEL
+CUSTOM_OPENAI_CLASSIFICATION_MODEL = OPENAI_CLASSIFICATION_MODEL
+CUSTOM_OPENAI_TOOLCALL_MODEL = OPENAI_TOOLCALL_MODEL
+
+# Custom Anthropic-compatible endpoint model constants (proxy / gateway in front
+# of the Anthropic API). Base URL and API key are supplied via env; the model
+# defaults mirror the Anthropic tier defaults and are overridable per tier via
+# CUSTOM_ANTHROPIC_{REASONING,CLASSIFICATION,TOOLCALL}_MODEL or CUSTOM_ANTHROPIC_MODEL.
+CUSTOM_ANTHROPIC_REASONING_MODEL = ANTHROPIC_REASONING_MODEL
+CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL = ANTHROPIC_CLASSIFICATION_MODEL
+CUSTOM_ANTHROPIC_TOOLCALL_MODEL = ANTHROPIC_TOOLCALL_MODEL
+
 # Base URLs for OpenAI-compatible providers
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
@@ -158,6 +174,8 @@ LLMProvider = Literal[
     "bedrock",
     "minimax",
     "groq",
+    "custom-openai",
+    "custom-anthropic",
     "codex",
     "cursor",
     "claude-code",
@@ -191,6 +209,14 @@ LLM_PROVIDER_API_KEY_ENVS = {
     "nvidia": "NVIDIA_API_KEY",
     "minimax": "MINIMAX_API_KEY",
     "groq": "GROQ_API_KEY",
+    "custom-openai": "CUSTOM_OPENAI_API_KEY",
+    "custom-anthropic": "CUSTOM_ANTHROPIC_API_KEY",
+}
+# Custom OpenAI/Anthropic-compatible providers require a user-supplied base URL
+# in addition to an API key. Maps provider -> (settings attr, env var).
+CUSTOM_ENDPOINT_BASE_URL_ENVS: dict[str, tuple[str, str]] = {
+    "custom-openai": ("custom_openai_base_url", "CUSTOM_OPENAI_BASE_URL"),
+    "custom-anthropic": ("custom_anthropic_base_url", "CUSTOM_ANTHROPIC_BASE_URL"),
 }
 DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS: tuple[str, ...] = ("openai", "anthropic")
 
@@ -339,6 +365,40 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
             os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
         ).strip()
         or GROQ_TOOLCALL_MODEL,
+        "custom_openai_api_key": resolve_llm_api_key("CUSTOM_OPENAI_API_KEY"),
+        "custom_anthropic_api_key": resolve_llm_api_key("CUSTOM_ANTHROPIC_API_KEY"),
+        "custom_openai_base_url": os.getenv("CUSTOM_OPENAI_BASE_URL", "").strip(),
+        "custom_anthropic_base_url": os.getenv("CUSTOM_ANTHROPIC_BASE_URL", "").strip(),
+        "custom_openai_reasoning_model": os.getenv(
+            "CUSTOM_OPENAI_REASONING_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_REASONING_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_REASONING_MODEL,
+        "custom_openai_classification_model": os.getenv(
+            "CUSTOM_OPENAI_CLASSIFICATION_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_CLASSIFICATION_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_CLASSIFICATION_MODEL,
+        "custom_openai_toolcall_model": os.getenv(
+            "CUSTOM_OPENAI_TOOLCALL_MODEL",
+            os.getenv("CUSTOM_OPENAI_MODEL", CUSTOM_OPENAI_TOOLCALL_MODEL),
+        ).strip()
+        or CUSTOM_OPENAI_TOOLCALL_MODEL,
+        "custom_anthropic_reasoning_model": os.getenv(
+            "CUSTOM_ANTHROPIC_REASONING_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_REASONING_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_REASONING_MODEL,
+        "custom_anthropic_classification_model": os.getenv(
+            "CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL,
+        "custom_anthropic_toolcall_model": os.getenv(
+            "CUSTOM_ANTHROPIC_TOOLCALL_MODEL",
+            os.getenv("CUSTOM_ANTHROPIC_MODEL", CUSTOM_ANTHROPIC_TOOLCALL_MODEL),
+        ).strip()
+        or CUSTOM_ANTHROPIC_TOOLCALL_MODEL,
         "bedrock_reasoning_model": os.getenv(
             "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
         ).strip()
@@ -409,6 +469,16 @@ class LLMSettings(StrictConfigModel):
     groq_reasoning_model: str = GROQ_REASONING_MODEL
     groq_classification_model: str = GROQ_CLASSIFICATION_MODEL
     groq_toolcall_model: str = GROQ_TOOLCALL_MODEL
+    custom_openai_api_key: str = ""
+    custom_anthropic_api_key: str = ""
+    custom_openai_base_url: str = ""
+    custom_anthropic_base_url: str = ""
+    custom_openai_reasoning_model: str = CUSTOM_OPENAI_REASONING_MODEL
+    custom_openai_classification_model: str = CUSTOM_OPENAI_CLASSIFICATION_MODEL
+    custom_openai_toolcall_model: str = CUSTOM_OPENAI_TOOLCALL_MODEL
+    custom_anthropic_reasoning_model: str = CUSTOM_ANTHROPIC_REASONING_MODEL
+    custom_anthropic_classification_model: str = CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL
+    custom_anthropic_toolcall_model: str = CUSTOM_ANTHROPIC_TOOLCALL_MODEL
     bedrock_reasoning_model: str = BEDROCK_REASONING_MODEL
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
@@ -437,6 +507,8 @@ class LLMSettings(StrictConfigModel):
             "bedrock",
             "minimax",
             "groq",
+            "custom-openai",
+            "custom-anthropic",
             "codex",
             "cursor",
             "claude-code",
@@ -461,6 +533,16 @@ class LLMSettings(StrictConfigModel):
     def _require_api_key_for_selected_provider(self) -> "LLMSettings":
         if self.provider in KEYLESS_LLM_PROVIDERS:
             return self  # local, IAM, or CLI-provider auth is handled outside API keys
+        # Custom OpenAI/Anthropic-compatible endpoints additionally require a
+        # user-supplied base URL — a missing one is a hard misconfiguration
+        # (not a swap-in-another-provider situation), so fail loudly.
+        base_url_spec = CUSTOM_ENDPOINT_BASE_URL_ENVS.get(self.provider)
+        if base_url_spec is not None:
+            attr, base_url_env = base_url_spec
+            if not getattr(self, attr):
+                raise ValueError(
+                    f"LLM provider '{self.provider}' requires {base_url_env} to be set."
+                )
         provider_to_key = {
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
@@ -470,6 +552,8 @@ class LLMSettings(StrictConfigModel):
             "nvidia": self.nvidia_api_key,
             "minimax": self.minimax_api_key,
             "groq": self.groq_api_key,
+            "custom-openai": self.custom_openai_api_key,
+            "custom-anthropic": self.custom_anthropic_api_key,
         }
         if provider_to_key[self.provider]:
             return self
@@ -576,6 +660,20 @@ GROQ_LLM_CONFIG = LLMModelConfig(
     reasoning_model=GROQ_REASONING_MODEL,
     classification_model=GROQ_CLASSIFICATION_MODEL,
     toolcall_model=GROQ_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
+CUSTOM_OPENAI_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=CUSTOM_OPENAI_REASONING_MODEL,
+    classification_model=CUSTOM_OPENAI_CLASSIFICATION_MODEL,
+    toolcall_model=CUSTOM_OPENAI_TOOLCALL_MODEL,
+    max_tokens=DEFAULT_MAX_TOKENS,
+)
+
+CUSTOM_ANTHROPIC_LLM_CONFIG = LLMModelConfig(
+    reasoning_model=CUSTOM_ANTHROPIC_REASONING_MODEL,
+    classification_model=CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL,
+    toolcall_model=CUSTOM_ANTHROPIC_TOOLCALL_MODEL,
     max_tokens=DEFAULT_MAX_TOKENS,
 )
 

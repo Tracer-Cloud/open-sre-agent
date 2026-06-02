@@ -158,11 +158,21 @@ class LLMResponse:
 
 class LLMClient:
     def __init__(
-        self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
+        self,
+        *,
+        model: str,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        base_url: str | None = None,
+        api_key_env: str = "ANTHROPIC_API_KEY",
     ) -> None:
-        api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+        # base_url is set for Anthropic-compatible gateways (custom-anthropic);
+        # api_key_env lets those gateways authenticate with their own key env var.
+        self._api_key_env = api_key_env
+        self._base_url = base_url
+        api_key = resolve_llm_api_key(api_key_env)
         self._api_key = api_key
-        self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+        self._client = Anthropic(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
@@ -179,14 +189,16 @@ class LLMClient:
         return self
 
     def _ensure_client(self) -> None:
-        api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+        api_key = resolve_llm_api_key(self._api_key_env)
         if not api_key:
             raise RuntimeError(
-                "Missing ANTHROPIC_API_KEY. Set it in your environment, .env, or secure local keychain before running LLM steps."
+                f"Missing {self._api_key_env}. Set it in your environment, .env, or secure local keychain before running LLM steps."
             )
         if api_key != self._api_key:
             self._api_key = api_key
-            self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
+            self._client = Anthropic(
+                api_key=api_key, base_url=self._base_url, timeout=_CLIENT_TIMEOUT_SEC
+            )
 
     def _build_request_kwargs(self, prompt_or_messages: Any) -> dict[str, Any]:
         """Refresh credentials, normalize messages, apply guardrails, and build API kwargs.
@@ -1349,6 +1361,27 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             max_tokens=config.max_tokens,
             base_url=GROQ_BASE_URL,
             api_key_env="GROQ_API_KEY",
+        )
+    elif provider == "custom-openai":
+        from app.config import CUSTOM_OPENAI_LLM_CONFIG
+
+        config = CUSTOM_OPENAI_LLM_CONFIG
+        return OpenAILLMClient(
+            model=_select_model(settings, "custom_openai", model_type),
+            model_fallback=_fallback_model("custom_openai"),
+            max_tokens=config.max_tokens,
+            base_url=settings.custom_openai_base_url,
+            api_key_env="CUSTOM_OPENAI_API_KEY",
+        )
+    elif provider == "custom-anthropic":
+        from app.config import CUSTOM_ANTHROPIC_LLM_CONFIG
+
+        config = CUSTOM_ANTHROPIC_LLM_CONFIG
+        return LLMClient(
+            model=_select_model(settings, "custom_anthropic", model_type),
+            max_tokens=config.max_tokens,
+            base_url=settings.custom_anthropic_base_url,
+            api_key_env="CUSTOM_ANTHROPIC_API_KEY",
         )
     elif provider == "ollama":
         from app.config import OLLAMA_LLM_CONFIG

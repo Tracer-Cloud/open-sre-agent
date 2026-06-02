@@ -580,6 +580,78 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     assert captured["api_key_env"] == "DEEPSEEK_API_KEY"
 
 
+def test_get_agent_llm_routes_custom_openai_to_supplied_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import agent_llm_client as alc
+
+    captured: dict[str, object] = {}
+
+    class _FakeOpenAIAgentClient:
+        def __init__(
+            self,
+            model: str,
+            max_tokens: int = 4096,
+            base_url: str | None = None,
+            api_key_env: str = "OPENAI_API_KEY",
+            api_key_default: str = "",
+        ) -> None:
+            captured.update(
+                {
+                    "model": model,
+                    "max_tokens": max_tokens,
+                    "base_url": base_url,
+                    "api_key_env": api_key_env,
+                    "api_key_default": api_key_default,
+                }
+            )
+
+    monkeypatch.setattr(alc, "OpenAIAgentClient", _FakeOpenAIAgentClient)
+    monkeypatch.setenv("LLM_PROVIDER", "custom-openai")
+    monkeypatch.setenv("CUSTOM_OPENAI_API_KEY", "sk-custom")
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://gateway:4000/v1")
+    monkeypatch.setenv("CUSTOM_OPENAI_REASONING_MODEL", "my-reasoner")
+
+    alc.reset_agent_client()
+    client = alc.get_agent_llm()
+
+    assert isinstance(client, _FakeOpenAIAgentClient)
+    assert captured["model"] == "my-reasoner"
+    assert captured["base_url"] == "http://gateway:4000/v1"
+    assert captured["api_key_env"] == "CUSTOM_OPENAI_API_KEY"
+    alc.reset_agent_client()
+
+
+def test_get_agent_llm_routes_custom_anthropic_to_anthropic_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import types
+
+    from app.services import agent_llm_client as alc
+
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    captured: dict[str, object] = {}
+
+    class _CapturingAnthropic:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+            self.messages = types.SimpleNamespace(create=lambda **_: None)
+
+    fake_anthropic.Anthropic = _CapturingAnthropic
+    monkeypatch.setenv("LLM_PROVIDER", "custom-anthropic")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_API_KEY", "sk-ant-custom")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_BASE_URL", "https://proxy.example.com")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_REASONING_MODEL", "claude-proxy")
+
+    alc.reset_agent_client()
+    client = alc.get_agent_llm()
+
+    assert isinstance(client, alc.AnthropicAgentClient)
+    # The Anthropic SDK client must be built against the user-supplied base URL.
+    assert captured["base_url"] == "https://proxy.example.com"
+    alc.reset_agent_client()
+
+
 @pytest.mark.parametrize(
     "provider",
     [
