@@ -1,7 +1,14 @@
-# Follow-up: cache the CloudOpsBench corpus in S3
+# Cache the CloudOpsBench corpus in S3 (design notes)
 
-> **Status:** proposal — not implemented yet. Ship after the
-> `infra/bench/` Fargate path produces its first successful run.
+> **Status:** implemented. `entrypoint.sh`, the Dockerfile changes,
+> `infra/bench/{fargate,iam_task,variables}.tf`, and the
+> `make mirror-cloudopsbench-s3` target all ship in the same PR.
+> See [AWS_BENCH_SETUP.md](AWS_BENCH_SETUP.md) for the one-time bootstrap
+> steps before the first Fargate run.
+>
+> This document is kept as the design rationale — useful for reviewers
+> trying to understand the trade-off vs baking the corpus into the image
+> or downloading from Hugging Face at runtime.
 
 ## Problem
 

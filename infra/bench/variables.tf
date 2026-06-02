@@ -47,9 +47,14 @@ variable "corpus_bucket_name" {
 }
 
 variable "corpus_hf_revision" {
-  description = "Hugging Face commit SHA pinned for this run. Must match a prefix that exists in s3://<corpus_bucket_name>/, populated by `make mirror-cloudopsbench-s3`. provenance.json records the same value so the artifact and the corpus are reproducibly paired."
+  description = "Hugging Face commit SHA pinned for this run. Must match a prefix that exists in s3://<corpus_bucket_name>/, populated by `make mirror-cloudopsbench-s3`. provenance.json records the same value so the artifact and the corpus are reproducibly paired. The default SHA must be present in S3 before the first Fargate run — see tests/benchmarks/AWS_BENCH_SETUP.md."
   type        = string
   default     = "ce0ded4f196f01e176cf1d69ec15c2db42b2a677"
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{40}$", var.corpus_hf_revision))
+    error_message = "corpus_hf_revision must be a 40-character lowercase hex SHA (HF git-style commit), e.g. ce0ded4f196f01e176cf1d69ec15c2db42b2a677."
+  }
 }
 
 variable "image_tag" {

@@ -87,18 +87,27 @@ RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir 'awscli==1.34.6'
+    && pip install --no-cache-dir 'awscli==1.45.19'
+
+# Non-root user for the bench process
+# beyond `bench`'s home. UID 10001 is well above any system UID range.
+RUN groupadd --system --gid 10001 bench \
+    && useradd --system --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin bench
 
 # Copy the prepared venv + source from the builder stage in one go.
 # The venv at /app/.venv has the project installed and all deps available.
 # PATH (set above) makes /app/.venv/bin take precedence over system python.
-COPY --from=builder /app /app
+# --chown so the bench user can write to /app at runtime (entrypoint.sh
+# writes the corpus under tests/benchmarks/cloudopsbench/benchmark/).
+COPY --from=builder --chown=bench:bench /app /app
 
 # Entrypoint wrapper: pulls the corpus from S3 before invoking the bench
 # CLI. Required env (set by the ECS task definition):
 #   BENCH_CORPUS_S3_BUCKET, BENCH_CORPUS_HF_REVISION
-COPY infra/bench/entrypoint.sh /app/entrypoint.sh
+COPY --chown=bench:bench infra/bench/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+USER bench
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 

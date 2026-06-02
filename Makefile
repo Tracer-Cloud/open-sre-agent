@@ -85,7 +85,6 @@ CLOUDOPSBENCH_LIMIT ?=
 # already taken, fall back to a variant like
 # tracer-cloud-cloud-ops-bench-dataset or opensre-bench-corpus.
 BENCH_S3_BUCKET ?= cloud-ops-bench-dataset
-BENCH_S3_PREFIX ?=
 
 opensre-hub-fetch:
 	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
@@ -182,8 +181,7 @@ mirror-cloudopsbench-s3: download-cloudopsbench-hf
 	  exit 1; \
 	fi
 	@HF_REV=$$($(PYTHON) -c "from huggingface_hub import HfApi; print(HfApi().dataset_info('$(CLOUDOPSBENCH_HF_DATASET_ID)').sha)") && \
-	  PREFIX="$(BENCH_S3_PREFIX)" && \
-	  DEST="s3://$(BENCH_S3_BUCKET)$${PREFIX:+/$$PREFIX}/$$HF_REV/" && \
+	  DEST="s3://$(BENCH_S3_BUCKET)/$$HF_REV/" && \
 	  echo "  → Pinning to HF revision: $$HF_REV" && \
 	  echo "  → Syncing to $$DEST" && \
 	  aws s3 sync "$(CLOUDOPSBENCH_BENCHMARK_DIR)/" "$$DEST" --no-progress && \
