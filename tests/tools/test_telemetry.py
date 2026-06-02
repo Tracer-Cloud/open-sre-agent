@@ -938,6 +938,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_datadog_monitors",
         "query_elasticsearch_logs",
         "query_grafana_alert_rules",
+        "query_grafana_annotations",
         "query_grafana_logs",
         "query_grafana_metrics",
         "query_grafana_service_names",

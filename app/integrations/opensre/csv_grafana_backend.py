@@ -260,6 +260,10 @@ class OpenSRECsvGrafanaBackend:
         traces = [{"traceID": tid, "spans": spans} for tid, spans in span_by_trace.items()]
         return {"traces": traces, "metrics": {}}
 
+    def query_annotations(self, **_: Any) -> list[dict[str, Any]]:
+        # OpenSRE CSV telemetry carries no deploy/config-change annotations.
+        return []
+
     def _default_alert(self) -> dict[str, Any]:
         return {
             "title": "OpenSRE local telemetry",

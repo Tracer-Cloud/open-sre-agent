@@ -108,6 +108,7 @@
               "coralogix",
               "datadog",
               "grafana",
+              "grafana_annotations",
               "hermes",
               "honeycomb",
               "incident_io",
