@@ -540,6 +540,47 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_dispatch_one_turn_forwards_confirm_fn_to_slash_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for #2694.
+
+    Confirmation-gated slash commands (e.g. ``/integrations verify``) must route
+    their "Proceed? [Y/n]" prompt through the caller-supplied ``confirm_fn`` (the
+    REPL's event-based handoff). If ``execute_routed_turn`` drops ``confirm_fn`` when
+    calling ``dispatch_slash``, ``execution_allowed`` falls back to a blocking
+    ``input()`` on the dispatch worker thread and freezes the REPL.
+    """
+    from rich.console import Console
+
+    captured: dict[str, object] = {}
+
+    def _capture(*_args: object, **kwargs: object) -> bool:
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.runtime.execution.dispatch_slash",
+        _capture,
+    )
+
+    def _sentinel_confirm(_prompt: str) -> str:
+        return "y"
+
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop_dispatch.dispatch_one_turn(
+        "/integrations verify",
+        session,
+        console,
+        on_exit=lambda: None,
+        confirm_fn=_sentinel_confirm,
+    )
+
+    assert captured.get("confirm_fn") is _sentinel_confirm
+
+
 def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
