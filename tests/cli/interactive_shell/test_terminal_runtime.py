@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -50,6 +51,41 @@ def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
     )
     with console.status("working", spinner="dots"):
         pass
+
+
+def test_streaming_console_print_does_not_recurse_under_stdout_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for the #2694 follow-up RecursionError.
+
+    A confirmation-gated command whose handler uses ``console.status`` (e.g.
+    ``/integrations verify``) installs a Rich ``FileProxy`` over ``sys.stdout``
+    whose ``write`` routes back into ``console.print``. ``StreamingConsole.print``
+    must not run its manual cursor-prep (which writes to ``sys.stdout``) under such
+    a redirect, otherwise it recurses infinitely:
+    print → prepare_repl_output_line → sys.stdout.write → FileProxy.write → print.
+    """
+    from rich.file_proxy import FileProxy
+
+    from app.cli.interactive_shell.ui import choice_menu as _choice_menu
+
+    spinner = loop_state.SpinnerState()
+    console = loop_module.StreamingConsole(
+        spinner,
+        threading.Event(),
+        force_terminal=True,
+        width=80,
+    )
+    real_stdout = sys.stdout
+    proxy = FileProxy(console, real_stdout)
+    # Force the interactive-TTY cursor-prep path that writes to sys.stdout, then
+    # redirect sys.stdout through the proxy so any such write would recurse.
+    monkeypatch.setattr(_choice_menu, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(proxy, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(sys, "stdout", proxy)
+
+    # Must not raise RecursionError.
+    console.print("output while a console.status redirect is active")
 
 
 @pytest.mark.parametrize(

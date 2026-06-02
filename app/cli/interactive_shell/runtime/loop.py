@@ -132,7 +132,17 @@ class StreamingConsole(Console):
         high column. Rich output that follows (tables, follow-up status lines,
         section rules) must start at column zero or lines appear broken.
         """
-        if not self._spinner.streaming:
+        from rich.file_proxy import FileProxy
+
+        # When a Rich redirect (e.g. ``console.status`` / ``Live``) is active it
+        # replaces ``sys.stdout`` with a ``FileProxy`` whose ``write`` routes back
+        # into ``console.print``. The cursor-prep below writes to ``sys.stdout``,
+        # so running it under such a redirect recurses infinitely:
+        #   print → prepare_repl_output_line → sys.stdout.write → FileProxy.write
+        #   → console.print → print → …  (issue #2694 follow-up)
+        # Rich owns the cursor during a redirect, so skip the manual prep entirely
+        # and delegate straight to Rich.
+        if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):
             from app.cli.interactive_shell.ui.choice_menu import (
                 ensure_tty_column_zero,
                 prepare_repl_output_line,
