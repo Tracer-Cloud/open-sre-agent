@@ -23,10 +23,6 @@ name: Benchmark — run on Fargate
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: 'ECR image tag to run (default = latest)'
-        required: true
-        default: 'latest'
       config:
         description: 'Path to YAML config inside the container'
         required: true
@@ -35,6 +31,15 @@ on:
         description: 'Dev mode (skip integrity gates, no pre-reg needed)'
         type: boolean
         default: true
+
+# Note: there is intentionally no `image_tag` input here. ECS RunTask
+# container overrides do NOT support overriding the image URI — that lives
+# on the task definition itself. The image actually pulled is whatever
+# was registered the last time `terraform apply -var=image_tag=<tag>` ran
+# in infra/bench/. Adding a workflow input here would silently mislead
+# operators into thinking they control the image per run. To change the
+# image, push it via `Benchmark image — build + push to ECR`, then re-apply
+# Terraform with the new tag.
 
 permissions:
   contents: read
@@ -62,19 +67,6 @@ jobs:
           role-session-name: bench-run-${{ github.run_id }}
           aws-region: us-east-1
 
-      - name: Verify image tag exists in ECR
-        env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
-        run: |
-          if ! aws ecr describe-images \
-                --repository-name opensre-bench \
-                --image-ids imageTag="$IMAGE_TAG" \
-                >/dev/null 2>&1; then
-            echo "::error::Image tag $IMAGE_TAG not found in ECR repo opensre-bench."
-            echo "::error::Push it via the 'bench (build + push image)' workflow first."
-            exit 1
-          fi
-
       - name: Launch ECS RunTask
         # Inputs bound to env vars so the shell does the interpolation —
         # GitHub Actions template syntax (${{ ... }}) is expanded before
@@ -83,13 +75,19 @@ jobs:
         env:
           BENCH_CONFIG: ${{ inputs.config }}
           BENCH_DEV_FLAG: ${{ inputs.dev_mode == true && '--dev' || '' }}
-          IMAGE_TAG: ${{ inputs.image_tag }}
           CLUSTER: ${{ vars.BENCH_ECS_CLUSTER }}
           TASK_FAMILY: ${{ vars.BENCH_TASK_DEFINITION_FAMILY }}
           SUBNETS: ${{ vars.BENCH_SUBNET_IDS }}
           SECURITY_GROUP: ${{ vars.BENCH_SECURITY_GROUP_ID }}
         run: |
           set -euo pipefail
+
+          # Surface the image the task definition will actually pull, so
+          # operators see the truth (not a workflow input that ECS ignores).
+          IMAGE_URI=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --query 'taskDefinition.containerDefinitions[0].image' \
+            --output text)
 
           # Overrides JSON: container env vars passed at runtime. The
           # container's entrypoint reads BENCH_CONFIG + BENCH_DEV_FLAG
@@ -99,14 +97,12 @@ jobs:
           OVERRIDES=$(jq -nc \
             --arg config "$BENCH_CONFIG" \
             --arg dev_flag "$BENCH_DEV_FLAG" \
-            --arg image_tag "$IMAGE_TAG" \
             '{
               containerOverrides: [{
                 name: "bench",
                 environment: [
                   {name: "BENCH_CONFIG", value: $config},
-                  {name: "BENCH_DEV_FLAG", value: $dev_flag},
-                  {name: "BENCH_IMAGE_TAG", value: $image_tag}
+                  {name: "BENCH_DEV_FLAG", value: $dev_flag}
                 ]
               }]
             }')
@@ -133,7 +129,7 @@ jobs:
           {
             echo "## Bench run launched"
             echo ""
-            echo "- Image tag: \`$IMAGE_TAG\`"
+            echo "- Image (from task definition): \`$IMAGE_URI\`"
             echo "- Config: \`$BENCH_CONFIG\`"
             echo "- Dev mode: \`${BENCH_DEV_FLAG:-(off)}\`"
             echo "- Task ARN: \`$TASK_ARN\`"
@@ -150,4 +146,6 @@ jobs:
             echo "https://us-east-1.console.aws.amazon.com/ecs/v2/clusters/$CLUSTER/tasks/$TASK_ID"
             echo ""
             echo "Artifacts land in the bench S3 bucket under \`runs/\` when the task completes."
+            echo ""
+            echo "_To change the running image: push a new tag via \`Benchmark image — build + push to ECR\`, then \`cd infra/bench && terraform apply -var=image_tag=<tag>\`._"
           } >> "$GITHUB_STEP_SUMMARY"
