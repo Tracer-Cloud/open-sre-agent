@@ -91,3 +91,35 @@ def test_cli_llm_spawn_log_redacts_prompt_equals_form(mock_run: MagicMock, caplo
     assert spawn.provider == "mock-cli"
     assert spawn.argv == ["/usr/bin/mock-cli", "--prompt=<redacted-prompt>", "--model", "gpt-5.1"]
     assert all(prompt not in arg for arg in spawn.argv)
+
+
+@patch("app.integrations.llm_cli.runner.subprocess.run")
+def test_runner_uses_adapter_explain_failure_for_quota(mock_run: MagicMock) -> None:
+    """Quota stderr is enriched via adapter explain_failure, not a runner-side classifier."""
+    import pytest
+
+    from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
+    mock_adapter = MagicMock()
+    mock_adapter.name = "codex"
+    mock_adapter.auth_hint = "codex login"
+    mock_adapter.detect.return_value = _mock_probe()
+    mock_adapter.build.return_value = MagicMock(
+        argv=("/usr/bin/codex", "exec", "-"),
+        stdin="hello",
+        cwd="/tmp",
+        env=None,
+        timeout_sec=30.0,
+    )
+    mock_adapter.explain_failure.side_effect = lambda **kwargs: explain_cli_failure(
+        exit_label="codex exec", **kwargs
+    )
+    mock_run.return_value = MagicMock(
+        returncode=1, stdout="", stderr="429 Too Many Requests: quota exceeded"
+    )
+
+    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+        gr.return_value.is_active = False
+        client = CLIBackedLLMClient(mock_adapter)
+        with pytest.raises(RuntimeError, match="quota or rate limit exceeded"):
+            client.invoke("hello")

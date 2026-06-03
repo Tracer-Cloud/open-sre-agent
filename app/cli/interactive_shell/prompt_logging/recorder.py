@@ -17,6 +17,14 @@ from app.version import get_version
 
 _SUPPORTED_ROUTE_KINDS = frozenset({"cli_agent", "cli_help", "follow_up", "new_alert"})
 
+# Maps PromptRecorder route_kind → session turn kind stored in turn_detail records.
+_ROUTE_TO_SESSION_KIND: dict[str, str] = {
+    "cli_agent": "chat",
+    "cli_help": "chat",
+    "follow_up": "follow_up",
+    "new_alert": "alert",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class LlmRunInfo:
@@ -66,6 +74,11 @@ class PromptRecorder:
     ) -> PromptRecorder | None:
         config = PromptLogConfig.load()
         if not config.enabled or route_kind not in _SUPPORTED_ROUTE_KINDS:
+            # When prompt logging is fully disabled, no recorder is created and
+            # no turn_detail records are written to the session file. This means
+            # the crash-recovery fallback in load_session() will produce empty
+            # cli_agent_messages for sessions that crashed before flush(). The
+            # conversation_snapshot written at clean exit is unaffected.
             return None
         return cls(
             config=config,
@@ -90,6 +103,7 @@ class PromptRecorder:
         if self._flushed:
             return
         self._flushed = True
+        latency_ms = self._latency_ms or int((time.monotonic() - self._start) * 1000)
         record = {
             "ts": datetime.now(UTC).isoformat(),
             "session_id": self._session_id,
@@ -99,7 +113,7 @@ class PromptRecorder:
             "response": self._response,
             "model": self._model or "",
             "provider": self._provider or "",
-            "latency_ms": self._latency_ms or int((time.monotonic() - self._start) * 1000),
+            "latency_ms": latency_ms,
             "input_tokens": self._input_tokens,
             "output_tokens": self._output_tokens,
             "opensre_version": get_version(),
@@ -107,6 +121,23 @@ class PromptRecorder:
         if self._config.local_enabled:
             with contextlib.suppress(OSError):
                 append_prompt_log_record(path=self._config.log_path, record=record)
+
+        # Also write enriched turn to the session file so /resume can restore context.
+        with contextlib.suppress(Exception):
+            from app.cli.interactive_shell.sessions.store import SessionStore
+
+            session_kind = _ROUTE_TO_SESSION_KIND.get(self._route_kind, self._route_kind)
+            SessionStore.append_turn_detail(
+                self._session_id,
+                session_kind,
+                self._prompt,
+                response=self._response or None,
+                turn_id=self._turn_id,
+                model=self._model or None,
+                provider=self._provider or None,
+                latency_ms=latency_ms,
+            )
+
         if self._config.posthog_enabled:
             with contextlib.suppress(Exception):
                 capture_ai_generation(

@@ -394,30 +394,25 @@ async def run_interactive(
         state.request_exit()
         state.cancel_current_dispatch()
         sampler_task.cancel()
-        try:  # noqa: SIM105
-            await sampler_task
-        except asyncio.CancelledError:
-            # Expected during shutdown after explicit task cancellation.
-            pass
         processor_task.cancel()
         alert_watcher_task.cancel()
         spinner_ticker_task.cancel()
-        try:
-            await processor_task
-        except asyncio.CancelledError:
-            # Expected during shutdown after explicit task cancellation.
-            pass
-        except Exception as exc:
-            log.debug("Processor task shutdown raised exception: %s", exc)
-        try:
-            await alert_watcher_task
-        except asyncio.CancelledError:
-            # Expected during shutdown after explicit task cancellation.
-            pass
-        except Exception as exc:
-            log.debug("Alert watcher shutdown raised exception: %s", exc)
-        with contextlib.suppress(asyncio.CancelledError):
-            await spinner_ticker_task
+        shutdown_labels = (
+            "sampler",
+            "processor",
+            "alert watcher",
+            "spinner ticker",
+        )
+        shutdown_results = await asyncio.gather(
+            sampler_task,
+            processor_task,
+            alert_watcher_task,
+            spinner_ticker_task,
+            return_exceptions=True,
+        )
+        for label, result in zip(shutdown_labels, shutdown_results, strict=True):
+            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+                log.debug("%s task shutdown raised exception: %s", label, result)
 
 
 __all__ = ["StreamingConsole", "run_interactive"]

@@ -13,7 +13,10 @@ from tests.synthetic.hermes_rca.hermes_schemas import (
     HermesScenarioMetadataSchema,
     validate_hermes_alert,
     validate_hermes_answer_key,
+    validate_hermes_approval_events,
+    validate_hermes_audit_trail,
     validate_hermes_config,
+    validate_hermes_credential_state,
     validate_hermes_cron_state,
     validate_hermes_filesystem_state,
     validate_hermes_kv_cache_state,
@@ -21,11 +24,13 @@ from tests.synthetic.hermes_rca.hermes_schemas import (
     validate_hermes_message_history,
     validate_hermes_orchestration_state,
     validate_hermes_provider_traffic,
+    validate_hermes_rbac_state,
     validate_hermes_routing_decisions,
     validate_hermes_runtime_state,
     validate_hermes_scenario_metadata,
     validate_hermes_session_log,
     validate_hermes_session_topology,
+    validate_hermes_workflow_run,
 )
 
 SUITE_DIR = Path(__file__).resolve().parent
@@ -125,6 +130,11 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
     routing_decisions = None
     memory_state = None
     filesystem_state = None
+    audit_trail = None
+    approval_events = None
+    rbac_state = None
+    credential_state = None
+    workflow_run = None
 
     if "hermes_session_log" in available_evidence:
         session_log = validate_hermes_session_log(
@@ -182,6 +192,29 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
             _read_json(scenario_dir / "hermes_filesystem_state.json")
         )
 
+    if "hermes_audit_trail" in available_evidence:
+        audit_trail = validate_hermes_audit_trail(
+            _read_json(scenario_dir / "hermes_audit_trail.json")
+        )
+
+    if "hermes_approval_events" in available_evidence:
+        approval_events = validate_hermes_approval_events(
+            _read_json(scenario_dir / "hermes_approval_events.json")
+        )
+
+    if "hermes_rbac_state" in available_evidence:
+        rbac_state = validate_hermes_rbac_state(_read_json(scenario_dir / "hermes_rbac_state.json"))
+
+    if "hermes_credential_state" in available_evidence:
+        credential_state = validate_hermes_credential_state(
+            _read_json(scenario_dir / "hermes_credential_state.json")
+        )
+
+    if "hermes_workflow_run" in available_evidence:
+        workflow_run = validate_hermes_workflow_run(
+            _read_json(scenario_dir / "hermes_workflow_run.json")
+        )
+
     return HermesScenarioEvidence(
         hermes_session_log=session_log,
         hermes_provider_traffic=provider_traffic,
@@ -195,6 +228,11 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
         hermes_routing_decisions=routing_decisions,
         hermes_memory_state=memory_state,
         hermes_filesystem_state=filesystem_state,
+        hermes_audit_trail=audit_trail,
+        hermes_approval_events=approval_events,
+        hermes_rbac_state=rbac_state,
+        hermes_credential_state=credential_state,
+        hermes_workflow_run=workflow_run,
     )
 
 

@@ -196,7 +196,7 @@ class TestTaskRegistry:
         assert loaded.status == TaskStatus.CANCELLED
         assert (12345, 15) not in calls
 
-    def test_session_reset_does_not_truncate_persistent_task_store(
+    def test_session_new_does_not_truncate_persistent_task_store(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -212,16 +212,16 @@ class TestTaskRegistry:
 
         session.clear()
 
-        # /reset must keep the on-disk store intact: a fresh persistent registry
+        # /new must keep the on-disk store intact: a fresh persistent registry
         # still finds the task, and the session's swapped-in registry continues
         # to surface persisted history via its disk-backed merge so /tasks does
-        # not "forget" the user's prior runs after a session reset.
+        # not "forget" the user's prior runs after /new.
         reloaded = TaskRegistry.persistent()
         [loaded] = reloaded.list_recent()
         assert loaded.task_id == task.task_id
         assert loaded.command == "opensre tests"
-        [visible_after_reset] = session.task_registry.list_recent()
-        assert visible_after_reset.task_id == task.task_id
+        [visible_after_new] = session.task_registry.list_recent()
+        assert visible_after_new.task_id == task.task_id
 
 
 class TestSlashTaskCommands:

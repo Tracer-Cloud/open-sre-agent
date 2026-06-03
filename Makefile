@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic
+.PHONY: install onboard benchmark benchmark-update-readme test test-full demo alert-template investigate-alert opensre-hub-fetch opensre-hub-export opensre-hub-investigate verify-integrations check-docker grafana-local-up grafana-local-down grafana-local-seed clean lint format deploy deploy-lambda deploy-prefect deploy-flink destroy destroy-lambda destroy-prefect destroy-flink prefect-local-test simulate-k8s-alert test-k8s-local test-k8s test-k8s-datadog chaos-mesh-up chaos-mesh-down chaos-engineering-apply chaos-engineering-delete chaos-lab-up chaos-lab-down chaos-experiment-list chaos-experiment-up chaos-experiment-down deploy-dd-monitors cleanup-dd-monitors deploy-eks destroy-eks test-k8s-eks datadog-demo crashloop-demo regen-trigger-config test-rca test-rca-grafana test-synthetic test-rds-synthetic test-cli-smoke deploy-vercel destroy-vercel test-vercel deploy-ec2 destroy-ec2 test-ec2 deploy-ec2-hello destroy-ec2-hello deploy-remote destroy-remote deploy-bedrock destroy-bedrock test-bedrock download-cloudopsbench-hf mirror-cloudopsbench-s3 validate-cloudopsbench test-openclaw test-openclaw-synthetic test-hermes test-hermes-synthetic
 
 
 ifneq ($(wildcard .venv/bin/python),)
@@ -75,6 +75,17 @@ CLOUDOPSBENCH_BENCHMARK_DIR ?= $(CLOUDOPSBENCH_DATASET_DIR)/benchmark
 CLOUDOPSBENCH_HF_INCLUDE ?= benchmark/**
 CLOUDOPSBENCH_LIMIT ?=
 
+# S3 mirror of the CloudOpsBench corpus from
+# https://huggingface.co/datasets/tracer-cloud/cloud-ops-bench-dataset.
+# The Fargate bench task reads the corpus from S3 at startup (faster
+# than HF, no rate limits, no HF_TOKEN at runtime).
+#
+# Suggested bucket name: cloud-ops-bench-dataset (matches the HF name).
+# S3 bucket names are GLOBALLY unique — if cloud-ops-bench-dataset is
+# already taken, fall back to a variant like
+# tracer-cloud-cloud-ops-bench-dataset or opensre-bench-corpus.
+BENCH_S3_BUCKET ?= cloud-ops-bench-dataset
+
 opensre-hub-fetch:
 	$(PYTHON) infra/opensre-dataset/fetch_opensre_hub_alert.py --prefix "$(OPENSRE_QUERY_PREFIX)" --output "$(OPENSRE_HUB_ALERT)" --index $(OPENSRE_HUB_INDEX)
 
@@ -142,7 +153,39 @@ test-cloudopsbench:
 # Download Cloud-OpsBench benchmark data from Hugging Face.
 download-cloudopsbench-hf:
 	@command -v hf >/dev/null 2>&1 || { echo "Install the Hugging Face CLI with: pip install 'huggingface_hub[cli]'"; exit 1; }
+	@if [ -z "$$HF_TOKEN" ]; then \
+	  echo "  ⚠ HF_TOKEN not set — falling back to anonymous HF access (~60 req/min limit; expect 429 retries on this dataset)."; \
+	  echo "  Tip: export HF_TOKEN=hf_... (or set the GH repo secret) to get ~1000 req/min and a ~3x speedup."; \
+	fi
 	hf download "$(CLOUDOPSBENCH_HF_DATASET_ID)" --repo-type dataset --local-dir "$(CLOUDOPSBENCH_DATASET_DIR)" --include "$(CLOUDOPSBENCH_HF_INCLUDE)"
+
+# Mirror the locally-downloaded corpus to S3, keyed by HF revision SHA.
+# Run this once at setup + again whenever the upstream HF dataset is
+# revised. The Fargate bench task pulls from this S3 prefix at startup
+# instead of re-downloading from HF every time.
+#
+# Pre-req:
+#   - aws CLI configured (`aws sts get-caller-identity` works)
+#   - `make download-cloudopsbench-hf` has been run at least once
+#   - BENCH_S3_BUCKET is set (from `cd infra/bench && terraform output -raw results_bucket_name`)
+mirror-cloudopsbench-s3: download-cloudopsbench-hf
+	@command -v aws >/dev/null 2>&1 || { echo "Install AWS CLI: https://aws.amazon.com/cli/"; exit 1; }
+	@if [ -z "$(BENCH_S3_BUCKET)" ]; then \
+	  echo "  ✗ BENCH_S3_BUCKET is not set. Get the value with:"; \
+	  echo "      cd infra/bench && terraform output -raw results_bucket_name"; \
+	  echo "  Then re-run:  BENCH_S3_BUCKET=<value> make mirror-cloudopsbench-s3"; \
+	  exit 1; \
+	fi
+	@if [ ! -d "$(CLOUDOPSBENCH_BENCHMARK_DIR)" ]; then \
+	  echo "  ✗ $(CLOUDOPSBENCH_BENCHMARK_DIR) not found — run 'make download-cloudopsbench-hf' first."; \
+	  exit 1; \
+	fi
+	@HF_REV=$$($(PYTHON) -c "from huggingface_hub import HfApi; print(HfApi().dataset_info('$(CLOUDOPSBENCH_HF_DATASET_ID)').sha)") && \
+	  DEST="s3://$(BENCH_S3_BUCKET)/$$HF_REV/" && \
+	  echo "  → Pinning to HF revision: $$HF_REV" && \
+	  echo "  → Syncing to $$DEST" && \
+	  aws s3 sync "$(CLOUDOPSBENCH_BENCHMARK_DIR)/" "$$DEST" --no-progress && \
+	  echo "  ✓ Mirror complete. Pin BENCH_CORPUS_HF_REVISION=$$HF_REV in the Fargate task definition."
 
 validate-cloudopsbench:
 	$(PYTHON) -m tests.benchmarks.cloudopsbench.run_suite --benchmark-dir "$(CLOUDOPSBENCH_BENCHMARK_DIR)" --validate-only
@@ -562,6 +605,7 @@ help:
 	@echo "  make test-hermes     - Run Hermes synthetic + e2e suites"
 	@echo "  make test-hermes-synthetic - Run Hermes RCA synthetic suite only (no-key deterministic path)"
 	@echo "  make download-cloudopsbench-hf - Download Cloud-OpsBench from Hugging Face"
+	@echo "  make mirror-cloudopsbench-s3   - Mirror Cloud-OpsBench to S3 (set BENCH_S3_BUCKET)"
 	@echo "  make test-cloudopsbench - Run the Cloud-OpsBench synthetic RCA suite"
 	@echo "  make clean           - Clean up cache files"
 	@echo "  make lint            - Lint code with ruff"

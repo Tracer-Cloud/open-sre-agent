@@ -17,6 +17,8 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.text import Text
 
+from app.cli.interactive_shell.command_registry.help import QUICK_ACCESS_COMMANDS
+from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.history import load_prompt_history
 from app.cli.interactive_shell.routing.resolve_cli_command.catalog import BARE_COMMAND_ALIASES
@@ -148,6 +150,19 @@ def _short_meta(text: str, max_len: int = 54) -> str:
     return text if len(text) <= max_len else text[: max_len - 1] + "…"
 
 
+# Precomputed at import time so bare-`/` completions never rebuild it per keystroke.
+_QUICK_ACCESS_SET: frozenset[str] = frozenset(QUICK_ACCESS_COMMANDS)
+
+
+def _slash_completion(cmd: SlashCommand, start_position: int) -> Completion:
+    return Completion(
+        cmd.name,
+        start_position=start_position,
+        display=cmd.name,
+        display_meta=_short_meta(cmd.description),
+    )
+
+
 class ShellCompleter(Completer):
     """Tab-completion for slash commands, subcommands, file paths, and bare aliases."""
 
@@ -178,14 +193,19 @@ class ShellCompleter(Completer):
         trailing_space = text != text.rstrip(" ")
         if len(parts) == 1 and not trailing_space:
             needle = parts[0].lower()
-            for cmd in SLASH_COMMANDS.values():
-                if cmd.name.lower().startswith(needle):
-                    yield Completion(
-                        cmd.name,
-                        start_position=-len(parts[0]),
-                        display=cmd.name,
-                        display_meta=_short_meta(cmd.description),
-                    )
+            if needle == "/":
+                # Bare `/`: show most important commands first, then the rest.
+                for name in QUICK_ACCESS_COMMANDS:
+                    cmd = SLASH_COMMANDS.get(name)
+                    if cmd is not None:
+                        yield _slash_completion(cmd, -1)
+                for cmd in SLASH_COMMANDS.values():
+                    if cmd.name not in _QUICK_ACCESS_SET:
+                        yield _slash_completion(cmd, -1)
+            else:
+                for cmd in SLASH_COMMANDS.values():
+                    if cmd.name.lower().startswith(needle):
+                        yield _slash_completion(cmd, -len(parts[0]))
             return
 
         if len(parts) <= 2:

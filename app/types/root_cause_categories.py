@@ -560,6 +560,31 @@ _TAXONOMY: tuple[RootCauseCategory, ...] = (
         GROUP_CODE_AND_CONFIG,
         "Memory tool failed due to strict JSON parsing incompatibility with model output.",
     ),
+    RootCauseCategory(
+        "missing_determinism_control",
+        GROUP_CODE_AND_CONFIG,
+        "Workflow executions with identical inputs produce divergent outputs without determinism enforcement or replay guarantees.",
+    ),
+    RootCauseCategory(
+        "missing_approval_gate",
+        GROUP_CODE_AND_CONFIG,
+        "Destructive or high-risk actions execute without explicit approval enforcement.",
+    ),
+    RootCauseCategory(
+        "missing_audit_trail",
+        GROUP_CODE_AND_CONFIG,
+        "Critical actions lack tamper-evident audit logging or cryptographic traceability.",
+    ),
+    RootCauseCategory(
+        "missing_rbac",
+        GROUP_CODE_AND_CONFIG,
+        "Tenant or user isolation boundaries are missing or bypassed during access checks.",
+    ),
+    RootCauseCategory(
+        "missing_credential_isolation",
+        GROUP_CODE_AND_CONFIG,
+        "Credentials are exposed directly inside runtime memory/process space without isolated proxy handling.",
+    ),
     # ── Generic fallbacks (kept for backward compatibility) ────────────
     # These exist so legacy answer keys, eval pipelines, and prior LLM
     # outputs continue to validate. New diagnoses should always prefer a
@@ -634,6 +659,11 @@ HERMES_ROOT_CAUSE_CATEGORIES: frozenset[str] = frozenset(
         "memory_unavailable",
         "memory_corruption",
         "memory_parse_failure",
+        "missing_determinism_control",
+        "missing_approval_gate",
+        "missing_audit_trail",
+        "missing_rbac",
+        "missing_credential_isolation",
     }
 )
 

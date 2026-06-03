@@ -207,9 +207,29 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about remote deployment status, health, or operations",
         anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
     ),
-    "/reset": _mcp(
-        "Clear session state while preserving trust mode.",
-        "User asks to reset session state or start fresh in the REPL",
+    "/new": _mcp(
+        "Start a new session while preserving the current LLM conversation context and "
+        "accumulated infra context. Rotates the session ID and resets all session state "
+        "while keeping the conversation thread so you can continue seamlessly in a fresh session file.",
+        "User wants to continue a conversation in a new session after /resume",
+        "User asks to start a new session without losing their current conversation",
+        anti_examples=(
+            "User wants to clear the screen (use /clear)",
+            "User asks to list sessions (use /sessions)",
+        ),
+    ),
+    "/resume": _mcp(
+        "Restore the conversation context from a previous session. "
+        "Bare /resume opens an interactive numbered picker. "
+        "Pass a session ID prefix or a name substring to resume directly "
+        "(e.g. /resume 9b2e4f7a or /resume redis).",
+        "User asks to resume or continue a previous session",
+        "User wants to pick up where they left off in an earlier REPL session",
+        "User types /resume with no argument to pick from a list",
+        anti_examples=(
+            "User asks to list sessions (use /sessions)",
+            "User asks to start a new session keeping context (use /new)",
+        ),
     ),
     "/save": _mcp(
         "Save the last investigation report to a file path. Requires confirmation.",

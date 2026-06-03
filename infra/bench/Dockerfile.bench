@@ -75,28 +75,42 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Runtime deps: only ca-certificates (for TLS to LLM provider APIs +
-# Hugging Face Hub API calls). No build-essential, no curl, no compilers.
+# Runtime deps: ca-certificates (for TLS to LLM provider APIs) + awscli
+# (the entrypoint pulls the Cloud-OpsBench corpus from S3 at task startup —
+# see entrypoint.sh). No build-essential, no curl, no compilers.
 # `apt-get upgrade` pulls latest patched base-image packages (libcap2,
 # libsystemd0, etc.) -- same reason as in the builder stage.
+#
+# awscli is installed via pip (small, single Python tool) rather than apt
+# or the v2 binary bundle (which adds ~80 MB). Pinned for reproducibility.
 RUN apt-get update \
     && apt-get -y upgrade \
     && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir 'awscli==1.45.19'
 
-# Hugging Face Hub is consumed via HTTPS API per call -- no local dataset
-# cache baked into the image. If a task needs to control HF cache location
-# at runtime, set HF_HOME via the ECS task definition env, not here.
+# Non-root user for the bench process
+# beyond `bench`'s home. UID 10001 is well above any system UID range.
+RUN groupadd --system --gid 10001 bench \
+    && useradd --system --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin bench
 
 # Copy the prepared venv + source from the builder stage in one go.
 # The venv at /app/.venv has the project installed and all deps available.
 # PATH (set above) makes /app/.venv/bin take precedence over system python.
-COPY --from=builder /app /app
+# --chown so the bench user can write to /app at runtime (entrypoint.sh
+# writes the corpus under tests/benchmarks/cloudopsbench/benchmark/).
+COPY --from=builder --chown=bench:bench /app /app
 
-# Bench framework CLI lives at tests/benchmarks/_framework/cli.py.
-# Invoke via the venv's python directly (PATH = /app/.venv/bin first).
-ENTRYPOINT ["python", "-m", "tests.benchmarks._framework.cli"]
+# Entrypoint wrapper: pulls the corpus from S3 before invoking the bench
+# CLI. Required env (set by the ECS task definition):
+#   BENCH_CORPUS_S3_BUCKET, BENCH_CORPUS_HF_REVISION
+COPY --chown=bench:bench infra/bench/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Default args - show CLI help if no subcommand passed. Override via ECS
-# task `command` for actual runs.
+USER bench
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default args passed to the bench CLI -- show CLI help if no subcommand
+# passed. Override via ECS task `command` for actual runs.
 CMD ["--help"]

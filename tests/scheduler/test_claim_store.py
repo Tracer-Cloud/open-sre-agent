@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.scheduler.claim_store import complete_run, get_runs, try_claim
+from app.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
 from app.scheduler.types import TaskStatus
 
 
@@ -91,6 +91,36 @@ class TestClaimStore:
     def test_get_runs_empty(self, db_path: Path) -> None:
         runs = get_runs("nonexistent", db_path=db_path)
         assert runs == []
+
+    def test_delete_runs_removes_only_matching_task(self, db_path: Path) -> None:
+        try_claim("task1", "2026-01-01T09:00", db_path=db_path)
+        try_claim("task2", "2026-01-01T09:00", db_path=db_path)
+        assert len(get_runs("task1", db_path=db_path)) == 1
+        assert len(get_runs("task2", db_path=db_path)) == 1
+
+        deleted = delete_runs("task1", db_path=db_path)
+        assert deleted == 1
+
+        # task1 runs are gone
+        assert get_runs("task1", db_path=db_path) == []
+        # task2 runs are untouched
+        assert len(get_runs("task2", db_path=db_path)) == 1
+
+    def test_delete_runs_idempotent(self, db_path: Path) -> None:
+        try_claim("task1", "2026-01-01T09:00", db_path=db_path)
+        assert delete_runs("task1", db_path=db_path) == 1
+        assert delete_runs("task1", db_path=db_path) == 0
+
+    def test_delete_runs_empty_db(self, db_path: Path) -> None:
+        assert delete_runs("nonexistent", db_path=db_path) == 0
+
+    def test_delete_runs_deletes_multiple_runs(self, db_path: Path) -> None:
+        for i in range(3):
+            fire_time = f"2026-01-01T{i:02d}:00"
+            try_claim("task1", fire_time, db_path=db_path)
+
+        assert delete_runs("task1", db_path=db_path) == 3
+        assert get_runs("task1", db_path=db_path) == []
 
 
 class TestConcurrency:

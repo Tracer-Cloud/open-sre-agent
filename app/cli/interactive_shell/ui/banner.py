@@ -50,6 +50,7 @@ from app.cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from app.config import LLMSettings
+from app.utils.figlet import render_figlet
 from app.version import get_version
 
 # ── Splash art ───────────────────────────────────────────────────────────────
@@ -93,15 +94,9 @@ def _render_art(console_width: int = 80) -> str:
     """
     custom_font = os.getenv("OPENSRE_FIGLET_FONT")
     if custom_font:
-        try:
-            import pyfiglet
-
-            rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
-            if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):
-                return rendered
-        except Exception:
-            # pyfiglet missing or font lookup failed — fall through to ASCII art
-            pass
+        rendered = render_figlet("OpenSRE", font=custom_font, max_line_width=console_width - 2)
+        if rendered:
+            return rendered
 
     art_width = max(len(ln) for ln in SPLASH_ART.splitlines())
     narrow_width = max(len(ln) for ln in SPLASH_ART_NARROW.splitlines())

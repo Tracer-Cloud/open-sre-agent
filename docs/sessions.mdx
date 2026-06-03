@@ -1,83 +1,21 @@
 ---
 title: 'Session History'
-description: 'How OpenSRE records your REPL sessions locally, what is stored, and how to view past sessions with /sessions'
+description: 'Pick up any past conversation exactly where you left off — browse recent sessions, restore context, and start fresh.'
 ---
 
-## Overview
+## Commands at a glance
 
-Every time you start the OpenSRE interactive shell, a new session is created and recorded to disk. Each session captures:
-
-- When it started and how long it lasted
-- Every interaction — chats, investigations, slash commands, incoming alerts
-- Aggregate counts (total turns, investigations run)
-
-Sessions are stored as JSONL files under `~/.opensre/sessions/`. They are written **incrementally** — the file exists on disk from the moment the REPL starts, so `/sessions` always shows the current session alongside past ones.
-
-## Session lifecycle
-
-| Event | What happens |
+| Command | What it does |
 | --- | --- |
-| REPL starts | `session_start` record written immediately; file created at `~/.opensre/sessions/<session-id>.jsonl` |
-| Each interaction | One `turn` record appended to the open file |
-| `/reset` | Current session closed (`session_end` written); new session file opened with a fresh ID |
-| REPL exits | `session_end` written; file is deleted if no turns were recorded (empty session) |
-| REPL crash | File remains with all turns up to the crash but no `session_end` — stats computed from the turn records |
+| `/sessions` | List your recent REPL sessions with name, duration, and turn counts |
+| `/resume <id>` | Restore a past session's conversation so you can keep asking questions |
+| `/new` | Start a fresh session while carrying forward the current conversation context |
 
-## Session file format
+---
 
-Each session is a JSONL file (one JSON object per line).
+## Browsing past sessions — `/sessions`
 
-**`session_start` — first line**
-
-```json
-{
-  "type": "session_start",
-  "session_id": "3f8a1c2d-...",
-  "started_at": "2024-01-15T10:00:00+00:00",
-  "opensre_version": "0.1"
-}
-```
-
-**`turn` — one per interaction**
-
-```json
-{
-  "type": "turn",
-  "kind": "chat",
-  "text": "why is CPU spiking on prod-api?"
-}
-```
-
-Turn `kind` values:
-
-| Kind | Description |
-| --- | --- |
-| `chat` | Free-text message routed to the LLM assistant |
-| `alert` | Investigation triggered by an alert payload |
-| `incoming_alert` | Alert received via the HTTP listener |
-| `slash` | Slash command (`/status`, `/reset`, etc.) |
-| `shell` | Shell command executed via the terminal runtime |
-
-Text is truncated to 200 characters. No response content is stored — only the prompt/input.
-
-**`session_end` — last line (when session closed cleanly)**
-
-```json
-{
-  "type": "session_end",
-  "ended_at": "2024-01-15T10:42:00+00:00",
-  "duration_secs": 2520,
-  "total_turns": 8,
-  "chat_turns": 5,
-  "investigation_turns": 2
-}
-```
-
-A session without a `session_end` record (crash or ongoing) is still valid — `/sessions` computes `total_turns`, `chat_turns`, and `investigation_turns` by scanning the `turn` records directly.
-
-## /sessions command
-
-Run `/sessions` inside the REPL to list recent sessions:
+Run `/sessions` inside the interactive shell to see your recent history:
 
 ```
 /sessions
@@ -86,46 +24,105 @@ Run `/sessions` inside the REPL to list recent sessions:
 ```
   Recent sessions
 
-   #  Session ID  Started            Duration  Turns  Investigations
-   ─────────────────────────────────────────────────────────────────
-   1  3f8a1c2d    2024-01-15 10:00   42m 0s    8      2
-      (current)
-   2  9b2e4f7a    2024-01-14 14:30   1h 5m     15     4
-   3  c1d3e8f2    2024-01-13 09:10   12m 3s    3      0
+   #  Session ID  Name                           Started            Duration  Turns
+   ─────────────────────────────────────────────────────────────────────────────────
+   1  3f8a1c2d    (current)                      2024-01-15 10:00   42m       8
+   2  9b2e4f7a    why is CPU spiking on prod-api  2024-01-14 14:30   1h 5m    15
+   3  c1d3e8f2    investigate OOM killer          2024-01-13 09:10   12m       3
 ```
 
-The current session is marked `(current)` with a live-updating elapsed time. Sessions without a `session_end` (crash or in-progress) show accurate turn counts computed from the file.
+Up to 20 sessions are shown, newest first. The current session updates its elapsed time live.
 
-Up to 20 sessions are shown, newest first.
+---
 
-## Storage location
+## Resuming a past session — `/resume`
+
+When you want to continue a past investigation or conversation, use `/resume` with the first few characters of the session ID shown in `/sessions`:
 
 ```
-~/.opensre/sessions/
-  3f8a1c2d-ab12-....jsonl   ← current session (in progress)
-  9b2e4f7a-cd34-....jsonl   ← previous session
-  c1d3e8f2-ef56-....jsonl
-  ...
+/resume 9b2e4f7a
 ```
 
-Each file is named after its UUID session ID. Files are plain text and human-readable.
+In a TTY, bare `/resume` opens an interactive picker of recent sessions. New turns after a resume append to that same session file — `/resume` does not create a duplicate entry in `/sessions`.
 
-## What is NOT stored
+OpenSRE restores the conversation so the assistant remembers what you were working on. It displays the past exchanges so you can see where you left off, then lets you continue typing:
 
-- LLM response content (stored separately in `~/.opensre/prompt_log.jsonl` if prompt logging is enabled)
-- Full alert payloads or investigation results (stored in `~/.opensre/investigations/`)
-- Secrets or credentials — session text is stored as typed; enable prompt log redaction if needed
-
-## Linking sessions to other data
-
-The `session_id` in each session file matches the `session_id` field in `~/.opensre/prompt_log.jsonl`. This means you can correlate a session's turn list with the full prompt/response pairs and token usage recorded in the prompt log.
-
-```bash
-# Find all prompt log entries for a given session
-grep '"session_id": "3f8a1c2d"' ~/.opensre/prompt_log.jsonl
 ```
+resumed session 9b2e4f7a · why is CPU spiking on prod-api (14 messages)
+─── conversation history ────────────────────────────────────
+❯ why is CPU spiking on prod-api?
+● assistant
+The root cause is a connection pool leak in the orders service...
+─────────────────────────────────────────────────────────────
+```
+
+**What gets restored:**
+
+| | Restored by `/resume` |
+| --- | --- |
+| Full conversation context (what you asked, what the assistant said) | ✅ Yes |
+| Infra context (service name, cluster, region learned mid-session) | ✅ Yes |
+| Trust mode, reasoning effort | ❌ No — these are per-session preferences |
+
+You can also search by name instead of ID:
+
+```
+/resume redis        # resumes the session whose name contains "redis"
+/resume cpu spike    # matches by name substring
+```
+
+If the prefix is ambiguous (matches more than one session), OpenSRE will ask you to be more specific.
+
+---
+
+## Starting fresh with context — `/new`
+
+`/new` closes the current session and opens a new one, but carries the conversation forward so you don't lose context:
+
+```
+/new
+```
+
+```
+new session started — conversation context carried forward.
+  14 messages in context · type to continue
+```
+
+Use `/new` after a long session to keep things tidy in `/sessions` without losing your place in the conversation.
+
+**`/new` vs `/clear`:**
+
+| Command | What it does |
+| --- | --- |
+| `/clear` | Clears the terminal screen only — session and context unchanged |
+| `/new` | Opens a new session file; conversation context carried forward |
+
+---
+
+## What OpenSRE saves
+
+Each session records:
+
+- When it started and ended, and how long it ran
+- Every message you sent and every response from the assistant
+- Infra context discovered during investigations (service names, cluster names, regions)
+- Turn counts for investigations and chats
+
+Sessions are stored as files under `~/.opensre/sessions/`. Each file is plain text and human-readable.
+
+---
+
+## Privacy and what is NOT saved
+
+- **Secrets or credentials** — session text is stored as typed; enable prompt log redaction if needed
+- **Full investigation results** — stored separately under `~/.opensre/investigations/`
+- **Token usage** — tracked in `~/.opensre/prompt_log.jsonl` when prompt logging is enabled
+
+See [Interactive Shell Privacy](/interactive-shell-privacy) for redaction controls.
+
+---
 
 ## Related
 
-- [Interactive Shell Privacy](/interactive-shell-privacy) — command history redaction and persistence controls
+- [Interactive Shell Privacy](/interactive-shell-privacy) — command history and redaction settings
 - [Prompt Logging](/configuration/environment-variables) — full prompt/response logging configuration

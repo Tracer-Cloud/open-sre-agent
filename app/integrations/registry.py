@@ -16,6 +16,7 @@ from app.integrations._verification_adapters import (
     _verify_bitbucket,
     _verify_clickhouse,
     _verify_coralogix,
+    _verify_dagster,
     _verify_datadog,
     _verify_discord,
     _verify_github,
@@ -24,6 +25,7 @@ from app.integrations._verification_adapters import (
     _verify_helm,
     _verify_honeycomb,
     _verify_incident_io,
+    _verify_jenkins,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -136,6 +138,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=None,
     ),
     IntegrationSpec(
+        service="jenkins",
+        verifier=_verify_jenkins,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
+    ),
+    IntegrationSpec(
         service="mongodb",
         aliases=("mongo",),
         verifier=_verify_mongodb,
@@ -172,6 +181,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
+    ),
+    IntegrationSpec(
+        service="dagster",
+        verifier=_verify_dagster,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
     ),
     IntegrationSpec(
         service="betterstack",
