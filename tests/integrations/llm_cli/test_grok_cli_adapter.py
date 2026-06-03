@@ -49,7 +49,9 @@ def _auth_proc(returncode: int = 0, stdout: str = "ok", stderr: str = "") -> Mag
 
 
 def test_classify_auth_logged_in_string() -> None:
-    logged_in, detail = _classify_grok_auth_from_probe(0, "You are logged in with grok.com.\n\nDefault model: grok-build\n", "")
+    logged_in, detail = _classify_grok_auth_from_probe(
+        0, "You are logged in with grok.com.\n\nDefault model: grok-build\n", ""
+    )
     assert logged_in is True
     assert "authenticated" in detail.lower()
 
