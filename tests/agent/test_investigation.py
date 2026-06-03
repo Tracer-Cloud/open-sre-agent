@@ -331,12 +331,18 @@ def test_trim_oldest_tool_pair_drops_assistant_and_following_user_turn() -> None
             "role": "assistant",
             "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
         },
-        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}],
+        },
         {
             "role": "assistant",
             "content": [{"type": "tool_use", "id": "t2", "name": "n", "input": {}}],
         },
-        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}]},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}],
+        },
     ]
 
     assert _trim_oldest_tool_pair(messages) is True
@@ -365,7 +371,10 @@ def test_enforce_context_budget_noop_when_under_ceiling() -> None:
             "role": "assistant",
             "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
         },
-        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}],
+        },
     ]
     snapshot = [m.copy() for m in messages]
 
@@ -385,12 +394,18 @@ def test_enforce_context_budget_trims_when_over_ceiling() -> None:
             "role": "assistant",
             "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
         },
-        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big_payload}]},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big_payload}],
+        },
         {
             "role": "assistant",
             "content": [{"type": "tool_use", "id": "t2", "name": "n", "input": {}}],
         },
-        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}]},
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}],
+        },
     ]
 
     _enforce_context_budget(messages)

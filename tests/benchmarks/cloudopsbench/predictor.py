@@ -186,12 +186,12 @@ def _build_system_prompt() -> str:
         "the most likely fault localization.\n\n"
         "Schema (ALL fields required on every prediction):\n"
         "  {\n"
-        "    \"top_3_predictions\": [\n"
+        '    "top_3_predictions": [\n'
         "      {\n"
-        "        \"rank\": 1,\n"
-        "        \"fault_taxonomy\": <one of the taxonomies below>,\n"
-        "        \"fault_object\": <canonical fault location string>,\n"
-        "        \"root_cause\": <one of the root_cause enum values below>\n"
+        '        "rank": 1,\n'
+        '        "fault_taxonomy": <one of the taxonomies below>,\n'
+        '        "fault_object": <canonical fault location string>,\n'
+        '        "root_cause": <one of the root_cause enum values below>\n'
         "      },\n"
         "      ... (rank 2, rank 3)\n"
         "    ]\n"

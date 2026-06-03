@@ -33,9 +33,7 @@ class _FakeLLM:
         self._raise = raise_on_invoke
         self.invoked_with: dict[str, Any] | None = None
 
-    def invoke(
-        self, messages: list[dict[str, Any]], system: str | None = None
-    ) -> _FakeLLMResponse:
+    def invoke(self, messages: list[dict[str, Any]], system: str | None = None) -> _FakeLLMResponse:
         if self._raise:
             raise RuntimeError("LLM failure (simulated)")
         self.invoked_with = {"messages": messages, "system": system}
