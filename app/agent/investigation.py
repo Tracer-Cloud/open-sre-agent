@@ -27,11 +27,21 @@ _UNSET: object = object()  # sentinel distinguishing "not yet started" from a No
 
 # Defensive context-window ceiling. Below this we never trim; above this we
 # drop the oldest tool_use/tool_result pair until back under the ceiling.
-# 180k leaves ~20k headroom for the LLM's response within Anthropic's
-# 200k prompt limit. The estimator below is a cheap heuristic; the
-# headroom absorbs its slack.
-_TOKEN_BUDGET_CEILING = 180_000
-_TOKENS_PER_CHAR = 0.25
+#
+# Empirically tuned from CloudOpsBench overflow logs:
+#   - Anthropic reported 206k–210k actual tokens on long investigations
+#   - Tool result payloads are JSON-heavy (logs, K8s objects, alert dumps),
+#     so Anthropic's tokenizer lands around 0.32–0.40 tokens/char, NOT the
+#     ~0.25 typical for English prose.
+#   - With ratio=0.25 and ceiling=180k, the estimator said ~160k and never
+#     fired the trim, while Anthropic was already rejecting at 206k.
+#
+# Picking ratio=0.40 + ceiling=150k means: even if actual content is 50%
+# tokens/char (worst case for JSON), the trim still fires before reaching
+# Anthropic's 200k limit. False positives in production (firing too early
+# on shorter cases) are acceptable — the trim is a no-op below ceiling.
+_TOKEN_BUDGET_CEILING = 150_000
+_TOKENS_PER_CHAR = 0.40
 
 # Maps alert_source → tool source keys. Tools from these sources are auto-called
 # before the LLM loop starts when the alert source is known.
