@@ -227,7 +227,7 @@ def extract_step_log(
     return {
         "step_name": selected.get("name", ""),
         "match_strategy": match_strategy,
-        "log_text": text
+        "log_text": text,
     }
 
 

@@ -275,7 +275,7 @@ line 1
 ##[group]Deploy
 """
         + ("A" * 7000)
-        + "\\n##[endgroup]\\n",
+        + "\n##[endgroup]\n",
         step_name="Deploy",
     )
     assert result["match_strategy"] == "step_name"
@@ -312,11 +312,16 @@ annotation between groups
 line 2
 ##[endgroup]
 final runner summary
-"""
+""",
+        step_name="Checkout"
     )
 
-    assert result["step_name"] == "full-log"
-    assert result["match_strategy"] == "full-log"
-    assert "runner setup before groups" in result["log_text"]
+    assert result["step_name"] == "Checkout"
+    assert result["match_strategy"] == "step_name"
+
+    assert "line 1" in result["log_text"]
     assert "annotation between groups" in result["log_text"]
-    assert "final runner summary" in result["log_text"]
+
+    assert "runner setup before groups" not in result["log_text"]
+    assert "line 2" not in result["log_text"]
+    assert "final runner summary" not in result["log_text"]
