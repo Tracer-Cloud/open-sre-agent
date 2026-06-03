@@ -664,3 +664,24 @@ def test_subprocess_env_does_not_leak_copilot_token_via_prefix_allowlist(
     assert "COPILOT_BIN" not in env
     assert "ANTHROPIC_API_KEY" not in env
     assert "PATH" in env or os.environ.get("PATH") is None
+
+
+def test_parse_returns_stripped_stdout() -> None:
+    adapter = CopilotAdapter()
+    assert adapter.parse(stdout="  hello world  \n", stderr="", returncode=0) == "hello world"
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    import pytest
+
+    adapter = CopilotAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    import pytest
+
+    adapter = CopilotAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)
