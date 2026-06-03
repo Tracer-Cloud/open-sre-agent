@@ -830,18 +830,30 @@ def _setup_signoz() -> None:
 
 
 def _setup_tempo() -> None:
+    from app.integrations.tempo import build_tempo_config, validate_tempo_config
+
     url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
     if not url:
         _die("Tempo URL is required.")
 
-    api_key = _p("Tempo bearer token (optional, leave blank if none)", secret=True)
+    api_key = _p("Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True)
+    username = _p("Tempo username (optional, for basic auth)")
+    password = _p("Tempo password (optional, for basic auth)", secret=True)
     org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
 
     credentials: dict[str, str] = {"url": url}
     if api_key:
         credentials["api_key"] = api_key
+    if username:
+        credentials["username"] = username
+    if password:
+        credentials["password"] = password
     if org_id:
         credentials["org_id"] = org_id
+
+    result = validate_tempo_config(build_tempo_config(credentials))
+    if not result.ok:
+        _die(f"Tempo validation failed: {result.detail}")
 
     upsert_integration("tempo", {"credentials": credentials})
 

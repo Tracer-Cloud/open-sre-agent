@@ -134,11 +134,6 @@ def validate_tempo_config(config: TempoConfig) -> TempoValidationResult:
         )
 
 
-def tempo_is_available(sources: dict[str, dict]) -> bool:
-    """Check if Tempo integration params are present in available sources."""
-    return bool(sources.get("tempo", {}).get("connection_verified"))
-
-
 def tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     """Extract Tempo connection params from resolved integrations.
 

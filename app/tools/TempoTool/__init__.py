@@ -20,7 +20,6 @@ def _tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     tempo = sources.get("tempo", {})
     return {
         **tempo_extract_params(sources),
-        "action": "search",
         "service": tempo.get("service_name", ""),
         "time_range_minutes": tempo.get("time_range_minutes", 60),
         "limit": 20,

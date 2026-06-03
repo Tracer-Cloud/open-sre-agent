@@ -45,8 +45,9 @@ class TempoMixin:
             "/api/search",
         )
 
+        escaped = service_name.replace("\\", "\\\\").replace('"', '\\"')
         params: dict[str, str] = {
-            "q": f'{{.service.name="{service_name}"}}',
+            "q": f'{{resource.service.name = "{escaped}"}}',
             "limit": str(limit),
         }
 
@@ -113,9 +114,8 @@ class TempoMixin:
                 headers=self._get_auth_headers(),
                 timeout=10,
             )
-
-            if response.status_code == 200:
-                return {"spans": parse_otlp_trace(response.json())}
+            response.raise_for_status()
+            return {"spans": parse_otlp_trace(response.json())}
         except Exception as exc:
             report_exception(
                 exc,
@@ -130,8 +130,6 @@ class TempoMixin:
                 extras={"trace_id": trace_id},
             )
             return {"spans": []}
-
-        return {"spans": []}
 
     def _extract_span_attributes(  # type: ignore[misc]
         self: GrafanaClientBase,

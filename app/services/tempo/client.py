@@ -88,6 +88,15 @@ class TempoClient:
 
     def __init__(self, config: TempoConfig) -> None:
         self.config = config
+        self._client: httpx.Client | None = None
+
+    def _get_client(self) -> httpx.Client:
+        if self._client is None:
+            self._client = httpx.Client(
+                headers=self.config.auth_headers(),
+                timeout=self.config.timeout_seconds,
+            )
+        return self._client
 
     def _configuration_error(self) -> str | None:
         if self.config.is_configured:
@@ -98,15 +107,15 @@ class TempoClient:
         self, path: str, params: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any] | None, str | None]:
         try:
-            response = httpx.get(
+            response = self._get_client().get(
                 f"{self.config.base_url()}{path}",
-                headers=self.config.auth_headers(),
                 params=params,
-                timeout=self.config.timeout_seconds,
             )
             response.raise_for_status()
             parsed = response.json()
-            return (parsed if isinstance(parsed, dict) else {}), None
+            if not isinstance(parsed, dict):
+                return None, f"Unexpected response shape: expected object, got {type(parsed).__name__}"
+            return parsed, None
         except httpx.HTTPStatusError as err:
             snippet = err.response.text[:200].strip()
             if snippet:
@@ -241,7 +250,12 @@ class TempoClient:
         for key, value in (tags or {}).items():
             if not key or not _VALID_TAG_KEY_RE.match(key):
                 continue
-            parts.append(f'span.{key} = "{_escape_traceql_value(str(value))}"')
+            # Honour explicit scope prefixes (resource./span.); default to span.
+            if key.startswith("resource.") or key.startswith("span."):
+                scoped_key = key
+            else:
+                scoped_key = f"span.{key}"
+            parts.append(f'{scoped_key} = "{_escape_traceql_value(str(value))}"')
         if not parts:
             return "{}"
         return "{ " + " && ".join(parts) + " }"
@@ -291,6 +305,12 @@ class TempoClient:
             f"/api/v2/search/tag/{tag}/values",
             params={"start": start, "end": end},
         )
+        # Fall back to the v1 endpoint for Tempo deployments older than ~2.0.
+        if error and "404" in error:
+            payload, error = self._get(
+                f"/api/search/tag/{tag}/values",
+                params={"start": start, "end": end},
+            )
         if error:
             return {
                 "source": "tempo",

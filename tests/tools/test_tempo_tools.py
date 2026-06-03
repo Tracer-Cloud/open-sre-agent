@@ -49,8 +49,13 @@ class _FakeTempoBackend:
 
 
 class TestTempoAvailability:
-    def test_available_with_url_only(self) -> None:
-        assert _tempo_is_available({"tempo": {"url": "http://localhost:3200"}}) is True
+    def test_available_with_connection_verified_and_url(self) -> None:
+        assert _tempo_is_available(
+            {"tempo": {"url": "http://localhost:3200", "connection_verified": True}}
+        ) is True
+
+    def test_unavailable_with_url_only_no_connection_verified(self) -> None:
+        assert _tempo_is_available({"tempo": {"url": "http://localhost:3200"}}) is False
 
     def test_available_with_backend(self) -> None:
         assert _tempo_is_available({"tempo": {"_backend": object()}}) is True

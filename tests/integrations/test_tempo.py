@@ -6,7 +6,6 @@ from app.integrations.tempo import (
     build_tempo_config,
     tempo_config_from_env,
     tempo_extract_params,
-    tempo_is_available,
     validate_tempo_config,
 )
 
@@ -67,6 +66,24 @@ class TestTempoConfigFromEnv:
         assert config.api_key == "token"
         assert config.is_configured is True
 
+    def test_returns_config_with_basic_auth(self, monkeypatch) -> None:
+        monkeypatch.setenv("TEMPO_URL", "http://localhost:3200")
+        monkeypatch.setenv("TEMPO_USERNAME", "admin")
+        monkeypatch.setenv("TEMPO_PASSWORD", "secret")
+        monkeypatch.delenv("TEMPO_API_KEY", raising=False)
+        config = tempo_config_from_env()
+        assert config is not None
+        assert config.username == "admin"
+        assert config.password == "secret"
+        assert config.api_key == ""
+
+    def test_returns_config_with_org_id(self, monkeypatch) -> None:
+        monkeypatch.setenv("TEMPO_URL", "http://localhost:3200")
+        monkeypatch.setenv("TEMPO_ORG_ID", "tenant-1")
+        config = tempo_config_from_env()
+        assert config is not None
+        assert config.org_id == "tenant-1"
+
 
 class TestTempoValidation:
     def test_validate_requires_url(self) -> None:
@@ -105,14 +122,6 @@ class TestTempoExtractParams:
         params = tempo_extract_params({})
         assert params["url"] == ""
         assert params["api_key"] == ""
-
-
-class TestTempoIsAvailable:
-    def test_available_when_connection_verified(self) -> None:
-        assert tempo_is_available({"tempo": {"connection_verified": True}}) is True
-
-    def test_unavailable_without_connection_verified(self) -> None:
-        assert tempo_is_available({"tempo": {"url": "http://localhost:3200"}}) is False
 
 
 class TestTempoEnvCatalogLoading:
