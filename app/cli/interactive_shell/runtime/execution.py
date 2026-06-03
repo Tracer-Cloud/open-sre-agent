@@ -141,6 +141,7 @@ def execute_routed_turn(
     *,
     on_exit: Callable[[], None],
     confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
     decision: RouteDecision,
 ) -> None:
     """Route + execute one accepted line."""
@@ -157,7 +158,13 @@ def execute_routed_turn(
         if not cmd_text:
             cmd_text = text.strip()
         try:
-            should_continue = dispatch_slash(cmd_text, session, console, confirm_fn=confirm_fn)
+            should_continue = dispatch_slash(
+                cmd_text,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            )
         except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
@@ -183,7 +190,13 @@ def execute_routed_turn(
         return
 
     if kind == "cli_agent":
-        turn = execute_cli_actions_with_metrics(text, session, console, confirm_fn=confirm_fn)
+        turn = execute_cli_actions_with_metrics(
+            text,
+            session,
+            console,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+        )
         fallback_to_llm = not turn.handled
         snapshot = session.record_terminal_turn(
             executed_count=turn.executed_count,
@@ -213,7 +226,7 @@ def execute_routed_turn(
         # (executed_count == 0, handled == True). In both cases the assistant must
         # generate an actual reply.
         with apply_reasoning_effort(session.reasoning_effort):
-            run = answer_cli_agent(text, session, console, confirm_fn=confirm_fn)
+            run = answer_cli_agent(text, session, console, confirm_fn=confirm_fn, is_tty=is_tty)
         assistant_text = run.response_text if run is not None and run.response_text else ""
         if not assistant_text.strip():
             assistant_text = _build_cli_agent_empty_response_fallback(text, session)
@@ -228,7 +241,7 @@ def execute_routed_turn(
         return
 
     if kind == "new_alert":
-        response = run_new_alert(text, session, console, confirm_fn=confirm_fn)
+        response = run_new_alert(text, session, console, confirm_fn=confirm_fn, is_tty=is_tty)
         if recorder is not None:
             recorder.set_response(response or "")
             recorder.flush()

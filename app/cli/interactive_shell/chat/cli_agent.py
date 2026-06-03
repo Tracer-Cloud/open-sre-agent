@@ -465,16 +465,17 @@ def answer_cli_agent(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
 
-    ``confirm_fn`` is forwarded to :func:`_execute_action_plan` so the
-    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
-    through its active prompt_toolkit input instead of the stdlib
-    ``input()`` (which deadlocks against the running ``prompt_async``).
+    ``confirm_fn`` and ``is_tty`` are forwarded to :func:`_execute_action_plan`
+    so the interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input, while scripted seeded input fails
+    closed instead of blocking on stdin.
     """
     if _is_command_selection_prompt(message):
         deterministic_response = _command_selection_response()
@@ -568,7 +569,13 @@ def answer_cli_agent(
     )
 
     actions = _parse_action_plan(text_str)
-    if _execute_action_plan(actions, session, console, confirm_fn=confirm_fn):
+    if _execute_action_plan(
+        actions,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
         _record_cli_agent_turn(session, message, text_str)
         return run_info
 

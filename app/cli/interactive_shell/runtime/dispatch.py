@@ -143,6 +143,7 @@ def dispatch_one_turn(
     *,
     on_exit: Callable[[], None],
     confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
 ) -> None:
     decision = _router.route_input(text, session)
     kind = decision.route_kind.value
@@ -159,6 +160,7 @@ def dispatch_one_turn(
         console,
         on_exit=on_exit,
         confirm_fn=confirm_fn,
+        is_tty=is_tty,
         decision=decision,
     )
 
@@ -184,7 +186,7 @@ def run_initial_input(
         if not stripped:
             continue
         render_submitted_prompt(console, session, stripped)
-        dispatch_one_turn(stripped, session, console, on_exit=_early_exit)
+        dispatch_one_turn(stripped, session, console, on_exit=_early_exit, is_tty=False)
         if exit_requested[0]:
             return 0
     return 0
