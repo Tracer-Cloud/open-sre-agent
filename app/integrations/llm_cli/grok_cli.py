@@ -218,10 +218,12 @@ class GrokCLIAdapter:
                 auth_proc.returncode, auth_proc.stdout, auth_proc.stderr
             )
 
-        # XAI_API_KEY is definitive for headless/CI auth even when the probe is
-        # unclear (e.g. network timeout); promote to authenticated as a fallback.
+        # XAI_API_KEY is definitive for headless/CI auth when the probe result is
+        # *unclear* (network error, timeout). Do NOT promote when the probe
+        # explicitly returned False — XAI_API_KEY may itself be the rejected
+        # credential, and masking that defers the failure to invocation time.
         auth_env_key = _has_explicit_grok_auth_env()
-        if logged_in is not True and auth_env_key:
+        if logged_in is None and auth_env_key:
             logged_in = True
             auth_detail = f"Authenticated via {auth_env_key}."
 

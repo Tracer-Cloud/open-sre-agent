@@ -166,6 +166,25 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
 
 @patch(_SUBPROCESS_RUN)
 @patch(_WHICH)
+def test_detect_api_key_does_not_override_explicit_false(
+    mock_which: MagicMock, mock_run: MagicMock
+) -> None:
+    """XAI_API_KEY must not promote logged_in when the probe explicitly returned False.
+
+    The key itself may be what was rejected; masking that defers the failure
+    to invocation time with a confusing 300s timeout instead of a clear error.
+    """
+    mock_which.return_value = "/usr/bin/grok"
+    mock_run.side_effect = [_version_proc(), _auth_proc(returncode=1, stderr="Error: Unauthorized")]
+
+    with patch.dict(os.environ, {"XAI_API_KEY": "xai-invalid", "GROK_CLI_BIN": ""}, clear=False):
+        probe = GrokCLIAdapter().detect()
+
+    assert probe.logged_in is False
+
+
+@patch(_SUBPROCESS_RUN)
+@patch(_WHICH)
 def test_detect_auth_unclear_on_network_error(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/grok"
     mock_run.side_effect = [_version_proc(), _auth_proc(returncode=1, stderr="connection refused")]
