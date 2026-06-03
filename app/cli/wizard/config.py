@@ -70,6 +70,10 @@ class ProviderOption:
     #: ``cli`` providers use ``adapter_factory`` and vendor auth (no API key in .env).
     credential_kind: CredentialKind = "api_key"
     adapter_factory: Callable[[], LLMCLIAdapter] | None = None
+    #: Optional callable that returns a fresh model list at wizard runtime.
+    #: When set, ``_choose_model`` calls this instead of using the static ``models``
+    #: tuple so the list reflects what the installed CLI actually exposes.
+    models_factory: Callable[[], tuple[ModelOption, ...]] | None = None
     #: Whether the CLI should accept model IDs outside the curated quick-pick list.
     #: Use this for providers whose model catalogs are large, account-gated, or
     #: updated independently of OpenSRE releases.
@@ -406,6 +410,65 @@ def _copilot_adapter_factory() -> LLMCLIAdapter:
     return CopilotAdapter()
 
 
+def _grok_cli_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.grok_cli import GrokCLIAdapter
+
+    return GrokCLIAdapter()
+
+
+_GROK_CLI_DEFAULT_MODEL_OPTION = ModelOption(
+    value="",
+    label="CLI default (no -m; use Grok Build configured model)",
+)
+
+# Static fallback used when ``grok models`` is unavailable at wizard time.
+GROK_CLI_MODELS = (
+    _GROK_CLI_DEFAULT_MODEL_OPTION,
+    ModelOption(value="grok-build", label="grok-build"),
+    ModelOption(value="grok-composer-2.5-fast", label="grok-composer-2.5-fast"),
+)
+
+
+def _fetch_grok_cli_models() -> tuple[ModelOption, ...]:
+    """Return available models by running ``grok models`` at wizard runtime.
+
+    Falls back to the static ``GROK_CLI_MODELS`` list on any error so the
+    wizard never stalls waiting for a binary that isn't installed yet.
+    """
+    import subprocess
+
+    from app.integrations.llm_cli.grok_cli import (
+        GrokCLIAdapter,
+        _grok_env_overrides,
+        parse_grok_models_output,
+    )
+
+    binary = GrokCLIAdapter()._resolve_binary()
+    if not binary:
+        return GROK_CLI_MODELS
+
+    try:
+        env = {**os.environ, **_grok_env_overrides()}
+        proc = subprocess.run(
+            [binary, "models"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            env=env,
+        )
+        model_ids = parse_grok_models_output(proc.stdout)
+    except Exception:
+        return GROK_CLI_MODELS
+
+    if not model_ids:
+        return GROK_CLI_MODELS
+
+    return (_GROK_CLI_DEFAULT_MODEL_OPTION,) + tuple(
+        ModelOption(value=m, label=m) for m in model_ids
+    )
+
+
 KIMI_MODELS = (
     ModelOption(
         value="",
@@ -644,6 +707,20 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_copilot_adapter_factory,
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="grok-cli",
+        label="xAI Grok Build CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="GROK_CLI_MODEL",
+        default_model="",
+        models=GROK_CLI_MODELS,
+        models_factory=_fetch_grok_cli_models,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_grok_cli_adapter_factory,
         allow_custom_models=True,
     ),
     ProviderOption(

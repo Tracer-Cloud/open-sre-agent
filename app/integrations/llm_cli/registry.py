@@ -65,6 +65,12 @@ def _copilot_factory() -> LLMCLIAdapter:
     return CopilotAdapter()
 
 
+def _grok_cli_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.grok_cli import GrokCLIAdapter
+
+    return GrokCLIAdapter()
+
+
 CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     "codex": CLIProviderRegistration(adapter_factory=_codex_factory, model_env_key="CODEX_MODEL"),
     "cursor": CLIProviderRegistration(
@@ -85,6 +91,9 @@ CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
     "kimi": CLIProviderRegistration(adapter_factory=_kimi_factory, model_env_key="KIMI_MODEL"),
     "copilot": CLIProviderRegistration(
         adapter_factory=_copilot_factory, model_env_key="COPILOT_MODEL"
+    ),
+    "grok-cli": CLIProviderRegistration(
+        adapter_factory=_grok_cli_factory, model_env_key="GROK_CLI_MODEL"
     ),
 }
 
