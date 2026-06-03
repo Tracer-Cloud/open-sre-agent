@@ -493,13 +493,18 @@ def test_investigate_print_template_smoke(cli_sandbox: CliSandbox) -> None:
 def test_investigate_onboard_handoff_smoke(
     cli_sandbox: CliSandbox, tmp_path: Path
 ) -> None:
-    """Seeded onboard state is read by investigate before it reaches the LLM.
+    """project.env written by onboard is read by investigate before it reaches the LLM.
 
-    No real API key is required. The test proves the handoff plumbing works by
-    asserting the CLI reaches the LLM credential check (and fails there with a
-    clear error) rather than crashing in config loading or file parsing.
+    Only the project .env handoff is exercised here — investigate reads
+    LLM_PROVIDER and model env vars from that file, not from the wizard store.
+    No real API key is required. The test proves the plumbing works by asserting
+    the CLI reaches the LLM credential check (exit 1 + ANTHROPIC_API_KEY named
+    in the error) rather than crashing in config loading or file parsing.
+
+    LLM_PROVIDER is passed explicitly via extra_env so the assertion holds even
+    on CI runners where the variable is set to a different provider in the
+    parent environment.
     """
-    cli_sandbox.seed_wizard_store(provider="anthropic", model="claude-opus-4-7")
     cli_sandbox.seed_project_env(provider="anthropic", model="claude-opus-4-7")
 
     alert_path = tmp_path / "alert.json"
@@ -515,7 +520,13 @@ def test_investigate_onboard_handoff_smoke(
         encoding="utf-8",
     )
 
-    result = _run_cli(cli_sandbox, "investigate", "-i", str(alert_path))
+    result = _run_cli(
+        cli_sandbox,
+        "investigate",
+        "-i",
+        str(alert_path),
+        extra_env={"LLM_PROVIDER": "anthropic"},
+    )
 
     # Exit 1 is expected — no real API key in CI.
     assert result.exit_code == 1
