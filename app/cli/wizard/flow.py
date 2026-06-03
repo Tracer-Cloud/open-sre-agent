@@ -356,7 +356,7 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     "Enter custom model ID" escape hatch is always available.
     """
     resolved_default = (default or "").strip()
-    models = provider.models_factory() if provider.models_factory else provider.models
+    models = provider.models
     if not models:
         return resolved_default or provider.default_model
 
@@ -2372,7 +2372,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             model = _choose_model(provider, default=model)
-        elif provider.models or provider.models_factory:
+        elif provider.models:
             current_display = model or "CLI default"
             _console.print(f"[{SECONDARY}]current model  {current_display}[/]")
             if _confirm("Change model?", default=False):

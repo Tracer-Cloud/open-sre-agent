@@ -70,10 +70,6 @@ class ProviderOption:
     #: ``cli`` providers use ``adapter_factory`` and vendor auth (no API key in .env).
     credential_kind: CredentialKind = "api_key"
     adapter_factory: Callable[[], LLMCLIAdapter] | None = None
-    #: Optional callable that returns a fresh model list at wizard runtime.
-    #: When set, ``_choose_model`` calls this instead of using the static ``models``
-    #: tuple so the list reflects what the installed CLI actually exposes.
-    models_factory: Callable[[], tuple[ModelOption, ...]] | None = None
     #: Whether the CLI should accept model IDs outside the curated quick-pick list.
     #: Use this for providers whose model catalogs are large, account-gated, or
     #: updated independently of OpenSRE releases.
@@ -429,23 +425,6 @@ GROK_CLI_MODELS = (
 )
 
 
-def _fetch_grok_cli_models() -> tuple[ModelOption, ...]:
-    """Return available models by running ``grok models`` at wizard runtime.
-
-    Falls back to the static ``GROK_CLI_MODELS`` list on any error so the
-    wizard never stalls waiting for a binary that isn't installed yet.
-    """
-    from app.integrations.llm_cli.grok_cli import fetch_grok_cli_model_ids
-
-    model_ids = fetch_grok_cli_model_ids()
-    if not model_ids:
-        return GROK_CLI_MODELS
-
-    return (_GROK_CLI_DEFAULT_MODEL_OPTION,) + tuple(
-        ModelOption(value=m, label=m) for m in model_ids
-    )
-
-
 KIMI_MODELS = (
     ModelOption(
         value="",
@@ -694,7 +673,6 @@ SUPPORTED_PROVIDERS = (
         model_env="GROK_CLI_MODEL",
         default_model="",
         models=GROK_CLI_MODELS,
-        models_factory=_fetch_grok_cli_models,
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_grok_cli_adapter_factory,
