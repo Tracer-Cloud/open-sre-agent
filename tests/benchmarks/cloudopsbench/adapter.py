@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterator
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,7 @@ from tests.benchmarks.cloudopsbench.case_loader import (
     load_cases as _legacy_load_cases,
 )
 from tests.benchmarks.cloudopsbench.held_out_split import compute_held_out_set
+from tests.benchmarks.cloudopsbench.predictor import emit_paper_predictions
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
 from tests.benchmarks.cloudopsbench.tags import seen_shape_for
@@ -313,6 +314,59 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         """The paper's 15 metrics. Validity metrics arrive in Phase C."""
         return _PAPER_METRIC_SCHEMA
 
+    def format_final_answer(
+        self,
+        case: BenchmarkCase,
+        run: RunResult,
+        spec: Any,  # noqa: ARG002 — same LLM the investigation used is already activated
+    ) -> RunResult:
+        """Emit paper-format ``top_3_predictions`` before scoring.
+
+        opensre produces free-text RCAs that the legacy keyword bridge in
+        ``scoring.infer_final_answer_from_opensre_text`` can only match if
+        the agent's wording overlaps with hard-coded phrases like
+        ``"access denied"`` AND ``"invalid credentials"``. That fails on
+        almost every real case.
+
+        This hook runs ONE additional LLM call to translate the
+        investigation evidence into the structured
+        ``top_3_predictions`` JSON the scorer prefers (see
+        ``scoring.extract_final_answer_payload``). The result is stashed
+        into ``run.final_diagnosis["top_3_predictions"]`` so the scorer
+        picks it up directly via ``parse_json_maybe``.
+
+        If the predictor fails (LLM error, malformed JSON), the run is
+        returned unchanged — the keyword bridge still runs as a fallback,
+        so there's no regression vs the pre-predictor behavior.
+
+        Mode-agnostic: ``opensre+llm`` passes the investigation summary,
+        ``llm_alone`` (Phase B) would pass an empty summary so the model
+        reasons from the alert alone. Same predictor, same scoring → the
+        honest opensre-vs-pure-LLM comparison.
+        """
+        # Late import — keeps tests/benchmarks importable without opensre.
+        from app.services.agent_llm_client import get_agent_llm
+
+        alert = self.build_alert(case)
+        investigation_summary = _summarize_investigation(run)
+
+        try:
+            llm = get_agent_llm()
+        except Exception:  # noqa: BLE001 — best-effort hook; never block scoring
+            return run
+
+        payload = emit_paper_predictions(
+            alert_text=_alert_text_for_predictor(alert.normalized),
+            investigation_summary=investigation_summary,
+            llm=llm,
+        )
+        if payload is None:
+            return run
+
+        enriched_diagnosis = dict(run.final_diagnosis)
+        enriched_diagnosis["top_3_predictions"] = payload["top_3_predictions"]
+        return replace(run, final_diagnosis=enriched_diagnosis)
+
     # ----------------------------------------------------------------------- #
     # Internal                                                                #
     # ----------------------------------------------------------------------- #
@@ -392,3 +446,37 @@ def _steps_from_backend(backend: CloudOpsBenchReplayBackend) -> list[dict[str, A
             }
         )
     return steps
+
+
+def _alert_text_for_predictor(normalized: dict[str, Any]) -> str:
+    """Compact alert representation for the paper-format predictor.
+
+    Pulls the fields the predictor cares about (cluster, namespace, alert
+    name, message) from the adapter's normalized alert dict. Avoids
+    forwarding huge nested payloads — the predictor only needs context
+    to disambiguate which system + namespace it is reasoning about.
+    """
+    parts: list[str] = []
+    for field in ("alert_name", "severity", "cluster_name", "namespace", "message"):
+        value = normalized.get(field)
+        if value:
+            parts.append(f"{field}: {value}")
+    return "\n".join(parts) if parts else ""
+
+
+def _summarize_investigation(run: RunResult) -> str:
+    """Render opensre's free-text RCA as input to the paper-format predictor.
+
+    Pulls the human-readable report + root_cause out of the investigation
+    output. The predictor sees this as evidence, not as the answer — its
+    job is to translate to the paper's structured taxonomy.
+    """
+    parts: list[str] = []
+    diagnosis = run.final_diagnosis
+    root_cause = diagnosis.get("root_cause")
+    if root_cause:
+        parts.append(f"Root cause (free-text): {root_cause}")
+    report = diagnosis.get("report")
+    if report:
+        parts.append(f"RCA report:\n{report}")
+    return "\n\n".join(parts) if parts else ""

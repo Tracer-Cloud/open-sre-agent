@@ -264,3 +264,27 @@ class BenchmarkAdapter(ABC):
         """Declare which metrics this adapter emits, for CLI validation +
         comparable reporting across adapters.
         """
+
+    def format_final_answer(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
+        run: RunResult,
+        spec: Any,  # noqa: ARG002 — used by overrides
+    ) -> RunResult:
+        """Optional: enrich ``run.final_diagnosis`` before ``score_case``.
+
+        Default no-op — returns the run unchanged. Override when the
+        benchmark's scorer expects a specific output schema the
+        investigation pipeline doesn't natively produce (e.g.,
+        CloudOpsBench requires paper-format ``top_3_predictions`` JSON
+        and runs a separate LLM call to emit it).
+
+        ``spec`` is the framework's LLMSpec for this cell — typed as
+        ``Any`` here to keep ``adapters.py`` free of llm_dispatch import
+        coupling; the override casts it to its real type.
+
+        Mode-agnostic by design: the runner calls this for every cell
+        regardless of mode, so the same hook serves both ``opensre+llm``
+        (with investigation evidence) and future ``llm_alone`` (without).
+        """
+        return run

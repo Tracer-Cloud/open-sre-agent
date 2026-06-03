@@ -422,6 +422,12 @@ class BenchmarkRunner:
             latency_ms=latency_ms,
         )
 
+        # Adapter hook: optionally enrich run.final_diagnosis (e.g.,
+        # CloudOpsBench emits paper-format top_3_predictions here so the
+        # scorer doesn't have to inference from free-text RCA). Default
+        # ABC implementation is a no-op for adapters that don't need it.
+        run = self.adapter.format_final_answer(case, run, spec)
+
         score = self.adapter.score_case(case, run, RunContext(integrations=integrations))
 
         # Per-cell artifact

@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()  # sentinel distinguishing "not yet started" from a None tool result
 
+# Defensive context-window ceiling. Below this we never trim; above this we
+# drop the oldest tool_use/tool_result pair until back under the ceiling.
+# 180k leaves ~20k headroom for the LLM's response within Anthropic's
+# 200k prompt limit. The estimator below is a cheap heuristic; the
+# headroom absorbs its slack.
+_TOKEN_BUDGET_CEILING = 180_000
+_TOKENS_PER_CHAR = 0.25
+
 # Maps alert_source → tool source keys. Tools from these sources are auto-called
 # before the LLM loop starts when the alert source is known.
 _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
@@ -167,6 +175,7 @@ class ConnectedInvestigationAgent:
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
+            _enforce_context_budget(messages)
             try:
                 response = llm.invoke(messages, system=system, tools=tool_schemas)
 
@@ -261,6 +270,68 @@ class ConnectedInvestigationAgent:
 
 
 InvestigationAgent = ConnectedInvestigationAgent
+
+
+def _estimate_message_tokens(messages: list[dict[str, Any]]) -> int:
+    """Cheap upper-bound token estimate. ~0.25 tokens per character is
+    conservative for English + JSON tool payloads; the budget ceiling
+    leaves enough headroom to absorb estimator slack.
+    """
+    total = 0
+    for message in messages:
+        content = message.get("content", "")
+        if isinstance(content, str):
+            total += int(len(content) * _TOKENS_PER_CHAR)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    total += int(len(json.dumps(block, default=str)) * _TOKENS_PER_CHAR)
+                elif isinstance(block, str):
+                    total += int(len(block) * _TOKENS_PER_CHAR)
+    return total
+
+
+def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
+    """Drop the oldest assistant tool_use message together with the
+    immediate next user message carrying its tool_results. Anthropic
+    requires every ``tool_use`` block to be followed by a matching
+    ``tool_result`` block, so the pair must be removed together to keep
+    the conversation valid.
+
+    Returns True if a pair was dropped, False if nothing trimmable
+    remains (e.g. only the initial user prompt is left).
+    """
+    for index, message in enumerate(messages):
+        if message.get("role") != "assistant":
+            continue
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            continue
+        has_tool_use = any(
+            isinstance(block, dict) and block.get("type") == "tool_use" for block in content
+        )
+        if not has_tool_use:
+            continue
+        # Drop the assistant turn AND its paired user turn (the tool_results).
+        # If the user turn isn't present (e.g. truncated mid-iteration),
+        # del messages[i:i+2] safely just drops the assistant turn.
+        del messages[index : index + 2]
+        return True
+    return False
+
+
+def _enforce_context_budget(messages: list[dict[str, Any]]) -> None:
+    """Trim oldest tool pairs until messages fit under the budget ceiling.
+
+    No-op on the happy path: ``_estimate_message_tokens`` is one pass over
+    ``messages`` and returns under the ceiling for normal investigations.
+    Only fires on long CloudOpsBench cases where unbounded tool history
+    has pushed the prompt past the model's limit.
+    """
+    while _estimate_message_tokens(messages) > _TOKEN_BUDGET_CEILING:
+        if not _trim_oldest_tool_pair(messages):
+            return
+        logger.warning("[agent] trimmed oldest tool pair to fit context budget")
 
 
 def _degraded_investigation_from_llm_failure(
