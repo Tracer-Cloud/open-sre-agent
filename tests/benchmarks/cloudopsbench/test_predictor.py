@@ -209,6 +209,111 @@ def test_emit_paper_predictions_returns_none_when_response_unparseable() -> None
 
 
 # --------------------------------------------------------------------------- #
+# Taxonomy derivation — LLM's fault_taxonomy is overridden with the           #
+# deterministic mapping from scoring._taxonomy_for_root_cause.                #
+# --------------------------------------------------------------------------- #
+
+
+def test_parse_predictions_overrides_wrong_llm_taxonomy_with_derived() -> None:
+    """Real failure mode observed in the June-3 OpenAI bench run:
+    `trainticket/runtime/34` — gpt-5 correctly identified
+    ``mysql_invalid_credentials`` but labelled it ``Startup_Fault``
+    (because the failure surfaces during startup). The paper-derived
+    taxonomy is ``Runtime_Fault``. Without this override, the case
+    scored a1=0 despite a substantively correct diagnosis."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_taxonomy": "Startup_Fault",'
+        ' "fault_object": "app/ts-auth-service",'
+        ' "root_cause": "mysql_invalid_credentials"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    pred = parsed["top_3_predictions"][0]
+    # LLM said Startup_Fault, but mysql_invalid_credentials → Runtime_Fault.
+    assert pred["fault_taxonomy"] == "Runtime_Fault"
+    # The other fields must be preserved verbatim.
+    assert pred["fault_object"] == "app/ts-auth-service"
+    assert pred["root_cause"] == "mysql_invalid_credentials"
+
+
+def test_parse_predictions_overrides_wrong_taxonomy_for_missing_secret_binding() -> None:
+    """`trainticket/startup/14` close-miss in the June-3 run. Tests the
+    scoring mapping fix (previously Runtime_Fault → now Startup_Fault per
+    dataset ground truth)."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_taxonomy": "Admission_Fault",'
+        ' "fault_object": "app/ts-security-service",'
+        ' "root_cause": "missing_secret_binding"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    assert parsed["top_3_predictions"][0]["fault_taxonomy"] == "Startup_Fault"
+
+
+def test_parse_predictions_overrides_wrong_taxonomy_for_sidecar_port_conflict() -> None:
+    """`trainticket/runtime/90` close-miss in the June-3 run."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_taxonomy": "Service_Routing_Fault",'
+        ' "fault_object": "app/ts-route-service",'
+        ' "root_cause": "service_sidecar_port_conflict"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    assert parsed["top_3_predictions"][0]["fault_taxonomy"] == "Runtime_Fault"
+
+
+def test_parse_predictions_keeps_taxonomy_when_llm_already_correct() -> None:
+    """When the LLM happens to pick the right taxonomy, the derivation
+    produces the same value — no behavior change."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_taxonomy": "Runtime_Fault",'
+        ' "fault_object": "app/frontend",'
+        ' "root_cause": "oom_killed"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    assert parsed["top_3_predictions"][0]["fault_taxonomy"] == "Runtime_Fault"
+
+
+def test_parse_predictions_fills_taxonomy_when_llm_omits_it() -> None:
+    """If the LLM omits fault_taxonomy entirely, the derived value is
+    still emitted — the prediction stays valid for scoring."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_object": "app/frontend",'
+        ' "root_cause": "oom_killed"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    assert parsed["top_3_predictions"][0]["fault_taxonomy"] == "Runtime_Fault"
+
+
+def test_parse_predictions_derives_default_taxonomy_for_unknown_root_cause() -> None:
+    """An LLM-emitted root_cause outside the enum falls back to the
+    mapping's default (``Performance_Fault``). Validates graceful degradation
+    rather than crashing."""
+    text = (
+        '{"top_3_predictions": ['
+        '{"rank": 1, "fault_taxonomy": "Runtime_Fault",'
+        ' "fault_object": "app/frontend",'
+        ' "root_cause": "some_unknown_root_cause_outside_the_enum"}'
+        "]}"
+    )
+    parsed = _parse_predictions(text)
+    assert parsed is not None
+    assert parsed["top_3_predictions"][0]["fault_taxonomy"] == "Performance_Fault"
+
+
+# --------------------------------------------------------------------------- #
 # Rate-limit retry behavior — predictor-specific glue (the recognizer +       #
 # retry helper itself are tested in tests/utils/test_llm_retry.py).           #
 # --------------------------------------------------------------------------- #

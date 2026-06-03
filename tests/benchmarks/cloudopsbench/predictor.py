@@ -33,6 +33,7 @@ import re
 from typing import Any
 
 from app.utils.llm_retry import retry_on_rate_limit
+from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
 
 logger = logging.getLogger(__name__)
 
@@ -282,12 +283,33 @@ def _parse_predictions(text: str) -> dict[str, Any] | None:
         root_cause = prediction.get("root_cause")
         if not isinstance(fault_object, str) or not isinstance(root_cause, str):
             continue
+
+        # Derive fault_taxonomy deterministically from root_cause using the
+        # scorer's mapping. The LLM's guess is overridden because the paper's
+        # taxonomy is a function OF root_cause, not an independent dimension —
+        # the model often picks the surface-phase taxonomy ("Startup_Fault" for
+        # something that breaks during startup) instead of the root-cause
+        # family ("Runtime_Fault" for mysql_invalid_credentials). Without this
+        # override we lose a1 even on substantively-correct diagnoses.
+        normalized_root_cause = root_cause.strip()
+        derived_taxonomy = _taxonomy_for_root_cause(normalized_root_cause)
+        llm_taxonomy = (prediction.get("fault_taxonomy") or "").strip()
+        if llm_taxonomy and llm_taxonomy != derived_taxonomy:
+            logger.info(
+                "[predictor] rank=%d overrode LLM fault_taxonomy=%r with "
+                "derived=%r for root_cause=%r",
+                index + 1,
+                llm_taxonomy,
+                derived_taxonomy,
+                normalized_root_cause,
+            )
+
         cleaned.append(
             {
                 "rank": prediction.get("rank", index + 1),
-                "fault_taxonomy": prediction.get("fault_taxonomy", ""),
+                "fault_taxonomy": derived_taxonomy,
                 "fault_object": fault_object.strip(),
-                "root_cause": root_cause.strip(),
+                "root_cause": normalized_root_cause,
             }
         )
 

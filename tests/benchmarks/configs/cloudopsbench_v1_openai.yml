@@ -30,7 +30,19 @@ model_versions:
   gpt-5: gpt-5-2025-08-07
 
 runs_per_case: 3
-workers: 4
+
+# Workers ↔ provider tier math:
+#   - gpt-4o tier-1 cap: 30k TPM
+#   - Each CloudOpsBench cell burns ~25-30k tokens per investigation
+#   - workers=4 ⇒ ~120k/min demand vs 30k available ⇒ rate-limit storm
+#     (June-3 run: 78% of cells died with "rate-limited" error,
+#      a1 mean fell to 2.8%)
+#   - workers=1 ⇒ one investigation at a time; retries drain the bucket
+#     between cells; ~90%+ cell-completion rate.
+# Wall-time: ~3-4× longer than workers=4, but the cells actually complete.
+# After upgrading to OpenAI tier-2 (450k TPM gpt-4o), can return to 4.
+workers: 1
+
 cost_budget_usd: 500.0
 seed: 42
 
