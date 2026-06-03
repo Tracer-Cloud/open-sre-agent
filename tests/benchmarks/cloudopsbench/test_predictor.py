@@ -206,3 +206,109 @@ def test_emit_paper_predictions_returns_none_when_response_unparseable() -> None
     )
 
     assert payload is None
+
+
+# --------------------------------------------------------------------------- #
+# Rate-limit retry behavior — predictor-specific glue (the recognizer +       #
+# retry helper itself are tested in tests/utils/test_llm_retry.py).           #
+# --------------------------------------------------------------------------- #
+
+
+class _FlakyLLM:
+    """Raises rate-limit on the first N calls, then returns canned content."""
+
+    def __init__(self, content: str, fail_first_n: int) -> None:
+        self._content = content
+        self._remaining_failures = fail_first_n
+        self.call_count = 0
+
+    def invoke(
+        self,
+        _messages: list[dict[str, Any]],
+        system: str | None = None,  # noqa: ARG002 — interface contract
+    ) -> _FakeLLMResponse:
+        self.call_count += 1
+        if self._remaining_failures > 0:
+            self._remaining_failures -= 1
+            raise RuntimeError(
+                "OpenAI rate limit exceeded: Error code: 429 - tokens per min (TPM): "
+                "Limit 30000, Used 29248. Please try again in 94ms."
+            )
+        return _FakeLLMResponse(content=self._content)
+
+
+def test_emit_paper_predictions_recovers_after_transient_rate_limit(monkeypatch) -> None:
+    """Two transient 429s, then success — payload must come back populated."""
+    # Don't actually sleep during the test.
+    import app.utils.llm_retry as llm_retry
+
+    monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
+
+    llm = _FlakyLLM(
+        content=(
+            '{"top_3_predictions": [{"rank": 1, "fault_taxonomy": "Runtime_Fault",'
+            ' "fault_object": "app/frontend", "root_cause": "oom_killed"}]}'
+        ),
+        fail_first_n=2,
+    )
+
+    payload = emit_paper_predictions(
+        alert_text="alert_name: anything",
+        investigation_summary="anything",
+        llm=llm,
+    )
+
+    assert payload is not None
+    assert payload["top_3_predictions"][0]["root_cause"] == "oom_killed"
+    # 2 failures + 1 success = 3 calls.
+    assert llm.call_count == 3
+
+
+def test_emit_paper_predictions_gives_up_after_max_rate_limit_retries(monkeypatch) -> None:
+    """If every retry hits the rate limit, return None gracefully (no crash)."""
+    import app.utils.llm_retry as llm_retry
+
+    monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
+
+    llm = _FlakyLLM(content="unused", fail_first_n=99)
+
+    payload = emit_paper_predictions(
+        alert_text="alert_name: anything",
+        investigation_summary="anything",
+        llm=llm,
+    )
+
+    assert payload is None
+    # Should have attempted exactly DEFAULT_MAX_ATTEMPTS times.
+    assert llm.call_count == llm_retry.DEFAULT_MAX_ATTEMPTS
+
+
+def test_emit_paper_predictions_does_not_retry_non_rate_limit_errors(monkeypatch) -> None:
+    """A 400 / schema error should fail fast — no point retrying a deterministic bug."""
+    import app.utils.llm_retry as llm_retry
+
+    monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
+
+    class _BrokenLLM:
+        def __init__(self) -> None:
+            self.call_count = 0
+
+        def invoke(
+            self,
+            _messages: list[dict[str, Any]],
+            system: str | None = None,  # noqa: ARG002 — interface contract
+        ) -> Any:
+            self.call_count += 1
+            raise RuntimeError("Anthropic request rejected (HTTP 400): invalid schema")
+
+    llm = _BrokenLLM()
+
+    payload = emit_paper_predictions(
+        alert_text="alert_name: anything",
+        investigation_summary="anything",
+        llm=llm,
+    )
+
+    assert payload is None
+    # No retries on deterministic failures.
+    assert llm.call_count == 1

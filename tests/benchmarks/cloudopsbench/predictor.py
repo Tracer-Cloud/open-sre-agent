@@ -32,6 +32,8 @@ import logging
 import re
 from typing import Any
 
+from app.utils.llm_retry import retry_on_rate_limit
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +163,10 @@ def emit_paper_predictions(
     user_content = _build_user_prompt(alert_text, investigation_summary)
 
     try:
-        response = llm.invoke([{"role": "user", "content": user_content}], system=system)
+        response = retry_on_rate_limit(
+            lambda: llm.invoke([{"role": "user", "content": user_content}], system=system),
+            label="predictor",
+        )
     except Exception as exc:  # noqa: BLE001 — best-effort step; never block scoring
         logger.warning("[predictor] LLM invocation failed: %s", exc)
         return None

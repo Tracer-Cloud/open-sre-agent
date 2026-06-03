@@ -171,9 +171,14 @@ def test_internal_server_error_without_model_data_is_retried(
     assert call_count == 3, "transient 500 errors should be retried"
 
 
-def test_anthropic_rate_limit_error_is_not_retried(
+def test_anthropic_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Rate-limit is transient by design — retry with backoff like 500s do.
+    Without retry, a single 429 mid-investigation kills the whole case.
+    """
+    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
@@ -191,12 +196,61 @@ def test_anthropic_rate_limit_error_is_not_retried(
     with pytest.raises(RuntimeError, match="Anthropic rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
-    assert call_count == 1, "rate limit should not be retried"
+    assert call_count == _RETRY_MAX_ATTEMPTS, (
+        f"rate limit should be retried {_RETRY_MAX_ATTEMPTS} times before giving up"
+    )
 
 
-def test_bedrock_rate_limit_error_is_not_retried(
+def test_anthropic_rate_limit_honors_retry_after_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """When the 429 response carries ``Retry-After``, the client should
+    sleep approximately that long (modulo ±10% jitter) instead of its
+    longer default backoff. Validates the integration of
+    ``extract_retry_after_seconds`` into the typed rate-limit handler.
+    """
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "app.services.agent_llm_client.time.sleep",
+        sleeps.append,
+    )
+
+    class _Resp:
+        # Use a Retry-After well above any jittered backoff so the server
+        # hint is unambiguously the source of the sleep duration.
+        headers = {"retry-after": "0.5"}
+
+    def raise_with_header(**_: object) -> object:
+        err = fake_anthropic.RateLimitError("slow down")
+        err.response = _Resp()
+        raise err
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=raise_with_header))
+
+    with pytest.raises(RuntimeError, match="Anthropic rate limit exceeded"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    # _RETRY_MAX_ATTEMPTS=3 → 2 sleeps before the final raise.
+    assert len(sleeps) == 2
+    # Each sleep should be ~0.5s ± 10% jitter, NOT the deterministic
+    # exponential 1.0s / 2.0s the fallback would have produced.
+    for s in sleeps:
+        assert 0.45 <= s <= 0.55, (
+            f"sleep={s} should be ~0.5s (Retry-After) with ±10% jitter, "
+            f"not deterministic exponential backoff"
+        )
+
+
+def test_bedrock_rate_limit_error_is_retried_then_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bedrock shares the Anthropic invoke path; 429 retry applies the same way."""
+    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("AWS_REGION", "us-west-2")
     monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
@@ -214,7 +268,9 @@ def test_bedrock_rate_limit_error_is_not_retried(
     with pytest.raises(RuntimeError, match="Bedrock rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
-    assert call_count == 1, "rate limit should not be retried"
+    assert call_count == _RETRY_MAX_ATTEMPTS, (
+        f"rate limit should be retried {_RETRY_MAX_ATTEMPTS} times before giving up"
+    )
 
 
 def _install_fake_openai(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
@@ -429,9 +485,15 @@ def test_openai_standard_models_use_max_tokens(
         )
 
 
-def test_openai_rate_limit_error_is_not_retried(
+def test_openai_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Rate-limit is transient by design — retry with backoff like 500s do.
+    Without retry, a single 429 mid-investigation kills the whole case (matters
+    especially on tight OpenAI tiers like gpt-4o's 30k TPM).
+    """
+    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+
     fake_openai = _install_fake_openai(monkeypatch)
     monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
 
@@ -452,7 +514,49 @@ def test_openai_rate_limit_error_is_not_retried(
     with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
         client.invoke(messages=[{"role": "user", "content": "hi"}])
 
-    assert call_count == 1, "429 should not retry"
+    assert call_count == _RETRY_MAX_ATTEMPTS, (
+        f"429 should be retried {_RETRY_MAX_ATTEMPTS} times before giving up"
+    )
+
+
+def test_openai_rate_limit_honors_body_text_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenAI's 429 body usually says ``"Please try again in NNms"``. The
+    client should sleep for that suggested duration (± 10% jitter), not
+    its deterministic backoff."""
+    fake_openai = _install_fake_openai(monkeypatch)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "app.services.agent_llm_client.time.sleep",
+        sleeps.append,
+    )
+
+    def raise_with_body_hint(**_: object) -> object:
+        # 250ms hint — distinct from the 1s/2s deterministic backoff so
+        # we can tell which path produced the sleep value.
+        raise fake_openai.RateLimitError(
+            "OpenAI rate limit exceeded: Error code: 429 - "
+            "Limit 30000, Used 29248. Please try again in 250ms."
+        )
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=raise_with_body_hint))
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(RuntimeError, match="OpenAI rate limit exceeded"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    assert len(sleeps) == 2
+    for s in sleeps:
+        assert 0.225 <= s <= 0.275, (
+            f"sleep={s} should be ~0.25s (body hint) with ±10% jitter, "
+            f"not deterministic exponential backoff"
+        )
 
 
 def test_openai_permission_denied_error_is_not_retried(
