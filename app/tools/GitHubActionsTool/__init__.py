@@ -38,18 +38,6 @@ def _extract_list(result: dict[str, Any], key: str) -> list[dict[str, Any]]:
     return [item for item in items if isinstance(item, dict)]
 
 
-def _extract_dict(result: dict[str, Any], keys: tuple[str, ...] = ()) -> dict[str, Any]:
-    """Extract dict from MCP tool result."""
-    json_result = _extract_json_text(result)
-    if isinstance(json_result, dict):
-        for key in keys:
-            value = json_result.get(key)
-            if isinstance(value, dict):
-                return value
-        return json_result
-    return {}
-
-
 def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract workflow jobs from MCP tool result."""
     json_result = _extract_json_text(result)
