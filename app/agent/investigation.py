@@ -28,19 +28,13 @@ _UNSET: object = object()  # sentinel distinguishing "not yet started" from a No
 # Defensive context-window ceiling. Below this we never trim; above this we
 # drop the oldest tool_use/tool_result pair until back under the ceiling.
 #
-# Empirically tuned from CloudOpsBench overflow logs:
-#   - Anthropic reported 206k–210k actual tokens on long investigations
-#   - Tool result payloads are JSON-heavy (logs, K8s objects, alert dumps),
-#     so Anthropic's tokenizer lands around 0.32–0.40 tokens/char, NOT the
-#     ~0.25 typical for English prose.
-#   - With ratio=0.25 and ceiling=180k, the estimator said ~160k and never
-#     fired the trim, while Anthropic was already rejecting at 206k.
-#
-# Picking ratio=0.40 + ceiling=150k means: even if actual content is 50%
-# tokens/char (worst case for JSON), the trim still fires before reaching
-# Anthropic's 200k limit. False positives in production (firing too early
-# on shorter cases) are acceptable — the trim is a no-op below ceiling.
-_TOKEN_BUDGET_CEILING = 150_000
+# Anthropic's 200k prompt limit is the hard cap. The estimator at
+# ``_estimate_message_tokens`` covers messages + system + tool schemas
+# (all three count toward the limit). 170k ceiling leaves ~30k headroom
+# for the response. ratio=0.40 absorbs JSON-structural overhead in tool
+# payloads — empirically tuned from overflow logs where Anthropic landed
+# at 0.32–0.40 tokens/char for opensre's tool-result mix.
+_TOKEN_BUDGET_CEILING = 170_000
 _TOKENS_PER_CHAR = 0.40
 
 # Maps alert_source → tool source keys. Tools from these sources are auto-called
@@ -185,7 +179,7 @@ class ConnectedInvestigationAgent:
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
-            _enforce_context_budget(messages)
+            _enforce_context_budget(messages, system=system, tools=tool_schemas)
             try:
                 response = llm.invoke(messages, system=system, tools=tool_schemas)
 
@@ -282,10 +276,18 @@ class ConnectedInvestigationAgent:
 InvestigationAgent = ConnectedInvestigationAgent
 
 
-def _estimate_message_tokens(messages: list[dict[str, Any]]) -> int:
-    """Cheap upper-bound token estimate. ~0.25 tokens per character is
-    conservative for English + JSON tool payloads; the budget ceiling
-    leaves enough headroom to absorb estimator slack.
+def _estimate_message_tokens(
+    messages: list[dict[str, Any]],
+    *,
+    system: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> int:
+    """Cheap upper-bound token estimate covering everything Anthropic sees.
+
+    Anthropic counts ``messages`` + ``system`` + ``tools`` toward the 200k
+    prompt limit. Earlier versions counted only ``messages`` and trimmed
+    aggressively while system + tools (tens of thousands of tokens for
+    opensre's 100+ tool registry) silently pushed us over the line.
     """
     total = 0
     for message in messages:
@@ -298,6 +300,11 @@ def _estimate_message_tokens(messages: list[dict[str, Any]]) -> int:
                     total += int(len(json.dumps(block, default=str)) * _TOKENS_PER_CHAR)
                 elif isinstance(block, str):
                     total += int(len(block) * _TOKENS_PER_CHAR)
+    if system:
+        total += int(len(system) * _TOKENS_PER_CHAR)
+    if tools:
+        for schema in tools:
+            total += int(len(json.dumps(schema, default=str)) * _TOKENS_PER_CHAR)
     return total
 
 
@@ -330,15 +337,20 @@ def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
     return False
 
 
-def _enforce_context_budget(messages: list[dict[str, Any]]) -> None:
-    """Trim oldest tool pairs until messages fit under the budget ceiling.
+def _enforce_context_budget(
+    messages: list[dict[str, Any]],
+    *,
+    system: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> None:
+    """Trim oldest tool pairs until prompt fits under the budget ceiling.
 
-    No-op on the happy path: ``_estimate_message_tokens`` is one pass over
-    ``messages`` and returns under the ceiling for normal investigations.
+    No-op on the happy path: the estimate covers messages + system + tools
+    in one pass and returns under the ceiling for normal investigations.
     Only fires on long CloudOpsBench cases where unbounded tool history
     has pushed the prompt past the model's limit.
     """
-    while _estimate_message_tokens(messages) > _TOKEN_BUDGET_CEILING:
+    while _estimate_message_tokens(messages, system=system, tools=tools) > _TOKEN_BUDGET_CEILING:
         if not _trim_oldest_tool_pair(messages):
             return
         logger.warning("[agent] trimmed oldest tool pair to fit context budget")
