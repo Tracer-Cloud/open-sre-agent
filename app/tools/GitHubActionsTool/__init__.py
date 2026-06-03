@@ -44,9 +44,11 @@ def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(json_result, dict) and "jobs" in json_result:
         jobs_raw = json_result["jobs"]
         if isinstance(jobs_raw, dict) and "jobs" in jobs_raw:
-            return [_normalize_job(job) for job in jobs_raw["jobs"] if isinstance(job, dict)]
+            target_list = jobs_raw["jobs"]
         else:
-            return [_normalize_job(job) for job in json_result["jobs"] if isinstance(job, dict)]
+            target_list = jobs_raw
+        if isinstance(target_list, list):
+            return [_normalize_job(job) for job in target_list if isinstance(job, dict)]
     return []
 
 
@@ -325,7 +327,8 @@ def list_github_actions_workflow_runs(
 
     result = call_github_mcp_tool(config, "actions_list", arguments)
     payload = _normalize_tool_result(result)
-    assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
+    if not isinstance(payload, dict):
+        return {"error": "Unexpected payload format returned from GitHub MCP tool"}
 
     if payload.get("available"):
         workflow_runs_raw = _extract_list(result, "workflow_runs")
@@ -509,7 +512,8 @@ def list_github_actions_run_jobs(
         },
     )
     payload = _normalize_tool_result(result)
-    assert isinstance(payload, dict), "payload must be dict from _normalize_tool_result"
+    if not isinstance(payload, dict):
+        return {"error": "Unexpected payload format returned from GitHub MCP tool"}
 
     if payload.get("available"):
         jobs = _extract_workflow_jobs(result)
