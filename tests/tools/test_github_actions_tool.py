@@ -313,7 +313,7 @@ line 2
 ##[endgroup]
 final runner summary
 """,
-        step_name="Checkout"
+        step_name="Checkout",
     )
 
     assert result["step_name"] == "Checkout"
