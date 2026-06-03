@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from app.integrations.github_mcp import call_github_mcp_tool
 from app.tools.GitHubSearchCodeTool import (
@@ -16,13 +16,14 @@ from app.tools.tool_decorator import tool
 from app.tools.utils.code_host_unavailable import code_host_unavailable_payload
 
 
-def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | list[Any] | str | None:
+def _extract_json_text(result: dict[str, Any]) -> dict[str, Any] | str | None:
     text = str(result.get("text") or "").strip()
     if not text:
         return None
 
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        return cast(dict[str, Any], parsed)
     except json.JSONDecodeError:
         return text
 
@@ -420,10 +421,10 @@ def list_github_actions_active_runs(
 
     # Check for errors
     if queued_result.get("is_error") or in_progress_result.get("is_error"):
-        error_texts = []
+        error_texts: list[str] = []
         for result in (queued_result, in_progress_result):
             if result.get("is_error") and result.get("text"):
-                error_texts.append(result.get("text"))
+                error_texts.append(str(result.get("text")))
 
         error_msg = " | ".join(error_texts) if error_texts else "Failed to list active runs"
 
