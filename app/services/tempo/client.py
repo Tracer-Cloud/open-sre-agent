@@ -114,7 +114,10 @@ class TempoClient:
             response.raise_for_status()
             parsed = response.json()
             if not isinstance(parsed, dict):
-                return None, f"Unexpected response shape: expected object, got {type(parsed).__name__}"
+                return (
+                    None,
+                    f"Unexpected response shape: expected object, got {type(parsed).__name__}",
+                )
             return parsed, None
         except httpx.HTTPStatusError as err:
             snippet = err.response.text[:200].strip()

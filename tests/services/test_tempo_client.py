@@ -31,9 +31,7 @@ class _ErrorResponse:
         raise httpx.HTTPStatusError(
             f"error {self.status_code}",
             request=self._request,
-            response=httpx.Response(
-                self.status_code, request=self._request, text=self.text
-            ),
+            response=httpx.Response(self.status_code, request=self._request, text=self.text),
         )
 
     def json(self) -> dict[str, Any]:
@@ -82,13 +80,9 @@ def test_get_trace_by_id_parses_spans(monkeypatch: Any) -> None:
         "batches": [
             {
                 "resource": {
-                    "attributes": [
-                        {"key": "service.name", "value": {"stringValue": "api"}}
-                    ]
+                    "attributes": [{"key": "service.name", "value": {"stringValue": "api"}}]
                 },
-                "scopeSpans": [
-                    {"spans": [{"name": "GET /x", "spanId": "s1", "attributes": []}]}
-                ],
+                "scopeSpans": [{"spans": [{"name": "GET /x", "spanId": "s1", "attributes": []}]}],
             }
         ]
     }
@@ -161,9 +155,7 @@ def test_search_traces_empty_query_when_no_filters(monkeypatch: Any) -> None:
 
 
 def test_list_services_parses_v2_tag_values(monkeypatch: Any) -> None:
-    payload = {
-        "tagValues": [{"type": "string", "value": "frontend"}, {"value": "cartservice"}]
-    }
+    payload = {"tagValues": [{"type": "string", "value": "frontend"}, {"value": "cartservice"}]}
     fake = _patch_client(monkeypatch, _FakeResponse(payload))
     result = _client().list_services()
     assert result["available"] is True

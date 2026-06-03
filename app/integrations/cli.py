@@ -856,7 +856,9 @@ def _setup_tempo() -> None:
     if not url:
         _die("Tempo URL is required.")
 
-    api_key = _p("Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True)
+    api_key = _p(
+        "Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True
+    )
     username = _p("Tempo username (optional, for basic auth)")
     password = _p("Tempo password (optional, for basic auth)", secret=True)
     org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
