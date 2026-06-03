@@ -6,13 +6,13 @@ Run with: pytest tests/integrations/test_temporal.py -v
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.integrations.temporal import TemporalConfig, load_temporal_config_from_env
 from app.services.temporal.client import TemporalClient, TemporalClientError
+from app.tools.registry import clear_tool_registry_cache, get_registered_tools
 from app.tools.TemporalTool.tool import (
     TemporalListWorkflowsTool,
     TemporalNamespaceMetricsTool,
@@ -21,7 +21,10 @@ from app.tools.TemporalTool.tool import (
     get_temporal_tools,
 )
 
+# ---------------------------------------------------------------------------
 # Fixtures
+# ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def config() -> TemporalConfig:
@@ -33,7 +36,10 @@ def client(config: TemporalConfig) -> TemporalClient:
     return TemporalClient(config)
 
 
+# ---------------------------------------------------------------------------
 # TemporalConfig
+# ---------------------------------------------------------------------------
+
 
 class TestTemporalConfig:
     def test_default_values(self) -> None:
@@ -78,7 +84,10 @@ class TestTemporalConfig:
         assert cfg.tls is True
 
 
+# ---------------------------------------------------------------------------
 # TemporalClient
+# ---------------------------------------------------------------------------
+
 
 class TestTemporalClient:
     def test_auth_header_with_api_key(self) -> None:
@@ -218,7 +227,10 @@ class TestTemporalClient:
             client.list_workflows()
 
 
+# ---------------------------------------------------------------------------
 # Tools
+# ---------------------------------------------------------------------------
+
 
 class TestTemporalListWorkflowsTool:
     @patch("app.tools.TemporalTool.tool.TemporalClient")
@@ -235,21 +247,21 @@ class TestTemporalListWorkflowsTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalListWorkflowsTool()
-        result = tool._run(query="ExecutionStatus='Failed'", page_size=10)
-        parsed = json.loads(result)
-        assert len(parsed) == 1
-        assert parsed[0]["workflow_id"] == "wf-1"
-        assert parsed[0]["status"] == "FAILED"
+        result = tool.run(host="localhost", query="ExecutionStatus='Failed'", page_size=10)
+        assert result["available"] is True
+        assert result["total"] == 1
+        assert result["total_failed"] == 1
 
     @patch("app.tools.TemporalTool.tool.TemporalClient")
-    def test_empty_returns_message(self, mock_client_cls: MagicMock) -> None:
+    def test_empty_returns_empty_list(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_workflows.return_value = []
         mock_client_cls.return_value = mock_client
 
         tool = TemporalListWorkflowsTool()
-        result = tool._run()
-        assert "No workflow" in result
+        result = tool.run(host="localhost")
+        assert result["available"] is True
+        assert result["total"] == 0
 
     @patch("app.tools.TemporalTool.tool.TemporalClient")
     def test_error_handled_gracefully(self, mock_client_cls: MagicMock) -> None:
@@ -258,9 +270,15 @@ class TestTemporalListWorkflowsTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalListWorkflowsTool()
-        result = tool._run()
-        assert "Error" in result
-        assert "connection refused" in result
+        result = tool.run(host="localhost")
+        assert result["available"] is False
+        assert "connection refused" in result["error"]
+
+    def test_missing_host_returns_error(self) -> None:
+        tool = TemporalListWorkflowsTool()
+        result = tool.run(host="")
+        assert result["available"] is False
+        assert "host is required" in result["error"]
 
 
 class TestTemporalWorkflowHistoryTool:
@@ -284,20 +302,26 @@ class TestTemporalWorkflowHistoryTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalWorkflowHistoryTool()
-        result = tool._run(workflow_id="wf-1", run_id="run-1")
-        parsed = json.loads(result)
-        assert parsed[0]["failure"]["message"] == "activity timed out"
-        assert parsed[0]["failure"]["cause"] == "deadline exceeded"
+        result = tool.run(host="localhost", workflow_id="wf-1", run_id="run-1")
+        assert result["available"] is True
+        assert result["total_failure_events"] == 1
 
     @patch("app.tools.TemporalTool.tool.TemporalClient")
-    def test_no_history_returns_message(self, mock_client_cls: MagicMock) -> None:
+    def test_no_history_returns_empty(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.get_workflow_history.return_value = []
         mock_client_cls.return_value = mock_client
 
         tool = TemporalWorkflowHistoryTool()
-        result = tool._run(workflow_id="wf-1", run_id="run-1")
-        assert "No history" in result
+        result = tool.run(host="localhost", workflow_id="wf-1", run_id="run-1")
+        assert result["available"] is True
+        assert result["total_events"] == 0
+
+    def test_missing_host_returns_error(self) -> None:
+        tool = TemporalWorkflowHistoryTool()
+        result = tool.run(host="", workflow_id="wf-1", run_id="run-1")
+        assert result["available"] is False
+        assert "host is required" in result["error"]
 
 
 class TestTemporalTaskQueueTool:
@@ -317,11 +341,11 @@ class TestTemporalTaskQueueTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalTaskQueueTool()
-        result = tool._run(task_queue="payment-task-queue")
-        parsed = json.loads(result)
-        assert parsed["poller_count"] == 1
-        assert parsed["pollers"][0]["identity"] == "worker-1@host"
-        assert parsed["backlog_count"] == 5
+        result = tool.run(host="localhost", task_queue="payment-task-queue")
+        assert result["available"] is True
+        assert result["poller_count"] == 1
+        assert result["pollers"][0]["identity"] == "worker-1@host"
+        assert result["backlog_count"] == 5
 
     @patch("app.tools.TemporalTool.tool.TemporalClient")
     def test_warns_when_no_pollers(self, mock_client_cls: MagicMock) -> None:
@@ -333,10 +357,17 @@ class TestTemporalTaskQueueTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalTaskQueueTool()
-        result = tool._run(task_queue="orphan-queue")
-        parsed = json.loads(result)
-        assert "warning" in parsed
-        assert "No workers" in parsed["warning"]
+        result = tool.run(host="localhost", task_queue="orphan-queue")
+        assert result["available"] is True
+        assert result["poller_count"] == 0
+        assert "warning" in result
+        assert len(result["unhealthy_queues"]) == 1
+
+    def test_missing_host_returns_error(self) -> None:
+        tool = TemporalTaskQueueTool()
+        result = tool.run(host="", task_queue="payment-task-queue")
+        assert result["available"] is False
+        assert "host is required" in result["error"]
 
 
 class TestTemporalNamespaceMetricsTool:
@@ -359,15 +390,17 @@ class TestTemporalNamespaceMetricsTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalNamespaceMetricsTool()
-        result = tool._run()
-        parsed = json.loads(result)
-        assert parsed["namespace"] == "production"
-        assert parsed["active_cluster"] == "us-east"
-        assert parsed["retention_days"] == "72h"
-        assert parsed["open_workflow_count"] == 42
+        result = tool.run(host="localhost", namespace="production")
+        assert result["available"] is True
+        assert result["namespace"] == "production"
+        assert result["active_cluster"] == "us-east"
+        assert result["retention_days"] == "72h"
+        assert result["open_workflow_count"] == 42
 
     @patch("app.tools.TemporalTool.tool.TemporalClient")
-    def test_namespace_info_returned_even_if_count_fails(self, mock_client_cls: MagicMock) -> None:
+    def test_namespace_info_returned_even_if_count_fails(
+        self, mock_client_cls: MagicMock
+    ) -> None:
         mock_client = MagicMock()
         mock_client.get_namespace_metrics.return_value = {
             "namespaceInfo": {
@@ -385,12 +418,19 @@ class TestTemporalNamespaceMetricsTool:
         mock_client_cls.return_value = mock_client
 
         tool = TemporalNamespaceMetricsTool()
-        result = tool._run()
-        parsed = json.loads(result)
-        assert parsed["namespace"] == "production"
-        assert parsed["active_cluster"] == "us-east"
-        assert parsed["retention_days"] == "72h"
-        assert parsed["open_workflow_count"] is None
+        result = tool.run(host="localhost", namespace="production")
+        assert result["available"] is True
+        assert result["namespace"] == "production"
+        assert result["active_cluster"] == "us-east"
+        assert result["retention_days"] == "72h"
+        assert result["open_workflow_count"] is None
+
+    def test_missing_host_returns_error(self) -> None:
+        tool = TemporalNamespaceMetricsTool()
+        result = tool.run(host="")
+        assert result["available"] is False
+        assert "host is required" in result["error"]
+
 
 class TestGetTemporalTools:
     def test_returns_four_tools(self) -> None:
@@ -404,7 +444,53 @@ class TestGetTemporalTools:
             "temporal_namespace_metrics",
         }
 
-    def test_accepts_custom_config(self) -> None:
-        cfg = TemporalConfig(host="prod-temporal", namespace="prod")
-        tools = get_temporal_tools(config=cfg)
-        assert all(t.config == cfg for t in tools)
+    def test_temporal_registered_in_integration_registry(self) -> None:
+        from app.integrations.registry import INTEGRATION_SPECS_BY_SERVICE
+        assert "temporal" in INTEGRATION_SPECS_BY_SERVICE
+
+    def test_temporal_tools_have_valid_input_schemas(self) -> None:
+        tools = get_temporal_tools()
+        for t in tools:
+            assert "properties" in t.input_schema
+            assert "required" in t.input_schema
+            assert "host" in t.input_schema["required"]
+
+    def test_temporal_tools_wired_with_integration_config(self) -> None:
+        from app.integrations.config_models import TemporalIntegrationConfig
+        from app.integrations.temporal import load_temporal_config_from_integration
+
+        integration_cfg = TemporalIntegrationConfig(
+            host="temporal.prod.example.com",
+            port=7233,
+            namespace="production",
+        )
+        resolved = load_temporal_config_from_integration(integration_cfg)
+        assert resolved.host == "temporal.prod.example.com"
+        assert resolved.namespace == "production"
+
+    def test_temporal_source_registered_in_evidence_types(self) -> None:
+        from app.types.evidence import EvidenceSource
+        assert "temporal" in EvidenceSource.__args__  # type: ignore[attr-defined]
+
+    def test_temporal_tools_discovered_by_registry(self) -> None:
+        """Temporal tools must be auto-discovered by the investigation registry."""
+
+        clear_tool_registry_cache()
+        tools = get_registered_tools("investigation")
+        tool_names = {t.name for t in tools}
+
+        assert "temporal_list_workflows" in tool_names
+        assert "temporal_workflow_history" in tool_names
+        assert "temporal_task_queue" in tool_names
+        assert "temporal_namespace_metrics" in tool_names
+
+    def test_temporal_tools_in_get_available_actions(self) -> None:
+        """Temporal tools must appear in get_available_actions() used by the agent."""
+        from app.tools.investigation_registry.actions import get_available_actions
+        from app.tools.registry import clear_tool_registry_cache
+
+        clear_tool_registry_cache()
+        actions = get_available_actions()
+        action_names = {a.name for a in actions}
+
+        assert "temporal_list_workflows" in action_names

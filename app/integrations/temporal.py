@@ -12,12 +12,6 @@ if TYPE_CHECKING:
     from app.integrations.config_models import TemporalIntegrationConfig
 from pydantic import BaseModel, Field
 
-"""Temporal workflow platform integration config and verification.
-
-This integration uses Temporal's HTTP API gateway (available on the same
-port as gRPC, default 7233). For self-hosted Temporal, no extra configuration
-is needed. For Temporal Cloud, set TEMPORAL_TLS=true and TEMPORAL_API_KEY.
-"""
 
 class TemporalConfig(BaseModel):
     """Configuration for connecting to a Temporal server."""
