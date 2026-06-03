@@ -177,8 +177,8 @@ def _mcp_response(_config: object, tool: str, arguments: dict[str, Any]) -> dict
             "arguments": arguments,
             "is_error": False,
             "text": """{
-                "job_id": 109,
-                "logs_content": "##[group]Checkout\nCloning repository\n##[endgroup]\n##[group]Deploy\nkubectl apply -f manifests/\nError: secret rotation broke production deploy\n##[endgroup]",
+                "job_id": 9001,
+                "logs_content": "##[group]Checkout\\nCloning repository\\n##[endgroup]\\n##[group]Deploy\\nkubectl apply -f manifests/\\nError: secret rotation broke production deploy\\n##[endgroup]",
                 "message": "Job logs content retrieved successfully",
                 "original_length": 2000
             }""",
@@ -260,7 +260,6 @@ def test_get_step_log_happy_path() -> None:
             repo="repo",
             run_id=101,
             job_id=9001,
-            step_name="Deploy",
             github_token="tok",
         )
     assert result["available"] is True
@@ -276,7 +275,7 @@ line 1
 ##[group]Deploy
 """
         + ("A" * 7000)
-        + "\n##[endgroup]\n",
+        + "\\n##[endgroup]\\n",
         step_name="Deploy",
     )
     assert result["match_strategy"] == "step_name"

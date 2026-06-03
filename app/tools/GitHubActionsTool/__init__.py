@@ -335,12 +335,13 @@ def list_github_actions_workflow_runs(
         workflow_runs = [_normalize_run(item) for item in workflow_runs_raw]
         payload["workflow_runs"] = workflow_runs
         payload["total"] = len(workflow_runs)
-        payload["branch"] = branch
-        payload["status"] = status
-        payload["event"] = event
     else:
         payload["workflow_runs"] = []
         payload["total"] = 0
+
+    payload["branch"] = branch
+    payload["status"] = status
+    payload["event"] = event
 
     return payload
 
@@ -636,13 +637,16 @@ def get_github_actions_step_log(
     # Detect first failed step if not specified
     failed_step = ""
     steps_raw = job.get("steps") if isinstance(job, dict) else []
-    if not step_name and isinstance(steps_raw, list):
-        for step in steps_raw:
-            if not isinstance(step, dict):
-                continue
-            if step.get("conclusion") == "failure" or step.get("status") == "failure":
-                failed_step = str(step.get("name") or "")
-                break
+    normalized_steps = []
+    if isinstance(steps_raw, list):
+        normalized_steps = [_normalize_step(step) for step in steps_raw if isinstance(step, dict)]
+        if not step_name:
+            for step in steps_raw:
+                if not isinstance(step, dict):
+                    continue
+                if step.get("conclusion") == "failure" or step.get("status") == "failure":
+                    failed_step = str(step.get("name") or "")
+                    break
 
     # Extract and filter step log
     extracted = extract_step_log(
@@ -658,7 +662,7 @@ def get_github_actions_step_log(
             "job_id": job_id,
             "job_name": job.get("name", ""),
             "job_conclusion": job.get("conclusion", ""),
-            "job_steps": steps_raw if isinstance(steps_raw, list) else [],
+            "job_steps": normalized_steps,
         }
     )
     return extracted
