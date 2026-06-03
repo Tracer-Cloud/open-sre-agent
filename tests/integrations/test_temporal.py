@@ -471,6 +471,28 @@ class TestGetTemporalTools:
     def test_temporal_source_registered_in_evidence_types(self) -> None:
         from app.types.evidence import EvidenceSource
         assert "temporal" in EvidenceSource.__args__  # type: ignore[attr-defined]
+    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    def test_integration_config_values_reach_client(self, mock_client_cls: MagicMock) -> None:
+        """Verify port, api_key, tls from integration config reach TemporalClient."""
+        mock_client = MagicMock()
+        mock_client.list_workflows.return_value = []
+        mock_client_cls.return_value = mock_client
+
+        tool = TemporalListWorkflowsTool()
+        tool.run(
+            host="temporal.cloud.example.com",
+            namespace="production",
+            port=7234,
+            api_key="my-secret-key",
+            tls=True,
+        )
+
+        called_config = mock_client_cls.call_args[0][0]
+        assert called_config.host == "temporal.cloud.example.com"
+        assert called_config.port == 7234
+        assert called_config.api_key == "my-secret-key"
+        assert called_config.tls is True
+        assert called_config.namespace == "production"
 
     def test_temporal_tools_discovered_by_registry(self) -> None:
         """Temporal tools must be auto-discovered by the investigation registry."""

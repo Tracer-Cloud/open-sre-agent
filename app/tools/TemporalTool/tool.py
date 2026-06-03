@@ -72,6 +72,21 @@ class TemporalListWorkflowsTool(BaseTool):
                 "default": 20,
                 "description": "Maximum number of workflow executions to return (1-50).",
             },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host"],
     }
@@ -88,6 +103,8 @@ class TemporalListWorkflowsTool(BaseTool):
         return {
             "host": temporal.get("host", ""),
             "namespace": temporal.get("namespace", "default"),
+            "api_key": temporal.get("api_key", "") or "",
+            "tls": bool(temporal.get("tls", False)),
             "query": "ExecutionStatus='Failed'",
             "page_size": 20,
         }
@@ -96,6 +113,9 @@ class TemporalListWorkflowsTool(BaseTool):
         self,
         host: str,
         namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
         query: str = "",
         page_size: int = 20,
         **_kwargs: Any,
@@ -110,7 +130,11 @@ class TemporalListWorkflowsTool(BaseTool):
             }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace)
+            config = TemporalConfig(host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,)
             client = TemporalClient(config)
             executions = client.list_workflows(query=query, page_size=min(page_size, 50))
         except TemporalClientError as exc:
@@ -179,6 +203,21 @@ class TemporalWorkflowHistoryTool(BaseTool):
                 "default": 50,
                 "description": "Maximum number of history events to return (1-200).",
             },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host", "workflow_id", "run_id"],
     }
@@ -194,7 +233,10 @@ class TemporalWorkflowHistoryTool(BaseTool):
         temporal = sources.get("temporal", {})
         return {
             "host": temporal.get("host", ""),
+            "port": int(temporal.get("port", 7233)),
             "namespace": temporal.get("namespace", "default"),
+            "api_key": temporal.get("api_key", "") or "",
+            "tls": bool(temporal.get("tls", False)),
             "workflow_id": temporal.get("workflow_id", ""),
             "run_id": temporal.get("run_id", ""),
             "max_event_count": 50,
@@ -206,6 +248,9 @@ class TemporalWorkflowHistoryTool(BaseTool):
         workflow_id: str,
         run_id: str,
         namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
         max_event_count: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
@@ -219,7 +264,12 @@ class TemporalWorkflowHistoryTool(BaseTool):
             }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,port=port,
+                api_key=api_key or None,
+                tls=tls,
+                )
             client = TemporalClient(config)
             events = client.get_workflow_history(
                 workflow_id=workflow_id,
@@ -283,6 +333,21 @@ class TemporalTaskQueueTool(BaseTool):
                 "type": "string",
                 "description": "Name of the task queue to inspect.",
             },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host", "task_queue"],
     }
@@ -298,7 +363,10 @@ class TemporalTaskQueueTool(BaseTool):
         temporal = sources.get("temporal", {})
         return {
             "host": temporal.get("host", ""),
+            "port": int(temporal.get("port", 7233)),
             "namespace": temporal.get("namespace", "default"),
+            "api_key": temporal.get("api_key", "") or "",
+            "tls": bool(temporal.get("tls", False)),
             "task_queue": temporal.get("task_queue", ""),
         }
 
@@ -307,6 +375,9 @@ class TemporalTaskQueueTool(BaseTool):
         host: str,
         task_queue: str,
         namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not (host or "").strip():
@@ -319,7 +390,13 @@ class TemporalTaskQueueTool(BaseTool):
             }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,
+            )
             client = TemporalClient(config)
             data = client.list_task_queues(task_queue=task_queue)
         except TemporalClientError as exc:
@@ -392,6 +469,21 @@ class TemporalNamespaceMetricsTool(BaseTool):
                 "default": "default",
                 "description": "Temporal namespace to query.",
             },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host"],
     }
@@ -409,13 +501,19 @@ class TemporalNamespaceMetricsTool(BaseTool):
         temporal = sources.get("temporal", {})
         return {
             "host": temporal.get("host", ""),
+            "port": int(temporal.get("port", 7233)),
             "namespace": temporal.get("namespace", "default"),
+            "api_key": temporal.get("api_key", "") or "",
+            "tls": bool(temporal.get("tls", False)),
         }
 
     def run(
         self,
         host: str,
         namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
         **_kwargs: Any,
     ) -> dict[str, Any]:
         if not (host or "").strip():
@@ -430,7 +528,13 @@ class TemporalNamespaceMetricsTool(BaseTool):
             }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,
+            )
             client = TemporalClient(config)
             data = client.get_namespace_metrics()
         except TemporalClientError as exc:
