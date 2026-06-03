@@ -179,6 +179,7 @@ def _run_backend(cloudops_backend: Any, method_name: str, **kwargs: Any) -> dict
     input_schema={"type": "object", "properties": {"resource_type": {"type": "string"}}},
     is_available=_cloudops_available,
     extract_params=_extract_get_resources,
+    injected_params=("cloudops_backend",),
 )
 def get_resources(
     cloudops_backend: Any,
@@ -209,6 +210,7 @@ def get_resources(
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_describe_resource,
+    injected_params=("cloudops_backend",),
 )
 def describe_resource(
     cloudops_backend: Any,
@@ -233,6 +235,7 @@ def describe_resource(
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_backend,
+    injected_params=("cloudops_backend",),
 )
 def get_cluster_configuration(cloudops_backend: Any) -> dict[str, Any]:
     return _run_backend(cloudops_backend, "GetClusterConfiguration")
@@ -246,6 +249,7 @@ def get_cluster_configuration(cloudops_backend: Any) -> dict[str, Any]:
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_backend,
+    injected_params=("cloudops_backend",),
 )
 def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
     return _run_backend(cloudops_backend, "GetAlerts")
@@ -259,6 +263,7 @@ def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_error_logs,
+    injected_params=("cloudops_backend",),
 )
 def get_error_logs(
     cloudops_backend: Any,
@@ -281,6 +286,7 @@ def get_error_logs(
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_recent_logs,
+    injected_params=("cloudops_backend",),
 )
 def get_recent_logs(
     cloudops_backend: Any,
@@ -305,6 +311,7 @@ def get_recent_logs(
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_service_dependencies,
+    injected_params=("cloudops_backend",),
 )
 def get_service_dependencies(cloudops_backend: Any, service_name: str) -> dict[str, Any]:
     return _run_backend(
@@ -322,6 +329,7 @@ def get_service_dependencies(cloudops_backend: Any, service_name: str) -> dict[s
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_app_yaml,
+    injected_params=("cloudops_backend",),
 )
 def get_app_yaml(cloudops_backend: Any, app_name: str) -> dict[str, Any]:
     return _run_backend(cloudops_backend, "GetAppYAML", app_name=app_name)
@@ -335,6 +343,7 @@ def get_app_yaml(cloudops_backend: Any, app_name: str) -> dict[str, Any]:
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_connectivity,
+    injected_params=("cloudops_backend",),
 )
 def check_service_connectivity(
     cloudops_backend: Any,
@@ -359,6 +368,7 @@ def check_service_connectivity(
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_node_status,
+    injected_params=("cloudops_backend",),
 )
 def check_node_service_status(
     cloudops_backend: Any,
