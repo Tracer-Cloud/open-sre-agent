@@ -644,3 +644,11 @@ def test_adapter_build_does_not_need_to_forward_opencode_vars() -> None:
         assert "OPENCODE_CONFIG" not in inv.env
 
         assert inv.env.get("NO_COLOR") == "1"
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    import pytest
+
+    adapter = OpenCodeAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)
