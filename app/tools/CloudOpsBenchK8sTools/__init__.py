@@ -1,4 +1,30 @@
-"""Cloud-OpsBench cache-backed Kubernetes tools."""
+"""Cloud-OpsBench cache-backed Kubernetes tools.
+
+Replays Cloud-OpsBench (Wang et al., arXiv:2603.00468) actions against the
+per-case ``tool_cache.json`` instead of talking to a real EKS cluster.
+The tools are gated on ``is_cloudopsbench_backend`` so they only appear
+to the LLM in replay mode; the real EKS tools take over otherwise.
+
+Each ``@tool`` declaration sets ``injected_params=("cloudops_backend",)``
+so the replay backend is hidden from the LLM's tool-call schema and
+supplied at call time by ``extract_params``. Without that, the LLM would
+treat ``cloudops_backend`` as a free-text param and dispatch's
+``{**injected, **tc.input}`` merge would let the LLM string override the
+real backend, crashing every call with
+``'str' object has no attribute '<Action>'``.
+
+The ``extract_params`` callbacks pre-fill positional args from the case's
+recorded ``process`` steps. After the injected-params fix landed these
+prefills are mostly dead-code — the LLM owns the real values via
+``tc.input`` — but they still serve as a sane-default safety net when the
+LLM omits a required param.
+
+CloudOpsBench dataset conventions encoded here:
+- ``case.process`` is split into ``path1`` (alert trigger sequence) and
+  ``path2`` (recovery / diagnostic actions).
+- Each process step is encoded as ``"Action::param1::param2::..."``.
+- ``case.result.fault_object`` is encoded as ``"app/<service_name>"``.
+"""
 
 from __future__ import annotations
 
@@ -7,10 +33,78 @@ from typing import Any, Protocol, cast
 
 from app.tools.tool_decorator import tool
 
+# --------------------------------------------------------------------------- #
+# Dataset conventions — change only when the upstream dataset format changes. #
+# --------------------------------------------------------------------------- #
+
+# Process-step actions that encode service_name in position [1].
+# The dataset guarantees this contract for these four action names.
+_ACTIONS_WITH_SERVICE_NAME: frozenset[str] = frozenset(
+    {
+        "GetErrorLogs",
+        "GetRecentLogs",
+        "GetServiceDependencies",
+        "GetAppYAML",
+    }
+)
+
+# Prefix used in ``case.result.fault_object``: ``"app/<service_name>"``.
+_FAULT_OBJECT_APP_PREFIX = "app/"
+
+# Search order over ``case.process``. The asymmetry is intentional:
+# - alert-first: when we want the affected service, path1 names it
+# - recovery-first: when we want action parameters, path2 has the calls
+_PATHS_ALERT_FIRST: tuple[str, ...] = ("path1", "path2")
+_PATHS_RECOVERY_FIRST: tuple[str, ...] = ("path2", "path1")
+
+# --------------------------------------------------------------------------- #
+# Fallback defaults — dead-code on the happy path.                            #
+#                                                                             #
+# After the injected-params fix the LLM is the source of truth for every      #
+# non-injected tool arg via ``tc.input``. These constants only fire when      #
+# BOTH the case process is missing the relevant step AND the LLM omits the    #
+# required param — a combination that should not happen for required fields. #
+# Kept as a safety net, not as primary behavior.                              #
+# --------------------------------------------------------------------------- #
+
+_DEFAULT_SERVICE = "frontend"  # most-frequent service in the dataset
+_DEFAULT_NAMESPACE = "default"  # Kubernetes' standard namespace
+_DEFAULT_RESOURCE_TYPE = "pods"  # most-listed K8s resource type
+_DEFAULT_DESCRIBE_RESOURCE_TYPE = "services"
+_DEFAULT_HTTP_PORT = 80
+_DEFAULT_CONTROL_PLANE_NODE = "master"  # legacy K8s naming used by the dataset
+_DEFAULT_CONTROL_PLANE_SERVICE = "kube-scheduler"
+
 
 class _CloudOpsBenchBackend(Protocol):
+    """Duck-typed contract for the Cloud-OpsBench replay backend.
+
+    The concrete implementation lives at
+    ``tests/benchmarks/cloudopsbench/replay_backend.py``. Capturing the
+    contract here instead of importing the class keeps ``app/`` runtime
+    code free of a dependency on ``tests/``.
+
+    Helpers in this module duck-type via
+    ``getattr(backend, "is_cloudopsbench_backend", False)`` rather than
+    ``isinstance(backend, _CloudOpsBenchBackend)`` — this Protocol exists
+    for human readers and IDE navigation, not for runtime enforcement.
+    Any object exposing the marker attribute participates.
+    """
+
+    # Marker attribute. ``True`` on the replay backend; absent (and so
+    # treated as ``False`` via ``getattr`` default) on real EKS sources.
     is_cloudopsbench_backend: bool
+
+    # The Cloud-OpsBench dataset case being replayed. Typed ``Any`` because
+    # the Case schema lives outside ``app/`` (see
+    # ``tests/benchmarks/cloudopsbench/case_loader.py``). Attributes consumed
+    # here: ``case.process`` (dict of path1/path2 step lists) and
+    # ``case.result.fault_object``.
     case: Any
+
+    # Default K8s namespace recorded on the case. Last-resort fallback in
+    # ``_default_namespace`` when neither alert sources nor the case
+    # override it.
     default_namespace: str
 
 
@@ -28,30 +122,25 @@ def _cloudops_available(sources: dict[str, dict]) -> bool:
 def _service_from_process(backend: Any) -> str:
     case = getattr(backend, "case", None)
     process = getattr(case, "process", {}) or {}
-    for path_name in ("path1", "path2"):
+    for path_name in _PATHS_ALERT_FIRST:
         for step in process.get(path_name, []):
             if not isinstance(step, str):
                 continue
             parts = step.split("::")
-            if len(parts) >= 2 and parts[0] in {
-                "GetErrorLogs",
-                "GetRecentLogs",
-                "GetServiceDependencies",
-                "GetAppYAML",
-            }:
+            if len(parts) >= 2 and parts[0] in _ACTIONS_WITH_SERVICE_NAME:
                 return parts[1]
 
     result = getattr(case, "result", None)
     fault_object = getattr(result, "fault_object", "")
-    if isinstance(fault_object, str) and fault_object.startswith("app/"):
+    if isinstance(fault_object, str) and fault_object.startswith(_FAULT_OBJECT_APP_PREFIX):
         return fault_object.split("/", 1)[1]
-    return "frontend"
+    return _DEFAULT_SERVICE
 
 
 def _process_parts_for_action(backend: Any, action_name: str) -> list[str]:
     case = getattr(backend, "case", None)
     process = getattr(case, "process", {}) or {}
-    for path_name in ("path2", "path1"):
+    for path_name in _PATHS_RECOVERY_FIRST:
         for step in process.get(path_name, []):
             if not isinstance(step, str):
                 continue
@@ -65,13 +154,13 @@ def _resource_type_from_process(backend: Any) -> str:
     parts = _process_parts_for_action(backend, "GetResources")
     if len(parts) >= 2:
         return parts[1]
-    return "pods"
+    return _DEFAULT_RESOURCE_TYPE
 
 
 def _default_namespace(backend: Any, sources: dict[str, dict]) -> str:
     eks = sources.get("eks") or {}
     namespace = eks.get("namespace") or getattr(backend, "default_namespace", "")
-    return str(namespace or "default")
+    return str(namespace or _DEFAULT_NAMESPACE)
 
 
 def _extract_backend(sources: dict[str, dict]) -> dict[str, Any]:
@@ -90,7 +179,7 @@ def _extract_get_resources(sources: dict[str, dict]) -> dict[str, Any]:
 def _extract_describe_resource(sources: dict[str, dict]) -> dict[str, Any]:
     backend = _cloudops_backend(sources)
     parts = _process_parts_for_action(backend, "DescribeResource")
-    resource_type = parts[1] if len(parts) >= 2 else "services"
+    resource_type = parts[1] if len(parts) >= 2 else _DEFAULT_DESCRIBE_RESOURCE_TYPE
     name = parts[2] if len(parts) >= 3 else _service_from_process(backend)
     return {
         "cloudops_backend": backend,
@@ -144,7 +233,7 @@ def _extract_connectivity(sources: dict[str, dict]) -> dict[str, Any]:
     return {
         "cloudops_backend": backend,
         "service_name": parts[1] if len(parts) >= 2 else _service_from_process(backend),
-        "port": int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 80,
+        "port": int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else _DEFAULT_HTTP_PORT,
         "namespace": _default_namespace(backend, sources),
     }
 
@@ -154,8 +243,8 @@ def _extract_node_status(sources: dict[str, dict]) -> dict[str, Any]:
     parts = _process_parts_for_action(backend, "CheckNodeServiceStatus")
     return {
         "cloudops_backend": backend,
-        "node_name": parts[1] if len(parts) >= 2 else "master",
-        "service_name": parts[2] if len(parts) >= 3 else "kube-scheduler",
+        "node_name": parts[1] if len(parts) >= 2 else _DEFAULT_CONTROL_PLANE_NODE,
+        "service_name": parts[2] if len(parts) >= 3 else _DEFAULT_CONTROL_PLANE_SERVICE,
     }
 
 
