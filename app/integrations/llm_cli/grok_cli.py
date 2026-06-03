@@ -63,7 +63,6 @@ from app.integrations.llm_cli.env_overrides import (
 )
 from app.integrations.llm_cli.probe_utils import run_version_probe
 from app.integrations.llm_cli.semver_utils import parse_semver_three_part
-from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
 _PROBE_TIMEOUT_SEC = 5.0
