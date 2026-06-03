@@ -177,9 +177,11 @@ def test_list_services_falls_back_to_v1_on_404(monkeypatch: Any) -> None:
 
 
 def test_list_span_names_parses_v1_string_values(monkeypatch: Any) -> None:
+    fake = _patch_client(monkeypatch, _FakeResponse({"tagValues": ["GET /a", "POST /b"]}))
     result = _client().list_span_names()
     assert result["available"] is True
     assert result["span_names"] == ["GET /a", "POST /b"]
+    assert fake.calls[0]["url"].endswith("/api/v2/search/tag/name/values")
 
 
 def test_search_traces_surfaces_http_error(monkeypatch: Any) -> None:
