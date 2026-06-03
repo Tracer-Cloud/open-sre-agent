@@ -644,5 +644,3 @@ def test_adapter_build_does_not_need_to_forward_opencode_vars() -> None:
         assert "OPENCODE_CONFIG" not in inv.env
 
         assert inv.env.get("NO_COLOR") == "1"
-
-
