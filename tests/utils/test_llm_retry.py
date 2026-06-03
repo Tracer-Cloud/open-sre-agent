@@ -4,6 +4,18 @@ from __future__ import annotations
 
 import pytest
 
+# Two import shapes, intentional and consistent:
+#   1. ``from app.utils.llm_retry import ...`` for the symbols tests use
+#      directly (DEFAULT_MAX_ATTEMPTS, is_rate_limit_error, etc.).
+#   2. ``import ... as llm_retry`` so monkeypatch can target the module's
+#      ``.time`` and ``.random`` attributes (the production code calls
+#      ``time.sleep`` / ``random.uniform`` bound to those module-level
+#      names). Patching ``"app.utils.llm_retry.time.sleep"`` as a string
+#      works too, but the module-alias form is cleaner.
+# Hoisted here from per-test ``import`` statements so we use a single
+# import style throughout (satisfies CodeQL "Module imported with both
+# 'import' and 'import from'").
+import app.utils.llm_retry as llm_retry
 from app.utils.llm_retry import (
     DEFAULT_MAX_ATTEMPTS,
     RETRY_AFTER_MAX_SEC,
@@ -65,8 +77,6 @@ def test_retry_on_rate_limit_returns_immediately_on_success() -> None:
 
 def test_retry_on_rate_limit_recovers_after_transient_failures(monkeypatch) -> None:
     """Two 429s, then success — final result returned, 3 total calls."""
-    import app.utils.llm_retry as llm_retry
-
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
     calls = {"n": 0}
@@ -83,8 +93,6 @@ def test_retry_on_rate_limit_recovers_after_transient_failures(monkeypatch) -> N
 
 def test_retry_on_rate_limit_reraises_after_exhausting(monkeypatch) -> None:
     """Always 429 — should re-raise after max_attempts. No silent None."""
-    import app.utils.llm_retry as llm_retry
-
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
     calls = {"n": 0}
@@ -100,8 +108,6 @@ def test_retry_on_rate_limit_reraises_after_exhausting(monkeypatch) -> None:
 
 def test_retry_on_rate_limit_does_not_retry_non_rate_limit_errors(monkeypatch) -> None:
     """A schema error fails fast — retrying a deterministic bug is wasted."""
-    import app.utils.llm_retry as llm_retry
-
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
     calls = {"n": 0}
@@ -118,8 +124,6 @@ def test_retry_on_rate_limit_does_not_retry_non_rate_limit_errors(monkeypatch) -
 
 def test_retry_on_rate_limit_respects_custom_max_attempts(monkeypatch) -> None:
     """Caller can lower / raise the retry count for their tolerance budget."""
-    import app.utils.llm_retry as llm_retry
-
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
     calls = {"n": 0}
@@ -139,8 +143,6 @@ def test_retry_on_rate_limit_applies_full_jitter_with_doubling_upper_bound(
     """random.uniform must be called with (0, current_backoff), and the
     upper bound must double on each retry — that's the exponential growth
     inside the jitter envelope."""
-    import app.utils.llm_retry as llm_retry
-
     sleeps: list[float] = []
     jitter_bounds: list[tuple[float, float]] = []
 
@@ -248,7 +250,6 @@ def test_retry_on_rate_limit_jitter_is_non_deterministic_under_real_random() -> 
     identical sleep durations — confirms random.uniform is actually wired
     into the production path (not e.g. accidentally short-circuited to a
     constant by a future refactor)."""
-    import app.utils.llm_retry as llm_retry
 
     def fn() -> str:
         raise RuntimeError("rate limit exceeded")
