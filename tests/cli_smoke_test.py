@@ -519,11 +519,12 @@ def test_investigate_onboard_handoff_smoke(
 
     # Exit 1 is expected — no real API key in CI.
     assert result.exit_code == 1
-    # The failure must be about the missing API key, not bad CLI wiring,
-    # a missing file, or a JSON parse error.
+    # The failure must name the missing credential specifically — not a generic
+    # "run opensre onboard" fallback that would also appear when config loading
+    # itself is broken (the scenario this test is designed to catch).
     combined = result.stdout + result.stderr
-    assert "ANTHROPIC_API_KEY" in combined or "onboard" in combined.lower(), (
-        f"Expected an LLM credential error, got:\n{combined}"
+    assert "ANTHROPIC_API_KEY" in combined, (
+        f"Expected a missing-credential error naming ANTHROPIC_API_KEY, got:\n{combined}"
     )
 
 
