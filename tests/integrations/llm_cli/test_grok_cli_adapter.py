@@ -15,6 +15,7 @@ from app.integrations.llm_cli.grok_cli import (
     _classify_grok_auth_from_probe,
     _fallback_grok_paths,
     _has_explicit_grok_auth_env,
+    parse_grok_models_output,
 )
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
@@ -469,3 +470,57 @@ def test_fallback_paths_linux() -> None:
 
     normalized = _posix_path_set(paths)
     assert "/custom/npm/bin/grok" in normalized
+
+
+# ---------------------------------------------------------------------------
+# parse_grok_models_output
+# ---------------------------------------------------------------------------
+
+
+def test_parse_models_output_typical() -> None:
+    text = (
+        "You are logged in with grok.com.\n\n"
+        "Default model: grok-build\n\n"
+        "Available models:\n"
+        "  - grok-composer-2.5-fast\n"
+        "  * grok-build (default)\n"
+    )
+    assert parse_grok_models_output(text) == ["grok-composer-2.5-fast", "grok-build"]
+
+
+def test_parse_models_output_empty_string() -> None:
+    assert parse_grok_models_output("") == []
+
+
+def test_parse_models_output_no_available_models_section() -> None:
+    assert parse_grok_models_output("You are logged in.\n\nDefault model: grok-build\n") == []
+
+
+def test_parse_models_output_stops_at_non_list_line() -> None:
+    text = (
+        "Available models:\n"
+        "  - grok-fast\n"
+        "  - grok-slow\n"
+        "\n"
+        "Some trailing info that is not a model.\n"
+        "  - grok-phantom\n"
+    )
+    # Blank line terminates the section; grok-phantom must not be included.
+    assert parse_grok_models_output(text) == ["grok-fast", "grok-slow"]
+
+
+def test_parse_models_output_strips_parenthetical_annotation() -> None:
+    text = "Available models:\n  * grok-build (default)\n"
+    assert parse_grok_models_output(text) == ["grok-build"]
+
+
+def test_parse_models_output_model_id_with_parenthesis_in_name() -> None:
+    # A model whose ID itself contains '(' should be truncated at the first '('
+    # per the current split("(")[0] behaviour — this test documents that contract.
+    text = "Available models:\n  - grok-weird(beta)\n"
+    assert parse_grok_models_output(text) == ["grok-weird"]
+
+
+def test_parse_models_output_section_header_case_insensitive() -> None:
+    text = "AVAILABLE MODELS:\n  - grok-x\n"
+    assert parse_grok_models_output(text) == ["grok-x"]

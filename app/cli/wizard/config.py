@@ -435,32 +435,9 @@ def _fetch_grok_cli_models() -> tuple[ModelOption, ...]:
     Falls back to the static ``GROK_CLI_MODELS`` list on any error so the
     wizard never stalls waiting for a binary that isn't installed yet.
     """
-    import subprocess
+    from app.integrations.llm_cli.grok_cli import fetch_grok_cli_model_ids
 
-    from app.integrations.llm_cli.grok_cli import (
-        GrokCLIAdapter,
-        _grok_env_overrides,
-        parse_grok_models_output,
-    )
-
-    binary = GrokCLIAdapter()._resolve_binary()
-    if not binary:
-        return GROK_CLI_MODELS
-
-    try:
-        env = {**os.environ, **_grok_env_overrides()}
-        proc = subprocess.run(
-            [binary, "models"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-            env=env,
-        )
-        model_ids = parse_grok_models_output(proc.stdout)
-    except Exception:
-        return GROK_CLI_MODELS
-
+    model_ids = fetch_grok_cli_model_ids()
     if not model_ids:
         return GROK_CLI_MODELS
 

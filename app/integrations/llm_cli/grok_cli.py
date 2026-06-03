@@ -2,8 +2,8 @@
 
 Grok Build is xAI's terminal-native agentic coding tool (binary: ``grok``). OpenSRE
 uses it purely as a one-shot text responder inside the ReAct loop, so invocations
-run in headless ``-p`` mode with ``--output-format plain`` and ``--no-auto-update``
-and never pass ``--always-approve`` (we do not want Grok autonomously editing files
+run in headless ``-p`` mode with ``--output-format plain`` and never pass
+``--always-approve`` (we do not want Grok autonomously editing files
 or running shell commands; OpenSRE provides its own tools).
 
 Env vars
@@ -153,6 +153,36 @@ def parse_grok_models_output(text: str) -> list[str]:
 
 def _fallback_grok_paths() -> list[str]:
     return _default_cli_fallback_paths("grok")
+
+
+def fetch_grok_cli_model_ids() -> list[str]:
+    """Run ``grok models`` and return the available model IDs.
+
+    Returns an empty list on any error (binary not found, timeout, parse failure).
+    Callers should fall back to a static list when this returns empty.
+    """
+    binary = resolve_cli_binary(
+        explicit_env_key="GROK_CLI_BIN",
+        binary_names=_candidate_binary_names("grok"),
+        fallback_paths=_fallback_grok_paths,
+    )
+    if not binary:
+        return []
+    try:
+        env = {**os.environ, **_grok_env_overrides()}
+        proc = subprocess.run(
+            [binary, "models"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+            env=env,
+        )
+        return parse_grok_models_output(proc.stdout)
+    except Exception:
+        return []
 
 
 class GrokCLIAdapter:
