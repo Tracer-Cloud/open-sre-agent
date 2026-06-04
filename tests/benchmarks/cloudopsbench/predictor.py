@@ -32,7 +32,7 @@ import logging
 import re
 from typing import Any
 
-from app.utils.llm_retry import retry_on_rate_limit
+from app.utils.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
 
 logger = logging.getLogger(__name__)
@@ -168,6 +168,12 @@ def emit_paper_predictions(
             lambda: llm.invoke([{"role": "user", "content": user_content}], system=system),
             label="predictor",
         )
+    except LLMCreditExhaustedError:
+        # Fatal — propagate so the bench runner halts. Continuing on a
+        # dead account would just emit hundreds of None-results for cells
+        # that have no chance of scoring; the operator needs to top up
+        # balance first.
+        raise
     except Exception as exc:  # noqa: BLE001 — best-effort step; never block scoring
         logger.warning("[predictor] LLM invocation failed: %s", exc)
         return None

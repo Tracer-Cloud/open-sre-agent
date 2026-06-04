@@ -64,12 +64,25 @@ def _looks_like_timeout(exc: BaseException) -> bool:
 
 
 def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
-    """Return a structured failure when *exc* is a known operational LLM error."""
+    """Return a structured failure when *exc* is a known operational LLM error.
+
+    Returns ``None`` to signal the caller should re-raise. In particular,
+    :class:`LLMCreditExhaustedError` is intentionally NOT classified — it
+    represents a non-recoverable billing condition that the bench runner
+    (and production agent) must halt on, not wrap into a degraded result.
+    """
     from app.integrations.llm_cli.errors import (
         CLIAuthenticationRequired,
         CLIInterruptedError,
         CLITimeoutError,
     )
+    from app.utils.llm_retry import LLMCreditExhaustedError
+
+    # Fatal — propagate to the runner / operator. Do NOT wrap into the
+    # generic "rate-limited" classification (which the text branch below
+    # would otherwise match against "credit balance too low" / "quota").
+    if isinstance(exc, LLMCreditExhaustedError):
+        return None
 
     if isinstance(exc, CLIAuthenticationRequired):
         return LLMInvokeFailure(

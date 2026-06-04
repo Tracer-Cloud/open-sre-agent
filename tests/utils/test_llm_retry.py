@@ -4,25 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-# Two import shapes, intentional and consistent:
-#   1. ``from app.utils.llm_retry import ...`` for the symbols tests use
-#      directly (DEFAULT_MAX_ATTEMPTS, is_rate_limit_error, etc.).
-#   2. ``import ... as llm_retry`` so monkeypatch can target the module's
-#      ``.time`` and ``.random`` attributes (the production code calls
-#      ``time.sleep`` / ``random.uniform`` bound to those module-level
-#      names). Patching ``"app.utils.llm_retry.time.sleep"`` as a string
-#      works too, but the module-alias form is cleaner.
-# Hoisted here from per-test ``import`` statements so we use a single
-# import style throughout (satisfies CodeQL "Module imported with both
-# 'import' and 'import from'").
+# Single import style for the helper module. We use the module alias for
+# every symbol (``llm_retry.is_rate_limit_error``, ``llm_retry.retry_on_rate_limit``,
+# etc.) so monkeypatching ``llm_retry.time`` and ``llm_retry.random`` shares
+# the same lookup path as the symbols under test. Satisfies CodeQL
+# "Module imported with both 'import' and 'import from'" (a from-import
+# alongside a module-import flags as mixed-style).
 import app.utils.llm_retry as llm_retry
-from app.utils.llm_retry import (
-    DEFAULT_MAX_ATTEMPTS,
-    RETRY_AFTER_MAX_SEC,
-    extract_retry_after_seconds,
-    is_rate_limit_error,
-    retry_on_rate_limit,
-)
 
 # --------------------------------------------------------------------------- #
 # is_rate_limit_error — provider recognizer                                   #
@@ -30,8 +18,8 @@ from app.utils.llm_retry import (
 
 
 def test_is_rate_limit_error_recognizes_openai_wrapper() -> None:
-    assert is_rate_limit_error(RuntimeError("OpenAI rate limit exceeded: 429"))
-    assert is_rate_limit_error(
+    assert llm_retry.is_rate_limit_error(RuntimeError("OpenAI rate limit exceeded: 429"))
+    assert llm_retry.is_rate_limit_error(
         RuntimeError(
             "Rate limit reached for gpt-4o-2024-11-20 ... "
             "tokens per min (TPM): Limit 30000, Used 29248."
@@ -40,23 +28,82 @@ def test_is_rate_limit_error_recognizes_openai_wrapper() -> None:
 
 
 def test_is_rate_limit_error_recognizes_anthropic_wrapper() -> None:
-    assert is_rate_limit_error(RuntimeError("Anthropic rate limit exceeded: 429"))
+    assert llm_retry.is_rate_limit_error(RuntimeError("Anthropic rate limit exceeded: 429"))
 
 
 def test_is_rate_limit_error_recognizes_structured_code() -> None:
-    assert is_rate_limit_error(RuntimeError("provider error: rate_limit_exceeded"))
+    assert llm_retry.is_rate_limit_error(RuntimeError("provider error: rate_limit_exceeded"))
 
 
 def test_is_rate_limit_error_case_insensitive() -> None:
-    assert is_rate_limit_error(RuntimeError("RATE LIMIT EXCEEDED"))
-    assert is_rate_limit_error(RuntimeError("TPM Exceeded"))
+    assert llm_retry.is_rate_limit_error(RuntimeError("RATE LIMIT EXCEEDED"))
+    assert llm_retry.is_rate_limit_error(RuntimeError("TPM Exceeded"))
 
 
 def test_is_rate_limit_error_does_not_match_unrelated_errors() -> None:
     # Don't retry 400 schema errors, generic exceptions, or model-not-found.
-    assert not is_rate_limit_error(RuntimeError("Anthropic request rejected (HTTP 400)"))
-    assert not is_rate_limit_error(ValueError("invalid input schema"))
-    assert not is_rate_limit_error(RuntimeError("OpenAI model 'foo' not found"))
+    assert not llm_retry.is_rate_limit_error(RuntimeError("Anthropic request rejected (HTTP 400)"))
+    assert not llm_retry.is_rate_limit_error(ValueError("invalid input schema"))
+    assert not llm_retry.is_rate_limit_error(RuntimeError("OpenAI model 'foo' not found"))
+
+
+def test_is_rate_limit_error_does_not_match_credit_exhaustion() -> None:
+    """Credit exhaustion can surface as 429 with 'rate limit' in surrounding
+    text, but it's NOT transient. is_rate_limit_error must filter it out so
+    the retry path never fires on a dead account."""
+    err = RuntimeError(
+        "OpenAI rate limit exceeded: Error code: 429 - "
+        "{'error': {'message': 'You exceeded your current quota', "
+        "'code': 'insufficient_quota'}}"
+    )
+    # Although "rate limit" is in the text, the credit hint wins → False.
+    assert not llm_retry.is_rate_limit_error(err)
+    assert llm_retry.is_credit_exhausted_error(err)
+
+
+# --------------------------------------------------------------------------- #
+# is_credit_exhausted_error — provider billing/quota recognizer               #
+# --------------------------------------------------------------------------- #
+
+
+def test_is_credit_exhausted_recognizes_openai_insufficient_quota() -> None:
+    assert llm_retry.is_credit_exhausted_error(
+        RuntimeError(
+            "Error code: 429 - {'error': {'message': "
+            "'You exceeded your current quota, please check your plan and billing details.', "
+            "'code': 'insufficient_quota'}}"
+        )
+    )
+
+
+def test_is_credit_exhausted_recognizes_openai_billing_hard_limit() -> None:
+    assert llm_retry.is_credit_exhausted_error(
+        RuntimeError("billing_hard_limit_reached for organization org-xyz")
+    )
+
+
+def test_is_credit_exhausted_recognizes_anthropic_credit_balance() -> None:
+    assert llm_retry.is_credit_exhausted_error(
+        RuntimeError(
+            "Anthropic request rejected (HTTP 400): "
+            "{'error': {'message': 'Your credit balance is too low to access the Anthropic API.'}}"
+        )
+    )
+
+
+def test_is_credit_exhausted_does_not_match_transient_rate_limit() -> None:
+    # Pure TPM rate limit — no credit/quota hint. Must NOT match.
+    err = RuntimeError(
+        "Rate limit reached for gpt-4o-2024-11-20 ... "
+        "tokens per min (TPM): Limit 30000, Used 29248. Please try again in 94ms."
+    )
+    assert not llm_retry.is_credit_exhausted_error(err)
+    assert llm_retry.is_rate_limit_error(err)
+
+
+def test_is_credit_exhausted_does_not_match_unrelated_errors() -> None:
+    assert not llm_retry.is_credit_exhausted_error(ValueError("invalid schema"))
+    assert not llm_retry.is_credit_exhausted_error(RuntimeError("model 'foo' not found"))
 
 
 # --------------------------------------------------------------------------- #
@@ -71,7 +118,7 @@ def test_retry_on_rate_limit_returns_immediately_on_success() -> None:
         calls["n"] += 1
         return "ok"
 
-    assert retry_on_rate_limit(fn, label="test") == "ok"
+    assert llm_retry.retry_on_rate_limit(fn, label="test") == "ok"
     assert calls["n"] == 1
 
 
@@ -87,7 +134,7 @@ def test_retry_on_rate_limit_recovers_after_transient_failures(monkeypatch) -> N
             raise RuntimeError("OpenAI rate limit exceeded")
         return "ok"
 
-    assert retry_on_rate_limit(fn, label="test") == "ok"
+    assert llm_retry.retry_on_rate_limit(fn, label="test") == "ok"
     assert calls["n"] == 3
 
 
@@ -102,8 +149,8 @@ def test_retry_on_rate_limit_reraises_after_exhausting(monkeypatch) -> None:
         raise RuntimeError("Anthropic rate limit exceeded")
 
     with pytest.raises(RuntimeError, match="rate limit"):
-        retry_on_rate_limit(fn, label="test")
-    assert calls["n"] == DEFAULT_MAX_ATTEMPTS
+        llm_retry.retry_on_rate_limit(fn, label="test")
+    assert calls["n"] == llm_retry.DEFAULT_MAX_ATTEMPTS
 
 
 def test_retry_on_rate_limit_does_not_retry_non_rate_limit_errors(monkeypatch) -> None:
@@ -117,7 +164,7 @@ def test_retry_on_rate_limit_does_not_retry_non_rate_limit_errors(monkeypatch) -
         raise ValueError("invalid schema")
 
     with pytest.raises(ValueError, match="invalid schema"):
-        retry_on_rate_limit(fn, label="test")
+        llm_retry.retry_on_rate_limit(fn, label="test")
     # Exactly one attempt — no retry on non-rate-limit errors.
     assert calls["n"] == 1
 
@@ -133,7 +180,7 @@ def test_retry_on_rate_limit_respects_custom_max_attempts(monkeypatch) -> None:
         raise RuntimeError("rate limit exceeded")
 
     with pytest.raises(RuntimeError):
-        retry_on_rate_limit(fn, label="test", max_attempts=5)
+        llm_retry.retry_on_rate_limit(fn, label="test", max_attempts=5)
     assert calls["n"] == 5
 
 
@@ -160,7 +207,7 @@ def test_retry_on_rate_limit_applies_full_jitter_with_doubling_upper_bound(
         raise RuntimeError("rate limit exceeded")
 
     with pytest.raises(RuntimeError):
-        retry_on_rate_limit(fn, label="test", initial_backoff_sec=2.0)
+        llm_retry.retry_on_rate_limit(fn, label="test", initial_backoff_sec=2.0)
 
     # 3 attempts → 2 sleeps between them (no sleep after the final raise).
     # Full jitter envelope is [0, backoff], backoff doubles each retry.
@@ -188,12 +235,12 @@ def _err_with_response(headers: dict[str, str], msg: str = "rate limited") -> Ru
 
 def test_extract_retry_after_reads_integer_seconds_header() -> None:
     err = _err_with_response({"retry-after": "5"})
-    assert extract_retry_after_seconds(err) == 5.0
+    assert llm_retry.extract_retry_after_seconds(err) == 5.0
 
 
 def test_extract_retry_after_reads_fractional_seconds_header() -> None:
     err = _err_with_response({"retry-after": "0.094"})
-    assert extract_retry_after_seconds(err) == pytest.approx(0.094)
+    assert llm_retry.extract_retry_after_seconds(err) == pytest.approx(0.094)
 
 
 def test_extract_retry_after_falls_back_to_body_text_milliseconds() -> None:
@@ -202,47 +249,47 @@ def test_extract_retry_after_falls_back_to_body_text_milliseconds() -> None:
         "OpenAI rate limit exceeded: Error code: 429 - "
         "Limit 30000, Used 29248, Requested 799. Please try again in 94ms."
     )
-    assert extract_retry_after_seconds(err) == pytest.approx(0.094)
+    assert llm_retry.extract_retry_after_seconds(err) == pytest.approx(0.094)
 
 
 def test_extract_retry_after_falls_back_to_body_text_seconds() -> None:
-    # 12s — below the RETRY_AFTER_MAX_SEC cap so we read the exact value.
+    # 12s — below the llm_retry.RETRY_AFTER_MAX_SEC cap so we read the exact value.
     err = RuntimeError("rate limited: Please try again in 12s.")
-    assert extract_retry_after_seconds(err) == 12.0
+    assert llm_retry.extract_retry_after_seconds(err) == 12.0
 
 
 def test_extract_retry_after_caps_at_max() -> None:
     """A misconfigured provider returning ``retry-after: 3600`` must not
-    hang the agent loop for an hour. Cap at RETRY_AFTER_MAX_SEC."""
+    hang the agent loop for an hour. Cap at llm_retry.RETRY_AFTER_MAX_SEC."""
     err = _err_with_response({"retry-after": "3600"})
-    assert extract_retry_after_seconds(err) == RETRY_AFTER_MAX_SEC
+    assert llm_retry.extract_retry_after_seconds(err) == llm_retry.RETRY_AFTER_MAX_SEC
 
 
 def test_extract_retry_after_caps_body_hint_at_max() -> None:
     err = RuntimeError("rate limited: Please try again in 7200s.")
-    assert extract_retry_after_seconds(err) == RETRY_AFTER_MAX_SEC
+    assert llm_retry.extract_retry_after_seconds(err) == llm_retry.RETRY_AFTER_MAX_SEC
 
 
 def test_extract_retry_after_returns_none_when_no_hint_present() -> None:
     # No response attached, no body hint — caller should fall back to jitter.
-    assert extract_retry_after_seconds(RuntimeError("rate limited, generic")) is None
+    assert llm_retry.extract_retry_after_seconds(RuntimeError("rate limited, generic")) is None
     # Response present but no retry-after header.
     err = _err_with_response({"x-other": "value"})
-    assert extract_retry_after_seconds(err) is None
+    assert llm_retry.extract_retry_after_seconds(err) is None
 
 
 def test_extract_retry_after_skips_http_date_format() -> None:
     """HTTP-date Retry-After is allowed by RFC 7231 but rare. We don't parse
     it — fall through to body text or None."""
     err = _err_with_response({"retry-after": "Wed, 21 Oct 2015 07:28:00 GMT"})
-    assert extract_retry_after_seconds(err) is None
+    assert llm_retry.extract_retry_after_seconds(err) is None
 
 
 def test_extract_retry_after_ignores_negative_header() -> None:
     """Negative retry-after is invalid per spec; treat as no hint and fall
     back. (Some misconfigured proxies have been observed sending -1.)"""
     err = _err_with_response({"retry-after": "-1"})
-    assert extract_retry_after_seconds(err) is None
+    assert llm_retry.extract_retry_after_seconds(err) is None
 
 
 def test_retry_on_rate_limit_jitter_is_non_deterministic_under_real_random() -> None:
@@ -260,7 +307,7 @@ def test_retry_on_rate_limit_jitter_is_non_deterministic_under_real_random() -> 
         llm_retry.time.sleep = sleeps.append  # type: ignore[assignment]
         try:
             with pytest.raises(RuntimeError):
-                retry_on_rate_limit(fn, label="test", initial_backoff_sec=2.0)
+                llm_retry.retry_on_rate_limit(fn, label="test", initial_backoff_sec=2.0)
         finally:
             llm_retry.time.sleep = original_sleep  # type: ignore[assignment]
         return sleeps

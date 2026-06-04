@@ -61,6 +61,42 @@ _RATE_LIMIT_HINTS: tuple[str, ...] = (
     "tpm",
 )
 
+# Substrings that indicate provider-side billing / quota exhaustion. UNLIKE
+# rate limits, these are NOT transient — retrying won't help until the
+# operator tops up balance or raises the spending cap. Kept disjoint from
+# the rate-limit hints above so ``is_rate_limit_error`` and
+# ``is_credit_exhausted_error`` never both match the same string.
+#   - OpenAI:    error code ``insufficient_quota``, body text
+#                "You exceeded your current quota"
+#   - Anthropic: HTTP 400 with body text
+#                "Your credit balance is too low to access the Anthropic API"
+#   - OpenAI:    error code ``billing_hard_limit_reached`` (org-level cap)
+_CREDIT_EXHAUSTED_HINTS: tuple[str, ...] = (
+    "insufficient_quota",
+    "billing_hard_limit_reached",
+    "exceeded your current quota",
+    "credit balance is too low",
+    "credit balance too low",
+)
+
+
+class LLMCreditExhaustedError(Exception):
+    """Provider-side billing / quota exhaustion — fatal, not retry-recoverable.
+
+    Raised by the LLM clients when the provider returns ``insufficient_quota``,
+    ``billing_hard_limit_reached``, ``"credit balance too low"``, or
+    equivalent. UNLIKE transient rate-limit errors, retries don't help —
+    the operator must top up balance or raise the spending cap.
+
+    Bench runner halts the entire run on first occurrence (continuing burns
+    wall-clock on a dead account and produces no useful data). Production
+    agent surfaces it as a credential / billing error.
+
+    Intentionally NOT a subclass of ``RuntimeError`` so the existing
+    catch-all-RuntimeError paths don't accidentally swallow it. Always
+    propagate to the operator.
+    """
+
 
 def is_rate_limit_error(exc: BaseException) -> bool:
     """Return True if ``exc`` looks like a transient rate-limit error.
@@ -68,9 +104,35 @@ def is_rate_limit_error(exc: BaseException) -> bool:
     Provider-agnostic: matches the message text of OpenAI's RateLimitError,
     Anthropic's RateLimitError, opensre's ``RuntimeError("... rate limit
     exceeded: ...")`` wrappers, and 429-shaped errors generally.
+
+    Returns False for non-transient billing/quota errors even though they
+    sometimes surface as 429 — those have their own recognizer
+    (:func:`is_credit_exhausted_error`) and a separate fatal path.
     """
     text = str(exc).lower()
+    if is_credit_exhausted_error(exc):
+        # OpenAI's insufficient_quota lands as HTTP 429 with "rate limit"
+        # in the surrounding message text. Don't classify it as transient;
+        # retries cannot fix a missing balance.
+        return False
     return any(hint in text for hint in _RATE_LIMIT_HINTS)
+
+
+def is_credit_exhausted_error(exc: BaseException) -> bool:
+    """Return True if ``exc`` indicates provider billing / quota exhaustion.
+
+    Provider-agnostic text matcher for the non-retryable billing cases:
+      - OpenAI 429 with ``code: insufficient_quota`` /
+        ``code: billing_hard_limit_reached``
+      - Anthropic 400 with body
+        ``"Your credit balance is too low to access the Anthropic API"``
+
+    Distinct from :func:`is_rate_limit_error` (which is transient/TPM and
+    retry-recoverable). Callers SHOULD NOT retry when this returns True —
+    raise :class:`LLMCreditExhaustedError` and let it propagate.
+    """
+    text = str(exc).lower()
+    return any(hint in text for hint in _CREDIT_EXHAUSTED_HINTS)
 
 
 def extract_retry_after_seconds(exc: BaseException) -> float | None:

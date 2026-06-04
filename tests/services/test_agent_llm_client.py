@@ -201,6 +201,78 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     )
 
 
+def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anthropic surfaces "credit balance too low" as HTTP 400.
+    Distinguish billing exhaustion (fatal, no retry) from real schema errors
+    so the bench runner halts on first occurrence instead of wrapping into
+    a generic RuntimeError that the cell loop catches as a per-cell failure."""
+    from app.utils.llm_retry import LLMCreditExhaustedError
+
+    fake_anthropic = _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    call_count = 0
+
+    def raise_credit_error(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_anthropic.BadRequestError(
+            "Error code: 400 - {'error': {'message': "
+            "'Your credit balance is too low to access the Anthropic API.'}}"
+        )
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(
+        messages=types.SimpleNamespace(create=raise_credit_error)
+    )
+
+    with pytest.raises(LLMCreditExhaustedError, match="credit exhausted"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    # Fail fast — no retry on a dead account.
+    assert call_count == 1
+
+
+def test_openai_insufficient_quota_raises_LLMCreditExhaustedError(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OpenAI returns insufficient_quota as HTTP 429 with body text. Even
+    though it lands in our RateLimitError handler (which normally retries),
+    the credit check must short-circuit to LLMCreditExhaustedError. This is
+    the exact scenario that burned 1h42m on the June-3 run #2."""
+    from app.utils.llm_retry import LLMCreditExhaustedError
+
+    fake_openai = _install_fake_openai(monkeypatch)
+
+    call_count = 0
+
+    def raise_insufficient_quota(**_: object) -> object:
+        nonlocal call_count
+        call_count += 1
+        raise fake_openai.RateLimitError(
+            "OpenAI rate limit exceeded: Error code: 429 - "
+            "{'error': {'message': 'You exceeded your current quota, please check "
+            "your plan and billing details.', 'code': 'insufficient_quota'}}"
+        )
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=raise_insufficient_quota)
+        )
+    )
+    client._model = "gpt-4o"
+    client._max_tokens = 512
+
+    with pytest.raises(LLMCreditExhaustedError, match="credit exhausted"):
+        client.invoke(messages=[{"role": "user", "content": "hi"}])
+
+    # Fail fast — exactly one attempt, no retry waste.
+    assert call_count == 1
+
+
 def test_anthropic_rate_limit_honors_retry_after_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -16,13 +16,36 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.utils.llm_retry import extract_retry_after_seconds
+from app.utils.llm_retry import (
+    LLMCreditExhaustedError,
+    extract_retry_after_seconds,
+    is_credit_exhausted_error,
+)
 
 logger = logging.getLogger(__name__)
 
 _RETRY_INITIAL_BACKOFF_SEC = 1.0
 _RETRY_MAX_ATTEMPTS = 3
 _CLIENT_TIMEOUT_SEC = 90.0
+
+
+def _maybe_raise_credit_exhausted(provider_name: str, err: BaseException) -> None:
+    """If ``err`` looks like provider billing / quota exhaustion, raise
+    :class:`LLMCreditExhaustedError` and short-circuit any retry path.
+
+    Providers route credit-exhaustion differently: OpenAI returns 429
+    with ``code: insufficient_quota`` (lands in our ``RateLimitError``
+    handler); Anthropic returns 400 with the body
+    ``"Your credit balance is too low ..."`` (lands in our
+    ``BadRequestError`` handler). Call this from BOTH handlers so neither
+    path silently retries on a dead account.
+    """
+    if is_credit_exhausted_error(err):
+        raise LLMCreditExhaustedError(
+            f"{provider_name} credit exhausted (provider billing/quota): "
+            f"top up balance or raise the spending cap at the provider "
+            f"console. Original error: {err}"
+        ) from err
 
 
 def _rate_limit_sleep_seconds(err: BaseException, fallback_backoff: float) -> float:
@@ -169,8 +192,16 @@ class AnthropicAgentClient:
             except PermissionDeniedError as err:
                 raise RuntimeError(self._permission_denied_error_message()) from err
             except BadRequestError as err:
+                # Anthropic surfaces "credit balance too low" as HTTP 400;
+                # distinguish credit exhaustion (fatal) from real schema
+                # errors before wrapping into a generic RuntimeError.
+                _maybe_raise_credit_exhausted(self.provider_name, err)
                 raise RuntimeError(self._bad_request_error_message(err)) from err
             except RateLimitError as err:
+                # OpenAI's insufficient_quota lands here too, dressed as 429
+                # with "rate limit" text. Distinguish billing exhaustion
+                # (fatal — no retry will help) from transient TPM throttling.
+                _maybe_raise_credit_exhausted(self.provider_name, err)
                 # Transient by definition — back off and retry instead of
                 # failing the whole case. Honor ``Retry-After`` when the
                 # provider sends one (much tighter than our jittered
@@ -512,8 +543,15 @@ class OpenAIAgentClient:
             except NotFoundError as err:
                 raise RuntimeError(f"OpenAI model '{self._model}' not found.") from err
             except BadRequestError as err:
+                # Some providers (or proxies) surface insufficient_quota as
+                # 400 — distinguish before the generic wrap.
+                _maybe_raise_credit_exhausted("OpenAI", err)
                 raise RuntimeError(f"OpenAI request rejected: {err}") from err
             except RateLimitError as err:
+                # OpenAI returns insufficient_quota as HTTP 429 with body
+                # text "You exceeded your current quota". Halt rather than
+                # burning retries on a dead account.
+                _maybe_raise_credit_exhausted("OpenAI", err)
                 # Transient by definition — back off and retry instead of
                 # failing the whole cell. OpenAI's body usually carries a
                 # tight hint like ``"Please try again in 94ms"``; honor it
