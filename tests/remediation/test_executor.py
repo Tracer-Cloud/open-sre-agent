@@ -6,6 +6,28 @@ from app.remediation.executor import execute_remediation_action
 from app.remediation.models import RemediationAction, RemediationActionType, SafetyLevel
 
 
+def test_execute_aws_ecs_restart_with_cluster() -> None:
+    import boto3
+    from unittest.mock import patch
+
+    with patch.object(boto3, "client") as mock_boto_client:
+        mock_instance = mock_boto_client.return_value
+        mock_instance.update_service.return_value = {"service": "my-service"}
+
+        action = RemediationAction(
+            action_type=RemediationActionType.aws_restart_ecs_service,
+            description="Restart ECS my-service in cluster prod-cluster",
+            command="aws ecs update-service --cluster prod-cluster --service my-service --force-new-deployment",
+            target="my-service",
+            parameters={"cluster": "prod-cluster"},
+        )
+        result = execute_remediation_action(action)
+        assert result.success
+        mock_instance.update_service.assert_called_once_with(
+            cluster="prod-cluster", service="my-service", forceNewDeployment=True
+        )
+
+
 def test_execute_manual_step_returns_noop() -> None:
     action = RemediationAction(
         action_type=RemediationActionType.manual_step,
@@ -113,5 +135,5 @@ def test_execute_aws_ecs_restart(mock_boto_client) -> None:
     result = execute_remediation_action(action)
     assert result.success
     mock_instance.update_service.assert_called_once_with(
-        service="my-service", forceNewDeployment=True
+        cluster="default", service="my-service", forceNewDeployment=True
     )

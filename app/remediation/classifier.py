@@ -23,14 +23,18 @@ _PATTERNS: list[PatternEntry] = [
         RemediationActionType.aws_restart_rds_instance,
         "aws rds reboot-db-instance --db-instance-identifier {target}",
     ),
-    # AWS ECS restart — must come before generic restart pattern
+    # AWS ECS restart — must come before generic restart pattern.
+    # Captures service name and optional cluster name.
+    # Expected forms:
+    #   "restart ECS service my-svc"
+    #   "restart the ECS service my-svc in cluster my-cluster"
     (
         re.compile(
-            r"(?:restart|reboot|update)\s+(?:the\s+)?(?:ECS|ecs)\s+(?:service\s+)?['\"]?([\w-]+)['\"]?",
+            r"(?:restart|reboot|update)\s+(?:the\s+)?(?:ECS|ecs)\s+(?:service\s+)?['\"]?([\w.-]+)['\"]?(?:\s+in\s+(?:cluster\s+)?['\"]?([\w.-]+)['\"]?)?",
             re.IGNORECASE,
         ),
         RemediationActionType.aws_restart_ecs_service,
-        "aws ecs update-service --service {target} --force-new-deployment",
+        "aws ecs update-service --cluster {cluster} --service {target} --force-new-deployment",
     ),
     # AWS ASG scale
     (
@@ -42,9 +46,10 @@ _PATTERNS: list[PatternEntry] = [
         "aws autoscaling update-auto-scaling-group --auto-scaling-group-name {target}",
     ),
     # kubectl rollout restart (supports "deployment/my-app" or "deployment my-app")
+    # NOTE: must come BEFORE the undo pattern so "undo" is not captured here.
     (
         re.compile(
-            r"(?:kubectl\s+)?rollout\s+(?:restart|undo)\s+(?:deployment|deploy)\s*[/\s]+([\w.-]+)",
+            r"(?:kubectl\s+)?rollout\s+restart\s+(?:deployment|deploy)\s*[/\s]+([\w.-]+)",
             re.IGNORECASE,
         ),
         RemediationActionType.kubectl_restart_deployment,
@@ -159,6 +164,13 @@ def _classify_single_step(step: str) -> RemediationAction:
             replicas = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
             params["replicas"] = replicas
             command = command_template.format(target=target, replicas=replicas)
+        elif action_type is RemediationActionType.aws_restart_ecs_service:
+            cluster = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
+            params["cluster"] = cluster
+            command = command_template.format(
+                target=target,
+                cluster=cluster or "default",
+            )
         elif action_type is RemediationActionType.generic_shell:
             command = target
             params["command"] = command

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess
 from typing import Any
 
@@ -87,15 +88,21 @@ def _build_aws_params(action: RemediationAction) -> dict[str, Any]:
     if action.action_type is RemediationActionType.aws_scale_asg:
         return {"AutoScalingGroupName": action.target}
     if action.action_type is RemediationActionType.aws_restart_ecs_service:
-        return {"service": action.target, "forceNewDeployment": True}
+        cluster = action.parameters.get("cluster") or ""
+        return {
+            "cluster": cluster or "default",
+            "service": action.target,
+            "forceNewDeployment": True,
+        }
     return {}
 
 
 def _execute_shell_command(action: RemediationAction) -> RemediationResult:
     try:
+        argv = shlex.split(action.command)
         completed = subprocess.run(
-            action.command,
-            shell=True,
+            argv,
+            shell=False,
             capture_output=True,
             text=True,
             encoding="utf-8",

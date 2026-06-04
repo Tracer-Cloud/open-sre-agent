@@ -41,7 +41,7 @@ def run_remediation_plan(
             )
             continue
 
-        if action.safety_level is SafetyLevel.safe or auto_execute:
+        if auto_execute:
             result = execute_remediation_action(action)
             entry_result = _result_to_dict(result)
             results.append(entry_result)
