@@ -601,6 +601,19 @@ class TestReadTailLines:
         lines = read_tail_lines(1234, max_bytes=25)
         assert lines == ["BBBBBBBBBB", "CCCCCCCCCC"]
 
+    def test_keeps_first_line_when_window_aligns_on_boundary(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # When the byte window starts exactly on a line boundary the first line
+        # is already complete and must be kept — it must not be dropped as if it
+        # were a partial head.
+        log = tmp_path / "agent.log"
+        log.write_text("AAAAAAAAAA\nBBBBBBBBBB\nCCCCCCCCCC\n")
+        self._patch_target(monkeypatch, log)
+        # 22 bytes == "BBBBBBBBBB\nCCCCCCCCCC\n"; start lands on B's newline.
+        lines = read_tail_lines(1234, max_bytes=22)
+        assert lines == ["BBBBBBBBBB", "CCCCCCCCCC"]
+
     def test_empty_file_returns_empty_list(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -627,6 +640,15 @@ class TestReadTailLines:
         self._patch_target(monkeypatch, log)
         with pytest.raises(ValueError, match="max_lines must be positive"):
             read_tail_lines(1234, max_lines=0)
+
+    def test_rejects_non_positive_max_bytes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = tmp_path / "agent.log"
+        log.write_text("x\n")
+        self._patch_target(monkeypatch, log)
+        with pytest.raises(ValueError, match="max_bytes must be positive"):
+            read_tail_lines(1234, max_bytes=0)
 
     def test_propagates_attach_unsupported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _fail(_pid: int) -> _ResolvedTarget:

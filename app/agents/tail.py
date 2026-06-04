@@ -439,22 +439,31 @@ def read_tail_lines(
     """
     if max_lines <= 0:
         raise ValueError("max_lines must be positive")
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be positive")
     target = _resolve_target(pid)
     try:
         with open(target.path, "rb") as fh:
             fh.seek(0, os.SEEK_END)
             size = fh.tell()
             start = max(0, size - max_bytes)
-            fh.seek(start)
+            # When the window starts mid-file, read one extra leading byte so we
+            # can tell whether our window begins exactly on a line boundary.
+            read_from = start - 1 if start > 0 else start
+            fh.seek(read_from)
             data = fh.read()
     except OSError as exc:
         raise AttachUnsupported(
             f"cannot read stdout target {target.path}: {exc.strerror or exc}"
         ) from exc
+    # Only drop the leading line when our window genuinely starts mid-line — i.e.
+    # the byte immediately before it is not a newline. If start lands exactly on
+    # a line boundary the first line is already complete and must be kept.
+    drop_partial = start > 0 and data[:1] != b"\n"
+    if start > 0:
+        data = data[1:]
     lines = data.decode("utf-8", errors="replace").splitlines()
-    # If we started mid-file the first line is almost certainly the partial
-    # tail of an earlier line — drop it so we never report a truncated line.
-    if start > 0 and lines:
+    if drop_partial and lines:
         lines = lines[1:]
     return lines[-max_lines:]
 
