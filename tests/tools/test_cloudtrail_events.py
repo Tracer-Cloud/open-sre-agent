@@ -249,6 +249,39 @@ def test_max_results_clamped(mock_call) -> None:
 
 
 @patch("app.tools.CloudTrailEventsTool.execute_aws_sdk_call")
+def test_truncated_when_next_token_present(mock_call) -> None:
+    mock_call.return_value = {
+        "success": True,
+        "data": {"Events": [], "NextToken": "tok-abc"},
+    }
+
+    result = lookup_cloudtrail_events()
+
+    # A NextToken means more events exist beyond this page — surface it.
+    assert result["truncated"] is True
+    assert result["next_token"] == "tok-abc"
+
+
+@patch("app.tools.CloudTrailEventsTool.execute_aws_sdk_call")
+def test_not_truncated_without_next_token(mock_call) -> None:
+    mock_call.return_value = {"success": True, "data": {"Events": []}}
+
+    result = lookup_cloudtrail_events()
+
+    assert result["truncated"] is False
+    assert result["next_token"] is None
+
+
+@patch("app.tools.CloudTrailEventsTool.execute_aws_sdk_call")
+def test_next_token_forwarded_to_api(mock_call) -> None:
+    mock_call.return_value = {"success": True, "data": {"Events": []}}
+
+    lookup_cloudtrail_events(next_token="tok-page-2")
+
+    assert mock_call.call_args.kwargs["parameters"]["NextToken"] == "tok-page-2"
+
+
+@patch("app.tools.CloudTrailEventsTool.execute_aws_sdk_call")
 def test_lookup_failure(mock_call) -> None:
     mock_call.return_value = {"success": False, "error": "ThrottlingException"}
 

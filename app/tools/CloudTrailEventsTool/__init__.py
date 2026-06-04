@@ -141,6 +141,14 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
                 "minimum": 1,
                 "maximum": MAX_RESULTS_LIMIT,
             },
+            "next_token": {
+                "type": "string",
+                "default": "",
+                "description": (
+                    "Pagination token from a previous truncated response; pass it to "
+                    "fetch the next page of events."
+                ),
+            },
         },
         "required": [],
     },
@@ -154,6 +162,7 @@ def lookup_cloudtrail_events(
     region: str = DEFAULT_CLOUDTRAIL_REGION,
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     max_results: int = DEFAULT_MAX_RESULTS,
+    next_token: str = "",
     aws_backend: Any = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
@@ -184,6 +193,7 @@ def lookup_cloudtrail_events(
                 duration_minutes=duration_minutes,
                 max_results=max_results,
                 region=region,
+                next_token=next_token,
             ),
         )
 
@@ -197,6 +207,8 @@ def lookup_cloudtrail_events(
     }
     if lookup_attributes:
         parameters["LookupAttributes"] = lookup_attributes
+    if next_token:
+        parameters["NextToken"] = next_token
 
     result = execute_aws_sdk_call(
         service_name="cloudtrail",
@@ -217,8 +229,13 @@ def lookup_cloudtrail_events(
             "error": "Failed to look up CloudTrail events. Check server logs for details.",
         }
 
-    raw_events = (result.get("data") or {}).get("Events") or []
+    data = result.get("data") or {}
+    raw_events = data.get("Events") or []
     events = [_shape_event(event) for event in raw_events]
+    # CloudTrail returns a NextToken when more matching events exist beyond this
+    # page. Surface it so the agent knows the result is partial (and can paginate
+    # via the next_token param) instead of silently treating 50 events as "all".
+    returned_token = data.get("NextToken") or None
 
     return {
         "source": "cloudtrail",
@@ -227,6 +244,8 @@ def lookup_cloudtrail_events(
         "duration_minutes": duration_minutes,
         "filter": (lookup_attributes[0] if lookup_attributes else None),
         "total_events": len(events),
+        "truncated": bool(returned_token),
+        "next_token": returned_token,
         "events": events,
         "error": None,
     }

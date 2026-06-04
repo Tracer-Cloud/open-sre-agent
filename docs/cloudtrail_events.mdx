@@ -32,9 +32,14 @@ CloudTrail is account-wide, so the tool becomes available to the planner wheneve
 | `region` | `us-east-1` | AWS region to query. |
 | `duration_minutes` | `60` | Look-back window. CloudTrail retains 90 days of history (the upper bound). |
 | `max_results` | `50` | Maximum events to return (CloudTrail caps this at 50 per call). |
+| `next_token` | — | Pagination token from a previous truncated response; pass it to fetch the next page. |
 
 <Note>
 CloudTrail's `LookupEvents` API accepts **only one filter attribute per call**. When more than one filter is supplied, the tool sends the most specific one, in priority order: `resource_name` → `username` → `event_source`. With no filter, it returns recent account-wide events for the window.
+</Note>
+
+<Note>
+CloudTrail returns at most 50 events per page. When more matching events exist, the response sets **`truncated: true`** and returns a **`next_token`** — pass it back via the `next_token` parameter to fetch the next page, so a busy account or wide window never silently drops events.
 </Note>
 
 ### Use cases
