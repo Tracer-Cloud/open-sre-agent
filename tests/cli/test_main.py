@@ -535,7 +535,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     landing_calls: list[int] = []
     monkeypatch.setattr(
         "app.cli.__main__.render_landing",
-        lambda: landing_calls.append(1),
+        lambda _group: landing_calls.append(1),
     )
 
     # run_repl must NOT be invoked when config.enabled is False.
@@ -575,7 +575,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     landing_calls: list[int] = []
     monkeypatch.setattr(
         "app.cli.__main__.render_landing",
-        lambda: landing_calls.append(1),
+        lambda _group: landing_calls.append(1),
     )
 
     with (

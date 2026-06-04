@@ -50,7 +50,7 @@ def test_render_help_command_list_matches_cli_registry(capsys) -> None:
 
 def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
     monkeypatch.setattr("app.cli.interactive_shell.ui.banner._is_first_run", lambda: True)
-    render_landing()
+    render_landing(cli)
     output = _normalized_output(capsys.readouterr().out)
 
     assert "OpenSRE" in output

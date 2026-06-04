@@ -79,7 +79,9 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int | None = None,
 ) -> None:
-    effective_width = width + 2 if width is not None else max((len(label) for label, _ in rows), default=0) + 2
+    effective_width = (
+        width + 2 if width is not None else max((len(label) for label, _ in rows), default=0) + 2
+    )
     console.print(Text.assemble((f"  {title}:", f"bold {TEXT}")))
     for label, description in rows:
         console.print(
@@ -105,12 +107,10 @@ def render_help(group: click.Group) -> None:
     console.print()
 
 
-def render_landing() -> None:
+def render_landing(group: click.Group) -> None:
     """Render the root landing page shown with no subcommand."""
-    from app.cli.__main__ import cli
-
     console = Console(highlight=False)
-    options = _options_from_command(cli)
+    options = _options_from_command(group)
     console.print()
     console.print(build_ready_panel(console))
     console.print(
