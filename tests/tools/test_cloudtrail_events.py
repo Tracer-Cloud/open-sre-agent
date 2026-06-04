@@ -166,7 +166,7 @@ def test_lookup_success_and_shaping(mock_call) -> None:
                     "EventTime": "2026-05-05T12:00:00Z",
                     "EventSource": "ec2.amazonaws.com",
                     "Username": "alice",
-                    "ReadOnly": False,
+                    "ReadOnly": "false",
                     "AccessKeyId": "AKIAEXAMPLE",
                     "Resources": [
                         {"ResourceType": "AWS::EC2::SecurityGroup", "ResourceName": "sg-1"}
