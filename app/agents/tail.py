@@ -441,7 +441,15 @@ def read_tail_lines(
         raise ValueError("max_lines must be positive")
     if max_bytes <= 0:
         raise ValueError("max_bytes must be positive")
-    target = _resolve_target(pid)
+    try:
+        target = _resolve_target(pid)
+    except AttachUnsupported as exc:
+        # _resolve_target is shared with attach(), so its rejections are phrased
+        # for a *live tail* ("live tail not supported"). This is a historical
+        # read, so reframe the reason before it reaches the planner's
+        # ``stdout_error`` — otherwise it implies a live-tail op failed.
+        reason = exc.reason.replace("live tail not supported", "not a regular file")
+        raise AttachUnsupported(f"cannot read stdout of pid {pid}: {reason}") from exc
     try:
         with open(target.path, "rb") as fh:
             fh.seek(0, os.SEEK_END)

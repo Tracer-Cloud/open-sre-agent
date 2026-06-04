@@ -655,8 +655,27 @@ class TestReadTailLines:
             raise AttachUnsupported("no such pid 9999")
 
         monkeypatch.setattr(tail_mod, "_resolve_target", _fail)
-        with pytest.raises(AttachUnsupported, match="no such pid 9999"):
+        with pytest.raises(
+            AttachUnsupported, match="cannot read stdout of pid 9999: no such pid 9999"
+        ):
             read_tail_lines(9999)
+
+    def test_reframes_live_tail_phrasing_for_historical_read(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The shared resolver phrases rejections for a live tail; read_tail_lines
+        # must reframe so the planner's stdout_error doesn't imply a live op.
+        def _fail(_pid: int) -> _ResolvedTarget:
+            raise AttachUnsupported("stdout is a socket; live tail not supported")
+
+        monkeypatch.setattr(tail_mod, "_resolve_target", _fail)
+        with pytest.raises(AttachUnsupported) as excinfo:
+            read_tail_lines(4321)
+        assert "live tail" not in excinfo.value.reason
+        assert (
+            excinfo.value.reason
+            == "cannot read stdout of pid 4321: stdout is a socket; not a regular file"
+        )
 
 
 def test_module_thread_cleanup_under_pytest() -> None:
