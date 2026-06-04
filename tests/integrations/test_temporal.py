@@ -13,7 +13,7 @@ import pytest
 from app.integrations.temporal import TemporalConfig, load_temporal_config_from_env
 from app.services.temporal.client import TemporalClient, TemporalClientError
 from app.tools.registry import clear_tool_registry_cache, get_registered_tools
-from app.tools.TemporalTool.tool import (
+from app.tools.TemporalTool import (
     TemporalListWorkflowsTool,
     TemporalNamespaceMetricsTool,
     TemporalTaskQueueTool,
@@ -233,7 +233,7 @@ class TestTemporalClient:
 
 
 class TestTemporalListWorkflowsTool:
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_returns_executions(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_workflows.return_value = [
@@ -252,7 +252,7 @@ class TestTemporalListWorkflowsTool:
         assert result["total"] == 1
         assert result["total_failed"] == 1
 
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_empty_returns_empty_list(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_workflows.return_value = []
@@ -263,7 +263,7 @@ class TestTemporalListWorkflowsTool:
         assert result["available"] is True
         assert result["total"] == 0
 
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_error_handled_gracefully(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_workflows.side_effect = TemporalClientError("connection refused")
@@ -282,7 +282,7 @@ class TestTemporalListWorkflowsTool:
 
 
 class TestTemporalWorkflowHistoryTool:
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_returns_events_with_failure(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.get_workflow_history.return_value = [
@@ -306,7 +306,7 @@ class TestTemporalWorkflowHistoryTool:
         assert result["available"] is True
         assert result["total_failure_events"] == 1
 
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_no_history_returns_empty(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.get_workflow_history.return_value = []
@@ -325,7 +325,7 @@ class TestTemporalWorkflowHistoryTool:
 
 
 class TestTemporalTaskQueueTool:
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_returns_pollers(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_task_queues.return_value = {
@@ -347,7 +347,7 @@ class TestTemporalTaskQueueTool:
         assert result["pollers"][0]["identity"] == "worker-1@host"
         assert result["backlog_count"] == 5
 
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_warns_when_no_pollers(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.list_task_queues.return_value = {
@@ -371,7 +371,7 @@ class TestTemporalTaskQueueTool:
 
 
 class TestTemporalNamespaceMetricsTool:
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_returns_namespace_info(self, mock_client_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.get_namespace_metrics.return_value = {
@@ -397,7 +397,7 @@ class TestTemporalNamespaceMetricsTool:
         assert result["retention_days"] == "72h"
         assert result["open_workflow_count"] == 42
 
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_namespace_info_returned_even_if_count_fails(
         self, mock_client_cls: MagicMock
     ) -> None:
@@ -471,7 +471,7 @@ class TestGetTemporalTools:
     def test_temporal_source_registered_in_evidence_types(self) -> None:
         from app.types.evidence import EvidenceSource
         assert "temporal" in EvidenceSource.__args__  # type: ignore[attr-defined]
-    @patch("app.tools.TemporalTool.tool.TemporalClient")
+    @patch("app.tools.TemporalTool.TemporalClient")
     def test_integration_config_values_reach_client(self, mock_client_cls: MagicMock) -> None:
         """Verify port, api_key, tls from integration config reach TemporalClient."""
         mock_client = MagicMock()

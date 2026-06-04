@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from app.integrations.registry import INTEGRATION_SPECS_BY_SERVICE
-from app.tools.TemporalTool.tool import (
+from app.tools.TemporalTool import (
     TemporalListWorkflowsTool,
     TemporalNamespaceMetricsTool,
     TemporalTaskQueueTool,
@@ -122,7 +122,7 @@ def test_temporal_list_workflows_synthetic_scenario() -> None:
     mock_client = MagicMock()
     mock_client.list_workflows.side_effect = lambda **kw: backend.list_workflows(**kw)
 
-    with patch("app.tools.TemporalTool.tool.TemporalClient", return_value=mock_client):
+    with patch("app.tools.TemporalTool.TemporalClient", return_value=mock_client):
         tool = TemporalListWorkflowsTool()
         result = tool.run(
             host="localhost",
@@ -146,7 +146,7 @@ def test_temporal_workflow_history_synthetic_scenario() -> None:
         lambda **kw: backend.get_workflow_history(**kw)
     )
 
-    with patch("app.tools.TemporalTool.tool.TemporalClient", return_value=mock_client):
+    with patch("app.tools.TemporalTool.TemporalClient", return_value=mock_client):
         tool = TemporalWorkflowHistoryTool()
         result = tool.run(
             host="localhost",
@@ -171,7 +171,7 @@ def test_temporal_task_queue_synthetic_scenario() -> None:
         lambda **kw: backend.list_task_queues(**kw)
     )
 
-    with patch("app.tools.TemporalTool.tool.TemporalClient", return_value=mock_client):
+    with patch("app.tools.TemporalTool.TemporalClient", return_value=mock_client):
         tool = TemporalTaskQueueTool()
         result = tool.run(
             host="localhost",
@@ -197,7 +197,7 @@ def test_temporal_namespace_metrics_synthetic_scenario() -> None:
         lambda **kw: backend.get_workflow_count(**kw)
     )
 
-    with patch("app.tools.TemporalTool.tool.TemporalClient", return_value=mock_client):
+    with patch("app.tools.TemporalTool.TemporalClient", return_value=mock_client):
         tool = TemporalNamespaceMetricsTool()
         result = tool.run(host="localhost", namespace="default")
 
@@ -220,7 +220,7 @@ def test_temporal_full_rca_scenario() -> None:
         lambda **kw: backend.list_task_queues(**kw)
     )
 
-    with patch("app.tools.TemporalTool.tool.TemporalClient", return_value=mock_client):
+    with patch("app.tools.TemporalTool.TemporalClient", return_value=mock_client):
         # Step 1: list failed workflows
         workflows_result = TemporalListWorkflowsTool().run(
             host="localhost",
