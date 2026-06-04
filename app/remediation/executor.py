@@ -86,7 +86,11 @@ def _build_aws_params(action: RemediationAction) -> dict[str, Any]:
     if action.action_type is RemediationActionType.aws_restart_rds_instance:
         return {"DBInstanceIdentifier": action.target}
     if action.action_type is RemediationActionType.aws_scale_asg:
-        return {"AutoScalingGroupName": action.target}
+        capacity = action.parameters.get("capacity") or ""
+        return {
+            "AutoScalingGroupName": action.target,
+            "DesiredCapacity": int(capacity) if capacity else 1,
+        }
     if action.action_type is RemediationActionType.aws_restart_ecs_service:
         cluster = action.parameters.get("cluster") or ""
         return {

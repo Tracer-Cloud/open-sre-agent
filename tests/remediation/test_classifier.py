@@ -93,6 +93,68 @@ def test_classify_sql_terminate() -> None:
     assert steps[0].action_type == RemediationActionType.sql_terminate_connections
 
 
+def test_classify_sql_terminate_with_database() -> None:
+    steps = classify_remediation_steps(["Terminate all connections on database prod-db"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.sql_terminate_connections
+    assert steps[0].target == "prod-db"
+    assert "prod-db" in steps[0].command
+
+
+def test_classify_sql_terminate_for_database() -> None:
+    steps = classify_remediation_steps(["pg_terminate_backend for db my-db"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.sql_terminate_connections
+    assert steps[0].target == "my-db"
+    assert "my-db" in steps[0].command
+
+
+def test_classify_sql_terminate_in_database() -> None:
+    steps = classify_remediation_steps(["Terminate sessions in database reporting-db"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.sql_terminate_connections
+    assert steps[0].target == "reporting-db"
+
+
+def test_classify_asg_scale_with_capacity() -> None:
+    steps = classify_remediation_steps(["Scale ASG my-asg to 5"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_scale_asg
+    assert steps[0].target == "my-asg"
+    assert steps[0].parameters.get("capacity") == "5"
+    assert "--desired-capacity 5" in steps[0].command
+
+
+def test_classify_asg_scale_long_form_with_capacity() -> None:
+    steps = classify_remediation_steps(["Increase the auto scaling group worker-asg to 10"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_scale_asg
+    assert steps[0].target == "worker-asg"
+    assert steps[0].parameters.get("capacity") == "10"
+
+
+def test_classify_asg_scale_with_flag_capacity() -> None:
+    steps = classify_remediation_steps(["Decrease ASG cache-asg --desired-capacity 3"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_scale_asg
+    assert steps[0].target == "cache-asg"
+    assert steps[0].parameters.get("capacity") == "3"
+    assert "--desired-capacity 3" in steps[0].command
+
+
+def test_classify_asg_scale_without_capacity_falls_to_manual() -> None:
+    steps = classify_remediation_steps(["Scale the ASG my-asg"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.manual_step
+
+
+def test_classify_generic_shell_safety_is_manual() -> None:
+    steps = classify_remediation_steps(["Run `some-command --flag`"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.generic_shell
+    assert steps[0].safety_level == SafetyLevel.manual
+
+
 def test_classify_manual_step() -> None:
     steps = classify_remediation_steps(["Check the application logs for further errors"])
     assert len(steps) == 1

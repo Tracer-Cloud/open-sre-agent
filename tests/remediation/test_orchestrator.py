@@ -65,6 +65,40 @@ def test_orchestrator_ecs_default_cluster_in_plan() -> None:
     assert "cluster default" in plan["command"]
 
 
+def test_orchestrator_asg_scale_in_plan() -> None:
+    result = run_remediation_plan(
+        ["Scale ASG my-asg to 5"],
+        auto_execute=False,
+    )
+    assert len(result["remediation_plan"]) == 1
+    plan = result["remediation_plan"][0]
+    assert plan["action_type"] == "aws_scale_asg"
+    assert plan["target"] == "my-asg"
+    assert "--desired-capacity 5" in plan["command"]
+
+
+def test_orchestrator_asg_scale_without_capacity_falls_to_manual() -> None:
+    result = run_remediation_plan(
+        ["Scale the ASG my-asg"],
+        auto_execute=False,
+    )
+    assert len(result["remediation_plan"]) == 1
+    assert result["remediation_plan"][0]["action_type"] == "manual_step"
+
+
+def test_orchestrator_generic_shell_skipped_as_manual() -> None:
+    result = run_remediation_plan(
+        ["Run `curl http://health`"],
+        auto_execute=True,
+    )
+    assert len(result["remediation_plan"]) == 1
+    assert result["remediation_plan"][0]["action_type"] == "generic_shell"
+    assert result["remediation_plan"][0]["safety_level"] == "manual"
+    plan_result = result["remediation_results"][0]
+    assert plan_result["skipped"] is True
+    assert "Manual step" in plan_result["error"]
+
+
 def test_orchestrator_with_confirm_fn_yes() -> None:
     def confirm_fn(_action) -> bool:
         return True

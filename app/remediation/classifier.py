@@ -45,14 +45,15 @@ _PATTERNS: list[PatternEntry] = [
         RemediationActionType.aws_restart_ecs_service,
         "aws ecs update-service --cluster {cluster} --service {target} --force-new-deployment",
     ),
-    # AWS ASG scale
+    # AWS ASG scale — must capture desired capacity.
+    # Expected forms: "scale ASG my-asg to 5", "increase auto scaling group my-asg --desired-capacity 10"
     (
         re.compile(
-            r"(?:scale|increase|decrease)\s+(?:the\s+)?(?:auto[.\s]?scaling\s+group|ASG|asg)\s+(?:of\s+)?['\"]?([\w-]+)['\"]?",
+            r"(?:scale|increase|decrease)\s+(?:the\s+)?(?:auto[.\s]?scaling\s+group|ASG|asg)\s+(?:of\s+)?['\"]?([\w-]+)['\"]?(?:\s+(?:to|--desired-capacity)\s+(\d+))",
             re.IGNORECASE,
         ),
         RemediationActionType.aws_scale_asg,
-        "aws autoscaling update-auto-scaling-group --auto-scaling-group-name {target}",
+        "aws autoscaling update-auto-scaling-group --auto-scaling-group-name {target} --desired-capacity {capacity}",
     ),
     # kubectl describe deployment — read-only, safe operation — must come before restart
     # Matches: "describe deployment X", "kubectl describe deployment/X",
@@ -138,10 +139,11 @@ _PATTERNS: list[PatternEntry] = [
         RemediationActionType.argocd_sync_application,
         "argocd app sync {target}",
     ),
-    # SQL terminate connections
+    # SQL terminate connections — captures optional database name.
+    # Expected forms: "terminate connections on database prod-db", "pg_terminate_backend for db my-db"
     (
         re.compile(
-            r"(?:pg_terminate_backend|terminate\s+(?:all\s+)?(?:connections|sessions|backends))",
+            r"(?:pg_terminate_backend|terminate\s+(?:all\s+)?(?:connections|sessions|backends))(?:\s+(?:(?:for|on|in)\s+)?(?:database|db)\s+['\"]?([\w.-]+)['\"]?)?",
             re.IGNORECASE,
         ),
         RemediationActionType.sql_terminate_connections,
@@ -193,6 +195,10 @@ def _classify_single_step(step: str) -> RemediationAction:
             replicas = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
             params["replicas"] = replicas
             command = command_template.format(target=target, replicas=replicas)
+        elif action_type is RemediationActionType.aws_scale_asg:
+            capacity = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
+            params["capacity"] = capacity
+            command = command_template.format(target=target, capacity=capacity)
         elif action_type is RemediationActionType.aws_restart_ecs_service:
             cluster = match.group(2) if match.lastindex and match.lastindex >= 2 else ""
             params["cluster"] = cluster

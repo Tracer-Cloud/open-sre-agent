@@ -39,7 +39,7 @@ SAFETY_BY_ACTION_TYPE: dict[RemediationActionType, SafetyLevel] = {
     RemediationActionType.aws_scale_asg: SafetyLevel.elevated,
     RemediationActionType.aws_restart_ecs_service: SafetyLevel.elevated,
     RemediationActionType.sql_terminate_connections: SafetyLevel.elevated,
-    RemediationActionType.generic_shell: SafetyLevel.elevated,
+    RemediationActionType.generic_shell: SafetyLevel.manual,
     RemediationActionType.manual_step: SafetyLevel.manual,
 }
 

@@ -157,6 +157,28 @@ def test_execute_aws_rds_restart(mock_boto_client) -> None:
 
 
 @patch("boto3.client")
+def test_execute_aws_asg_scale_with_capacity(mock_boto_client) -> None:
+    mock_instance = mock_boto_client.return_value
+    mock_instance.update_auto_scaling_group.return_value = {
+        "AutoScalingGroupName": "my-asg",
+    }
+
+    action = RemediationAction(
+        action_type=RemediationActionType.aws_scale_asg,
+        description="Scale ASG my-asg to 5",
+        command="aws autoscaling update-auto-scaling-group --auto-scaling-group-name my-asg --desired-capacity 5",
+        target="my-asg",
+        parameters={"capacity": "5"},
+    )
+    result = execute_remediation_action(action)
+    assert result.success
+    mock_instance.update_auto_scaling_group.assert_called_once_with(
+        AutoScalingGroupName="my-asg",
+        DesiredCapacity=5,
+    )
+
+
+@patch("boto3.client")
 def test_execute_aws_ecs_restart(mock_boto_client) -> None:
     mock_instance = mock_boto_client.return_value
     mock_instance.update_service.return_value = {"service": "my-service"}
