@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+from app.remediation.classifier import classify_remediation_steps
+from app.remediation.models import RemediationActionType, SafetyLevel
+
+
+def test_classify_restart_deployment() -> None:
+    steps = classify_remediation_steps(["Restart the deployment my-app"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.kubectl_restart_deployment
+    assert steps[0].target == "my-app"
+    assert "my-app" in steps[0].command
+
+
+def test_classify_rollout_restart_kubectl() -> None:
+    steps = classify_remediation_steps(["kubectl rollout restart deployment/my-service"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.kubectl_restart_deployment
+    assert steps[0].target == "my-service"
+
+
+def test_classify_helm_rollback() -> None:
+    steps = classify_remediation_steps(["helm rollback my-release"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.helm_rollback_release
+    assert steps[0].target == "my-release"
+
+
+def test_classify_rollback_release() -> None:
+    steps = classify_remediation_steps(["Roll back the helm release my-release"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.helm_rollback_release
+
+
+def test_classify_argocd_sync() -> None:
+    steps = classify_remediation_steps(["argocd app sync my-app"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.argocd_sync_application
+    assert steps[0].target == "my-app"
+
+
+def test_classify_rds_restart() -> None:
+    steps = classify_remediation_steps(["Restart the RDS instance my-db-instance"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_restart_rds_instance
+    assert steps[0].target == "my-db-instance"
+
+
+def test_classify_rds_reboot_quoted() -> None:
+    steps = classify_remediation_steps(["reboot the database instance 'prod-db-1'"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_restart_rds_instance
+
+
+def test_classify_ecs_restart() -> None:
+    steps = classify_remediation_steps(["Restart the ECS service backend-service"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_restart_ecs_service
+    assert steps[0].target == "backend-service"
+
+
+def test_classify_kubectl_scale() -> None:
+    steps = classify_remediation_steps(["kubectl scale deployment my-app --replicas=5"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.kubectl_scale_deployment
+    assert steps[0].target == "my-app"
+    assert "5" in steps[0].command
+
+
+def test_classify_sql_terminate() -> None:
+    steps = classify_remediation_steps(["Run pg_terminate_backend to kill blocking sessions"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.sql_terminate_connections
+
+
+def test_classify_manual_step() -> None:
+    steps = classify_remediation_steps(["Check the application logs for further errors"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.manual_step
+    assert steps[0].safety_level == SafetyLevel.manual
+
+
+def test_classify_generic_shell_backtick() -> None:
+    steps = classify_remediation_steps(["Run `kubectl get pods -n default`"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.generic_shell
+    assert "kubectl get pods" in steps[0].command
+
+
+def test_classify_execute_shell() -> None:
+    steps = classify_remediation_steps(['Execute "curl -X POST http://health"'])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.generic_shell
+
+
+def test_classify_multiple_steps() -> None:
+    steps = classify_remediation_steps(
+        [
+            "Restart the deployment my-app",
+            "Helm rollback my-release",
+            "Check the logs manually",
+        ]
+    )
+    assert len(steps) == 3
+    assert steps[0].action_type == RemediationActionType.kubectl_restart_deployment
+    assert steps[1].action_type == RemediationActionType.helm_rollback_release
+    assert steps[2].action_type == RemediationActionType.manual_step
+
+
+def test_classify_empty_steps() -> None:
+    steps = classify_remediation_steps([])
+    assert steps == []
+
+
+def test_classify_blank_steps() -> None:
+    steps = classify_remediation_steps(["", "  ", None])  # type: ignore[list-item]
+    assert steps == []

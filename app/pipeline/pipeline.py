@@ -133,6 +133,27 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
     return {"configurable": {"upstream_evidence_provider": provider}}
 
 
+def _run_remediation(state_any: dict[str, Any]) -> dict[str, Any]:
+    """Classify and optionally execute remediation steps from investigation results.
+
+    If ``auto_remediate`` is set in state, auto-executes safe actions.
+    Otherwise just classifies steps and stores the plan.
+    """
+    from app.remediation import run_remediation_plan
+
+    steps: list[str] = list(state_any.get("remediation_steps") or [])
+    if not steps:
+        return {}
+
+    auto = bool(state_any.get("auto_remediate", False))
+    plan_result = run_remediation_plan(steps, auto_execute=auto)
+
+    return {
+        "remediation_plan": plan_result.get("remediation_plan", []),
+        "remediation_results": plan_result.get("remediation_results", []),
+    }
+
+
 def run_connected_investigation(state: AgentState) -> AgentState:
     """Resolve connected integrations → parse alert → agent loop → deliver.
 
@@ -164,6 +185,7 @@ def run_connected_investigation(state: AgentState) -> AgentState:
             ),
         )
 
+        _merge(state_any, _run_remediation(state_any))
         _merge(state_any, deliver(state))
     except Exception as exc:
         capture_exception(exc)

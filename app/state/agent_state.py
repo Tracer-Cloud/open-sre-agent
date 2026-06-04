@@ -132,6 +132,11 @@ class AgentState(TypedDict, total=False):
     run_id: str
     _auth_token: str
 
+    # Remediation
+    remediation_plan: list[dict[str, Any]]
+    remediation_results: list[dict[str, Any]]
+    auto_remediate: bool
+
     # Outputs
     slack_message: str
     problem_md: str
@@ -214,6 +219,9 @@ class AgentStateModel(StrictConfigModel):
     summary: str = ""
     problem_report: dict[str, Any] = Field(default_factory=dict)
     report: str = ""
+    remediation_plan: list[dict[str, Any]] = Field(default_factory=list)
+    remediation_results: list[dict[str, Any]] = Field(default_factory=list)
+    auto_remediate: bool = False
     opensre_evaluate: bool = False
     opensre_eval_rubric: str = ""
     opensre_llm_eval: dict[str, Any] = Field(default_factory=dict)
