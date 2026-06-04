@@ -13,20 +13,12 @@ name: Benchmark image — promote tag to task definition
 #   Actions → "Benchmark image — promote tag to task definition" → Run
 #
 # Pre-reqs (one-time):
-#   - infra/bench/ Terraform applied at least once
+#   - infra/bench/ Terraform applied at least once. The opensre-bench-github-actions
+#     OIDC role's permissions (ecs:RegisterTaskDefinition, state-bucket read/write,
+#     lock-table read/write, iam:PassRole) are granted by the github_actions_run_bench
+#     inline policy in infra/bench/iam_oidc.tf — any apply of that module attaches them.
 #   - Repo secrets seeded into AWS Secrets Manager
 #   - Repo vars set (AWS_ACCOUNT_ID etc., see AWS_BENCH_SETUP.md step 4)
-#   - The opensre-bench-github-actions OIDC role MUST be granted these
-#     additional permissions before this workflow can succeed:
-#       - ecs:RegisterTaskDefinition
-#       - ecs:DescribeTaskDefinition
-#       - iam:PassRole on the bench task + execution roles
-#       - s3:GetObject, s3:PutObject on the Terraform state bucket
-#       - dynamodb:GetItem, PutItem, DeleteItem on the lock table
-#     The existing role currently has RunTask + Seed only. Extending it is
-#     a 10-line addition to infra/bench/iam_oidc.tf — see the comment in
-#     that file. This workflow will FAIL with AccessDenied until that
-#     IAM diff is applied.
 
 on:
   workflow_dispatch:
