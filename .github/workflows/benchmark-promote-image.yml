@@ -91,11 +91,22 @@ jobs:
         # Plan is captured in the workflow log; review it in the run page.
         # -auto-approve is intentional — this workflow IS the human approval
         # (the operator triggered it manually with a specific tag).
+        #
+        # -target=aws_ecs_task_definition.bench scopes apply to the task
+        # definition (and its data-source / role dependencies) only. Without
+        # this, every dispatch tries to reconcile every resource in the
+        # module — IAM, S3, ECR, etc. — against whatever ref the workflow
+        # was dispatched from. Out-of-band local applies cause that
+        # reconciliation to attempt rollbacks the workflow role isn't
+        # permitted to perform (iam:DetachRolePolicy, iam:PutRolePolicy),
+        # failing the run even when the task-def update itself succeeded.
         working-directory: infra/bench
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          terraform apply -input=false -auto-approve -var="image_tag=$IMAGE_TAG"
+          terraform apply -input=false -auto-approve \
+            -target=aws_ecs_task_definition.bench \
+            -var="image_tag=$IMAGE_TAG"
 
       - name: Surface the new task definition revision in the job summary
         working-directory: infra/bench

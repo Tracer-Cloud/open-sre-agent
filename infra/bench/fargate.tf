@@ -81,6 +81,17 @@ resource "aws_ecs_task_definition" "bench" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
+  # Keep old revisions on every Terraform-driven replacement (e.g. image_tag
+  # change in benchmark-promote-image.yml). Two reasons:
+  #   1. Old revisions are free + rollback targets — `aws ecs run-task
+  #      --task-definition opensre-bench:<N>` still works on INACTIVE revisions
+  #      and lets us re-run a previously-promoted image immediately.
+  #   2. Skipping Deregister removes the need for the promote workflow's role
+  #      to hold ecs:DeregisterTaskDefinition, which previously caused
+  #      AccessDenied races with the parallel inline-policy modify in the
+  #      same apply.
+  skip_destroy = true
+
   container_definitions = jsonencode([
     {
       name      = "bench"
