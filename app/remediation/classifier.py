@@ -14,6 +14,15 @@ PatternEntry = tuple[re.Pattern[str], RemediationActionType, str]
 
 
 _PATTERNS: list[PatternEntry] = [
+    # AWS RDS describe — read-only, safe operation — must come before restart patterns
+    (
+        re.compile(
+            r"(?:describe|get)\s+(?:the\s+)?(?:RDS|rds|database|db)\s+(?:instance\s+)?(?:of\s+)?['\"]?([\w-]+)['\"]?",
+            re.IGNORECASE,
+        ),
+        RemediationActionType.aws_describe_rds_instance,
+        "aws rds describe-db-instances --db-instance-identifier {target}",
+    ),
     # AWS RDS restart — must come before generic restart pattern
     (
         re.compile(
@@ -44,6 +53,26 @@ _PATTERNS: list[PatternEntry] = [
         ),
         RemediationActionType.aws_scale_asg,
         "aws autoscaling update-auto-scaling-group --auto-scaling-group-name {target}",
+    ),
+    # kubectl describe deployment — read-only, safe operation — must come before restart
+    # Matches: "describe deployment X", "kubectl describe deployment/X",
+    # "describe the deployment X", "get details of the deployment X"
+    (
+        re.compile(
+            r"(?:kubectl\s+)?describe\s+(?:the\s+)?(?:details\s+of\s+)?(?:the\s+)?(?:deployment|deploy)\s*[/\s]+([\w.-]+)",
+            re.IGNORECASE,
+        ),
+        RemediationActionType.kubectl_describe_deployment,
+        "kubectl describe deployment/{target}",
+    ),
+    # "get" variant for natural language: "get the deployment X", "get details of the deployment X"
+    (
+        re.compile(
+            r"get\s+(?:the\s+)?(?:details\s+of\s+)?(?:the\s+)?(?:deployment|deploy)\s*[/\s]+([\w.-]+)",
+            re.IGNORECASE,
+        ),
+        RemediationActionType.kubectl_describe_deployment,
+        "kubectl describe deployment/{target}",
     ),
     # kubectl rollout restart (supports "deployment/my-app" or "deployment my-app")
     # NOTE: must come BEFORE the undo pattern so "undo" is not captured here.

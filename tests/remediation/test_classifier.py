@@ -57,6 +57,26 @@ def test_classify_ecs_restart() -> None:
     assert len(steps) == 1
     assert steps[0].action_type == RemediationActionType.aws_restart_ecs_service
     assert steps[0].target == "backend-service"
+    assert steps[0].parameters.get("cluster") == ""
+    assert "cluster default" in steps[0].command
+
+
+def test_classify_ecs_restart_with_cluster() -> None:
+    steps = classify_remediation_steps(["Restart the ECS service my-svc in cluster prod-cluster"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_restart_ecs_service
+    assert steps[0].target == "my-svc"
+    assert steps[0].parameters.get("cluster") == "prod-cluster"
+    assert "--cluster prod-cluster" in steps[0].command
+
+
+def test_classify_ecs_restart_update_variant_with_cluster() -> None:
+    steps = classify_remediation_steps(["Update the ECS service data-pipeline in cluster staging"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_restart_ecs_service
+    assert steps[0].target == "data-pipeline"
+    assert steps[0].parameters.get("cluster") == "staging"
+    assert "--cluster staging" in steps[0].command
 
 
 def test_classify_kubectl_scale() -> None:
@@ -115,3 +135,34 @@ def test_classify_empty_steps() -> None:
 def test_classify_blank_steps() -> None:
     steps = classify_remediation_steps(["", "  ", None])  # type: ignore[list-item]
     assert steps == []
+
+
+def test_classify_rds_describe_safe() -> None:
+    steps = classify_remediation_steps(["Describe the RDS instance my-db"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_describe_rds_instance
+    assert steps[0].target == "my-db"
+    assert steps[0].safety_level == SafetyLevel.safe
+
+
+def test_classify_rds_describe_get_safe() -> None:
+    steps = classify_remediation_steps(["get the database instance 'prod-db'"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.aws_describe_rds_instance
+    assert steps[0].safety_level == SafetyLevel.safe
+
+
+def test_classify_kubectl_describe_safe() -> None:
+    steps = classify_remediation_steps(["describe deployment my-app"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.kubectl_describe_deployment
+    assert steps[0].target == "my-app"
+    assert steps[0].safety_level == SafetyLevel.safe
+
+
+def test_classify_describe_deployment_natural_language() -> None:
+    steps = classify_remediation_steps(["get details of the deployment payment-service"])
+    assert len(steps) == 1
+    assert steps[0].action_type == RemediationActionType.kubectl_describe_deployment
+    assert steps[0].target == "payment-service"
+    assert steps[0].safety_level == SafetyLevel.safe

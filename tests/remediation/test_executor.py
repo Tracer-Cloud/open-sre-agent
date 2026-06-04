@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import boto3
+
 from app.remediation.executor import execute_remediation_action
 from app.remediation.models import RemediationAction, RemediationActionType, SafetyLevel
 
 
 def test_execute_aws_ecs_restart_with_cluster() -> None:
-    import boto3
-    from unittest.mock import patch
-
     with patch.object(boto3, "client") as mock_boto_client:
         mock_instance = mock_boto_client.return_value
         mock_instance.update_service.return_value = {"service": "my-service"}
@@ -26,6 +25,42 @@ def test_execute_aws_ecs_restart_with_cluster() -> None:
         mock_instance.update_service.assert_called_once_with(
             cluster="prod-cluster", service="my-service", forceNewDeployment=True
         )
+
+
+@patch("app.remediation.executor.subprocess.run")
+def test_execute_aws_describe_rds_shell(mock_run) -> None:
+    mock_run.return_value.returncode = 0
+    mock_run.return_value.stdout = '{"DBInstances": [{"DBInstanceIdentifier": "my-db"}]}'
+    mock_run.return_value.stderr = ""
+
+    action = RemediationAction(
+        action_type=RemediationActionType.aws_describe_rds_instance,
+        description="Describe RDS instance my-db",
+        command="aws rds describe-db-instances --db-instance-identifier my-db",
+        target="my-db",
+    )
+    result = execute_remediation_action(action)
+    assert result.success
+    assert "DBInstanceIdentifier" in result.output
+    mock_run.assert_called_once()
+
+
+@patch("app.remediation.executor.subprocess.run")
+def test_execute_kubectl_describe_deployment_shell(mock_run) -> None:
+    mock_run.return_value.returncode = 0
+    mock_run.return_value.stdout = "Name: my-app\nReplicas: 3"
+    mock_run.return_value.stderr = ""
+
+    action = RemediationAction(
+        action_type=RemediationActionType.kubectl_describe_deployment,
+        description="Describe deployment my-app",
+        command="kubectl describe deployment/my-app",
+        target="my-app",
+    )
+    result = execute_remediation_action(action)
+    assert result.success
+    assert "Replicas: 3" in result.output
+    mock_run.assert_called_once()
 
 
 def test_execute_manual_step_returns_noop() -> None:

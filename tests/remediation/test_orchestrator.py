@@ -41,6 +41,30 @@ def test_orchestrator_without_confirm_fn() -> None:
     assert "confirmation" in (result["remediation_results"][0].get("error") or "").lower()
 
 
+def test_orchestrator_ecs_cluster_in_plan() -> None:
+    result = run_remediation_plan(
+        ["Restart the ECS service my-svc in cluster prod"],
+        auto_execute=False,
+    )
+    assert len(result["remediation_plan"]) == 1
+    plan = result["remediation_plan"][0]
+    assert plan["action_type"] == "aws_restart_ecs_service"
+    assert plan["target"] == "my-svc"
+    assert "--cluster prod" in plan["command"]
+
+
+def test_orchestrator_ecs_default_cluster_in_plan() -> None:
+    result = run_remediation_plan(
+        ["Restart the ECS service my-svc"],
+        auto_execute=False,
+    )
+    assert len(result["remediation_plan"]) == 1
+    plan = result["remediation_plan"][0]
+    assert plan["action_type"] == "aws_restart_ecs_service"
+    assert plan["target"] == "my-svc"
+    assert "cluster default" in plan["command"]
+
+
 def test_orchestrator_with_confirm_fn_yes() -> None:
     def confirm_fn(_action) -> bool:
         return True
