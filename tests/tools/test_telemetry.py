@@ -807,16 +807,12 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
 # wrapper from #1476, or (b) have no observed swallow pattern. Keep alphabetised.
 _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
     {
-        "CheckNodeServiceStatus",
-        "CheckServiceConnectivity",
-        "DescribeResource",
-        "GetAlerts",
-        "GetAppYAML",
-        "GetClusterConfiguration",
-        "GetErrorLogs",
-        "GetRecentLogs",
-        "GetResources",
-        "GetServiceDependencies",
+        # CloudOpsBench replay tools (CheckNodeServiceStatus, GetResources, ...)
+        # were removed from this list when the bench tool module moved out of
+        # app/tools/ into tests/benchmarks/cloudopsbench/tools/k8s/. They live
+        # there as an external registry package and are only loaded when the
+        # bench is actively imported, so they don't appear in the production
+        # registry that this test enumerates.
         "alertmanager_alerts",
         "alertmanager_silences",
         "argocd_application_diff",
@@ -989,7 +985,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from app.tools.registry import get_registered_tool_map
 
-    registered = set(get_registered_tool_map().keys())
+    # Limit the audit to PRODUCTION tools (those defined in ``app.tools.*``).
+    # External packages registered via ``register_external_tool_package``
+    # (e.g. bench-only tools that live under ``tests/benchmarks/``) have
+    # their own classification expectations and aren't part of this
+    # production-telemetry contract. Filtering by ``origin_module`` keeps
+    # this test stable regardless of test order — whether the bench package
+    # has been imported earlier in the session is no longer relevant.
+    registered = {
+        name
+        for name, tool in get_registered_tool_map().items()
+        if tool.origin_module.startswith("app.tools.")
+    }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 
     unclassified = registered - classified
