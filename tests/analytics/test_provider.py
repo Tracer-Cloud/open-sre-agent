@@ -93,6 +93,7 @@ def test_analytics_send_uses_posthog_capture_key_from_env(
     )
     analytics.shutdown(flush=False)
 
+    assert len(posted_payloads) == 1, f"expected exactly one POST; got {posted_payloads}"
     assert posted_payloads[0]["json"]["api_key"] == "phc_from_env"
 
 
