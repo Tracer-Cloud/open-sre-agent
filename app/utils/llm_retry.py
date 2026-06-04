@@ -61,23 +61,72 @@ _RATE_LIMIT_HINTS: tuple[str, ...] = (
     "tpm",
 )
 
-# Substrings that indicate provider-side billing / quota exhaustion. UNLIKE
-# rate limits, these are NOT transient — retrying won't help until the
-# operator tops up balance or raises the spending cap. Kept disjoint from
-# the rate-limit hints above so ``is_rate_limit_error`` and
-# ``is_credit_exhausted_error`` never both match the same string.
-#   - OpenAI:    error code ``insufficient_quota``, body text
-#                "You exceeded your current quota"
-#   - Anthropic: HTTP 400 with body text
-#                "Your credit balance is too low to access the Anthropic API"
-#   - OpenAI:    error code ``billing_hard_limit_reached`` (org-level cap)
-_CREDIT_EXHAUSTED_HINTS: tuple[str, ...] = (
-    "insufficient_quota",
-    "billing_hard_limit_reached",
-    "exceeded your current quota",
-    "credit balance is too low",
-    "credit balance too low",
+# Provider-side billing / quota exhaustion is detected in two layers:
+#
+#   1. Structured error code (PREFERRED, reword-proof). OpenAI exposes a
+#      stable enum on its typed exceptions (``APIError.code``) and in the
+#      response body (``body.error.code``). Documented at
+#      https://platform.openai.com/docs/guides/error-codes — these codes
+#      are part of OpenAI's API contract and don't change as message
+#      wording is updated.
+#   2. Text-substring fallback (REQUIRED for Anthropic, defensive for
+#      wrapped RuntimeErrors). Anthropic does NOT expose a credit-specific
+#      error type — credit-too-low lands as a generic
+#      ``invalid_request_error`` (400) with the wording in the message body
+#      only. See https://docs.anthropic.com/en/api/errors. Text matching is
+#      the only signal Anthropic gives us; reword-fragility is theirs, not
+#      ours, but our tests pin the current wording so CI catches drift.
+
+# Stable structured codes — match these before text. OpenAI uses these
+# exact strings on both ``RateLimitError.code`` and ``body.error.code``
+# (sometimes also ``body.error.type``).
+_CREDIT_EXHAUSTED_CODES: frozenset[str] = frozenset(
+    {
+        "insufficient_quota",  # OpenAI: out of credit / over plan limit
+        "billing_hard_limit_reached",  # OpenAI: org-level monthly cap
+    }
 )
+
+# Text fallback for providers without a billing-specific error code
+# (Anthropic) AND for already-wrapped ``RuntimeError`` messages that
+# downstream code might see after agent_llm_client has rewrapped the
+# typed exception. Kept disjoint from the rate-limit hints above so
+# ``is_rate_limit_error`` and ``is_credit_exhausted_error`` never both
+# match the same string.
+_CREDIT_EXHAUSTED_HINTS: tuple[str, ...] = (
+    "insufficient_quota",  # OpenAI code may appear in stringified error
+    "billing_hard_limit_reached",
+    "exceeded your current quota",  # OpenAI body message
+    "credit balance is too low",  # Anthropic message
+    "credit balance too low",  # normalized
+)
+
+
+def _structured_error_code(exc: BaseException) -> str | None:
+    """Pull a provider's stable error code from a typed SDK exception.
+
+    Looks in two places, in priority order:
+
+      1. ``exc.code`` — set directly on OpenAI's ``APIError`` subclasses
+         (RateLimitError, BadRequestError, etc.).
+      2. ``exc.body.error.code`` — set on the response-body dict for
+         OpenAI errors when the SDK has parsed the body.
+
+    Returns ``None`` for exceptions without a code attribute (e.g.
+    Anthropic SDK errors, generic RuntimeErrors). Callers fall back to
+    text matching in that case.
+    """
+    code = getattr(exc, "code", None)
+    if isinstance(code, str):
+        return code
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        error_obj = body.get("error")
+        if isinstance(error_obj, dict):
+            nested_code = error_obj.get("code")
+            if isinstance(nested_code, str):
+                return nested_code
+    return None
 
 
 class LLMCreditExhaustedError(Exception):
@@ -121,16 +170,21 @@ def is_rate_limit_error(exc: BaseException) -> bool:
 def is_credit_exhausted_error(exc: BaseException) -> bool:
     """Return True if ``exc`` indicates provider billing / quota exhaustion.
 
-    Provider-agnostic text matcher for the non-retryable billing cases:
-      - OpenAI 429 with ``code: insufficient_quota`` /
-        ``code: billing_hard_limit_reached``
-      - Anthropic 400 with body
-        ``"Your credit balance is too low to access the Anthropic API"``
+    Detection order:
+      1. **Structured error code** (OpenAI). Reword-proof — ``exc.code``
+         and ``body.error.code`` are part of OpenAI's API contract.
+      2. **Text-substring fallback** (Anthropic + already-wrapped
+         RuntimeErrors). Anthropic surfaces "credit balance is too low"
+         only in the message body — they don't expose a billing-specific
+         error type. Text matching is the only signal we get.
 
     Distinct from :func:`is_rate_limit_error` (which is transient/TPM and
     retry-recoverable). Callers SHOULD NOT retry when this returns True —
     raise :class:`LLMCreditExhaustedError` and let it propagate.
     """
+    structured_code = _structured_error_code(exc)
+    if structured_code is not None and structured_code in _CREDIT_EXHAUSTED_CODES:
+        return True
     text = str(exc).lower()
     return any(hint in text for hint in _CREDIT_EXHAUSTED_HINTS)
 

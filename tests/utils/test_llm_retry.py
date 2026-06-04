@@ -107,6 +107,83 @@ def test_is_credit_exhausted_does_not_match_unrelated_errors() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Structured-code detection — OpenAI's stable error-code enum, reword-proof   #
+# (documented at platform.openai.com/docs/guides/error-codes).                #
+# --------------------------------------------------------------------------- #
+
+
+class _FakeOpenAIAPIError(Exception):
+    """Shape-compatible with openai.APIError for the bits we read."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        body: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.body = body
+
+
+def test_is_credit_exhausted_uses_structured_code_when_message_is_clean() -> None:
+    """If OpenAI ever softens the body wording (e.g. drops "exceeded your
+    current quota"), the structured ``code`` field still tells us. This is
+    the whole point of preferring codes over text."""
+    err = _FakeOpenAIAPIError(
+        "We had trouble processing your request.",  # benign wording
+        code="insufficient_quota",
+    )
+    assert llm_retry.is_credit_exhausted_error(err)
+
+
+def test_is_credit_exhausted_uses_body_error_code_when_top_level_is_none() -> None:
+    """SDK sometimes leaves ``.code`` None and only fills the parsed
+    response body. Our extractor falls through to ``body.error.code``."""
+    err = _FakeOpenAIAPIError(
+        "rate limit reached (benign wording)",
+        code=None,
+        body={"error": {"code": "billing_hard_limit_reached", "type": "billing"}},
+    )
+    assert llm_retry.is_credit_exhausted_error(err)
+
+
+def test_is_credit_exhausted_returns_false_for_transient_rate_limit_code() -> None:
+    """OpenAI's transient TPM throttle has ``code='rate_limit_exceeded'``.
+    Must NOT classify it as fatal."""
+    err = _FakeOpenAIAPIError(
+        "Rate limit reached for gpt-4o ... tokens per min (TPM)",
+        code="rate_limit_exceeded",
+    )
+    assert not llm_retry.is_credit_exhausted_error(err)
+    assert llm_retry.is_rate_limit_error(err)
+
+
+def test_is_credit_exhausted_ignores_non_string_code_attributes() -> None:
+    """Defensive: an exception with ``.code`` set to a non-string
+    (e.g. an int or None) should not crash the extractor."""
+    err = _FakeOpenAIAPIError("rate limited", code=None)
+    # Falls through to text matching; "rate limited" doesn't match any
+    # credit hint, so returns False — not a crash.
+    assert llm_retry.is_credit_exhausted_error(err) is False
+
+
+def test_is_credit_exhausted_falls_back_to_text_for_anthropic_400() -> None:
+    """Anthropic does NOT expose a billing-specific error code — credit-
+    too-low surfaces as a generic invalid_request_error with the wording
+    in the message body. Text matching is the only signal Anthropic gives
+    us; this is documented at docs.anthropic.com/en/api/errors."""
+    # Mimics anthropic.BadRequestError — no ``.code`` attr at all.
+    err = RuntimeError(
+        "Anthropic request rejected (HTTP 400): "
+        "{'type': 'invalid_request_error', "
+        "'message': 'Your credit balance is too low to access the Anthropic API.'}"
+    )
+    assert llm_retry.is_credit_exhausted_error(err)
+
+
+# --------------------------------------------------------------------------- #
 # retry_on_rate_limit — control flow                                          #
 # --------------------------------------------------------------------------- #
 
