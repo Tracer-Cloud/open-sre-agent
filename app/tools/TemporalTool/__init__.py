@@ -1,3 +1,11 @@
+"""Temporal tool definitions.
+
+Four tools surface the four Temporal API capabilities:
+  1. TemporalListWorkflowsTool        — list recent executions with status/failure reason
+  2. TemporalWorkflowHistoryTool      — fetch event history for a single run
+  3. TemporalTaskQueueTool            — list task queues and worker pollers
+  4. TemporalNamespaceMetricsTool     — namespace config, retention, cluster info, open workflow count (best-effort)
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -5,24 +13,25 @@ from typing import Any
 from app.services.temporal.client import TemporalClient, TemporalClientError
 from app.tools.base import BaseTool
 
-
-def _attrs_key(event_type: str) -> str:
-    _map = {
-        "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED": "workflowExecutionStartedEventAttributes",
-        "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED": "workflowExecutionCompletedEventAttributes",
-        "EVENT_TYPE_WORKFLOW_EXECUTION_FAILED": "workflowExecutionFailedEventAttributes",
-        "EVENT_TYPE_WORKFLOW_EXECUTION_TIMED_OUT": "workflowExecutionTimedOutEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED": "activityTaskScheduledEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_STARTED": "activityTaskStartedEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_COMPLETED": "activityTaskCompletedEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_FAILED": "activityTaskFailedEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_TIMED_OUT": "activityTaskTimedOutEventAttributes",
-        "EVENT_TYPE_ACTIVITY_TASK_CANCEL_REQUESTED": "activityTaskCancelRequestedEventAttributes",
-    }
-    return _map.get(event_type, "")
+# def _make_client(sources: dict[str, Any]) -> TemporalClient:
+#     temporal = sources.get("temporal", {})
+#     if temporal.get("host"):
+#         from app.integrations.temporal import TemporalConfig
+#         config = TemporalConfig(
+#             host=temporal.get("host", "localhost"),
+#             port=int(temporal.get("port", 7233)),
+#             namespace=temporal.get("namespace", "default"),
+#             api_key=temporal.get("api_key") or None,
+#             tls=bool(temporal.get("tls", False)),
+#         )
+#     else:
+#         config = load_temporal_config_from_env()
+#     return TemporalClient(config)
 
 
 class TemporalListWorkflowsTool(BaseTool):
+    """List recent Temporal workflow executions with status and failure reason."""
+
     name = "temporal_list_workflows"
     source = "temporal"
     description = (
@@ -40,13 +49,44 @@ class TemporalListWorkflowsTool(BaseTool):
     input_schema = {
         "type": "object",
         "properties": {
-            "host": {"type": "string", "description": "Temporal server hostname (e.g. localhost or account.tmprl.cloud)."},
-            "namespace": {"type": "string", "default": "default", "description": "Temporal namespace to query."},
-            "query": {"type": "string", "default": "", "description": "Temporal visibility query string. Examples: ExecutionStatus='Failed', WorkflowType='OrderWorkflow' AND ExecutionStatus='Running'."},
-            "page_size": {"type": "integer", "default": 20, "description": "Maximum number of workflow executions to return (1-50)."},
-            "port": {"type": "integer", "default": 7233, "description": "Temporal HTTP API port (default 7233)."},
-            "api_key": {"type": "string", "default": "", "description": "API key for Temporal Cloud authentication (optional)."},
-            "tls": {"type": "boolean", "default": False, "description": "Whether to use TLS (required for Temporal Cloud)."},
+            "host": {
+                "type": "string",
+                "description": "Temporal server hostname (e.g. localhost or account.tmprl.cloud).",
+            },
+            "namespace": {
+                "type": "string",
+                "default": "default",
+                "description": "Temporal namespace to query.",
+            },
+            "query": {
+                "type": "string",
+                "default": "",
+                "description": (
+                    "Temporal visibility query string. Examples: "
+                    "ExecutionStatus='Failed', "
+                    "WorkflowType='OrderWorkflow' AND ExecutionStatus='Running'."
+                ),
+            },
+            "page_size": {
+                "type": "integer",
+                "default": 20,
+                "description": "Maximum number of workflow executions to return (1-50).",
+            },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host"],
     }
@@ -69,22 +109,61 @@ class TemporalListWorkflowsTool(BaseTool):
             "page_size": 20,
         }
 
-    def run(self, host: str, namespace: str = "default", port: int = 7233, api_key: str = "", tls: bool = False, query: str = "", page_size: int = 20, **_kwargs: Any) -> dict[str, Any]:
+    def run(
+        self,
+        host: str,
+        namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
+        query: str = "",
+        page_size: int = 20,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
         if not (host or "").strip():
-            return {"source": "temporal", "available": False, "error": "host is required to connect to Temporal.", "executions": [], "failed_executions": []}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": "host is required to connect to Temporal.",
+                "executions": [],
+                "failed_executions": [],
+            }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace, port=port, api_key=api_key or None, tls=tls)
+            config = TemporalConfig(host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,)
             client = TemporalClient(config)
             executions = client.list_workflows(query=query, page_size=min(page_size, 50))
         except TemporalClientError as exc:
-            return {"source": "temporal", "available": False, "error": str(exc), "executions": [], "failed_executions": []}
-        failed = [ex for ex in executions if ex.get("status", "") in ("FAILED", "TIMED_OUT", "TERMINATED")]
-        return {"source": "temporal", "available": True, "executions": executions, "total": len(executions), "failed_executions": failed, "total_failed": len(failed)}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": str(exc),
+                "executions": [],
+                "failed_executions": [],
+            }
 
+        failed = [
+            ex for ex in executions
+            if ex.get("status", "") in ("FAILED", "TIMED_OUT", "TERMINATED")
+        ]
+
+        return {
+            "source": "temporal",
+            "available": True,
+            "executions": executions,
+            "total": len(executions),
+            "failed_executions": failed,
+            "total_failed": len(failed),
+        }
 
 
 class TemporalWorkflowHistoryTool(BaseTool):
+    """Fetch the event history for a specific Temporal workflow run."""
+
     name = "temporal_workflow_history"
     source = "temporal"
     description = (
@@ -102,14 +181,43 @@ class TemporalWorkflowHistoryTool(BaseTool):
     input_schema = {
         "type": "object",
         "properties": {
-            "host": {"type": "string", "description": "Temporal server hostname."},
-            "namespace": {"type": "string", "default": "default", "description": "Temporal namespace to query."},
-            "workflow_id": {"type": "string", "description": "The workflow ID to inspect."},
-            "run_id": {"type": "string", "description": "The run ID of the specific execution."},
-            "max_event_count": {"type": "integer", "default": 50, "description": "Maximum number of history events to return (1-200)."},
-            "port": {"type": "integer", "default": 7233, "description": "Temporal HTTP API port (default 7233)."},
-            "api_key": {"type": "string", "default": "", "description": "API key for Temporal Cloud authentication (optional)."},
-            "tls": {"type": "boolean", "default": False, "description": "Whether to use TLS (required for Temporal Cloud)."},
+            "host": {
+                "type": "string",
+                "description": "Temporal server hostname.",
+            },
+            "namespace": {
+                "type": "string",
+                "default": "default",
+                "description": "Temporal namespace to query.",
+            },
+            "workflow_id": {
+                "type": "string",
+                "description": "The workflow ID to inspect.",
+            },
+            "run_id": {
+                "type": "string",
+                "description": "The run ID of the specific execution.",
+            },
+            "max_event_count": {
+                "type": "integer",
+                "default": 50,
+                "description": "Maximum number of history events to return (1-200).",
+            },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host", "workflow_id", "run_id"],
     }
@@ -134,21 +242,67 @@ class TemporalWorkflowHistoryTool(BaseTool):
             "max_event_count": 50,
         }
 
-    def run(self, host: str, workflow_id: str, run_id: str, namespace: str = "default", port: int = 7233, api_key: str = "", tls: bool = False, max_event_count: int = 50, **_kwargs: Any) -> dict[str, Any]:
+    def run(
+        self,
+        host: str,
+        workflow_id: str,
+        run_id: str,
+        namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
+        max_event_count: int = 50,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
         if not (host or "").strip():
-            return {"source": "temporal", "available": False, "error": "host is required to connect to Temporal.", "events": [], "failure_events": []}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": "host is required to connect to Temporal.",
+                "events": [],
+                "failure_events": [],
+            }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace, port=port, api_key=api_key or None, tls=tls)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,port=port,
+                api_key=api_key or None,
+                tls=tls,
+                )
             client = TemporalClient(config)
-            events = client.get_workflow_history(workflow_id=workflow_id, run_id=run_id, max_event_count=min(max_event_count, 200))
+            events = client.get_workflow_history(
+                workflow_id=workflow_id,
+                run_id=run_id,
+                max_event_count=min(max_event_count, 200),
+            )
         except TemporalClientError as exc:
-            return {"source": "temporal", "available": False, "error": str(exc), "events": [], "failure_events": []}
-        failure_events = [ev for ev in events if "FAILED" in ev.get("eventType", "") or "TIMED_OUT" in ev.get("eventType", "")]
-        return {"source": "temporal", "available": True, "events": events, "total_events": len(events), "failure_events": failure_events, "total_failure_events": len(failure_events)}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": str(exc),
+                "events": [],
+                "failure_events": [],
+            }
+
+        failure_events = [
+            ev for ev in events
+            if "FAILED" in ev.get("eventType", "") or "TIMED_OUT" in ev.get("eventType", "")
+        ]
+
+        return {
+            "source": "temporal",
+            "available": True,
+            "events": events,
+            "total_events": len(events),
+            "failure_events": failure_events,
+            "total_failure_events": len(failure_events),
+        }
 
 
 class TemporalTaskQueueTool(BaseTool):
+    """List task queue pollers and worker health for a Temporal task queue."""
+
     name = "temporal_task_queue"
     source = "temporal"
     description = (
@@ -166,12 +320,34 @@ class TemporalTaskQueueTool(BaseTool):
     input_schema = {
         "type": "object",
         "properties": {
-            "host": {"type": "string", "description": "Temporal server hostname."},
-            "namespace": {"type": "string", "default": "default", "description": "Temporal namespace to query."},
-            "task_queue": {"type": "string", "description": "Name of the task queue to inspect."},
-            "port": {"type": "integer", "default": 7233, "description": "Temporal HTTP API port (default 7233)."},
-            "api_key": {"type": "string", "default": "", "description": "API key for Temporal Cloud authentication (optional)."},
-            "tls": {"type": "boolean", "default": False, "description": "Whether to use TLS (required for Temporal Cloud)."},
+            "host": {
+                "type": "string",
+                "description": "Temporal server hostname.",
+            },
+            "namespace": {
+                "type": "string",
+                "default": "default",
+                "description": "Temporal namespace to query.",
+            },
+            "task_queue": {
+                "type": "string",
+                "description": "Name of the task queue to inspect.",
+            },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host", "task_queue"],
     }
@@ -194,56 +370,120 @@ class TemporalTaskQueueTool(BaseTool):
             "task_queue": temporal.get("task_queue", ""),
         }
 
-    def run(self, host: str, task_queue: str, namespace: str = "default", port: int = 7233, api_key: str = "", tls: bool = False, **_kwargs: Any) -> dict[str, Any]:
+    def run(
+        self,
+        host: str,
+        task_queue: str,
+        namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
         if not (host or "").strip():
-            return {"source": "temporal", "available": False, "error": "host is required to connect to Temporal.", "pollers": [], "unhealthy_queues": []}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": "host is required to connect to Temporal.",
+                "pollers": [],
+                "unhealthy_queues": [],
+            }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace, port=port, api_key=api_key or None, tls=tls)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,
+            )
             client = TemporalClient(config)
             data = client.list_task_queues(task_queue=task_queue)
         except TemporalClientError as exc:
-            return {"source": "temporal", "available": False, "error": str(exc), "pollers": [], "unhealthy_queues": []}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": str(exc),
+                "pollers": [],
+                "unhealthy_queues": [],
+            }
+
         pollers = data.get("pollers", [])
         status = data.get("taskQueueStatus", {})
+
         result: dict[str, Any] = {
-            "source": "temporal", "available": True, "task_queue": task_queue,
+            "source": "temporal",
+            "available": True,
+            "task_queue": task_queue,
             "poller_count": len(pollers),
-            "pollers": [{"identity": p.get("identity", ""), "last_access_time": p.get("lastAccessTime", ""), "rate_per_second": p.get("ratePerSecond", 0)} for p in pollers],
+            "pollers": [
+                {
+                    "identity": p.get("identity", ""),
+                    "last_access_time": p.get("lastAccessTime", ""),
+                    "rate_per_second": p.get("ratePerSecond", 0),
+                }
+                for p in pollers
+            ],
             "backlog_count": status.get("backlogCountHint", 0),
             "unhealthy_queues": [],
         }
+
         if not pollers:
             result["unhealthy_queues"] = [task_queue]
-            result["warning"] = "No workers are currently polling this task queue. Workflows may be stuck waiting for workers."
+            result["warning"] = (
+                "No workers are currently polling this task queue. "
+                "Workflows may be stuck waiting for workers."
+            )
+
         return result
 
 
 class TemporalNamespaceMetricsTool(BaseTool):
+    """Fetch namespace-level Temporal metrics: namespace config, retention, cluster info."""
+
     name = "temporal_namespace_metrics"
     source = "temporal"
     description = (
         "Fetch Temporal namespace-level summary: namespace config, "
         "retention period, and cluster info. "
-        "Attempts to fetch open workflow count via a separate endpoint; "
-        "returns None if that endpoint is unavailable. "
+        "Also attempts to fetch open workflow count via a separate endpoint — "
+        "returns None for that field if the endpoint is unavailable. "
         "Use this as a first step to get an overview of Temporal namespace health."
     )
     use_cases = [
-        "Getting a high-level overview of a Temporal namespace",
-        "Checking namespace retention period and cluster config",
-        "Verifying namespace registration state during an incident",
-        "Fetching open workflow count as a health signal (falls back to None if unavailable)",
+    "Getting a high-level overview of a Temporal namespace",
+    "Checking namespace retention period and cluster config",
+    "Verifying namespace registration state during an incident",
+    "Fetching open workflow count as a health signal (falls back to None if unavailable)",
     ]
     requires = ["host"]
     input_schema = {
         "type": "object",
         "properties": {
-            "host": {"type": "string", "description": "Temporal server hostname."},
-            "namespace": {"type": "string", "default": "default", "description": "Temporal namespace to query."},
-            "port": {"type": "integer", "default": 7233, "description": "Temporal HTTP API port (default 7233)."},
-            "api_key": {"type": "string", "default": "", "description": "API key for Temporal Cloud authentication (optional)."},
-            "tls": {"type": "boolean", "default": False, "description": "Whether to use TLS (required for Temporal Cloud)."},
+            "host": {
+                "type": "string",
+                "description": "Temporal server hostname.",
+            },
+            "namespace": {
+                "type": "string",
+                "default": "default",
+                "description": "Temporal namespace to query.",
+            },
+            "port": {
+                "type": "integer",
+                "default": 7233,
+                "description": "Temporal HTTP API port (default 7233).",
+            },
+            "api_key": {
+                "type": "string",
+                "default": "",
+                "description": "API key for Temporal Cloud authentication (optional).",
+            },
+            "tls": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to use TLS (required for Temporal Cloud).",
+            },
         },
         "required": ["host"],
     }
@@ -267,26 +507,62 @@ class TemporalNamespaceMetricsTool(BaseTool):
             "tls": bool(temporal.get("tls", False)),
         }
 
-    def run(self, host: str, namespace: str = "default", port: int = 7233, api_key: str = "", tls: bool = False, **_kwargs: Any) -> dict[str, Any]:
+    def run(
+        self,
+        host: str,
+        namespace: str = "default",
+        port: int = 7233,
+        api_key: str = "",
+        tls: bool = False,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
         if not (host or "").strip():
-            return {"source": "temporal", "available": False, "error": "host is required to connect to Temporal.", "namespace": "", "retention_days": "", "active_cluster": "", "open_workflow_count": None}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": "host is required to connect to Temporal.",
+                "namespace": "",
+                "retention_days": "",
+                "active_cluster": "",
+                "open_workflow_count": None,
+            }
         try:
             from app.integrations.temporal import TemporalConfig
-            config = TemporalConfig(host=host, namespace=namespace, port=port, api_key=api_key or None, tls=tls)
+            config = TemporalConfig(
+                host=host,
+                namespace=namespace,
+                port=port,
+                api_key=api_key or None,
+                tls=tls,
+            )
             client = TemporalClient(config)
             data = client.get_namespace_metrics()
         except TemporalClientError as exc:
-            return {"source": "temporal", "available": False, "error": str(exc), "namespace": "", "retention_days": "", "active_cluster": "", "open_workflow_count": None}
+            return {
+                "source": "temporal",
+                "available": False,
+                "error": str(exc),
+                "namespace": "",
+                "retention_days": "",
+                "active_cluster": "",
+                "open_workflow_count": None,
+            }
+
         try:
-            open_workflow_count: int | None = client.get_workflow_count().get("count", 0)
+            count_data = client.get_workflow_count()
+            open_workflow_count: int | None = count_data.get("count", 0)
         except TemporalClientError:
             open_workflow_count = None
+
         ns_info = data.get("namespaceInfo", {})
         cfg = data.get("config", {})
         replication = data.get("replicationConfig", {})
+
         return {
-            "source": "temporal", "available": True,
-            "namespace": ns_info.get("name", ""), "state": ns_info.get("state", ""),
+            "source": "temporal",
+            "available": True,
+            "namespace": ns_info.get("name", ""),
+            "state": ns_info.get("state", ""),
             "description": ns_info.get("description", ""),
             "retention_days": cfg.get("workflowExecutionRetentionTtl", ""),
             "active_cluster": replication.get("activeClusterName", ""),
@@ -294,13 +570,6 @@ class TemporalNamespaceMetricsTool(BaseTool):
             "data": ns_info.get("data", {}),
             "open_workflow_count": open_workflow_count,
         }
-
-
-# Registry auto-discovery: instances must be defined here so __module__ matches
-temporal_list_workflows = TemporalListWorkflowsTool()
-temporal_workflow_history = TemporalWorkflowHistoryTool()
-temporal_task_queue = TemporalTaskQueueTool()
-temporal_namespace_metrics = TemporalNamespaceMetricsTool()
 
 
 def get_temporal_tools() -> list[BaseTool]:
@@ -312,6 +581,11 @@ def get_temporal_tools() -> list[BaseTool]:
         TemporalNamespaceMetricsTool(),
     ]
 
+# Registry auto-discovery: instances must be defined here so __module__ matches
+temporal_list_workflows = TemporalListWorkflowsTool()
+temporal_workflow_history = TemporalWorkflowHistoryTool()
+temporal_task_queue = TemporalTaskQueueTool()
+temporal_namespace_metrics = TemporalNamespaceMetricsTool()
 
 __all__ = [
     "TemporalListWorkflowsTool",
