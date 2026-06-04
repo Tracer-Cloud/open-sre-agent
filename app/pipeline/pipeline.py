@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.state import AgentState
+
+if TYPE_CHECKING:
+    # Type-only import — avoids paying the agent module's heavy import cost
+    # at pipeline load while still letting static type-checkers validate
+    # ``agent_class`` injections.
+    from app.agent.investigation import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +142,7 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
 def run_connected_investigation(
     state: AgentState,
     *,
-    agent_class: type | None = None,
+    agent_class: type[ConnectedInvestigationAgent] | None = None,
 ) -> AgentState:
     """Resolve connected integrations → parse alert → agent loop → deliver.
 

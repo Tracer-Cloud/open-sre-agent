@@ -85,11 +85,18 @@ class ConnectedInvestigationAgent:
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools.
 
-        Returns ``(accept_conclusion, optional_nudge)``:
+        Returns ``(accept_conclusion, nudge)``:
           - ``(True, None)`` — accept the LLM's choice, exit the loop. Default.
-          - ``(False, "...")`` — reject the bail, inject the nudge as a user
-            message, continue the loop. ``MAX_INVESTIGATION_LOOPS`` still
+          - ``(False, "...")`` — reject the bail, inject the nudge string as a
+            user message, continue the loop. ``MAX_INVESTIGATION_LOOPS`` still
             caps the worst case so a stubborn model can't infinite-loop.
+
+        **Contract:** ``(False, None)`` is invalid and raises ``ValueError`` at
+        the call site. Rejecting the conclusion without providing a nudge
+        would spin the loop on an unchanged message history until the outer
+        iteration cap, silently burning the token budget. The type system
+        allows ``str | None`` so subclasses can use a single return type;
+        the runtime guard enforces the actual contract.
 
         Default returns ``(True, None)`` — production agents accept whatever
         the LLM decides. Subclasses can override to enforce minimum-evidence
@@ -230,8 +237,20 @@ class ConnectedInvestigationAgent:
                 if accept:
                     logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
                     break
-                if nudge is not None:
-                    messages.append({"role": "user", "content": nudge})
+                # Contract: rejecting the conclusion (accept=False) MUST
+                # come with a nudge so the next LLM call sees new context.
+                # Without one the loop would spin on an unchanged message
+                # history until MAX_INVESTIGATION_LOOPS, silently burning
+                # the entire token budget without making progress. Failing
+                # fast keeps buggy hook overrides loud rather than expensive.
+                if nudge is None:
+                    raise ValueError(
+                        f"{type(self).__name__}._should_accept_conclusion returned "
+                        "(False, None) — a nudge string is required when rejecting "
+                        "the conclusion, otherwise the LLM will loop on an unchanged "
+                        "message history until MAX_INVESTIGATION_LOOPS."
+                    )
+                messages.append({"role": "user", "content": nudge})
                 continue
 
             # Emit tool_start for each pending call before executing

@@ -403,6 +403,51 @@ def test_should_accept_conclusion_production_default_accepts() -> None:
     assert nudge is None
 
 
+def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
+    """Greptile P1: a hook override that returns ``(False, None)`` would
+    spin the loop on an unchanged message history until
+    ``MAX_INVESTIGATION_LOOPS``, silently burning the whole token budget.
+    The call site must raise immediately so buggy overrides fail loud
+    instead of expensive.
+
+    This pins the contract — a future regression that drops the guard
+    fails here instead of in a production token-burn incident."""
+
+    class _BadAgent(ConnectedInvestigationAgent):
+        def _should_accept_conclusion(
+            self,
+            *,
+            evidence_count: int,  # noqa: ARG002 — base signature
+            iteration: int,  # noqa: ARG002 — base signature
+        ) -> tuple[bool, str | None]:
+            return False, None  # invalid — rejects without providing context
+
+    mock_llm = MagicMock()
+    # Empty content + no tool calls → LLM "concludes" → triggers the hook.
+    mock_response = MagicMock()
+    mock_response.has_tool_calls = False
+    mock_response.tool_calls = []
+    mock_response.content = ""
+    mock_response.raw_content = None
+    mock_llm.invoke.return_value = mock_response
+    mock_llm.tool_schemas.return_value = []
+    mock_tracker = MagicMock()
+
+    state = {
+        "alert_name": "Test alert",
+        "pipeline_name": "test-pipeline",
+        "severity": "critical",
+        "resolved_integrations": {},
+    }
+    agent = _BadAgent()
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        pytest.raises(ValueError, match="_should_accept_conclusion returned"),
+    ):
+        agent.run(state)
+
+
 def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
     """Subclasses can return (False, nudge) to keep the loop going.
     This is what BenchInvestigationAgent does to enforce minimum evidence."""

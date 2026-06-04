@@ -6,6 +6,7 @@ import importlib
 import inspect
 import logging
 import pkgutil
+import threading
 from functools import lru_cache
 from types import ModuleType
 
@@ -36,6 +37,7 @@ _SKIP_MODULE_NAMES = {
 # discovers only ``app.tools.*``. The list is *not* persisted across
 # processes — every fresh import of opensre starts with zero externals.
 _external_tool_packages: list[ModuleType] = []
+_external_registration_lock = threading.Lock()
 
 
 def register_external_tool_package(package: ModuleType) -> None:
@@ -45,11 +47,19 @@ def register_external_tool_package(package: ModuleType) -> None:
     process. The registry cache is cleared so the new package's tools
     appear on the next lookup.
 
+    Idempotent and thread-safe: concurrent callers registering the same
+    package (e.g. multiple workers in a ``ThreadPoolExecutor`` each
+    importing a bench package) won't add duplicate entries that would
+    otherwise produce noisy ``Duplicate tool name`` warnings on every
+    subsequent registry walk.
+
     Production code does NOT call this — it's a hook for test suites
     and external integrators that ship their own tools but want them
     routed through opensre's agent loop.
     """
-    if package not in _external_tool_packages:
+    with _external_registration_lock:
+        if package in _external_tool_packages:
+            return
         _external_tool_packages.append(package)
         clear_tool_registry_cache()
 

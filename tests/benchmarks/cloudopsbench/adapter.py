@@ -320,7 +320,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         """The paper's 15 metrics. Validity metrics arrive in Phase C."""
         return _PAPER_METRIC_SCHEMA
 
-    def investigation_agent_class(self) -> type:
+    def investigation_agent_class(self) -> type[BenchInvestigationAgent]:
         """CloudOpsBench uses a stricter agent: minimum-tool-call floor.
 
         See :class:`BenchInvestigationAgent` for the rationale (June-3 bench

@@ -14,9 +14,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    # Type-only import — preserves the framework's "zero ``app.*`` imports"
+    # constraint at runtime while still letting type-checkers validate
+    # that adapter overrides return an investigation-agent subclass.
+    from app.agent.investigation import ConnectedInvestigationAgent
 
 # --------------------------------------------------------------------------- #
 # Mode — opensre+LLM vs LLM-alone. Framework-level concept; same adapter +    #
@@ -265,7 +271,7 @@ class BenchmarkAdapter(ABC):
         comparable reporting across adapters.
         """
 
-    def investigation_agent_class(self) -> type | None:
+    def investigation_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
         """Optional: which investigation agent class should the runner use?
 
         Default ``None`` — let the production pipeline construct its standard

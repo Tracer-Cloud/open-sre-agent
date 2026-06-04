@@ -534,6 +534,49 @@ def test_register_external_tool_package_adds_tools_to_registry() -> None:
     )
 
 
+def test_register_external_tool_package_is_thread_safe_under_concurrent_calls() -> None:
+    """Greptile P2: the check-then-append used to be a race window — two
+    threads could both pass the ``not in`` check and both append the same
+    package, causing every tool in that package to be logged as a duplicate
+    and silently dropped on subsequent registry walks. The locked version
+    must register exactly once even under high concurrency."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    fake_pkg: Any = ModuleType("synthetic.concurrent_registration_pkg")
+    fake_pkg.__path__ = []  # type: ignore[attr-defined] — empty walk, no tools
+
+    barrier = threading.Barrier(parties=8)
+    saved = list(registry_module._external_tool_packages)
+    try:
+        # Make sure the package isn't already registered from a prior test.
+        if fake_pkg in registry_module._external_tool_packages:
+            registry_module._external_tool_packages.remove(fake_pkg)
+
+        def attempt_register() -> None:
+            # Synchronize starts so all threads enter the critical section
+            # within the same scheduling quantum — maximizes race exposure.
+            barrier.wait()
+            registry_module.register_external_tool_package(fake_pkg)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(attempt_register) for _ in range(8)]
+            for f in futures:
+                f.result()
+
+        # Exactly one registration regardless of how many threads raced.
+        count = registry_module._external_tool_packages.count(fake_pkg)
+        assert count == 1, (
+            f"Expected exactly 1 registration for the same package across 8 "
+            f"concurrent callers, got {count}. The lock around check-then-"
+            f"append is missing or broken."
+        )
+    finally:
+        # Restore the registration list to its pre-test state.
+        registry_module._external_tool_packages[:] = saved
+        registry_module.clear_tool_registry_cache()
+
+
 def test_register_external_tool_package_is_idempotent() -> None:
     """Registering the same package twice doesn't add duplicates."""
     import tests.benchmarks.cloudopsbench.tools as cob_tools_pkg
