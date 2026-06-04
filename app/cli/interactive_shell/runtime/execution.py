@@ -229,7 +229,7 @@ def execute_routed_turn(
         return
 
     if kind == "new_alert":
-        response = run_new_alert(text, session, console, confirm_fn=confirm_fn)
+        response = run_new_alert(text, session, console, confirm_fn=confirm_fn, is_tty=is_tty)
         if recorder is not None:
             recorder.set_response(response or "")
             recorder.flush()
