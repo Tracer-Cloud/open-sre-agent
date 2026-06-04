@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import queue
+import sys
 import threading
 import time
 from pathlib import Path
@@ -36,6 +37,11 @@ from app.agents.tail import (
     _resolve_target,
     _ResolvedTarget,
     attach,
+)
+
+_WINDOWS_TAIL_TEST_REASON = (
+    "agent trace rejects Windows before POSIX fd/inode tailing; "
+    "these tests exercise platform-specific resolver or rename semantics"
 )
 
 
@@ -160,6 +166,7 @@ class TestParseLsofFd1:
         assert _parse_lsof_fd1("") == (None, None)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=_WINDOWS_TAIL_TEST_REASON)
 class TestResolveLinuxTarget:
     def test_regular_file_target(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         log = tmp_path / "out.log"
@@ -414,6 +421,8 @@ class TestAttachSession:
         # producer keeps writing to the original inode. The reader holds
         # a fd to that inode and must keep tailing — pathname existence
         # is intentionally not a liveness condition.
+        if sys.platform == "win32":
+            pytest.skip(_WINDOWS_TAIL_TEST_REASON)
         log = tmp_path / "agent.log"
         log.write_text("")
         with self._make_session(log) as sess:

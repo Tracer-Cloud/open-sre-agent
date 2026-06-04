@@ -45,6 +45,9 @@ else:
 logger = logging.getLogger(__name__)
 
 DEFAULT_BUS_SOCKET_PATH: Path = OPENSRE_HOME_DIR / "agents-bus.sock"
+BUS_UNSUPPORTED_MESSAGE: str = (
+    "agent bus requires Unix-domain socket support; this platform does not provide socket.AF_UNIX"
+)
 
 #: Bus message wire-format version. Bump when ``BusMessage`` fields change shape.
 BUS_SCHEMA_VERSION: int = 1
@@ -58,6 +61,16 @@ _MAX_FRAME_BYTES: int = 64 * 1024
 #: unresponsive and evicted, so one wedged client cannot stall fan-out for
 #: every other publisher's reader thread.
 _BROADCAST_WRITE_TIMEOUT_SECONDS: float = 0.2
+
+
+def bus_supported() -> bool:
+    """Return True when this host can create Unix-domain sockets for the bus."""
+    return hasattr(socket, "AF_UNIX")
+
+
+def _require_bus_supported() -> None:
+    if not bus_supported():
+        raise OSError(BUS_UNSUPPORTED_MESSAGE)
 
 
 @dataclass(frozen=True)
@@ -260,6 +273,7 @@ class BusServer:
         """
         if self._running.is_set():
             return
+        _require_bus_supported()
         _ensure_parent_dir(self._path)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -548,6 +562,7 @@ def _ensure_broker(path: Path) -> BusServer | None:
 
 def _connect_client(path: Path, timeout: float) -> socket.socket:
     """Open a blocking UDS connection to the broker at ``path``."""
+    _require_bus_supported()
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     client.settimeout(timeout)
     try:

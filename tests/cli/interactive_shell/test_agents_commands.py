@@ -99,6 +99,27 @@ class TestAgentsRegistration:
         assert DEFAULT_WINDOW_SECONDS == 10.0
 
 
+class TestAgentsBus:
+    def test_bus_reports_unsupported_platform_without_subscribing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(agents_mod, "bus_supported", lambda: False, raising=False)
+
+        def _unexpected_subscribe() -> object:
+            raise AssertionError("unsupported /agents bus must not call subscribe()")
+
+        monkeypatch.setattr(agents_mod, "subscribe", _unexpected_subscribe)
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/agents bus", sess_obj, console) is True
+
+        out = buf.getvalue()
+        assert "cannot tail /agents bus" in out
+        assert "Unix-domain socket" in out
+        assert sess_obj.history[-1]["ok"] is False
+
+
 class TestAgentsDispatch:
     def test_conflicts_with_empty_event_source_renders_empty_state(self) -> None:
         session = ReplSession()

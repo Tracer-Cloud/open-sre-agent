@@ -15,6 +15,10 @@ from pathlib import Path
 import pytest
 
 _POSIX_FCNTL_AVAILABLE = importlib.util.find_spec("fcntl") is not None
+pytestmark = pytest.mark.skipif(
+    not hasattr(socket, "AF_UNIX"),
+    reason="agent bus requires Unix-domain socket support",
+)
 
 from app.agents import bus as bus_module
 from app.agents.bus import (

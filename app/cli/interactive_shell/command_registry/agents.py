@@ -23,7 +23,7 @@ from rich.markup import escape
 from rich.text import Text
 from rich.tree import Tree
 
-from app.agents.bus import BusMessage, subscribe
+from app.agents.bus import BusMessage, bus_supported, subscribe
 from app.agents.config import (
     agents_config_path,
     load_agents_config,
@@ -152,7 +152,7 @@ def _format_bus_message(msg: BusMessage) -> str:
     return " ".join(parts)
 
 
-def _cmd_agents_bus(console: Console) -> bool:
+def _cmd_agents_bus(session: ReplSession, console: Console) -> bool:
     """Live-tail the cross-agent context bus until ``Ctrl-C`` or broker exit.
 
     Self-elects a broker if none is running, then streams each ``BusMessage``
@@ -160,6 +160,14 @@ def _cmd_agents_bus(console: Console) -> bool:
     ``KeyboardInterrupt`` (user detached), broker disconnect (e.g. the
     publishing process exited), or socket error.
     """
+    if not bus_supported():
+        console.print(
+            f"[{ERROR}]cannot tail /agents bus:[/] "
+            "Unix-domain socket support is unavailable on this platform."
+        )
+        session.mark_latest(ok=False, kind="slash")
+        return True
+
     console.print(
         f"[{DIM}]tailing /agents bus — Ctrl-C to exit[/]",
     )
@@ -657,7 +665,7 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
     if sub == "budget":
         return _cmd_agents_budget(session, console, args[1:])
     if sub == "bus":
-        return _cmd_agents_bus(console)
+        return _cmd_agents_bus(session, console)
     if sub == "conflicts":
         return _cmd_agents_conflicts(console)
 

@@ -18,7 +18,7 @@ import time
 import uuid
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[3]
+project_root = Path(__file__).resolve().parents[4]
 
 from tests.shared.infrastructure_sdk import save_outputs
 from tests.shared.infrastructure_sdk.resources import (
@@ -36,6 +36,12 @@ from tests.shared.infrastructure_sdk.resources import (
 STACK_NAME = "tracer-flink-ecs"
 REGION = "us-east-1"
 GRAFANA_SECRET_NAME = "tracer/grafana-cloud"
+TESTS_DIR = project_root / "tests"
+E2E_DIR = TESTS_DIR / "e2e"
+FLINK_SCENARIO_DIR = E2E_DIR / "upstream_apache_flink_ecs"
+FLINK_IMAGE_DOCKERFILE = FLINK_SCENARIO_DIR / "infrastructure_code" / "flink_image" / "Dockerfile"
+MOCK_API_CODE_DIR = TESTS_DIR / "shared" / "external_vendor_api"
+TRIGGER_LAMBDA_CODE_DIR = FLINK_SCENARIO_DIR / "pipeline_code" / "trigger_lambda"
 
 
 def deploy() -> dict:
@@ -151,14 +157,7 @@ def deploy() -> dict:
     # Build and push Docker image
     # Build context is project root to include telemetry packages
     context_dir = project_root
-    dockerfile_path = (
-        project_root
-        / "tests"
-        / "upstream_apache_flink_ecs"
-        / "infrastructure_code"
-        / "flink_image"
-        / "Dockerfile"
-    )
+    dockerfile_path = FLINK_IMAGE_DOCKERFILE
 
     print("  - Building and pushing Docker image (ARM64)...")
     print(f"    Dockerfile: {dockerfile_path}")
@@ -330,7 +329,7 @@ otelcol.exporter.otlphttp "grafana" {
     print("\n[Phase 6] Creating Lambda functions and API Gateways...")
 
     # Mock API Lambda
-    mock_api_code_dir = project_root / "tests/shared/external_vendor_api"
+    mock_api_code_dir = MOCK_API_CODE_DIR
     print(f"  - Bundling Mock API Lambda from: {mock_api_code_dir}")
     mock_api_code = lambda_.bundle_code(mock_api_code_dir)
 
@@ -360,9 +359,7 @@ otelcol.exporter.otlphttp "grafana" {
     print(f"    Mock API URL: {mock_api['invoke_url']}")
 
     # Trigger Lambda
-    trigger_code_dir = (
-        project_root / "tests/e2e/upstream_apache_flink_ecs/pipeline_code/trigger_lambda"
-    )
+    trigger_code_dir = TRIGGER_LAMBDA_CODE_DIR
     requirements_file = trigger_code_dir / "requirements.txt"
     print(f"  - Bundling Trigger Lambda from: {trigger_code_dir}")
     trigger_code = lambda_.bundle_code(trigger_code_dir, requirements_file)
