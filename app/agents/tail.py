@@ -415,6 +415,50 @@ class AttachSession:
         self.close()
 
 
+def read_tail_lines(
+    pid: int,
+    *,
+    max_lines: int = 50,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+) -> list[str]:
+    """Return up to the last ``max_lines`` lines of a pid's stdout file.
+
+    Unlike :func:`attach` — which seeks to EOF to *follow* new output —
+    this reads the existing on-disk tail of the regular file backing fd 1.
+    That history is what the investigation planner needs when it probes a
+    stuck agent after the fact (it never had a live trace session open).
+
+    Resolution and target validation reuse the same path as :func:`attach`,
+    so the contract is identical: :class:`AttachUnsupported` is raised
+    synchronously for any target we can't read (Windows, missing pid,
+    fd is a TTY/pipe/socket, permission denied, file vanished). Reads at
+    most ``max_bytes`` from the end of the file so an enormous log can't
+    blow up memory; the byte window is decoded with ``errors="replace"``
+    and the leading partial line (when the window starts mid-line) is
+    dropped before slicing the last ``max_lines``.
+    """
+    if max_lines <= 0:
+        raise ValueError("max_lines must be positive")
+    target = _resolve_target(pid)
+    try:
+        with open(target.path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            start = max(0, size - max_bytes)
+            fh.seek(start)
+            data = fh.read()
+    except OSError as exc:
+        raise AttachUnsupported(
+            f"cannot read stdout target {target.path}: {exc.strerror or exc}"
+        ) from exc
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    # If we started mid-file the first line is almost certainly the partial
+    # tail of an earlier line — drop it so we never report a truncated line.
+    if start > 0 and lines:
+        lines = lines[1:]
+    return lines[-max_lines:]
+
+
 def attach(
     pid: int,
     *,
@@ -450,4 +494,5 @@ __all__ = [
     "AttachUnsupported",
     "TailBuffer",
     "attach",
+    "read_tail_lines",
 ]

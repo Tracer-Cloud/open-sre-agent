@@ -36,6 +36,7 @@ from app.agents.tail import (
     _resolve_target,
     _ResolvedTarget,
     attach,
+    read_tail_lines,
 )
 
 
@@ -559,6 +560,81 @@ class TestAttachIntegration:
             seen = _drain_until(sess, lambda b: b"world" in b, timeout=3.0)
             assert b"world" in seen
         assert not sess._thread.is_alive()  # noqa: SLF001
+
+
+class TestReadTailLines:
+    """``read_tail_lines`` reads the existing on-disk tail (not EOF-follow)."""
+
+    def _patch_target(self, monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
+        monkeypatch.setattr(
+            tail_mod,
+            "_resolve_target",
+            lambda pid: _ResolvedTarget(pid=pid, path=path),
+        )
+
+    def test_returns_existing_history(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = tmp_path / "agent.log"
+        log.write_text("alpha\nbeta\ngamma\n")
+        self._patch_target(monkeypatch, log)
+        assert read_tail_lines(1234) == ["alpha", "beta", "gamma"]
+
+    def test_caps_to_last_max_lines(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        log = tmp_path / "agent.log"
+        log.write_text("".join(f"line {i}\n" for i in range(200)))
+        self._patch_target(monkeypatch, log)
+        lines = read_tail_lines(1234, max_lines=50)
+        assert len(lines) == 50
+        assert lines[0] == "line 150"
+        assert lines[-1] == "line 199"
+
+    def test_drops_leading_partial_line_when_window_clips(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A small byte window that starts mid-line must drop the partial
+        # head so we never report a truncated line.
+        log = tmp_path / "agent.log"
+        log.write_text("AAAAAAAAAA\nBBBBBBBBBB\nCCCCCCCCCC\n")
+        self._patch_target(monkeypatch, log)
+        # 25 bytes captures the tail end of the first line plus the last two.
+        lines = read_tail_lines(1234, max_bytes=25)
+        assert lines == ["BBBBBBBBBB", "CCCCCCCCCC"]
+
+    def test_empty_file_returns_empty_list(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = tmp_path / "agent.log"
+        log.write_text("")
+        self._patch_target(monkeypatch, log)
+        assert read_tail_lines(1234) == []
+
+    def test_invalid_utf8_is_replaced(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = tmp_path / "agent.log"
+        log.write_bytes(b"good\n\xff\xfe bad\n")
+        self._patch_target(monkeypatch, log)
+        lines = read_tail_lines(1234)
+        assert lines[0] == "good"
+        assert "�" in lines[1]
+
+    def test_rejects_non_positive_max_lines(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = tmp_path / "agent.log"
+        log.write_text("x\n")
+        self._patch_target(monkeypatch, log)
+        with pytest.raises(ValueError, match="max_lines must be positive"):
+            read_tail_lines(1234, max_lines=0)
+
+    def test_propagates_attach_unsupported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _fail(_pid: int) -> _ResolvedTarget:
+            raise AttachUnsupported("no such pid 9999")
+
+        monkeypatch.setattr(tail_mod, "_resolve_target", _fail)
+        with pytest.raises(AttachUnsupported, match="no such pid 9999"):
+            read_tail_lines(9999)
 
 
 def test_module_thread_cleanup_under_pytest() -> None:
