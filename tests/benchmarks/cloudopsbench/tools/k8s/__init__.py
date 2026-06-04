@@ -268,8 +268,21 @@ def _run_backend(cloudops_backend: Any, method_name: str, **kwargs: Any) -> dict
 @tool(
     name="GetResources",
     source="eks",
-    description="Replay Cloud-OpsBench GetResources against the case tool_cache.json.",
-    use_cases=["List Kubernetes resources recorded in the benchmark snapshot."],
+    description=(
+        "List Kubernetes resources in the cluster — pods, deployments, "
+        "services, events, nodes, replicasets. Use this FIRST in most "
+        "investigations to identify which workloads are failing, see "
+        "pod status (CrashLoopBackOff, ImagePullBackOff, Pending, "
+        "ContainerCreating), and find recent events that indicate why."
+    ),
+    use_cases=[
+        "Identify which pods are unhealthy: resource_type='pods' shows STATUS column",
+        "Find broken deployments: resource_type='deployments' shows READY vs DESIRED replicas",
+        "Discover failure signals: resource_type='events' shows scheduling errors, "
+        "image pull failures, OOM kills, secret-binding errors",
+        "Enumerate services and their selectors: resource_type='services'",
+        "Check node health: resource_type='nodes' shows Ready / NotReady / SchedulingDisabled",
+    ],
     requires=["cluster_name"],
     input_schema={"type": "object", "properties": {"resource_type": {"type": "string"}}},
     is_available=_cloudops_available,
@@ -300,8 +313,23 @@ def get_resources(
 @tool(
     name="DescribeResource",
     source="eks",
-    description="Replay Cloud-OpsBench DescribeResource against the case tool_cache.json.",
-    use_cases=["Inspect details for a recorded Kubernetes resource."],
+    description=(
+        "Get detailed configuration for a specific named Kubernetes resource "
+        "(pod, deployment, service, statefulset). Use AFTER GetResources "
+        "to investigate WHY a specific workload is failing — shows env "
+        "vars, secret references, volume mounts, container ports, "
+        "image tags, and the full status with event log."
+    ),
+    use_cases=[
+        "Inspect a failing pod's env vars and secret references: "
+        "resource_type='pod', name='<pod-name>'",
+        "Check a deployment's image, replica count, and selectors: "
+        "resource_type='deployment', name='<deployment>'",
+        "Verify a service's port mappings, selectors, and endpoints: "
+        "resource_type='service', name='<service>'",
+        "Examine a StatefulSet's volume claims and pod template: "
+        "resource_type='statefulset', name='<sts-name>'",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_describe_resource,
@@ -325,8 +353,19 @@ def describe_resource(
 @tool(
     name="GetClusterConfiguration",
     source="eks",
-    description="Replay Cloud-OpsBench GetClusterConfiguration from tool_cache.json.",
-    use_cases=["Inspect recorded cluster-level configuration."],
+    description=(
+        "Get cluster-level state: node health, control-plane component "
+        "status (kubelet, kube-scheduler, kube-proxy, containerd), and "
+        "system-level conditions. Use when issues appear cluster-wide "
+        "rather than workload-specific — e.g. multiple unrelated services "
+        "failing simultaneously, or scheduling failures across namespaces."
+    ),
+    use_cases=[
+        "Detect node-level problems: which nodes are NotReady, cordoned, or out of resources",
+        "Diagnose control-plane issues: kubelet down, scheduler offline, "
+        "containerd crashed, kube-proxy unavailable",
+        "Establish baseline cluster health before narrowing to a specific workload",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_backend,
@@ -339,8 +378,20 @@ def get_cluster_configuration(cloudops_backend: Any) -> dict[str, Any]:
 @tool(
     name="GetAlerts",
     source="eks",
-    description="Replay Cloud-OpsBench GetAlerts from tool_cache.json.",
-    use_cases=["Inspect recorded metric alerts for the case."],
+    description=(
+        "Get the active alerts that triggered this investigation. Call "
+        "this FIRST in every case — the alert message identifies the "
+        "affected service/namespace, severity, error rate, and timestamp. "
+        "Don't reason from the alert headline alone; always pull the "
+        "structured alert data."
+    ),
+    use_cases=[
+        "Identify the affected service: alert tags name the failing component",
+        "Establish when the issue started: alert firstSeen timestamp",
+        "See the error pattern: alert message often contains HTTP 5xx, "
+        "OOM, connection refused, etc.",
+        "Determine severity: critical vs warning helps prioritize sub-investigations",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_backend,
@@ -353,8 +404,21 @@ def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
 @tool(
     name="GetErrorLogs",
     source="eks",
-    description="Replay Cloud-OpsBench GetErrorLogs for the benchmark case.",
-    use_cases=["Inspect service error-log summaries recorded in the snapshot."],
+    description=(
+        "Get aggregated error-log signals for a specific service: counts "
+        "and example messages grouped by error type. Use AFTER finding a "
+        "failing service from GetResources/events — error logs typically "
+        "pinpoint the actual root cause (MySQL 'access denied', DNS "
+        "'no such host', 'OOMKilled', 'image pull backoff', etc.)."
+    ),
+    use_cases=[
+        "Confirm a suspected MySQL credential issue: look for 'Access denied for user' "
+        "or '1045' MySQL error codes",
+        "Confirm a DNS resolution failure: look for 'no such host' or 'DNS resolution failed'",
+        "Identify image pull issues: 'ErrImagePull' or 'manifest unknown'",
+        "Find HTTP 5xx patterns: 500/502/503/504 grouped by endpoint",
+        "Detect connection-refused / port-mismatch errors against downstream services",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_error_logs,
@@ -376,8 +440,19 @@ def get_error_logs(
 @tool(
     name="GetRecentLogs",
     source="eks",
-    description="Replay Cloud-OpsBench GetRecentLogs for the benchmark case.",
-    use_cases=["Inspect recent service logs recorded in raw_data/logs.json."],
+    description=(
+        "Get the most recent log lines from a service — chronologically "
+        "ordered, unfiltered. Use when GetErrorLogs aggregation isn't "
+        "enough: recent logs show the SEQUENCE of events leading to "
+        "failure, often revealing race conditions, startup ordering "
+        "issues, or transient errors that don't surface in summaries."
+    ),
+    use_cases=[
+        "See the moment of failure: tail logs around the alert timestamp",
+        "Detect startup-sequence problems: container init order, secret/volume mount timing",
+        "Find intermittent errors that aggregate-by-type misses",
+        "Confirm a fix's effect by checking the latest log lines",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_recent_logs,
@@ -401,8 +476,21 @@ def get_recent_logs(
 @tool(
     name="GetServiceDependencies",
     source="eks",
-    description="Replay Cloud-OpsBench GetServiceDependencies from tool_cache.json.",
-    use_cases=["Inspect recorded service dependency topology."],
+    description=(
+        "Map a service's upstream and downstream dependencies. Use this "
+        "to trace cascading failures: if service A is failing, what "
+        "calls A (impact blast-radius), and what does A call (potential "
+        "root cause upstream)? Critical for distinguishing 'A is broken' "
+        "from 'A is broken because B is broken'."
+    ),
+    use_cases=[
+        "Trace the cause: which downstream services does the failing "
+        "service depend on? Check those for errors too.",
+        "Trace the impact: which upstream services call the failing one? "
+        "Useful for confirming user-visible impact.",
+        "Identify shared infrastructure: multiple failing services calling "
+        "the same database/cache often points to that shared dep as the cause.",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_service_dependencies,
@@ -419,8 +507,21 @@ def get_service_dependencies(cloudops_backend: Any, service_name: str) -> dict[s
 @tool(
     name="GetAppYAML",
     source="eks",
-    description="Replay Cloud-OpsBench GetAppYAML from tool_cache.json.",
-    use_cases=["Inspect recorded YAML for an application service."],
+    description=(
+        "Get the full deployment YAML for an application — shows every "
+        "secret reference, env var, volume mount, image tag, and resource "
+        "limit. Use when DescribeResource doesn't show enough: the raw "
+        "YAML often reveals misconfigured secret bindings, mismatched "
+        "env-var names, wrong image tags, or sidecar/init-container "
+        "issues that aren't obvious from the high-level describe."
+    ),
+    use_cases=[
+        "Diagnose a missing secret binding: check 'envFrom' and 'volumes' "
+        "sections for secret references",
+        "Find image-tag mistakes: compare the spec's image vs the registered tag",
+        "Detect resource-limit misconfigurations: CPU/memory requests and limits",
+        "Check init-container ordering and sidecar configurations",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_app_yaml,
@@ -433,8 +534,20 @@ def get_app_yaml(cloudops_backend: Any, app_name: str) -> dict[str, Any]:
 @tool(
     name="CheckServiceConnectivity",
     source="eks",
-    description="Replay Cloud-OpsBench CheckServiceConnectivity from tool_cache.json.",
-    use_cases=["Check recorded service connectivity result."],
+    description=(
+        "Test reachability of a Kubernetes service from inside the "
+        "cluster. Use to confirm suspected service-routing failures: "
+        "DNS resolution problems, port mismatches between Service and "
+        "Pod, sidecar (Istio) port conflicts, or selector mismatches "
+        "that leave a Service with zero endpoints."
+    ),
+    use_cases=[
+        "Confirm DNS resolution failure: connectivity fails with 'no such host'",
+        "Confirm port-mapping mismatch: connection refused on the Service "
+        "port but pod listens on a different port",
+        "Confirm zero-endpoint failures: 'no endpoints available'",
+        "Validate that a fix resolved the connectivity issue",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_connectivity,
@@ -458,8 +571,19 @@ def check_service_connectivity(
 @tool(
     name="CheckNodeServiceStatus",
     source="eks",
-    description="Replay Cloud-OpsBench CheckNodeServiceStatus from tool_cache.json.",
-    use_cases=["Check recorded node component status."],
+    description=(
+        "Check the health of a specific Kubernetes control-plane "
+        "component (kubelet, kube-scheduler, kube-proxy, containerd) "
+        "on a named node. Use when GetClusterConfiguration reveals "
+        "node-level issues OR when GetResources shows scheduling "
+        "failures, Pending pods, or NotReady nodes."
+    ),
+    use_cases=[
+        "Diagnose scheduling failures: check kube-scheduler on master nodes",
+        "Diagnose pod-startup failures: check kubelet on the worker node",
+        "Diagnose container-runtime issues: check containerd on the affected node",
+        "Diagnose service-routing failures: check kube-proxy on relevant nodes",
+    ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
     extract_params=_extract_node_status,
