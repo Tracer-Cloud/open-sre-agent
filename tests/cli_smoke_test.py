@@ -431,8 +431,11 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
     result = _run_cli(cli_sandbox, "-h")
 
     assert result.exit_code == 0
+    assert "Welcome back" not in result.stdout
     assert "Commands:" in result.stdout
     assert "integrations" in result.stdout
+    assert "--interactive / --no-interactive" in result.stdout
+    assert "--layout [classic|pinned]" in result.stdout
     assert "update" in result.stdout
 
 
