@@ -164,28 +164,15 @@ data "aws_iam_policy_document" "github_actions_run_bench" {
     resources = ["*"]
   }
 
-  # DeregisterTaskDefinition is called by Terraform when changing image_tag
-  # forces a revision replacement on aws_ecs_task_definition.bench. Unlike
-  # Register, this action DOES accept resource ARNs, so it's scoped to the
-  # bench family only (no ability to deregister other modules' task defs).
+  # Tag the task definition on Register. The AWS provider's default_tags
+  # block in providers.tf attaches tags to every taggable resource, so
+  # RegisterTaskDefinition implicitly calls ecs:TagResource. Scoped to the
+  # bench family. (No UntagResource: skip_destroy = true on the resource
+  # means Terraform never deregisters / untags old revisions.)
   statement {
-    sid       = "DeregisterBenchTaskDefinition"
+    sid       = "TagBenchTaskDefinition"
     effect    = "Allow"
-    actions   = ["ecs:DeregisterTaskDefinition"]
-    resources = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name_prefix}:*"]
-  }
-
-  # Tag the task definition on Register/Deregister. The AWS provider's
-  # default_tags block in providers.tf attaches tags to every taggable
-  # resource, so RegisterTaskDefinition implicitly calls ecs:TagResource
-  # and Deregister can call ecs:UntagResource. Scoped to the bench family.
-  statement {
-    sid    = "TagBenchTaskDefinition"
-    effect = "Allow"
-    actions = [
-      "ecs:TagResource",
-      "ecs:UntagResource",
-    ]
+    actions   = ["ecs:TagResource"]
     resources = ["arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.name_prefix}:*"]
   }
 
