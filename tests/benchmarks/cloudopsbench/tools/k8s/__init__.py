@@ -278,8 +278,7 @@ def _run_backend(cloudops_backend: Any, method_name: str, **kwargs: Any) -> dict
     use_cases=[
         "Identify which pods are unhealthy: resource_type='pods' shows STATUS column",
         "Find broken deployments: resource_type='deployments' shows READY vs DESIRED replicas",
-        "Discover failure signals: resource_type='events' shows scheduling errors, "
-        "image pull failures, OOM kills, secret-binding errors",
+        "Discover failure signals: resource_type='events' shows scheduling errors, image pull failures, OOM kills, secret-binding errors",
         "Enumerate services and their selectors: resource_type='services'",
         "Check node health: resource_type='nodes' shows Ready / NotReady / SchedulingDisabled",
     ],
@@ -321,14 +320,10 @@ def get_resources(
         "image tags, and the full status with event log."
     ),
     use_cases=[
-        "Inspect a failing pod's env vars and secret references: "
-        "resource_type='pod', name='<pod-name>'",
-        "Check a deployment's image, replica count, and selectors: "
-        "resource_type='deployment', name='<deployment>'",
-        "Verify a service's port mappings, selectors, and endpoints: "
-        "resource_type='service', name='<service>'",
-        "Examine a StatefulSet's volume claims and pod template: "
-        "resource_type='statefulset', name='<sts-name>'",
+        "Inspect a failing pod's env vars and secret references: resource_type='pod', name='<pod-name>'",
+        "Check a deployment's image, replica count, and selectors: resource_type='deployment', name='<deployment>'",
+        "Verify a service's port mappings, selectors, and endpoints: resource_type='service', name='<service>'",
+        "Examine a StatefulSet's volume claims and pod template: resource_type='statefulset', name='<sts-name>'",
     ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
@@ -362,8 +357,7 @@ def describe_resource(
     ),
     use_cases=[
         "Detect node-level problems: which nodes are NotReady, cordoned, or out of resources",
-        "Diagnose control-plane issues: kubelet down, scheduler offline, "
-        "containerd crashed, kube-proxy unavailable",
+        "Diagnose control-plane issues: kubelet down, scheduler offline, containerd crashed, kube-proxy unavailable",
         "Establish baseline cluster health before narrowing to a specific workload",
     ],
     requires=["cluster_name"],
@@ -388,8 +382,7 @@ def get_cluster_configuration(cloudops_backend: Any) -> dict[str, Any]:
     use_cases=[
         "Identify the affected service: alert tags name the failing component",
         "Establish when the issue started: alert firstSeen timestamp",
-        "See the error pattern: alert message often contains HTTP 5xx, "
-        "OOM, connection refused, etc.",
+        "See the error pattern: alert message often contains HTTP 5xx, OOM, connection refused, etc.",
         "Determine severity: critical vs warning helps prioritize sub-investigations",
     ],
     requires=["cluster_name"],
@@ -412,8 +405,7 @@ def get_alerts(cloudops_backend: Any) -> dict[str, Any]:
         "'no such host', 'OOMKilled', 'image pull backoff', etc.)."
     ),
     use_cases=[
-        "Confirm a suspected MySQL credential issue: look for 'Access denied for user' "
-        "or '1045' MySQL error codes",
+        "Confirm a suspected MySQL credential issue: look for 'Access denied for user' or '1045' MySQL error codes",
         "Confirm a DNS resolution failure: look for 'no such host' or 'DNS resolution failed'",
         "Identify image pull issues: 'ErrImagePull' or 'manifest unknown'",
         "Find HTTP 5xx patterns: 500/502/503/504 grouped by endpoint",
@@ -484,12 +476,9 @@ def get_recent_logs(
         "from 'A is broken because B is broken'."
     ),
     use_cases=[
-        "Trace the cause: which downstream services does the failing "
-        "service depend on? Check those for errors too.",
-        "Trace the impact: which upstream services call the failing one? "
-        "Useful for confirming user-visible impact.",
-        "Identify shared infrastructure: multiple failing services calling "
-        "the same database/cache often points to that shared dep as the cause.",
+        "Trace the cause: which downstream services does the failing service depend on? Check those for errors too.",
+        "Trace the impact: which upstream services call the failing one? Useful for confirming user-visible impact.",
+        "Identify shared infrastructure: multiple failing services calling the same database/cache often points to that shared dep as the cause.",
     ],
     requires=["cluster_name"],
     is_available=_cloudops_available,
@@ -516,8 +505,7 @@ def get_service_dependencies(cloudops_backend: Any, service_name: str) -> dict[s
         "issues that aren't obvious from the high-level describe."
     ),
     use_cases=[
-        "Diagnose a missing secret binding: check 'envFrom' and 'volumes' "
-        "sections for secret references",
+        "Diagnose a missing secret binding: check 'envFrom' and 'volumes' sections for secret references",
         "Find image-tag mistakes: compare the spec's image vs the registered tag",
         "Detect resource-limit misconfigurations: CPU/memory requests and limits",
         "Check init-container ordering and sidecar configurations",
@@ -543,8 +531,7 @@ def get_app_yaml(cloudops_backend: Any, app_name: str) -> dict[str, Any]:
     ),
     use_cases=[
         "Confirm DNS resolution failure: connectivity fails with 'no such host'",
-        "Confirm port-mapping mismatch: connection refused on the Service "
-        "port but pod listens on a different port",
+        "Confirm port-mapping mismatch: connection refused on the Service port but pod listens on a different port",
         "Confirm zero-endpoint failures: 'no endpoints available'",
         "Validate that a fix resolved the connectivity issue",
     ],
