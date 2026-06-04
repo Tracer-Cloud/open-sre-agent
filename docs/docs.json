@@ -128,6 +128,7 @@
             "expanded": true,
             "pages": [
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
               "integrations/github-actions",

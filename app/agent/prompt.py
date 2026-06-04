@@ -63,9 +63,9 @@ Severity: {severity}
 _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "grafana": ["grafana"],
     "datadog": ["datadog"],
-    "cloudwatch": ["cloudwatch", "ec2", "rds"],
-    "eks": ["eks", "ec2"],
-    "alertmanager": ["eks", "cloudwatch", "grafana"],
+    "cloudwatch": ["cloudwatch", "ec2", "rds", "cloudtrail"],
+    "eks": ["eks", "ec2", "cloudtrail"],
+    "alertmanager": ["eks", "cloudwatch", "grafana", "cloudtrail"],
     "sentry": ["sentry"],
     "honeycomb": ["honeycomb"],
     "coralogix": ["coralogix"],
