@@ -66,6 +66,20 @@ def test_tool_discovered_on_investigation_surface() -> None:
     assert "lookup_cloudtrail_events" in names
 
 
+def test_cloudtrail_seeded_and_prioritized_for_aws_alerts() -> None:
+    """CloudTrail is auto-seeded and prioritized for AWS-originating alerts.
+
+    Guards both maps so a cloudwatch/eks/alertmanager alert pulls CloudTrail
+    change-causality into the investigation, not just one of them.
+    """
+    from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
+    from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
+
+    for alert_source in ("cloudwatch", "eks", "alertmanager"):
+        assert "cloudtrail" in seed_map[alert_source]
+        assert "cloudtrail" in priority_map[alert_source]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Schema shape
 # ─────────────────────────────────────────────────────────────────────────────

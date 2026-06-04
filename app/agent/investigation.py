@@ -30,9 +30,9 @@ _UNSET: object = object()  # sentinel distinguishing "not yet started" from a No
 _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "grafana": ["grafana"],
     "datadog": ["datadog"],
-    "cloudwatch": ["cloudwatch"],
-    "eks": ["eks"],
-    "alertmanager": ["grafana", "cloudwatch"],
+    "cloudwatch": ["cloudwatch", "cloudtrail"],
+    "eks": ["eks", "cloudtrail"],
+    "alertmanager": ["grafana", "cloudwatch", "cloudtrail"],
     "sentry": ["sentry"],
     "honeycomb": ["honeycomb"],
     "coralogix": ["coralogix"],
