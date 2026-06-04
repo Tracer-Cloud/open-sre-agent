@@ -31,30 +31,32 @@ def _cmd_remediate(session: ReplSession, console: Console, args: list[str]) -> b
 
     _print_remediation_plan(console, steps)
 
-    safe_or_elevated = [s for s in steps if s.safety_level is not SafetyLevel.manual]
+    safe_actions = [s for s in steps if s.safety_level is SafetyLevel.safe]
+    elevated_actions = [s for s in steps if s.safety_level is SafetyLevel.elevated]
     manual = [s for s in steps if s.safety_level is SafetyLevel.manual]
 
-    if not safe_or_elevated:
-        console.print(
-            f"\n[{WARNING}]all steps require manual execution — no automated actions to take.[/]"
-        )
-        if manual:
-            _print_manual_steps(console, manual)
+    # Auto-execute safe (read-only) actions — they bypass confirmation
+    for action in safe_actions:
+        console.print(f"\n[{HIGHLIGHT}]safe action — executing:[/] {escape(action.command)}")
+        _execute_and_print(console, action)
+
+    if not elevated_actions and not manual:
         return True
 
-    if auto_flag:
-        console.print(f"\n[{HIGHLIGHT}]auto-remediate mode: executing all actions...[/]")
-        for action in safe_or_elevated:
-            _execute_and_print(console, action)
-    else:
-        console.print(f"\n[{WARNING}]elevated actions require confirmation:[/]")
-        for action in safe_or_elevated:
-            label = f"Execute: {action.command}"
-            confirmed = _confirm_action(console, label)
-            if confirmed:
+    if elevated_actions:
+        if auto_flag:
+            console.print(f"\n[{HIGHLIGHT}]auto-remediate mode: executing elevated actions...[/]")
+            for action in elevated_actions:
                 _execute_and_print(console, action)
-            else:
-                console.print(f"  [{WARNING}]skipped[/] {escape(action.command)}")
+        else:
+            console.print(f"\n[{WARNING}]elevated actions require confirmation:[/]")
+            for action in elevated_actions:
+                label = f"Execute: {action.command}"
+                confirmed = _confirm_action(console, label)
+                if confirmed:
+                    _execute_and_print(console, action)
+                else:
+                    console.print(f"  [{WARNING}]skipped[/] {escape(action.command)}")
 
     if manual:
         _print_manual_steps(console, manual)
