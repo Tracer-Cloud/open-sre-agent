@@ -14,7 +14,9 @@ from app.constants.posthog import (
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
     POSTHOG_CAPTURE_API_KEY,
+    POSTHOG_CAPTURE_API_KEY_ENV,
     POSTHOG_HOST,
+    posthog_capture_api_key,
 )
 from app.constants.sentry import (
     SENTRY_DSN,
@@ -54,7 +56,9 @@ __all__ = [
     "OPENSRE_HOME_DIR",
     "OPENSRE_TMP_DIR",
     "POSTHOG_CAPTURE_API_KEY",
+    "POSTHOG_CAPTURE_API_KEY_ENV",
     "POSTHOG_HOST",
+    "posthog_capture_api_key",
     "SENTRY_DSN",
     "SENTRY_ERROR_SAMPLE_RATE",
     "SENTRY_IN_APP_INCLUDE",

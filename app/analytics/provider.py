@@ -24,7 +24,7 @@ import httpx
 
 from app.analytics.events import Event
 from app.cli.wizard.store import get_store_path
-from app.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
+from app.constants.posthog import POSTHOG_HOST, posthog_capture_api_key
 from app.version import get_version
 
 _CONFIG_DIR = get_store_path().parent
@@ -767,8 +767,11 @@ class Analytics:
         if insert_id is not None:
             properties["$insert_id"] = insert_id
         _log_event_line(item.event, properties)
+        capture_api_key = posthog_capture_api_key()
+        if not capture_api_key:
+            return
         payload = {
-            "api_key": POSTHOG_CAPTURE_API_KEY,
+            "api_key": capture_api_key,
             "event": item.event,
             "properties": properties,
         }

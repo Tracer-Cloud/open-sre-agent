@@ -72,6 +72,45 @@ def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
     assert dispatched == ["/integrations list"]
 
 
+def test_dispatch_one_turn_forwards_confirm_fn_to_direct_slash_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatched: list[str] = []
+    confirmation_answers: list[str | None] = []
+
+    def _dispatch(
+        command: str,
+        _session: ReplSession,
+        _console: Console,
+        *,
+        confirm_fn=None,
+        **_kwargs: object,
+    ) -> bool:
+        dispatched.append(command)
+        confirmation_answers.append(confirm_fn("Proceed? [Y/n] ") if confirm_fn else None)
+        return True
+
+    monkeypatch.setattr(
+        loop_dispatch._router,
+        "route_input",
+        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
+    )
+    monkeypatch.setattr(loop_execution, "dispatch_slash", _dispatch)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    loop_dispatch.dispatch_one_turn(
+        "integrations verify",
+        session,
+        console,
+        on_exit=lambda: None,
+        confirm_fn=lambda _prompt: "y",
+    )
+
+    assert dispatched == ["/integrations verify"]
+    assert confirmation_answers == ["y"]
+
+
 def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

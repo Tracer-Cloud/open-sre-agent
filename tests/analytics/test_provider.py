@@ -25,6 +25,7 @@ def _reset_anonymous_id_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     provider._cached_identity_persistence = "unknown"
     provider._first_run_marker_created_this_process = False
     provider._pending_user_id_load_failures.clear()
+    monkeypatch.setenv("POSTHOG_CAPTURE_API_KEY", "phc_test_default")
     monkeypatch.setattr(provider, "_event_log_state", provider._EventLogState())
     monkeypatch.setattr(provider, "_FIRST_RUN_PATH", tmp_path / "installed")
     yield
@@ -63,6 +64,62 @@ def _stub_httpx_client(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object
 
     monkeypatch.setattr(provider.httpx, "Client", _StubClient)
     return posted_payloads
+
+
+def test_analytics_send_uses_posthog_capture_key_from_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("POSTHOG_CAPTURE_API_KEY", "phc_from_env")
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads: list[dict[str, object]] = []
+
+    class _StubResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    class _StubClient:
+        def post(self, url: str, json: dict[str, object]) -> _StubResponse:
+            posted_payloads.append({"url": url, "json": json})
+            return _StubResponse()
+
+    analytics = provider.Analytics()
+    analytics._send(
+        _StubClient(),
+        provider._Envelope(event=Event.CLI_INVOKED.value, properties={}),
+    )
+    analytics.shutdown(flush=False)
+
+    assert posted_payloads[0]["json"]["api_key"] == "phc_from_env"
+
+
+def test_analytics_send_skips_posthog_when_capture_key_is_unset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("POSTHOG_CAPTURE_API_KEY", raising=False)
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads: list[dict[str, object]] = []
+
+    class _StubClient:
+        def post(self, url: str, json: dict[str, object]) -> object:
+            posted_payloads.append({"url": url, "json": json})
+            raise AssertionError("PostHog should not be called without a capture key")
+
+    analytics = provider.Analytics()
+    analytics._send(
+        _StubClient(),
+        provider._Envelope(event=Event.CLI_INVOKED.value, properties={}),
+    )
+    analytics.shutdown(flush=False)
+
+    assert posted_payloads == []
 
 
 def test_capture_install_detected_if_needed_captures_once(monkeypatch, tmp_path: Path) -> None:
