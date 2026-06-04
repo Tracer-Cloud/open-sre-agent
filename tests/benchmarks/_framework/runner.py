@@ -378,7 +378,11 @@ class BenchmarkRunner:
         final_state_dict: dict[str, Any] = {}
 
         try:
-            final_state = run_investigation(alert.raw, resolved_integrations=integrations)
+            final_state = run_investigation(
+                alert.raw,
+                resolved_integrations=integrations,
+                agent_class=self.adapter.investigation_agent_class(),
+            )
             final_state_dict = dict(final_state)
         except (CostBudgetExceeded, UnknownModel, LLMCreditExhaustedError):
             # Run-fatal: propagate up to _execute_llm_batch / _run_inner so

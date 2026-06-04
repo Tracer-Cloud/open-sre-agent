@@ -68,8 +68,8 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
 
     Returns ``None`` to signal the caller should re-raise. In particular,
     :class:`LLMCreditExhaustedError` is intentionally NOT classified — it
-    represents a non-recoverable billing condition that the bench runner
-    (and production agent) must halt on, not wrap into a degraded result.
+    represents a non-recoverable billing condition that callers must halt
+    on, not wrap into a degraded result.
     """
     from app.integrations.llm_cli.errors import (
         CLIAuthenticationRequired,

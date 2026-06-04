@@ -265,6 +265,21 @@ class BenchmarkAdapter(ABC):
         comparable reporting across adapters.
         """
 
+    def investigation_agent_class(self) -> type | None:
+        """Optional: which investigation agent class should the runner use?
+
+        Default ``None`` — let the production pipeline construct its standard
+        :class:`ConnectedInvestigationAgent`. Override when the benchmark
+        needs a stricter termination policy or other agent-level behavior
+        (e.g. CloudOpsBench's minimum-tool-call floor lives in
+        :class:`tests.benchmarks.cloudopsbench.bench_agent.BenchInvestigationAgent`).
+
+        Production code stays clean: the runner just passes whatever the
+        adapter returns to ``run_investigation``. Bench-specific agent logic
+        lives entirely in bench code.
+        """
+        return None
+
     def format_final_answer(
         self,
         case: BenchmarkCase,  # noqa: ARG002 — used by overrides

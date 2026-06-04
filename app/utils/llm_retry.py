@@ -8,21 +8,20 @@ ad-hoc in others):
      429s with different exception classes but consistent message text.
   2. Retrying with exponential backoff when the recognizer says yes.
 
-Used by:
-  - ``tests/benchmarks/cloudopsbench/predictor.py`` — wraps its one-shot
-    LLM call so the structured-output emitter doesn't silently degrade to
-    None on a transient 429.
-  - ``app/services/agent_llm_client.py`` — uses :func:`is_rate_limit_error`
-    inside its existing retry loop so the investigation loop survives a
-    transient 429 the same way it survives a 500.
-
 Why a helper instead of catching the SDK's typed exceptions everywhere:
 opensre wraps provider exceptions into ``RuntimeError`` at boundaries
 (see e.g. ``AnthropicAgentClient.invoke`` raising
 ``RuntimeError("Anthropic rate limit exceeded: ...")``). Downstream code
-(the predictor, future cross-provider tooling) only sees the wrapped
-text. Matching by text is the only common denominator without taking a
-hard import dependency on every provider's exception module.
+only sees the wrapped text — matching by text is the common denominator
+without taking a hard import dependency on every provider's exception
+module.
+
+The agent LLM client (:mod:`app.services.agent_llm_client`) uses
+:func:`is_rate_limit_error` inside its own retry loop so the
+investigation survives a transient 429 the same way it survives a 500.
+Any code path that performs its own LLM call can wrap it with
+:func:`retry_on_rate_limit` to inherit the same backoff + jitter
+contract.
 """
 
 from __future__ import annotations
@@ -137,9 +136,11 @@ class LLMCreditExhaustedError(Exception):
     equivalent. UNLIKE transient rate-limit errors, retries don't help —
     the operator must top up balance or raise the spending cap.
 
-    Bench runner halts the entire run on first occurrence (continuing burns
-    wall-clock on a dead account and produces no useful data). Production
-    agent surfaces it as a credential / billing error.
+    Long-running orchestrators (multi-cell batches, scheduled investigations)
+    should halt on first occurrence rather than continuing — every subsequent
+    LLM call will fail the same way until the account is topped up.
+    Interactive callers should surface the error to the operator with clear
+    "fix your billing" guidance.
 
     Intentionally NOT a subclass of ``RuntimeError`` so the existing
     catch-all-RuntimeError paths don't accidentally swallow it. Always
@@ -252,12 +253,11 @@ def retry_on_rate_limit[T](
       - ``max_attempts`` retries have exhausted.
 
     Backoff uses **full jitter** (``sleep ~ Uniform(0, backoff)``) rather than
-    deterministic ``time.sleep(backoff)``. With multiple concurrent workers
-    (e.g. the bench runner's ``workers: 4``), a deterministic backoff would
-    have all rate-limited clients wake up at the same instant and retry in
-    lockstep, immediately re-hitting the TPM bucket. Full jitter is the
-    pattern AWS recommends and matches what the Anthropic + OpenAI SDKs do
-    internally.
+    deterministic ``time.sleep(backoff)``. With multiple concurrent callers, a
+    deterministic backoff would have all rate-limited clients wake up at the
+    same instant and retry in lockstep, immediately re-hitting the TPM
+    bucket. Full jitter is the pattern AWS recommends and matches what the
+    Anthropic + OpenAI SDKs do internally.
 
     ``label`` is the short tag used in log messages so callers (predictor,
     agent loop, ...) can be told apart in tail-grep.

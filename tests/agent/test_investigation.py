@@ -383,6 +383,51 @@ def test_enforce_context_budget_noop_when_under_ceiling() -> None:
     assert messages == snapshot
 
 
+# --------------------------------------------------------------------------- #
+# Termination hook — production default + override mechanics                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_should_accept_conclusion_production_default_accepts() -> None:
+    """Production default: the agent ALWAYS accepts the LLM's choice to stop.
+    Returning (True, None) is the no-op path; subclasses override to enforce
+    floors or other termination policies."""
+    agent = ConnectedInvestigationAgent()
+    accept, nudge = agent._should_accept_conclusion(evidence_count=0, iteration=0)
+    assert accept is True
+    assert nudge is None
+    # Behavior independent of how many tool calls happened — production
+    # agents trust the LLM.
+    accept, nudge = agent._should_accept_conclusion(evidence_count=100, iteration=15)
+    assert accept is True
+    assert nudge is None
+
+
+def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
+    """Subclasses can return (False, nudge) to keep the loop going.
+    This is what BenchInvestigationAgent does to enforce minimum evidence."""
+
+    class _StrictAgent(ConnectedInvestigationAgent):
+        def _should_accept_conclusion(
+            self,
+            *,
+            evidence_count: int,
+            iteration: int,  # noqa: ARG002 — base signature
+        ) -> tuple[bool, str | None]:
+            if evidence_count >= 5:
+                return True, None
+            return False, f"Only {evidence_count} tool calls so far — keep going."
+
+    agent = _StrictAgent()
+    accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=2)
+    assert accept is False
+    assert nudge is not None and "3 tool calls" in nudge
+
+    accept, nudge = agent._should_accept_conclusion(evidence_count=7, iteration=5)
+    assert accept is True
+    assert nudge is None
+
+
 def test_enforce_context_budget_trims_when_over_ceiling() -> None:
     # Each tool turn carries ~1 MB of text (~250k token estimate). One pair
     # is enough to push messages past the 180k ceiling; the function should

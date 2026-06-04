@@ -40,6 +40,7 @@ from tests.benchmarks._framework.adapters import (
     RunContext,
     RunResult,
 )
+from tests.benchmarks.cloudopsbench.bench_agent import BenchInvestigationAgent
 from tests.benchmarks.cloudopsbench.case_loader import (
     BENCHMARK_DIR,
     CloudOpsCase,
@@ -225,8 +226,8 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
 
     def build_opensre_integrations(self, case: BenchmarkCase) -> dict[str, Any]:
         """Construct a fresh State Snapshot replay backend per case and
-        wire it under the ``eks`` integration key opensre's CloudOpsBench
-        tools (``app/tools/CloudOpsBenchK8sTools/__init__.py``) read from.
+        wire it under the ``eks`` integration key the bench's replay
+        tools (``tests/benchmarks/cloudopsbench/tools/k8s``) read from.
 
         The returned dict is the only place this cell's backend lives;
         the runner passes it back via ``RunContext`` to ``score_case``.
@@ -250,11 +251,16 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                 "region": "us-east-1",
                 "cluster_names": [cluster_name],
             },
-            # CloudOpsBenchK8sTools read from here (sources["eks"]["_backend"]).
+            # CloudOpsBenchK8sTools read from sources["eks"]["_bench_backend"].
+            # Deliberately distinct from the ``_backend`` slot used by synthetic
+            # tests — production tool availability checks (_eks_available,
+            # eks_available_or_backend) read only ``_backend`` and
+            # ``connection_verified``, so this key stays invisible to them and
+            # they correctly skip activation for bench cells.
             "eks": {
                 "namespace": legacy.namespace,
                 "cluster_name": cluster_name,
-                "_backend": backend,
+                "_bench_backend": backend,
             },
         }
 
@@ -278,13 +284,13 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         per-cell state on the adapter (thread-safe).
         """
         legacy = self._require_case(case)
-        backend = (context.integrations.get("eks") or {}).get("_backend")
+        backend = (context.integrations.get("eks") or {}).get("_bench_backend")
         if not isinstance(backend, CloudOpsBenchReplayBackend):
             return CaseScore(
                 case_id=case.case_id,
                 metrics={},
                 failure_reason=(
-                    "context.integrations missing 'eks._backend' of type "
+                    "context.integrations missing 'eks._bench_backend' of type "
                     "CloudOpsBenchReplayBackend — runner must pass the same "
                     "integrations dict to score_case as it passed to run_investigation"
                 ),
@@ -313,6 +319,16 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
     def metric_schema(self) -> MetricSchema:
         """The paper's 15 metrics. Validity metrics arrive in Phase C."""
         return _PAPER_METRIC_SCHEMA
+
+    def investigation_agent_class(self) -> type:
+        """CloudOpsBench uses a stricter agent: minimum-tool-call floor.
+
+        See :class:`BenchInvestigationAgent` for the rationale (June-3 bench
+        showed median 4-7 tool calls vs the paper's expected 15-20 winning
+        trajectory). Production code is unaffected — the runner injects this
+        class via the ``agent_class`` parameter on ``run_investigation``.
+        """
+        return BenchInvestigationAgent
 
     def format_final_answer(
         self,

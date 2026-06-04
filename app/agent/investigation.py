@@ -77,6 +77,26 @@ AgentEventCallback = Callable[[str, dict[str, Any]], None]
 class ConnectedInvestigationAgent:
     """ReAct loop scoped to the tools enabled by connected integrations."""
 
+    def _should_accept_conclusion(
+        self,
+        *,
+        evidence_count: int,  # noqa: ARG002 — used by overrides
+        iteration: int,  # noqa: ARG002 — used by overrides
+    ) -> tuple[bool, str | None]:
+        """Hook: decide what to do when the LLM stops requesting tools.
+
+        Returns ``(accept_conclusion, optional_nudge)``:
+          - ``(True, None)`` — accept the LLM's choice, exit the loop. Default.
+          - ``(False, "...")`` — reject the bail, inject the nudge as a user
+            message, continue the loop. ``MAX_INVESTIGATION_LOOPS`` still
+            caps the worst case so a stubborn model can't infinite-loop.
+
+        Default returns ``(True, None)`` — production agents accept whatever
+        the LLM decides. Subclasses can override to enforce minimum-evidence
+        floors, structured-stage progression, or other termination policies.
+        """
+        return True, None
+
     def run(
         self,
         state: dict[str, Any],
@@ -203,8 +223,16 @@ class ConnectedInvestigationAgent:
             messages.append(_build_assistant_msg(llm, response))
 
             if not response.has_tool_calls:
-                logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
-                break
+                accept, nudge = self._should_accept_conclusion(
+                    evidence_count=len(evidence_entries),
+                    iteration=iteration,
+                )
+                if accept:
+                    logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
+                    break
+                if nudge is not None:
+                    messages.append({"role": "user", "content": nudge})
+                continue
 
             # Emit tool_start for each pending call before executing
             for tc in response.tool_calls:
@@ -347,8 +375,8 @@ def _enforce_context_budget(
 
     No-op on the happy path: the estimate covers messages + system + tools
     in one pass and returns under the ceiling for normal investigations.
-    Only fires on long CloudOpsBench cases where unbounded tool history
-    has pushed the prompt past the model's limit.
+    Only fires on long investigations where unbounded tool history has
+    pushed the prompt past the model's limit.
     """
     while _estimate_message_tokens(messages, system=system, tools=tools) > _TOKEN_BUDGET_CEILING:
         if not _trim_oldest_tool_pair(messages):

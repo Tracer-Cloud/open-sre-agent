@@ -25,6 +25,35 @@ _SKIP_MODULE_NAMES = {
     "utils",
 }
 
+# Extension point: callers outside ``app.tools.*`` (e.g. test suites,
+# external benchmark harnesses, downstream integrators) can register
+# additional tool packages by calling
+# :func:`register_external_tool_package`. Registered packages are walked
+# the same way as :mod:`app.tools` — each top-level submodule is imported
+# and any ``@tool``-decorated callables are picked up.
+#
+# Production stays clean: with no external registrations, the registry
+# discovers only ``app.tools.*``. The list is *not* persisted across
+# processes — every fresh import of opensre starts with zero externals.
+_external_tool_packages: list[ModuleType] = []
+
+
+def register_external_tool_package(package: ModuleType) -> None:
+    """Register an additional tool package for registry discovery.
+
+    Call before any ``get_registered_tools()`` consumer in the same
+    process. The registry cache is cleared so the new package's tools
+    appear on the next lookup.
+
+    Production code does NOT call this — it's a hook for test suites
+    and external integrators that ship their own tools but want them
+    routed through opensre's agent loop.
+    """
+    if package not in _external_tool_packages:
+        _external_tool_packages.append(package)
+        clear_tool_registry_cache()
+
+
 # Preserve the current chat surface while the repo migrates toward explicit
 # per-tool surface metadata.
 _LEGACY_CHAT_TOOL_NAMES = {
@@ -46,9 +75,9 @@ _LEGACY_CHAT_TOOL_NAMES = {
 }
 
 
-def _iter_tool_module_names() -> list[str]:
+def _iter_tool_module_names(package: ModuleType) -> list[str]:
     module_names: list[str] = []
-    for module_info in pkgutil.iter_modules(tools_package.__path__):
+    for module_info in pkgutil.iter_modules(package.__path__):
         if module_info.name in _SKIP_MODULE_NAMES:
             continue
         if module_info.name.startswith("_") or module_info.name.endswith("_test"):
@@ -57,8 +86,8 @@ def _iter_tool_module_names() -> list[str]:
     return sorted(module_names)
 
 
-def _import_tool_module(module_name: str) -> ModuleType:
-    return importlib.import_module(f"{tools_package.__name__}.{module_name}")
+def _import_tool_module(package: ModuleType, module_name: str) -> ModuleType:
+    return importlib.import_module(f"{package.__name__}.{module_name}")
 
 
 def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
@@ -122,29 +151,35 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    for module_name in _iter_tool_module_names():
-        try:
-            module = _import_tool_module(module_name)
-        except ModuleNotFoundError as exc:
-            logger.warning("[tools] Skipping %s: %s", module_name, exc)
-            continue
-        except Exception as exc:
-            logger.warning(
-                "[tools] Skipping %s due to import failure: %s",
-                module_name,
-                exc,
-                exc_info=True,
-            )
-            continue
-
-        for tool in _collect_registered_tools_from_module(module):
-            if tool.name in tools_by_name:
+    # Walk the canonical tools package, then any externally-registered
+    # packages in the order they were registered. First definition of a
+    # given tool name wins; duplicates are logged and skipped.
+    packages: list[ModuleType] = [tools_package, *_external_tool_packages]
+    for package in packages:
+        for module_name in _iter_tool_module_names(package):
+            try:
+                module = _import_tool_module(package, module_name)
+            except ModuleNotFoundError as exc:
+                logger.warning("[tools] Skipping %s.%s: %s", package.__name__, module_name, exc)
+                continue
+            except Exception as exc:
                 logger.warning(
-                    "[tools] Duplicate tool name '%s' across modules; keeping first definition",
-                    tool.name,
+                    "[tools] Skipping %s.%s due to import failure: %s",
+                    package.__name__,
+                    module_name,
+                    exc,
+                    exc_info=True,
                 )
                 continue
-            tools_by_name[tool.name] = tool
+
+            for tool in _collect_registered_tools_from_module(module):
+                if tool.name in tools_by_name:
+                    logger.warning(
+                        "[tools] Duplicate tool name '%s' across modules; keeping first definition",
+                        tool.name,
+                    )
+                    continue
+                tools_by_name[tool.name] = tool
 
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 

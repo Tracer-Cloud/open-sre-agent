@@ -80,6 +80,7 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str, str] | None = None,
+    agent_class: type | None = None,
 ) -> AgentState:
     """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
 
@@ -90,6 +91,10 @@ def run_investigation(
             FixtureGrafanaBackend should be injected without real credential resolution.
         investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
             initial state; avoids copying those fields onto ``raw_alert``.
+        agent_class: Optional override for the investigation agent class. Defaults
+            to ``ConnectedInvestigationAgent``. Callers that need a custom
+            termination policy, structured-stage progression, or other
+            agent-level extensions can pass a subclass instead.
     """
     init_sentry(entrypoint="pipeline")
     from app.pipeline.pipeline import run_connected_investigation as _run
@@ -109,7 +114,7 @@ def run_investigation(
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "app.pipeline.runners"},
     ):
-        return _run(initial)
+        return _run(initial, agent_class=agent_class)
 
 
 def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:

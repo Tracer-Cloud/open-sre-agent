@@ -16,13 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 def _eks_available(sources: dict[str, dict]) -> bool:
-    # In CloudOpsBench replay mode the EKS surface is served by the case
-    # snapshot via CloudOpsBenchK8sTools. Exposing the real EKS tools too
-    # would have the agent attempt sts:AssumeRole against placeholder ARNs
-    # like arn:aws:iam::placeholder:role/placeholder, which always fails.
-    backend = (sources.get("eks") or {}).get("_backend")
-    if getattr(backend, "is_cloudopsbench_backend", False):
-        return False
     return bool(sources.get("eks", {}).get("connection_verified"))
 
 

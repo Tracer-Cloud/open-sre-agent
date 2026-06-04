@@ -2,8 +2,10 @@
 
 Replays Cloud-OpsBench (Wang et al., arXiv:2603.00468) actions against the
 per-case ``tool_cache.json`` instead of talking to a real EKS cluster.
-The tools are gated on ``is_cloudopsbench_backend`` so they only appear
-to the LLM in replay mode; the real EKS tools take over otherwise.
+The tools are gated on the presence of a backend at
+``sources["eks"]["_bench_backend"]`` — a slot the bench adapter sets and
+production code never populates. The real EKS tools take over in any
+non-bench context.
 
 Each ``@tool`` declaration sets ``injected_params=("cloudops_backend",)``
 so the replay backend is hidden from the LLM's tool-call schema and
@@ -84,16 +86,12 @@ class _CloudOpsBenchBackend(Protocol):
     contract here instead of importing the class keeps ``app/`` runtime
     code free of a dependency on ``tests/``.
 
-    Helpers in this module duck-type via
-    ``getattr(backend, "is_cloudopsbench_backend", False)`` rather than
-    ``isinstance(backend, _CloudOpsBenchBackend)`` — this Protocol exists
-    for human readers and IDE navigation, not for runtime enforcement.
-    Any object exposing the marker attribute participates.
+    Identification is by **dedicated source slot**, not a marker attribute:
+    the bench adapter sets ``sources["eks"]["_bench_backend"]`` (distinct
+    from the synthetic-test ``_backend`` slot), so production tool
+    availability checks stay completely unaware of bench backend types.
+    No ``is_cloudopsbench_backend`` flag needed.
     """
-
-    # Marker attribute. ``True`` on the replay backend; absent (and so
-    # treated as ``False`` via ``getattr`` default) on real EKS sources.
-    is_cloudopsbench_backend: bool
 
     # The Cloud-OpsBench dataset case being replayed. Typed ``Any`` because
     # the Case schema lives outside ``app/`` (see
@@ -109,10 +107,18 @@ class _CloudOpsBenchBackend(Protocol):
 
 
 def _cloudops_backend(sources: dict[str, dict]) -> Any:
-    backend = (sources.get("eks") or {}).get("_backend")
-    if getattr(backend, "is_cloudopsbench_backend", False):
-        return backend
-    return None
+    """Look up the CloudOpsBench replay backend in its dedicated slot.
+
+    The bench adapter sets ``sources["eks"]["_bench_backend"]`` (not
+    ``_backend``) deliberately: ``_backend`` is the slot for synthetic-test
+    fixture backends that share the EKS tool API, and the replay backend
+    speaks a different (paper-protocol) API. Using a separate slot means
+    production tools that read ``_backend`` (``_eks_available``,
+    ``eks_available_or_backend``) stay completely unaware of bench
+    backends — no provider-specific branching needed in their availability
+    checks.
+    """
+    return (sources.get("eks") or {}).get("_bench_backend")
 
 
 def _cloudops_available(sources: dict[str, dict]) -> bool:

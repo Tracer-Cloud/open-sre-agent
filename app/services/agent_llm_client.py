@@ -56,9 +56,10 @@ def _rate_limit_sleep_seconds(err: BaseException, fallback_backoff: float) -> fl
     jitter ``Uniform(0, fallback_backoff)`` when no hint is available — same
     pattern AWS and the Anthropic/OpenAI SDKs use for transient errors.
 
-    Always adds ±10% jitter even on the server hint: with multiple bench
-    workers, four clients all sleeping for *exactly* the suggested 94ms
-    would still wake up in lockstep and re-trigger the same TPM bucket.
+    Always adds ±10% jitter even on the server hint: with multiple
+    concurrent callers, clients all sleeping for *exactly* the suggested
+    94ms would still wake up in lockstep and re-trigger the same TPM
+    bucket.
 
     Logs which branch produced the sleep duration so operators can audit
     whether the Retry-After path is actually firing (most OpenAI 429s

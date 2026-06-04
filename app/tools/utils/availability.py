@@ -20,17 +20,14 @@ def eks_available_or_backend(sources: dict[str, dict]) -> bool:
     support continue to use the narrower check in
     ``app.tools.EKSListClustersTool._eks_available``.
 
-    Exception: in CloudOpsBench replay mode the EKS surface is served by the
-    case snapshot via CloudOpsBenchK8sTools (GetResources, GetClusterConfiguration,
-    etc.). The CloudOpsBenchReplayBackend does not implement the EKS tool API
-    (list_pods, get_pod_logs, ...), so exposing these EKS tools would have the
-    agent call methods that don't exist on the backend.
+    The ``_backend`` slot is reserved for fixture backends that implement
+    the EKS tool API (``list_pods``, ``get_pod_logs``, ...). Other backend
+    types that speak different protocols should be placed in their own
+    distinct source slots and are invisible to this check — the real EKS
+    tools stay deactivated for those modes.
     """
     eks = sources.get("eks", {})
-    backend = eks.get("_backend")
-    if getattr(backend, "is_cloudopsbench_backend", False):
-        return False
-    return bool(eks.get("connection_verified") or backend)
+    return bool(eks.get("connection_verified") or eks.get("_backend"))
 
 
 def datadog_available_or_backend(sources: dict[str, dict]) -> bool:
