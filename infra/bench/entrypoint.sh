@@ -57,22 +57,54 @@ fi
 #   1. ECS RunTask (production path) — the workflow injects BENCH_CONFIG +
 #      BENCH_DEV_FLAG as containerOverrides env vars. The Dockerfile CMD
 #      ["--help"] is left in place, so "$@" would be just "--help" — not
-#      what we want. We construct the real invocation from the env vars
-#      and the bench framework's CLI subcommand schema.
+#      what we want. We construct the real invocation from the env vars.
 #
 #   2. Local `docker run` (developer path) — the operator passes
-#      positional args directly (e.g. `docker run … run /cfg.yml --dev`).
-#      BENCH_CONFIG is unset, so we fall through to "$@".
-#
-# Without this branch the env-var path silently runs `--help` and exits 0,
-# leaving the workflow green and the operator confused about why no bench
-# happened.
+#      positional args directly. BENCH_CONFIG is unset, so we fall
+#      through to "$@".
 if [ -n "${BENCH_CONFIG:-}" ]; then
   echo "→ Invoking bench CLI from env: cli run ${BENCH_CONFIG} ${BENCH_DEV_FLAG:-}"
   # BENCH_DEV_FLAG is either '--dev' or '' — left unquoted so empty value
   # expands to no arg at all (vs an empty-string positional).
-  exec python -m tests.benchmarks._framework.cli run "$BENCH_CONFIG" ${BENCH_DEV_FLAG:-}
+  set -- run "$BENCH_CONFIG" ${BENCH_DEV_FLAG:-}
+else
+  echo "→ Invoking bench CLI from CMD/args: python -m tests.benchmarks._framework.cli $*"
 fi
 
-echo "→ Invoking bench CLI from CMD/args: python -m tests.benchmarks._framework.cli $*"
-exec python -m tests.benchmarks._framework.cli "$@"
+# Run the bench in-process (not via exec) so we can sync artifacts AFTER it
+# finishes — they live on the container's local fs at .bench-results/ and
+# would otherwise vanish when the task exits. Temporarily disable -e so a
+# non-zero bench exit code doesn't skip the upload step (we want artifacts
+# from failed runs too).
+set +e
+python -m tests.benchmarks._framework.cli "$@"
+BENCH_EXIT=$?
+set -e
+
+# Persist artifacts to S3 so report.json + provenance.json + cases/*.json
+# survive container exit. BENCH_RESULTS_BUCKET is set by the ECS task
+# definition. Skipped (with a warning) for local `docker run` where the
+# operator can just look at the container fs.
+SYNC_EXIT=0
+if [ -d ".bench-results" ] && [ -n "${BENCH_RESULTS_BUCKET:-}" ]; then
+  S3_DEST="s3://${BENCH_RESULTS_BUCKET}/runs/"
+  ARTIFACT_COUNT=$(find .bench-results -type f | wc -l | tr -d ' ')
+  echo "→ Syncing ${ARTIFACT_COUNT} artifact(s) from .bench-results/ to ${S3_DEST}"
+  if aws s3 sync ".bench-results/" "$S3_DEST" \
+        --no-progress \
+        --region "${AWS_REGION:-us-east-1}"; then
+    echo "→ Artifacts persisted to ${S3_DEST}"
+  else
+    echo "::error::S3 sync failed — artifacts were NOT persisted." >&2
+    SYNC_EXIT=2
+  fi
+elif [ -d ".bench-results" ]; then
+  echo "::warning::BENCH_RESULTS_BUCKET not set — artifacts stay in container fs only." >&2
+fi
+
+# Bench failure dominates the exit code; surface sync failure only when the
+# bench itself succeeded (otherwise the operator sees the real cause first).
+if [ "$BENCH_EXIT" -ne 0 ]; then
+  exit "$BENCH_EXIT"
+fi
+exit "$SYNC_EXIT"

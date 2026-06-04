@@ -9,13 +9,19 @@ import queue
 import threading
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.types.config import NodeConfig
 from app.utils.errors import report_and_reraise
 from app.utils.sentry_sdk import init_sentry
+
+if TYPE_CHECKING:
+    # Type-only — avoids paying the agent module's heavy import cost at
+    # runner load while still letting static type-checkers validate
+    # ``agent_class`` injections.
+    from app.agent.investigation import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +86,7 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str, str] | None = None,
+    agent_class: type[ConnectedInvestigationAgent] | None = None,
 ) -> AgentState:
     """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
 
@@ -90,6 +97,10 @@ def run_investigation(
             FixtureGrafanaBackend should be injected without real credential resolution.
         investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
             initial state; avoids copying those fields onto ``raw_alert``.
+        agent_class: Optional override for the investigation agent class. Defaults
+            to ``ConnectedInvestigationAgent``. Callers that need a custom
+            termination policy, structured-stage progression, or other
+            agent-level extensions can pass a subclass instead.
     """
     init_sentry(entrypoint="pipeline")
     from app.pipeline.pipeline import run_connected_investigation as _run
@@ -109,7 +120,7 @@ def run_investigation(
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "app.pipeline.runners"},
     ):
-        return _run(initial)
+        return _run(initial, agent_class=agent_class)
 
 
 def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:

@@ -361,10 +361,12 @@ def test_parse_returns_stripped_stdout() -> None:
 
 
 def test_parse_handles_empty_stdout() -> None:
-    """Should return empty string when stdout is empty."""
+    """Should raise RuntimeError when stdout is empty."""
+    import pytest
+
     adapter = OpenCodeAdapter()
-    result = adapter.parse(stdout="", stderr="", returncode=0)
-    assert result == ""
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="", stderr="", returncode=0)
 
 
 def test_parse_ignores_stderr() -> None:
@@ -642,3 +644,11 @@ def test_adapter_build_does_not_need_to_forward_opencode_vars() -> None:
         assert "OPENCODE_CONFIG" not in inv.env
 
         assert inv.env.get("NO_COLOR") == "1"
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    import pytest
+
+    adapter = OpenCodeAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

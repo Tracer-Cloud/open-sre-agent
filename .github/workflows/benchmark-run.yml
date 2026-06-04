@@ -60,6 +60,34 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
+      - name: Verify required repo variables
+        # Fail loudly BEFORE the AWS auth step if any required repo variable
+        # is missing. Without this, an unset var would surface downstream as
+        # an opaque error like "Task Definition can not be blank" from
+        # describe-task-definition. See AWS_BENCH_SETUP.md step 4 for how
+        # to set these.
+        env:
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          BENCH_ECS_CLUSTER: ${{ vars.BENCH_ECS_CLUSTER }}
+          BENCH_TASK_DEFINITION_FAMILY: ${{ vars.BENCH_TASK_DEFINITION_FAMILY }}
+          BENCH_SUBNET_IDS: ${{ vars.BENCH_SUBNET_IDS }}
+          BENCH_SECURITY_GROUP_ID: ${{ vars.BENCH_SECURITY_GROUP_ID }}
+        run: |
+          missing=()
+          for var in AWS_ACCOUNT_ID BENCH_ECS_CLUSTER BENCH_TASK_DEFINITION_FAMILY \
+                     BENCH_SUBNET_IDS BENCH_SECURITY_GROUP_ID; do
+            if [ -z "${!var:-}" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing repo variable(s): ${missing[*]}"
+            echo "::error::Set them under Settings → Secrets and variables → Actions → Variables."
+            echo "::error::Values come from \`cd infra/bench && terraform output\` — see tests/benchmarks/AWS_BENCH_SETUP.md step 4."
+            exit 1
+          fi
+          echo "All 5 required repo variables are set."
+
       - name: Configure AWS credentials (OIDC role assumption)
         uses: aws-actions/configure-aws-credentials@v4
         with:

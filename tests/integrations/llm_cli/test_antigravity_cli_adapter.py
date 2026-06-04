@@ -391,3 +391,24 @@ def test_antigravity_empty_model_env_treated_as_absent(_mock_which: MagicMock) -
         inv = AntigravityCLIAdapter().build(prompt="p", model="", workspace="")
 
     assert "--model" not in inv.argv
+
+
+def test_parse_returns_stripped_stdout() -> None:
+    adapter = AntigravityCLIAdapter()
+    assert adapter.parse(stdout="  hello world  \n", stderr="", returncode=0) == "hello world"
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    import pytest
+
+    adapter = AntigravityCLIAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    import pytest
+
+    adapter = AntigravityCLIAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

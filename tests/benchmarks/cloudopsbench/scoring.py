@@ -255,6 +255,23 @@ def _infer_fault_object(text: str) -> str:
 
 
 def _taxonomy_for_root_cause(root_cause: str) -> str:
+    """Map a CloudOpsBench root_cause to its paper-taxonomy bucket.
+
+    The mapping below is **audited against the dataset's actual ground-truth
+    fault_taxonomy values** (see metadata.json files under
+    tests/benchmarks/cloudopsbench/benchmark/), not derived independently.
+    Two assignments were previously wrong and silently cost a1 points on
+    every case using those root_causes:
+
+    - ``missing_secret_binding`` — dataset says ``Startup_Fault`` (the failure
+      surfaces when a pod tries to start with an unbindable secret), not
+      ``Runtime_Fault``.
+    - ``service_sidecar_port_conflict`` — dataset says ``Runtime_Fault`` (the
+      port conflict manifests when the istio sidecar tries to bind at runtime),
+      not ``Service_Routing_Fault``.
+
+    Both are now placed in the buckets the paper's dataset uses.
+    """
     if root_cause.startswith("namespace_"):
         return "Admission_Fault"
     if root_cause in {
@@ -281,6 +298,7 @@ def _taxonomy_for_root_cause(root_cause: str) -> str:
         "image_registry_dns_failure",
         "incorrect_image_reference",
         "missing_image_pull_secret",
+        "missing_secret_binding",  # dataset GT: Startup_Fault (moved from Runtime)
         "pvc_selector_mismatch",
         "pvc_storage_class_mismatch",
         "pvc_access_mode_mismatch",
@@ -298,11 +316,11 @@ def _taxonomy_for_root_cause(root_cause: str) -> str:
         "readiness_probe_incorrect_port",
         "mysql_invalid_credentials",
         "mysql_invalid_port",
-        "missing_secret_binding",
         "db_connection_exhaustion",
         "db_readonly_mode",
         "gateway_misrouted",
         "deployment_zero_replicas",
+        "service_sidecar_port_conflict",  # dataset GT: Runtime_Fault (moved from Service_Routing)
     }:
         return "Runtime_Fault"
     if root_cause in {
@@ -310,7 +328,6 @@ def _taxonomy_for_root_cause(root_cause: str) -> str:
         "service_port_mapping_mismatch",
         "service_protocol_mismatch",
         "service_env_var_address_mismatch",
-        "service_sidecar_port_conflict",
         "service_dns_resolution_failure",
     }:
         return "Service_Routing_Fault"

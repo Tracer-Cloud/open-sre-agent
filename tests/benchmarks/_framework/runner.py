@@ -38,6 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from app.utils.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     BenchmarkAdapter,
     BenchmarkCase,
@@ -342,7 +343,12 @@ class BenchmarkRunner:
             for future in as_completed(future_to_spec):
                 try:
                     results.append(future.result())
-                except CostBudgetExceeded:
+                except (CostBudgetExceeded, LLMCreditExhaustedError):
+                    # Both are run-fatal: cost budget halts on operator-set
+                    # cap; credit exhaustion halts because no retry can
+                    # recover a dead provider account. Cancel pending
+                    # futures so we don't burn time on cells destined to
+                    # fail the same way.
                     for f in future_to_spec:
                         f.cancel()
                     raise
@@ -372,16 +378,27 @@ class BenchmarkRunner:
         final_state_dict: dict[str, Any] = {}
 
         try:
-            final_state = run_investigation(alert.raw, resolved_integrations=integrations)
+            final_state = run_investigation(
+                alert.raw,
+                resolved_integrations=integrations,
+                agent_class=self.adapter.investigation_agent_class(),
+            )
             final_state_dict = dict(final_state)
-        except (CostBudgetExceeded, UnknownModel):
+        except (CostBudgetExceeded, UnknownModel, LLMCreditExhaustedError):
             # Run-fatal: propagate up to _execute_llm_batch / _run_inner so
             # the run halts at the configured budget ceiling. Without this
             # explicit re-raise, the broad `except Exception` below would
-            # silently record the budget breach as a per-cell failure and
-            # the run would continue past the cap. UnknownModel is a
-            # pre-flight problem (model missing from pricing table) and
-            # should also halt rather than mask as a cell failure.
+            # silently record the breach as a per-cell failure and the run
+            # would continue past the cap.
+            #
+            # UnknownModel: pre-flight problem (model missing from pricing
+            # table) — must halt, not mask as cell failure.
+            #
+            # LLMCreditExhaustedError: provider billing/quota exhausted
+            # (e.g. OpenAI insufficient_quota, Anthropic credit-balance-too-low).
+            # Retries can't help — operator must top up balance. Run #2 of the
+            # June-3 bench burned 1h42m wall-clock on this before the halt
+            # path existed; halting on first occurrence prevents recurrence.
             raise
         except Exception as exc:
             ok = False
@@ -421,6 +438,12 @@ class BenchmarkRunner:
             cost_usd=0.0,
             latency_ms=latency_ms,
         )
+
+        # Adapter hook: optionally enrich run.final_diagnosis (e.g.,
+        # CloudOpsBench emits paper-format top_3_predictions here so the
+        # scorer doesn't have to inference from free-text RCA). Default
+        # ABC implementation is a no-op for adapters that don't need it.
+        run = self.adapter.format_final_answer(case, run, spec)
 
         score = self.adapter.score_case(case, run, RunContext(integrations=integrations))
 

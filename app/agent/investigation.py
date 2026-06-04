@@ -25,6 +25,18 @@ logger = logging.getLogger(__name__)
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()  # sentinel distinguishing "not yet started" from a None tool result
 
+# Defensive context-window ceiling. Below this we never trim; above this we
+# drop the oldest tool_use/tool_result pair until back under the ceiling.
+#
+# Anthropic's 200k prompt limit is the hard cap. The estimator at
+# ``_estimate_message_tokens`` covers messages + system + tool schemas
+# (all three count toward the limit). 170k ceiling leaves ~30k headroom
+# for the response. ratio=0.40 absorbs JSON-structural overhead in tool
+# payloads — empirically tuned from overflow logs where Anthropic landed
+# at 0.32–0.40 tokens/char for opensre's tool-result mix.
+_TOKEN_BUDGET_CEILING = 170_000
+_TOKENS_PER_CHAR = 0.40
+
 # Maps alert_source → tool source keys. Tools from these sources are auto-called
 # before the LLM loop starts when the alert source is known.
 _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
@@ -64,6 +76,33 @@ AgentEventCallback = Callable[[str, dict[str, Any]], None]
 
 class ConnectedInvestigationAgent:
     """ReAct loop scoped to the tools enabled by connected integrations."""
+
+    def _should_accept_conclusion(
+        self,
+        *,
+        evidence_count: int,  # noqa: ARG002 — used by overrides
+        iteration: int,  # noqa: ARG002 — used by overrides
+    ) -> tuple[bool, str | None]:
+        """Hook: decide what to do when the LLM stops requesting tools.
+
+        Returns ``(accept_conclusion, nudge)``:
+          - ``(True, None)`` — accept the LLM's choice, exit the loop. Default.
+          - ``(False, "...")`` — reject the bail, inject the nudge string as a
+            user message, continue the loop. ``MAX_INVESTIGATION_LOOPS`` still
+            caps the worst case so a stubborn model can't infinite-loop.
+
+        **Contract:** ``(False, None)`` is invalid and raises ``ValueError`` at
+        the call site. Rejecting the conclusion without providing a nudge
+        would spin the loop on an unchanged message history until the outer
+        iteration cap, silently burning the token budget. The type system
+        allows ``str | None`` so subclasses can use a single return type;
+        the runtime guard enforces the actual contract.
+
+        Default returns ``(True, None)`` — production agents accept whatever
+        the LLM decides. Subclasses can override to enforce minimum-evidence
+        floors, structured-stage progression, or other termination policies.
+        """
+        return True, None
 
     def run(
         self,
@@ -167,6 +206,7 @@ class ConnectedInvestigationAgent:
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
+            _enforce_context_budget(messages, system=system, tools=tool_schemas)
             try:
                 response = llm.invoke(messages, system=system, tools=tool_schemas)
 
@@ -190,8 +230,28 @@ class ConnectedInvestigationAgent:
             messages.append(_build_assistant_msg(llm, response))
 
             if not response.has_tool_calls:
-                logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
-                break
+                accept, nudge = self._should_accept_conclusion(
+                    evidence_count=len(evidence_entries),
+                    iteration=iteration,
+                )
+                if accept:
+                    logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
+                    break
+                # Contract: rejecting the conclusion (accept=False) MUST
+                # come with a nudge so the next LLM call sees new context.
+                # Without one the loop would spin on an unchanged message
+                # history until MAX_INVESTIGATION_LOOPS, silently burning
+                # the entire token budget without making progress. Failing
+                # fast keeps buggy hook overrides loud rather than expensive.
+                if nudge is None:
+                    raise ValueError(
+                        f"{type(self).__name__}._should_accept_conclusion returned "
+                        "(False, None) — a nudge string is required when rejecting "
+                        "the conclusion, otherwise the LLM will loop on an unchanged "
+                        "message history until MAX_INVESTIGATION_LOOPS."
+                    )
+                messages.append({"role": "user", "content": nudge})
+                continue
 
             # Emit tool_start for each pending call before executing
             for tc in response.tool_calls:
@@ -261,6 +321,86 @@ class ConnectedInvestigationAgent:
 
 
 InvestigationAgent = ConnectedInvestigationAgent
+
+
+def _estimate_message_tokens(
+    messages: list[dict[str, Any]],
+    *,
+    system: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> int:
+    """Cheap upper-bound token estimate covering everything Anthropic sees.
+
+    Anthropic counts ``messages`` + ``system`` + ``tools`` toward the 200k
+    prompt limit. Earlier versions counted only ``messages`` and trimmed
+    aggressively while system + tools (tens of thousands of tokens for
+    opensre's 100+ tool registry) silently pushed us over the line.
+    """
+    total = 0
+    for message in messages:
+        content = message.get("content", "")
+        if isinstance(content, str):
+            total += int(len(content) * _TOKENS_PER_CHAR)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    total += int(len(json.dumps(block, default=str)) * _TOKENS_PER_CHAR)
+                elif isinstance(block, str):
+                    total += int(len(block) * _TOKENS_PER_CHAR)
+    if system:
+        total += int(len(system) * _TOKENS_PER_CHAR)
+    if tools:
+        for schema in tools:
+            total += int(len(json.dumps(schema, default=str)) * _TOKENS_PER_CHAR)
+    return total
+
+
+def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
+    """Drop the oldest assistant tool_use message together with the
+    immediate next user message carrying its tool_results. Anthropic
+    requires every ``tool_use`` block to be followed by a matching
+    ``tool_result`` block, so the pair must be removed together to keep
+    the conversation valid.
+
+    Returns True if a pair was dropped, False if nothing trimmable
+    remains (e.g. only the initial user prompt is left).
+    """
+    for index, message in enumerate(messages):
+        if message.get("role") != "assistant":
+            continue
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            continue
+        has_tool_use = any(
+            isinstance(block, dict) and block.get("type") == "tool_use" for block in content
+        )
+        if not has_tool_use:
+            continue
+        # Drop the assistant turn AND its paired user turn (the tool_results).
+        # If the user turn isn't present (e.g. truncated mid-iteration),
+        # del messages[i:i+2] safely just drops the assistant turn.
+        del messages[index : index + 2]
+        return True
+    return False
+
+
+def _enforce_context_budget(
+    messages: list[dict[str, Any]],
+    *,
+    system: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> None:
+    """Trim oldest tool pairs until prompt fits under the budget ceiling.
+
+    No-op on the happy path: the estimate covers messages + system + tools
+    in one pass and returns under the ceiling for normal investigations.
+    Only fires on long investigations where unbounded tool history has
+    pushed the prompt past the model's limit.
+    """
+    while _estimate_message_tokens(messages, system=system, tools=tools) > _TOKEN_BUDGET_CEILING:
+        if not _trim_oldest_tool_pair(messages):
+            return
+        logger.warning("[agent] trimmed oldest tool pair to fit context budget")
 
 
 def _degraded_investigation_from_llm_failure(

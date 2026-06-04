@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.state import AgentState
+
+if TYPE_CHECKING:
+    # Type-only import — avoids paying the agent module's heavy import cost
+    # at pipeline load while still letting static type-checkers validate
+    # ``agent_class`` injections.
+    from app.agent.investigation import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +139,20 @@ def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
     return {"configurable": {"upstream_evidence_provider": provider}}
 
 
-def run_connected_investigation(state: AgentState) -> AgentState:
+def run_connected_investigation(
+    state: AgentState,
+    *,
+    agent_class: type[ConnectedInvestigationAgent] | None = None,
+) -> AgentState:
     """Resolve connected integrations → parse alert → agent loop → deliver.
 
     All steps mutate a shared state dict. Each step returns a dict of updates
     which are merged in. Pure function: inputs in, state out.
+
+    ``agent_class``: optional override for the investigation agent class.
+    Defaults to :class:`ConnectedInvestigationAgent`. Callers that need a
+    custom termination policy, structured-stage progression, or other
+    agent-level extensions can pass a subclass instead.
     """
     from app.agent.context import resolve_integrations
     from app.agent.extract import extract_alert
@@ -146,6 +161,7 @@ def run_connected_investigation(state: AgentState) -> AgentState:
     from app.delivery import deliver
     from app.utils.sentry_sdk import capture_exception
 
+    agent_class = agent_class or ConnectedInvestigationAgent
     state_any = cast(dict[str, Any], state)
 
     try:
@@ -155,7 +171,7 @@ def run_connected_investigation(state: AgentState) -> AgentState:
         if state_any.get("is_noise"):
             return cast(AgentState, state_any)
 
-        _merge(state_any, ConnectedInvestigationAgent().run(state_any))
+        _merge(state_any, agent_class().run(state_any))
         _merge(
             state_any,
             node_correlate_upstream(

@@ -105,7 +105,14 @@ COPY --from=builder --chown=bench:bench /app /app
 # CLI. Required env (set by the ECS task definition):
 #   BENCH_CORPUS_S3_BUCKET, BENCH_CORPUS_HF_REVISION
 COPY --chown=bench:bench infra/bench/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh \
+    && chown bench:bench /app
+# ^^^ chown the WORKDIR itself, not just its contents. Without this the bench
+# user can write INTO existing subtrees (the COPY --chown above covered them)
+# but cannot create new directories like .bench-results/ AT /app — WORKDIR
+# created the directory owned by root and a per-file --chown doesn't touch
+# the directory's own ownership. Surfaces at runtime as
+# `PermissionError: [Errno 13] Permission denied: '.bench-results'`.
 
 USER bench
 

@@ -14,9 +14,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    # Type-only import — preserves the framework's "zero ``app.*`` imports"
+    # constraint at runtime while still letting type-checkers validate
+    # that adapter overrides return an investigation-agent subclass.
+    from app.agent.investigation import ConnectedInvestigationAgent
 
 # --------------------------------------------------------------------------- #
 # Mode — opensre+LLM vs LLM-alone. Framework-level concept; same adapter +    #
@@ -264,3 +270,42 @@ class BenchmarkAdapter(ABC):
         """Declare which metrics this adapter emits, for CLI validation +
         comparable reporting across adapters.
         """
+
+    def investigation_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: which investigation agent class should the runner use?
+
+        Default ``None`` — let the production pipeline construct its standard
+        :class:`ConnectedInvestigationAgent`. Override when the benchmark
+        needs a stricter termination policy or other agent-level behavior
+        (e.g. CloudOpsBench's minimum-tool-call floor lives in
+        :class:`tests.benchmarks.cloudopsbench.bench_agent.BenchInvestigationAgent`).
+
+        Production code stays clean: the runner just passes whatever the
+        adapter returns to ``run_investigation``. Bench-specific agent logic
+        lives entirely in bench code.
+        """
+        return None
+
+    def format_final_answer(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
+        run: RunResult,
+        spec: Any,  # noqa: ARG002 — used by overrides
+    ) -> RunResult:
+        """Optional: enrich ``run.final_diagnosis`` before ``score_case``.
+
+        Default no-op — returns the run unchanged. Override when the
+        benchmark's scorer expects a specific output schema the
+        investigation pipeline doesn't natively produce (e.g.,
+        CloudOpsBench requires paper-format ``top_3_predictions`` JSON
+        and runs a separate LLM call to emit it).
+
+        ``spec`` is the framework's LLMSpec for this cell — typed as
+        ``Any`` here to keep ``adapters.py`` free of llm_dispatch import
+        coupling; the override casts it to its real type.
+
+        Mode-agnostic by design: the runner calls this for every cell
+        regardless of mode, so the same hook serves both ``opensre+llm``
+        (with investigation evidence) and future ``llm_alone`` (without).
+        """
+        return run

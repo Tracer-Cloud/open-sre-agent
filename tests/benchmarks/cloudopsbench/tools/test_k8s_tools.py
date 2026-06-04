@@ -3,11 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from app.tools.CloudOpsBenchK8sTools import get_error_logs, get_recent_logs
+from tests.benchmarks.cloudopsbench.tools.k8s import get_error_logs, get_recent_logs
 
 
 class _Backend:
-    is_cloudopsbench_backend = True
     default_namespace = "boutique"
 
     def __init__(self, process: dict[str, list[str]]) -> None:
@@ -30,7 +29,10 @@ def test_recent_logs_extracts_its_own_service_name() -> None:
             "path2": [],
         }
     )
-    sources = {"eks": {"_backend": backend, "namespace": "boutique"}}
+    # Bench backend lives in its dedicated slot (_bench_backend), distinct
+    # from the synthetic-test ``_backend`` slot. This is what the
+    # slot-separation refactor enforces.
+    sources = {"eks": {"_bench_backend": backend, "namespace": "boutique"}}
 
     error_params = _tool_params(get_error_logs, sources)
     recent_params = _tool_params(get_recent_logs, sources)

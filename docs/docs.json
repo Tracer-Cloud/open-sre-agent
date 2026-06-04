@@ -44,6 +44,12 @@
             ]
           },
           {
+            "group": "Community",
+            "pages": [
+              "bi-weekly-giveaway"
+            ]
+          },
+          {
             "group": "Configuration",
             "pages": [
               "configuration/environment-variables"

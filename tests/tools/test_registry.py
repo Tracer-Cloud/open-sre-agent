@@ -250,9 +250,9 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     module.get_incident_metadata = get_incident_metadata
 
     monkeypatch.setattr(
-        registry_module, "_iter_tool_module_names", lambda: ["fake_discovered_tool"]
+        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_discovered_tool"]
     )
-    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _name: module)
+    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
     assert [
         tool_def.name for tool_def in registry_module.get_registered_tools("investigation")
@@ -283,9 +283,9 @@ def test_resolve_tool_display_name_prefers_registered_metadata(
     module.get_incident_metadata = get_incident_metadata
 
     monkeypatch.setattr(
-        registry_module, "_iter_tool_module_names", lambda: ["fake_display_name_tool"]
+        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_display_name_tool"]
     )
-    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _name: module)
+    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
 
     assert registry_module.resolve_tool_display_name("get_incident_metadata") == "Incident metadata"
 
@@ -339,12 +339,12 @@ def test_registry_regression_duplicate_tool_names_across_modules(
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
-        lambda: ["first_module", "second_module"],
+        lambda _pkg: ["first_module", "second_module"],
     )
     monkeypatch.setattr(
         registry_module,
         "_import_tool_module",
-        lambda name: module1 if name == "first_module" else module2,
+        lambda _pkg, name: module1 if name == "first_module" else module2,
     )
 
     with caplog.at_level(logging.WARNING, logger="app.tools.registry"):
@@ -380,7 +380,7 @@ def test_registry_regression_import_failures(
     valid_tool.__module__ = module.__name__
     module.valid_tool = valid_tool
 
-    def mock_import(name: str) -> ModuleType:
+    def mock_import(_pkg: ModuleType, name: str) -> ModuleType:
         if name == "broken_module":
             raise RuntimeError("Module initialization failed")
         return module
@@ -388,7 +388,7 @@ def test_registry_regression_import_failures(
     monkeypatch.setattr(
         registry_module,
         "_iter_tool_module_names",
-        lambda: ["broken_module", "valid_tool"],
+        lambda _pkg: ["broken_module", "valid_tool"],
     )
     monkeypatch.setattr(
         registry_module,
@@ -404,8 +404,11 @@ def test_registry_regression_import_failures(
     assert "valid_tool" in tool_names
     assert registry_module.get_registered_tool_map()["valid_tool"].run() == {"status": "ok"}
 
+    # Log message now includes the package prefix (``app.tools.``) so the
+    # operator can tell WHICH discovery path failed when multiple packages
+    # are registered.
     assert any(
-        "Skipping broken_module" in record.message and record.levelname == "WARNING"
+        "broken_module" in record.message and record.levelname == "WARNING"
         for record in caplog.records
     )
 
@@ -500,3 +503,210 @@ def test_v2_registry_tools_define_output_schema() -> None:
         output_schema = tool_def.output_schema
         assert isinstance(output_schema, dict), f"{tool_def.name} must define output_schema."
         assert output_schema.get("type") == "object"
+
+
+# --------------------------------------------------------------------------- #
+# External tool package registration (extension point for test suites and    #
+# downstream integrators that ship their own tools outside app.tools).        #
+# --------------------------------------------------------------------------- #
+
+
+def test_register_external_tool_package_adds_tools_to_registry() -> None:
+    """A package registered via :func:`register_external_tool_package` has
+    its top-level submodules walked the same way as ``app.tools.*``. This
+    is the mechanism that lets bench-only tool modules live outside ``app/``
+    while still being discoverable by the agent loop when the bench is
+    actively running."""
+    # Importing the cloudopsbench package side-effects registration on its
+    # own (see tests/benchmarks/cloudopsbench/__init__.py), so by the time
+    # this test runs the package is already registered.
+    import tests.benchmarks.cloudopsbench  # noqa: F401 — side-effect import
+    import tests.benchmarks.cloudopsbench.tools as cob_tools_pkg
+
+    # The registered list contains the bench tools package.
+    assert cob_tools_pkg in registry_module._external_tool_packages
+
+    # And the registry actually discovers the bench's GetResources tool.
+    tools = registry_module.get_registered_tools()
+    tool_names = {t.name for t in tools}
+    assert "GetResources" in tool_names, (
+        "bench tools package was registered but its tools didn't surface in the registry"
+    )
+
+
+def test_register_external_tool_package_is_thread_safe_under_concurrent_calls() -> None:
+    """Greptile P2: the check-then-append used to be a race window — two
+    threads could both pass the ``not in`` check and both append the same
+    package, causing every tool in that package to be logged as a duplicate
+    and silently dropped on subsequent registry walks. The locked version
+    must register exactly once even under high concurrency."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    fake_pkg: Any = ModuleType("synthetic.concurrent_registration_pkg")
+    fake_pkg.__path__ = []  # type: ignore[attr-defined] — empty walk, no tools
+
+    barrier = threading.Barrier(parties=8)
+    saved = list(registry_module._external_tool_packages)
+    try:
+        # Make sure the package isn't already registered from a prior test.
+        if fake_pkg in registry_module._external_tool_packages:
+            registry_module._external_tool_packages.remove(fake_pkg)
+
+        def attempt_register() -> None:
+            # Synchronize starts so all threads enter the critical section
+            # within the same scheduling quantum — maximizes race exposure.
+            barrier.wait()
+            registry_module.register_external_tool_package(fake_pkg)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(attempt_register) for _ in range(8)]
+            for f in futures:
+                f.result()
+
+        # Exactly one registration regardless of how many threads raced.
+        count = registry_module._external_tool_packages.count(fake_pkg)
+        assert count == 1, (
+            f"Expected exactly 1 registration for the same package across 8 "
+            f"concurrent callers, got {count}. The lock around check-then-"
+            f"append is missing or broken."
+        )
+    finally:
+        # Restore the registration list to its pre-test state.
+        registry_module._external_tool_packages[:] = saved
+        registry_module.clear_tool_registry_cache()
+
+
+def test_register_external_tool_package_is_idempotent() -> None:
+    """Registering the same package twice doesn't add duplicates."""
+    import tests.benchmarks.cloudopsbench.tools as cob_tools_pkg
+
+    initial_count = len(registry_module._external_tool_packages)
+    registry_module.register_external_tool_package(cob_tools_pkg)
+    registry_module.register_external_tool_package(cob_tools_pkg)
+    final_count = len(registry_module._external_tool_packages)
+
+    # First call may add (or no-op if already registered); second call must
+    # never add anything beyond the first.
+    assert final_count <= initial_count + 1
+    assert registry_module._external_tool_packages.count(cob_tools_pkg) == 1
+
+
+def test_production_registry_does_not_include_bench_tools_without_import() -> None:
+    """Sanity-check separation: with the bench package *not* imported,
+    only ``app.tools.*`` modules contribute to the registry. The bench
+    tools must be invisible.
+
+    We can't fully un-import the bench in a single test process (other
+    tests in this run may have imported it), but we can verify the
+    registry walks only the canonical package when external registrations
+    are cleared."""
+    saved = list(registry_module._external_tool_packages)
+    try:
+        registry_module._external_tool_packages.clear()
+        registry_module.clear_tool_registry_cache()
+        tools = registry_module.get_registered_tools()
+        tool_names = {t.name for t in tools}
+        # GetResources, GetAlerts, etc. are bench-only; not in app/tools.
+        assert "GetResources" not in tool_names
+        assert "GetAlerts" not in tool_names
+    finally:
+        # Restore so subsequent tests in this module see the bench package.
+        registry_module._external_tool_packages.extend(saved)
+        registry_module.clear_tool_registry_cache()
+
+
+def test_registry_clears_cache_on_external_registration_so_new_tools_appear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lru_cache on _load_registry_snapshot would freeze the tool list
+    on the first lookup. register_external_tool_package MUST clear the
+    cache or registrations after that first lookup would be invisible —
+    a silent bug class."""
+    # Prime the cache as the production lifecycle would.
+    initial_tools = registry_module.get_registered_tools()
+    initial_names = {t.name for t in initial_tools}
+
+    # Register a synthetic external package after the cache is warm.
+    fake_pkg: Any = ModuleType("synthetic.tool_pkg_for_cache_test")
+    fake_pkg.__path__ = []  # type: ignore[attr-defined] — empty walk, no tools
+
+    saved = list(registry_module._external_tool_packages)
+    try:
+        registry_module.register_external_tool_package(fake_pkg)
+        # Cache must have been cleared; next lookup re-runs discovery.
+        # No tools to add from fake_pkg, but the call shouldn't crash and
+        # the result shape must be equivalent to before.
+        post_register_tools = registry_module.get_registered_tools()
+        post_register_names = {t.name for t in post_register_tools}
+        # The canonical tools are still there.
+        assert initial_names == post_register_names
+    finally:
+        # Drop the synthetic package from the registration list to avoid
+        # leaking into other tests.
+        registry_module._external_tool_packages[:] = saved
+        registry_module.clear_tool_registry_cache()
+
+
+def test_registry_canonical_tool_wins_when_external_package_redefines_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First registration wins for a given tool name. The canonical
+    ``app.tools.*`` package is walked first, so a downstream integrator
+    can't accidentally shadow a production tool with their own version of
+    the same name — only a clear log warning, original tool preserved."""
+    canonical_tool_name = "ListEKSPodsTool".replace("Tool", "").lower()
+    # Build a fake external package that 'declares' a tool with a name
+    # that overlaps with a known canonical tool. We use the same
+    # discovery path the registry uses, so this is realistic.
+    pre_existing = {t.name for t in registry_module.get_registered_tools()}
+    if "list_eks_pods" not in pre_existing:
+        pytest.skip("Canonical EKS pod tool absent; can't validate shadowing protection.")
+
+    fake_module: Any = ModuleType("synthetic.shadowing_module")
+
+    @tool(name="list_eks_pods", description="external shadow", source="knowledge")
+    def shadow_eks_pods() -> dict[str, str]:
+        return {"shadow": "true"}
+
+    shadow_eks_pods.__module__ = fake_module.__name__
+    fake_module.shadow_eks_pods = shadow_eks_pods
+
+    fake_pkg: Any = ModuleType("synthetic.shadow_pkg")
+    fake_pkg.__path__ = []  # type: ignore[attr-defined]
+
+    # Inject the fake by patching the walk + import.
+    real_iter = registry_module._iter_tool_module_names
+    real_import = registry_module._import_tool_module
+
+    def fake_iter(package: ModuleType) -> list[str]:
+        if package is fake_pkg:
+            return ["shadowing_module"]
+        return real_iter(package)
+
+    def fake_import(package: ModuleType, name: str) -> ModuleType:
+        if package is fake_pkg and name == "shadowing_module":
+            return fake_module
+        return real_import(package, name)
+
+    monkeypatch.setattr(registry_module, "_iter_tool_module_names", fake_iter)
+    monkeypatch.setattr(registry_module, "_import_tool_module", fake_import)
+
+    saved = list(registry_module._external_tool_packages)
+    try:
+        registry_module.register_external_tool_package(fake_pkg)
+        registry_module.clear_tool_registry_cache()
+
+        tool_map = registry_module.get_registered_tool_map()
+        # Canonical tool survives — the shadow was rejected.
+        canonical = tool_map.get("list_eks_pods")
+        assert canonical is not None
+        # Canonical's description is not the shadow's — proves we kept the
+        # original, not the override.
+        assert canonical.description != "external shadow", (
+            f"External package shadowed canonical tool name "
+            f"{canonical_tool_name!r}. First-registration-wins rule broken."
+        )
+    finally:
+        registry_module._external_tool_packages[:] = saved
+        registry_module.clear_tool_registry_cache()

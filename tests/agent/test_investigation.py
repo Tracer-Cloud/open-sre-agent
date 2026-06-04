@@ -10,7 +10,10 @@ from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
     _build_synthetic_assistant_tool_call_msg,
+    _enforce_context_budget,
+    _estimate_message_tokens,
     _run_parallel,
+    _trim_oldest_tool_pair,
 )
 from app.integrations.llm_cli.errors import CLITimeoutError
 from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
@@ -302,3 +305,201 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
     assert msg["content"][0]["toolUse"]["toolUseId"] == "abc12def3"
     assert msg["content"][0]["toolUse"]["name"] == "query_logs"
     assert "I will start by querying" not in str(msg)
+
+
+def test_estimate_tokens_counts_string_and_block_content() -> None:
+    messages = [
+        {"role": "user", "content": "x" * 400},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "y" * 200},
+                {"type": "tool_use", "id": "t1", "name": "n", "input": {"q": "z" * 100}},
+            ],
+        },
+    ]
+
+    # ~0.25 tokens/char; ceiling-style estimate, exact value not asserted.
+    assert _estimate_message_tokens(messages) > 100
+    assert _estimate_message_tokens([]) == 0
+
+
+def test_trim_oldest_tool_pair_drops_assistant_and_following_user_turn() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t2", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}],
+        },
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    # The first tool_use AND its paired tool_result must be removed together,
+    # otherwise Anthropic rejects the conversation.
+    assert len(messages) == 3
+    assert messages[0]["content"] == "alert"
+    assert messages[1]["content"][0]["id"] == "t2"
+
+
+def test_trim_oldest_tool_pair_returns_false_when_no_tool_use_remains() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {"role": "assistant", "content": [{"type": "text", "text": "plain reply"}]},
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is False
+    assert len(messages) == 2
+
+
+def test_enforce_context_budget_noop_when_under_ceiling() -> None:
+    messages: list[dict] = [
+        {"role": "user", "content": "short alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}],
+        },
+    ]
+    snapshot = [m.copy() for m in messages]
+
+    _enforce_context_budget(messages)
+
+    assert messages == snapshot
+
+
+# --------------------------------------------------------------------------- #
+# Termination hook — production default + override mechanics                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_should_accept_conclusion_production_default_accepts() -> None:
+    """Production default: the agent ALWAYS accepts the LLM's choice to stop.
+    Returning (True, None) is the no-op path; subclasses override to enforce
+    floors or other termination policies."""
+    agent = ConnectedInvestigationAgent()
+    accept, nudge = agent._should_accept_conclusion(evidence_count=0, iteration=0)
+    assert accept is True
+    assert nudge is None
+    # Behavior independent of how many tool calls happened — production
+    # agents trust the LLM.
+    accept, nudge = agent._should_accept_conclusion(evidence_count=100, iteration=15)
+    assert accept is True
+    assert nudge is None
+
+
+def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
+    """Greptile P1: a hook override that returns ``(False, None)`` would
+    spin the loop on an unchanged message history until
+    ``MAX_INVESTIGATION_LOOPS``, silently burning the whole token budget.
+    The call site must raise immediately so buggy overrides fail loud
+    instead of expensive.
+
+    This pins the contract — a future regression that drops the guard
+    fails here instead of in a production token-burn incident."""
+
+    class _BadAgent(ConnectedInvestigationAgent):
+        def _should_accept_conclusion(
+            self,
+            *,
+            evidence_count: int,  # noqa: ARG002 — base signature
+            iteration: int,  # noqa: ARG002 — base signature
+        ) -> tuple[bool, str | None]:
+            return False, None  # invalid — rejects without providing context
+
+    mock_llm = MagicMock()
+    # Empty content + no tool calls → LLM "concludes" → triggers the hook.
+    mock_response = MagicMock()
+    mock_response.has_tool_calls = False
+    mock_response.tool_calls = []
+    mock_response.content = ""
+    mock_response.raw_content = None
+    mock_llm.invoke.return_value = mock_response
+    mock_llm.tool_schemas.return_value = []
+    mock_tracker = MagicMock()
+
+    state = {
+        "alert_name": "Test alert",
+        "pipeline_name": "test-pipeline",
+        "severity": "critical",
+        "resolved_integrations": {},
+    }
+    agent = _BadAgent()
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        pytest.raises(ValueError, match="_should_accept_conclusion returned"),
+    ):
+        agent.run(state)
+
+
+def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
+    """Subclasses can return (False, nudge) to keep the loop going.
+    This is what BenchInvestigationAgent does to enforce minimum evidence."""
+
+    class _StrictAgent(ConnectedInvestigationAgent):
+        def _should_accept_conclusion(
+            self,
+            *,
+            evidence_count: int,
+            iteration: int,  # noqa: ARG002 — base signature
+        ) -> tuple[bool, str | None]:
+            if evidence_count >= 5:
+                return True, None
+            return False, f"Only {evidence_count} tool calls so far — keep going."
+
+    agent = _StrictAgent()
+    accept, nudge = agent._should_accept_conclusion(evidence_count=3, iteration=2)
+    assert accept is False
+    assert nudge is not None and "3 tool calls" in nudge
+
+    accept, nudge = agent._should_accept_conclusion(evidence_count=7, iteration=5)
+    assert accept is True
+    assert nudge is None
+
+
+def test_enforce_context_budget_trims_when_over_ceiling() -> None:
+    # Each tool turn carries ~1 MB of text (~250k token estimate). One pair
+    # is enough to push messages past the 180k ceiling; the function should
+    # trim it.
+    big_payload = "x" * 1_000_000
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big_payload}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t2", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}],
+        },
+    ]
+
+    _enforce_context_budget(messages)
+
+    # Oldest pair (t1 with the big payload) must be gone; the t2 pair survives.
+    assert len(messages) == 3
+    assert messages[1]["content"][0]["id"] == "t2"
