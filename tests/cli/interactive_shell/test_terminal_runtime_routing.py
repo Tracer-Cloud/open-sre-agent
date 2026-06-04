@@ -197,8 +197,9 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
         _session: ReplSession,
         _console: Console,
         confirm_fn=None,
+        is_tty=None,
     ) -> TerminalActionExecutionResult:
-        _ = confirm_fn
+        _ = confirm_fn, is_tty
         action_calls.append(text)
         return TerminalActionExecutionResult(
             planned_count=2,
