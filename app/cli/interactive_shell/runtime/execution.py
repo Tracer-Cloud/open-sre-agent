@@ -142,6 +142,7 @@ def execute_routed_turn(
     on_exit: Callable[[], None],
     confirm_fn: Callable[[str], str] | None = None,
     decision: RouteDecision,
+    is_tty: bool | None = None,
 ) -> None:
     """Route + execute one accepted line."""
     kind = decision.route_kind.value
@@ -157,7 +158,7 @@ def execute_routed_turn(
         if not cmd_text:
             cmd_text = text.strip()
         try:
-            should_continue = dispatch_slash(cmd_text, session, console, confirm_fn=confirm_fn)
+            should_continue = dispatch_slash(cmd_text, session, console, confirm_fn=confirm_fn, is_tty=is_tty)
         except Exception as exc:
             report_exception(exc, context="interactive_shell.slash_dispatch")
             console.print(
