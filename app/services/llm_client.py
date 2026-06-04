@@ -1238,6 +1238,23 @@ def reset_llm_singletons() -> None:
     _llm_for_tools = None
 
 
+def warmup_llm_clients() -> None:
+    """Pre-warm all LLM client singletons (deferred import + init) in one call.
+
+    Safe to call from a background thread; all three getters are idempotent
+    after first init. Suppresses exceptions so warm-up failure never crashes
+    the REPL.
+    """
+    import contextlib
+
+    with contextlib.suppress(Exception):
+        get_llm_for_reasoning()
+    with contextlib.suppress(Exception):
+        get_llm_for_classification()
+    with contextlib.suppress(Exception):
+        get_llm_for_tools()
+
+
 def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | None:
     """Local import avoids package import cycle (llm_cli __init__ → runner → llm_client)."""
     from app.integrations.llm_cli.registry import get_cli_provider_registration

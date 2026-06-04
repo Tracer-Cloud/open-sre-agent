@@ -537,8 +537,8 @@ def answer_cli_agent(
     prompt = f"{system}\n{integration_guard}{synthetic_block}{user_block}"
 
     try:
-        client = get_llm_for_reasoning()
         started = time.monotonic()
+        client = get_llm_for_reasoning()
         text_str = stream_to_console(
             console,
             label=STREAM_LABEL_ASSISTANT,

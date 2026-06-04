@@ -314,6 +314,13 @@ async def run_interactive(
     processor_task = asyncio.create_task(_processor())
     alert_watcher_task = asyncio.create_task(_alert_watcher())
     spinner_ticker_task = asyncio.create_task(_spinner_ticker())
+
+    async def _llm_warmup() -> None:
+        from app.services.llm_client import warmup_llm_clients
+
+        await asyncio.to_thread(warmup_llm_clients)
+
+    asyncio.create_task(_llm_warmup())
     try:
         with patch_stdout(raw=True):
             echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
