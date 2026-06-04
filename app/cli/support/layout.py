@@ -79,7 +79,7 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int | None = None,
 ) -> None:
-    effective_width = (width or max((len(label) for label, _ in rows), default=0)) + 2
+    effective_width = width + 2 if width is not None else max((len(label) for label, _ in rows), default=0) + 2
     console.print(Text.assemble((f"  {title}:", f"bold {TEXT}")))
     for label, description in rows:
         console.print(
