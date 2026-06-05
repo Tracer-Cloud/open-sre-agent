@@ -44,7 +44,14 @@ from typing import Any
 _PAPER_BASELINE: dict[str, dict[str, float]] = {
     "gpt-4o": {"a1": 0.49, "a3": 0.55, "tcr": 0.99, "cov": 0.78, "steps": 5.67, "iac": 0.27},
     "gpt-5": {"a1": 0.67, "a3": 0.75, "tcr": 0.99, "cov": 0.77, "steps": 5.57, "iac": 0.04},
-    "claude-4-sonnet": {"a1": 0.50, "a3": 0.54, "tcr": 0.98, "cov": 0.52, "steps": 4.25, "iac": 0.12},
+    "claude-4-sonnet": {
+        "a1": 0.50,
+        "a3": 0.54,
+        "tcr": 0.98,
+        "cov": 0.52,
+        "steps": 4.25,
+        "iac": 0.12,
+    },
     "deepseek-v3.2": {"a1": 0.73, "a3": 0.79, "tcr": 0.99, "cov": 0.88, "steps": 10.0, "iac": 0.25},
     "qwen3-235b": {"a1": 0.50, "a3": 0.53, "tcr": 0.96, "cov": 0.67, "steps": 5.34, "iac": 0.22},
     "qwen3-14b": {"a1": 0.34, "a3": 0.43, "tcr": 0.82, "cov": 0.71, "steps": 5.82, "iac": 0.40},
@@ -79,9 +86,7 @@ _OPENSRE_ONLY_METRICS = [
 ]
 
 
-def _match_paper_row(
-    table: dict[str, dict[str, float]], llm: str
-) -> dict[str, float] | None:
+def _match_paper_row(table: dict[str, dict[str, float]], llm: str) -> dict[str, float] | None:
     """Best-effort match of a run's LLM label to a row in a paper table."""
     key = llm.strip().lower()
     if key in table:
@@ -100,6 +105,7 @@ def _match_paper_baseline(llm: str) -> dict[str, float] | None:
 def _match_paper_icl(llm: str) -> dict[str, float] | None:
     """Paper Table 5 ICL row for this LLM, if any (only 3 models exist)."""
     return _match_paper_row(_PAPER_ICL, llm)
+
 
 # --------------------------------------------------------------------------- #
 # Public API                                                                  #
@@ -600,8 +606,7 @@ def _render_html(
             llm_cells = by_llm[llm]
             n_scen = len({c.get("case", {}).get("case_id", "?") for c in llm_cells})
             parts.append(
-                f'<tr><td><code>{esc(llm)}</code></td>'
-                f'<td>ours</td><td class="metric">{n_scen}</td>'
+                f'<tr><td><code>{esc(llm)}</code></td><td>ours</td><td class="metric">{n_scen}</td>'
             )
             for m in _PAPER_COMPARABLE_METRICS:
                 scen_vals = _scenario_means(llm_cells, m)
@@ -615,7 +620,7 @@ def _render_html(
             baseline = _match_paper_baseline(llm)
             if baseline is not None:
                 parts.append(
-                    f'<tr><td><code>{esc(llm)}</code></td>'
+                    f"<tr><td><code>{esc(llm)}</code></td>"
                     '<td><span class="pill">paper-Base</span></td>'
                     '<td class="metric">452</td>'
                 )
@@ -627,7 +632,7 @@ def _render_html(
             icl = _match_paper_icl(llm)
             if icl is not None:
                 parts.append(
-                    f'<tr><td><code>{esc(llm)}</code></td>'
+                    f"<tr><td><code>{esc(llm)}</code></td>"
                     '<td><span class="pill warn">paper-ICL</span></td>'
                     '<td class="metric">452</td>'
                 )
@@ -638,7 +643,7 @@ def _render_html(
                 parts.append("</tr>")
         parts.append("</tbody></table>")
         parts.append(
-            '<p><small><code>paper-Base</code> = zero-shot agent (Table 4). '
+            "<p><small><code>paper-Base</code> = zero-shot agent (Table 4). "
             "<code>paper-ICL</code> = 3 retrieved in-context traces, <strong>no "
             "agent framework</strong> (Table 5) — the cost-equivalent baseline "
             "opensre must beat. ICL exists only for the three models the paper "
