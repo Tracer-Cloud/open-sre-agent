@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.agent.correlation.confidence import (
+    EvidenceContribution,
+    SharedConfidence,
+    build_shared_confidence,
+)
 from app.agent.correlation.models import UpstreamCandidate
 from app.agent.correlation.upstream import MetricSeries
 
@@ -54,7 +59,9 @@ class CandidateCorrelationScore:
     topology_score: float
     periodicity_score: float
     operator_hint_score: float
+    feature_workflow_score: float
     final_confidence: float
+    shared_confidence: SharedConfidence
     rationale: str
 
 
@@ -195,6 +202,43 @@ def score_candidate_correlation(
     periodicity_score = periodicity.score if periodicity is not None else 0.0
     operator_hint_score = getattr(operator_hint, "score", 0.0) if operator_hint is not None else 0.0
 
+    feature_workflow_score = operator_hint_score
+
+    shared_confidence = build_shared_confidence(
+        (
+            EvidenceContribution(
+                source="correlation",
+                score=time_window.score,
+                weight=0.45,
+                rationale=time_window.rationale,
+            ),
+            EvidenceContribution(
+                source="topology",
+                score=topology.adjacency_score,
+                weight=0.30,
+                rationale=topology.rationale,
+            ),
+            EvidenceContribution(
+                source="periodicity",
+                score=periodicity_score,
+                weight=0.10,
+                rationale=(
+                    periodicity.rationale if periodicity is not None else "No periodicity evidence."
+                ),
+            ),
+            EvidenceContribution(
+                source="feature_workflow",
+                score=feature_workflow_score,
+                weight=0.15,
+                rationale=getattr(
+                    operator_hint,
+                    "rationale",
+                    "No feature/workflow hint evidence.",
+                ),
+            ),
+        )
+    )
+
     final_confidence = round(
         (
             time_window.score * 0.5
@@ -211,12 +255,15 @@ def score_candidate_correlation(
         topology_score=topology.adjacency_score,
         periodicity_score=periodicity_score,
         operator_hint_score=operator_hint_score,
+        feature_workflow_score=feature_workflow_score,
         final_confidence=final_confidence,
+        shared_confidence=shared_confidence,
         rationale=(
-            f"time_window={time_window.score}, "
+            f"confidence={shared_confidence.label}; "
+            f"correlation={time_window.score}, "
             f"topology={topology.adjacency_score}, "
             f"periodicity={periodicity_score}, "
-            f"operator_hint={operator_hint_score}"
+            f"feature_workflow={feature_workflow_score}"
         ),
     )
 
