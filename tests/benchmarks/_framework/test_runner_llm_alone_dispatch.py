@@ -47,6 +47,10 @@ class _BaselineAgentStub:
     """Placeholder class — runner only uses the type, never instantiates here."""
 
 
+class _PureBaselineAgentStub:
+    """Same idea as ``_BaselineAgentStub`` but for the third arm."""
+
+
 class _AdapterWithBaseline(BenchmarkAdapter):
     """Adapter that supports llm_alone via distinct hooks for tracing."""
 
@@ -91,6 +95,10 @@ class _AdapterWithBaseline(BenchmarkAdapter):
         # override deliberately violates the base ABC's return type so the
         # test can verify the runner doesn't introspect the class at all.
         return _BaselineAgentStub
+
+    def pure_baseline_agent_class(self) -> type[_PureBaselineAgentStub]:  # type: ignore[override]
+        # Same stub-typing rationale as baseline_agent_class above.
+        return _PureBaselineAgentStub
 
 
 class _AdapterWithoutBaseline(BenchmarkAdapter):
@@ -251,4 +259,61 @@ def test_run_one_cell_passes_baseline_agent_class_when_llm_alone(tmp_path: Path)
         )
     assert captured["agent_class"] is _BaselineAgentStub
     # And the baseline marker integrations made it through too
+    assert captured["resolved_integrations"]["_marker"] == "baseline"
+
+
+# --------------------------------------------------------------------------- #
+# llm_alone_pure — third arm (pure baseline)                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_inner_refuses_llm_alone_pure_when_adapter_has_no_pure_baseline(
+    tmp_path: Path,
+) -> None:
+    """Mirror of the llm_alone refusal: a config asking for llm_alone_pure
+    against an adapter that returns None from pure_baseline_agent_class
+    must fail at pre-flight, not silently run with None agent."""
+    runner = BenchmarkRunner(
+        config=_config(tmp_path, modes=["llm_alone_pure"]),
+        adapter=_AdapterWithoutBaseline(),
+    )
+    with pytest.raises(NotImplementedError) as exc_info:
+        runner.run_without_integrity()
+    assert "llm_alone_pure" in str(exc_info.value) or "pure baseline" in str(exc_info.value)
+    assert "no-baseline" in str(exc_info.value)
+
+
+def test_run_one_cell_llm_alone_pure_uses_baseline_tools_and_pure_agent(
+    tmp_path: Path,
+) -> None:
+    """llm_alone_pure uses the SAME tool surface as llm_alone (both go
+    through build_baseline_tools — the methodological constant across
+    all three modes is the per-case tool inventory). What differs is the
+    agent class: pure_baseline_agent_class for llm_alone_pure."""
+    adapter = _AdapterWithBaseline()
+    runner = BenchmarkRunner(config=_config(tmp_path, modes=["llm_alone_pure"]), adapter=adapter)
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir(parents=True)
+    captured: dict[str, Any] = {}
+
+    def _capture_kwargs(*_args: Any, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"root_cause": "x", "report": "x", "evidence_entries": []}
+
+    with patch("app.pipeline.runners.run_investigation", _capture_kwargs):
+        runner._run_one_cell(
+            case=BenchmarkCase(case_id="c1", benchmark_name="with-baseline"),
+            mode="llm_alone_pure",
+            llm="claude-4-sonnet",
+            spec=LLM_SPECS["claude-4-sonnet"],
+            run_index=0,
+            cases_dir=cases_dir,
+        )
+    # Pure baseline uses the baseline-tools path (same as llm_alone)
+    assert adapter.baseline_tools_calls == 1
+    assert adapter.opensre_integrations_calls == 0
+    # But threads through the PURE agent class, not the regular baseline one
+    assert captured["agent_class"] is _PureBaselineAgentStub
+    assert captured["agent_class"] is not _BaselineAgentStub
+    # Integrations dict still carries the baseline marker
     assert captured["resolved_integrations"]["_marker"] == "baseline"

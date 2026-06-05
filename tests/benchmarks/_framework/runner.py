@@ -160,13 +160,24 @@ class BenchmarkRunner:
     # ----------------------------------------------------------------------- #
 
     def _run_inner(self, *, dev_mode: bool) -> RunOutcome:
-        # Refuse llm_alone if the adapter declines — keeps the runner generic
-        # over adapters that don't yet ship a matched baseline.
+        # Refuse baseline modes if the adapter declines — keeps the runner
+        # generic over adapters that don't yet ship a matched control arm.
+        # Both checks are pre-flight so an unsupported mode fails before any
+        # cell runs and burns tokens.
         if "llm_alone" in self.config.modes and self.adapter.baseline_agent_class() is None:
             raise NotImplementedError(
                 f"Adapter {self.adapter.name!r} does not implement an llm_alone "
                 "control arm (baseline_agent_class returned None). Run with "
                 "modes=['opensre+llm'] only, or extend the adapter."
+            )
+        if (
+            "llm_alone_pure" in self.config.modes
+            and self.adapter.pure_baseline_agent_class() is None
+        ):
+            raise NotImplementedError(
+                f"Adapter {self.adapter.name!r} does not implement a pure baseline "
+                "(pure_baseline_agent_class returned None). Drop llm_alone_pure "
+                "from modes, or extend the adapter with a prompt-stripped agent."
             )
 
         # Pre-flight: verify every LLM in config is registered AND that its
@@ -387,6 +398,12 @@ class BenchmarkRunner:
         if mode == "llm_alone":
             integrations = self.adapter.build_baseline_tools(case)
             agent_class = self.adapter.baseline_agent_class()
+        elif mode == "llm_alone_pure":
+            # Same tool surface as the other baseline (build_baseline_tools);
+            # only the agent class differs — minimal system prompt instead of
+            # opensre's full planner/verifier prompt.
+            integrations = self.adapter.build_baseline_tools(case)
+            agent_class = self.adapter.pure_baseline_agent_class()
         else:
             integrations = self.adapter.build_opensre_integrations(case)
             agent_class = self.adapter.investigation_agent_class()

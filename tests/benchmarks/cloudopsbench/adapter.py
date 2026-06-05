@@ -43,6 +43,7 @@ from tests.benchmarks._framework.adapters import (
 from tests.benchmarks.cloudopsbench.bench_agent import (
     BaselineLLMAloneAgent,
     BenchInvestigationAgent,
+    PureBaselineAgent,
 )
 from tests.benchmarks.cloudopsbench.case_loader import (
     BENCHMARK_DIR,
@@ -55,7 +56,9 @@ from tests.benchmarks.cloudopsbench.case_loader import (
     load_cases as _legacy_load_cases,
 )
 from tests.benchmarks.cloudopsbench.held_out_split import compute_held_out_set
-from tests.benchmarks.cloudopsbench.predictor import emit_paper_predictions
+from tests.benchmarks.cloudopsbench.predictor import (
+    emit_paper_predictions,
+)
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
 from tests.benchmarks.cloudopsbench.tags import seen_shape_for
@@ -344,6 +347,19 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         """
         return BaselineLLMAloneAgent
 
+    def pure_baseline_agent_class(self) -> type[PureBaselineAgent]:
+        """Agent class for the llm_alone_pure control arm.
+
+        Returns :class:`PureBaselineAgent` — same bench-package tool
+        filter as the other two arms, no MIN_TOOL_CALLS floor (like
+        BaselineLLMAloneAgent), AND a minimal task-specific system prompt
+        instead of opensre's full planner/verifier/stage-gate prompt.
+        The contrast (opensre+llm) − (llm_alone_pure) isolates the full
+        opensre stack; (llm_alone) − (llm_alone_pure) isolates opensre's
+        prompt alone, factoring out the termination policy.
+        """
+        return PureBaselineAgent
+
     def format_final_answer(
         self,
         case: BenchmarkCase,
@@ -393,6 +409,17 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         if payload is None:
             return run
 
+        # Lever D — rerank deliberately NOT wired into the pipeline.
+        # The conservative-rescue variant (see ``rerank_predictions_by_evidence``)
+        # was empirically validated against the 11:46 case data and found to
+        # have zero rescue surface: 76/77 failures have rank-1 with at least
+        # one substring hit in the LLM's own investigation narrative, so the
+        # "rank-1 unmentioned" gate never fires. Additionally, the per-case
+        # ``evidence_entries`` field is empty (separate plumbing bug — needs
+        # the runner to propagate tool results before any text-based rerank
+        # has a richer signal to use). Keep the function + tests in tree as
+        # a documented attempt; revisit when tool results are persisted or
+        # when an LLM-as-judge variant is worth its per-cell cost.
         enriched_diagnosis = dict(run.final_diagnosis)
         enriched_diagnosis["top_3_predictions"] = payload["top_3_predictions"]
         return replace(run, final_diagnosis=enriched_diagnosis)

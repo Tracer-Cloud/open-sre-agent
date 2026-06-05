@@ -27,12 +27,52 @@ case, so a stubborn model can't infinite-loop.
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+import os
+from typing import Any, ClassVar
 
 from app.agent.investigation import ConnectedInvestigationAgent
 from app.tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)
+
+# Default minimum-tool-call floor for the opensre+llm arm. Overridable via the
+# ``BENCH_MIN_TOOL_CALLS`` env var so the floor can be swept across runs WITHOUT
+# editing code — each sweep point is a fresh CLI process, so an import-time read
+# is sufficient. Tests still override the class attribute directly.
+_DEFAULT_MIN_TOOL_CALLS = 8
+_ENV_MIN_TOOL_CALLS = "BENCH_MIN_TOOL_CALLS"
+
+
+def _resolve_min_tool_calls() -> int:
+    """Read the floor from the environment, falling back to the default.
+
+    Invalid or negative values are ignored (with a warning) rather than
+    crashing a long bench run; a 0 floor is legal and means "let the LLM
+    decide", i.e. the same termination policy as the llm_alone control.
+    """
+    raw = os.environ.get(_ENV_MIN_TOOL_CALLS)
+    if raw is None or raw.strip() == "":
+        return _DEFAULT_MIN_TOOL_CALLS
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "Ignoring non-integer %s=%r; using default floor %d",
+            _ENV_MIN_TOOL_CALLS,
+            raw,
+            _DEFAULT_MIN_TOOL_CALLS,
+        )
+        return _DEFAULT_MIN_TOOL_CALLS
+    if value < 0:
+        logger.warning(
+            "Ignoring negative %s=%d; using default floor %d",
+            _ENV_MIN_TOOL_CALLS,
+            value,
+            _DEFAULT_MIN_TOOL_CALLS,
+        )
+        return _DEFAULT_MIN_TOOL_CALLS
+    return value
+
 
 # Tools available to the bench agent are exactly those registered by the
 # bench-specific package. Production opensre tools (real EKS API calls,
@@ -57,9 +97,10 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
     without rebuilding the agent instance. Default 8 is calibrated for
     CloudOpsBench's median win-trajectory (~15-20 tool calls) while
     leaving headroom: even a perfect 8-call run is within the loop cap.
+    Set ``BENCH_MIN_TOOL_CALLS`` to sweep the floor across runs.
     """
 
-    MIN_TOOL_CALLS = 8
+    MIN_TOOL_CALLS = _resolve_min_tool_calls()
     ALLOWED_TOOL_MODULE_PREFIXES: ClassVar[tuple[str, ...]] = (_BENCH_TOOL_MODULE_PREFIX,)
 
     def _should_accept_conclusion(
@@ -169,3 +210,59 @@ class BaselineLLMAloneAgent(ConnectedInvestigationAgent):
         tools: list[RegisteredTool],
     ) -> list[RegisteredTool]:
         return _filter_to_bench_package(tools, self.ALLOWED_TOOL_MODULE_PREFIXES)
+
+
+# Minimal SRE-diagnostic system prompt for the pure baseline.
+#
+# Deliberately concise — no planner instructions, no stage-gate language, no
+# anti-hallucination scaffolding, no evidence-budget guidance. The point of
+# this control is to measure what a general-purpose LLM does with the same
+# tools and zero opensre-specific framing. Anything richer than this prompt
+# starts smuggling opensre's structural priors back into the "baseline."
+#
+# We DO ask for the same output shape (root cause + faulting component)
+# because the scorer needs to find those fields; that's a measurement
+# protocol requirement, not a reasoning prior.
+_PURE_BASELINE_SYSTEM_PROMPT = (
+    "You are an SRE diagnosing a Kubernetes incident. An alert has been raised. "
+    "Use the available tools to investigate. When you have enough evidence to "
+    "name a root cause, state your conclusion in two short fields: "
+    "(1) the faulting component (Kubernetes object: deployment, pod, service, "
+    "secret, etc.), and (2) the root cause in 1-2 sentences."
+)
+
+
+class PureBaselineAgent(ConnectedInvestigationAgent):
+    """Pure LLM-alone baseline — strips opensre's system prompt as well.
+
+    The third arm the audit asked for. Comparison hierarchy:
+      - ``opensre+llm``         → opensre prompt + Lever #1 floor (full opensre)
+      - ``llm_alone``           → opensre prompt − Lever #1 floor (isolates Lever #1)
+      - ``llm_alone_pure`` (this) → minimal prompt − Lever #1 floor (isolates opensre's PROMPT vs raw LLM+tools)
+
+    Reading the contrasts:
+      - (opensre+llm) − (llm_alone)         = lift from Lever #1
+      - (opensre+llm) − (llm_alone_pure)    = lift from full opensre stack (prompt + Lever #1)
+      - (llm_alone)   − (llm_alone_pure)    = lift from opensre's PROMPT alone
+
+    What this STILL inherits from :class:`ConnectedInvestigationAgent`:
+    the ReAct loop scaffolding (tool execution, evidence accumulation,
+    context-budget enforcement, retry-on-tool-error, etc.). Those are
+    mechanical plumbing every baseline would need; they aren't
+    "opensre's reasoning." The honest framing is "minimal-prompt LLM
+    with tools," not "pure stdin/stdout LLM" — which would not be a
+    meaningful comparison anyway.
+    """
+
+    ALLOWED_TOOL_MODULE_PREFIXES: ClassVar[tuple[str, ...]] = (_BENCH_TOOL_MODULE_PREFIX,)
+
+    def _filter_tools(
+        self,
+        tools: list[RegisteredTool],
+    ) -> list[RegisteredTool]:
+        # Same bench-package whitelist as Bench + Baseline arms — tool
+        # surface is the methodological constant across all three modes.
+        return _filter_to_bench_package(tools, self.ALLOWED_TOOL_MODULE_PREFIXES)
+
+    def _build_system_prompt(self, state: dict[str, Any]) -> str:  # noqa: ARG002 — interface contract
+        return _PURE_BASELINE_SYSTEM_PROMPT

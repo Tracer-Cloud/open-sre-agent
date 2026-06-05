@@ -41,21 +41,109 @@ from typing import Any
 # full-corpus stratum (see headline note).                                     #
 # --------------------------------------------------------------------------- #
 
+# Full Table 4 row per model: outcome (a1/a3/tcr) + process (exact/in_order/
+# any_order/rel/cov) + efficiency/robustness (steps/iac/rar/ztdr). MTTI is
+# deliberately omitted — wall-clock seconds, hardware/provider dependent, and
+# not measured in this harness (see _NON_COMPARABLE_METRICS).
 _PAPER_BASELINE: dict[str, dict[str, float]] = {
-    "gpt-4o": {"a1": 0.49, "a3": 0.55, "tcr": 0.99, "cov": 0.78, "steps": 5.67, "iac": 0.27},
-    "gpt-5": {"a1": 0.67, "a3": 0.75, "tcr": 0.99, "cov": 0.77, "steps": 5.57, "iac": 0.04},
+    "gpt-4o": {
+        "a1": 0.49,
+        "a3": 0.55,
+        "tcr": 0.99,
+        "exact": 0.14,
+        "in_order": 0.45,
+        "any_order": 0.46,
+        "rel": 0.63,
+        "cov": 0.78,
+        "steps": 5.67,
+        "iac": 0.27,
+        "rar": 0.02,
+        "ztdr": 0.02,
+    },  # noqa: E501
+    "gpt-5": {
+        "a1": 0.67,
+        "a3": 0.75,
+        "tcr": 0.99,
+        "exact": 0.16,
+        "in_order": 0.38,
+        "any_order": 0.48,
+        "rel": 0.65,
+        "cov": 0.77,
+        "steps": 5.57,
+        "iac": 0.04,
+        "rar": 0.05,
+        "ztdr": 0.04,
+    },  # noqa: E501
     "claude-4-sonnet": {
         "a1": 0.50,
         "a3": 0.54,
         "tcr": 0.98,
+        "exact": 0.05,
+        "in_order": 0.24,
+        "any_order": 0.25,
+        "rel": 0.46,
         "cov": 0.52,
         "steps": 4.25,
         "iac": 0.12,
-    },
-    "deepseek-v3.2": {"a1": 0.73, "a3": 0.79, "tcr": 0.99, "cov": 0.88, "steps": 10.0, "iac": 0.25},
-    "qwen3-235b": {"a1": 0.50, "a3": 0.53, "tcr": 0.96, "cov": 0.67, "steps": 5.34, "iac": 0.22},
-    "qwen3-14b": {"a1": 0.34, "a3": 0.43, "tcr": 0.82, "cov": 0.71, "steps": 5.82, "iac": 0.40},
-    "qwen3-8b": {"a1": 0.21, "a3": 0.23, "tcr": 0.92, "cov": 0.47, "steps": 5.46, "iac": 0.40},
+        "rar": 0.05,
+        "ztdr": 0.32,
+    },  # noqa: E501
+    "deepseek-v3.2": {
+        "a1": 0.73,
+        "a3": 0.79,
+        "tcr": 0.99,
+        "exact": 0.0,
+        "in_order": 0.53,
+        "any_order": 0.63,
+        "rel": 0.43,
+        "cov": 0.88,
+        "steps": 10.0,
+        "iac": 0.25,
+        "rar": 0.11,
+        "ztdr": 0.0,
+    },  # noqa: E501
+    "qwen3-235b": {
+        "a1": 0.50,
+        "a3": 0.53,
+        "tcr": 0.96,
+        "exact": 0.13,
+        "in_order": 0.38,
+        "any_order": 0.41,
+        "rel": 0.55,
+        "cov": 0.67,
+        "steps": 5.34,
+        "iac": 0.22,
+        "rar": 0.06,
+        "ztdr": 0.17,
+    },  # noqa: E501
+    "qwen3-14b": {
+        "a1": 0.34,
+        "a3": 0.43,
+        "tcr": 0.82,
+        "exact": 0.04,
+        "in_order": 0.31,
+        "any_order": 0.42,
+        "rel": 0.63,
+        "cov": 0.71,
+        "steps": 5.82,
+        "iac": 0.40,
+        "rar": 0.10,
+        "ztdr": 0.0,
+    },  # noqa: E501
+    "qwen3-8b": {
+        "a1": 0.21,
+        "a3": 0.23,
+        "tcr": 0.92,
+        "exact": 0.01,
+        "in_order": 0.15,
+        "any_order": 0.20,
+        "rel": 0.36,
+        "cov": 0.47,
+        "steps": 5.46,
+        "iac": 0.40,
+        "rar": 0.16,
+        "ztdr": 0.27,
+    },  # noqa: E501
 }
 
 # Paper Table 5 — In-Context Learning (3 retrieved diagnostic traces, NO agent
@@ -63,14 +151,75 @@ _PAPER_BASELINE: dict[str, dict[str, float]] = {
 # in-context demos lift GPT-4o 0.49 -> 0.70 with no orchestration. Only the
 # three models the paper ran under ICL are present.
 _PAPER_ICL: dict[str, dict[str, float]] = {
-    "gpt-4o": {"a1": 0.70, "a3": 0.75, "tcr": 0.97, "cov": 0.76, "steps": 4.40, "iac": 0.08},
-    "qwen3-235b": {"a1": 0.59, "a3": 0.63, "tcr": 0.98, "cov": 0.66, "steps": 3.11, "iac": 0.09},
-    "qwen3-14b": {"a1": 0.71, "a3": 0.75, "tcr": 0.99, "cov": 0.86, "steps": 6.29, "iac": 0.29},
+    "gpt-4o": {
+        "a1": 0.70,
+        "a3": 0.75,
+        "tcr": 0.97,
+        "exact": 0.28,
+        "in_order": 0.49,
+        "any_order": 0.52,
+        "rel": 0.67,
+        "cov": 0.76,
+        "steps": 4.40,
+        "iac": 0.08,
+        "rar": 0.0,
+        "ztdr": 0.13,
+    },  # noqa: E501
+    "qwen3-235b": {
+        "a1": 0.59,
+        "a3": 0.63,
+        "tcr": 0.98,
+        "exact": 0.27,
+        "in_order": 0.52,
+        "any_order": 0.54,
+        "rel": 0.57,
+        "cov": 0.66,
+        "steps": 3.11,
+        "iac": 0.09,
+        "rar": 0.03,
+        "ztdr": 0.30,
+    },  # noqa: E501
+    "qwen3-14b": {
+        "a1": 0.71,
+        "a3": 0.75,
+        "tcr": 0.99,
+        "exact": 0.11,
+        "in_order": 0.44,
+        "any_order": 0.59,
+        "rel": 0.70,
+        "cov": 0.86,
+        "steps": 6.29,
+        "iac": 0.29,
+        "rar": 0.11,
+        "ztdr": 0.0,
+    },  # noqa: E501
 }
 
 # Metrics defined identically in the paper (Table 4) — the only set for which a
-# head-to-head number against the published baseline is meaningful.
-_PAPER_COMPARABLE_METRICS = ["a1", "a3", "tcr", "cov", "steps", "iac"]
+# head-to-head number against the published baseline is meaningful. MTTI is
+# excluded on purpose (see _NON_COMPARABLE_METRICS).
+_PAPER_COMPARABLE_METRICS = [
+    "a1",
+    "a3",
+    "exact",
+    "in_order",
+    "any_order",
+    "rel",
+    "cov",
+    "steps",
+    "iac",
+    "rar",
+    "ztdr",
+]
+
+# Computed by our scorer but NOT comparable to the paper, with the reason.
+# Surfaced as a footnote so a reader doesn't mistake a structural 0 (or a
+# saturated 1.0) for a result.
+_NON_COMPARABLE_METRICS = {
+    "mtti": "wall-clock seconds; per-step latency not captured in this harness (always 0)",
+    "tcr": "saturated at 1.0 — the predictor always emits structured output, so this "
+    "does not track the paper's crash/schema-violation rate",
+}
 
 # opensre-only instrumentation. Useful as internal diagnostics, but NOT present
 # in the paper, so they are reported in a separate panel to avoid implying a
@@ -645,6 +794,12 @@ def _render_markdown(
         "cost-equivalent baseline opensre must beat. ICL exists only for the "
         "three models the paper ran it on._"
     )
+    lines.append("")
+    lines.append(
+        "_Excluded from the comparison: "
+        + "; ".join(f"**{m}** ({why})" for m, why in _NON_COMPARABLE_METRICS.items())
+        + "._"
+    )
 
     # --- Decomposition: where the accuracy goes (Track 2) ---
     lines.extend(_render_decomposition_markdown(cells, by_lm))
@@ -945,6 +1100,10 @@ def _render_html(
             "opensre must beat. ICL exists only for the three models the paper "
             "ran it on.</small></p>"
         )
+        excluded = "; ".join(
+            f"<strong>{esc(m)}</strong> ({esc(why)})" for m, why in _NON_COMPARABLE_METRICS.items()
+        )
+        parts.append(f"<p><small>Excluded from the comparison: {excluded}.</small></p>")
 
         # Decomposition (Track 2)
         parts.extend(_render_decomposition_html(cells, by_lm, esc))

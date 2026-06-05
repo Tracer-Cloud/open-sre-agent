@@ -122,6 +122,23 @@ class ConnectedInvestigationAgent:
         """
         return tools
 
+    def _build_system_prompt(self, state: dict[str, Any]) -> str:
+        """Hook: produce the LLM system prompt for this investigation.
+
+        Called once per ``run`` after the resolved-integrations view has
+        been written into ``state``. Default delegates to
+        :func:`app.agent.prompt.build_system_prompt` — production behavior
+        is unchanged.
+
+        Subclasses can override to swap in a fundamentally different
+        instruction shape (e.g. a minimal SRE-diagnostic prompt for a
+        pure baseline that needs to NOT inherit opensre's
+        planner/verifier instructions). Returning an empty string or
+        ``""`` is legal — the LLM will then receive no system prompt at
+        all, which is itself a meaningful experimental condition.
+        """
+        return build_system_prompt(state)
+
     def run(
         self,
         state: dict[str, Any],
@@ -166,7 +183,7 @@ class ConnectedInvestigationAgent:
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
-        system = build_system_prompt(state)
+        system = self._build_system_prompt(state)
         alert_text = format_alert_context(state)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
 

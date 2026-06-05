@@ -18,13 +18,19 @@
 
 benchmark: cloudopsbench
 
-# Primary contrast (prereg comparison_protocol): opensre+llm vs llm_alone for
-# the SAME model_version. llm_alone is the in-harness control arm — identical
-# per-case tool surface, but the baseline agent (no MIN_TOOL_CALLS floor), so
-# the delta isolates opensre's policy rather than the model's intrinsic skill.
+# Three-arm contrast (locks the audit-grade attribution):
+#   opensre+llm        full opensre   prompt + MIN_TOOL_CALLS=8
+#   llm_alone          same prompt    no MIN_TOOL_CALLS floor
+#   llm_alone_pure     minimal prompt no MIN_TOOL_CALLS floor
+#
+# Reading the contrasts (cost: +50% per arm added):
+#   (opensre+llm) - (llm_alone)      = lift from MIN_TOOL_CALLS=8 alone
+#   (opensre+llm) - (llm_alone_pure) = lift from opensre's full stack
+#   (llm_alone)   - (llm_alone_pure) = lift from opensre's prompt alone
 modes:
   - opensre+llm
   - llm_alone
+  - llm_alone_pure
 
 llms:
   - gpt-4o
@@ -76,16 +82,18 @@ pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v
 # for the generalization_gate computation in the report to mean anything.
 #
 # Cost projection (vs 11:46's $1.67 at 180 cells, gpt-5 dispatched as gpt-4o):
-#   - With BOTH modes (opensre+llm and llm_alone) and full corpus:
-#     5424 cells = 452 cases × 2 LLMs × 3 seeds × 2 modes
+#   - With ALL three modes and full corpus:
+#     8136 cells = 452 cases × 2 LLMs × 3 seeds × 3 modes
 #   - With the dispatcher fix, gpt-5 actually runs gpt-5 (~5× per-call cost
-#     vs gpt-4o). With llm_alone's lower MIN_TOOL_CALLS, baseline cells average
-#     fewer tool calls per case, partially offsetting the doubled cell count.
-#   - Expected total: ~$80. Well within the $500 budget but ~50× the
+#     vs gpt-4o). With llm_alone* lower MIN_TOOL_CALLS, baseline cells average
+#     fewer tool calls per case, partially offsetting the tripled cell count.
+#   - Expected total: ~$120. Well within the $500 budget but ~70× the
 #     11:46 spend. Confirm budget before triggering.
-#   - To run opensre+llm only (no control arm), comment out llm_alone in
-#     `modes` above — the report will then omit the primary internal contrast
-#     locked by the pre-registration.
+#   - To run cheaper:
+#     - Drop llm_alone_pure → saves ~$40 (loses the prompt-vs-floor attribution)
+#     - Drop both baselines → saves ~$80 (loses the internal contrast entirely;
+#       reverts to "compare against paper's number from a different harness",
+#       which the prereg's comparison_protocol forbids for the primary claim)
 filters:
   # limit: omit → run all 452 cases
   seen_shape: [true, false]

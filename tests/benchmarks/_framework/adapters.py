@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 # same case work for both modes.                                              #
 # --------------------------------------------------------------------------- #
 
-Mode = Literal["opensre+llm", "llm_alone"]
+Mode = Literal["opensre+llm", "llm_alone", "llm_alone_pure"]
 
 
 # --------------------------------------------------------------------------- #
@@ -300,6 +300,24 @@ class BenchmarkAdapter(ABC):
         The runner picks this method for ``llm_alone`` cells and
         ``investigation_agent_class`` for ``opensre+llm`` cells, then passes
         the chosen class to ``run_investigation`` exactly the same way.
+        """
+        return None
+
+    def pure_baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: agent class for the pure-baseline (``llm_alone_pure``) arm.
+
+        Default ``None`` — the adapter does not ship a prompt-stripped
+        baseline; runner refuses ``modes=["llm_alone_pure"]``.
+
+        Override to return an agent that ALSO overrides ``_build_system_prompt``
+        with a minimal task-specific prompt — no opensre planner / verifier /
+        evidence-budget instructions. The contrast (opensre+llm) − (llm_alone_pure)
+        then isolates the lift from opensre's full structural stack, not just
+        the bench-specific termination policy that ``baseline_agent_class``
+        controls.
+
+        Same tool surface as both other arms; the methodological constant
+        across all three modes is the per-case integrations dict.
         """
         return None
 

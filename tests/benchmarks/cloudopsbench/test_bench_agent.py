@@ -6,7 +6,12 @@ import pytest
 
 from app.agent.investigation import ConnectedInvestigationAgent
 from app.tools.registered_tool import RegisteredTool
-from tests.benchmarks.cloudopsbench.bench_agent import BenchInvestigationAgent
+from tests.benchmarks.cloudopsbench.bench_agent import (
+    _DEFAULT_MIN_TOOL_CALLS,
+    _ENV_MIN_TOOL_CALLS,
+    BenchInvestigationAgent,
+    _resolve_min_tool_calls,
+)
 
 
 def _make_registered_tool(name: str, origin_module: str) -> RegisteredTool:
@@ -88,6 +93,29 @@ def test_bench_agent_threshold_is_class_attribute_for_easy_override() -> None:
     assert accept is True
 
 
+def test_resolve_min_tool_calls_defaults_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No env var → the calibrated default floor."""
+    monkeypatch.delenv(_ENV_MIN_TOOL_CALLS, raising=False)
+    assert _resolve_min_tool_calls() == _DEFAULT_MIN_TOOL_CALLS
+
+
+@pytest.mark.parametrize("value", [0, 1, 4, 8, 16])
+def test_resolve_min_tool_calls_reads_env(monkeypatch: pytest.MonkeyPatch, value: int) -> None:
+    """A valid integer in the env var sweeps the floor. 0 is legal — it means
+    'let the LLM decide', matching the llm_alone control's termination policy."""
+    monkeypatch.setenv(_ENV_MIN_TOOL_CALLS, str(value))
+    assert _resolve_min_tool_calls() == value
+
+
+@pytest.mark.parametrize("bad", ["", "  ", "abc", "3.5", "-1", "-10"])
+def test_resolve_min_tool_calls_falls_back_on_invalid(
+    monkeypatch: pytest.MonkeyPatch, bad: str
+) -> None:
+    """Garbage / negative values never crash a long run — fall back to default."""
+    monkeypatch.setenv(_ENV_MIN_TOOL_CALLS, bad)
+    assert _resolve_min_tool_calls() == _DEFAULT_MIN_TOOL_CALLS
+
+
 def test_production_agent_filter_tools_is_identity() -> None:
     """Default ``_filter_tools`` must return the input unchanged so production
     investigations continue to see every available tool. Regressing this
@@ -167,6 +195,69 @@ def test_baseline_agent_uses_same_bench_package_tool_filter_as_bench_agent() -> 
     inputs = [bench_tool, prod_eks]
     assert BenchInvestigationAgent()._filter_tools(inputs) == BaselineLLMAloneAgent()._filter_tools(
         inputs
+    )
+
+
+# --------------------------------------------------------------------------- #
+# PureBaselineAgent — pure baseline (minimal prompt + no MIN_TOOL_CALLS)       #
+# --------------------------------------------------------------------------- #
+
+
+def test_pure_baseline_agent_is_subclass_of_production_agent() -> None:
+    """Same dispatch contract as the other two agents — the runner can
+    treat the pure baseline interchangeably via agent_class."""
+    from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
+
+    assert issubclass(PureBaselineAgent, ConnectedInvestigationAgent)
+
+
+def test_pure_baseline_agent_overrides_system_prompt() -> None:
+    """The whole point of the third arm: the system prompt is NOT
+    opensre's. Pin that the override returns a string distinct from the
+    default ``build_system_prompt`` so a future hook removal can't
+    silently turn this back into a flavor of BaselineLLMAloneAgent."""
+    from app.agent.prompt import build_system_prompt
+    from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
+
+    agent = PureBaselineAgent()
+    pure_prompt = agent._build_system_prompt({})
+    opensre_prompt = build_system_prompt({})
+    assert pure_prompt != opensre_prompt
+    # The minimal prompt should still describe the task — not empty, not None
+    assert pure_prompt
+    assert "SRE" in pure_prompt or "Kubernetes" in pure_prompt or "diagnos" in pure_prompt.lower()
+
+
+def test_pure_baseline_agent_uses_default_should_accept_conclusion() -> None:
+    """Like BaselineLLMAloneAgent: no MIN_TOOL_CALLS floor. This isolates
+    the system prompt delta as the only difference from the other
+    baseline arm. (opensre+llm − llm_alone) = floor; (llm_alone −
+    llm_alone_pure) = prompt; (opensre+llm − llm_alone_pure) = both."""
+    from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
+
+    agent = PureBaselineAgent()
+    for evidence_count in [0, 1, 5, 50]:
+        accept, nudge = agent._should_accept_conclusion(evidence_count=evidence_count, iteration=0)
+        assert accept is True
+        assert nudge is None
+
+
+def test_pure_baseline_agent_uses_same_bench_package_tool_filter_as_other_arms() -> None:
+    """Methodological constant: all three arms share the bench-package
+    tool filter so the comparison varies only in agent policy / prompt,
+    not in the tool surface."""
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        BaselineLLMAloneAgent,
+        PureBaselineAgent,
+    )
+
+    bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
+    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
+    inputs = [bench_tool, prod_eks]
+    assert (
+        BenchInvestigationAgent()._filter_tools(inputs)
+        == BaselineLLMAloneAgent()._filter_tools(inputs)
+        == PureBaselineAgent()._filter_tools(inputs)
     )
 
 

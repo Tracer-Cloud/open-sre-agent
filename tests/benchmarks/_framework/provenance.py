@@ -55,6 +55,7 @@ _ENV_ALLOWLIST: frozenset[str] = frozenset(
     {
         "OPENSRE_BENCH_WORKERS",
         "OPENSRE_BENCH_COST_BUDGET_USD",
+        "BENCH_MIN_TOOL_CALLS",
         "PYTHONPATH",
         "LANG",
         "LC_ALL",
@@ -336,7 +337,24 @@ def _run_inputs_section(config: BenchmarkConfig) -> dict[str, Any]:
         "seed": config.seed,
         "filters": config.filters.model_dump(),
         "report_formats": list(config.report_formats),
+        "min_tool_calls": _resolved_min_tool_calls(),
     }
+
+
+def _resolved_min_tool_calls() -> int | None:
+    """The effective MIN_TOOL_CALLS floor for the opensre+llm arm this run.
+
+    Recorded so a sweep over ``BENCH_MIN_TOOL_CALLS`` is self-documenting:
+    the report no longer has to be cross-referenced with the shell that
+    launched it. Best-effort — if the bench agent can't be imported (e.g.
+    opensre deps absent in a unit-test sandbox), return None rather than fail.
+    """
+    try:
+        from tests.benchmarks.cloudopsbench.bench_agent import _resolve_min_tool_calls
+
+        return _resolve_min_tool_calls()
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------- #
