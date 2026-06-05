@@ -27,7 +27,7 @@ def _patch_post(monkeypatch: pytest.MonkeyPatch, response: _Resp) -> dict[str, A
         captured.update(kwargs)
         return response
 
-    monkeypatch.setattr("app.utils.twilio_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
     return captured
 
 
@@ -105,7 +105,7 @@ def test_post_twilio_sms_transport_failure_redacts_token(
     def _fake_post(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("auth header tok-leak failed")
 
-    monkeypatch.setattr("app.utils.twilio_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
 
     success, error, sid = post_twilio_sms(
         to="+14155550000",

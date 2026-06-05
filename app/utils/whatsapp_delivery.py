@@ -5,21 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
-
+from app.utils.delivery_transport import post_form
 from app.utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
 
 _MESSAGE_LIMIT = 4096
 _TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts"
-
-
-def _redact_token(text: str, token: str) -> str:
-    """Replace access token with <redacted> to prevent accidental log leakage."""
-    if token and token in text:
-        return text.replace(token, "<redacted>")
-    return text
 
 
 def post_whatsapp_message_twilio(
@@ -42,43 +34,37 @@ def post_whatsapp_message_twilio(
         "To": twilio_to,
         "Body": text,
     }
-    try:
-        response = httpx.post(
-            url,
-            data=payload,
-            auth=(account_sid, auth_token),
-            timeout=15.0,
-            follow_redirects=False,
-        )
-    except Exception as exc:
-        error = _redact_token(str(exc), auth_token)
-        logger.warning("[whatsapp] twilio post exception: %s", error)
-        return False, error, ""
 
-    error_message = ""
-    parsed: dict[str, Any] = {}
-    try:
-        raw = response.json()
-        if isinstance(raw, dict):
-            parsed = raw
-    except Exception:
-        parsed = {}
+    response = post_form(
+        url,
+        payload,
+        auth=(account_sid, auth_token),
+        timeout=15.0,
+    )
+    if not response.ok:
+        safe_error = _redact_token(response.error, auth_token) if auth_token else response.error
+        logger.warning("[whatsapp] twilio post exception: %s", safe_error)
+        return False, safe_error, ""
 
     if response.status_code not in (200, 201):
-        if parsed:
-            error_message = str(
-                parsed.get("message")
-                or parsed.get("error_message")
-                or f"HTTP {response.status_code}"
-            )
-        else:
-            error_message = response.text or f"HTTP {response.status_code}"
-        error_message = _redact_token(error_message, auth_token)
-        logger.warning("[whatsapp] twilio post failed: %s", error_message)
-        return False, error_message, ""
+        error_message = str(
+            response.data.get("message")
+            or response.data.get("error_message")
+            or f"HTTP {response.status_code}"
+        )
+        safe_error = _redact_token(error_message, auth_token) if auth_token else error_message
+        logger.warning("[whatsapp] twilio post failed: %s", safe_error)
+        return False, safe_error, ""
 
-    message_id = str(parsed.get("sid") or "")
+    message_id = str(response.data.get("sid") or "")
     return True, "", message_id
+
+
+def _redact_token(text: str, token: str) -> str:
+    """Replace access token with <redacted> to prevent accidental log leakage."""
+    if token and token in text:
+        return text.replace(token, "<redacted>")
+    return text
 
 
 def send_whatsapp_report(

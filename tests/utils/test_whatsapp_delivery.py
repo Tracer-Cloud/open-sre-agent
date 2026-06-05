@@ -28,7 +28,7 @@ def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -
         captured.update(kwargs)
         return _Resp()
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+1234567890",
@@ -51,7 +51,7 @@ def test_post_whatsapp_message_twilio_transport_failure(monkeypatch: pytest.Monk
     def _fake_post(*args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("Connection refused")
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", _fake_post)
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+123",
@@ -75,7 +75,7 @@ def test_post_whatsapp_message_twilio_api_error(monkeypatch: pytest.MonkeyPatch)
         def json() -> dict[str, Any]:
             return {"message": "Invalid 'From' parameter"}
 
-    monkeypatch.setattr("app.utils.whatsapp_delivery.httpx.post", lambda *_a, **_kw: _Resp())
+    monkeypatch.setattr("app.utils.delivery_transport.httpx.post", lambda *_a, **_kw: _Resp())
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+123",

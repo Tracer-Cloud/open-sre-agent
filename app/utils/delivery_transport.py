@@ -17,16 +17,38 @@ completed without raising; callers then inspect ``status_code`` and
 ``data``/``text`` to apply provider semantics (e.g. ``data["ok"]`` for
 Slack, ``status_code in (200, 201)`` for Discord, ``status_code == 200``
 for Telegram).
+
+Retry behaviour
+---------------
+Transient failures (429, 502, 503, 504, network errors) are retried with
+jittered exponential backoff. Client errors (4xx) are never retried.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import logging
+import random
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_INITIAL_BACKOFF_SEC = 2.0
+
+# Retryable statuses (429, 502, 503, 504) and transient exception types.
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 502, 503, 504})
+_TRANSIENT_EXC_TYPES: tuple[type[Exception], ...] = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    httpx.RemoteProtocolError,
+    httpx.TransportError,
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +94,101 @@ class DeliveryResponse:
             object.__setattr__(self, "data", MappingProxyType(dict(self.data)))
 
 
+def is_retryable_response(response: DeliveryResponse) -> bool:
+    """True for transport exceptions and 429/502/503/504; False for client errors."""
+    if not response.ok:
+        return response.exc_type in {
+            "TimeoutException",
+            "ConnectError",
+            "RemoteProtocolError",
+            "TransportError",
+        }
+    return response.status_code in _RETRYABLE_STATUS_CODES
+
+
+def delivery_retry(
+    fn: Callable[[], DeliveryResponse],
+    *,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
+    label: str = "delivery",
+) -> DeliveryResponse:
+    """Invoke fn with jittered exponential backoff on transient failures."""
+    backoff = initial_backoff_sec
+    for attempt in range(max_attempts):
+        response = fn()
+
+        if is_retryable_response(response) and attempt < max_attempts - 1:
+            sleep_sec = random.uniform(0.0, backoff)  # noqa: S311
+            logger.warning(
+                "[%s] transient failure (attempt %d/%d, backoff=%.1fs, "
+                "status=%s exc=%s): %s",
+                label,
+                attempt + 1,
+                max_attempts,
+                sleep_sec,
+                response.status_code,
+                response.exc_type or "-",
+                response.error or response.text[:100],
+            )
+            time.sleep(sleep_sec)
+            backoff *= 2
+            continue
+
+        if attempt > 0:
+            logger.info(
+                "[%s] delivered on attempt %d/%d",
+                label,
+                attempt + 1,
+                max_attempts,
+            )
+        return response
+
+    logger.warning(
+        "[%s] all %d attempts exhausted; last error: %s",
+        label,
+        max_attempts,
+        response.error or response.text[:200],
+    )
+    return response  # type: ignore[return-value]  # last response from loop
+
+
+def _post_json_once(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: float = 15.0,
+    follow_redirects: bool = False,
+) -> DeliveryResponse:
+    try:
+        response = httpx.post(
+            url,
+            json=payload,
+            headers=headers or {},
+            timeout=timeout,
+            follow_redirects=follow_redirects,
+        )
+    except Exception as exc:
+        return DeliveryResponse(ok=False, error=str(exc), exc_type=type(exc).__name__)
+
+    text = response.text
+    data: dict[str, Any] = {}
+    try:
+        parsed = response.json()
+        if isinstance(parsed, dict):
+            data = parsed
+    except Exception:
+        pass
+
+    return DeliveryResponse(
+        ok=True,
+        status_code=response.status_code,
+        data=data,
+        text=text,
+    )
+
+
 def post_json(
     url: str,
     payload: dict[str, Any],
@@ -79,6 +196,8 @@ def post_json(
     headers: dict[str, str] | None = None,
     timeout: float = 15.0,
     follow_redirects: bool = False,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
 ) -> DeliveryResponse:
     """POST ``payload`` as JSON to ``url`` and return a normalized result.
 
@@ -98,6 +217,8 @@ def post_json(
             default to match Slack/Discord/Telegram REST APIs (which never
             redirect on success). Slack incoming webhooks and the NextJS
             ``/api/slack`` proxy enable it.
+        max_attempts: Max HTTP attempts (default 3).
+        initial_backoff_sec: Initial backoff before first retry (doubles per attempt, default 2.0).
 
     Returns:
         ``DeliveryResponse`` with ``ok``, ``status_code``, ``data``,
@@ -105,30 +226,69 @@ def post_json(
         non-fatal: ``data`` falls back to ``{}`` and ``text`` always
         carries the raw body.
     """
+    def _request_fn() -> DeliveryResponse:
+        return _post_json_once(
+            url, payload, headers=headers, timeout=timeout, follow_redirects=follow_redirects
+        )
+    return delivery_retry(_request_fn, max_attempts=max_attempts, initial_backoff_sec=initial_backoff_sec, label="json")
+
+
+def _post_form_once(
+    url: str,
+    data: dict[str, str],
+    *,
+    auth: tuple[str, str] | None = None,
+    timeout: float = 15.0,
+) -> DeliveryResponse:
     try:
         response = httpx.post(
             url,
-            json=payload,
-            headers=headers or {},
+            data=data,
+            auth=auth,
             timeout=timeout,
-            follow_redirects=follow_redirects,
+            follow_redirects=False,
         )
     except Exception as exc:
         return DeliveryResponse(ok=False, error=str(exc), exc_type=type(exc).__name__)
 
     text = response.text
-    data: dict[str, Any] = {}
+    parsed_data: dict[str, Any] = {}
     try:
         parsed = response.json()
         if isinstance(parsed, dict):
-            data = parsed
+            parsed_data = parsed
     except Exception:
-        # non-JSON body is permitted; fall through with empty data
         pass
 
     return DeliveryResponse(
         ok=True,
         status_code=response.status_code,
-        data=data,
+        data=parsed_data,
         text=text,
     )
+
+
+def post_form(
+    url: str,
+    data: dict[str, str],
+    *,
+    auth: tuple[str, str] | None = None,
+    timeout: float = 15.0,
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    initial_backoff_sec: float = DEFAULT_INITIAL_BACKOFF_SEC,
+) -> DeliveryResponse:
+    """POST form-encoded data with automatic retry. Supports HTTP Basic Auth."""
+    def _request_fn() -> DeliveryResponse:
+        return _post_form_once(url, data, auth=auth, timeout=timeout)
+    return delivery_retry(_request_fn, max_attempts=max_attempts, initial_backoff_sec=initial_backoff_sec, label="form")
+
+
+__all__ = [
+    "DEFAULT_MAX_ATTEMPTS",
+    "DEFAULT_INITIAL_BACKOFF_SEC",
+    "DeliveryResponse",
+    "delivery_retry",
+    "is_retryable_response",
+    "post_form",
+    "post_json",
+]
