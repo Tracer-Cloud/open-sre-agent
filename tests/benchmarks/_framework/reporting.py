@@ -309,6 +309,151 @@ def _mean_with_ci(
 
 
 # --------------------------------------------------------------------------- #
+# Decomposition — "where does the accuracy go?" (shared md/html data)          #
+# --------------------------------------------------------------------------- #
+
+_PRIMARY_MODE = "opensre+llm"
+_CONTROL_MODE = "llm_alone"
+
+
+def _control_contrast_rows(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[tuple[str, float, float, float, int, str]]:
+    """Per-LLM paired control delta on a1: opensre+llm − llm_alone.
+
+    Returns ``(llm, mean_delta, lo, hi, n_paired, verdict)`` for LLMs that
+    ran BOTH arms. Empty when the control arm wasn't run.
+    """
+    rows: list[tuple[str, float, float, float, int, str]] = []
+    for llm in sorted(by_lm.keys()):
+        modes = by_lm[llm]
+        if _PRIMARY_MODE not in modes or _CONTROL_MODE not in modes:
+            continue
+        deltas = _paired_scenario_deltas(cells, llm, "a1", _PRIMARY_MODE, _CONTROL_MODE)
+        mean, lo, hi, n = _mean_with_ci(deltas)
+        if n < 2:
+            verdict = "too few paired scenarios"
+        elif lo <= 0.0 <= hi:
+            verdict = "no significant effect (CI contains 0)"
+        elif mean > 0:
+            verdict = "opensre helps"
+        else:
+            verdict = "opensre hurts"
+        rows.append((llm, mean, lo, hi, n, verdict))
+    return rows
+
+
+def _category_a1(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    llm: str,
+    mode: str,
+) -> dict[str, tuple[float, int]]:
+    """Mean a1 per fault_category for one (llm, mode), with scenario count."""
+    cells = by_lm.get(llm, {}).get(mode, [])
+    by_cat: dict[str, list[dict[str, Any]]] = {}
+    for cell in cells:
+        by_cat.setdefault(_cell_category(cell), []).append(cell)
+    out: dict[str, tuple[float, int]] = {}
+    for cat, cat_cells in by_cat.items():
+        scen_vals = _scenario_means(cat_cells, "a1")
+        mean, _, _, n = _mean_with_ci(scen_vals)
+        out[cat] = (mean, n)
+    return out
+
+
+def _render_decomposition_markdown(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[str]:
+    """Track-2 decomposition: control delta, localization-vs-labeling, by category."""
+    if not by_lm:
+        return []
+    lines: list[str] = []
+    lines.append("## Decomposition — where the accuracy goes")
+    lines.append("")
+
+    # 1. Control contrast (the number that isolates opensre's contribution)
+    lines.append("### Control contrast — A@1(opensre+llm) − A@1(llm_alone), same model")
+    lines.append("")
+    contrast = _control_contrast_rows(cells, by_lm)
+    if not contrast:
+        lines.append(
+            "_No control arm in this run — add `llm_alone` to `modes` so the "
+            "delta that isolates opensre's policy (vs the model's intrinsic "
+            "skill) can be computed. This is the single most important number._"
+        )
+    else:
+        lines.append("| LLM | Δ A@1 (paired) | 95% CI | n | verdict |")
+        lines.append("|---|---|---|---|---|")
+        for llm, mean, lo, hi, n, verdict in contrast:
+            lines.append(
+                f"| `{llm}` | {mean:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {n} | {verdict} |"
+            )
+        lines.append("")
+        lines.append(
+            "_Paired per-scenario difference (seeds averaged first). A CI that "
+            "contains 0 means opensre's pipeline is statistically indistinguishable "
+            "from bare tool-use on this model._"
+        )
+    lines.append("")
+
+    # 2. Localization vs labeling (opensre+llm) — is it finding the right place?
+    has_decomp = any(
+        _per_cell_metric(by_lm[llm].get(_PRIMARY_MODE, []), m)
+        for llm in by_lm
+        for m in ("object_a1", "partial_a1")
+    )
+    if has_decomp:
+        lines.append("### Localization vs labeling (opensre+llm)")
+        lines.append("")
+        lines.append("| LLM | a1 (triple) | object_a1 (component) | partial_a1 (relaxed) |")
+        lines.append("|---|---|---|---|")
+        for llm in sorted(by_lm.keys()):
+            op_cells = by_lm[llm].get(_PRIMARY_MODE, [])
+            vals = []
+            for m in ("a1", "object_a1", "partial_a1"):
+                mean, _, _, n = _mean_with_ci(_scenario_means(op_cells, m))
+                vals.append(f"{mean:.2f}" if n else "—")
+            lines.append(f"| `{llm}` | {vals[0]} | {vals[1]} | {vals[2]} |")
+        lines.append("")
+        lines.append(
+            "_If `object_a1` ≫ `a1`, opensre finds the right component but "
+            "mislabels the root cause — a predictor/translation problem, not a "
+            "reasoning one. If both are low, the investigation missed the place._"
+        )
+        lines.append("")
+
+    # 3. Per fault-category A@1 (opensre+llm) — vs paper Fig. 3 difficulty
+    categories = sorted(
+        {_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE}
+    )
+    if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
+        lines.append("### Per fault-category A@1 (opensre+llm)")
+        lines.append("")
+        header = "| LLM | " + " | ".join(categories) + " |"
+        sep = "|" + "|".join(["---"] * (len(categories) + 1)) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for llm in sorted(by_lm.keys()):
+            cat_map = _category_a1(by_lm, llm, _PRIMARY_MODE)
+            row = [f"`{llm}`"]
+            for cat in categories:
+                mean, n = cat_map.get(cat, (0.0, 0))
+                row.append(f"{mean:.2f} (n={n})" if n else "—")
+            lines.append("| " + " | ".join(row) + " |")
+        lines.append("")
+        lines.append(
+            "_Paper Fig. 3: Startup/Runtime are easy (A@1 > 0.65), "
+            "Admission/Performance are hard (A@1 < 0.36). Losing only where the "
+            "paper loses = corpus difficulty; losing broadly = opensre._"
+        )
+        lines.append("")
+
+    return lines
+
+
+# --------------------------------------------------------------------------- #
 # Markdown rendering                                                          #
 # --------------------------------------------------------------------------- #
 
@@ -365,26 +510,27 @@ def _render_markdown(
         "statistically indistinguishable."
     )
     lines.append("")
-    by_llm = _cells_by_llm(cells)
-    if not by_llm:
+    by_lm = _cells_by_llm_mode(cells)
+    if not by_lm:
         lines.append("_no cells executed_")
     else:
-        header = "| LLM | source | n | " + " | ".join(_PAPER_COMPARABLE_METRICS) + " |"
+        header = "| LLM | variant | n | " + " | ".join(_PAPER_COMPARABLE_METRICS) + " |"
         sep = "|" + "|".join(["---"] * (len(_PAPER_COMPARABLE_METRICS) + 3)) + "|"
         lines.append(header)
         lines.append(sep)
-        for llm in sorted(by_llm.keys()):
-            llm_cells = by_llm[llm]
-            n_scen = len({c.get("case", {}).get("case_id", "?") for c in llm_cells})
-            row = [f"`{llm}`", "ours", str(n_scen)]
-            for metric in _PAPER_COMPARABLE_METRICS:
-                scen_vals = _scenario_means(llm_cells, metric)
-                mean, lo, hi, _ = _mean_with_ci(scen_vals)
-                if metric in ("a1", "a3") and len(scen_vals) >= 2:
-                    row.append(f"{mean:.2f} [{lo:.2f}–{hi:.2f}]")
-                else:
-                    row.append(f"{mean:.2f}")
-            lines.append("| " + " | ".join(row) + " |")
+        for llm in sorted(by_lm.keys()):
+            for mode in sorted(by_lm[llm].keys()):
+                mode_cells = by_lm[llm][mode]
+                n_scen = len({c.get("case", {}).get("case_id", "?") for c in mode_cells})
+                row = [f"`{llm}`", mode, str(n_scen)]
+                for metric in _PAPER_COMPARABLE_METRICS:
+                    scen_vals = _scenario_means(mode_cells, metric)
+                    mean, lo, hi, _ = _mean_with_ci(scen_vals)
+                    if metric in ("a1", "a3") and len(scen_vals) >= 2:
+                        row.append(f"{mean:.2f} [{lo:.2f}–{hi:.2f}]")
+                    else:
+                        row.append(f"{mean:.2f}")
+                lines.append("| " + " | ".join(row) + " |")
             baseline = _match_paper_baseline(llm)
             if baseline is not None:
                 prow = [f"`{llm}`", "paper-Base", "452"]
@@ -401,19 +547,20 @@ def _render_markdown(
                 lines.append("| " + " | ".join(irow) + " |")
     lines.append("")
     lines.append(
-        "_`paper-Base` = zero-shot agent (Table 4). `paper-ICL` = 3 retrieved "
-        "in-context traces, **no agent framework** (Table 5) — the "
+        "_`opensre+llm` is the primary arm; `llm_alone` is the same-model "
+        "control. `paper-Base` = zero-shot agent (Table 4); `paper-ICL` = 3 "
+        "retrieved in-context traces, **no agent framework** (Table 5) — the "
         "cost-equivalent baseline opensre must beat. ICL exists only for the "
         "three models the paper ran it on._"
     )
 
+    # --- Decomposition: where the accuracy goes (Track 2) ---
+    lines.extend(_render_decomposition_markdown(cells, by_lm))
+
     # --- opensre-only diagnostics (NOT in the paper, NOT comparable) ---
-    if by_llm:
-        present = [
-            m
-            for m in _OPENSRE_ONLY_METRICS
-            if any(_per_cell_metric(cs, m) for cs in by_llm.values())
-        ]
+    if by_lm:
+        flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+        present = [m for m in _OPENSRE_ONLY_METRICS if _per_cell_metric(flat, m)]
         if present:
             lines.append("### opensre-only diagnostics (not in the paper — do not compare)")
             lines.append("")
@@ -424,18 +571,19 @@ def _render_markdown(
                 "heuristic validity probes. Means shown for internal tracking only._"
             )
             lines.append("")
-            header = "| LLM | " + " | ".join(present) + " |"
-            sep = "|" + "|".join(["---"] * (len(present) + 1)) + "|"
+            header = "| LLM | variant | " + " | ".join(present) + " |"
+            sep = "|" + "|".join(["---"] * (len(present) + 2)) + "|"
             lines.append(header)
             lines.append(sep)
-            for llm in sorted(by_llm.keys()):
-                llm_cells = by_llm[llm]
-                row = [f"`{llm}`"]
-                for metric in present:
-                    scen_vals = _scenario_means(llm_cells, metric)
-                    mean, _, _, _ = _mean_with_ci(scen_vals)
-                    row.append(f"{mean:.2f}")
-                lines.append("| " + " | ".join(row) + " |")
+            for llm in sorted(by_lm.keys()):
+                for mode in sorted(by_lm[llm].keys()):
+                    mode_cells = by_lm[llm][mode]
+                    row = [f"`{llm}`", mode]
+                    for metric in present:
+                        scen_vals = _scenario_means(mode_cells, metric)
+                        mean, _, _, n = _mean_with_ci(scen_vals)
+                        row.append(f"{mean:.2f}" if n else "—")
+                    lines.append("| " + " | ".join(row) + " |")
             lines.append("")
 
     # --- Per-stratum × per-LLM detail (Mechanism 4) ---
@@ -646,29 +794,31 @@ def _render_html(
         "when our run is single-shot and full-corpus; if the CI overlaps the "
         "paper value, the two are statistically indistinguishable.</p></div>"
     )
-    by_llm = _cells_by_llm(cells)
-    if not by_llm:
+    by_lm = _cells_by_llm_mode(cells)
+    if not by_lm:
         parts.append("<p><em>no cells executed</em></p>")
     else:
-        parts.append("<table><thead><tr><th>LLM</th><th>source</th><th>n</th>")
+        parts.append("<table><thead><tr><th>LLM</th><th>variant</th><th>n</th>")
         for m in _PAPER_COMPARABLE_METRICS:
             parts.append(f"<th>{esc(m)}</th>")
         parts.append("</tr></thead><tbody>")
-        for llm in sorted(by_llm.keys()):
-            llm_cells = by_llm[llm]
-            n_scen = len({c.get("case", {}).get("case_id", "?") for c in llm_cells})
-            parts.append(
-                f'<tr><td><code>{esc(llm)}</code></td><td>ours</td><td class="metric">{n_scen}</td>'
-            )
-            for m in _PAPER_COMPARABLE_METRICS:
-                scen_vals = _scenario_means(llm_cells, m)
-                mean, lo, hi, _ = _mean_with_ci(scen_vals)
-                if m in ("a1", "a3") and len(scen_vals) >= 2:
-                    cell_txt = f"{mean:.2f}<br><small>[{lo:.2f}–{hi:.2f}]</small>"
-                else:
-                    cell_txt = f"{mean:.2f}"
-                parts.append(f'<td class="metric">{cell_txt}</td>')
-            parts.append("</tr>")
+        for llm in sorted(by_lm.keys()):
+            for mode in sorted(by_lm[llm].keys()):
+                mode_cells = by_lm[llm][mode]
+                n_scen = len({c.get("case", {}).get("case_id", "?") for c in mode_cells})
+                parts.append(
+                    f"<tr><td><code>{esc(llm)}</code></td>"
+                    f'<td>{esc(mode)}</td><td class="metric">{n_scen}</td>'
+                )
+                for m in _PAPER_COMPARABLE_METRICS:
+                    scen_vals = _scenario_means(mode_cells, m)
+                    mean, lo, hi, _ = _mean_with_ci(scen_vals)
+                    if m in ("a1", "a3") and len(scen_vals) >= 2:
+                        cell_txt = f"{mean:.2f}<br><small>[{lo:.2f}–{hi:.2f}]</small>"
+                    else:
+                        cell_txt = f"{mean:.2f}"
+                    parts.append(f'<td class="metric">{cell_txt}</td>')
+                parts.append("</tr>")
             baseline = _match_paper_baseline(llm)
             if baseline is not None:
                 parts.append(
@@ -695,33 +845,38 @@ def _render_html(
                 parts.append("</tr>")
         parts.append("</tbody></table>")
         parts.append(
-            "<p><small><code>paper-Base</code> = zero-shot agent (Table 4). "
+            "<p><small><code>opensre+llm</code> is the primary arm; "
+            "<code>llm_alone</code> is the same-model control. "
+            "<code>paper-Base</code> = zero-shot agent (Table 4); "
             "<code>paper-ICL</code> = 3 retrieved in-context traces, <strong>no "
             "agent framework</strong> (Table 5) — the cost-equivalent baseline "
             "opensre must beat. ICL exists only for the three models the paper "
             "ran it on.</small></p>"
         )
 
+        # Decomposition (Track 2)
+        parts.extend(_render_decomposition_html(cells, by_lm, esc))
+
         # opensre-only diagnostics (segregated — not paper-comparable)
-        present = [
-            m
-            for m in _OPENSRE_ONLY_METRICS
-            if any(_per_cell_metric(cs, m) for cs in by_llm.values())
-        ]
+        flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+        present = [m for m in _OPENSRE_ONLY_METRICS if _per_cell_metric(flat, m)]
         if present:
             parts.append("<h3>opensre-only diagnostics (not in the paper — do not compare)</h3>")
-            parts.append("<table><thead><tr><th>LLM</th>")
+            parts.append("<table><thead><tr><th>LLM</th><th>variant</th>")
             for m in present:
                 parts.append(f"<th>{esc(m)}</th>")
             parts.append("</tr></thead><tbody>")
-            for llm in sorted(by_llm.keys()):
-                llm_cells = by_llm[llm]
-                parts.append(f"<tr><td><code>{esc(llm)}</code></td>")
-                for m in present:
-                    scen_vals = _scenario_means(llm_cells, m)
-                    mean, _, _, _ = _mean_with_ci(scen_vals)
-                    parts.append(f'<td class="metric">{mean:.2f}</td>')
-                parts.append("</tr>")
+            for llm in sorted(by_lm.keys()):
+                for mode in sorted(by_lm[llm].keys()):
+                    mode_cells = by_lm[llm][mode]
+                    parts.append(
+                        f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>"
+                    )
+                    for m in present:
+                        scen_vals = _scenario_means(mode_cells, m)
+                        mean, _, _, n = _mean_with_ci(scen_vals)
+                        parts.append(f'<td class="metric">{mean:.2f}</td>' if n else "<td>—</td>")
+                    parts.append("</tr>")
             parts.append("</tbody></table>")
 
     # Per-stratum × per-LLM
