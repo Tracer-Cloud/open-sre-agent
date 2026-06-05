@@ -123,6 +123,53 @@ def test_bench_agent_filter_drops_everything_when_no_bench_tools_registered() ->
     assert BenchInvestigationAgent()._filter_tools(only_prod) == []
 
 
+# --------------------------------------------------------------------------- #
+# BaselineLLMAloneAgent — control arm                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_baseline_agent_is_subclass_of_production_agent() -> None:
+    """Same agent_class injection pattern as BenchInvestigationAgent — the
+    runner doesn't need to know about a separate baseline subclass tree."""
+    from tests.benchmarks.cloudopsbench.bench_agent import BaselineLLMAloneAgent
+
+    assert issubclass(BaselineLLMAloneAgent, ConnectedInvestigationAgent)
+
+
+def test_baseline_agent_uses_default_should_accept_conclusion() -> None:
+    """The whole point of the control arm: the LLM's choice to conclude is
+    accepted unconditionally, with NO MIN_TOOL_CALLS floor. Otherwise the
+    baseline isn't measuring "vanilla LLM termination policy" — it's
+    measuring opensre+llm with the floor removed, which is a different
+    counterfactual. Pin this so a future hook addition can't silently turn
+    the baseline back into a flavor of opensre+llm."""
+    from tests.benchmarks.cloudopsbench.bench_agent import BaselineLLMAloneAgent
+
+    agent = BaselineLLMAloneAgent()
+    for evidence_count in [0, 1, 5, 50]:
+        accept, nudge = agent._should_accept_conclusion(evidence_count=evidence_count, iteration=0)
+        assert accept is True, (
+            f"BaselineLLMAloneAgent rejected conclusion at evidence_count={evidence_count}; "
+            f"the control arm must accept whatever the LLM decides"
+        )
+        assert nudge is None
+
+
+def test_baseline_agent_uses_same_bench_package_tool_filter_as_bench_agent() -> None:
+    """Fairness invariant: the two modes (opensre+llm and llm_alone) must
+    see the IDENTICAL tool inventory. Any difference in tool surface
+    confounds the "is the difference the agent policy?" question. Pin
+    that both agents filter to the same allowed module prefixes."""
+    from tests.benchmarks.cloudopsbench.bench_agent import BaselineLLMAloneAgent
+
+    bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
+    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
+    inputs = [bench_tool, prod_eks]
+    assert BenchInvestigationAgent()._filter_tools(inputs) == BaselineLLMAloneAgent()._filter_tools(
+        inputs
+    )
+
+
 def test_bench_agent_allowed_prefixes_is_class_attribute_for_override() -> None:
     """Mirrors the MIN_TOOL_CALLS convention — a one-off experiment can
     widen or narrow the prefix tuple without rebuilding the instance or

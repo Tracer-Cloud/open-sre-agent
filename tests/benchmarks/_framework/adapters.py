@@ -286,6 +286,23 @@ class BenchmarkAdapter(ABC):
         """
         return None
 
+    def baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: which agent class to use for the ``llm_alone`` control arm.
+
+        Default ``None`` — the adapter does not support an in-harness baseline,
+        and the runner will refuse a config with ``modes=["llm_alone"]``.
+
+        Override to return an agent class that represents the matched control
+        for this benchmark's headline claim. The control's job is to isolate
+        whichever lever you're attributing lift to — typically: same tool
+        surface, same scoring, but no bench-specific termination policy.
+
+        The runner picks this method for ``llm_alone`` cells and
+        ``investigation_agent_class`` for ``opensre+llm`` cells, then passes
+        the chosen class to ``run_investigation`` exactly the same way.
+        """
+        return None
+
     def format_final_answer(
         self,
         case: BenchmarkCase,  # noqa: ARG002 — used by overrides

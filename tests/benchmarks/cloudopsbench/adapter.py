@@ -40,7 +40,10 @@ from tests.benchmarks._framework.adapters import (
     RunContext,
     RunResult,
 )
-from tests.benchmarks.cloudopsbench.bench_agent import BenchInvestigationAgent
+from tests.benchmarks.cloudopsbench.bench_agent import (
+    BaselineLLMAloneAgent,
+    BenchInvestigationAgent,
+)
 from tests.benchmarks.cloudopsbench.case_loader import (
     BENCHMARK_DIR,
     CloudOpsCase,
@@ -267,16 +270,15 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         }
 
     def build_baseline_tools(self, case: BenchmarkCase) -> dict[str, Any]:
-        """LLM-alone mode is implemented in Phase B (separate workstream).
+        """Tool surface for the LLM-alone control arm.
 
-        Raises NotImplementedError so the runner fails fast and clearly
-        rather than silently scoring a baseline run as opensre.
+        Same replay backend, same per-case integrations, same bench-tool
+        registration the opensre+llm path uses — fairness in tool surface
+        is the entire point of the in-harness baseline. The only difference
+        between the two modes is the agent class (see
+        :meth:`baseline_agent_class`), which carries the policy delta.
         """
-        raise NotImplementedError(
-            "build_baseline_tools is Phase B of the task scope — "
-            "see opensre-benchmark-task-scope.md. Until then, run with "
-            "modes=['opensre+llm'] only."
-        )
+        return self.build_opensre_integrations(case)
 
     def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
         """Score the case using CloudOpsBench's 15 paper metrics.
@@ -331,6 +333,16 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         class via the ``agent_class`` parameter on ``run_investigation``.
         """
         return BenchInvestigationAgent
+
+    def baseline_agent_class(self) -> type[BaselineLLMAloneAgent]:
+        """Agent class for the llm_alone control arm.
+
+        Returns :class:`BaselineLLMAloneAgent` — same bench-package tool
+        filter as :class:`BenchInvestigationAgent` (so the comparison is
+        fair on tool surface) but without the MIN_TOOL_CALLS=8 floor (so
+        the comparison isolates the lever).
+        """
+        return BaselineLLMAloneAgent
 
     def format_final_answer(
         self,

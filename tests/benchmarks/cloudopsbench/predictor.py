@@ -159,9 +159,38 @@ _KNOWN_NODES_BY_NORM: dict[str, str] = {n.lower(): n for n in _FAULT_OBJECT_NODE
 _KNOWN_NAMESPACES_BY_NORM: dict[str, str] = {n.lower(): n for n in _FAULT_OBJECT_NAMESPACES}
 
 # Conservative: only snap a root_cause when the closest canonical token is a
-# clear typo/spacing variant, not a different concept. 0.8 catches the
-# observed drift while leaving genuinely-different guesses untouched.
+# clear typo/spacing variant. 0.8 catches the observed drift (e.g.
+# ``missing_secrectbinding`` → ``missing_secret_binding`` at 0.95,
+# ``network_packet_loss`` → ``node_network_packet_loss`` at 0.88) without
+# pulling totally unrelated tokens. Note that ratio alone cannot separate
+# every legitimate snap from a cross-concept jump — see
+# ``_BLOCKED_CONCEPT_PAIRS`` below for the second guard.
 _ROOT_CAUSE_SNAP_CUTOFF = 0.8
+
+# Word stems whose canonicals exist in pairs and differ by only a few chars,
+# making them susceptible to difflib false-positive snapping. The 11:46 run
+# emitted ``readiness_probe_incorrect_timing`` (no canonical for it) which
+# scores 0.889 against ``liveness_probe_incorrect_timing`` — above the snap
+# cutoff but semantically a different probe type. Raising the global cutoff
+# to block this pair would break the legitimate
+# ``network_packet_loss`` → ``node_network_packet_loss`` snap (0.884), so we
+# express the constraint as an explicit blocklist instead. Extend when other
+# concept pairs surface from future runs.
+_BLOCKED_CONCEPT_PAIRS: tuple[tuple[str, str], ...] = (("readiness", "liveness"),)
+
+
+def _crosses_blocked_concept_boundary(predicted_norm: str, snapped: str) -> bool:
+    """Refuse a snap that crosses a known concept boundary (readiness↔liveness)."""
+    snapped_lower = snapped.lower()
+    for a, b in _BLOCKED_CONCEPT_PAIRS:
+        # predicted contains stem A AND target contains stem B (and not A) →
+        # the snap is rewriting one concept onto a sibling. Symmetric check
+        # via the for-loop iterating both orderings.
+        if a in predicted_norm and b in snapped_lower and a not in snapped_lower:
+            return True
+        if b in predicted_norm and a in snapped_lower and b not in snapped_lower:
+            return True
+    return False
 
 
 def _snap_root_cause(raw: str) -> str:
@@ -169,8 +198,10 @@ def _snap_root_cause(raw: str) -> str:
 
     Resolution order: exact (after lower + underscore normalization) →
     ``namespace_*`` admission tokens pass through → closest canonical token by
-    difflib ratio above ``_ROOT_CAUSE_SNAP_CUTOFF``. Falls back to the cleaned
-    input when nothing is close enough (no regression vs. prior behavior).
+    difflib ratio above ``_ROOT_CAUSE_SNAP_CUTOFF`` AND not crossing a
+    blocked concept boundary. Falls back to the cleaned input when nothing
+    is close enough OR the closest match would cross a blocked boundary
+    (no regression vs. the pre-snap behavior).
     """
     cleaned = raw.strip()
     if not cleaned:
@@ -187,6 +218,13 @@ def _snap_root_cause(raw: str) -> str:
     )
     if match:
         snapped = _ROOT_CAUSE_BY_NORM[match[0]]
+        if _crosses_blocked_concept_boundary(norm, snapped):
+            logger.info(
+                "[predictor] refused cross-concept snap %r → %r (blocked pair)",
+                cleaned,
+                snapped,
+            )
+            return cleaned
         if snapped.lower() != norm:
             logger.info("[predictor] snapped root_cause %r → %r", cleaned, snapped)
         return snapped

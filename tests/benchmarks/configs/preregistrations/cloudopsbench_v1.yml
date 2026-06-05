@@ -8,7 +8,7 @@
 # YAUHEN: search for "YAUHEN" comments below — those are the spots that need
 # your judgment before commit. Don't ship targets you can't defend in a PR.
 
-cycle: cloudopsbench-v1-2026-05-XX     # YAUHEN: stamp the actual run date
+cycle: cloudopsbench-v1-2026-06-05      # stamped at commit; locks the cycle identity
 
 # --------------------------------------------------------------------------- #
 # Target corpus + version pinning — all values must be confirmed at commit    #
@@ -16,11 +16,81 @@ cycle: cloudopsbench-v1-2026-05-XX     # YAUHEN: stamp the actual run date
 target_corpus:
   benchmark: cloudopsbench
   hf_dataset: tracer-cloud/cloud-ops-bench-dataset
-  hf_revision: main                    # YAUHEN: pin to specific HF commit SHA
+  # Pinned HF commit SHA — matches BENCH_CORPUS_HF_REVISION in infra/bench/
+  # (the Fargate task pulls from s3://<corpus_bucket>/<this_sha>/). Mirrored
+  # via `make mirror-cloudopsbench-s3` from a developer machine.
+  hf_revision: ce0ded4f196f01e176cf1d69ec15c2db42b2a677
   paper: arXiv:2603.00468v1
   case_count: 452
-opensre_sha: REPLACE_AT_COMMIT_TIME    # YAUHEN: stamp `git rev-parse HEAD`
+# opensre_sha is stamped by the runner from `git rev-parse HEAD` at run time
+# and copied into provenance.json. Leave the literal placeholder here so the
+# integrity gate catches a non-git checkout (e.g. dev-mode laptop run) loudly
+# instead of silently emitting a report with sha = "(no-git)".
+opensre_sha: REPLACE_AT_COMMIT_TIME
 framework_version: 0.1.0
+
+# --------------------------------------------------------------------------- #
+# Comparison protocol — what counts as the primary contrast                     #
+# --------------------------------------------------------------------------- #
+# The paper (Table 4) reports each model in a "Base" (zero-shot) agent setting
+# over the full 452-case corpus, single run per case, where A@k is a per-case
+# MEAN and a hit requires a strict triple match of <Stage, Component, Root
+# Cause> (paper § 4.2.1). Two consequences are LOCKED here:
+#
+#   1. PRIMARY contrast is INTERNAL and same-model: opensre+llm vs llm_alone
+#      for the identical model_version. This isolates opensre's contribution
+#      from the model's intrinsic ability. The paper Base/ICL numbers are an
+#      EXTERNAL reference, not the primary contrast (our harness, predictor,
+#      and snapshot adapter differ from the paper's CrewAI setup, so absolute
+#      cross-harness numbers are not strictly comparable).
+#
+#   2. The honest ceiling is NOT the paper "Base" number. The paper shows a
+#      cheap In-Context-Learning baseline (3 retrieved traces) lifts GPT-4o
+#      0.49 -> 0.70 with NO agent framework (paper Table 5, § 4.6). Any opensre
+#      lift over Base must therefore be reported ALONGSIDE the ICL number so a
+#      reader can judge whether opensre's structural cost buys more than 3
+#      in-context demos would. opensre must also NOT inject ICL-style
+#      demonstrations into its own prompts, or the comparison is confounded.
+comparison_protocol:
+  primary_contrast: "opensre+llm vs llm_alone (same model_version)"
+  external_reference: "paper Table 4 Base; paper Table 5 ICL (report both)"
+  headline_aggregation: mean           # matches paper A@k; medians are a side view
+  headline_stratum: single-shot        # consistency-selected (best-of-N) is NOT the headline
+  triple_match_required: true          # <Stage/taxonomy, Component/object, Root Cause>
+  ceiling_caveat: "paper ICL (GPT-4o 0.70) is the cost-equivalent baseline to beat, not Base 0.49"
+
+# --------------------------------------------------------------------------- #
+# Statistical power — committed BEFORE the run so targets are falsifiable       #
+# --------------------------------------------------------------------------- #
+# A target is only meaningful if the run can actually detect it. For a
+# two-proportion test (α=0.05 two-sided, 80% power) against a fixed baseline
+# near p≈0.5, the scenarios-per-arm required are approximately:
+#     detect +0.05 absolute A@1  ->  ~1500 scenarios   (infeasible; corpus=452)
+#     detect +0.10 absolute A@1  ->  ~385 scenarios    (~ full corpus)
+#     detect +0.15 absolute A@1  ->  ~170 scenarios
+#     detect +0.20 absolute A@1  ->  ~95 scenarios
+# Repeated SEEDS do not add power — the scenario is the independent unit, so CIs
+# are scenario-clustered. The N=30 pilot CANNOT resolve any of the hypothesis
+# targets below; it is exploratory only. A SHIPPABLE cycle MUST run the full
+# corpus (limit: null) so the +0.10..+0.15 targets become detectable.
+statistical_power:
+  independent_unit: scenario           # seeds are correlated; cluster on case_id
+  alpha: 0.05
+  power: 0.80
+  min_scenarios_for_ship: 452          # full corpus; pilots (limit<452) are exploratory
+  pilot_is_exploratory: true
+  ci_method: scenario-clustered bootstrap (2000 resamples)
+
+# --------------------------------------------------------------------------- #
+# Provenance requirements — what makes a run promotable to a baseline           #
+# --------------------------------------------------------------------------- #
+# The audit found a run with opensre_sha="(no-git)" and dev-mode gates skipped.
+# Such runs are valid for iteration but MUST NOT be promoted to a baseline.
+provenance_requirements:
+  committed_checkout_required: true    # opensre_sha must be a real SHA, not "(no-git)"/"-dirty"
+  dev_mode_forbidden_for_baseline: true  # integrity gates must run (no --dev) to ship
+  prereg_sha_pinned_in_report: true    # provenance.json must carry this file's sha256
+  model_version_pinned: true           # gpt-4o / gpt-5 resolved to dated snapshots, verified post-run
 
 # --------------------------------------------------------------------------- #
 # Per-model hypotheses — what we expect, why, before seeing any data           #
@@ -180,8 +250,8 @@ stopping_rules:
 # --------------------------------------------------------------------------- #
 contamination_check:
   data_contamination_checked: true     # adapter flag is set
-  declared_by: yauhen                  # YAUHEN: confirm reviewer name
-  date: 2026-05-XX                     # YAUHEN: stamp date of declaration
+  declared_by: yauhen
+  date: 2026-06-05
   evidence: |
     Cloud-OpsBench was published 2026-02-28 (arXiv:2603.00468v1). All four
     models in this run have training cutoffs documented as PRIOR to this

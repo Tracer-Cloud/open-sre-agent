@@ -100,22 +100,72 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
             WARNING so the registry bug surfaces in the run log instead
             of silently shrinking the bench tool set.
         """
-        kept: list[RegisteredTool] = []
-        dropped: list[str] = []
-        for tool in tools:
-            if not tool.origin_module:
-                logger.warning(
-                    "Bench filter dropping tool %r with empty origin_module — "
-                    "registry bug: tool was constructed without origin_module=. "
-                    "Set it explicitly so the bench can keep it.",
-                    tool.name,
-                )
-                dropped.append(f"{tool.name} (no origin_module)")
-                continue
-            if tool.origin_module.startswith(self.ALLOWED_TOOL_MODULE_PREFIXES):
-                kept.append(tool)
-            else:
-                dropped.append(f"{tool.name} ({tool.origin_module})")
-        if dropped:
-            logger.debug("Bench filter dropped %d tool(s): %s", len(dropped), ", ".join(dropped))
-        return kept
+        return _filter_to_bench_package(tools, self.ALLOWED_TOOL_MODULE_PREFIXES)
+
+
+def _filter_to_bench_package(
+    tools: list[RegisteredTool],
+    allowed_prefixes: tuple[str, ...],
+) -> list[RegisteredTool]:
+    """Shared bench-package tool filter — same policy across all bench agents.
+
+    Both :class:`BenchInvestigationAgent` (the opensre+llm path) and
+    :class:`BaselineLLMAloneAgent` (the llm_alone control arm) must see the
+    same tool surface; the comparison between modes is only fair when the
+    tool inventory is identical. Extracting the filter into a free function
+    keeps that contract enforced by reuse rather than by a "remember to keep
+    these in sync" comment.
+    """
+    kept: list[RegisteredTool] = []
+    dropped: list[str] = []
+    for tool in tools:
+        if not tool.origin_module:
+            logger.warning(
+                "Bench filter dropping tool %r with empty origin_module — "
+                "registry bug: tool was constructed without origin_module=. "
+                "Set it explicitly so the bench can keep it.",
+                tool.name,
+            )
+            dropped.append(f"{tool.name} (no origin_module)")
+            continue
+        if tool.origin_module.startswith(allowed_prefixes):
+            kept.append(tool)
+        else:
+            dropped.append(f"{tool.name} ({tool.origin_module})")
+    if dropped:
+        logger.debug("Bench filter dropped %d tool(s): %s", len(dropped), ", ".join(dropped))
+    return kept
+
+
+class BaselineLLMAloneAgent(ConnectedInvestigationAgent):
+    """LLM-alone control arm for the bench.
+
+    The audit identified this as the single biggest scientific gap in the
+    cycle: without a matched in-harness baseline on the same cases, no
+    "opensre helps" claim is attributable. This subclass is that control.
+
+    What it inherits from :class:`ConnectedInvestigationAgent` (production):
+      - The ReAct loop, evidence accumulation, context-budget enforcement
+      - The default ``_should_accept_conclusion`` hook — accept whatever
+        the LLM decides, no minimum-tool-call floor
+
+    What it overrides:
+      - ``_filter_tools`` — same bench-package whitelist
+        :class:`BenchInvestigationAgent` uses, so the two modes see the
+        IDENTICAL tool inventory and the only difference between them is
+        the bench-specific termination policy (Lever #1's MIN_TOOL_CALLS=8)
+
+    What this measures: the marginal lift from the bench-specific lever
+    (MIN_TOOL_CALLS), not the full opensre-vs-bare-LLM gap. The system
+    prompt and ReAct loop are still opensre's. A truly pure baseline
+    (minimal SRE prompt, no opensre planning structure) is a follow-up;
+    surface this limitation in the report rather than hiding it.
+    """
+
+    ALLOWED_TOOL_MODULE_PREFIXES: ClassVar[tuple[str, ...]] = (_BENCH_TOOL_MODULE_PREFIX,)
+
+    def _filter_tools(
+        self,
+        tools: list[RegisteredTool],
+    ) -> list[RegisteredTool]:
+        return _filter_to_bench_package(tools, self.ALLOWED_TOOL_MODULE_PREFIXES)

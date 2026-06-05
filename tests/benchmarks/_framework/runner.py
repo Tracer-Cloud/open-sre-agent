@@ -17,12 +17,16 @@ Two entry points:
     promoted to a real report.
 
 opensre+LLM mode wires opensre's ``run_investigation`` against the adapter's
-integrations. ``llm_alone`` mode is Phase B; ``run()`` raises if requested.
+integrations + investigation agent. ``llm_alone`` mode (the control arm) wires
+the same per-case tool surface but the adapter's baseline agent class, so the
+contrast isolates opensre's policy delta on a fixed model. The runner refuses
+``modes=["llm_alone"]`` only when the adapter returns ``None`` from
+``baseline_agent_class`` (see ``_run_inner``).
 
-llm_dispatch is not yet implemented — the runner uses whatever LLM opensre
-is configured with via env vars. ``RunResult.model_version`` is set to
-``"(unpinned)"`` accordingly; a future llm_dispatch.py will enable per-cell
-model selection with version pinning.
+llm_dispatch pins the model per cell: the dispatcher activates each LLM, sets
+the provider env, resets opensre's client singletons, and verifies the
+resolved snapshot against ``config.model_versions``. ``RunResult.model_version``
+records what opensre actually resolved to, not what the YAML requested.
 """
 
 from __future__ import annotations
@@ -101,11 +105,12 @@ class RunOutcome:
 class BenchmarkRunner:
     """Drives a single benchmark run end-to-end.
 
-    v1 limitations (will lift as later modules ship):
-      - Serial execution (parallel comes when worker-pool tested)
-      - opensre+llm mode only (llm_alone is Phase B)
-      - No per-cell LLM dispatch (uses opensre's configured LLM)
-      - Stratum reporting is `all` only until Phase D tagging adds seen/unseen
+    Supports: serial or worker-pool execution; both ``opensre+llm`` and the
+    ``llm_alone`` control arm (when the adapter provides a baseline agent);
+    per-cell LLM dispatch with version pinning; and per-stratum reporting
+    (all / seen-shape / unseen-shape / held-out / optimize / consistency-
+    selected). Headline aggregation (mean + scenario-clustered CI) lives in
+    ``reporting.py``; this runner stores per-stratum medians.
     """
 
     def __init__(
@@ -155,11 +160,13 @@ class BenchmarkRunner:
     # ----------------------------------------------------------------------- #
 
     def _run_inner(self, *, dev_mode: bool) -> RunOutcome:
-        # Refuse unsupported modes upfront
-        if "llm_alone" in self.config.modes:
+        # Refuse llm_alone if the adapter declines — keeps the runner generic
+        # over adapters that don't yet ship a matched baseline.
+        if "llm_alone" in self.config.modes and self.adapter.baseline_agent_class() is None:
             raise NotImplementedError(
-                "llm_alone mode is Phase B of the task scope — see "
-                "opensre-benchmark-task-scope.md. Run with modes=['opensre+llm'] only."
+                f"Adapter {self.adapter.name!r} does not implement an llm_alone "
+                "control arm (baseline_agent_class returned None). Run with "
+                "modes=['opensre+llm'] only, or extend the adapter."
             )
 
         # Pre-flight: verify every LLM in config is registered AND that its
@@ -372,7 +379,17 @@ class BenchmarkRunner:
         from app.pipeline.runners import run_investigation
 
         alert = self.adapter.build_alert(case)
-        integrations = self.adapter.build_opensre_integrations(case)
+        # Mode dispatch: opensre+llm uses the adapter's full integration setup
+        # + investigation agent; llm_alone uses the (typically identical) baseline
+        # tool surface + a different agent class. Both go through the same
+        # run_investigation entry point so the rest of the pipeline (format,
+        # score, artifact write) is mode-agnostic.
+        if mode == "llm_alone":
+            integrations = self.adapter.build_baseline_tools(case)
+            agent_class = self.adapter.baseline_agent_class()
+        else:
+            integrations = self.adapter.build_opensre_integrations(case)
+            agent_class = self.adapter.investigation_agent_class()
         started = datetime.now(UTC)
         t0 = time.monotonic()
         ok = True
@@ -383,7 +400,7 @@ class BenchmarkRunner:
             final_state = run_investigation(
                 alert.raw,
                 resolved_integrations=integrations,
-                agent_class=self.adapter.investigation_agent_class(),
+                agent_class=agent_class,
             )
             final_state_dict = dict(final_state)
         except (CostBudgetExceeded, UnknownModel, LLMCreditExhaustedError):
