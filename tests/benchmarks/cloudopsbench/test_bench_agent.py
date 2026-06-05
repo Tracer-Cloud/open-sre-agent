@@ -139,3 +139,39 @@ def test_bench_agent_allowed_prefixes_is_class_attribute_for_override() -> None:
     prod_hermes = _make_registered_tool("HermesLogs", "app.tools.HermesLogsTool")
     filtered = _MixedBench()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool, prod_eks]
+
+
+def test_bench_agent_filter_drops_tool_at_prefix_root_without_submodule() -> None:
+    """Trailing-dot guard: a tool whose origin_module equals the prefix
+    ROOT (no submodule) is dropped, matching the comment on
+    ``_BENCH_TOOL_MODULE_PREFIX``. The registry's pkgutil walk never
+    produces this state for auto-discovered tools, but a direct
+    ``register_external_tool_package`` against a single-file module would —
+    the test pins the documented behavior so future contributors who hit
+    it can find this commit."""
+    at_root = _make_registered_tool(
+        "AtRoot",
+        "tests.benchmarks.cloudopsbench.tools",  # no trailing submodule
+    )
+    bench_submodule = _make_registered_tool(
+        "GetResources", "tests.benchmarks.cloudopsbench.tools.k8s"
+    )
+    filtered = BenchInvestigationAgent()._filter_tools([at_root, bench_submodule])
+    assert filtered == [bench_submodule]
+
+
+def test_bench_agent_filter_warns_on_empty_origin_module(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``origin_module`` defaults to "" on directly-constructed RegisteredTool.
+    Such a tool is dropped silently if we don't surface it — the bench
+    would quietly run with fewer tools and the user would never know.
+    We warn at WARNING so the registry bug shows up in the run log."""
+    no_origin = _make_registered_tool("Orphan", "")
+    bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
+    with caplog.at_level("WARNING"):
+        filtered = BenchInvestigationAgent()._filter_tools([no_origin, bench_tool])
+    assert filtered == [bench_tool]
+    # The warning must name the offending tool so an operator can find it
+    # in the registry.
+    assert any("Orphan" in r.message and "empty origin_module" in r.message for r in caplog.records)
