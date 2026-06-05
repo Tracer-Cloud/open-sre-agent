@@ -383,6 +383,52 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         enriched_diagnosis["top_3_predictions"] = payload["top_3_predictions"]
         return replace(run, final_diagnosis=enriched_diagnosis)
 
+    def select_best_run(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — interface contract
+        runs: list[tuple[RunResult, CaseScore]],
+    ) -> int | None:
+        """Majority vote on the predicted root-cause taxonomy.
+
+        06-05 run analysis showed median a1=0.43 (gpt-4o) and 0.57 (gpt-5)
+        but ORACLE best-of-3=0.83 / 0.80 — a 0.40 / 0.23 consistency gap.
+        Majority vote on ``final_diagnosis.top_3_predictions[0].fault_taxonomy``
+        closes 60% of the gpt-4o gap and 100% of the gpt-5 gap (gpt-5 hits
+        the paper baseline 0.67 exactly). 90% of scenarios had ≥2 of 3
+        seeds agreeing on a taxonomy.
+
+        Algorithm:
+          1. Extract each run's top-1 predicted taxonomy
+            (``final_diagnosis["top_3_predictions"][0]["fault_taxonomy"]``).
+          2. Drop runs with no prediction (predictor failed → empty string).
+          3. Pick the taxonomy with the most votes. Ties broken by earliest
+             run index — deterministic + reproducible.
+          4. Return the index of the earliest run that produced that
+             taxonomy.
+
+        Returns ``None`` only when no run produced any prediction at all —
+        in that case the median ``all`` stratum is the only meaningful view.
+        """
+        if len(runs) <= 1:
+            return 0 if runs else None
+
+        taxonomies: list[str] = []
+        for run, _score in runs:
+            top = (run.final_diagnosis or {}).get("top_3_predictions") or []
+            taxonomies.append(top[0].get("fault_taxonomy", "") if top else "")
+
+        # Tally votes, ignoring blank predictions
+        votes: dict[str, int] = {}
+        for t in taxonomies:
+            if t:
+                votes[t] = votes.get(t, 0) + 1
+        if not votes:
+            return None
+
+        # Highest vote count, tiebreak by first-appearance order (stable)
+        winning = max(votes, key=lambda k: (votes[k], -taxonomies.index(k)))
+        return taxonomies.index(winning)
+
     # ----------------------------------------------------------------------- #
     # Internal                                                                #
     # ----------------------------------------------------------------------- #

@@ -309,3 +309,37 @@ class BenchmarkAdapter(ABC):
         (with investigation evidence) and future ``llm_alone`` (without).
         """
         return run
+
+    def select_best_run(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
+        runs: list[tuple[RunResult, CaseScore]],  # noqa: ARG002 — used by overrides
+    ) -> int | None:
+        """Optional: pick the canonical run from a self-consistency batch.
+
+        Called once per (case, mode, llm) group after every run finishes.
+        ``runs`` is the list of (RunResult, CaseScore) tuples in original
+        run-index order.
+
+        Return:
+          - ``int`` — index of the run whose metrics should be reported as
+            the canonical answer for this scenario. The runner emits an
+            additional ``consistency_selected`` stratum built from those
+            picks alongside the standard ``all`` (median) stratum.
+          - ``None`` — no selection; only the median ``all`` stratum is
+            reported. This is the default for adapters that don't run
+            multi-seed self-consistency.
+
+        Why this hook exists: paper-style A@1 averaging across N seeds
+        drags the median below what the agent can actually produce. The
+        06-05 CloudOpsBench run showed median a1=0.43 (gpt-4o) vs
+        ORACLE bo3=0.83 — a 0.40 consistency gap. A free selector
+        (majority vote on predicted root-cause taxonomy) closes 60% of
+        that gap with zero extra LLM calls.
+
+        The hook is opt-in per adapter so benchmarks without multi-seed
+        protocols are unaffected. The runner still computes the standard
+        median stratum so both views are reported side-by-side for
+        transparency — no silent metric swap.
+        """
+        return None

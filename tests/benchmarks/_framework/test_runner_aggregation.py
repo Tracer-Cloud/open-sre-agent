@@ -215,3 +215,105 @@ def test_missing_metric_in_cell_score_aggregates_as_zero() -> None:
     key = "opensre+llm/claude-4-sonnet"
     assert result["all"][key]["a1"] == 0.5
     assert result["all"][key]["grounding"] == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# consistency-selected stratum: emitted when adapter overrides select_best_run #
+# --------------------------------------------------------------------------- #
+
+
+class _ConstSelectorAdapter:
+    """Minimal adapter stub for consistency-selection tests.
+
+    Only ``select_best_run`` is exercised; the other ABC methods aren't
+    reached by the aggregator. The adapter returns whatever the test
+    configures, so each test can pin the selector's behavior explicitly.
+    """
+
+    def __init__(self, *, picked: int | None = None, raises: Exception | None = None) -> None:
+        self._picked = picked
+        self._raises = raises
+
+    def select_best_run(self, _case, _runs):  # noqa: ARG002 — stub signature
+        if self._raises is not None:
+            raise self._raises
+        return self._picked
+
+
+def test_consistency_stratum_omitted_when_no_adapter_passed() -> None:
+    """Existing callers without an adapter keep median-only behavior — the
+    new stratum must not appear for them."""
+    cell = _make_cell(case_id="c1", metric_value=0.5)
+    result = _aggregate_per_stratum([cell], ["a1"])
+    assert "consistency-selected" not in result
+
+
+def test_consistency_stratum_omitted_when_adapter_returns_none() -> None:
+    """``None`` from the selector means "no pick, skip this group". With
+    every group returning None, the stratum stays out of the report —
+    confirms the opt-in shape, no silent empty stratum."""
+    cell = _make_cell(case_id="c1", metric_value=0.5)
+    result = _aggregate_per_stratum([cell], ["a1"], adapter=_ConstSelectorAdapter(picked=None))
+    assert "consistency-selected" not in result
+
+
+def test_consistency_stratum_uses_picked_cell_metrics_per_scenario() -> None:
+    """3 seeds per (case, mode, llm); adapter picks run-index 1. The
+    stratum's metric must equal the picked cell's a1, NOT the median of
+    all 3 — that's the whole point of selection."""
+    cells = [
+        _make_cell(case_id="c1", metric_value=0.0),
+        _make_cell(case_id="c1", metric_value=1.0),  # adapter picks this one
+        _make_cell(case_id="c1", metric_value=0.0),
+    ]
+    result = _aggregate_per_stratum(cells, ["a1"], adapter=_ConstSelectorAdapter(picked=1))
+    key = "opensre+llm/claude-4-sonnet"
+    assert result["consistency-selected"][key]["a1"] == 1.0
+    # The standard "all" stratum still reports the median across all 3
+    # — the new stratum is additive, not a replacement.
+    assert result["all"][key]["a1"] == 0.0
+
+
+def test_consistency_selector_called_per_scenario_not_per_cell() -> None:
+    """Two scenarios × 3 seeds each = 6 cells but only 2 selector calls.
+    The aggregator must group cells before asking the adapter to pick."""
+    call_count = 0
+
+    class _CountingAdapter:
+        def select_best_run(self, _case, _runs):  # noqa: ARG002 — interface contract
+            nonlocal call_count
+            call_count += 1
+            return 0
+
+    cells = [
+        _make_cell(case_id="c1", metric_value=0.5),
+        _make_cell(case_id="c1", metric_value=0.5),
+        _make_cell(case_id="c1", metric_value=0.5),
+        _make_cell(case_id="c2", metric_value=0.5),
+        _make_cell(case_id="c2", metric_value=0.5),
+        _make_cell(case_id="c2", metric_value=0.5),
+    ]
+    _aggregate_per_stratum(cells, ["a1"], adapter=_CountingAdapter())
+    assert call_count == 2
+
+
+def test_consistency_stratum_swallows_selector_exception_with_warning(capsys) -> None:
+    """Selector errors must not abort the whole report — fall back to
+    median-only. Stderr/stdout warning is the audit signal so the failure
+    isn't silent."""
+    cell = _make_cell(case_id="c1", metric_value=0.5)
+    result = _aggregate_per_stratum(
+        [cell], ["a1"], adapter=_ConstSelectorAdapter(raises=RuntimeError("boom"))
+    )
+    assert "consistency-selected" not in result
+    captured = capsys.readouterr()
+    assert "select_best_run raised" in captured.out
+    assert "boom" in captured.out
+
+
+def test_consistency_stratum_skips_out_of_bounds_index() -> None:
+    """A selector that returns an invalid index (>= len(runs) or < 0) must
+    not crash and must not produce a stratum entry for that group."""
+    cell = _make_cell(case_id="c1", metric_value=0.5)
+    result = _aggregate_per_stratum([cell], ["a1"], adapter=_ConstSelectorAdapter(picked=99))
+    assert "consistency-selected" not in result

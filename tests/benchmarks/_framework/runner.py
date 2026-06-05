@@ -249,7 +249,9 @@ class BenchmarkRunner:
         ended_at = datetime.now(UTC).isoformat()
 
         # Build the report (per-stratum aggregation)
-        per_stratum = _aggregate_per_stratum(cells, self.adapter.metric_schema().all_metrics())
+        per_stratum = _aggregate_per_stratum(
+            cells, self.adapter.metric_schema().all_metrics(), adapter=self.adapter
+        )
         negative = _build_negative_results(cells, self.adapter)
         config_hash = _hash_config(self.config)
 
@@ -494,22 +496,39 @@ class BenchmarkRunner:
 
 
 def _aggregate_per_stratum(
-    cells: list[_CellResult], metrics: list[str]
+    cells: list[_CellResult],
+    metrics: list[str],
+    *,
+    adapter: BenchmarkAdapter | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """Aggregate cell metrics into the per_stratum shape IntegrityGuard expects.
 
     Shape: {stratum: {f"{mode}/{llm}": {metric: median_value}}}
 
     Strata populated:
-      - ``all``                          — every cell
+      - ``all``                          — every cell, median across runs
       - ``seen-shape`` / ``unseen-shape`` — Phase D tag from
         ``BenchmarkCase.seen_shape``; mid-shape cells appear only in ``all``
       - ``held-out`` / ``optimize``      — generalization-gate split from
         ``BenchmarkCase.metadata["is_held_out"]``; required by integrity
         Mechanism 8 so reports can compute ``held_out_lift / optimize_lift``
         per the pre-registration's ``generalization_gate`` clause
+      - ``consistency-selected``         — one run per (case, mode, llm)
+        group, picked by ``adapter.select_best_run``. Emitted only when
+        the adapter overrides the hook AND at least one group returns a
+        non-None index. Lets reports show median + selected side-by-side
+        without mutating the standard ``all`` view.
+
+    ``adapter`` is optional so existing callers (tests, downstream
+    framework integrators) keep working with median-only aggregation;
+    passing the adapter enables the selected stratum.
     """
     by_stratum_mode_llm: dict[str, dict[str, dict[str, list[float]]]] = {"all": {}}
+
+    # Group cells by (case_id, mode, llm) so the adapter's selector can
+    # see all seeds of one scenario together. dict preserves insertion order
+    # so the index it returns is stable w.r.t. the runs list.
+    by_scenario: dict[tuple[str, str, str], list[_CellResult]] = {}
 
     for cell in cells:
         key = f"{cell.mode}/{cell.llm}"
@@ -532,6 +551,32 @@ def _aggregate_per_stratum(
             append_to("held-out")
         elif held_out is False:
             append_to("optimize")
+
+        by_scenario.setdefault((cell.case.case_id, cell.mode, cell.llm), []).append(cell)
+
+    # Consistency selection: ask the adapter to pick the canonical run per
+    # scenario. A None return for any group means "no pick" — that group's
+    # cells are skipped in the selected stratum, the others still count.
+    if adapter is not None:
+        for group in by_scenario.values():
+            if not group:
+                continue
+            try:
+                picked = adapter.select_best_run(group[0].case, [(c.run, c.score) for c in group])
+            except Exception as exc:
+                # Selector errors must not abort the report — fall back to
+                # median-only. Log so the failure surfaces in the run log.
+                print(f"  ⚠ select_best_run raised for {group[0].case.case_id}: {exc}")
+                continue
+            if picked is None or not (0 <= picked < len(group)):
+                continue
+            chosen = group[picked]
+            key = f"{chosen.mode}/{chosen.llm}"
+            bucket = by_stratum_mode_llm.setdefault("consistency-selected", {}).setdefault(
+                key, {m: [] for m in metrics}
+            )
+            for m in metrics:
+                bucket[m].append(chosen.score.metrics.get(m, 0.0))
 
     return {
         stratum: {
