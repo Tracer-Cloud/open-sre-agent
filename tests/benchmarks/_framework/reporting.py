@@ -195,14 +195,66 @@ def _per_cell_metric(cells: list[dict[str, Any]], metric: str) -> list[float]:
     return out
 
 
-def _cells_by_llm(cells: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    out: dict[str, list[dict[str, Any]]] = {}
+def _cell_mode(cell: dict[str, Any]) -> str:
+    return cell.get("run", {}).get("mode", "(unknown)")
+
+
+def _cell_category(cell: dict[str, Any]) -> str:
+    return cell.get("case", {}).get("metadata", {}).get("fault_category", "(unknown)")
+
+
+def _cells_by_llm_mode(
+    cells: list[dict[str, Any]],
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Group cells as ``{llm: {mode: [cells]}}``.
+
+    Splitting on mode matters once the ``llm_alone`` control arm runs:
+    pooling both modes into one LLM bucket would silently average the
+    opensre+llm result with its own baseline.
+    """
+    out: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for cell in cells:
         if "_load_error" in cell:
             continue
         llm = cell.get("run", {}).get("llm", "(unknown)")
-        out.setdefault(llm, []).append(cell)
+        mode = _cell_mode(cell)
+        out.setdefault(llm, {}).setdefault(mode, []).append(cell)
     return out
+
+
+def _paired_scenario_deltas(
+    cells: list[dict[str, Any]],
+    llm: str,
+    metric: str,
+    mode_a: str,
+    mode_b: str,
+) -> list[float]:
+    """Per-scenario ``metric(mode_a) − metric(mode_b)`` for one LLM.
+
+    Only scenarios present in BOTH modes contribute (a paired difference),
+    so the control delta isolates opensre's policy from scenario mix. Seeds
+    within a scenario are averaged before differencing.
+    """
+    a: dict[str, list[float]] = {}
+    b: dict[str, list[float]] = {}
+    for cell in cells:
+        if cell.get("run", {}).get("llm") != llm:
+            continue
+        value = cell.get("score", {}).get("metrics", {}).get(metric)
+        if not isinstance(value, (int, float)):
+            continue
+        case_id = cell.get("case", {}).get("case_id", "(unknown)")
+        mode = _cell_mode(cell)
+        if mode == mode_a:
+            a.setdefault(case_id, []).append(float(value))
+        elif mode == mode_b:
+            b.setdefault(case_id, []).append(float(value))
+    deltas: list[float] = []
+    for case_id in a.keys() & b.keys():
+        mean_a = sum(a[case_id]) / len(a[case_id])
+        mean_b = sum(b[case_id]) / len(b[case_id])
+        deltas.append(mean_a - mean_b)
+    return deltas
 
 
 def _scenario_means(cells: list[dict[str, Any]], metric: str) -> list[float]:
