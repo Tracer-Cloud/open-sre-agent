@@ -2009,6 +2009,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "types-psutil" },
+    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
@@ -2088,6 +2089,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "types-psutil", specifier = ">=7.2.2.20260408" },
+    { name = "types-pyyaml", specifier = ">=6.0.12" },
 ]
 
 [[package]]
