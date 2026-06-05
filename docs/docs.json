@@ -44,6 +44,12 @@
             ]
           },
           {
+            "group": "Community",
+            "pages": [
+              "bi-weekly-giveaway"
+            ]
+          },
+          {
             "group": "Configuration",
             "pages": [
               "configuration/environment-variables"
@@ -124,9 +130,11 @@
               "aws",
               "bitbucket",
               "github",
+              "integrations/github-actions",
               "gitlab",
               "google-docs",
               "helm",
+              "jenkins",
               "jira",
               "vercel"
             ]
@@ -147,6 +155,7 @@
             "group": "Data and workflow systems",
             "pages": [
               "clickhouse",
+              "dagster",
               "kafka",
               "mariadb",
               "mongodb",

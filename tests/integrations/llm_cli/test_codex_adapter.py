@@ -737,3 +737,20 @@ def test_codex_cli_registry_entry() -> None:
     assert reg is not None
     assert reg.model_env_key == "CODEX_MODEL"
     assert reg.adapter_factory().name == "codex"
+
+
+def test_parse_returns_stripped_stdout() -> None:
+    adapter = CodexAdapter()
+    assert adapter.parse(stdout="  hello world  \n", stderr="", returncode=0) == "hello world"
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    adapter = CodexAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    adapter = CodexAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

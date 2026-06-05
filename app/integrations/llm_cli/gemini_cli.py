@@ -259,10 +259,12 @@ class GeminiCLIAdapter:
         )
 
     def parse(self, *, stdout: str, stderr: str, returncode: int) -> str:
-        del stderr, returncode
         text = (stdout or "").strip()
         if not text:
-            return ""
+            raise RuntimeError(
+                self.explain_failure(stdout=stdout, stderr=stderr, returncode=returncode)
+                + " (empty output)"
+            )
         try:
             payload = json.loads(text)
         except json.JSONDecodeError:

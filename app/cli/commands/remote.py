@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -10,7 +11,7 @@ import click
 
 from app.cli.commands.remote_health import _save_remote_base_url, run_remote_health_check
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
-from app.cli.support.context import is_json_output, is_yes
+from app.cli.support.context import is_interactive_env, is_json_output, is_yes
 from app.cli.support.errors import OpenSREError
 
 if TYPE_CHECKING:
@@ -663,7 +664,13 @@ def remote(ctx: click.Context, url: str | None, api_key: str | None) -> None:
     ctx.obj["api_key"] = api_key
 
     if ctx.invoked_subcommand is None:
-        if is_yes() or is_json_output():
+        if (
+            is_yes()
+            or is_json_output()
+            or not sys.stdin.isatty()
+            or not sys.stdout.isatty()
+            or not is_interactive_env()
+        ):
             raise OpenSREError(
                 "No subcommand provided.",
                 suggestion=(

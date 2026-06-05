@@ -22,6 +22,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `opencode.py`        | Multi-provider CLI: `--version`, then `opencode auth list` (see `_parse_opencode_auth_list_output`). |
 | `kimi.py`            | `kimi --print` path: `--version`, `kimi login status`, then env/config.toml fallback (`KIMI_API_KEY`). |
 | `copilot.py`         | `copilot -p` path: `--version`, then env tokens, then `gh auth status` (and `--hostname` when `COPILOT_GH_HOST` / `GH_HOST` targets a non-default host); otherwise `logged_in=None`. Plaintext `$COPILOT_HOME/config.json` is not inspected. No OS keychain probes. |
+| `grok_cli.py`        | xAI Grok Build CLI (`grok -p --output-format plain`): `--version`, then `grok models` (~0.5 s, no LLM call) to classify auth — looks for "You are logged in" / "logged in with" in output. `XAI_API_KEY` env promotes to authenticated as a headless/CI fallback even when the probe result is unclear. `XAI_API_KEY` forwarded only via `CLIInvocation.env` (`XAI_CLI_ENV_KEYS`), never the blanket prefix. Never passes `--always-approve`. |
 
 
 ## Wiring a new provider

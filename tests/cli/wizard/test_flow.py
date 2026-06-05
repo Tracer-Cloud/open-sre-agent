@@ -369,6 +369,220 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     ]
 
 
+def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    password_responses = iter(["llm-secret", "dag_test_token"])
+    text_responses = iter(["http://localhost:3000"])
+    saved_integrations: list[tuple[str, dict]] = []
+    synced_env_values: list[dict[str, str]] = []
+    synced_secrets: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(text_responses)
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        flow,
+        "validate_dagster_integration",
+        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
+    )
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "save_llm_api_key", lambda *_args, **_kwargs: None)
+
+    def _sync_env_values(values: dict[str, str], **_kwargs):
+        synced_env_values.append(values)
+        return tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(
+        flow,
+        "sync_env_secret",
+        lambda key, value: synced_secrets.append((key, value)),
+    )
+    monkeypatch.setattr(
+        flow,
+        "upsert_integration",
+        lambda service, payload: saved_integrations.append((service, payload)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert saved_integrations == [
+        (
+            "dagster",
+            {
+                "credentials": {
+                    "endpoint": "http://localhost:3000",
+                    "api_token": "dag_test_token",
+                }
+            },
+        )
+    ]
+    assert synced_env_values == [{"DAGSTER_ENDPOINT": "http://localhost:3000"}]
+    assert synced_secrets == [("DAGSTER_API_TOKEN", "dag_test_token")]
+
+
+def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -> None:
+    """OSS path: empty api_token must not call sync_env_secret."""
+    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    password_responses = iter(["llm-secret", ""])
+    text_responses = iter(["http://localhost:3000"])
+    synced_env_values: list[dict[str, str]] = []
+    synced_secrets: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(text_responses)
+        return m
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        flow,
+        "validate_dagster_integration",
+        lambda **_kwargs: flow.IntegrationHealthResult(ok=True, detail="Dagster ok"),
+    )
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "save_llm_api_key", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        flow,
+        "sync_env_values",
+        lambda values, **_kwargs: synced_env_values.append(values) or (tmp_path / ".env"),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_env_secret",
+        lambda key, value: synced_secrets.append((key, value)),
+    )
+    monkeypatch.setattr(flow, "upsert_integration", lambda *_args, **_kwargs: None)
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert synced_env_values == [{"DAGSTER_ENDPOINT": "http://localhost:3000"}]
+    assert synced_secrets == []  # OSS path: no token
+
+
+def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
+    """Two consecutive Dagster validation failures, then success.
+
+    Proves the retry loop recovers from N consecutive failures (not just one),
+    and that only the final successful attempt reaches the persistence layer.
+    """
+    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    # Two wrong tokens, then the correct one.
+    password_responses = iter(["llm-secret", "bad_token_1", "bad_token_2", "dag_good"])
+    # endpoint is prompted on each retry (three attempts total).
+    text_responses = iter(
+        ["http://localhost:3000", "http://localhost:3000", "http://localhost:3000"]
+    )
+    saved_integrations: list[tuple[str, dict]] = []
+    synced_env_values: list[dict[str, str]] = []
+    synced_secrets: list[tuple[str, str]] = []
+    validation_call_count = 0
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(text_responses)
+        return m
+
+    def _validate_dagster(**_kwargs):
+        nonlocal validation_call_count
+        validation_call_count += 1
+        if validation_call_count < 3:
+            return flow.IntegrationHealthResult(
+                ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
+            )
+        return flow.IntegrationHealthResult(ok=True, detail="Dagster ok")
+
+    monkeypatch.setattr(flow, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(flow, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "validate_dagster_integration", _validate_dagster)
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "save_llm_api_key", lambda *_args, **_kwargs: None)
+
+    def _sync_env_values(values: dict[str, str], **_kwargs):
+        synced_env_values.append(values)
+        return tmp_path / ".env"
+
+    monkeypatch.setattr(flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(
+        flow,
+        "sync_env_secret",
+        lambda key, value: synced_secrets.append((key, value)),
+    )
+    monkeypatch.setattr(
+        flow,
+        "upsert_integration",
+        lambda service, payload: saved_integrations.append((service, payload)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert validation_call_count == 3  # two failures, then success
+    # Only the successful attempt should reach the persistence layer:
+    assert saved_integrations == [
+        (
+            "dagster",
+            {
+                "credentials": {
+                    "endpoint": "http://localhost:3000",
+                    "api_token": "dag_good",
+                }
+            },
+        )
+    ]
+    assert synced_env_values == [{"DAGSTER_ENDPOINT": "http://localhost:3000"}]
+    assert synced_secrets == [("DAGSTER_API_TOKEN", "dag_good")]
+
+
 def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, capsys) -> None:
     select_responses = iter(
         [

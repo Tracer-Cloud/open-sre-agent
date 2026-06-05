@@ -17,10 +17,10 @@ from typing import Any
 
 import pytest
 
-from app.hermes.agent import HermesAgent
-from app.hermes.classifier import IncidentClassifier
-from app.hermes.incident import HermesIncident
-from app.hermes.sinks import TelegramSink
+from app.integrations.hermes.agent import HermesAgent
+from app.integrations.hermes.classifier import IncidentClassifier
+from app.integrations.hermes.incident import HermesIncident
+from app.integrations.hermes.sinks import TelegramSink
 from app.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
 
 pytestmark = pytest.mark.synthetic

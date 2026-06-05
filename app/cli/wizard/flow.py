@@ -90,6 +90,12 @@ def validate_coralogix_integration(**kwargs):
     return _validate(**kwargs)
 
 
+def validate_dagster_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_dagster_integration as _validate
+
+    return _validate(**kwargs)
+
+
 def validate_slack_webhook(**kwargs):
     from app.cli.wizard.integration_health import validate_slack_webhook as _validate
 
@@ -110,6 +116,12 @@ def validate_github_mcp_integration(**kwargs):
 
 def validate_gitlab_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_gitlab_integration as _validate
+
+    return _validate(**kwargs)
+
+
+def validate_jenkins_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_jenkins_integration as _validate
 
     return _validate(**kwargs)
 
@@ -344,14 +356,15 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     "Enter custom model ID" escape hatch is always available.
     """
     resolved_default = (default or "").strip()
-    if not provider.models:
+    models = provider.models
+    if not models:
         return resolved_default or provider.default_model
 
     _step("Model")
 
-    curated_values = {option.value for option in provider.models}
+    curated_values = {option.value for option in models}
     curated_choices: list[Choice] = [
-        Choice(value=option.value, label=option.label) for option in provider.models
+        Choice(value=option.value, label=option.label) for option in models
     ]
 
     extra_choices: list[Choice] = []
@@ -860,6 +873,41 @@ def _configure_coralogix() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_dagster() -> tuple[str, str]:
+    _, credentials = _integration_defaults("dagster")
+    _console.print("\n[bold]Dagster Integration[/bold]")
+    _console.print(
+        f"[{SECONDARY}]Dagster webserver URL. "
+        f"OSS local dev: http://localhost:3000. "
+        f"Dagster+: https://<deployment>.dagster.cloud/<env>. "
+        f"API token required for Dagster+; leave blank for unauthenticated OSS.[/]\n"
+    )
+    while True:
+        endpoint = _prompt_value(
+            "Dagster webserver URL",
+            default=_string_value(credentials.get("endpoint"), "http://localhost:3000"),
+        )
+        api_token = _prompt_value(
+            "Dagster API token (optional for OSS)",
+            default=_string_value(credentials.get("api_token")),
+            secret=True,
+            allow_empty=True,
+        )
+        with _console.status("Validating Dagster integration...", spinner="dots"):
+            result = validate_dagster_integration(endpoint=endpoint, api_token=api_token)
+        _render_integration_result("Dagster", result)
+        if result.ok:
+            upsert_integration(
+                "dagster",
+                {"credentials": {"endpoint": endpoint, "api_token": api_token}},
+            )
+            if api_token:
+                sync_env_secret("DAGSTER_API_TOKEN", api_token)
+            env_path = sync_env_values({"DAGSTER_ENDPOINT": endpoint})
+            return "Dagster", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_slack() -> tuple[str, str]:
     _, credentials = _integration_defaults("slack")
     while True:
@@ -1241,6 +1289,43 @@ def _configure_gitlab() -> tuple[str, str]:
                 }
             )
             return "Gitlab", str(env_path)
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_jenkins() -> tuple[str, str]:
+    _, credentials = _integration_defaults("jenkins")
+
+    while True:
+        base_url = _prompt_value(
+            "Jenkins URL (e.g. http://localhost:8080)",
+            default=_string_value(credentials.get("base_url")),
+        )
+        username = _prompt_value(
+            "Jenkins username",
+            default=_string_value(credentials.get("username")),
+        )
+        api_token = _prompt_value(
+            "Jenkins API token",
+            default=_string_value(credentials.get("api_token")),
+            secret=True,
+        )
+
+        with _console.status("Validating Jenkins integration...", spinner="dots"):
+            result = validate_jenkins_integration(
+                base_url=base_url, username=username, api_token=api_token
+            )
+        _render_integration_result("Jenkins", result)
+        if result.ok:
+            credentials = {"base_url": base_url, "username": username, "api_token": api_token}
+            upsert_integration("jenkins", {"credentials": credentials})
+            sync_env_secret("JENKINS_API_TOKEN", api_token)
+            env_path = sync_env_values(
+                {
+                    "JENKINS_URL": base_url,
+                    "JENKINS_USER": username,
+                }
+            )
+            return "Jenkins", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
@@ -1879,6 +1964,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         ),
         Choice(value="gitlab", label="Gitlab", hint="Let the agent inspect repos, PRs, and issues"),
         Choice(
+            value="jenkins",
+            label="Jenkins",
+            hint="Correlate failed builds and deployments with incidents",
+        ),
+        Choice(
             value="google_docs",
             label="Google Docs",
             hint="Create shareable incident postmortem reports",
@@ -1889,6 +1979,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             hint=(
                 "Deployments, build output, and logs tools; runtime-log API can lag the dashboard"
             ),
+        ),
+        Choice(
+            value="dagster",
+            label="Dagster",
+            hint="Pipeline runs, asset materializations, and tick history",
         ),
         Choice(
             value="betterstack",
@@ -1958,8 +2053,10 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "github": _configure_github_mcp,
         "sentry": _configure_sentry,
         "gitlab": _configure_gitlab,
+        "jenkins": _configure_jenkins,
         "google_docs": _configure_google_docs,
         "vercel": _configure_vercel,
+        "dagster": _configure_dagster,
         "betterstack": _configure_betterstack,
         "jira": _configure_jira,
         "alertmanager": _configure_alertmanager,
@@ -1983,8 +2080,10 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "github": "github mcp",
         "sentry": "sentry",
         "gitlab": "gitlab",
+        "jenkins": "jenkins",
         "google_docs": "google docs",
         "vercel": "vercel",
+        "dagster": "dagster",
         "jira": "jira",
         "alertmanager": "alertmanager",
         "opsgenie": "opsgenie",

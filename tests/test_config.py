@@ -82,7 +82,7 @@ def test_llm_settings_minimax_provider_accepted() -> None:
     )
     assert settings.provider == "minimax"
     assert settings.minimax_api_key == "mm-test-key"
-    assert settings.minimax_reasoning_model == "MiniMax-M2.7"
+    assert settings.minimax_reasoning_model == "MiniMax-M3"
     assert settings.minimax_toolcall_model == "MiniMax-M2.7-highspeed"
 
 

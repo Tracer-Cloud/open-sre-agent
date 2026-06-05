@@ -856,7 +856,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.correlation.node.node_correlate_upstream",
+        "app.agent.correlation.node.node_correlate_upstream",
         lambda _state, _config=None: {
             "correlation": {
                 "correlated_signals": [

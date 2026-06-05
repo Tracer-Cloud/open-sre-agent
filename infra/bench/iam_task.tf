@@ -73,3 +73,32 @@ resource "aws_iam_role_policy" "task_results_rw" {
   role   = aws_iam_role.task.id
   policy = data.aws_iam_policy_document.task_results_rw.json
 }
+
+# Read-only access to the corpus mirror bucket. The entrypoint runs
+# `aws s3 sync` against s3://<corpus_bucket>/<corpus_hf_revision>/ at task
+# startup. Read-only is enough — the corpus is populated out-of-band by
+# `make mirror-cloudopsbench-s3` from a developer machine.
+#
+# Bucket-scoped, not account-scoped, so a future bucket addition would
+# require an explicit Terraform diff.
+data "aws_iam_policy_document" "task_corpus_read" {
+  statement {
+    sid       = "ReadCorpusObjects"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:aws:s3:::${var.corpus_bucket_name}/*"]
+  }
+
+  statement {
+    sid       = "ListCorpusBucket"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
+    resources = ["arn:aws:s3:::${var.corpus_bucket_name}"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_corpus_read" {
+  name   = "corpus-read"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_corpus_read.json
+}

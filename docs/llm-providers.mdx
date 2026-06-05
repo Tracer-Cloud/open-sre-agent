@@ -15,7 +15,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
 | Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
-| MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M2.7`                                | `MiniMax-M2.7-highspeed`                        |
+| MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M3`                                  | `MiniMax-M2.7-highspeed`                        |
 | Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
 | OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
@@ -149,9 +149,9 @@ Uses NVIDIA's OpenAI-compatible API at `https://integrate.api.nvidia.com/v1`. Br
 export LLM_PROVIDER=minimax
 export MINIMAX_API_KEY=...
 # Optional override (single value applies to both slots if set):
-export MINIMAX_MODEL=MiniMax-M2.7
+export MINIMAX_MODEL=MiniMax-M3
 # Or per-slot:
-export MINIMAX_REASONING_MODEL=MiniMax-M2.7
+export MINIMAX_REASONING_MODEL=MiniMax-M3
 export MINIMAX_TOOLCALL_MODEL=MiniMax-M2.7-highspeed
 ```
 
@@ -268,6 +268,40 @@ Antigravity CLI (`agy`) is Google's successor to Gemini CLI. Install via `curl -
 As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `GOOGLE_APPLICATION_CREDENTIALS` env credentials as authenticated (mirroring the Gemini CLI adapter), so users migrating across the two CLIs can keep their existing env-var-based auth without re-running the browser flow.
 
 Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes `--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`, keeping every opensre call ephemeral.
+
+
+### xAI Grok Build CLI
+
+```bash
+export LLM_PROVIDER=grok-cli
+# Authenticate the Grok Build CLI separately. Either path works:
+grok login                 # OAuth sign-in with a SuperGrok / X Premium+ account
+# ...or, for headless / CI runs, use an API key instead of a browser login:
+export XAI_API_KEY=xai-...  # get one from the xAI console
+# Optional overrides (all blank-by-default):
+export GROK_CLI_MODEL=          # e.g. grok-build; unset → CLI configured default
+export GROK_CLI_BIN=            # explicit path to the `grok` binary
+export GROK_CLI_TIMEOUT_SECONDS=300   # default 300; clamped 30-600
+```
+
+Requires the [xAI Grok Build CLI](https://x.ai/cli) (binary: `grok`). Install with
+`curl -fsSL https://x.ai/cli/install.sh | bash` (macOS/Linux) or
+`irm https://x.ai/cli/install.ps1 | iex` (Windows). If `GROK_CLI_MODEL` is unset, OpenSRE
+omits `-m` and the CLI uses its configured default. The wizard populates the model list live
+from `grok models` at onboarding time so newly released models appear without an OpenSRE update.
+
+Invocations run as `grok -p PROMPT --output-format plain`, so each opensre call is a single
+non-interactive turn. The adapter deliberately omits `--always-approve`: OpenSRE drives its own
+tools, so Grok is used purely as a text responder and never auto-executes shell commands or file edits.
+
+**Auth detection:** auth is probed via `grok models` (~0.5 s, no LLM call), which prints
+"You are logged in" on success. `XAI_API_KEY` is treated as an authenticated fallback for
+headless / CI runs even when the probe result is unclear. `XAI_API_KEY` is forwarded **only**
+to the Grok subprocess (never via the shared CLI env allowlist), so it cannot leak into other
+CLI adapters.
+
+> **Not to be confused with `groq`.** The `grok-cli` provider is xAI's Grok Build CLI. The
+> separate `groq` provider is the Groq HTTP API (a different company); the two are unrelated.
 
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 

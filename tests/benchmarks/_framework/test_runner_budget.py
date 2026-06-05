@@ -23,6 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.utils.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     AlertPayload,
     BenchmarkAdapter,
@@ -110,6 +111,30 @@ def _raises_unknown_model(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
 
 def _raises_runtime(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     raise RuntimeError("tool returned 500")
+
+
+def _raises_credit_exhausted(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    raise LLMCreditExhaustedError(
+        "OpenAI credit exhausted (provider billing/quota): "
+        "top up balance or raise the spending cap at the provider console."
+    )
+
+
+def test_run_one_cell_propagates_llm_credit_exhausted(tmp_path: Path) -> None:
+    """LLMCreditExhaustedError must reach the outer handler so the run halts.
+
+    Without this propagation, the bench runner's broad ``except Exception``
+    block would catch the credit error and record it as a per-cell failure,
+    causing it to grind through hundreds of cells against a dead account
+    (the exact regression observed on the June-3 run #2, which burned
+    1h42m on zero successful API calls before this halt path existed).
+    """
+    runner = _runner(tmp_path)
+    with (
+        patch("app.pipeline.runners.run_investigation", _raises_credit_exhausted),
+        pytest.raises(LLMCreditExhaustedError),
+    ):
+        _call_run_one_cell(runner, tmp_path)
 
 
 def test_run_one_cell_propagates_cost_budget_exceeded(tmp_path: Path) -> None:

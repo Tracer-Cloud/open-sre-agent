@@ -324,15 +324,13 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
 
         duration_secs = entry.get("duration_secs")
         if is_current:
-            try:
+            with contextlib.suppress(OSError, OverflowError, ValueError):
                 elapsed = int(
                     (
                         datetime.now(UTC) - datetime.fromtimestamp(session.started_at, tz=UTC)
                     ).total_seconds()
                 )
                 duration_secs = elapsed
-            except Exception:
-                pass
 
         total = entry.get("total_turns")
         investigations = entry.get("investigation_turns")

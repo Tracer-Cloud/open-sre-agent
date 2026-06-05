@@ -42,3 +42,47 @@ resource "aws_s3_bucket_public_access_block" "results" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# Lifecycle policy — versioning is ON for safety (accidental overwrite of a
+# published run can be recovered) but old versions otherwise accumulate
+# forever. Two rules:
+#
+#   1. Expire noncurrent (overwritten / deleted) versions after 90 days.
+#      The 90-day window is long enough for a real "oops we need to
+#      restore" to be noticed; after that, the cost of keeping every
+#      historical version outweighs the recovery value.
+#
+#   2. Abort incomplete multipart uploads after 1 day. Failed large
+#      uploads leave orphaned multipart parts that are billed for
+#      storage but invisible in the console.
+#
+# Current-version objects are NEVER expired — published bench artifacts
+# stay forever, matching the pre-registration's reproducibility promise.
+resource "aws_s3_bucket_lifecycle_configuration" "results" {
+  bucket = aws_s3_bucket.results.id
+
+  rule {
+    id     = "expire-noncurrent-versions-after-90-days"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads-after-1-day"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+
+  # Lifecycle configuration requires versioning to already be configured.
+  depends_on = [aws_s3_bucket_versioning.results]
+}

@@ -6,15 +6,15 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.hermes.correlating_sink import CorrelatingSink
-from app.hermes.correlator import (
+from app.integrations.hermes.correlating_sink import CorrelatingSink
+from app.integrations.hermes.correlator import (
     DEFAULT_DEDUP_WINDOW_S,
     IncidentCorrelator,
     RouteDestination,
     correlate_all,
     default_routing_matrix,
 )
-from app.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
+from app.integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
 
 
 def _record(seconds: int = 0) -> LogRecord:
@@ -223,7 +223,7 @@ class TestCorrelatingSink:
     def test_missing_route_increments_unrouted_metric(self, caplog) -> None:
         corr = IncidentCorrelator()
         sink = CorrelatingSink(correlator=corr, routes={})
-        with caplog.at_level("WARNING", logger="app.hermes.correlating_sink"):
+        with caplog.at_level("WARNING", logger="app.integrations.hermes.correlating_sink"):
             sink(_incident())
         snapshot = sink.metrics_snapshot()
         assert snapshot["delivered"] == 0

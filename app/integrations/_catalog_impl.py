@@ -35,9 +35,11 @@ from app.integrations.config_models import (
     VictoriaLogsIntegrationConfig,
     WhatsAppConfig,
 )
+from app.integrations.dagster import build_dagster_config
 from app.integrations.effective_models import EffectiveIntegrations
 from app.integrations.github_mcp import build_github_mcp_config
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
+from app.integrations.jenkins import build_jenkins_config, jenkins_config_from_env
 from app.integrations.mariadb import build_mariadb_config
 from app.integrations.mongodb import build_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config
@@ -356,6 +358,23 @@ def _classify_service_instance(
             return None, None
         return gitlab_config.model_dump(), "gitlab"
 
+    if key == "jenkins":
+        try:
+            jenkins_config = build_jenkins_config(
+                {
+                    "base_url": credentials.get("base_url", ""),
+                    "username": credentials.get("username", ""),
+                    "api_token": credentials.get("api_token", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if jenkins_config.is_configured:
+            return jenkins_config.model_dump(), "jenkins"
+        return None, None
+
     if key == "mongodb":
         try:
             mongodb_config = build_mongodb_config(
@@ -616,6 +635,25 @@ def _classify_service_instance(
                 "ssl_mode": mysql_config.ssl_mode,
                 "integration_id": record_id,
             }, "mysql"
+        return None, None
+
+    if key == "dagster":
+        try:
+            dagster_config = build_dagster_config(
+                {
+                    "endpoint": credentials.get("endpoint", ""),
+                    "api_token": credentials.get("api_token", ""),
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if dagster_config.endpoint:
+            return {
+                "endpoint": dagster_config.endpoint,
+                "api_token": dagster_config.api_token,
+                "integration_id": record_id,
+            }, "dagster"
         return None, None
 
     if key == "rabbitmq":
@@ -1578,6 +1616,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="mariadb")
 
+    dagster_endpoint = os.getenv("DAGSTER_ENDPOINT", "").strip()
+    if dagster_endpoint:
+        try:
+            dagster_config = build_dagster_config(
+                {
+                    "endpoint": dagster_endpoint,
+                    "api_token": os.getenv("DAGSTER_API_TOKEN", "").strip(),
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "dagster",
+                    dagster_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="dagster")
+
     rabbitmq_host = os.getenv("RABBITMQ_HOST", "").strip()
     rabbitmq_username = os.getenv("RABBITMQ_USERNAME", "").strip()
     if rabbitmq_host and rabbitmq_username:
@@ -1870,6 +1926,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load SigNoz config from env", exc_info=True)
+
+    try:
+        jenkins_config = jenkins_config_from_env()
+        if jenkins_config is not None and jenkins_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "jenkins",
+                    jenkins_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception:
+        logger.debug("Failed to load Jenkins config from env", exc_info=True)
 
     return integrations
 

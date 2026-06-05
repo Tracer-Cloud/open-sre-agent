@@ -1,0 +1,68 @@
+# Cloud-OpsBench v1 — OpenAI slice (gpt-4o + gpt-5).
+#
+# Provider slice of cloudopsbench_v1.yml. Use this when running just the
+# OpenAI models (no ANTHROPIC_API_KEY / DEEPSEEK_API_KEY required). The
+# full grid (all 4 paper models in one run) is still
+# cloudopsbench_v1.yml — keep that for the publication-grade comparison
+# once all provider credits are available.
+#
+# Sibling slices:
+#   - cloudopsbench_v1_anthropic.yml   (claude-4-sonnet)
+#   - cloudopsbench_v1_deepseek.yml    (deepseek-v3.2)
+#
+# Required env at run time: OPENAI_API_KEY.
+#
+# Run with --dev first to verify the chain, then drop --dev for production:
+#   uv run python -m tests.benchmarks._framework.cli run \
+#       tests/benchmarks/configs/cloudopsbench_v1_openai.yml --dev
+
+benchmark: cloudopsbench
+
+modes:
+  - opensre+llm
+
+llms:
+  - gpt-4o
+  - gpt-5
+
+model_versions:
+  gpt-4o: gpt-4o-2024-11-20
+  gpt-5: gpt-5-2025-08-07
+
+runs_per_case: 3
+
+# Workers ↔ provider tier math:
+#   - gpt-4o tier-1 cap: 30k TPM
+#   - Each CloudOpsBench cell burns ~25-30k tokens per investigation
+#   - workers=4 ⇒ ~120k/min demand vs 30k available ⇒ rate-limit storm
+#     (June-3 run: 78% of cells died with "rate-limited" error,
+#      a1 mean fell to 2.8%)
+#   - workers=1 ⇒ one investigation at a time; retries drain the bucket
+#     between cells; ~90%+ cell-completion rate.
+# Wall-time: ~3-4× longer than workers=4, but the cells actually complete.
+# After upgrading to OpenAI tier-2 (450k TPM gpt-4o), can return to 4.
+workers: 1
+
+cost_budget_usd: 500.0
+seed: 42
+
+# Per-slice output dir so artifacts from different provider runs don't
+# stomp on each other under .bench-results/. Each report.json is kept
+# alongside its own provenance.json — joinable later by case_id + llm.
+output_dir: .bench-results/cloudopsbench_v1_openai/
+
+# Same pre-registration as the full grid — slices share the experimental
+# scope; only the LLM set differs. IntegrityGuard.pre_flight still applies
+# to non-dev runs.
+pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+
+filters:
+  limit: 30
+  seen_shape: [true]
+  systems: []
+  fault_categories: []
+
+report_formats:
+  - json
+  - markdown
+  - html

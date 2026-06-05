@@ -566,6 +566,52 @@ def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     assert exit_calls == [None]
 
 
+def test_dispatch_one_turn_passes_is_tty_and_confirm_fn_to_dispatch_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    args_passed: list[dict[str, object]] = []
+
+    def _fake_dispatch_slash(*args: object, **kwargs: object) -> bool:
+        args_passed.append(kwargs)
+        return True
+
+    monkeypatch.setattr(loop_execution, "dispatch_slash", _fake_dispatch_slash)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    def fake_confirm(prompt: str) -> str:
+        _ = prompt
+        return "y"
+
+    loop_dispatch.dispatch_one_turn(
+        "/exit",
+        session,
+        console,
+        on_exit=lambda: None,
+        confirm_fn=fake_confirm,
+        is_tty=False,
+    )
+
+    assert len(args_passed) == 1
+    assert args_passed[0]["confirm_fn"] is fake_confirm
+    assert args_passed[0]["is_tty"] is False
+
+
+def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_dispatch_one_turn(*args: object, **kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(loop_dispatch, "dispatch_one_turn", _fake_dispatch_one_turn)
+
+    assert loop_dispatch.run_initial_input("/remote", ReplSession()) == 0
+    assert len(calls) == 1
+    assert calls[0]["is_tty"] is False
+
+
 class TestLooksLikeCorrection:
     """Unit tests for the ``_looks_like_correction`` heuristic.
 

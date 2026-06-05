@@ -2,7 +2,7 @@
 """Build the Discord release announcement JSON payload.
 
 Reads from environment variables set by the GitHub Actions step:
-  RELEASE_TAG, RELEASE_URL, REPO_STARS,
+  RELEASE_TAG, RELEASE_URL,
   DISCORD_RELEASES_ROLE_ID, DISCORD_RELEASE_LOGO_EMOJI, DISCORD_RELEASE_LOGO_URL,
   CHANGELOG_FILE  — path to DISCORD_NARRATIVE.md or GENERATED_CHANGELOG.md
 """
@@ -16,7 +16,6 @@ MAX_CHANGELOG_CHARS = 1400
 
 tag = os.environ["RELEASE_TAG"]
 url = os.environ["RELEASE_URL"]
-stars = os.environ.get("REPO_STARS", "0")
 role_id = os.environ.get("DISCORD_RELEASES_ROLE_ID", "")
 logo_emoji = os.environ.get("DISCORD_RELEASE_LOGO_EMOJI", "")
 logo_url = os.environ.get("DISCORD_RELEASE_LOGO_URL", "")
@@ -39,8 +38,7 @@ content = (
     mention
     + logo_prefix
     + f"🚀 **opensre {bt}{tag}{bt} is live**\n"
-    + f"🔗 {url}\n"
-    + f"⭐ {stars} stars\n\n"
+    + f"🔗 {url}\n\n"
     + changelog
 )
 

@@ -76,7 +76,7 @@ def test_watch_starts_with_correlator_by_default(telegram_env: None) -> None:
         except _AgentBuildAbort as exc:
             captured["sink"] = exc.sink
 
-    from app.hermes.correlating_sink import CorrelatingSink
+    from app.integrations.hermes.correlating_sink import CorrelatingSink
 
     assert isinstance(captured.get("sink"), CorrelatingSink)
 
@@ -95,7 +95,7 @@ def test_watch_no_correlate_uses_raw_telegram_sink(telegram_env: None) -> None:
         except _AgentBuildAbort as exc:
             captured["sink"] = exc.sink
 
-    from app.hermes.sinks import TelegramSink
+    from app.integrations.hermes.sinks import TelegramSink
 
     assert isinstance(captured.get("sink"), TelegramSink)
 

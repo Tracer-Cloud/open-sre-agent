@@ -1,7 +1,7 @@
 # Hermes Synthetic Suite
 
 Real-world Hermes log fixtures used to lock in the behavior of
-`app.hermes.IncidentClassifier`. Each scenario captures a production
+`app.integrations.hermes.IncidentClassifier`. Each scenario captures a production
 pattern observed on a Hermes deployment, ships the raw `errors.log`
 slice that triggered it, and declares — in `answer.yml` — the incidents
 the classifier is expected to emit.

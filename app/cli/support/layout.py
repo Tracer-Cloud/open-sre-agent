@@ -30,15 +30,6 @@ _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     ("opensre version", "Print detailed version, Python and OS info"),
 )
 
-_SHORT_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("--json, -j", "Emit machine-readable JSON output."),
-    ("--verbose", "Print extra diagnostic information."),
-    ("--debug", "Print debug-level logs and traces."),
-    ("--yes, -y", "Auto-confirm all interactive prompts."),
-    ("--version", "Show the version and exit."),
-    ("-h, --help", "Show this message and exit."),
-)
-
 
 def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
     ctx = click.Context(group)
@@ -47,6 +38,20 @@ def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
         cmd = group.get_command(ctx, name)
         if cmd is not None and not cmd.hidden:
             rows.append((name, cmd.get_short_help_str(limit=200)))
+    return tuple(rows)
+
+
+def _options_from_command(command: click.Command) -> tuple[tuple[str, str], ...]:
+    ctx = click.Context(command)
+    rows: list[tuple[str, str]] = []
+    for param in command.get_params(ctx):
+        if getattr(param, "hidden", False):
+            continue
+        if not isinstance(param, click.Option):
+            continue
+        record = param.get_help_record(ctx)
+        if record is not None:
+            rows.append(record)
     return tuple(rows)
 
 
@@ -72,12 +77,19 @@ def _render_rows(
     *,
     title: str,
     rows: Sequence[tuple[str, str]],
-    width: int,
+    width: int | None = None,
 ) -> None:
+    effective_width = (
+        width + 2 if width is not None else max((len(label) for label, _ in rows), default=0) + 2
+    )
     console.print(Text.assemble((f"  {title}:", f"bold {TEXT}")))
     for label, description in rows:
         console.print(
-            Text.assemble(("    ", ""), (f"{label:<{width}}", f"bold {BRAND}"), description)
+            Text.assemble(
+                ("    ", ""),
+                (f"{label:<{effective_width}}", f"bold {BRAND}"),
+                description,
+            )
         )
 
 
@@ -85,20 +97,20 @@ def render_help(group: click.Group) -> None:
     """Render the root help view, deriving the command list from the live Click group."""
     console = Console(highlight=False)
     commands = _commands_from_group(group)
-    console.print()
-    console.print(build_ready_panel(console))
+    options = _options_from_command(group)
     console.print()
     _render_usage(console)
     console.print()
     _render_rows(console, title="Commands", rows=commands, width=16)
     console.print()
-    _render_rows(console, title="Options", rows=_SHORT_OPTIONS, width=16)
+    _render_rows(console, title="Options", rows=options)
     console.print()
 
 
-def render_landing() -> None:
+def render_landing(group: click.Group) -> None:
     """Render the root landing page shown with no subcommand."""
     console = Console(highlight=False)
+    options = _options_from_command(group)
     console.print()
     console.print(build_ready_panel(console))
     console.print(
@@ -112,7 +124,7 @@ def render_landing() -> None:
     console.print()
     _render_rows(console, title="Quick start", rows=_LANDING_EXAMPLES, width=42)
     console.print()
-    _render_rows(console, title="Options", rows=_SHORT_OPTIONS, width=42)
+    _render_rows(console, title="Options", rows=options)
     console.print()
 
 

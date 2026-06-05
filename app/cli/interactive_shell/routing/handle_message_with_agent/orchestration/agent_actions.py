@@ -331,6 +331,7 @@ def execute_cli_actions_with_metrics(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
     deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
     """Execute planned actions and return per-turn action counters.
@@ -422,6 +423,7 @@ def execute_cli_actions_with_metrics(
         session=session,
         console=console,
         confirm_fn=confirm_fn,
+        is_tty=is_tty,
         dispatch_fn=deps.dispatch if deps is not None else None,
     )
     executed_entries = [

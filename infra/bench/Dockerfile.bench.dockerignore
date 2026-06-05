@@ -51,6 +51,11 @@ packaging/
 .claude/
 .aider*
 
+# Exception: the bench Dockerfile COPYs entrypoint.sh from infra/bench/,
+# so it must be in the build context. Negation works because the parent
+# directory rule is the closest matching include/exclude pair for this file.
+!infra/bench/entrypoint.sh
+
 # ---- Tests: exclude everything EXCEPT bench-related -------------------- #
 # Order matters: blanket exclusion first, then negations.
 tests/*

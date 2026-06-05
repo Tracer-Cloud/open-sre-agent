@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.hermes.poller`."""
+"""Tests for :mod:`app.integrations.hermes.poller`."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-import app.hermes.poller as hermes_poller
-from app.hermes.classifier import IncidentClassifier
-from app.hermes.incident import LogLevel
+import app.integrations.hermes.poller as hermes_poller
+from app.integrations.hermes.classifier import IncidentClassifier
+from app.integrations.hermes.incident import LogLevel
 from tests.utils.hermes_logs_helper import hermes_log_fixture
 
 _LINES_BURST = [
