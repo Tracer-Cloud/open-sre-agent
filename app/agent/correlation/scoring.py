@@ -58,7 +58,6 @@ class CandidateCorrelationScore:
     time_window_score: float
     topology_score: float
     periodicity_score: float
-    operator_hint_score: float
     feature_workflow_score: float
     final_confidence: float
     shared_confidence: SharedConfidence
@@ -200,9 +199,9 @@ def score_candidate_correlation(
     operator_hint: object | None = None,
 ) -> CandidateCorrelationScore:
     periodicity_score = periodicity.score if periodicity is not None else 0.0
-    operator_hint_score = getattr(operator_hint, "score", 0.0) if operator_hint is not None else 0.0
-
-    feature_workflow_score = operator_hint_score
+    feature_workflow_score = (
+        getattr(operator_hint, "score", 0.0) if operator_hint is not None else 0.0
+    )
 
     shared_confidence = build_shared_confidence(
         (
@@ -239,24 +238,13 @@ def score_candidate_correlation(
         )
     )
 
-    final_confidence = round(
-        (
-            time_window.score * 0.5
-            + topology.adjacency_score * 0.3
-            + periodicity_score * 0.1
-            + operator_hint_score * 0.1
-        ),
-        4,
-    )
-
     return CandidateCorrelationScore(
         candidate_name=candidate_name,
         time_window_score=time_window.score,
         topology_score=topology.adjacency_score,
         periodicity_score=periodicity_score,
-        operator_hint_score=operator_hint_score,
         feature_workflow_score=feature_workflow_score,
-        final_confidence=final_confidence,
+        final_confidence=shared_confidence.score,
         shared_confidence=shared_confidence,
         rationale=(
             f"confidence={shared_confidence.label}; "

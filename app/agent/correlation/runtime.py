@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from app.agent.correlation.feature_config import (
+    load_feature_workflow_config,
+    resolve_feature_keywords,
+)
 from app.agent.correlation.feature_workflow import score_feature_workflow_hypothesis
 from app.agent.correlation.models import CorrelatedSignal, UpstreamCandidate
 from app.agent.correlation.reporting import build_correlation_report, correlation_report_to_payload
@@ -15,6 +20,31 @@ from app.agent.correlation.scoring import (
     score_topology_adjacency,
 )
 from app.agent.correlation.upstream import UpstreamEvidenceBundle
+
+_FEATURE_CONFIG_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "tests"
+    / "synthetic"
+    / "rds_postgres"
+    / "correlation"
+    / "feature_workflow_config.yml"
+)
+
+
+def _runtime_feature_keywords(
+    *,
+    endpoint: str | None,
+    service_name: str,
+) -> tuple[str, ...]:
+    if not _FEATURE_CONFIG_PATH.exists():
+        return ()
+
+    config = load_feature_workflow_config(_FEATURE_CONFIG_PATH)
+    return resolve_feature_keywords(
+        endpoint=endpoint,
+        service_name=service_name,
+        config=config,
+    )
 
 
 def _empty_correlation() -> dict[str, Any]:
@@ -33,6 +63,7 @@ def build_runtime_correlation(
         return _empty_correlation()
 
     rds_metric = evidence.rds_metrics[0]
+    endpoint = next((hint for hint in evidence.operator_hints if hint.startswith("/")), None)
     candidates: list[UpstreamCandidate] = []
 
     for metric in evidence.upstream_metrics:
@@ -65,7 +96,7 @@ def build_runtime_correlation(
             spike_threshold=75.0,
         )
 
-        candidate_keywords = tuple(
+        metric_keywords = tuple(
             token
             for token in metric.name.lower()
             .replace("{", " ")
@@ -77,6 +108,13 @@ def build_runtime_correlation(
             .split()
             if len(token) > 2
         )
+
+        config_keywords = _runtime_feature_keywords(
+            endpoint=endpoint,
+            service_name=metric.name,
+        )
+
+        candidate_keywords = tuple(dict.fromkeys(metric_keywords + config_keywords))
 
         feature_workflow = score_feature_workflow_hypothesis(
             candidate_name=metric.name,
