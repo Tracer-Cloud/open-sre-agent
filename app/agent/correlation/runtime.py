@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -21,14 +22,7 @@ from app.agent.correlation.scoring import (
 )
 from app.agent.correlation.upstream import UpstreamEvidenceBundle
 
-_FEATURE_CONFIG_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "tests"
-    / "synthetic"
-    / "rds_postgres"
-    / "correlation"
-    / "feature_workflow_config.yml"
-)
+_FEATURE_CONFIG_ENV = "OPENSRE_FEATURE_WORKFLOW_CONFIG"
 
 
 def _runtime_feature_keywords(
@@ -36,10 +30,19 @@ def _runtime_feature_keywords(
     endpoint: str | None,
     service_name: str,
 ) -> tuple[str, ...]:
-    if not _FEATURE_CONFIG_PATH.exists():
+    config_path = os.getenv(_FEATURE_CONFIG_ENV)
+    if not config_path:
         return ()
 
-    config = load_feature_workflow_config(_FEATURE_CONFIG_PATH)
+    config_file = Path(config_path)
+    if not config_file.exists():
+        return ()
+
+    try:
+        config = load_feature_workflow_config(config_file)
+    except Exception:
+        return ()
+
     return resolve_feature_keywords(
         endpoint=endpoint,
         service_name=service_name,
@@ -116,10 +119,12 @@ def build_runtime_correlation(
 
         candidate_keywords = tuple(dict.fromkeys(metric_keywords + config_keywords))
 
+        workflow_hints = tuple(hint for hint in evidence.operator_hints if not hint.startswith("/"))
+
         feature_workflow = score_feature_workflow_hypothesis(
             candidate_name=metric.name,
             candidate_keywords=candidate_keywords,
-            operator_hints=evidence.operator_hints,
+            operator_hints=workflow_hints,
         )
 
         score = score_candidate_correlation(
