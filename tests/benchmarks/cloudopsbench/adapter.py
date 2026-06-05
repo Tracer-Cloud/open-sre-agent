@@ -68,7 +68,7 @@ from tests.benchmarks.cloudopsbench.validity_scoring import (
 # --------------------------------------------------------------------------- #
 
 _PAPER_METRIC_SCHEMA = MetricSchema(
-    outcome_metrics=["a1", "a3", "partial_a1", "partial_a3", "tcr"],
+    outcome_metrics=["a1", "a3", "partial_a1", "partial_a3", "object_a1", "object_a3", "tcr"],
     process_metrics=["exact", "in_order", "any_order", "rel", "cov"],
     efficiency_metrics=["steps", "mtti"],
     robustness_metrics=["iac", "rar", "ztdr"],
@@ -85,6 +85,8 @@ _PAPER_METRIC_SCHEMA = MetricSchema(
         "a3": True,
         "partial_a1": True,
         "partial_a3": True,
+        "object_a1": True,
+        "object_a3": True,
         "tcr": True,
         # Process — trajectory alignment + tool usage (higher better)
         "exact": True,

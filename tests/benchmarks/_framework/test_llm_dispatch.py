@@ -213,3 +213,87 @@ def test_llm_spec_is_frozen() -> None:
     # dataclasses.FrozenInstanceError subclasses AttributeError
     with pytest.raises(AttributeError):
         spec.name = "y"  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------- #
+# Singleton-reset coverage: protects against the "every cell silently runs    #
+# the first activated model" bug that hit the 06-05 11:46 run.                #
+#                                                                             #
+# Diagnostic from that run: `cost.by_model` showed 180 calls to gpt-4o and 0  #
+# to gpt-5, even though the config listed both. Root cause: the dispatcher's  #
+# ``_reset_opensre_singletons`` only cleared ``llm_client._client`` but not   #
+# ``agent_llm_client._agent_client`` — and the investigation agent uses the   #
+# latter. With the agent client cached from the first activation, every       #
+# subsequent activation's cells reused it under whatever model the first      #
+# activation set.                                                             #
+# --------------------------------------------------------------------------- #
+
+
+def test_reset_opensre_singletons_clears_both_module_caches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both ``llm_client.reset_llm_singletons`` AND
+    ``agent_llm_client.reset_agent_client`` MUST be called on every
+    activation switch. Missing the second one re-uses the first
+    activation's agent client for the rest of the run."""
+    # Re-install the real method (the autouse fixture stubs it out)
+    monkeypatch.undo()
+
+    call_log: list[str] = []
+
+    # Import the real modules and replace the two reset functions with
+    # call-tracking stubs. This works regardless of which order
+    # _reset_opensre_singletons invokes them.
+    import app.services.agent_llm_client as agent_llm_mod
+    import app.services.llm_client as llm_mod
+
+    monkeypatch.setattr(
+        llm_mod, "reset_llm_singletons", lambda: call_log.append("reset_llm_singletons")
+    )
+    monkeypatch.setattr(
+        agent_llm_mod, "reset_agent_client", lambda: call_log.append("reset_agent_client")
+    )
+
+    LLMDispatcher._reset_opensre_singletons()  # type: ignore[attr-defined]
+
+    assert "reset_llm_singletons" in call_log, (
+        "llm_client._client singleton was NOT cleared — opensre.services.llm_client "
+        "would keep returning the previously-activated provider's client"
+    )
+    assert "reset_agent_client" in call_log, (
+        "agent_llm_client._agent_client singleton was NOT cleared — the investigation "
+        "agent's get_agent_llm() would silently reuse the first activation's model "
+        "for every subsequent cell (this is the 06-05 11:46 dispatcher bug)"
+    )
+
+
+def test_activation_round_trip_resets_singletons_on_enter_and_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reset must run both BEFORE yield (clears stale client so the
+    new env's get_agent_llm rebuilds) AND on finally (restores prior
+    state so the next activation isn't polluted)."""
+    monkeypatch.undo()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    reset_calls: list[str] = []
+    monkeypatch.setattr(
+        LLMDispatcher,
+        "_reset_opensre_singletons",
+        staticmethod(lambda: reset_calls.append("reset")),
+    )
+
+    dispatcher = LLMDispatcher()
+    with dispatcher.activate("claude-4-sonnet"):
+        # First reset happens BEFORE the yield, after env vars are applied
+        assert reset_calls == ["reset"], (
+            "Singleton reset must run between env-var application and the "
+            "yield, so opensre rebuilds its client against the new env"
+        )
+
+    # Second reset happens in the finally branch after env restoration
+    assert reset_calls == ["reset", "reset"], (
+        "Singleton reset must also run on activation exit, otherwise the "
+        "next activation's first cell could be polluted by the prior LLM's "
+        "cached client"
+    )
