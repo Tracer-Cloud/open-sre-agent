@@ -348,9 +348,9 @@ async def run_interactive(
                         continue
                     if session.session_id:
                         echo_console.print()
-                        echo_console.print(f"Resume this session with:")
+                        echo_console.print("Resume this session with:")
                         echo_console.print(f"/resume {session.session_id}")
-                        echo_console.print(f"Goodbye!")
+                        echo_console.print("Goodbye!")
                     return
                 except KeyboardInterrupt:
                     if state.is_dispatch_running():
