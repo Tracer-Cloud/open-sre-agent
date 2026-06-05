@@ -387,9 +387,7 @@ def _render_decomposition_markdown(
         lines.append("| LLM | Δ A@1 (paired) | 95% CI | n | verdict |")
         lines.append("|---|---|---|---|---|")
         for llm, mean, lo, hi, n, verdict in contrast:
-            lines.append(
-                f"| `{llm}` | {mean:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {n} | {verdict} |"
-            )
+            lines.append(f"| `{llm}` | {mean:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {n} | {verdict} |")
         lines.append("")
         lines.append(
             "_Paired per-scenario difference (seeds averaged first). A CI that "
@@ -425,9 +423,7 @@ def _render_decomposition_markdown(
         lines.append("")
 
     # 3. Per fault-category A@1 (opensre+llm) — vs paper Fig. 3 difficulty
-    categories = sorted(
-        {_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE}
-    )
+    categories = sorted({_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE})
     if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
         lines.append("### Per fault-category A@1 (opensre+llm)")
         lines.append("")
@@ -521,9 +517,7 @@ def _render_decomposition_html(
         )
 
     # 3. Per fault-category A@1
-    categories = sorted(
-        {_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE}
-    )
+    categories = sorted({_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE})
     if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
         parts.append("<h3>Per fault-category A@1 (opensre+llm)</h3>")
         parts.append("<table><thead><tr><th>LLM</th>")
@@ -967,9 +961,7 @@ def _render_html(
             for llm in sorted(by_lm.keys()):
                 for mode in sorted(by_lm[llm].keys()):
                     mode_cells = by_lm[llm][mode]
-                    parts.append(
-                        f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>"
-                    )
+                    parts.append(f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>")
                     for m in present:
                         scen_vals = _scenario_means(mode_cells, m)
                         mean, _, _, n = _mean_with_ci(scen_vals)
