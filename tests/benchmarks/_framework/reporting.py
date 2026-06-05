@@ -216,7 +216,9 @@ _PAPER_COMPARABLE_METRICS = [
 # Surfaced as a footnote so a reader doesn't mistake a structural 0 (or a
 # saturated 1.0) for a result.
 _NON_COMPARABLE_METRICS = {
-    "mtti": "wall-clock seconds; per-step latency not captured in this harness (always 0)",
+    "mtti": "measured wall-clock seconds to diagnosis, but hardware/provider/"
+    "network dependent — useful for internal A/B (e.g. floor sweeps), not a "
+    "like-for-like number against the paper's setup",
     "tcr": "saturated at 1.0 — the predictor always emits structured output, so this "
     "does not track the paper's crash/schema-violation rate",
 }

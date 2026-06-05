@@ -11,7 +11,7 @@
 # (the floor is read from BENCH_MIN_TOOL_CALLS at import time and stamped
 # into each run's provenance.json under run_inputs.min_tool_calls):
 #
-#   for f in 3 5 8; do
+#   for f in 3 5 8 10; do
 #     BENCH_MIN_TOOL_CALLS=$f uv run python -m tests.benchmarks._framework.cli \
 #       run tests/benchmarks/configs/cloudopsbench_floorsweep_openai.yml --dev
 #   done
@@ -20,8 +20,9 @@
 # floor for each via provenance.json -> run_inputs.min_tool_calls.
 #
 # Cost: 90 cells/run (30 cases x 1 LLM x 3 runs x 1 mode). At ~$0.01/cell
-# (gpt-4o) that's ~$0.90/run, under $3 for the whole {3,5,8} sweep.
-# Lower floors do fewer tool calls => cheaper.
+# (gpt-4o) that's ~$0.90/run, under $4 for the whole {3,5,8,10} sweep
+# (8 = current default; 10 tests whether MORE forcing helps). Lower floors do
+# fewer tool calls => cheaper.
 #
 # This is a DEV experiment (small, single-shape) — always pass --dev so the
 # generalization/power gates don't block it. Results are exploratory and not

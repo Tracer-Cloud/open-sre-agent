@@ -545,6 +545,29 @@ def calculate_rar(agent_steps: list[str]) -> float:
 
 
 def calculate_total_latency(case_data: dict[str, Any]) -> float:
+    """Mean-time-to-identify, in seconds: wall-clock from investigation start
+    to the agent's diagnosis.
+
+    The benchmark replays tool results deterministically, so per-step
+    ``tool_latency`` is meaningless (~microseconds of dict lookup). The honest
+    signal is the LLM-dominated wall-clock the runner already measures with a
+    monotonic timer around ``run_investigation`` and stores on
+    ``RunResult.latency_ms`` (the scoring-only predictor call runs *after* that
+    stop-watch, so it isn't counted — exactly the paper's "time to identify").
+
+    Priority:
+      1. Real measured wall-clock — ``case_data["latency_ms"]`` (preferred).
+      2. Sum of per-step ``model_latency``/``tool_latency`` — kept for any
+         future per-step instrumentation and for callers that pass timed steps.
+
+    Returns 0.0 only when neither source is present (e.g. a hand-built
+    ``case_data`` in a unit test), so a missing measurement is visibly 0
+    rather than a silently fabricated number.
+    """
+    latency_ms = case_data.get("latency_ms")
+    if isinstance(latency_ms, (int, float)) and latency_ms > 0:
+        return float(latency_ms) / 1000.0
+
     total = 0.0
     for step in case_data.get("steps", []):
         if not isinstance(step, dict):

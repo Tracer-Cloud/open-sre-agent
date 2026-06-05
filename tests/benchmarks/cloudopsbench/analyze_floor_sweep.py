@@ -34,7 +34,18 @@ from tests.benchmarks._framework.reporting import (
 
 # Process + outcome metrics the sweep is meant to move. a1 is the guardrail
 # (must not drop); rel/exact/steps/cov are the over-exploration signal.
-_SWEEP_METRICS = ["a1", "a3", "exact", "in_order", "any_order", "rel", "cov", "steps", "iac"]
+_SWEEP_METRICS = [
+    "a1",
+    "a3",
+    "exact",
+    "in_order",
+    "any_order",
+    "rel",
+    "cov",
+    "steps",
+    "iac",
+    "mtti",
+]
 
 
 def _floor_for_run(run_dir: Path) -> int | None:

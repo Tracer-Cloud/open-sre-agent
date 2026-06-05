@@ -524,6 +524,11 @@ def _build_case_data(
             "path2": list(legacy.process.get("path2") or []),
         },
         "steps": _steps_from_backend(backend),
+        # Real measured wall-clock of the investigation (runner's monotonic
+        # timer around run_investigation). The scorer's calculate_total_latency
+        # reads this for MTTI — without it, MTTI is structurally 0 because the
+        # replay backend has no per-step latency to sum.
+        "latency_ms": run.latency_ms,
         # The legacy scorer doesn't require final_state, but pass it through
         # for forward-compat with future scoring extensions.
         "final_state": {"evidence_entries": run.evidence_entries},
