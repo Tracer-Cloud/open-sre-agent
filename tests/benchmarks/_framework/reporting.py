@@ -453,6 +453,104 @@ def _render_decomposition_markdown(
     return lines
 
 
+def _render_decomposition_html(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    esc: Any,
+) -> list[str]:
+    """HTML mirror of :func:`_render_decomposition_markdown`."""
+    if not by_lm:
+        return []
+    parts: list[str] = []
+    parts.append("<h2>Decomposition — where the accuracy goes</h2>")
+
+    # 1. Control contrast
+    parts.append("<h3>Control contrast — A@1(opensre+llm) − A@1(llm_alone), same model</h3>")
+    contrast = _control_contrast_rows(cells, by_lm)
+    if not contrast:
+        parts.append(
+            '<div class="callout warn"><p>No control arm in this run — add '
+            "<code>llm_alone</code> to <code>modes</code> so the delta that "
+            "isolates opensre's policy (vs the model's intrinsic skill) can be "
+            "computed. This is the single most important number.</p></div>"
+        )
+    else:
+        parts.append(
+            "<table><thead><tr><th>LLM</th><th>Δ A@1 (paired)</th>"
+            "<th>95% CI</th><th>n</th><th>verdict</th></tr></thead><tbody>"
+        )
+        for llm, mean, lo, hi, n, verdict in contrast:
+            parts.append(
+                f"<tr><td><code>{esc(llm)}</code></td>"
+                f'<td class="metric">{mean:+.2f}</td>'
+                f'<td class="metric">[{lo:+.2f}, {hi:+.2f}]</td>'
+                f'<td class="metric">{n}</td><td>{esc(verdict)}</td></tr>'
+            )
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>Paired per-scenario difference (seeds averaged first). "
+            "A CI containing 0 means opensre's pipeline is statistically "
+            "indistinguishable from bare tool-use on this model.</small></p>"
+        )
+
+    # 2. Localization vs labeling
+    has_decomp = any(
+        _per_cell_metric(by_lm[llm].get(_PRIMARY_MODE, []), m)
+        for llm in by_lm
+        for m in ("object_a1", "partial_a1")
+    )
+    if has_decomp:
+        parts.append("<h3>Localization vs labeling (opensre+llm)</h3>")
+        parts.append(
+            "<table><thead><tr><th>LLM</th><th>a1 (triple)</th>"
+            "<th>object_a1 (component)</th><th>partial_a1 (relaxed)</th>"
+            "</tr></thead><tbody>"
+        )
+        for llm in sorted(by_lm.keys()):
+            op_cells = by_lm[llm].get(_PRIMARY_MODE, [])
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td>")
+            for m in ("a1", "object_a1", "partial_a1"):
+                mean, _, _, n = _mean_with_ci(_scenario_means(op_cells, m))
+                parts.append(f'<td class="metric">{mean:.2f}</td>' if n else "<td>—</td>")
+            parts.append("</tr>")
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>If <code>object_a1</code> ≫ <code>a1</code>, opensre "
+            "finds the right component but mislabels the root cause — a "
+            "predictor/translation problem, not a reasoning one.</small></p>"
+        )
+
+    # 3. Per fault-category A@1
+    categories = sorted(
+        {_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE}
+    )
+    if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
+        parts.append("<h3>Per fault-category A@1 (opensre+llm)</h3>")
+        parts.append("<table><thead><tr><th>LLM</th>")
+        for cat in categories:
+            parts.append(f"<th>{esc(cat)}</th>")
+        parts.append("</tr></thead><tbody>")
+        for llm in sorted(by_lm.keys()):
+            cat_map = _category_a1(by_lm, llm, _PRIMARY_MODE)
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td>")
+            for cat in categories:
+                mean, n = cat_map.get(cat, (0.0, 0))
+                parts.append(
+                    f'<td class="metric">{mean:.2f}<br><small>n={n}</small></td>'
+                    if n
+                    else "<td>—</td>"
+                )
+            parts.append("</tr>")
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>Paper Fig. 3: Startup/Runtime easy (A@1 &gt; 0.65), "
+            "Admission/Performance hard (A@1 &lt; 0.36). Losing only where the "
+            "paper loses = corpus difficulty; losing broadly = opensre.</small></p>"
+        )
+
+    return parts
+
+
 # --------------------------------------------------------------------------- #
 # Markdown rendering                                                          #
 # --------------------------------------------------------------------------- #
