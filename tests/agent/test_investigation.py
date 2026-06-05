@@ -667,3 +667,115 @@ def test_enforce_context_budget_trims_when_over_ceiling() -> None:
     # Oldest pair (t1 with the big payload) must be gone; the t2 pair survives.
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "t2"
+
+
+# --------------------------------------------------------------------------- #
+# Last-resort truncation. Whole-pair trimming drops tool exchanges oldest-first #
+# but cannot shrink the base prompt (e.g. an oversized initial alert / non-tool #
+# message). The old code returned there and overflowed the API; these pin the   #
+# truncation fallback that closes that crash vector.                            #
+# --------------------------------------------------------------------------- #
+
+_MARKER = "…[truncated to fit context budget]"
+
+
+def test_enforce_context_budget_truncates_oversized_string_base_prompt() -> None:
+    """A huge initial user message (string content) with no trimmable tool pair
+    must be truncated, not left to overflow."""
+    ceiling = 50_000
+    big = "x" * 1_000_000  # ~500k token estimate at 0.5 tokens/char — alone over ceiling
+    messages = [{"role": "user", "content": big}]
+
+    _enforce_context_budget(messages, ceiling=ceiling)
+
+    assert _estimate_message_tokens(messages) <= ceiling
+    assert len(messages[0]["content"]) < len(big)
+    assert messages[0]["content"].endswith(_MARKER)
+
+
+def test_enforce_context_budget_truncates_oversized_list_content_base_prompt() -> None:
+    """A user message whose list content (Anthropic text blocks) is over budget
+    and isn't part of a tool pair must be truncated in place, structure intact."""
+    ceiling = 50_000
+    big = "y" * 1_000_000
+    messages = [{"role": "user", "content": [{"type": "text", "text": big}]}]
+
+    _enforce_context_budget(messages, ceiling=ceiling)
+
+    assert _estimate_message_tokens(messages) <= ceiling
+    block = messages[0]["content"][0]
+    assert block["type"] == "text"  # structure preserved
+    assert len(block["text"]) < len(big)
+    assert block["text"].endswith(_MARKER)
+
+
+def test_enforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None:
+    """Mixed: a trimmable tool pair AND an oversized base alert. The trimmer drops
+    the pair first; truncation then shrinks the remaining oversized alert."""
+    ceiling = 50_000
+    big = "z" * 1_000_000
+    messages = [
+        {"role": "user", "content": big},  # oversized base alert (not a tool pair)
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "small"}],
+        },
+    ]
+
+    _enforce_context_budget(messages, ceiling=ceiling)
+
+    assert _estimate_message_tokens(messages) <= ceiling
+    # The t1 tool pair was trimmed away entirely.
+    assert all(
+        not (
+            isinstance(m.get("content"), list)
+            and m["content"]
+            and isinstance(m["content"][0], dict)
+            and m["content"][0].get("type") == "tool_use"
+        )
+        for m in messages
+    )
+    # The remaining oversized alert was truncated.
+    assert messages[0]["role"] == "user"
+    assert len(messages[0]["content"]) < len(big)
+    assert messages[0]["content"].endswith(_MARKER)
+
+
+def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> None:
+    """If system+tools alone exceed the ceiling and messages have no shrinkable
+    text, the function must return (no infinite loop) and let the API surface it.
+    """
+    ceiling = 10_000
+    # A huge tool schema pushes overhead past the ceiling; the single message has
+    # only a tiny, already-minimal payload that truncation can't usefully shrink.
+    tools = [{"name": "big", "schema": "s" * 1_000_000}]
+    messages = [{"role": "user", "content": "tiny"}]
+
+    # Must terminate quickly rather than spin.
+    _enforce_context_budget(messages, tools=tools, ceiling=ceiling)
+
+    assert messages == [{"role": "user", "content": "tiny"}]
+
+
+def test_truncate_content_distributes_across_multiple_blocks() -> None:
+    """List content with several text slots is shrunk proportionally so the whole
+    message lands near the budget instead of zeroing the first slot only."""
+    from app.agent.investigation import _truncate_content
+
+    content = [
+        {"type": "text", "text": "a" * 100_000},
+        {"type": "tool_result", "tool_use_id": "t", "content": "b" * 100_000},
+    ]
+
+    new_content, changed = _truncate_content(content, max_chars=10_000)
+
+    assert changed is True
+    total = len(new_content[0]["text"]) + len(new_content[1]["content"])
+    # Both slots contributed to the reduction (proportional, not all-from-one).
+    assert len(new_content[0]["text"]) < 100_000
+    assert len(new_content[1]["content"]) < 100_000
+    assert total <= 10_000 + 2 * len("…[truncated to fit context budget]")

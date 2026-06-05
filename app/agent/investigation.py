@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -65,6 +65,24 @@ _TOKEN_BUDGET_CEILING = _DEFAULT_CONTEXT_WINDOW - _RESPONSE_HEADROOM_TOKENS
 # Overflow logs showed real tokens/char of 0.4–0.5 for opensre's tool-result
 # mix, so 0.5 is the safe upper edge.
 _TOKENS_PER_CHAR = 0.50
+
+# Last-resort truncation. Whole-pair trimming (``_trim_oldest_tool_pair``) drops
+# tool exchanges oldest-first, but once every tool pair is gone the base prompt
+# can still exceed the window — e.g. a 40-service train-ticket alert whose initial
+# user message is huge, or any single non-tool message that isn't part of a
+# trimmable pair. The old code returned there and let the request overflow. When
+# trimming is exhausted but the prompt is still over budget, we truncate the
+# largest message's text payload in place so the request can never exceed the
+# model window. Marker tells the model (and anyone reading the trace) that
+# content was elided.
+_TRUNCATION_MARKER = "…[truncated to fit context budget]"
+# Slack subtracted from the per-message budget so the post-truncation estimate
+# lands safely under the ceiling rather than exactly on it.
+_TRUNCATION_SAFETY_TOKENS = 2_000
+# Floor for a single message's content budget. If system+tools+other messages
+# already consume the whole ceiling, we still leave at least this much so the
+# truncated message carries some signal instead of being blanked.
+_TRUNCATION_MIN_TOKENS = 1_000
 
 
 def _context_budget_ceiling_for_model(model: str | None) -> int:
@@ -506,6 +524,102 @@ def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
+    """Truncate ``text`` to ``max_chars`` (inclusive of the marker). No-op if it fits."""
+    if len(text) <= max_chars:
+        return text, False
+    keep = max(max_chars - len(_TRUNCATION_MARKER), 0)
+    return text[:keep] + _TRUNCATION_MARKER, True
+
+
+def _iter_text_slots(
+    node: Any,
+) -> Iterator[tuple[dict[str, Any] | list[Any], str | int]]:
+    """Yield (container, key) handles for every truncatable string in a content tree.
+
+    Targets the bulky payload fields opensre actually emits: a dict's ``content``
+    / ``text`` (Anthropic tool_result + text blocks) and bare strings inside
+    lists. Recurses through nested dicts/lists (e.g. a tool_result whose
+    ``content`` is itself a list of text blocks). Each yielded handle supports
+    ``container[key] = ...`` so callers can rewrite in place.
+    """
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(value, str) and key in ("content", "text"):
+                yield node, key
+            elif isinstance(value, (list, dict)):
+                yield from _iter_text_slots(value)
+    elif isinstance(node, list):
+        for idx, value in enumerate(node):
+            if isinstance(value, str):
+                yield node, idx
+            elif isinstance(value, (list, dict)):
+                yield from _iter_text_slots(value)
+
+
+def _truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
+    """Shrink a message's ``content`` so its char length is ~``max_chars``.
+
+    String content is cut directly. List content (Anthropic block lists) is
+    truncated proportionally across its text slots so the whole message lands
+    near the budget rather than zeroing the first slot. Returns the (possibly
+    same, mutated-in-place) content object and whether anything changed.
+    """
+    if isinstance(content, str):
+        return _shrink_text(content, max_chars)
+    if isinstance(content, list):
+        slots = list(_iter_text_slots(content))
+        if not slots:
+            return content, False
+        total = sum(len(container[key] or "") for container, key in slots)
+        if total <= max_chars:
+            return content, False
+        factor = max_chars / total if total else 0.0
+        changed = False
+        for container, key in slots:
+            target = max(int(len(container[key] or "") * factor), 0)
+            new_value, slot_changed = _shrink_text(container[key] or "", target)
+            if slot_changed:
+                container[key] = new_value  # type: ignore[index]
+                changed = True
+        return content, changed
+    return content, False
+
+
+def _truncate_largest_message(
+    messages: list[dict[str, Any]],
+    *,
+    system: str | None,
+    tools: list[dict[str, Any]] | None,
+    ceiling: int,
+) -> bool:
+    """Truncate the biggest still-shrinkable message so the prompt fits.
+
+    Tries messages largest-first (so an untruncatable assistant ``tool_calls``
+    turn doesn't block a truncatable tool-result behind it) and stops at the
+    first one that actually shrinks. Each successful call strictly reduces the
+    total, guaranteeing the caller's loop terminates. Returns False when no
+    message can be shrunk further — the caller then lets the API surface the
+    error rather than spinning.
+    """
+    order = sorted(
+        range(len(messages)),
+        key=lambda i: _estimate_message_tokens([messages[i]]),
+        reverse=True,
+    )
+    for idx in order:
+        overhead = _estimate_message_tokens(
+            [m for i, m in enumerate(messages) if i != idx], system=system, tools=tools
+        )
+        budget_tokens = max(ceiling - overhead - _TRUNCATION_SAFETY_TOKENS, _TRUNCATION_MIN_TOKENS)
+        max_chars = int(budget_tokens / _TOKENS_PER_CHAR)
+        new_content, changed = _truncate_content(messages[idx].get("content"), max_chars)
+        if changed:
+            messages[idx]["content"] = new_content
+            return True
+    return False
+
+
 def _enforce_context_budget(
     messages: list[dict[str, Any]],
     *,
@@ -524,7 +638,24 @@ def _enforce_context_budget(
     """
     while _estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
         if not _trim_oldest_tool_pair(messages):
-            return
+            # Whole-pair trimming exhausted but still over budget: the remaining
+            # base prompt (e.g. an oversized initial alert or other non-tool
+            # message) is itself too large. Truncate its payload so the request
+            # can't overflow. If nothing is left to shrink, return and let the
+            # API surface the error rather than spin.
+            if not _truncate_largest_message(
+                messages, system=system, tools=tools, ceiling=ceiling
+            ):
+                logger.warning(
+                    "[agent] context still over budget after trimming + truncation "
+                    "(ceiling=%d); letting the request proceed",
+                    ceiling,
+                )
+                return
+            logger.warning(
+                "[agent] truncated oversized message to fit context budget (ceiling=%d)", ceiling
+            )
+            continue
         logger.warning(
             "[agent] trimmed oldest tool pair to fit context budget (ceiling=%d)", ceiling
         )
