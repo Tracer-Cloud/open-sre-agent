@@ -18,9 +18,13 @@
 
 benchmark: cloudopsbench
 
+# Primary contrast (prereg comparison_protocol): opensre+llm vs llm_alone for
+# the SAME model_version. llm_alone is the in-harness control arm — identical
+# per-case tool surface, but the baseline agent (no MIN_TOOL_CALLS floor), so
+# the delta isolates opensre's policy rather than the model's intrinsic skill.
 modes:
   - opensre+llm
-  - llm_alone     # control arm — same model_version, same tool surface, no MIN_TOOL_CALLS floor
+  - llm_alone
 
 llms:
   - gpt-4o
