@@ -26,12 +26,11 @@ _SKIP_MODULE_NAMES = {
     "utils",
 }
 
-# Extension point: callers outside ``app.tools.*`` (e.g. test suites,
-# external benchmark harnesses, downstream integrators) can register
-# additional tool packages by calling
-# :func:`register_external_tool_package`. Registered packages are walked
-# the same way as :mod:`app.tools` — each top-level submodule is imported
-# and any ``@tool``-decorated callables are picked up.
+# Extension point: callers outside ``app.tools.*`` can register additional
+# tool packages by calling :func:`register_external_tool_package`.
+# Registered packages are walked the same way as :mod:`app.tools` — each
+# top-level submodule is imported and any ``@tool``-decorated callables
+# are picked up.
 #
 # Production stays clean: with no external registrations, the registry
 # discovers only ``app.tools.*``. The list is *not* persisted across
@@ -49,13 +48,13 @@ def register_external_tool_package(package: ModuleType) -> None:
 
     Idempotent and thread-safe: concurrent callers registering the same
     package (e.g. multiple workers in a ``ThreadPoolExecutor`` each
-    importing a bench package) won't add duplicate entries that would
-    otherwise produce noisy ``Duplicate tool name`` warnings on every
-    subsequent registry walk.
+    importing the same extension on first use) won't add duplicate
+    entries that would otherwise produce noisy ``Duplicate tool name``
+    warnings on every subsequent registry walk.
 
-    Production code does NOT call this — it's a hook for test suites
-    and external integrators that ship their own tools but want them
-    routed through opensre's agent loop.
+    Production code does NOT call this — it's an extension point for
+    callers outside ``app.tools.*`` that ship their own tools but want
+    them routed through opensre's agent loop.
     """
     with _external_registration_lock:
         if package in _external_tool_packages:

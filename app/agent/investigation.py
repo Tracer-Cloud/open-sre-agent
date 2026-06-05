@@ -111,14 +111,14 @@ class ConnectedInvestigationAgent:
         """Hook: narrow the tool list the agent will see.
 
         Called once at the start of ``run`` after the registry has produced
-        the candidate set for the resolved integrations. Default returns the
-        input unchanged — production agents expose every available tool.
+        the candidate set for the resolved integrations and before
+        ``_build_connected_tool_context`` derives ``state["available_sources"]``
+        and ``state["available_action_names"]`` — anything dropped here is
+        also dropped from those state fields.
 
-        Bench subclasses override this to restrict the agent to tools whose
-        results are deterministic in the bench environment (e.g. replay-backed
-        tools), preventing real-world integration tools (production EKS API
-        calls, Hermes log tailing, etc.) from being chosen and burning calls
-        on AccessDenied / network errors.
+        Default returns the input unchanged. Subclasses can override to
+        implement any policy that restricts tool availability per agent
+        instance (e.g. enforce an allowlist for an isolated execution mode).
         """
         return tools
 
