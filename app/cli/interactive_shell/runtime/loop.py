@@ -346,12 +346,17 @@ async def run_interactive(
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()
                         continue
+                    if session.session_id:
+                        echo_console.print()
+                        echo_console.print(f"Resume this session with:")
+                        echo_console.print(f"/resume {session.session_id}")
+                        echo_console.print(f"Goodbye!")
                     return
                 except KeyboardInterrupt:
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()
                         continue
-                    if repl_prompt_note_ctrl_c(echo_console):
+                    if repl_prompt_note_ctrl_c(echo_console, session.session_id):
                         return
                     continue
                 else:
