@@ -60,7 +60,7 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     with (
         patch("app.agent.context.resolve_integrations", return_value={}),
         patch("app.agent.extract.extract_alert", return_value={"is_noise": False}),
-        patch("app.correlation.node.node_correlate_upstream", return_value={}),
+        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_SentinelAgent)
@@ -83,7 +83,7 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
         patch(
             "app.agent.investigation.ConnectedInvestigationAgent.run", return_value={}
         ) as mock_run,
-        patch("app.correlation.node.node_correlate_upstream", return_value={}),
+        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
     ):
         run_connected_investigation(state)  # no agent_class kwarg
@@ -105,7 +105,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     with (
         patch("app.agent.context.resolve_integrations", return_value={}),
         patch("app.agent.extract.extract_alert", return_value={"is_noise": False}),
-        patch("app.correlation.node.node_correlate_upstream", return_value={}),
+        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
     ):
         run_investigation(raw_alert={"alert": "test"}, agent_class=_SentinelAgent)
