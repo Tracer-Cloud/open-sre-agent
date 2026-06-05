@@ -136,6 +136,20 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
     name = "cloudopsbench"
     version = "1.0.0"
 
+    # M7 (IntegrityGuard.pre_flight) — a documented data-contamination review
+    # has been performed: Cloud-OpsBench was published 2026-02 and every model
+    # in the grid has a training cutoff PRIOR to that date, so none could have
+    # seen the corpus. Full declaration + caveats live in the pre-registration
+    # (preregistrations/cloudopsbench_v1.yml::contamination_check). This flag is
+    # what the integrity gate reads to allow a non-dev (promotable) run.
+    data_contamination_checked = True
+
+    # Dataset pinning surfaced into provenance.json (_dataset_section reads these
+    # by attribute). Must match the pre-reg target_corpus so a reviewer can
+    # reproduce against the exact corpus revision.
+    hf_dataset = "tracer-cloud/cloud-ops-bench-dataset"
+    hf_revision = "ce0ded4f196f01e176cf1d69ec15c2db42b2a677"
+
     def __init__(self, benchmark_dir: Path = BENCHMARK_DIR) -> None:
         self._benchmark_dir = benchmark_dir
         # CloudOpsCase cache so we don't re-load case files between
@@ -144,6 +158,13 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         # start); read-only during cell execution → safe for the framework
         # runner's ThreadPoolExecutor.
         self._cases_by_id: dict[str, CloudOpsCase] = {}
+
+    @property
+    def benchmark_dir(self) -> Path:
+        """Local corpus path, surfaced into provenance.json (_dataset_section
+        reads ``benchmark_dir`` by attribute). Read-only view of the private
+        field so provenance records where the cases were loaded from."""
+        return self._benchmark_dir
 
     # ----------------------------------------------------------------------- #
     # BenchmarkAdapter interface                                              #

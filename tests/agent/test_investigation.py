@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 from unittest.mock import MagicMock, patch
@@ -10,6 +11,7 @@ from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
     _build_synthetic_assistant_tool_call_msg,
+    _context_budget_ceiling_for_model,
     _enforce_context_budget,
     _estimate_message_tokens,
     _run_parallel,
@@ -362,6 +364,168 @@ def test_trim_oldest_tool_pair_returns_false_when_no_tool_use_remains() -> None:
 
     assert _trim_oldest_tool_pair(messages) is False
     assert len(messages) == 2
+
+
+# --------------------------------------------------------------------------- #
+# OpenAI shape — regression pin for the 2026-06-05 floorsweep overflow bug.   #
+# Pre-fix, the trim function only recognized Anthropic tool_use blocks inside #
+# content lists, so gpt-4o assistant turns (content = plain string,           #
+# tool_calls as a top-level field) were never trimmed; long runs hit the 128k #
+# context_length_exceeded API error before the ceiling could fire.            #
+# --------------------------------------------------------------------------- #
+
+
+def test_trim_oldest_tool_pair_drops_openai_assistant_and_following_tool_messages() -> None:
+    """OpenAI shape: assistant has top-level ``tool_calls`` and the results
+    arrive as separate ``role: "tool"`` messages with matching call_ids.
+    The trimmer must drop the assistant + ALL its matched tool followers."""
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1a", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+                {"id": "call_1b", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1a", "content": "result a"},
+        {"role": "tool", "tool_call_id": "call_1b", "content": "result b"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_2", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_2", "content": "result"},
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    # Drops the OLDEST assistant + both of its tool followers (variable-length
+    # exchange, since one assistant turn can issue multiple tool_calls).
+    assert len(messages) == 3
+    assert messages[0]["content"] == "alert"
+    assert messages[1]["tool_calls"][0]["id"] == "call_2"
+    assert messages[2]["tool_call_id"] == "call_2"
+
+
+def test_trim_oldest_tool_pair_stops_at_unrelated_tool_message_after_openai_assistant() -> None:
+    """Defensive: if a non-matching ``role: "tool"`` message appears after an
+    OpenAI assistant turn (shouldn't happen in practice but we don't trust
+    upstream message hygiene), we stop walking and drop only the assistant
+    and the followers that DO match its call_ids."""
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "content": "result"},
+        # Stray tool message from a different assistant turn — must not be eaten
+        {"role": "tool", "tool_call_id": "orphan", "content": "huh"},
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    # Dropped the assistant + the matching tool, but NOT the orphan
+    assert len(messages) == 2
+    assert messages[0]["content"] == "alert"
+    assert messages[1]["tool_call_id"] == "orphan"
+
+
+def test_trim_oldest_tool_pair_drops_openai_assistant_when_no_tool_messages_follow() -> None:
+    """Edge: assistant turn issued tool_calls but the follow-up tool
+    messages haven't been appended yet (truncated mid-iteration). Drop just
+    the assistant — keeps the conversation valid for the next trim cycle."""
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+        },
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+    assert len(messages) == 1
+    assert messages[0]["content"] == "alert"
+
+
+def test_trim_oldest_tool_pair_skips_openai_assistant_with_empty_tool_calls() -> None:
+    """An assistant message with ``tool_calls: []`` (empty list — e.g. a
+    plain reply with no tool requests) must NOT be picked up as trimmable.
+    Pin this so a future code path that initializes tool_calls=[] for a
+    text-only assistant turn doesn't accidentally get torn out."""
+    messages = [
+        {"role": "user", "content": "alert"},
+        {"role": "assistant", "content": "plain reply", "tool_calls": []},
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is False
+    assert len(messages) == 2
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gpt-4o-2024-11-20", 112_000),  # 128k window − 16k headroom
+        ("gpt-5-2025-08-07", 112_000),
+        ("gpt-4-turbo", 112_000),
+        ("gpt-4.1", 984_000),  # 1M window
+        ("claude-3-5-sonnet-20241022", 184_000),  # 200k window
+        ("us.anthropic.claude-3-7-sonnet", 184_000),  # Bedrock prefix still matches
+        ("some-unknown-model", 112_000),  # conservative default
+        (None, 112_000),
+        ("", 112_000),
+    ],
+)
+def test_context_budget_ceiling_for_model(model: str | None, expected: int) -> None:
+    """The trim ceiling must track the ACTIVE model's window. A flat ceiling
+    overflowed gpt-4o (128k) because it was tuned for Anthropic's 200k — this
+    is the regression guard for that bug."""
+    assert _context_budget_ceiling_for_model(model) == expected
+
+
+def test_gpt4o_ceiling_is_below_its_hard_limit() -> None:
+    """The whole point: gpt-4o's ceiling must leave headroom under 128k so the
+    trimmed prompt + response never trips context_length_exceeded."""
+    assert _context_budget_ceiling_for_model("gpt-4o-2024-11-20") < 128_000
+
+
+def test_enforce_context_budget_respects_explicit_model_ceiling() -> None:
+    """A payload that fits a 200k Anthropic ceiling but not a 112k gpt-4o
+    ceiling must be trimmed when the gpt-4o ceiling is passed."""
+    big = "x" * 300_000  # ~150k tokens at 0.5/char — over 112k, under 184k
+    messages: list[dict] = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "k", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": big}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t2", "name": "k", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "small"}],
+        },
+    ]
+    _enforce_context_budget(messages, ceiling=_context_budget_ceiling_for_model("gpt-4o"))
+    # Oldest big pair trimmed; the small t2 pair survives.
+    assert len(messages) == 3
+    assert all("t1" not in json.dumps(m) for m in messages)
 
 
 def test_enforce_context_budget_noop_when_under_ceiling() -> None:
