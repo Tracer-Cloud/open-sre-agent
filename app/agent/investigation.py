@@ -104,6 +104,24 @@ class ConnectedInvestigationAgent:
         """
         return True, None
 
+    def _filter_tools(
+        self,
+        tools: list[RegisteredTool],
+    ) -> list[RegisteredTool]:
+        """Hook: narrow the tool list the agent will see.
+
+        Called once at the start of ``run`` after the registry has produced
+        the candidate set for the resolved integrations. Default returns the
+        input unchanged — production agents expose every available tool.
+
+        Bench subclasses override this to restrict the agent to tools whose
+        results are deterministic in the bench environment (e.g. replay-backed
+        tools), preventing real-world integration tools (production EKS API
+        calls, Hermes log tailing, etc.) from being chosen and burning calls
+        on AccessDenied / network errors.
+        """
+        return tools
+
     def run(
         self,
         state: dict[str, Any],
@@ -137,7 +155,7 @@ class ConnectedInvestigationAgent:
             _emit("tool_end", _tool_event_payload(tc, output=output))
 
         resolved = state.get("resolved_integrations") or {}
-        tools = _get_available_tools(resolved)
+        tools = self._filter_tools(_get_available_tools(resolved))
         tool_context = _build_connected_tool_context(resolved, tools)
         state["available_sources"] = tool_context["available_sources"]
         state["available_action_names"] = tool_context["available_action_names"]

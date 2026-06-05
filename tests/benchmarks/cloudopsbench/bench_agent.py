@@ -26,7 +26,17 @@ case, so a stubborn model can't infinite-loop.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from app.agent.investigation import ConnectedInvestigationAgent
+from app.tools.registered_tool import RegisteredTool
+
+# Tools available to the bench agent are exactly those registered by the
+# bench-specific package. Production opensre tools (real EKS API calls,
+# Hermes log tailing, etc.) would hit live infrastructure that the bench
+# task role intentionally cannot reach — burning calls on AccessDenied
+# instead of returning deterministic replay data.
+_BENCH_TOOL_MODULE_PREFIX = "tests.benchmarks.cloudopsbench.tools."
 
 
 class BenchInvestigationAgent(ConnectedInvestigationAgent):
@@ -39,6 +49,7 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
     """
 
     MIN_TOOL_CALLS = 8
+    ALLOWED_TOOL_MODULE_PREFIXES: ClassVar[tuple[str, ...]] = (_BENCH_TOOL_MODULE_PREFIX,)
 
     def _should_accept_conclusion(
         self,
@@ -55,3 +66,16 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
             f"you haven't queried, or evidence that would support OR "
             f"contradict your current hypothesis."
         )
+
+    def _filter_tools(
+        self,
+        tools: list[RegisteredTool],
+    ) -> list[RegisteredTool]:
+        """Restrict to bench-package tools by origin module.
+
+        Filtering by ``origin_module`` instead of an explicit name list means
+        a new bench tool added under ``tests/benchmarks/cloudopsbench/tools/``
+        is picked up automatically — no risk of the whitelist drifting out
+        of sync with the tool registry.
+        """
+        return [t for t in tools if t.origin_module.startswith(self.ALLOWED_TOOL_MODULE_PREFIXES)]
