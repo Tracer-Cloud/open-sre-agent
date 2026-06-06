@@ -154,8 +154,10 @@ def _control_contrast(cells: list[dict[str, Any]], llm: str) -> None:
             f"scenarios — {meaning}"
         )
     if not any_control:
-        print("  (no control arms in this run — single-arm pilot; run the v1 "
-              "config's llm_alone / llm_alone_pure to attribute the lift)")
+        print(
+            "  (no control arms in this run — single-arm pilot; run the v1 "
+            "config's llm_alone / llm_alone_pure to attribute the lift)"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -176,8 +178,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"# Track-2 failure-mode analysis — {run_dir.name}")
-    print(f"# {len([c for c in all_cells if '_load_error' not in c])} cells, "
-          f"{len(by_llm_mode)} LLM(s): {', '.join(sorted(by_llm_mode))}")
+    print(
+        f"# {len([c for c in all_cells if '_load_error' not in c])} cells, "
+        f"{len(by_llm_mode)} LLM(s): {', '.join(sorted(by_llm_mode))}"
+    )
 
     for llm in sorted(by_llm_mode):
         llm_cells = [c for c in all_cells if c.get("run", {}).get("llm") == llm]
@@ -188,8 +192,10 @@ def main(argv: list[str] | None = None) -> int:
             _breakdown(primary, llm, _cell_system, "Per system")
         _control_contrast(llm_cells, llm)
 
-    print("\n# Read: a1−object_a1 gap = labeling problem (lever #4 cite/label); "
-          "low object_a1 = localization problem (coverage/exploration lever).")
+    print(
+        "\n# Read: a1−object_a1 gap = labeling problem (lever #4 cite/label); "
+        "low object_a1 = localization problem (coverage/exploration lever)."
+    )
     return 0
 
 

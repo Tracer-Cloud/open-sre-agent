@@ -39,7 +39,15 @@ logger = logging.getLogger(__name__)
 # ``BENCH_MIN_TOOL_CALLS`` env var so the floor can be swept across runs WITHOUT
 # editing code — each sweep point is a fresh CLI process, so an import-time read
 # is sufficient. Tests still override the class attribute directly.
-_DEFAULT_MIN_TOOL_CALLS = 8
+#
+# Calibrated to 5 based on the 2026-06-06 floorsweep on 30 gpt-4o cases × 3
+# seeds (.bench-results/cloudopsbench_floorsweep_openai/). Floor=5 produced the
+# highest single-shot A@1 mean (0.578) and the highest object_a1 (0.811) while
+# preserving a `rel` (0.374) much closer to the paper's gpt-4o reference (0.63)
+# than floor=8 (rel=0.306). Floor=8 (the prior default) over-explored — agents
+# averaged 9 tool calls per case, burning 3-4 calls on tools that didn't change
+# the diagnosis. See EXPERIMENTS.md in bench-results-openai/ for the full table.
+_DEFAULT_MIN_TOOL_CALLS = 5
 _ENV_MIN_TOOL_CALLS = "BENCH_MIN_TOOL_CALLS"
 
 

@@ -163,6 +163,35 @@ def test_code_section_includes_sha_branch_dirty_files(tmp_path: Path) -> None:
     assert isinstance(code["opensre_changed_files"], list)
 
 
+def test_git_state_preserves_first_char_of_unstaged_changed_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: ``git status --porcelain`` column 0 is a significant space for
+    unstaged changes (" M app/…"). An earlier strip ate that space on the first
+    line, so the fixed-width [3:] path slice dropped the path's first char
+    ("app/…" → "pp/…"). Pin that the porcelain is read UNSTRIPPED and the path is
+    intact. The fake asserts strip=False is actually passed: if it weren't, it
+    would return the stripped form and the path would regress to "pp/…".
+    """
+    from tests.benchmarks._framework import provenance as prov_mod
+
+    def fake_run_git(*args: str, strip: bool = True) -> str:
+        if args[:2] == ("status", "--porcelain"):
+            raw = " M app/agent/investigation.py\n?? tests/benchmarks/new_file.py\n"
+            return raw if not strip else raw.strip()
+        return "deadbeef"
+
+    monkeypatch.setattr(prov_mod, "_run_git", fake_run_git)
+
+    state = prov_mod._git_state()
+
+    assert state["opensre_dirty"] is True
+    assert state["opensre_changed_files"] == [
+        "app/agent/investigation.py",
+        "tests/benchmarks/new_file.py",
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # Config + pre-registration: inline content + sha256                          #
 # --------------------------------------------------------------------------- #

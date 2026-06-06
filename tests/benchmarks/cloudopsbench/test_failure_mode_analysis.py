@@ -75,8 +75,18 @@ def test_main_renders_breakdowns_and_right_place_wrong_label(tmp_path: Path, cap
     run_dir = _write_cases(
         tmp_path,
         [
-            _cell("c1", system="trainticket", category="runtime", a1=0.0, object_a1=1.0, cov=0.5, steps=9),
-            _cell("c2", system="boutique", category="startup", a1=0.0, object_a1=0.0, cov=0.9, steps=8),
+            _cell(
+                "c1",
+                system="trainticket",
+                category="runtime",
+                a1=0.0,
+                object_a1=1.0,
+                cov=0.5,
+                steps=9,
+            ),
+            _cell(
+                "c2", system="boutique", category="startup", a1=0.0, object_a1=0.0, cov=0.9, steps=8
+            ),
         ],
     )
     assert main([str(run_dir)]) == 0

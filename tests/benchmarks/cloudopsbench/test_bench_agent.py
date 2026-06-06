@@ -70,10 +70,12 @@ def test_bench_agent_allows_conclusion_above_threshold() -> None:
     assert nudge is None
 
 
-@pytest.mark.parametrize("count", [0, 1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize("count", list(range(BenchInvestigationAgent.MIN_TOOL_CALLS)))
 def test_bench_agent_rejects_below_floor_for_every_count_under_min(count: int) -> None:
     """Exhaustive: every count below the floor must be rejected. Guards
-    against a future off-by-one in the floor comparison."""
+    against a future off-by-one in the floor comparison. Parametrized off
+    the class attribute so re-tuning ``MIN_TOOL_CALLS`` doesn't drift the
+    test cases out of sync with the actual floor."""
     agent = BenchInvestigationAgent()
     accept, nudge = agent._should_accept_conclusion(evidence_count=count, iteration=count)
     assert accept is False

@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -532,29 +532,52 @@ def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
     return text[:keep] + _TRUNCATION_MARKER, True
 
 
-def _iter_text_slots(
-    node: Any,
-) -> Iterator[tuple[dict[str, Any] | list[Any], str | int]]:
-    """Yield (container, key) handles for every truncatable string in a content tree.
+def _sum_text_chars(node: Any) -> int:
+    """Total char length of every truncatable string in a content tree.
 
     Targets the bulky payload fields opensre actually emits: a dict's ``content``
     / ``text`` (Anthropic tool_result + text blocks) and bare strings inside
-    lists. Recurses through nested dicts/lists (e.g. a tool_result whose
-    ``content`` is itself a list of text blocks). Each yielded handle supports
-    ``container[key] = ...`` so callers can rewrite in place.
+    lists, recursing through nested dicts/lists.
     """
+    total = 0
     if isinstance(node, dict):
         for key, value in node.items():
             if isinstance(value, str) and key in ("content", "text"):
-                yield node, key
+                total += len(value)
             elif isinstance(value, (list, dict)):
-                yield from _iter_text_slots(value)
+                total += _sum_text_chars(value)
+    elif isinstance(node, list):
+        for value in node:
+            if isinstance(value, str):
+                total += len(value)
+            elif isinstance(value, (list, dict)):
+                total += _sum_text_chars(value)
+    return total
+
+
+def _apply_text_factor(node: Any, factor: float) -> bool:
+    """Shrink every truncatable string in a content tree to ~``factor`` of its
+    length, mutating in place. Returns whether anything changed."""
+    changed = False
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(value, str) and key in ("content", "text"):
+                new_value, slot_changed = _shrink_text(value, max(int(len(value) * factor), 0))
+                if slot_changed:
+                    node[key] = new_value
+                    changed = True
+            elif isinstance(value, (list, dict)):
+                changed = _apply_text_factor(value, factor) or changed
     elif isinstance(node, list):
         for idx, value in enumerate(node):
             if isinstance(value, str):
-                yield node, idx
+                new_value, slot_changed = _shrink_text(value, max(int(len(value) * factor), 0))
+                if slot_changed:
+                    node[idx] = new_value
+                    changed = True
             elif isinstance(value, (list, dict)):
-                yield from _iter_text_slots(value)
+                changed = _apply_text_factor(value, factor) or changed
+    return changed
 
 
 def _truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
@@ -568,21 +591,11 @@ def _truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
     if isinstance(content, str):
         return _shrink_text(content, max_chars)
     if isinstance(content, list):
-        slots = list(_iter_text_slots(content))
-        if not slots:
-            return content, False
-        total = sum(len(container[key] or "") for container, key in slots)
+        total = _sum_text_chars(content)
         if total <= max_chars:
             return content, False
         factor = max_chars / total if total else 0.0
-        changed = False
-        for container, key in slots:
-            target = max(int(len(container[key] or "") * factor), 0)
-            new_value, slot_changed = _shrink_text(container[key] or "", target)
-            if slot_changed:
-                container[key] = new_value  # type: ignore[index]
-                changed = True
-        return content, changed
+        return content, _apply_text_factor(content, factor)
     return content, False
 
 
@@ -643,9 +656,7 @@ def _enforce_context_budget(
             # message) is itself too large. Truncate its payload so the request
             # can't overflow. If nothing is left to shrink, return and let the
             # API surface the error rather than spin.
-            if not _truncate_largest_message(
-                messages, system=system, tools=tools, ceiling=ceiling
-            ):
+            if not _truncate_largest_message(messages, system=system, tools=tools, ceiling=ceiling):
                 logger.warning(
                     "[agent] context still over budget after trimming + truncation "
                     "(ceiling=%d); letting the request proceed",
