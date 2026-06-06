@@ -79,13 +79,23 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         source_ip = parsed.get("sourceIPAddress")
         error_code = parsed.get("errorCode")
 
+    # CloudTrail returns ReadOnly as the string "true"/"false"; coerce to a real
+    # bool so callers don't trip over "false" being truthy in Python.
+    read_only_raw = raw.get("ReadOnly")
+    if isinstance(read_only_raw, bool):
+        read_only = read_only_raw
+    elif isinstance(read_only_raw, str):
+        read_only = read_only_raw.strip().lower() == "true"
+    else:
+        read_only = None
+
     return {
         "event_id": raw.get("EventId"),
         "event_name": raw.get("EventName"),
         "event_time": raw.get("EventTime"),
         "event_source": raw.get("EventSource"),
         "username": raw.get("Username"),
-        "read_only": raw.get("ReadOnly"),
+        "read_only": read_only,
         "access_key_id": raw.get("AccessKeyId"),
         "resources": resources,
         "aws_region": aws_region,
@@ -152,6 +162,7 @@ def _shape_event(raw: dict[str, Any]) -> dict[str, Any]:
         },
         "required": [],
     },
+    injected_params=("aws_backend",),
     is_available=cloudtrail_is_available,
     extract_params=cloudtrail_extract_params,
 )

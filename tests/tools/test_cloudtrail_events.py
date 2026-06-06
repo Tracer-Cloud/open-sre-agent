@@ -66,17 +66,19 @@ def test_tool_discovered_on_investigation_surface() -> None:
     assert "lookup_cloudtrail_events" in names
 
 
-def test_cloudtrail_seeded_and_prioritized_for_aws_alerts() -> None:
-    """CloudTrail is auto-seeded and prioritized for AWS-originating alerts.
+def test_cloudtrail_prioritized_but_not_auto_seeded_for_aws_alerts() -> None:
+    """CloudTrail is prioritized for AWS alerts but left for the planner to call.
 
-    Guards both maps so a cloudwatch/eks/alertmanager alert pulls CloudTrail
-    change-causality into the investigation, not just one of them.
+    It is intentionally NOT in the auto-seed map: an unscoped, account-wide
+    lookup on every cloudwatch/eks/alertmanager alert would be noisy and press
+    CloudTrail's low lookup rate limit. The prompt prioritization map nudges the
+    planner to reach for it once it has a concrete resource/principal/time target.
     """
     from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
     from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
 
     for alert_source in ("cloudwatch", "eks", "alertmanager"):
-        assert "cloudtrail" in seed_map[alert_source]
+        assert "cloudtrail" not in seed_map[alert_source]
         assert "cloudtrail" in priority_map[alert_source]
 
 
@@ -113,7 +115,9 @@ def test_is_available_on_role_or_credentials() -> None:
 
 
 def test_is_available_on_injected_backend() -> None:
-    assert cloudtrail_is_available({"aws": {"_backend": object()}}) is True
+    # The synthetic harness injects the fixture backend as "ec2_backend" on the
+    # "aws" source (see tests/synthetic/rds_postgres/run_suite.py).
+    assert cloudtrail_is_available({"aws": {"ec2_backend": object()}}) is True
 
 
 def test_not_available_without_aws() -> None:
@@ -142,7 +146,8 @@ def test_extract_params_defaults_region(monkeypatch) -> None:
 
 def test_extract_params_forwards_backend() -> None:
     backend = object()
-    params = cloudtrail_extract_params({"aws": {"_backend": backend}})
+    # Harness-shaped: the backend handle lives under "ec2_backend" on "aws".
+    params = cloudtrail_extract_params({"aws": {"ec2_backend": backend}})
     assert params["aws_backend"] is backend
 
 
@@ -184,6 +189,8 @@ def test_lookup_success_and_shaping(mock_call) -> None:
     event = result["events"][0]
     assert event["event_name"] == "DeleteSecurityGroup"
     assert event["username"] == "alice"
+    # "false" -> real bool False (not the truthy string "false")
+    assert event["read_only"] is False
     assert event["resources"] == [{"type": "AWS::EC2::SecurityGroup", "name": "sg-1"}]
     assert event["aws_region"] == "us-east-1"
     assert event["source_ip_address"] == "1.2.3.4"
@@ -312,6 +319,7 @@ def test_short_circuits_to_aws_backend(mock_call) -> None:
     )
 
     mock_call.assert_not_called()
+    assert result["available"] is True
     assert backend.calls == [
         {
             "lookup_attributes": [{"AttributeKey": "ResourceName", "AttributeValue": "sg-1"}],
@@ -320,4 +328,28 @@ def test_short_circuits_to_aws_backend(mock_call) -> None:
             "region": "us-east-1",
         }
     ]
+
+
+@patch("app.tools.CloudTrailEventsTool.execute_aws_sdk_call")
+def test_harness_shaped_aws_source_short_circuits_off_real_aws(mock_call) -> None:
+    """Regression: the synthetic harness injects the backend as aws['ec2_backend'].
+
+    Resolving via cloudtrail_extract_params (not injecting aws_backend directly)
+    must pick up that handle and short-circuit the tool, so a synthetic run —
+    e.g. an rds scenario with alert_source 'cloudwatch' — never reaches a real
+    boto3 lookup_events call even when ambient AWS creds are present.
+    """
+    backend = _FakeAWSBackend(
+        response={"source": "cloudtrail", "available": True, "total_events": 0, "events": []}
+    )
+    # Source dict shaped exactly like tests/synthetic/rds_postgres/run_suite.py.
+    sources = {"aws": {"region": "us-east-1", "ec2_backend": backend}}
+
+    params = cloudtrail_extract_params(sources)
+    assert params["aws_backend"] is backend  # resolved from ec2_backend, not _backend
+
+    result = lookup_cloudtrail_events(resource_name="sg-1", **params)
+
+    mock_call.assert_not_called()
+    assert backend.calls and backend.calls[0]["region"] == "us-east-1"
     assert result["available"] is True
