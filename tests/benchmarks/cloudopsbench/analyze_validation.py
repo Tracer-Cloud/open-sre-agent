@@ -64,7 +64,11 @@ def _top(run: dict) -> list[dict]:
 
 def _is_a1(pred: dict, gt: tuple[str, str, str]) -> bool:
     go, gr, gtax = gt
-    return _norm(pred.get("fault_object")) == go and _norm(pred.get("root_cause")) == gr and _norm(pred.get("fault_taxonomy")) == gtax
+    return (
+        _norm(pred.get("fault_object")) == go
+        and _norm(pred.get("root_cause")) == gr
+        and _norm(pred.get("fault_taxonomy")) == gtax
+    )
 
 
 def _bootstrap_ci(deltas: list[float], iters: int = 2000) -> tuple[float, float, float]:
@@ -92,9 +96,11 @@ def analyze(run_dir: Path) -> int:
     for seen in (True, False):
         label = "SEEN-shape" if seen else "UNSEEN-shape"
         print(f"=== {label} ===")
-        print(f'{"arm":<14}{"n":>5}{"a1":>8}{"object_a1":>11}{"healthy%":>10}')
+        print(f"{'arm':<14}{'n':>5}{'a1':>8}{'object_a1':>11}{'healthy%':>10}")
         for arm in _ARMS:
-            cells = [r for r in rows if r["run"]["mode"] == arm and r["case"].get("seen_shape") is seen]
+            cells = [
+                r for r in rows if r["run"]["mode"] == arm and r["case"].get("seen_shape") is seen
+            ]
             if not cells:
                 continue
             a1 = obj = healthy = 0
@@ -134,8 +140,12 @@ def analyze(run_dir: Path) -> int:
         shared = sorted(set(a) & set(b))
         deltas = [a[k] - b[k] for k in shared]
         pt, lo, hi = _bootstrap_ci(deltas)
-        verdict = "ns (incl 0)" if (lo <= 0 <= hi) else ("opensre+ SIG" if pt > 0 else "control+ SIG")
-        print(f"  {label:<7} d={pt:+.4f}  95%CI[{lo:+.4f},{hi:+.4f}]  n_scen={len(shared):>3}  {verdict}")
+        verdict = (
+            "ns (incl 0)" if (lo <= 0 <= hi) else ("opensre+ SIG" if pt > 0 else "control+ SIG")
+        )
+        print(
+            f"  {label:<7} d={pt:+.4f}  95%CI[{lo:+.4f},{hi:+.4f}]  n_scen={len(shared):>3}  {verdict}"
+        )
     print()
 
     # Translation-loss proxy (seen-shape, the Fix-A target).

@@ -544,7 +544,9 @@ def _build_user_prompt(
 ) -> str:
     alert_block = alert_text.strip()
     if metric_alerts.strip():
-        alert_block = f"{alert_block}\n\n{metric_alerts.strip()}" if alert_block else metric_alerts.strip()
+        alert_block = (
+            f"{alert_block}\n\n{metric_alerts.strip()}" if alert_block else metric_alerts.strip()
+        )
 
     perf_block = ""
     if performance_localization_hint:

@@ -133,9 +133,7 @@ def infer_performance_localization(
         cpu_service = next(iter(cpu_throttled))
         cpu_latency = latency_peak.get(cpu_service, 0.0)
         other_latency = {
-            svc: pct
-            for svc, pct in latency_peak.items()
-            if svc != cpu_service and pct >= 500.0
+            svc: pct for svc, pct in latency_peak.items() if svc != cpu_service and pct >= 500.0
         }
         if other_latency:
             best_other = max(other_latency, key=other_latency.get)
@@ -164,15 +162,16 @@ def infer_performance_localization(
                 "fault_object": f"app/{best_service}",
                 "root_cause": "pod_network_delay",
                 "rationale": (
-                    f"largest relative latency spike (+{best_pct:.0f}%) among "
-                    f"alerted services"
+                    f"largest relative latency spike (+{best_pct:.0f}%) among alerted services"
                 ),
             }
 
     return None
 
 
-def performance_context_for_case_dir(case_dir: Path, *, namespace: str) -> tuple[str, dict[str, str] | None]:
+def performance_context_for_case_dir(
+    case_dir: Path, *, namespace: str
+) -> tuple[str, dict[str, str] | None]:
     """Return ``(formatted_alerts, localization_hint)`` for a case directory."""
     alert_data = load_alert_json(case_dir)
     return (
