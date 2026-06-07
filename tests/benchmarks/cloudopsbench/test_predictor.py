@@ -265,11 +265,30 @@ def test_user_prompt_with_summary_anchors_rank1_on_investigation() -> None:
         "alert_name: trainticket/runtime/56",
         "ts-voucher-service Access denied for user 'ts'",
     )
-    assert "AUTHORITATIVE" in body
+    assert "INVESTIGATION SUMMARY" in body
     assert "rank 1" in body.lower()
     # Inputs are still carried through verbatim.
     assert "trainticket/runtime/56" in body
     assert "Access denied" in body
+
+
+def test_user_prompt_includes_performance_localization_hint() -> None:
+    from tests.benchmarks.cloudopsbench.predictor import _build_user_prompt
+
+    body = _build_user_prompt(
+        "alert_name: trainticket/performance/44",
+        "cluster-wide CPU saturation under load",
+        metric_alerts="Metric anomalies:\n  - ts-station-service: [LATENCY] +35691%",
+        performance_localization_hint={
+            "fault_object": "app/ts-station-service",
+            "root_cause": "pod_network_delay",
+            "rationale": "largest latency spike",
+        },
+    )
+    assert "ALERT-DERIVED PERFORMANCE LOCALIZATION" in body
+    assert "app/ts-station-service" in body
+    assert "pod_network_delay" in body
+    assert "35691" in body
 
 
 def test_user_prompt_without_summary_is_alert_only_and_unchanged() -> None:

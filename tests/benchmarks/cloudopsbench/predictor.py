@@ -412,6 +412,8 @@ def emit_paper_predictions(
     alert_text: str,
     investigation_summary: str,
     llm: Any,
+    metric_alerts: str = "",
+    performance_localization_hint: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     """Ask the LLM to translate the investigation into paper-format predictions.
 
@@ -426,7 +428,12 @@ def emit_paper_predictions(
     pre-predictor behavior.
     """
     system = _build_system_prompt()
-    user_content = _build_user_prompt(alert_text, investigation_summary)
+    user_content = _build_user_prompt(
+        alert_text,
+        investigation_summary,
+        metric_alerts=metric_alerts,
+        performance_localization_hint=performance_localization_hint,
+    )
 
     try:
         response = retry_on_rate_limit(
@@ -510,29 +517,66 @@ def _build_system_prompt() -> str:
         "  - If the cause is genuinely an app-level misconfiguration (wrong\n"
         "    port, bad image reference, probe misconfig, missing secret binding\n"
         "    on ONE deployment), keep fault_object as 'app/<service>'. The\n"
-        "    scope rule only fires for cross-service namespace-wide failures.\n"
+        "    scope rule only fires for cross-service namespace-wide failures.\n\n"
+        "Performance-fault disambiguation (when metric anomalies are present):\n"
+        "  - ``pod_cpu_overload``: rank-1 ``fault_object`` is the service whose\n"
+        "    alert shows RESOURCE_SATURATION / cpu_cfs throttling ON THAT SERVICE.\n"
+        "  - ``pod_network_delay``: rank-1 ``fault_object`` is the service with\n"
+        "    the largest relative LATENCY_DEGRADATION spike (highest +%% increase\n"
+        "    in p50/p90), NOT a different service that only shows CPU throttling.\n"
+        "    CPU throttling on service A does not localize ``pod_network_delay``\n"
+        "    onto A when service B has the extreme latency spike.\n"
+        "  - Do NOT emit ``namespace_*`` quota tokens on performance alerts unless\n"
+        "    the investigation explicitly identifies a ResourceQuota admission block.\n"
+        "  - When an ALERT-DERIVED PERFORMANCE LOCALIZATION block is provided in\n"
+        "    the user message, it is AUTHORITATIVE for rank-1 ``fault_object`` and\n"
+        "    ``root_cause`` — formalize it even if the investigation summary names\n"
+        "    a different service or a cluster-wide CPU saturation narrative.\n"
     )
 
 
-def _build_user_prompt(alert_text: str, investigation_summary: str) -> str:
+def _build_user_prompt(
+    alert_text: str,
+    investigation_summary: str,
+    *,
+    metric_alerts: str = "",
+    performance_localization_hint: dict[str, str] | None = None,
+) -> str:
+    alert_block = alert_text.strip()
+    if metric_alerts.strip():
+        alert_block = f"{alert_block}\n\n{metric_alerts.strip()}" if alert_block else metric_alerts.strip()
+
+    perf_block = ""
+    if performance_localization_hint:
+        perf_block = (
+            "ALERT-DERIVED PERFORMANCE LOCALIZATION (AUTHORITATIVE for rank-1\n"
+            "fault_object + root_cause — overrides cluster-wide investigation\n"
+            "narratives that name the wrong service):\n"
+            f"  fault_object: {performance_localization_hint.get('fault_object', '')}\n"
+            f"  root_cause: {performance_localization_hint.get('root_cause', '')}\n"
+            f"  rationale: {performance_localization_hint.get('rationale', '')}\n\n"
+        )
+
     if investigation_summary.strip():
         body = (
             "ALERT:\n"
-            f"{alert_text}\n\n"
-            "INVESTIGATION SUMMARY (AUTHORITATIVE — formalize its conclusion,\n"
-            "do not re-diagnose the alert from scratch):\n"
+            f"{alert_block}\n\n"
+            "INVESTIGATION SUMMARY (formalize its conclusion unless the performance\n"
+            "localization block below overrides rank-1):\n"
             f"{investigation_summary}\n\n"
-            "Set rank 1 to the component and root cause this investigation\n"
-            "identified (applying the scope rule to choose the fault_object\n"
-            "level). Emit the JSON object now."
+            f"{perf_block}"
+            "Set rank 1 to the localized component and root cause (apply the scope\n"
+            "rule for fault_object level). Emit the JSON object now."
         )
     else:
         # llm_alone path — no prior investigation to lean on.
         body = (
             "ALERT:\n"
-            f"{alert_text}\n\n"
+            f"{alert_block}\n\n"
+            f"{perf_block}"
             "No prior investigation evidence is available; reason from the\n"
-            "alert alone. Emit the JSON object now."
+            "alert and any performance localization block above. Emit the JSON\n"
+            "object now."
         )
     return body
 

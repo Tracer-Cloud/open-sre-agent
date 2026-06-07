@@ -20,6 +20,7 @@ from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
         # benchmark/.../metadata.json ground_truth.fault_taxonomy:
         ("missing_secret_binding", "Startup_Fault"),
         ("service_sidecar_port_conflict", "Runtime_Fault"),
+        ("missing_service_account", "Admission_Fault"),
         # Already correct, but pin them so the next refactor can't silently
         # break the mapping:
         ("mysql_invalid_credentials", "Runtime_Fault"),
@@ -27,7 +28,6 @@ from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
         ("oom_killed", "Runtime_Fault"),
         ("incorrect_image_reference", "Startup_Fault"),
         ("service_dns_resolution_failure", "Service_Routing_Fault"),
-        ("missing_service_account", "Scheduling_Fault"),
         ("kube_scheduler_unavailable", "Infrastructure_Fault"),
         # Prefix rule: anything starting with namespace_*
         ("namespace_anything_at_all", "Admission_Fault"),

@@ -56,6 +56,9 @@ from tests.benchmarks.cloudopsbench.case_loader import (
     load_cases as _legacy_load_cases,
 )
 from tests.benchmarks.cloudopsbench.held_out_split import compute_held_out_set
+from tests.benchmarks.cloudopsbench.performance_alert_localization import (
+    performance_context_for_case_dir,
+)
 from tests.benchmarks.cloudopsbench.predictor import (
     emit_paper_predictions,
 )
@@ -415,7 +418,13 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         from app.services.agent_llm_client import get_agent_llm
 
         alert = self.build_alert(case)
+        legacy = self._require_case(case)
         investigation_summary = _summarize_investigation(run)
+        metric_alerts, perf_hint = performance_context_for_case_dir(
+            legacy.case_dir, namespace=legacy.namespace
+        )
+        if legacy.fault_category != "performance":
+            perf_hint = None
 
         try:
             llm = get_agent_llm()
@@ -425,6 +434,8 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         payload = emit_paper_predictions(
             alert_text=_alert_text_for_predictor(alert.normalized),
             investigation_summary=investigation_summary,
+            metric_alerts=metric_alerts,
+            performance_localization_hint=perf_hint,
             llm=llm,
         )
         if payload is None:

@@ -276,13 +276,15 @@ def _taxonomy_for_root_cause(root_cause: str) -> str:
     - ``service_sidecar_port_conflict`` — dataset says ``Runtime_Fault`` (the
       port conflict manifests when the istio sidecar tries to bind at runtime),
       not ``Service_Routing_Fault``.
+    - ``missing_service_account`` — dataset says ``Admission_Fault`` (all 10
+      boutique/admission/* cases; the apiserver rejects pod creation at admission
+      time), not ``Scheduling_Fault``.
 
-    Both are now placed in the buckets the paper's dataset uses.
+    All three are now placed in the buckets the paper's dataset uses.
     """
-    if root_cause.startswith("namespace_"):
+    if root_cause.startswith("namespace_") or root_cause == "missing_service_account":
         return "Admission_Fault"
     if root_cause in {
-        "missing_service_account",
         "node_cordon_mismatch",
         "node_affinity_mismatch",
         "node_selector_mismatch",
