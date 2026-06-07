@@ -1,0 +1,135 @@
+---
+title: "Supabase"
+description: "Connect Supabase so OpenSRE can diagnose PostgreSQL database and authentication issues"
+---
+
+Supabase powers many modern applications. When something goes wrong with your database or auth system, OpenSRE connects to your Supabase PostgreSQL instance to quickly diagnose the issue — querying tables, checking replica health, analyzing query performance, and reviewing authentication logs.
+
+## What you'll need
+
+- A Supabase project with an active database
+- Your database connection credentials
+- The ability to reach your database from your OpenSRE environment
+- Possibly an IP allowlist update (we'll walk you through it)
+
+## Connecting Supabase
+
+### Guided walkthrough
+
+Let's set this up together:
+
+```bash
+opensre integrations setup
+```
+
+Pick **Supabase** and fill in your database details.
+
+### DIY: Using environment variables
+
+Or add these directly to your `.env`:
+
+```bash
+SUPABASE_HOST=db.abcdefg.supabase.co
+SUPABASE_PORT=5432
+SUPABASE_DATABASE=postgres
+SUPABASE_USERNAME=postgres
+SUPABASE_PASSWORD=your_password
+SUPABASE_SSL_MODE=require
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPABASE_HOST` | — | **Required.** Supabase database host |
+| `SUPABASE_PORT` | `5432` | PostgreSQL port |
+| `SUPABASE_DATABASE` | `postgres` | Database name |
+| `SUPABASE_USERNAME` | — | **Required.** Database username |
+| `SUPABASE_PASSWORD` | — | **Required.** Database password |
+| `SUPABASE_SSL_MODE` | `require` | SSL mode: `disable`, `allow`, `prefer`, `require` |
+
+### Option 3: Persistent store
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "supabase-prod",
+      "service": "supabase",
+      "status": "active",
+      "credentials": {
+        "host": "db.abcdefg.supabase.co",
+        "port": 5432,
+        "database": "postgres",
+        "username": "postgres",
+        "password": "your_password",
+        "ssl_mode": "require"
+      }
+    }
+  ]
+}
+```
+
+## Find your Supabase connection details
+
+It's easy — they're all in one place:
+
+1. Log into Supabase
+2. Select your project
+3. Go to **Project Settings** → **Database**
+4. Under **Connection info**, you'll see:
+   - **Host** (something like `db.abcdefg.supabase.co`)
+   - **Database** (usually `postgres`)
+   - **Port** (usually `5432`)
+   - **Username** and **Password**
+
+Copy these values into your OpenSRE config.
+
+## Optional: Use a connection string
+
+If you prefer connection strings:
+
+```bash
+postgresql://username:password@db.abcdefg.supabase.co:5432/postgres?sslmode=require
+```
+
+## Network setup: IP allowlist
+
+Supabase restricts which IPs can connect. You might need to allowlist your OpenSRE environment:
+
+1. In Supabase, go to **Project Settings** → **Security** → **Network**
+2. Under **IP Allowlist**, add your OpenSRE IP
+3. Click **Save**
+
+<Tip>
+For local testing, you can temporarily disable the allowlist, but always enable it for production.
+</Tip>
+
+## Better security: Create a limited role
+
+Instead of using your main `postgres` account, create a read-only role:
+
+```sql
+-- Run this connected as the postgres user
+CREATE ROLE opensre_viewer WITH LOGIN PASSWORD 'strong_password';
+GRANT CONNECT ON DATABASE postgres TO opensre_viewer;
+GRANT USAGE ON SCHEMA public TO opensre_viewer;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO opensre_viewer;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO opensre_viewer;
+```
+
+Then use these credentials:
+
+```bash
+SUPABASE_USERNAME=opensre_viewer
+SUPABASE_PASSWORD=strong_password
+```
+
+## Test it out
+
+Ready to verify?
+
+```bash
+opensre integrations verify --id supabase-prod
+```
+
+This checks that you can connect and that you have the right permissions.

@@ -1,0 +1,105 @@
+---
+title: "Azure SQL"
+description: "Connect Azure SQL so OpenSRE can diagnose database issues and query performance during investigations"
+---
+
+When a database alert fires, you need answers fast. OpenSRE connects to your Azure SQL instances to quickly diagnose what's going wrong — checking server health, finding those slow queries that are bogging things down, monitoring resource usage, and analyzing query execution plans to pinpoint bottlenecks.
+
+## What you'll need
+
+Before getting started, make sure you have:
+
+- An Azure SQL Database instance up and running
+- Network connectivity from your OpenSRE environment to your Azure SQL server
+- Database credentials ready (username and password)
+- Your server hostname handy
+
+## Getting connected
+
+### The easy way: Interactive setup
+
+If you prefer guided steps, just run:
+
+```bash
+opensre integrations setup
+```
+
+Pick **Azure SQL** from the menu and follow the prompts.
+
+### The flexible way: Environment variables
+
+Add these to your `.env` file:
+
+```bash
+AZURE_SQL_SERVER=myserver.database.windows.net
+AZURE_SQL_DATABASE=mydb
+AZURE_SQL_USERNAME=sqladmin
+AZURE_SQL_PASSWORD=your_password
+AZURE_SQL_ENCRYPT=true
+AZURE_SQL_TRUST_CERT=false
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AZURE_SQL_SERVER` | — | **Required.** Azure SQL server hostname |
+| `AZURE_SQL_DATABASE` | — | **Required.** Database name |
+| `AZURE_SQL_USERNAME` | — | **Required.** SQL authentication username |
+| `AZURE_SQL_PASSWORD` | — | **Required.** SQL authentication password |
+| `AZURE_SQL_ENCRYPT` | `true` | Encrypt your connection for security |
+| `AZURE_SQL_TRUST_CERT` | `false` | Only set to `true` for local development |
+
+### The permanent way: Integration store
+
+You can also save your connection details to `~/.opensre/integrations.json`:
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "azure-sql-prod",
+      "service": "azure_sql",
+      "status": "active",
+      "credentials": {
+        "server": "myserver.database.windows.net",
+        "database": "mydb",
+        "username": "sqladmin",
+        "password": "your_password",
+        "encrypt": true,
+        "trust_cert": false
+      }
+    }
+  ]
+}
+```
+
+## Finding your connection details
+
+Your Azure SQL server hostname looks like `myserver.database.windows.net`. You can find it:
+
+1. Open the Azure Portal
+2. Navigate to your SQL Database resource
+3. Look for **Server name** in the overview panel
+4. Copy it and add `.database.windows.net` if needed
+
+## Network access: Firewall setup
+
+Azure SQL uses firewall rules to control who can connect. Make sure OpenSRE can reach your server:
+
+1. In Azure Portal, go to your SQL server → **Security** → **Firewalls and virtual networks**
+2. Add your OpenSRE environment's IP address
+3. Or check **Allow Azure services and resources to access this server** if running in Azure
+
+<Tip>
+If you're not sure of your IP, start with a permissive rule temporarily, get OpenSRE working, then lock it down.
+</Tip>
+
+## Test the connection
+
+Ready to verify everything works?
+
+```bash
+opensre integrations verify --id azure-sql-prod
+```
+
+This will test your connection and make sure OpenSRE has the right permissions.

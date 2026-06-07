@@ -117,16 +117,19 @@
               "hermes",
               "honeycomb",
               "incident_io",
+              "openobserve",
               "opsgenie",
               "sentry",
               "signoz",
-              "splunk"
+              "splunk",
+              "victoria_logs"
             ]
           },
           {
             "group": "Cloud, code, and collaboration",
             "expanded": true,
             "pages": [
+              "argocd",
               "aws",
               "bitbucket",
               "github",
@@ -136,6 +139,7 @@
               "helm",
               "jenkins",
               "jira",
+              "trello",
               "vercel"
             ]
           },
@@ -154,18 +158,23 @@
           {
             "group": "Data and workflow systems",
             "pages": [
+              "airflow",
+              "azure-sql",
               "clickhouse",
               "dagster",
               "kafka",
               "mariadb",
               "mongodb",
+              "mongodb-atlas",
               "mysql",
               "openclaw",
               "opensearch",
               "postgresql",
               "prefect",
               "rabbitmq",
-              "rds"
+              "rds",
+              "snowflake",
+              "supabase"
             ]
           }
         ]

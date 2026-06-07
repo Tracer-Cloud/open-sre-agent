@@ -1,0 +1,92 @@
+---
+title: "OpenObserve"
+description: "Connect OpenObserve so OpenSRE can pull structured log and trace evidence during investigations"
+---
+
+When something breaks, you want to know *why* — and logs tell that story. OpenSRE connects to OpenObserve to pull the log and trace data that explains what was happening when your alert fired, helping you correlate errors, anomalies, and service interactions to quickly identify root causes.
+
+## What you need
+
+- An OpenObserve instance (either self-hosted or cloud-hosted)
+- An API key for authentication
+- Network access from your OpenSRE environment to OpenObserve
+- The base URL of your OpenObserve API
+
+## Getting set up
+
+### Guided setup
+
+Start here if you want step-by-step guidance:
+
+```bash
+opensre integrations setup
+```
+
+Select **OpenObserve** and fill in your details.
+
+### Manual setup with environment variables
+
+Or just add these to your `.env` file:
+
+```bash
+OPENOBSERVE_BASE_URL=https://api.openobserve.example.com
+OPENOBSERVE_API_KEY=your_api_key
+OPENOBSERVE_ORG_ID=default
+OPENOBSERVE_VERIFY_SSL=true
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENOBSERVE_BASE_URL` | — | **Required.** Base URL of your OpenObserve instance |
+| `OPENOBSERVE_API_KEY` | — | **Required.** API key for authentication |
+| `OPENOBSERVE_ORG_ID` | `default` | Organization ID in OpenObserve |
+| `OPENOBSERVE_VERIFY_SSL` | `true` | Verify TLS certificates |
+
+### Option 3: Persistent store
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "openobserve-prod",
+      "service": "openobserve",
+      "status": "active",
+      "credentials": {
+        "base_url": "https://api.openobserve.example.com",
+        "api_key": "your_api_key",
+        "org_id": "default"
+      }
+    }
+  ]
+}
+```
+
+## Getting your API key
+
+Here's how to create an API key in OpenObserve:
+
+1. Log into OpenObserve
+2. Navigate to **Settings**
+3. Find **Users** or **Organizations** (depending on your setup)
+4. Click on your user or org
+5. Generate a new API key
+6. Copy it somewhere safe
+
+## What OpenSRE can query
+
+Once connected, OpenSRE can search across:
+
+- **Logs** — Search by timestamp, service name, log level, message content
+- **Traces** — Dig into spans, follow complete traces, see latency details
+- **Metrics** — Query Prometheus-style metrics from your observability stack
+
+## Test your connection
+
+Make sure everything's wired up correctly:
+
+```bash
+opensre integrations verify --id openobserve-prod
+```
+
+This validates your API key and confirms you can access your organization.
