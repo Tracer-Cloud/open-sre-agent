@@ -170,7 +170,52 @@ def analyze(run_dir: Path) -> int:
                 dropped += 1
         if fails:
             print(f"  {arm:<14} {dropped}/{fails} = {100 * dropped / fails:.1f}% of failures")
+    print()
+
+    # B2 false-healthy guard activations (Path B, 2026-06-07).
+    # The guard rewrites a false-healthy investigation to root_cause_category=unknown
+    # with a fixed signature string. Detect fired cells by that signature so the
+    # analyzer can split fired vs non-fired a1 per arm — the headline B2 impact.
+    print("=== B2 false-healthy guard activations ===")
+    print("    cells where the guard downgraded a false-healthy conclusion")
+    any_fired = False
+    for arm in _ARMS:
+        cells = [r for r in rows if r["run"]["mode"] == arm]
+        if not cells:
+            continue
+        fired = [r for r in cells if _b2_fired(r)]
+        non_fired = [r for r in cells if not _b2_fired(r)]
+        if not fired:
+            print(f"  {arm:<14} 0 / {len(cells)} cells fired")
+            continue
+        any_fired = True
+        fired_a1 = sum(1 for r in fired if _cell_a1(r))
+        non_fired_a1 = sum(1 for r in non_fired if _cell_a1(r))
+        fire_rate = 100 * len(fired) / len(cells)
+        non_fired_a1_rate = non_fired_a1 / len(non_fired) if non_fired else 0.0
+        print(
+            f"  {arm:<14} {len(fired):3d} / {len(cells):3d} = {fire_rate:5.1f}% fired  "
+            f"|  fired a1={fired_a1 / len(fired):.3f}  non-fired a1={non_fired_a1_rate:.3f}"
+        )
+    if not any_fired:
+        print(
+            "  (no activations detected — either the guard wasn't enabled, "
+            "evidence_entries weren't persisted, or no cell matched both conditions)"
+        )
     return 0
+
+
+# Detect a B2 guard activation by the downgrade signature. Keep this marker
+# phrase in lockstep with ``false_healthy_guard._DOWNGRADE_ROOT_CAUSE``.
+def _b2_fired(row: dict) -> bool:
+    diag = row["run"].get("final_diagnosis") or {}
+    rc = _norm(diag.get("root_cause"))
+    return "tool observations show unhealthy" in rc and "marked unresolved" in rc
+
+
+def _cell_a1(row: dict) -> int:
+    preds = _top(row["run"])
+    return 1 if preds and _is_a1(preds[0], _gt(row["case"])) else 0
 
 
 def main() -> int:
