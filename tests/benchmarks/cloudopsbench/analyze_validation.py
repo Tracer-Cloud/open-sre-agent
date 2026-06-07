@@ -110,7 +110,7 @@ def analyze(run_dir: Path) -> int:
                 p1 = preds[0] if preds else {}
                 if preds and _is_a1(p1, gt):
                     a1 += 1
-                if _norm(p1.get("fault_object")) == gt[0]:
+                if preds and _norm(p1.get("fault_object")) == gt[0]:
                     obj += 1
                 if _norm((r["run"].get("final_diagnosis") or {}).get("stage")) == "healthy":
                     healthy += 1

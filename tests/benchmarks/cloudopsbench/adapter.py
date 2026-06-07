@@ -425,6 +425,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         )
         if legacy.fault_category != "performance":
             perf_hint = None
+            metric_alerts = ""
 
         try:
             llm = get_agent_llm()
