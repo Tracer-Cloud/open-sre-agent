@@ -602,10 +602,18 @@ def _summarize_investigation(run: RunResult) -> str:
     """
     parts: list[str] = []
     diagnosis = run.final_diagnosis
+    # Lead with opensre's own conclusion so the predictor anchors rank-1 on it
+    # rather than re-deriving from the (hedge-heavy) report body. The
+    # 2026-06-06 run showed the predictor dropped the correct component named
+    # in opensre's report from its top-3 on 15% of failures (3x the
+    # no-investigation arm) — a translation-loss leak this framing closes.
+    component = diagnosis.get("component")
+    if component:
+        parts.append(f"Identified component: {component}")
     root_cause = diagnosis.get("root_cause")
     if root_cause:
-        parts.append(f"Root cause (free-text): {root_cause}")
+        parts.append(f"Investigation conclusion (root cause): {root_cause}")
     report = diagnosis.get("report")
     if report:
-        parts.append(f"RCA report:\n{report}")
+        parts.append(f"Supporting RCA report:\n{report}")
     return "\n\n".join(parts) if parts else ""

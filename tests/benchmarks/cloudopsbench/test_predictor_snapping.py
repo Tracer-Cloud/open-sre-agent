@@ -228,3 +228,102 @@ def test_snap_fault_object_does_not_fuzzy_snap_novel_service_name() -> None:
 def test_snap_fault_object_empty_input_returns_empty() -> None:
     assert _snap_fault_object("") == ""
     assert _snap_fault_object("   ") == ""
+
+
+# --------------------------------------------------------------------------- #
+# Performance / admission vocabulary coverage                                  #
+#                                                                              #
+# The 2026-06-06 three-arm run scored ~0.01 a1 on the entire unseen-shape      #
+# stratum (performance + admission cases) while object_a1 was ~0.40 — the      #
+# agent localized the component but the root_cause label always failed.        #
+# Root cause: these seven tokens were absent from ``_ROOT_CAUSES``, so the     #
+# system prompt never offered them AND ``pod_network_delay`` fuzzy-snapped     #
+# onto ``node_network_delay`` (Infrastructure, not Performance). These tests   #
+# pin the fix: each token is in-vocab, snap-stable, and maps to the right      #
+# taxonomy. ``pod_network_delay`` must NOT collapse onto ``node_network_delay``.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("token", "taxonomy"),
+    [
+        ("pod_network_delay", "Performance_Fault"),
+        ("pod_cpu_overload", "Performance_Fault"),
+        ("namespace_cpu_quota_exceeded", "Admission_Fault"),
+        ("namespace_memory_quota_exceeded", "Admission_Fault"),
+        ("namespace_pod_quota_exceeded", "Admission_Fault"),
+        ("namespace_service_quota_exceeded", "Admission_Fault"),
+        ("namespace_storage_quota_exceeded", "Admission_Fault"),
+    ],
+)
+def test_performance_admission_tokens_snap_stable_and_map_taxonomy(
+    token: str, taxonomy: str
+) -> None:
+    from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
+
+    assert _snap_root_cause(token) == token
+    assert _taxonomy_for_root_cause(_snap_root_cause(token)) == taxonomy
+
+
+def test_pod_network_delay_does_not_collapse_onto_node_network_delay() -> None:
+    """Regression for the unseen-shape collapse: a free-text ``pod network
+    delay`` (Performance_Fault) must resolve to ``pod_network_delay`` and not
+    fuzzy-snap onto the very similar ``node_network_delay`` (Infrastructure)."""
+    assert _snap_root_cause("pod network delay") == "pod_network_delay"
+    assert _snap_root_cause("pod_network_delay") != "node_network_delay"
+
+
+# --------------------------------------------------------------------------- #
+# Scope rule — namespace-vs-app prompt guidance                                #
+#                                                                              #
+# 2026-06-07 A.3 audit of the 06-06 powered run found 51 of 169 unseen-shape   #
+# A.3 cells (object wrong at rank-1) where ground truth was ``namespace/<X>``   #
+# but the LLM picked ``app/<service>`` instead. The diagnosis report literally  #
+# named the namespace and described multi-service failure — the LLM had the    #
+# evidence but defaulted to a single-service guess. Only 1 of 51 emitted any   #
+# Admission-family root_cause, so a post-hoc family-based rewrite would have   #
+# rescued ~0 cells. The fix has to teach the model UPSTREAM, in the prompt.    #
+# These tests pin the scope-rule directives so a future prompt edit can't      #
+# silently regress them.                                                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_system_prompt_contains_namespace_scope_rule() -> None:
+    """The prompt must explicitly forbid app/<service> objects when the
+    root_cause is a namespace-wide admission token. Without this directive
+    the LLM defaults to single-service localization even when the evidence
+    is namespace-wide (verified empirically on 51 cells)."""
+    from tests.benchmarks.cloudopsbench.predictor import _build_system_prompt
+
+    prompt = _build_system_prompt()
+    assert "Scope rule" in prompt
+    # Must call out namespace_* tokens explicitly so the LLM associates the
+    # token family with namespace-scope objects
+    assert "namespace_" in prompt
+    # Must call out the MULTIPLE-services-in-same-namespace pattern — this is
+    # the trigger condition that distinguished the 51 A.3 cells from real
+    # single-service faults
+    assert "MULTIPLE" in prompt or "multiple" in prompt
+    # Must include the "scope only fires for cross-service" carve-out so a
+    # single-service admission/runtime fault (e.g. one Deployment with the
+    # wrong image, single pod OOM) doesn't get wrongly elevated to namespace
+    assert "app-level" in prompt or "single-service" in prompt
+
+
+def test_system_prompt_keeps_single_service_carveout() -> None:
+    """The scope rule MUST NOT push the LLM toward namespace-scope for
+    genuinely single-service faults. The carve-out language has to name the
+    single-service failure modes (port, image, probe, secret) so the model
+    doesn't over-apply the rule and start scoring zero on the 81 seen-shape
+    cases that ARE app-scope today (where llm_alone_pure was at 0.56)."""
+    from tests.benchmarks.cloudopsbench.predictor import _build_system_prompt
+
+    prompt = _build_system_prompt()
+    # At least one of the app-scope failure-mode keywords must appear in the
+    # carve-out — name them explicitly so the LLM has anchors for "this is
+    # app-scope" vs "this is namespace-scope"
+    app_scope_anchors = ["port", "image", "probe", "secret"]
+    assert sum(anchor in prompt for anchor in app_scope_anchors) >= 2, (
+        "Scope-rule carve-out must name at least 2 of the canonical "
+        "single-service failure modes so the rule doesn't over-fire."
+    )

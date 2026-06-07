@@ -183,6 +183,105 @@ def test_emit_paper_predictions_llm_alone_path_passes_alert_only() -> None:
     assert "No prior investigation evidence" in user_content
 
 
+def _run_with_diagnosis(diagnosis: dict[str, Any]) -> Any:
+    from tests.benchmarks._framework.adapters import RunResult
+
+    return RunResult(
+        case_id="c1",
+        mode="opensre+llm",
+        llm="gpt-4o",
+        model_version="(test)",
+        opensre_sha="(test)",
+        started_at="2026-01-01T00:00:00+00:00",
+        ended_at="2026-01-01T00:00:01+00:00",
+        ok=True,
+        error=None,
+        final_diagnosis=diagnosis,
+        evidence_entries=[],
+        tokens_in=0,
+        tokens_out=0,
+        cost_usd=0.0,
+        latency_ms=1000,
+    )
+
+
+def test_summarize_investigation_leads_with_conclusion_then_report() -> None:
+    """Fix A: opensre's conclusion must come BEFORE the hedge-heavy report body
+    so the predictor anchors on it. Component (when populated) leads, then the
+    free-text root cause, then the supporting report."""
+    from tests.benchmarks.cloudopsbench.adapter import _summarize_investigation
+
+    run = _run_with_diagnosis(
+        {
+            "component": "app/redis-cart",
+            "root_cause": "missing service account redis-service in boutique",
+            "report": "## Findings\n• non-validated claims ...",
+        }
+    )
+    summary = _summarize_investigation(run)
+    assert "app/redis-cart" in summary
+    assert "missing service account" in summary
+    # Conclusion ordering: identified component / conclusion precede the report.
+    assert summary.index("redis-cart") < summary.index("Findings")
+    assert "Investigation conclusion" in summary
+
+
+def test_summarize_investigation_handles_empty_component() -> None:
+    """Component is empty in the current opensre output schema — the summary
+    must still surface the free-text conclusion without crashing."""
+    from tests.benchmarks.cloudopsbench.adapter import _summarize_investigation
+
+    run = _run_with_diagnosis(
+        {"component": "", "root_cause": "oom on cartservice", "report": "details"}
+    )
+    summary = _summarize_investigation(run)
+    assert "oom on cartservice" in summary
+    assert "Identified component" not in summary
+
+
+def test_system_prompt_marks_investigation_summary_authoritative() -> None:
+    """Fix A (2026-06-07): the 2026-06-06 run showed the predictor dropped the
+    component opensre's report named from its top-3 on 15% of failures (3x the
+    no-investigation arm). Root cause was the prompt telling the model rank-1 is
+    'your strongest hypothesis given the evidence' — inviting it to re-diagnose
+    and discard opensre's conclusion. The prompt must now mark a provided
+    investigation summary as AUTHORITATIVE for rank-1."""
+    from tests.benchmarks.cloudopsbench.predictor import _build_system_prompt
+
+    prompt = _build_system_prompt()
+    assert "AUTHORITATIVE" in prompt
+    assert "re-diagnose" in prompt.lower() or "re-diagnose from the alert" in prompt
+    # The alert-alone fallback (llm_alone control) must still be described so
+    # that path is unchanged.
+    assert "NO investigation summary" in prompt or "no investigation summary" in prompt
+
+
+def test_user_prompt_with_summary_anchors_rank1_on_investigation() -> None:
+    """The investigation-path user prompt must instruct the model to set rank-1
+    to the investigation's identified component/root_cause, not re-derive it."""
+    from tests.benchmarks.cloudopsbench.predictor import _build_user_prompt
+
+    body = _build_user_prompt(
+        "alert_name: trainticket/runtime/56",
+        "ts-voucher-service Access denied for user 'ts'",
+    )
+    assert "AUTHORITATIVE" in body
+    assert "rank 1" in body.lower()
+    # Inputs are still carried through verbatim.
+    assert "trainticket/runtime/56" in body
+    assert "Access denied" in body
+
+
+def test_user_prompt_without_summary_is_alert_only_and_unchanged() -> None:
+    """The llm_alone control path (empty summary) must NOT get the authoritative
+    framing — it has no investigation to anchor on. Keeps the controls valid."""
+    from tests.benchmarks.cloudopsbench.predictor import _build_user_prompt
+
+    body = _build_user_prompt("alert_name: boutique/startup/9", "")
+    assert "No prior investigation evidence" in body
+    assert "AUTHORITATIVE" not in body
+
+
 def test_emit_paper_predictions_returns_none_when_llm_raises() -> None:
     """Predictor is best-effort: LLM failure must NOT break scoring."""
     llm = _FakeLLM("", raise_on_invoke=True)

@@ -104,6 +104,23 @@ _ROOT_CAUSES: tuple[str, ...] = (
     "service_env_var_address_mismatch",
     "service_sidecar_port_conflict",
     "service_dns_resolution_failure",
+    # Performance — derive Performance_Fault via the scoring default bucket.
+    # These were absent from the vocab through the 2026-06-06 run, so the LLM
+    # was never told they were valid and ``pod_network_delay`` would mis-snap
+    # onto ``node_network_delay`` (Infrastructure_Fault). That capped a1 on the
+    # entire unseen-shape stratum (performance + admission) near zero even
+    # though object_a1 was ~0.40. See ANALYSIS.md for that run.
+    "pod_network_delay",
+    "pod_cpu_overload",
+    # Admission — the ``namespace_*`` quota family. ``_snap_root_cause`` already
+    # passes ``namespace_*`` tokens through verbatim and the scorer maps the
+    # prefix to Admission_Fault, but listing the concrete tokens here surfaces
+    # them in the system prompt so the model actually emits them.
+    "namespace_cpu_quota_exceeded",
+    "namespace_memory_quota_exceeded",
+    "namespace_pod_quota_exceeded",
+    "namespace_service_quota_exceeded",
+    "namespace_storage_quota_exceeded",
 )
 
 # fault_object values are canonical paths. The scorer accepts whatever
@@ -467,9 +484,33 @@ def _build_system_prompt() -> str:
         f"  namespace/<ns>     where ns is one of: {', '.join(_FAULT_OBJECT_NAMESPACES)}\n\n"
         "Rules:\n"
         "  - Output ONLY the JSON object. No prose, no markdown fences.\n"
-        "  - Rank 1 must be your strongest hypothesis given the evidence.\n"
+        "  - If an INVESTIGATION SUMMARY is provided, it is the conclusion of a\n"
+        "    tool-driven root-cause investigation. Treat it as AUTHORITATIVE:\n"
+        "    rank 1 MUST be the schema-formalized version of the component and\n"
+        "    root cause it identifies. Do NOT re-diagnose from the alert and\n"
+        "    discard it — only deviate if the summary names no component or is\n"
+        "    internally contradictory. (The scope rule below still applies when\n"
+        "    choosing the fault_object level.)\n"
+        "  - With NO investigation summary, rank 1 is your strongest hypothesis\n"
+        "    reasoning from the alert alone.\n"
         "  - Ranks 2 and 3 should be plausible alternatives, not duplicates.\n"
-        "  - fault_taxonomy MUST correspond to the chosen root_cause family.\n"
+        "  - fault_taxonomy MUST correspond to the chosen root_cause family.\n\n"
+        "Scope rule (CRITICAL — the fault lives at the level it ORIGINATES, not\n"
+        "where symptoms show up):\n"
+        "  - If root_cause is any 'namespace_*' admission token (e.g.\n"
+        "    'namespace_memory_quota_exceeded', 'namespace_cpu_quota_exceeded',\n"
+        "    'namespace_pod_quota_exceeded'), fault_object MUST be\n"
+        "    'namespace/<X>' — NEVER 'app/<service>'. Quota / admission faults\n"
+        "    live at the namespace; individual services are downstream victims.\n"
+        "  - If the evidence shows MULTIPLE services in the same namespace\n"
+        "    failing together AND the cause is a namespace-level limit (quota,\n"
+        "    service account, network policy, resource cap), the strongest\n"
+        "    rank-1 hypothesis is 'namespace/<X>' even if one service appears\n"
+        "    'first to fail'. A single-service prediction here is wrong scope.\n"
+        "  - If the cause is genuinely an app-level misconfiguration (wrong\n"
+        "    port, bad image reference, probe misconfig, missing secret binding\n"
+        "    on ONE deployment), keep fault_object as 'app/<service>'. The\n"
+        "    scope rule only fires for cross-service namespace-wide failures.\n"
     )
 
 
@@ -478,9 +519,12 @@ def _build_user_prompt(alert_text: str, investigation_summary: str) -> str:
         body = (
             "ALERT:\n"
             f"{alert_text}\n\n"
-            "INVESTIGATION SUMMARY:\n"
+            "INVESTIGATION SUMMARY (AUTHORITATIVE — formalize its conclusion,\n"
+            "do not re-diagnose the alert from scratch):\n"
             f"{investigation_summary}\n\n"
-            "Emit the JSON object now."
+            "Set rank 1 to the component and root cause this investigation\n"
+            "identified (applying the scope rule to choose the fault_object\n"
+            "level). Emit the JSON object now."
         )
     else:
         # llm_alone path — no prior investigation to lean on.
