@@ -117,7 +117,7 @@ def analyze(run_dir: Path) -> int:
     for seen in (True, False, None):
         label = {True: "seen", False: "unseen", None: "all"}[seen]
 
-        def scen_a1(arm: str) -> dict[str, float]:
+        def scen_a1(arm: str, seen: bool | None = seen) -> dict[str, float]:
             by: dict[str, list[int]] = {}
             for r in rows:
                 if r["run"]["mode"] != arm:
