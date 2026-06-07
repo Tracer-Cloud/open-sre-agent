@@ -30,8 +30,12 @@ import logging
 import os
 from typing import Any, ClassVar
 
-from app.agent.investigation import ConnectedInvestigationAgent
+from app.agent.investigation import AgentEventCallback, ConnectedInvestigationAgent
 from app.tools.registered_tool import RegisteredTool
+from tests.benchmarks.cloudopsbench.false_healthy_guard import (
+    apply_false_healthy_downgrade,
+    should_downgrade_false_healthy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +114,21 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
 
     MIN_TOOL_CALLS = _resolve_min_tool_calls()
     ALLOWED_TOOL_MODULE_PREFIXES: ClassVar[tuple[str, ...]] = (_BENCH_TOOL_MODULE_PREFIX,)
+
+    def run(
+        self,
+        state: dict[str, Any],
+        on_event: AgentEventCallback | None = None,
+    ) -> dict[str, Any]:
+        """Run investigation, then downgrade false-healthy conclusions (Path B)."""
+        updates = super().run(state, on_event=on_event)
+        if should_downgrade_false_healthy(updates):
+            logger.info(
+                "[bench] false-healthy guard: downgrading conclusion — "
+                "tool observations show unhealthy workloads"
+            )
+            return apply_false_healthy_downgrade(updates)
+        return updates
 
     def _should_accept_conclusion(
         self,

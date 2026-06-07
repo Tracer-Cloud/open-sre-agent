@@ -686,6 +686,38 @@ def _git_sha() -> str:
         return "(no-git)"
 
 
+_EVIDENCE_OUTPUT_TRUNCATE_CHARS = 2000
+
+
+def _truncate_evidence_entries(entries: list[Any]) -> list[Any]:
+    """Truncate the verbose ``data`` payload on each entry for case-file size.
+
+    Keeps ``tool_name`` + ``tool_args`` verbatim — those are small and
+    structural. Truncates ``data.output`` / ``data.content`` to the first
+    ``_EVIDENCE_OUTPUT_TRUNCATE_CHARS`` characters so a B-track guard or
+    post-hoc analyzer can still detect failure-status tokens (CrashLoop,
+    ImagePull, etc.) without bloating the case JSON at full-grid scale.
+    """
+    truncated: list[Any] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            truncated.append(entry)
+            continue
+        kept = dict(entry)
+        data = kept.get("data")
+        if isinstance(data, dict):
+            shrunk = dict(data)
+            for key in ("output", "content", "text", "message"):
+                value = shrunk.get(key)
+                if isinstance(value, str) and len(value) > _EVIDENCE_OUTPUT_TRUNCATE_CHARS:
+                    shrunk[key] = value[:_EVIDENCE_OUTPUT_TRUNCATE_CHARS] + "...[truncated]"
+            kept["data"] = shrunk
+        elif isinstance(data, str) and len(data) > _EVIDENCE_OUTPUT_TRUNCATE_CHARS:
+            kept["data"] = data[:_EVIDENCE_OUTPUT_TRUNCATE_CHARS] + "...[truncated]"
+        truncated.append(kept)
+    return truncated
+
+
 def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict[str, Any]:
     """Serializable shape for per-case artifact JSON."""
     return {
@@ -706,6 +738,11 @@ def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict
             "error": run.error,
             "final_diagnosis": run.final_diagnosis,
             "evidence_entries_count": len(run.evidence_entries),
+            # Truncated entries (verbose ``data`` payload capped) for post-hoc
+            # analysis of which evidence the agent saw. The B-track false-healthy
+            # guard reads this at runtime from the full list; the truncated copy
+            # is the disk-side audit trail.
+            "evidence_entries": _truncate_evidence_entries(run.evidence_entries),
             "tokens_in": run.tokens_in,
             "tokens_out": run.tokens_out,
             "cost_usd": run.cost_usd,

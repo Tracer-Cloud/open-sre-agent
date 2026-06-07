@@ -291,6 +291,77 @@ def test_user_prompt_includes_performance_localization_hint() -> None:
     assert "35691" in body
 
 
+def test_bridge_override_fires_on_investigation_with_keyword_and_service() -> None:
+    """Bridge-override (2026-06-07): when opensre's investigation text contains
+    BOTH a known root_cause keyword AND a known service name, the deterministic
+    keyword bridge in ``scoring.infer_final_answer_from_opensre_text`` must
+    fire and produce a rank-1 payload — no predictor LLM call needed.
+
+    Pinned against a representative loss case from the 2026-06-06 Fargate
+    Fix-A run (boutique/startup/9 family): investigation correctly named
+    ImagePullBackOff on frontend but the predictor LLM wandered to
+    ``service_dns_resolution_failure``. The bridge would have rescued it.
+    """
+    from tests.benchmarks.cloudopsbench.scoring import (
+        infer_final_answer_from_opensre_text,
+    )
+
+    # The bridge's existing rule for incorrect_image_reference requires
+    # ALL of (imagepullbackoff, image pull, incorrect image) present. Real
+    # investigations rarely include the phrase "incorrect image" verbatim —
+    # that's a known reason the bridge fires too rarely in practice and is
+    # the rule-tightness issue the offline validation surfaces.
+    case_data = {
+        "root_cause": "frontend ImagePullBackOff — incorrect image reference",
+        "report": "image pull failed for frontend; incorrect image tag v0.10.999",
+        "final_state": {
+            "root_cause": "frontend ImagePullBackOff — incorrect image reference",
+            "report": "image pull failed for frontend; incorrect image tag v0.10.999",
+        },
+    }
+    payload = infer_final_answer_from_opensre_text(case_data)
+    assert payload is not None
+    rank1 = payload["top_3_predictions"][0]
+    assert rank1["root_cause"] == "incorrect_image_reference"
+    assert rank1["fault_object"] == "app/frontend"
+    assert rank1["fault_taxonomy"] == "Startup_Fault"
+
+
+def test_bridge_override_does_not_fire_without_known_service_name() -> None:
+    """Confidence gate: the bridge requires BOTH a recognized root_cause keyword
+    AND a known service/node/namespace name. Investigation text that only
+    mentions a generic concept (no entity to localize) must return None so the
+    predictor LLM still runs as fallback."""
+    from tests.benchmarks.cloudopsbench.scoring import (
+        infer_final_answer_from_opensre_text,
+    )
+
+    case_data = {
+        "root_cause": "ImagePullBackOff observed in the cluster",
+        "report": "Pods can't pull images",
+        "final_state": {
+            "root_cause": "ImagePullBackOff observed in the cluster",
+            "report": "Pods can't pull images",
+        },
+    }
+    payload = infer_final_answer_from_opensre_text(case_data)
+    assert payload is None
+
+
+def test_bridge_override_does_not_fire_on_empty_investigation() -> None:
+    """The llm_alone control arm passes an empty investigation summary; the
+    bridge must return None on empty input so llm_alone falls through to the
+    predictor LLM as today — preserves the matched contrast."""
+    from tests.benchmarks.cloudopsbench.scoring import (
+        infer_final_answer_from_opensre_text,
+    )
+
+    payload = infer_final_answer_from_opensre_text(
+        {"root_cause": "", "report": "", "final_state": {"root_cause": "", "report": ""}}
+    )
+    assert payload is None
+
+
 def test_user_prompt_without_summary_is_alert_only_and_unchanged() -> None:
     """The llm_alone control path (empty summary) must NOT get the authoritative
     framing — it has no investigation to anchor on. Keeps the controls valid."""
