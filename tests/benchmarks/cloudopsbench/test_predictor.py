@@ -291,26 +291,47 @@ def test_user_prompt_includes_performance_localization_hint() -> None:
     assert "35691" in body
 
 
-def test_bridge_override_fires_on_investigation_with_keyword_and_service() -> None:
-    """Bridge-override (2026-06-07): when opensre's investigation text contains
-    BOTH a known root_cause keyword AND a known service name, the deterministic
-    keyword bridge in ``scoring.infer_final_answer_from_opensre_text`` must
-    fire and produce a rank-1 payload — no predictor LLM call needed.
+def test_bridge_does_not_fire_on_realistic_investigation_text() -> None:
+    """Pins the bridge's STRICT contract on text matching the kind of phrasing
+    real investigations actually produce: pod-status terms ("ImagePullBackOff")
+    + a known service name + a tag mention. The existing rule for
+    ``incorrect_image_reference`` requires all of (``imagepullbackoff``,
+    ``image pull``, ``incorrect image``) verbatim — the literal phrase
+    ``incorrect image`` rarely appears in real LLM-generated investigation
+    output, so the bridge stays silent on this realistic case and the
+    predictor LLM still runs (no regression vs pre-bridge behavior).
 
-    Pinned against a representative loss case from the 2026-06-06 Fargate
-    Fix-A run (boutique/startup/9 family): investigation correctly named
-    ImagePullBackOff on frontend but the predictor LLM wandered to
-    ``service_dns_resolution_failure``. The bridge would have rescued it.
+    This documents WHY the bridge-before-predictor wiring evaluated on
+    2026-06-07 was not shipped: offline replay against the 240 Fargate
+    Fix-A cells showed the bridge fires on 3/120 cells per arm with zero
+    net Δa1. See ``bench-results-openai/fix-a-loss-patterns.md``.
     """
     from tests.benchmarks.cloudopsbench.scoring import (
         infer_final_answer_from_opensre_text,
     )
 
-    # The bridge's existing rule for incorrect_image_reference requires
-    # ALL of (imagepullbackoff, image pull, incorrect image) present. Real
-    # investigations rarely include the phrase "incorrect image" verbatim —
-    # that's a known reason the bridge fires too rarely in practice and is
-    # the rule-tightness issue the offline validation surfaces.
+    case_data = {
+        "root_cause": "frontend deployment failing with ImagePullBackOff",
+        "report": "image pull failed for frontend; tag v0.10.999 not found in registry",
+        "final_state": {
+            "root_cause": "frontend deployment failing with ImagePullBackOff",
+            "report": "image pull failed for frontend; tag v0.10.999 not found in registry",
+        },
+    }
+    # No "incorrect image" → strict AND-of-3-tokens rule misses → bridge silent.
+    assert infer_final_answer_from_opensre_text(case_data) is None
+
+
+def test_bridge_fires_when_all_required_tokens_present() -> None:
+    """Pins the bridge's POSITIVE contract: when text DOES contain every token
+    the rule requires (here ``imagepullbackoff`` + ``image pull`` + ``incorrect
+    image``) AND a known service name, the bridge fires and emits the right
+    rank-1 triple. Contrived input — the prior test documents that real LLM
+    output rarely produces this exact phrase combination."""
+    from tests.benchmarks.cloudopsbench.scoring import (
+        infer_final_answer_from_opensre_text,
+    )
+
     case_data = {
         "root_cause": "frontend ImagePullBackOff — incorrect image reference",
         "report": "image pull failed for frontend; incorrect image tag v0.10.999",

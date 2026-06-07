@@ -18,33 +18,44 @@ import json
 import re
 from typing import Any
 
-# kubectl STATUS column values that indicate an active workload failure.
+# kubectl STATUS column values that UNAMBIGUOUSLY indicate workload failure.
+# Deliberately conservative: dropped ``error`` (matches "ERRORS: 0" /
+# "no errors found"), ``failed`` (matches "0 failed pods"), and the lifecycle
+# states ``pending`` / ``containercreating`` / ``terminating`` (normal during
+# rolling deploys). The ``_POD_NOT_READY_LINE`` regex below catches genuinely
+# stuck workloads via their ``0/N ready`` count, which is the load-bearing
+# detection for those cases.
 _UNHEALTHY_STATUS_TOKENS: tuple[str, ...] = (
     "crashloopbackoff",
     "imagepullbackoff",
     "errimagepull",
     "invalidimagename",
-    "pending",
-    "containercreating",
-    "failed",
     "oomkilled",
     "notready",
-    "error",
-    "terminating",
 )
 
-# Pod list lines where READY is 0/N (workload not ready).
+# Pod list lines where READY is 0/N (workload not ready). Combined with the
+# token list above, this is what catches Pending / Failed / ContainerCreating
+# pods that are actually stuck (vs transient during a normal rollout).
 _POD_NOT_READY_LINE = re.compile(
     r"^[a-z0-9][-a-z0-9.]*\s+0/\d+\s+",
     re.IGNORECASE | re.MULTILINE,
 )
 
+# Phrases used to recognize a false-healthy investigation conclusion in the
+# free-text root_cause / report. Each entry MUST be specific enough that it
+# cannot also appear inside a correct unhealthy diagnosis. In particular,
+# ``"all pods are healthy"`` is the load-bearing phrase here, not ``"all pods
+# in"`` (which would match e.g. ``"all pods in the boutique namespace are in
+# CrashLoopBackOff"`` — a correct unhealthy diagnosis the guard would then
+# wrongly downgrade).
 _FALSE_HEALTHY_PHRASES: tuple[str, ...] = (
     "cluster appears healthy",
     "appears healthy as no active",
     "appears healthy as no",
     "all pods are healthy",
-    "all pods in",
+    "all pods in the cluster are healthy",
+    "all pods in the namespace are healthy",
     "false positive",
     "no active anomalies",
     "no failure signs",
