@@ -14,6 +14,15 @@ from tests.benchmarks.cloudopsbench.performance_alert_localization import (
     performance_context_for_case_dir,
 )
 
+pytestmark = [
+    pytest.mark.cloudopsbench,
+    pytest.mark.skipif(
+        not BENCHMARK_DIR.is_dir(),
+        reason="CloudOpsBench benchmark data is not downloaded; run "
+        "`make download-cloudopsbench-hf` first.",
+    ),
+]
+
 _BENCH = BENCHMARK_DIR
 
 
