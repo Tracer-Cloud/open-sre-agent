@@ -1,0 +1,81 @@
+# Cloud-OpsBench — B2 false-healthy guard validation (cheap, gpt-4o, two arms).
+#
+# Measures the impact of the 2026-06-07 B2 false-healthy guard
+# (``tests/benchmarks/cloudopsbench/false_healthy_guard.py``) on the same
+# 40-case slice that was used to baseline Fix-A. The slice itself is
+# unchanged — only the code under test differs, so the new run can be
+# compared directly against ``cloudopsbench_fixa_validation_openai`` runs.
+#
+# What B2 does (in one line):
+#   When opensre+llm declares the cluster healthy but its own GetResources
+#   observations show unhealthy pods (CrashLoopBackOff, ImagePullBackOff,
+#   ErrImagePull, OOMKilled, NotReady, or any "0/N ready" line), downgrade
+#   the conclusion to ``root_cause_category="unknown"`` BEFORE the predictor
+#   runs. The matched ``llm_alone`` control arm is unchanged.
+#
+# Offline projection on the prior Fix-A run (no B2 in image):
+#   - guard would fire on 14 / 120 opensre+llm cells (phrase match)
+#   - 11 currently a1=0  (potential rescue)
+#   -  3 currently a1=1  (of which 2 protected by Group C perf_hint)
+#   - net ceiling: +10 cells / Δa1 ≈ +0.083 on the seen-shape contrast
+#
+# Two arms so the contrast is directly measurable on the SAME cases:
+#   opensre+llm  — full investigation + B2 guard before predictor
+#   llm_alone    — same predictor, empty summary (matched control; B2 absent
+#                  by design — control must stay untouched)
+#
+# Run (needs OpenAI network egress; agent sandbox blocks it):
+#   cd opensre && set -a && source .env && set +a
+#   BENCH_MIN_TOOL_CALLS=5 uv run python -m tests.benchmarks._framework.cli \
+#     run tests/benchmarks/configs/cloudopsbench_b2_validation_openai.yml --dev
+#
+# Cost: 40 cases x 1 LLM x 3 runs x 2 modes = 240 cells ~= $4 (gpt-4o).
+# DEV experiment — always --dev. Exploratory, not promotable.
+#
+# What success looks like:
+#   - SEEN-shape opensre+llm a1 moves UP from the 0.569 Fix-A baseline.
+#   - SEEN-shape paired contrast (opensre+llm − llm_alone) moves UP from
+#     −0.083 toward 0; CI may still include zero at n=40 but the point
+#     estimate should be less negative.
+#   - The "B2 false-healthy guard activations" section in
+#     ``analyze_validation.py`` reports a non-zero opensre+llm fire count.
+#     If it reports 0, the guard didn't fire at runtime (most likely
+#     ``evidence_entries`` plumbing — verify the runner.py truncation fix
+#     is in the deployed image).
+
+benchmark: cloudopsbench
+
+modes:
+  - opensre+llm
+  - llm_alone
+
+llms:
+  - gpt-4o
+
+model_versions:
+  gpt-4o: gpt-4o-2024-11-20
+
+# 3 runs/case averages single-shot LLM noise; seed pins the SAME case set
+# the Fix-A baseline used so the contrast is paired pre/post-B2.
+runs_per_case: 3
+
+workers: 1
+
+cost_budget_usd: 25.0
+seed: 42
+
+output_dir: .bench-results/cloudopsbench_b2_validation_openai/
+
+pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+
+filters:
+  # 40 seeded cases spanning BOTH shape strata — identical to
+  # cloudopsbench_fixa_validation_openai so the runs are directly comparable.
+  limit: 40
+  seen_shape: [true, false]
+  systems: []
+  fault_categories: []
+
+report_formats:
+  - json
+  - markdown
