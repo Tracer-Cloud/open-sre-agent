@@ -18,7 +18,7 @@ name: Benchmark image — promote tag to task definition
 #     lock-table read/write, iam:PassRole) are granted by the github_actions_run_bench
 #     inline policy in infra/bench/iam_oidc.tf — any apply of that module attaches them.
 #   - Repo secrets seeded into AWS Secrets Manager
-#   - Repo vars set (AWS_ACCOUNT_ID etc., see AWS_BENCH_SETUP.md step 4)
+#   - Repo vars set (AWS_ACCOUNT_ID etc., see tests/benchmarks/cloudopsbench/AWS_BENCH_SETUP.md step 4)
 
 on:
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: |
           if [ -z "${AWS_ACCOUNT_ID:-}" ]; then
-            echo "::error::Missing repo variable AWS_ACCOUNT_ID. See AWS_BENCH_SETUP.md."
+            echo "::error::Missing repo variable AWS_ACCOUNT_ID. See tests/benchmarks/cloudopsbench/AWS_BENCH_SETUP.md."
             exit 1
           fi
 
