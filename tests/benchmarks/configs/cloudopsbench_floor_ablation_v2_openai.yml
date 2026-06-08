@@ -71,6 +71,13 @@ workers: 1
 cost_budget_usd: 25.0
 seed: 42
 
+# Floor-ablation experiment knob: override the BenchInvestigationAgent's
+# MIN_TOOL_CALLS class attribute for this run. Setting to 0 lets the LLM
+# stop when it decides — the load-bearing test of the "forced exploration
+# adds noise" hypothesis. Config-driven (not env-var-driven) so the floor
+# value is part of the reproducible experiment definition.
+min_tool_calls: 0
+
 output_dir: .bench-results/cloudopsbench_floor_ablation_v2_openai/
 
 pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml

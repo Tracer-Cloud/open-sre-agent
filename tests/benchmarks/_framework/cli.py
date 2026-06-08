@@ -153,6 +153,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return EXIT_UNKNOWN_ADAPTER
 
+    # Per-config override of the cloudopsbench bench-agent termination floor.
+    # Applied here (after the adapter import has triggered the bench_agent
+    # module load) so the class attribute exists and the override takes
+    # effect for this run only. Keeps the floor inside the experiment
+    # definition rather than relying on launch-time env vars. Other adapters
+    # ignore the field — see BenchmarkConfig.min_tool_calls.
+    if config.min_tool_calls is not None and config.benchmark == "cloudopsbench":
+        from tests.benchmarks.cloudopsbench.bench_agent import BenchInvestigationAgent
+
+        BenchInvestigationAgent.MIN_TOOL_CALLS = config.min_tool_calls
+        print(
+            f"  ✓ BenchInvestigationAgent.MIN_TOOL_CALLS = {config.min_tool_calls} "
+            f"(from config.min_tool_calls)"
+        )
+
     runner = BenchmarkRunner(config=config, adapter=adapter, config_path=path)
 
     try:

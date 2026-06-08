@@ -102,6 +102,32 @@ def test_report_formats_default_is_json_and_markdown(tmp_path: Path) -> None:
     assert config.report_formats == ["json", "markdown"]
 
 
+def test_min_tool_calls_defaults_to_none_so_agent_class_default_wins(
+    tmp_path: Path,
+) -> None:
+    """Default config does NOT set min_tool_calls — the CLI override path
+    must skip and the BenchInvestigationAgent's import-time floor stands."""
+    config = BenchmarkConfig.model_validate(_minimal_raw(tmp_path))
+    assert config.min_tool_calls is None
+
+
+def test_min_tool_calls_accepts_zero_for_drop_floor_experiment(
+    tmp_path: Path,
+) -> None:
+    """Floor-ablation experiment knob: ``min_tool_calls=0`` lets the LLM stop
+    when it decides. ge=0 constraint must accept 0 (not >0)."""
+    raw = _minimal_raw(tmp_path, min_tool_calls=0)
+    config = BenchmarkConfig.model_validate(raw)
+    assert config.min_tool_calls == 0
+
+
+def test_min_tool_calls_rejects_negative(tmp_path: Path) -> None:
+    """Negative floor is incoherent — Pydantic ge=0 constraint must catch it."""
+    raw = _minimal_raw(tmp_path, min_tool_calls=-1)
+    with pytest.raises(ValidationError):
+        BenchmarkConfig.model_validate(raw)
+
+
 def test_report_formats_must_be_non_empty(tmp_path: Path) -> None:
     raw = _minimal_raw(tmp_path, report_formats=[])
     with pytest.raises(ValidationError):
