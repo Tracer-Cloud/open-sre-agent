@@ -4,7 +4,7 @@
 # IntegrityGuard.pre_flight — the framework refuses to start a production run
 # without a non-empty pre-registration on disk.
 #
-# Schema matches tests/benchmarks/configs/preregistrations/cloudopsbench_smoke.yml.
+# Schema matches tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_smoke.yml.
 # YAUHEN: search for "YAUHEN" comments below — those are the spots that need
 # your judgment before commit. Don't ship targets you can't defend in a PR.
 

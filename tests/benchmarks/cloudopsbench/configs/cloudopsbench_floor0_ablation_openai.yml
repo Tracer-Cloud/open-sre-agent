@@ -43,7 +43,7 @@
 # the experiment):
 #   cd opensre && set -a && source .env && set +a
 #   BENCH_MIN_TOOL_CALLS=0 uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_floor0_ablation_openai.yml --dev
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_floor0_ablation_openai.yml --dev
 #
 # For Fargate: set BENCH_MIN_TOOL_CALLS=0 in the ECS task definition
 # container env vars before dispatching. Image :f063cb1 already supports
@@ -72,7 +72,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_floor0_ablation_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # 40 seeded cases — IDENTICAL to cloudopsbench_fixa_validation_openai and

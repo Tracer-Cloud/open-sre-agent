@@ -11,12 +11,12 @@
 # pre-registration is committed and you're publishing numbers:
 #
 #   uv run python -m tests.benchmarks._framework.cli validate \
-#       tests/benchmarks/configs/cloudopsbench_v1.yml
+#       tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1.yml
 #
 #   uv run python -m tests.benchmarks._framework.cli run \
-#       tests/benchmarks/configs/cloudopsbench_v1.yml --dev   # first run
+#       tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1.yml --dev   # first run
 #   uv run python -m tests.benchmarks._framework.cli run \
-#       tests/benchmarks/configs/cloudopsbench_v1.yml         # production
+#       tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1.yml         # production
 
 benchmark: cloudopsbench
 
@@ -67,7 +67,7 @@ output_dir: .bench-results/cloudopsbench_v1/
 # Pre-registration — Mechanism 1. The framework's IntegrityGuard.pre_flight
 # refuses production runs without a real, non-empty pre-registration.
 # Fill the YAUHEN: placeholders in this file before dropping --dev.
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 # Filters — start with a tractable subset for the first real-LLM run, then
 # widen for the full publication grid. The defaults below pull a 30-case

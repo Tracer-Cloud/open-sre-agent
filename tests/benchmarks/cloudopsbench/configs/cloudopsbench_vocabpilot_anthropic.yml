@@ -20,7 +20,7 @@
 # Run:
 #   set -a && source .env && set +a && \
 #   uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_vocabpilot_anthropic.yml --dev
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_vocabpilot_anthropic.yml --dev
 #
 # Cost: 20 cases × 1 LLM × 3 runs × 1 mode = 60 cells. claude-sonnet-4-5 is
 # ~$0.02-0.04/cell with opensre's investigation flow, so budget ~$1-2 for the
@@ -58,7 +58,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_vocabpilot_anthropic/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # Unseen-shape only — performance + admission cases, exactly the stratum that

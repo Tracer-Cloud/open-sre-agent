@@ -2,7 +2,7 @@
 
 The benchmark framework is YAML-driven (Yauhen's stated requirement: easy
 to configure, parallel by default). Configs live under
-``tests/benchmarks/configs/*.yml``. Loading a config goes through these
+``tests/benchmarks/cloudopsbench/configs/*.yml``. Loading a config goes through these
 validation layers:
 
   1. Pydantic — types and field constraints (always-on, fast).

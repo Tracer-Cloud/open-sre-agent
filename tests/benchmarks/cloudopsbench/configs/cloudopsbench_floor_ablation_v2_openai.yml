@@ -80,7 +80,7 @@ min_tool_calls: 0
 
 output_dir: .bench-results/cloudopsbench_floor_ablation_v2_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # 40 seeded cases, BOTH shape strata — same slice as fixa baseline.

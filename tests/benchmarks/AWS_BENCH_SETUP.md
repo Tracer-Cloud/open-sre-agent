@@ -86,7 +86,7 @@ you don't have it: `aws s3 mb s3://cloud-ops-bench-dataset --region us-east-1`.
 
 ```bash
 gh workflow run benchmark-run.yml \
-    -f config=tests/benchmarks/configs/cloudopsbench_smoke.yml \
+    -f config=tests/benchmarks/cloudopsbench/configs/cloudopsbench_smoke.yml \
     -f dev_mode=true
 ```
 

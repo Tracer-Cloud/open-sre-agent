@@ -38,7 +38,7 @@
 # exhaustion):
 #   cd opensre && set -a && source .env && set +a
 #   BENCH_MIN_TOOL_CALLS=5 uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_definitive_openai.yml --dev
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_definitive_openai.yml --dev
 #
 # Wall-time risk: prior 06-06 Fargate run died at 9h from OpenAI credit
 # exhaustion. workers=4 should finish in ~5-6h; budget headroom in the
@@ -69,7 +69,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_definitive_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # Full corpus, both shape strata — no limit.

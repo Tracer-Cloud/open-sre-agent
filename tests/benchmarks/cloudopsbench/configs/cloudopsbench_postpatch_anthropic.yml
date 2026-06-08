@@ -25,7 +25,7 @@
 # Run (NO --dev — this is publication-grade; IntegrityGuard required):
 #   set -a && source .env && set +a && \
 #   uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_postpatch_anthropic.yml
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_postpatch_anthropic.yml
 #
 # Cost projection: pilot was 60 cells in 52 min on workers=2. At full N:
 #   - 452 cases × 3 seeds × 1 mode × 1 LLM = 1,356 cells
@@ -65,7 +65,7 @@ output_dir: .bench-results/cloudopsbench_postpatch_anthropic/
 
 # Same pre-registration as the v1 openai grid — both runs are testing the
 # same hypotheses on the same corpus, just on different model providers.
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # Full corpus, both shape strata (the headline number the pilot is scaling).

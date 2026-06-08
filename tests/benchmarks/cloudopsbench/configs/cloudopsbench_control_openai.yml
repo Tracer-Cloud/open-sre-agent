@@ -13,7 +13,7 @@
 # Run at the committed default floor (stamped into provenance):
 #
 #   BENCH_MIN_TOOL_CALLS=5 uv run python -m tests.benchmarks._framework.cli \
-#       run tests/benchmarks/configs/cloudopsbench_control_openai.yml --dev
+#       run tests/benchmarks/cloudopsbench/configs/cloudopsbench_control_openai.yml --dev
 #
 # The floor only affects opensre+llm; llm_alone / llm_alone_pure have no floor,
 # so the baselines are identical regardless of BENCH_MIN_TOOL_CALLS.
@@ -45,7 +45,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_control_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # Same 30 seeded cases as the floor sweep (seed pins the selection) so the

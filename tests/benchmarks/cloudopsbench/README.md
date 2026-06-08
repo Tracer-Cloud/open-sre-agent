@@ -96,7 +96,7 @@ Workflow: `Benchmark — run on Fargate`
 
 | Input | Value |
 |---|---|
-| Path to YAML config inside the container | one of `tests/benchmarks/configs/*.yml`, e.g. `tests/benchmarks/configs/cloudopsbench_v1_openai.yml` |
+| Path to YAML config inside the container | one of `tests/benchmarks/cloudopsbench/configs/*.yml`, e.g. `tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1_openai.yml` |
 | Dev mode | `true` for ad-hoc runs (skips integrity gates), `false` for publication-grade runs (requires pre-registration) |
 
 What happens: an ECS Fargate task starts using the *current* task-def
@@ -136,7 +136,7 @@ Or open the ECS task in the AWS Console (link is in the workflow's job
 summary).
 
 Filters and case limits live in the bench config YAML
-(`tests/benchmarks/configs/*.yml`) that you point the workflow at — pick
+(`tests/benchmarks/cloudopsbench/configs/*.yml`) that you point the workflow at — pick
 or copy an existing one to scope the run.
 
 ### Updating LLM API keys

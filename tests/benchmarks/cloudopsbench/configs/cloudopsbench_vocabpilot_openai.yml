@@ -16,7 +16,7 @@
 #
 # Run:
 #   uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_vocabpilot_openai.yml --dev
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_vocabpilot_openai.yml --dev
 #
 # Cost: 20 cases x 1 LLM x 3 runs x 1 mode = 60 cells. At ~$0.01/cell (gpt-4o)
 # that's ~$0.60. This is a DEV experiment (small, single-stratum) — always pass
@@ -47,7 +47,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_vocabpilot_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # Unseen-shape only — performance + admission cases, exactly the stratum that

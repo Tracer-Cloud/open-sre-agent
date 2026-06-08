@@ -15,7 +15,7 @@
 # Run with --dev first to verify the chain, then drop --dev for production.
 # Pin the MIN_TOOL_CALLS floor explicitly so it lands in provenance.json:
 #   BENCH_MIN_TOOL_CALLS=5 uv run python -m tests.benchmarks._framework.cli run \
-#       tests/benchmarks/configs/cloudopsbench_v1_openai.yml --dev
+#       tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1_openai.yml --dev
 #
 # ===========================================================================
 # 2026-06-07 RE-RUN NOTES (read before launching the powered run)
@@ -103,7 +103,7 @@ output_dir: .bench-results/cloudopsbench_v1_openai/
 # Same pre-registration as the full grid — slices share the experimental
 # scope; only the LLM set differs. IntegrityGuard.pre_flight still applies
 # to non-dev runs.
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 # Power the sample for an audited bench run.
 #

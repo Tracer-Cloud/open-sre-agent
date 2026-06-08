@@ -14,7 +14,7 @@
 #
 # Run with --dev first to verify the chain, then drop --dev for production:
 #   uv run python -m tests.benchmarks._framework.cli run \
-#       tests/benchmarks/configs/cloudopsbench_v1_anthropic.yml --dev
+#       tests/benchmarks/cloudopsbench/configs/cloudopsbench_v1_anthropic.yml --dev
 
 benchmark: cloudopsbench
 
@@ -34,7 +34,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_v1_anthropic/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   limit: 30

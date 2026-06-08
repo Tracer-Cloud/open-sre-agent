@@ -21,7 +21,7 @@
 # Run (needs OpenAI network egress — the agent sandbox blocks it):
 #   cd opensre && set -a && source .env && set +a
 #   BENCH_MIN_TOOL_CALLS=5 uv run python -m tests.benchmarks._framework.cli \
-#     run tests/benchmarks/configs/cloudopsbench_fixa_validation_openai.yml --dev
+#     run tests/benchmarks/cloudopsbench/configs/cloudopsbench_fixa_validation_openai.yml --dev
 #
 # Cost: 40 cases x 1 LLM x 3 runs x 2 modes = 240 cells ~= $2.40 (gpt-4o).
 # DEV experiment — always --dev. Exploratory, not promotable.
@@ -55,7 +55,7 @@ seed: 42
 
 output_dir: .bench-results/cloudopsbench_fixa_validation_openai/
 
-pre_registration_path: tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
 
 filters:
   # 40 seeded cases spanning BOTH shape strata so one run validates the vocab

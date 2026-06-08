@@ -134,7 +134,7 @@ When the bench framework merges off its feature branch:
 
 - Container Dockerfile (separate concern; lives in repo root)
 - `.github/workflows/bench.yml` (run-time workflow that launches Fargate tasks)
-- Pre-registration YAML for Phase 1 ([`tests/benchmarks/configs/preregistrations/`](../tests/benchmarks/configs/preregistrations/))
+- Pre-registration YAML for Phase 1 ([`tests/benchmarks/cloudopsbench/configs/preregistrations/`](../tests/benchmarks/cloudopsbench/configs/preregistrations/))
 
 Other modules that may follow Phase 2 / additional adapters:
 
