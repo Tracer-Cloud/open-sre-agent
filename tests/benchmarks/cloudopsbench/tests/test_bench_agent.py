@@ -315,3 +315,54 @@ def test_bench_agent_filter_warns_on_empty_origin_module(
     # The warning must name the offending tool so an operator can find it
     # in the registry.
     assert any("Orphan" in r.message and "empty origin_module" in r.message for r in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
+# BenchInvestigationAgentTrimmedPrompt — bench-only trimmed prompt variant    #
+# --------------------------------------------------------------------------- #
+
+
+def test_trimmed_prompt_agent_is_subclass_of_bench_agent() -> None:
+    """Bench-only trimmed-prompt variant must inherit BenchInvestigationAgent
+    so it picks up the same tool filter + configurable MIN_TOOL_CALLS."""
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        BenchInvestigationAgentTrimmedPrompt,
+    )
+
+    assert issubclass(BenchInvestigationAgentTrimmedPrompt, BenchInvestigationAgent)
+
+
+def test_trimmed_prompt_agent_uses_trimmed_system_prompt() -> None:
+    """The trimmed prompt must differ from both the full opensre prompt
+    (production) and the pure baseline prompt. It keeps tool-output
+    citation guidance while dropping multi-stage / hedging directives."""
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        _PURE_BASELINE_SYSTEM_PROMPT,
+        _TRIMMED_BENCH_SYSTEM_PROMPT,
+        BenchInvestigationAgentTrimmedPrompt,
+    )
+
+    prompt = BenchInvestigationAgentTrimmedPrompt()._build_system_prompt({})
+    # Must be the documented trimmed prompt verbatim.
+    assert prompt == _TRIMMED_BENCH_SYSTEM_PROMPT
+    # Must not collapse to the bare baseline.
+    assert prompt != _PURE_BASELINE_SYSTEM_PROMPT
+    # Must require citation (the load-bearing behavior we KEEP from opensre).
+    assert "cite" in prompt.lower()
+    # Must explicitly drop hedging.
+    assert "do not hedge" in prompt.lower()
+
+
+def test_trimmed_prompt_agent_inherits_floor_override() -> None:
+    """The trimmed variant must read the floor from the SAME class attribute
+    the CLI overrides (BenchInvestigationAgent.MIN_TOOL_CALLS) — otherwise
+    a config setting min_tool_calls=0 + agent_variant=trimmed_prompt would
+    silently keep floor=5 on the trimmed runs and confound the comparison."""
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        BenchInvestigationAgentTrimmedPrompt,
+    )
+
+    # Floor lives on the parent class — subclass MUST NOT shadow it.
+    parent_floor = BenchInvestigationAgent.MIN_TOOL_CALLS
+    child_floor = BenchInvestigationAgentTrimmedPrompt.MIN_TOOL_CALLS
+    assert parent_floor == child_floor

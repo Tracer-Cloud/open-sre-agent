@@ -128,6 +128,30 @@ def test_min_tool_calls_rejects_negative(tmp_path: Path) -> None:
         BenchmarkConfig.model_validate(raw)
 
 
+def test_agent_variant_defaults_to_default(tmp_path: Path) -> None:
+    """Default config preserves the production-equivalent BenchInvestigationAgent.
+    The CLI override path only fires when agent_variant is explicitly set,
+    so the import-time class stands for any config not opting in."""
+    config = BenchmarkConfig.model_validate(_minimal_raw(tmp_path))
+    assert config.agent_variant == "default"
+
+
+def test_agent_variant_accepts_trimmed_prompt(tmp_path: Path) -> None:
+    """The trimmed-prompt experiment knob: enables the
+    BenchInvestigationAgentTrimmedPrompt swap at CLI startup."""
+    raw = _minimal_raw(tmp_path, agent_variant="trimmed_prompt")
+    config = BenchmarkConfig.model_validate(raw)
+    assert config.agent_variant == "trimmed_prompt"
+
+
+def test_agent_variant_rejects_unknown_value(tmp_path: Path) -> None:
+    """Literal type constraint must reject typo'd or unknown variants —
+    otherwise a config typo could silently fall through to the default."""
+    raw = _minimal_raw(tmp_path, agent_variant="trimedprompt")
+    with pytest.raises(ValidationError):
+        BenchmarkConfig.model_validate(raw)
+
+
 def test_report_formats_must_be_non_empty(tmp_path: Path) -> None:
     raw = _minimal_raw(tmp_path, report_formats=[])
     with pytest.raises(ValidationError):

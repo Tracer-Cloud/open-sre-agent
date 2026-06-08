@@ -116,6 +116,21 @@ class BenchmarkConfig(BaseModel):
     # from the config file alone — see ``cloudopsbench_floor_ablation_v2_openai.yml``.
     min_tool_calls: int | None = Field(ge=0, default=None)
 
+    # Adapter-specific bench agent variant. ``"default"`` (the default) keeps
+    # ``BenchInvestigationAgent`` and its full opensre system prompt — the
+    # apples-to-apples comparison with production behavior. ``"trimmed_prompt"``
+    # swaps in ``BenchInvestigationAgentTrimmedPrompt``, which keeps tool
+    # filtering + tool-output citation but drops the multi-stage / validation /
+    # hedging scaffolding the full opensre prompt carries. Honored only by the
+    # CloudOpsBench adapter; other adapters ignore the field.
+    #
+    # Predictor-drift mode (60% of opensre+llm losses on the floor=0 full-N
+    # run) is upstream of the predictor — opensre's investigation TEXT itself
+    # is biased toward adjacent vocabulary, which the predictor faithfully
+    # formalizes. This field exists to test whether a less structured prompt
+    # produces less adjacent-token bias.
+    agent_variant: Literal["default", "trimmed_prompt"] = "default"
+
     # ----------------------------------------------------------------------- #
     # Pydantic-level validation                                               #
     # ----------------------------------------------------------------------- #

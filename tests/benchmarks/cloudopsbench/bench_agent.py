@@ -274,3 +274,59 @@ class PureBaselineAgent(ConnectedInvestigationAgent):
 
     def _build_system_prompt(self, state: dict[str, Any]) -> str:  # noqa: ARG002 — interface contract
         return _PURE_BASELINE_SYSTEM_PROMPT
+
+
+# Trimmed bench prompt — sits between the full opensre prompt and the pure
+# baseline. The 2026-06-08 full-N floor=0 run loss diagnosis (n=353 paired
+# scenarios) showed 60% of opensre+llm losses against llm_alone_pure are
+# "predictor drift" cases: opensre's investigation correctly identifies the
+# fault_object (object_a1 is ~tied between the arms) but the predictor's
+# rank-1 root_cause is a token adjacent to the truth — e.g.
+# ``liveness_probe_incorrect_timing`` instead of ``..._protocol``,
+# ``image_registry_dns_failure`` instead of ``incorrect_image_reference``,
+# ``namespace_cpu_quota_exceeded`` instead of ``namespace_pod_quota_exceeded``.
+#
+# The predictor is faithful to its input; the wrong tokens come from
+# opensre's investigation TEXT itself. The full opensre system prompt's
+# hedging + validation + multi-stage scaffolding produces RCAs that lean on
+# adjacent vocabulary the predictor then formalizes.
+#
+# This trimmed variant keeps the parts that have customer value
+# (tool-output citation, structured component + root_cause output) and drops
+# the parts that empirically produce noise on cloudopsbench (hedging-by-
+# default language, multi-stage planner instructions, validation-of-
+# validation directives). It is BENCH-ONLY — production opensre's prompt is
+# unchanged.
+_TRIMMED_BENCH_SYSTEM_PROMPT = (
+    "You are an SRE agent investigating a Kubernetes incident. Use the "
+    "available tools to gather evidence — typically pod state, error logs, "
+    "recent events, and resource configuration.\n\n"
+    "When you have identified the failing component and root cause, "
+    "produce a concise conclusion:\n"
+    "  (1) the faulting component — Kubernetes object (deployment, pod, "
+    "service, secret, namespace, etc.)\n"
+    "  (2) the root cause in 1-2 sentences naming the specific failure "
+    "mode\n"
+    "  (3) cite the tool output that supports your conclusion.\n\n"
+    "Do not hedge when the evidence is clear. Do not validate the same "
+    "claim multiple ways. Do not break the investigation into stages "
+    "unless the case genuinely requires multi-step escalation."
+)
+
+
+class BenchInvestigationAgentTrimmedPrompt(BenchInvestigationAgent):
+    """Bench-only ``BenchInvestigationAgent`` variant with a trimmed prompt.
+
+    Inherits BenchInvestigationAgent's tool filter and the configurable
+    ``MIN_TOOL_CALLS`` class attribute (set from config.min_tool_calls at
+    CLI startup). Overrides only the system prompt.
+
+    Selected by setting ``agent_variant: trimmed_prompt`` in a bench config.
+    The CLI override (see ``_framework/cli.py``) swaps the adapter's
+    investigation_agent_class to this when the field is set; default
+    behavior (agent_variant unset / "default") returns the original
+    ``BenchInvestigationAgent`` class.
+    """
+
+    def _build_system_prompt(self, state: dict[str, Any]) -> str:  # noqa: ARG002 — interface contract
+        return _TRIMMED_BENCH_SYSTEM_PROMPT

@@ -168,6 +168,22 @@ def _cmd_run(args: argparse.Namespace) -> int:
             f"(from config.min_tool_calls)"
         )
 
+    # Per-config override of the cloudopsbench investigation agent variant.
+    # ``trimmed_prompt`` swaps the adapter's investigation_agent_class to
+    # ``BenchInvestigationAgentTrimmedPrompt`` for this run only. Patches the
+    # adapter method in place so the runner picks up the new class without
+    # framework-level dispatch changes.
+    if config.agent_variant == "trimmed_prompt" and config.benchmark == "cloudopsbench":
+        from tests.benchmarks.cloudopsbench.bench_agent import (
+            BenchInvestigationAgentTrimmedPrompt,
+        )
+
+        adapter.investigation_agent_class = lambda: BenchInvestigationAgentTrimmedPrompt  # type: ignore[method-assign]
+        print(
+            "  ✓ adapter.investigation_agent_class = BenchInvestigationAgentTrimmedPrompt "
+            "(from config.agent_variant=trimmed_prompt)"
+        )
+
     runner = BenchmarkRunner(config=config, adapter=adapter, config_path=path)
 
     try:
