@@ -43,7 +43,15 @@ Mode = Literal["opensre+llm", "llm_alone", "llm_alone_pure"]
 
 
 class CaseFilters(BaseModel):
-    """User-supplied case filters. Empty list = no filter on that dim."""
+    """User-supplied case filters. Empty list = no filter on that dim.
+
+    ``seed`` is required by integrity Mechanism 6 (no cherry-picking) — the
+    adapter uses it to seed the random selection so case sub-samples are
+    reproducible across runs. Dropping this field would silently break
+    reproducibility: Pydantic v2 ignores unknown constructor kwargs by
+    default, so ``CaseFilters(seed=42)`` would seem to succeed and then
+    ``filters.seed`` would AttributeError downstream.
+    """
 
     systems: list[str] = Field(default_factory=list)
     fault_categories: list[str] = Field(default_factory=list)
@@ -51,6 +59,7 @@ class CaseFilters(BaseModel):
     seen_shape: list[bool] = Field(default_factory=list)
     case_ids: list[str] = Field(default_factory=list)
     limit: int | None = None
+    seed: int | None = None
 
 
 class BenchmarkCase(BaseModel):
