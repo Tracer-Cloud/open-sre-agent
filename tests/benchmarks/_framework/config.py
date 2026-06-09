@@ -201,6 +201,19 @@ class BenchmarkConfig(BaseModel):
                 "large for a single run. Confirm intent in pre-registration."
             )
 
+        # Cross-field guard: agent_variant is silently ignored by adapters
+        # other than CloudOpsBench. Setting it on a non-cloudopsbench config
+        # would run the wrong agent without warning — refuse the config so
+        # the intent is explicit. ``"default"`` is always allowed.
+        if self.agent_variant != "default" and self.benchmark != "cloudopsbench":
+            errors.append(
+                f"agent_variant={self.agent_variant!r} is honored only by the "
+                f"cloudopsbench adapter, but benchmark={self.benchmark!r}. The "
+                "field would be silently ignored, producing an experiment "
+                "that measures the default agent. Set agent_variant: default "
+                "or run against the cloudopsbench adapter."
+            )
+
         # Output dir must not be a managed system path. Compare BOTH the lexical
         # form and the resolved form (on macOS /etc → /private/etc symlink would
         # bypass a check against only one). The narrow prefix list intentionally

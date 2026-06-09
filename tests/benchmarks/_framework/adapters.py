@@ -1,380 +1,54 @@
-"""Abstract benchmark adapter + typed data contracts.
+"""Backward-compatibility shim: re-exports the framework's adapter surface.
 
-The framework calls into adapters via ``BenchmarkAdapter``. Each benchmark
-suite (CloudOpsBench, OpenRCA, ToolCallBench) implements this interface;
-the framework handles parallelism, LLM dispatch, output, cost tracking,
-integrity guards.
+The original monolithic ``adapters.py`` mixed three responsibilities — data
+contracts, the abstract adapter base, and the registry. Each now lives in
+its own module under ``_framework/``:
 
-This module deliberately has zero ``app.*`` imports — the framework is
-independent of opensre internals. Adapters bridge to opensre.
+  - ``types.py`` — ``CaseFilters``, ``BenchmarkCase``, ``AlertPayload``,
+    ``RunResult``, ``CaseScore``, ``RunContext``, ``MetricSchema``, ``Mode``
+  - ``adapter_base.py`` — the ``BenchmarkAdapter`` ABC + the
+    ``apply_config_overrides`` strategy hook
+  - ``registry.py`` — ``register_adapter``, ``build_adapter``,
+    ``known_adapters``, ``ensure_known_adapters_registered``
+
+Existing ``from tests.benchmarks._framework.adapters import X`` callers
+continue to work — every public name from the three modules above is
+re-exported here. New code should import from the focused modules
+directly.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from collections.abc import Iterator
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
-
-from pydantic import BaseModel, Field
-
-if TYPE_CHECKING:
-    # Type-only import — preserves the framework's "zero ``app.*`` imports"
-    # constraint at runtime while still letting type-checkers validate
-    # that adapter overrides return an investigation-agent subclass.
-    from app.agent.investigation import ConnectedInvestigationAgent
-
-# --------------------------------------------------------------------------- #
-# Mode — opensre+LLM vs LLM-alone. Framework-level concept; same adapter +    #
-# same case work for both modes.                                              #
-# --------------------------------------------------------------------------- #
-
-Mode = Literal["opensre+llm", "llm_alone", "llm_alone_pure"]
-
-
-# --------------------------------------------------------------------------- #
-# Case selection                                                              #
-# --------------------------------------------------------------------------- #
-
-
-class CaseFilters(BaseModel):
-    """User-supplied filter for which cases to load.
-
-    Filters are AND-combined. Empty list/None means "no filter on this dim".
-    """
-
-    systems: list[str] = Field(default_factory=list)
-    fault_categories: list[str] = Field(default_factory=list)
-    difficulty: list[Literal["easy", "medium", "hard"]] = Field(default_factory=list)
-    # opensre-specific tag; populated post-tagging (Phase D)
-    seen_shape: list[bool] = Field(default_factory=list)
-    case_ids: list[str] = Field(default_factory=list)
-    limit: int | None = None
-    # Seeded random sample for fair selection — required by integrity Mechanism 6
-    seed: int | None = None
-
-
-class BenchmarkCase(BaseModel):
-    """One scenario the adapter loaded. Framework-agnostic shape.
-
-    Per-adapter specifics live in ``metadata``. The framework reads only
-    ``case_id``, ``benchmark_name``, and ``seen_shape``; everything else is
-    adapter-private.
-    """
-
-    case_id: str
-    benchmark_name: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    # opensre-specific tag; None until Phase D tagging is applied
-    seen_shape: bool | None = None
-
-
-# --------------------------------------------------------------------------- #
-# Alert / integration payloads — what the adapter hands the runner            #
-# --------------------------------------------------------------------------- #
-
-
-class AlertPayload(BaseModel):
-    """Shape an adapter produces to seed an investigation.
-
-    ``raw`` is the verbatim alert (e.g., a Datadog webhook); ``normalized``
-    is the extracted, agent-friendly form used by both opensre+LLM and
-    LLM-alone modes.
-    """
-
-    raw: dict[str, Any]
-    normalized: dict[str, Any]
-
-
-# --------------------------------------------------------------------------- #
-# Run result — what the runner produces per case-run                          #
-# --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True)
-class RunResult:
-    """One complete case-run: opensre+LLM or LLM-alone, one LLM, one trial.
-
-    Captured at framework level so any adapter's scorer can compute trace-
-    based metrics. Per-row fields support:
-      - reproducibility (model_version, opensre_sha, seed)
-      - cost accounting (tokens, USD)
-      - process scoring (evidence_entries trajectory)
-      - paired comparison (case_id + mode + llm join key)
-    """
-
-    case_id: str
-    mode: Mode
-    llm: str
-    model_version: str
-    # opensre git SHA — pinned per result row (Principle: standardization)
-    opensre_sha: str
-    started_at: str  # ISO-8601 UTC
-    ended_at: str
-    ok: bool
-    error: str | None
-    # Diagnosis: {stage, component, root_cause}
-    final_diagnosis: dict[str, Any]
-    # Per-tool-call trace; same shape as opensre's AgentState.evidence_entries
-    evidence_entries: list[dict[str, Any]]
-    tokens_in: int
-    tokens_out: int
-    cost_usd: float
-    latency_ms: int
-
-
-# --------------------------------------------------------------------------- #
-# Scoring                                                                     #
-# --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True)
-class CaseScore:
-    """Per-case scoring output from an adapter.
-
-    ``metrics`` keys are adapter-defined (see ``MetricSchema``). The
-    framework treats values as floats and aggregates them across cells.
-    """
-
-    case_id: str
-    metrics: dict[str, float]
-    failure_reason: str | None = None
-
-
-@dataclass(frozen=True)
-class RunContext:
-    """Per-cell context handed to ``score_case``.
-
-    Lets the adapter access cell-local state (the integrations dict it
-    built earlier — which carries adapter-specific runtime objects like
-    the CloudOpsBench replay backend) WITHOUT keeping per-cell state on
-    the adapter instance. Required for thread-safe parallel execution.
-    """
-
-    integrations: dict[str, Any]
-
-
-class MetricSchema(BaseModel):
-    """Adapter's metric inventory. Declared once per adapter.
-
-    The framework uses ``higher_is_better`` to render comparison tables
-    correctly (e.g., for IAC, lower is better). It also uses the family
-    grouping to enforce multi-metric reporting per integrity Mechanism 3:
-    at least one metric from each of ``outcome_metrics``, ``process_metrics``,
-    and ``validity_metrics`` must be reported.
-    """
-
-    # Required: at least one outcome metric (per integrity Mechanism 3)
-    outcome_metrics: list[str] = Field(min_length=1)
-    process_metrics: list[str] = Field(default_factory=list)
-    robustness_metrics: list[str] = Field(default_factory=list)
-    validity_metrics: list[str] = Field(default_factory=list)
-    efficiency_metrics: list[str] = Field(default_factory=list)
-    # All metrics that appear above must have an entry here.
-    higher_is_better: dict[str, bool]
-
-    def all_metrics(self) -> list[str]:
-        """Flat list of every metric name this adapter emits."""
-        return (
-            self.outcome_metrics
-            + self.process_metrics
-            + self.robustness_metrics
-            + self.validity_metrics
-            + self.efficiency_metrics
-        )
-
-    def validate_completeness(self) -> list[str]:
-        """Return list of integrity errors. Empty means schema is honest.
-
-        Enforces:
-          - every metric listed has a direction in ``higher_is_better``
-          - no orphan keys in ``higher_is_better`` (extra metrics)
-          - at least one validity metric (Mechanism 9: process scoring)
-        """
-        errors: list[str] = []
-        declared = set(self.all_metrics())
-        directed = set(self.higher_is_better.keys())
-        missing = declared - directed
-        orphan = directed - declared
-        if missing:
-            errors.append(f"metrics missing direction in higher_is_better: {sorted(missing)}")
-        if orphan:
-            errors.append(f"higher_is_better has unknown metrics: {sorted(orphan)}")
-        if not self.validity_metrics:
-            errors.append(
-                "no validity_metrics declared — integrity Mechanism 9 "
-                "requires at least one validity metric "
-                "(e.g., citation_grounding_rate, entity_existence_rate)"
-            )
-        return errors
-
-
-# --------------------------------------------------------------------------- #
-# The adapter interface                                                       #
-# --------------------------------------------------------------------------- #
-
-
-class BenchmarkAdapter(ABC):
-    """One adapter per benchmark suite.
-
-    Implementations:
-      - ``tests/benchmarks/cloudopsbench/adapter.py``  (first)
-      - ``tests/benchmarks/openrca_scenarios/adapter.py``  (proves reusability)
-      - ``tests/benchmarks/toolcall_model_benchmark/adapter.py``  (proves reusability)
-
-    The framework calls these methods; adapters bridge to whatever the
-    specific benchmark needs (HF datasets, replay backends, custom scoring).
-    """
-
-    name: str  # e.g. "cloudopsbench"
-    version: str  # adapter version, separate from corpus version
-
-    @abstractmethod
-    def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:
-        """Stream cases matching the filter. Seeded random selection is the
-        adapter's responsibility (integrity Mechanism 6).
-        """
-
-    @abstractmethod
-    def build_alert(self, case: BenchmarkCase) -> AlertPayload:
-        """Convert a case into the alert opensre / LLM consume."""
-
-    @abstractmethod
-    def build_opensre_integrations(self, case: BenchmarkCase) -> dict[str, Any]:
-        """Return the resolved_integrations dict opensre+LLM mode passes to
-        ``run_investigation``. For CloudOpsBench, this wires the replay
-        backend in place of live AWS/K8s/Datadog clients.
-        """
-
-    @abstractmethod
-    def build_baseline_tools(self, case: BenchmarkCase) -> dict[str, Any]:
-        """Return the tool surface for LLM-alone mode. Same replay backend
-        access as opensre+LLM (fairness) but no extract/context/diagnose
-        pipeline — just direct LLM with tool-calling.
-        """
-
-    @abstractmethod
-    def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
-        """Compute per-case metrics from the run result + per-cell context.
-
-        ``context.integrations`` is the dict ``build_opensre_integrations``
-        returned for THIS cell — adapters use it to read runtime state
-        accumulated during the run (e.g., a replay backend's action_log).
-
-        Passing context explicitly (vs caching on the adapter) is what
-        makes the adapter thread-safe for parallel runner execution.
-        """
-
-    @abstractmethod
-    def metric_schema(self) -> MetricSchema:
-        """Declare which metrics this adapter emits, for CLI validation +
-        comparable reporting across adapters.
-        """
-
-    def investigation_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
-        """Optional: which investigation agent class should the runner use?
-
-        Default ``None`` — let the production pipeline construct its standard
-        :class:`ConnectedInvestigationAgent`. Override when the benchmark
-        needs a stricter termination policy or other agent-level behavior
-        (e.g. CloudOpsBench's minimum-tool-call floor lives in
-        :class:`tests.benchmarks.cloudopsbench.bench_agent.BenchInvestigationAgent`).
-
-        Production code stays clean: the runner just passes whatever the
-        adapter returns to ``run_investigation``. Bench-specific agent logic
-        lives entirely in bench code.
-        """
-        return None
-
-    def baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
-        """Optional: which agent class to use for the ``llm_alone`` control arm.
-
-        Default ``None`` — the adapter does not support an in-harness baseline,
-        and the runner will refuse a config with ``modes=["llm_alone"]``.
-
-        Override to return an agent class that represents the matched control
-        for this benchmark's headline claim. The control's job is to isolate
-        whichever lever you're attributing lift to — typically: same tool
-        surface, same scoring, but no bench-specific termination policy.
-
-        The runner picks this method for ``llm_alone`` cells and
-        ``investigation_agent_class`` for ``opensre+llm`` cells, then passes
-        the chosen class to ``run_investigation`` exactly the same way.
-        """
-        return None
-
-    def pure_baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
-        """Optional: agent class for the pure-baseline (``llm_alone_pure``) arm.
-
-        Default ``None`` — the adapter does not ship a prompt-stripped
-        baseline; runner refuses ``modes=["llm_alone_pure"]``.
-
-        Override to return an agent that ALSO overrides ``_build_system_prompt``
-        with a minimal task-specific prompt — no opensre planner / verifier /
-        evidence-budget instructions. The contrast (opensre+llm) − (llm_alone_pure)
-        then isolates the lift from opensre's full structural stack, not just
-        the bench-specific termination policy that ``baseline_agent_class``
-        controls.
-
-        Same tool surface as both other arms; the methodological constant
-        across all three modes is the per-case integrations dict.
-        """
-        return None
-
-    def format_final_answer(
-        self,
-        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
-        run: RunResult,
-        spec: Any,  # noqa: ARG002 — used by overrides
-    ) -> RunResult:
-        """Optional: enrich ``run.final_diagnosis`` before ``score_case``.
-
-        Default no-op — returns the run unchanged. Override when the
-        benchmark's scorer expects a specific output schema the
-        investigation pipeline doesn't natively produce (e.g.,
-        CloudOpsBench requires paper-format ``top_3_predictions`` JSON
-        and runs a separate LLM call to emit it).
-
-        ``spec`` is the framework's LLMSpec for this cell — typed as
-        ``Any`` here to keep ``adapters.py`` free of llm_dispatch import
-        coupling; the override casts it to its real type.
-
-        Mode-agnostic by design: the runner calls this for every cell
-        regardless of mode, so the same hook serves both ``opensre+llm``
-        (with investigation evidence) and future ``llm_alone`` (without).
-        """
-        return run
-
-    def select_best_run(
-        self,
-        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
-        runs: list[tuple[RunResult, CaseScore]],  # noqa: ARG002 — used by overrides
-    ) -> int | None:
-        """Optional: pick the canonical run from a self-consistency batch.
-
-        Called once per (case, mode, llm) group after every run finishes.
-        ``runs`` is the list of (RunResult, CaseScore) tuples in original
-        run-index order.
-
-        Return:
-          - ``int`` — index of the run whose metrics should be reported as
-            the canonical answer for this scenario. The runner emits an
-            additional ``consistency_selected`` stratum built from those
-            picks alongside the standard ``all`` (median) stratum.
-          - ``None`` — no selection; only the median ``all`` stratum is
-            reported. This is the default for adapters that don't run
-            multi-seed self-consistency.
-
-        Why this hook exists: paper-style A@1 averaging across N seeds
-        drags the median below what the agent can actually produce. The
-        06-05 CloudOpsBench run showed median a1=0.43 (gpt-4o) vs
-        ORACLE bo3=0.83 — a 0.40 consistency gap. A free selector
-        (majority vote on predicted root-cause taxonomy) closes 60% of
-        that gap with zero extra LLM calls.
-
-        The hook is opt-in per adapter so benchmarks without multi-seed
-        protocols are unaffected. The runner still computes the standard
-        median stratum so both views are reported side-by-side for
-        transparency — no silent metric swap.
-        """
-        return None
+from tests.benchmarks._framework.adapter_base import BenchmarkAdapter
+from tests.benchmarks._framework.registry import (
+    build_adapter,
+    ensure_known_adapters_registered,
+    known_adapters,
+    register_adapter,
+)
+from tests.benchmarks._framework.types import (
+    AlertPayload,
+    BenchmarkCase,
+    CaseFilters,
+    CaseScore,
+    MetricSchema,
+    Mode,
+    RunContext,
+    RunResult,
+)
+
+__all__ = [
+    "AlertPayload",
+    "BenchmarkAdapter",
+    "BenchmarkCase",
+    "CaseFilters",
+    "CaseScore",
+    "MetricSchema",
+    "Mode",
+    "RunContext",
+    "RunResult",
+    "build_adapter",
+    "ensure_known_adapters_registered",
+    "known_adapters",
+    "register_adapter",
+]

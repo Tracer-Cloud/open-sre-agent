@@ -152,6 +152,30 @@ def test_agent_variant_rejects_unknown_value(tmp_path: Path) -> None:
         BenchmarkConfig.model_validate(raw)
 
 
+def test_agent_variant_non_default_rejected_for_non_cloudopsbench(
+    tmp_path: Path,
+) -> None:
+    """Cross-field guard: agent_variant is honored only by the cloudopsbench
+    adapter. A config that sets agent_variant=trimmed_prompt on a different
+    benchmark would silently run the default agent. The lint gate must
+    reject so the intent is explicit."""
+    raw = _minimal_raw(tmp_path, benchmark="some_other_bench", agent_variant="trimmed_prompt")
+    config = BenchmarkConfig.model_validate(raw)
+    errors = config.lint()
+    assert any("agent_variant" in e and "cloudopsbench" in e for e in errors), (
+        f"Expected an agent_variant cross-field error; got: {errors}"
+    )
+
+
+def test_agent_variant_default_passes_lint_for_any_benchmark(tmp_path: Path) -> None:
+    """The default value must not block non-cloudopsbench benchmarks —
+    only non-default values trigger the cross-field guard."""
+    raw = _minimal_raw(tmp_path, benchmark="some_other_bench")
+    config = BenchmarkConfig.model_validate(raw)
+    errors = config.lint()
+    assert not any("agent_variant" in e for e in errors)
+
+
 def test_report_formats_must_be_non_empty(tmp_path: Path) -> None:
     raw = _minimal_raw(tmp_path, report_formats=[])
     with pytest.raises(ValidationError):

@@ -62,23 +62,30 @@ from tests.benchmarks._framework.runner import BenchmarkRunner
 
 
 def _build_adapter(name: str) -> BenchmarkAdapter:
-    """Map ``config.benchmark`` to an adapter instance.
+    """Map ``config.benchmark`` to an adapter instance via the registry.
 
-    Registered adapters live in their own modules; the registry is here
-    so the framework doesn't depend on any specific adapter.
+    The framework's ``adapter_registry`` (see ``_framework/adapters.py``)
+    is the single source of truth for which adapters exist. This wrapper
+    bootstraps known adapters on first call and then delegates.
     """
-    if name == "cloudopsbench":
-        # Late import — keeps the framework importable even if the adapter
-        # has unmet deps (e.g., HF dataset not downloaded yet).
-        from tests.benchmarks.cloudopsbench.adapter import CloudOpsBenchAdapter
+    from tests.benchmarks._framework.adapters import (
+        build_adapter,
+        ensure_known_adapters_registered,
+    )
 
-        return CloudOpsBenchAdapter()
-    raise KeyError(name)
+    ensure_known_adapters_registered()
+    return build_adapter(name)
 
 
 def _known_adapters() -> list[str]:
-    """Adapters this CLI knows how to construct. Keep in sync with ``_build_adapter``."""
-    return ["cloudopsbench"]
+    """Adapters this CLI knows how to construct, via the registry."""
+    from tests.benchmarks._framework.adapters import (
+        ensure_known_adapters_registered,
+        known_adapters,
+    )
+
+    ensure_known_adapters_registered()
+    return known_adapters()
 
 
 # --------------------------------------------------------------------------- #
@@ -153,36 +160,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return EXIT_UNKNOWN_ADAPTER
 
-    # Per-config override of the cloudopsbench bench-agent termination floor.
-    # Applied here (after the adapter import has triggered the bench_agent
-    # module load) so the class attribute exists and the override takes
-    # effect for this run only. Keeps the floor inside the experiment
-    # definition rather than relying on launch-time env vars. Other adapters
-    # ignore the field — see BenchmarkConfig.min_tool_calls.
-    if config.min_tool_calls is not None and config.benchmark == "cloudopsbench":
-        from tests.benchmarks.cloudopsbench.bench_agent import BenchInvestigationAgent
-
-        BenchInvestigationAgent.MIN_TOOL_CALLS = config.min_tool_calls
-        print(
-            f"  ✓ BenchInvestigationAgent.MIN_TOOL_CALLS = {config.min_tool_calls} "
-            f"(from config.min_tool_calls)"
-        )
-
-    # Per-config override of the cloudopsbench investigation agent variant.
-    # ``trimmed_prompt`` swaps the adapter's investigation_agent_class to
-    # ``BenchInvestigationAgentTrimmedPrompt`` for this run only. Patches the
-    # adapter method in place so the runner picks up the new class without
-    # framework-level dispatch changes.
-    if config.agent_variant == "trimmed_prompt" and config.benchmark == "cloudopsbench":
-        from tests.benchmarks.cloudopsbench.bench_agent import (
-            BenchInvestigationAgentTrimmedPrompt,
-        )
-
-        adapter.investigation_agent_class = lambda: BenchInvestigationAgentTrimmedPrompt  # type: ignore[method-assign]
-        print(
-            "  ✓ adapter.investigation_agent_class = BenchInvestigationAgentTrimmedPrompt "
-            "(from config.agent_variant=trimmed_prompt)"
-        )
+    # Strategy-pattern hand-off: each adapter owns its own config-knob
+    # handling via ``apply_config_overrides``. The framework no longer
+    # needs to know which adapter honors which fields. Default (base
+    # BenchmarkAdapter.apply_config_overrides) is a no-op for adapters
+    # without runtime knobs.
+    adapter.apply_config_overrides(config)
 
     runner = BenchmarkRunner(config=config, adapter=adapter, config_path=path)
 

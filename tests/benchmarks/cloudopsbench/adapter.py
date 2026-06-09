@@ -71,6 +71,16 @@ from tests.benchmarks.cloudopsbench.validity_scoring import (
     compute_kubectl_actionability,
 )
 
+# Adapter identity string — single source of truth for the benchmark name.
+# Referenced by the adapter's ``name`` class attribute below, by the
+# framework's CLI and config lint (which conditionalize cloudopsbench-only
+# knobs on this string), and by anything else that needs to distinguish a
+# cloudopsbench config from another adapter's config. Keeping it as a
+# module-level constant avoids the magic-string drift the greptile review
+# flagged on 2026-06-09.
+BENCHMARK_NAME = "cloudopsbench"
+
+
 # --------------------------------------------------------------------------- #
 # Metric inventory — the paper's 15 metrics                                   #
 # Validity metrics are added in a follow-up (Phase C).                        #
@@ -136,7 +146,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             score = adapter.score_case(case, run_result)
     """
 
-    name = "cloudopsbench"
+    name = BENCHMARK_NAME
     version = "1.0.0"
 
     # M7 (IntegrityGuard.pre_flight) — a documented data-contamination review
@@ -172,6 +182,54 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
     # ----------------------------------------------------------------------- #
     # BenchmarkAdapter interface                                              #
     # ----------------------------------------------------------------------- #
+
+    def apply_config_overrides(self, config: Any) -> None:
+        """Honor cloudopsbench-specific config knobs before the runner starts.
+
+        Two knobs today:
+          - ``config.min_tool_calls`` (Optional[int]) — overrides
+            ``BenchInvestigationAgent.MIN_TOOL_CALLS`` so the floor is
+            reproducible from the YAML rather than a launch-time env var.
+          - ``config.agent_variant`` (Literal["default", "trimmed_prompt"])
+            — when ``"trimmed_prompt"``, swaps this adapter's
+            ``investigation_agent_class`` to
+            ``BenchInvestigationAgentTrimmedPrompt`` for this run only.
+
+        Both overrides print a "✓ ..." confirmation line so the run log
+        records which knobs fired (or didn't).
+
+        Late imports — keeps the adapter importable even if bench_agent
+        has unmet deps in some other context.
+        """
+        from tests.benchmarks.cloudopsbench.bench_agent import (
+            BenchInvestigationAgent,
+            BenchInvestigationAgentTrimmedPrompt,
+        )
+
+        min_tool_calls = getattr(config, "min_tool_calls", None)
+        if min_tool_calls is not None:
+            BenchInvestigationAgent.MIN_TOOL_CALLS = min_tool_calls
+            print(
+                f"  ✓ BenchInvestigationAgent.MIN_TOOL_CALLS = {min_tool_calls} "
+                f"(from config.min_tool_calls)"
+            )
+
+        agent_variant = getattr(config, "agent_variant", "default")
+        if agent_variant == "trimmed_prompt":
+
+            def _trimmed_investigation_agent_class() -> type[BenchInvestigationAgentTrimmedPrompt]:
+                return BenchInvestigationAgentTrimmedPrompt
+
+            # type: ignore[method-assign] — strategy-pattern instance attr
+            # shadowing of the method dispatch lookup. Documented; the
+            # named wrapper makes the override survive base-method
+            # signature changes.
+            self.investigation_agent_class = _trimmed_investigation_agent_class  # type: ignore[method-assign]
+            print(
+                "  ✓ adapter.investigation_agent_class = "
+                "BenchInvestigationAgentTrimmedPrompt "
+                "(from config.agent_variant=trimmed_prompt)"
+            )
 
     def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:
         """Stream cases matching the filter, with seeded random selection
@@ -629,3 +687,18 @@ def _summarize_investigation(run: RunResult) -> str:
     if report:
         parts.append(f"Supporting RCA report:\n{report}")
     return "\n\n".join(parts) if parts else ""
+
+
+# --------------------------------------------------------------------------- #
+# Registration                                                                 #
+#                                                                              #
+# Self-register into the framework's adapter registry on module import. The   #
+# CLI's bootstrap (``ensure_known_adapters_registered``) imports this module  #
+# at startup; this side-effect makes the framework dispatch CloudOpsBench by  #
+# name without an if/elif chain in the framework itself.                       #
+# --------------------------------------------------------------------------- #
+
+
+from tests.benchmarks._framework.adapters import register_adapter  # noqa: E402
+
+register_adapter(BENCHMARK_NAME, CloudOpsBenchAdapter)
