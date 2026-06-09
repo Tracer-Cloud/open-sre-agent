@@ -107,7 +107,12 @@ _FAULT_OBJECT_SERVICES: tuple[str, ...] = (
     "recommendationservice",
     "redis-cart",
     "shippingservice",
-    # train-ticket
+    # train-ticket — full enumeration of the dataset's service mesh + DB.
+    # The 2026-06-09 trimmed-prompt loss diagnostic showed 33.7% of cells had
+    # a GT fault_object missing from this list, capping A@1 below the paper
+    # baseline on Runtime / Performance / Startup. ``tsdb-mysql`` alone was
+    # 90 cells locked at A@1=0.00 because the LLM consistently substituted
+    # the nearest in-vocab service (most often ``ts-inside-payment-service``).
     "ts-gateway-service",
     "ts-order-service",
     "ts-payment-service",
@@ -116,6 +121,30 @@ _FAULT_OBJECT_SERVICES: tuple[str, ...] = (
     "ts-auth-service",
     "ts-route-service",
     "ts-ticket-office-service",
+    "ts-assurance-service",
+    "ts-basic-service",
+    "ts-cancel-service",
+    "ts-config-service",
+    "ts-consign-service",
+    "ts-contacts-service",
+    "ts-delivery-service",
+    "ts-food-delivery-service",
+    "ts-food-service",
+    "ts-inside-payment-service",
+    "ts-notification-service",
+    "ts-order-other-service",
+    "ts-preserve-service",
+    "ts-price-service",
+    "ts-seat-service",
+    "ts-security-service",
+    "ts-station-food-service",
+    "ts-station-service",
+    "ts-train-food-service",
+    "ts-train-service",
+    "ts-travel2-service",
+    "ts-voucher-service",
+    "ts-wait-order-service",
+    "tsdb-mysql",
 )
 
 _FAULT_OBJECT_NODES: tuple[str, ...] = ("master", "worker-01", "worker-02", "worker-03")
