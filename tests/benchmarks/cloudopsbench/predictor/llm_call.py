@@ -107,6 +107,17 @@ def emit_paper_predictions(
 
 
 def _build_system_prompt() -> str:
+    """Canonical predictor system prompt.
+
+    Encodes the schema (top_3_predictions with rank / fault_taxonomy /
+    fault_object / root_cause), the closed vocabularies from
+    ``vocabulary.py`` interpolated inline so the model sees the exact
+    enum surface the scorer compares against, the
+    investigation-is-authoritative rule, the namespace-scope rule for
+    admission faults, and the performance-fault disambiguation rules.
+    Pure string — no per-call state, safe to cache via OpenAI's automatic
+    prefix cache (≥1024-token stable prefix qualifies).
+    """
     return (
         "You are a CloudOpsBench fault-localization formatter.\n"
         "Given an alert and an investigation summary, output exactly ONE JSON\n"
@@ -186,6 +197,25 @@ def _build_user_prompt(
     metric_alerts: str = "",
     performance_localization_hint: dict[str, str] | None = None,
 ) -> str:
+    """Assemble the predictor user-message body for one case.
+
+    Composes three optional blocks onto the alert text in fixed order so
+    the prompt prefix above the variable section stays cacheable:
+
+      1. ``ALERT:`` — required; alert text + appended ``metric_alerts``
+         block when present (treated as continuation of the alert).
+      2. ``ALERT-DERIVED PERFORMANCE LOCALIZATION`` — emitted only when
+         ``performance_localization_hint`` is provided. Marked
+         AUTHORITATIVE for rank-1 to override any cluster-wide
+         narrative the investigation produced.
+      3. ``INVESTIGATION SUMMARY`` — emitted when ``investigation_summary``
+         is non-empty (opensre+llm path). Absent on the ``llm_alone``
+         path so the model reasons from the alert alone.
+
+    The closing instruction differs between the two paths: with a summary
+    the model is told to formalize its conclusion; without, to reason
+    from the alert. No model-state side effects — pure string assembly.
+    """
     alert_block = alert_text.strip()
     if metric_alerts.strip():
         alert_block = (
