@@ -229,14 +229,27 @@ def per_stratum_uniformity(
 ) -> GuardVerdict:
     """No single fault category should dominate the lift.
 
-    ``max(positive lifts) / median(positive lifts) > threshold`` indicates
-    one category is the entire mechanism — likely a category-specific
-    overfit, not a general win.
+    A real mechanism win lifts at least two strata roughly together; lift
+    concentrated in a single category is the category-specific overfit
+    signature this guard catches. Three branches:
+
+      - 0 positive strata → no lift signal at all (variant ties or
+        regresses across the board). Pass; this guard has nothing to say
+        about uniformly-bad variants.
+      - 1 positive stratum out of >1 total → all lift is in one category.
+        Fail with ``measurement=inf`` regardless of magnitude — that IS
+        the maximum concentration.
+      - 2+ positive strata → ``max(positive lifts) / median(positive lifts)``
+        must be ≤ threshold. The ratio measures how disproportionate the
+        biggest lift is vs the typical lift.
     """
     per_stratum = _per_attribute_lift(
         baseline, variant, mode, lambda c: c["case"]["metadata"]["fault_category"]
     )
     pos_lifts = [lift for lift, _ in per_stratum.values() if lift > 0]
+    per_stratum_detail = {s: {"lift": lift, "n": n} for s, (lift, n) in per_stratum.items()}
+
+    # Branch 1: no positive lifts → variant has no signal to overfit on.
     if not pos_lifts:
         return GuardVerdict(
             name="per_stratum_uniformity",
@@ -245,9 +258,30 @@ def per_stratum_uniformity(
             threshold=threshold,
             detail={
                 "reason": "no positive stratum lifts to assess concentration",
-                "per_stratum": {s: {"lift": lift, "n": n} for s, (lift, n) in per_stratum.items()},
+                "per_stratum": per_stratum_detail,
             },
         )
+
+    # Branch 2: exactly one stratum has positive lift while ≥2 exist →
+    # concentration is total. Guard against this explicitly because a
+    # single-element pos_lifts has max/median = 1.0 and would silently
+    # pass the ratio check despite being the textbook overfit pattern.
+    if len(pos_lifts) == 1 and len(per_stratum) > 1:
+        return GuardVerdict(
+            name="per_stratum_uniformity",
+            passed=False,
+            measurement=float("inf"),
+            threshold=threshold,
+            detail={
+                "reason": (
+                    "all positive lift concentrated in a single stratum out of "
+                    f"{len(per_stratum)} total — concentration is total"
+                ),
+                "per_stratum": per_stratum_detail,
+            },
+        )
+
+    # Branch 3: 2+ positive strata → ratio check.
     med = median(pos_lifts)
     ratio = max(pos_lifts) / med if med > 0 else float("inf")
     return GuardVerdict(
@@ -255,9 +289,7 @@ def per_stratum_uniformity(
         passed=ratio <= threshold,
         measurement=ratio,
         threshold=threshold,
-        detail={
-            "per_stratum": {s: {"lift": lift, "n": n} for s, (lift, n) in per_stratum.items()},
-        },
+        detail={"per_stratum": per_stratum_detail},
     )
 
 

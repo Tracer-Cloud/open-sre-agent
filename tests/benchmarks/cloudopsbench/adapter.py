@@ -516,11 +516,20 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                 emit_paper_predictions_structured,
             )
 
+            # Forward the cell's config-resolved model version so the
+            # structured variant doesn't silently fall back to its env-var /
+            # default. ``run.model_version`` carries the pinned snapshot
+            # the framework resolved from ``config.model_versions[llm]`` —
+            # the same value provenance.json records. Without this, the
+            # structured variant would use ``OPENSRE_BENCH_PREDICTOR_MODEL``
+            # / ``gpt-4o-2024-11-20`` regardless of what the bench config
+            # said, breaking reproducibility across model-pin changes.
             payload = emit_paper_predictions_structured(
                 alert_text=_alert_text_for_predictor(alert.normalized),
                 investigation_summary=investigation_summary,
                 metric_alerts=metric_alerts,
                 performance_localization_hint=perf_hint,
+                model=run.model_version,
             )
         else:
             payload = emit_paper_predictions(

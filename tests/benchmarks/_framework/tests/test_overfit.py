@@ -175,6 +175,38 @@ def test_per_stratum_uniformity_handles_no_positive_lifts() -> None:
     assert verdict.measurement is None
 
 
+def test_per_stratum_uniformity_fails_when_single_stratum_carries_lift() -> None:
+    """Regression for the single-stratum blind spot: when all positive lift
+    is concentrated in one of multiple strata, max/median of a one-element
+    list is 1.0 — so the ratio check silently passed despite being THE
+    textbook overfit pattern. The explicit single-positive-stratum branch
+    catches it as ``measurement=inf``."""
+    baseline, variant = _merge(
+        _scenario("r1", fault_category="runtime", baseline_a1=0.0, variant_a1=1.0),
+        _scenario("a1", fault_category="admission", baseline_a1=0.0, variant_a1=0.0),
+        _scenario("p1", fault_category="performance", baseline_a1=0.0, variant_a1=0.0),
+        _scenario("st1", fault_category="startup", baseline_a1=0.0, variant_a1=0.0),
+    )
+    verdict = per_stratum_uniformity(baseline, variant, "opensre+llm")
+    assert not verdict.passed
+    assert verdict.measurement == float("inf")
+    assert "single stratum" in verdict.detail["reason"]
+
+
+def test_per_stratum_uniformity_fails_when_single_positive_others_negative() -> None:
+    """Same single-stratum failure mode, but with neighboring strata actively
+    regressing — the variant lifts one category while hurting others. Also
+    overfit (plus regression), should fail."""
+    baseline, variant = _merge(
+        _scenario("r1", fault_category="runtime", baseline_a1=0.0, variant_a1=1.0),
+        _scenario("a1", fault_category="admission", baseline_a1=0.5, variant_a1=0.0),
+        _scenario("p1", fault_category="performance", baseline_a1=0.5, variant_a1=0.0),
+    )
+    verdict = per_stratum_uniformity(baseline, variant, "opensre+llm")
+    assert not verdict.passed
+    assert verdict.measurement == float("inf")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Guard C — cluster concentration
 # ─────────────────────────────────────────────────────────────────────────────
