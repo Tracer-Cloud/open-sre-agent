@@ -151,9 +151,7 @@ def emit_paper_predictions_structured(
     responsible for choosing this variant only when the configured model
     supports it.
     """
-    resolved_model = model or os.environ.get(
-        "OPENSRE_BENCH_PREDICTOR_MODEL", "gpt-4o-2024-11-20"
-    )
+    resolved_model = model or os.environ.get("OPENSRE_BENCH_PREDICTOR_MODEL", "gpt-4o-2024-11-20")
     resolved_client = client or OpenAI()
 
     system = _build_system_prompt()

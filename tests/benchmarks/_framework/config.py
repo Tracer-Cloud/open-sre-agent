@@ -244,9 +244,7 @@ class BenchmarkConfig(BaseModel):
             # the dispatcher routes by LLM provider. Until then, this guard
             # refuses non-OpenAI llms with a clear error.
             openai_prefixes = ("gpt-", "openai", "o1", "o3", "o4")
-            non_openai_llms = [
-                llm for llm in self.llms if not llm.startswith(openai_prefixes)
-            ]
+            non_openai_llms = [llm for llm in self.llms if not llm.startswith(openai_prefixes)]
             if non_openai_llms:
                 errors.append(
                     f"predictor_variant=structured currently supports OpenAI "

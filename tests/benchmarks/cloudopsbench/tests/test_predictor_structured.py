@@ -25,7 +25,6 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _TAXONOMY_CATEGORIES,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Anti-overfit invariants — schema MUST be vocabulary-derived                 #
 # --------------------------------------------------------------------------- #

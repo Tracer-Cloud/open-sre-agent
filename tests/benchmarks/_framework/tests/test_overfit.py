@@ -10,11 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 from tests.benchmarks._framework.overfit import (
-    CLUSTER_CONCENTRATION_MAX,
-    PER_STRATUM_CONCENTRATION_MAX,
-    PER_SYSTEM_UNIFORMITY_MAX,
-    REJECT_RATIO_THRESHOLD,
-    SHIP_RATIO_THRESHOLD,
     aggregate_lift,
     analyze,
     flipped_loss_to_win_clusters,
@@ -23,7 +18,6 @@ from tests.benchmarks._framework.overfit import (
     per_stratum_uniformity,
     per_system_uniformity,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers — build fake cell dicts matching the framework's emitted shape
@@ -67,8 +61,24 @@ def _scenario(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Build a baseline + variant cell pair for one scenario (one run each)."""
     return (
-        [_make_cell(case_id, system=system, fault_category=fault_category, a1=baseline_a1, gt_fault_object=gt)],
-        [_make_cell(case_id, system=system, fault_category=fault_category, a1=variant_a1, gt_fault_object=gt)],
+        [
+            _make_cell(
+                case_id,
+                system=system,
+                fault_category=fault_category,
+                a1=baseline_a1,
+                gt_fault_object=gt,
+            )
+        ],
+        [
+            _make_cell(
+                case_id,
+                system=system,
+                fault_category=fault_category,
+                a1=variant_a1,
+                gt_fault_object=gt,
+            )
+        ],
     )
 
 
@@ -172,12 +182,30 @@ def test_per_stratum_uniformity_handles_no_positive_lifts() -> None:
 
 def test_cluster_concentration_passes_when_flips_spread() -> None:
     baseline, variant = _merge(
-        _scenario("c1", system="boutique", fault_category="runtime",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/checkoutservice"),
-        _scenario("c2", system="trainticket", fault_category="admission",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/ts-payment-service"),
-        _scenario("c3", system="boutique", fault_category="startup",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/cartservice"),
+        _scenario(
+            "c1",
+            system="boutique",
+            fault_category="runtime",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/checkoutservice",
+        ),
+        _scenario(
+            "c2",
+            system="trainticket",
+            fault_category="admission",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/ts-payment-service",
+        ),
+        _scenario(
+            "c3",
+            system="boutique",
+            fault_category="startup",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/cartservice",
+        ),
     )
     verdict = flipped_loss_to_win_clusters(baseline, variant, "opensre+llm")
     # 3 flips, 3 distinct clusters → max concentration = 1/3 < 0.60
@@ -186,14 +214,38 @@ def test_cluster_concentration_passes_when_flips_spread() -> None:
 
 def test_cluster_concentration_fails_when_one_cluster_dominates() -> None:
     baseline, variant = _merge(
-        _scenario("p1", system="trainticket", fault_category="runtime",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/ts-payment-alpha"),
-        _scenario("p2", system="trainticket", fault_category="runtime",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/ts-payment-beta"),
-        _scenario("p3", system="trainticket", fault_category="runtime",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/ts-payment-gamma"),
-        _scenario("p4", system="boutique", fault_category="runtime",
-                  baseline_a1=0.0, variant_a1=1.0, gt="app/checkoutservice"),
+        _scenario(
+            "p1",
+            system="trainticket",
+            fault_category="runtime",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/ts-payment-alpha",
+        ),
+        _scenario(
+            "p2",
+            system="trainticket",
+            fault_category="runtime",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/ts-payment-beta",
+        ),
+        _scenario(
+            "p3",
+            system="trainticket",
+            fault_category="runtime",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/ts-payment-gamma",
+        ),
+        _scenario(
+            "p4",
+            system="boutique",
+            fault_category="runtime",
+            baseline_a1=0.0,
+            variant_a1=1.0,
+            gt="app/checkoutservice",
+        ),
     )
     verdict = flipped_loss_to_win_clusters(baseline, variant, "opensre+llm")
     # The 3 ts-payment-* flips cluster via the GT-prefix logic → 3/4 = 75% > 60%
@@ -279,11 +331,16 @@ def test_analyze_returns_ship_true_when_all_guards_pass() -> None:
     for i in range(40):
         sys = systems[i % 2]
         cat = categories[i % 4]
-        pairs.append(_scenario(
-            f"c{i}", system=sys, fault_category=cat,
-            baseline_a1=0.5, variant_a1=0.75,
-            gt=f"app/service-{i}",  # distinct per-case prefixes prevent cluster concentration
-        ))
+        pairs.append(
+            _scenario(
+                f"c{i}",
+                system=sys,
+                fault_category=cat,
+                baseline_a1=0.5,
+                variant_a1=0.75,
+                gt=f"app/service-{i}",  # distinct per-case prefixes prevent cluster concentration
+            )
+        )
     baseline, variant = _merge(*pairs)
     report = analyze(baseline, variant)
     assert report.ship
@@ -298,11 +355,27 @@ def test_analyze_returns_ship_false_when_held_out_collapses() -> None:
         sys = "boutique" if i % 2 == 0 else "trainticket"
         cat = ["runtime", "admission", "performance", "startup"][i % 4]
         if cid in held:
-            pairs.append(_scenario(cid, system=sys, fault_category=cat,
-                                   baseline_a1=0.5, variant_a1=0.5, gt=f"app/service-{i}"))
+            pairs.append(
+                _scenario(
+                    cid,
+                    system=sys,
+                    fault_category=cat,
+                    baseline_a1=0.5,
+                    variant_a1=0.5,
+                    gt=f"app/service-{i}",
+                )
+            )
         else:
-            pairs.append(_scenario(cid, system=sys, fault_category=cat,
-                                   baseline_a1=0.0, variant_a1=1.0, gt=f"app/service-{i}"))
+            pairs.append(
+                _scenario(
+                    cid,
+                    system=sys,
+                    fault_category=cat,
+                    baseline_a1=0.0,
+                    variant_a1=1.0,
+                    gt=f"app/service-{i}",
+                )
+            )
     baseline, variant = _merge(*pairs)
     report = analyze(baseline, variant)
     assert not report.ship

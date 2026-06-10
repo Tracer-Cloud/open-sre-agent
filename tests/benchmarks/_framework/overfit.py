@@ -49,8 +49,8 @@ from typing import Any
 HELD_OUT_SEED = 42
 HELD_OUT_FRAC = 0.20
 
-SHIP_RATIO_THRESHOLD = 0.70       # held_out_lift / optimize_lift ≥ this → ship
-REJECT_RATIO_THRESHOLD = 0.30     # < this → reject as overfit
+SHIP_RATIO_THRESHOLD = 0.70  # held_out_lift / optimize_lift ≥ this → ship
+REJECT_RATIO_THRESHOLD = 0.30  # < this → reject as overfit
 PER_SYSTEM_UNIFORMITY_MAX = 0.05  # boutique vs trainticket lift spread cap
 PER_STRATUM_CONCENTRATION_MAX = 2.0  # max-stratum-lift / median-stratum-lift cap
 CLUSTER_CONCENTRATION_MAX = 0.60  # any single flip-cluster's share cap
@@ -442,9 +442,7 @@ def _format_report(report: OverfitReport) -> str:
     lines.append("=" * 78)
     lines.append(f"Overfit attribution — mode={report.mode}")
     lines.append("=" * 78)
-    lines.append(
-        f"Full corpus  lift={report.full_corpus_lift:+.3f}  (n={report.full_corpus_n})"
-    )
+    lines.append(f"Full corpus  lift={report.full_corpus_lift:+.3f}  (n={report.full_corpus_n})")
     lines.append("")
     for g in report.guards:
         marker = "PASS" if g.passed else "FAIL"
