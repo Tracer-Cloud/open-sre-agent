@@ -312,28 +312,32 @@ def flipped_loss_to_win_clusters(
     mode: str,
     threshold: float = CLUSTER_CONCENTRATION_MAX,
 ) -> GuardVerdict:
-    """Cluster the cells the variant rescued (a1=0 → a1≥1) by
-    ``(system, fault_category, GT-service-prefix)``.
+    """Cluster scenarios the variant rescued (baseline all-fail → variant
+    majority-win) by ``(system, fault_category, GT-service-prefix)``.
 
     If a single cluster owns more than ``threshold`` of the flips, that
     cluster IS the variant's overfit fingerprint — it learned a specific
     sub-pattern, not a general lever.
+
+    A "flip" is defined at the **scenario** level (not the per-replicate
+    cell): the baseline-mean A@1 across replicates is exactly 0 (every
+    replicate lost) AND the variant-mean A@1 is ≥ 0.5 (majority of
+    replicates won). Scenario-level semantics avoid the run-index
+    matching trap — the framework emits one cell per (case, mode, run)
+    but doesn't put ``run_index`` in the cell dict (it's only encoded in
+    the filename), so keying by ``(case_id, run.get("run_index", 0))``
+    silently collapses all replicates of a case onto the same key. Using
+    the mean across replicates is both correct and resilient to that
+    schema gap.
     """
-    base_by_cell = {
-        (c["case"]["case_id"], c["run"].get("run_index", 0)): c["score"]["metrics"]["a1"]
-        for c in baseline
-        if c["run"]["mode"] == mode
-    }
-    var_by_cell = {
-        (c["case"]["case_id"], c["run"].get("run_index", 0)): c["score"]["metrics"]["a1"]
-        for c in variant
-        if c["run"]["mode"] == mode
-    }
+    base_by_case = _mean_a1_by_case(baseline, mode)
+    var_by_case = _mean_a1_by_case(variant, mode)
     case_meta = {c["case"]["case_id"]: c["case"]["metadata"] for c in baseline + variant}
     clusters: Counter[tuple[str, str, str]] = Counter()
-    for key in base_by_cell.keys() & var_by_cell.keys():
-        if base_by_cell[key] == 0 and var_by_cell[key] >= 1.0:
-            meta = case_meta[key[0]]
+    for case_id in base_by_case.keys() & var_by_case.keys():
+        # All baseline replicates lost AND majority of variant replicates won.
+        if base_by_case[case_id] == 0.0 and var_by_case[case_id] >= 0.5:
+            meta = case_meta[case_id]
             gt_fo = meta["ground_truth"].get("fault_object", "")
             # Prefix-strip the last "-<word>" segment so service families
             # (ts-payment-*, ts-order-*) cluster together rather than each

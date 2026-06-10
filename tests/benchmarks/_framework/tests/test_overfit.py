@@ -286,6 +286,64 @@ def test_cluster_concentration_fails_when_one_cluster_dominates() -> None:
     assert verdict.measurement == 0.75
 
 
+def test_cluster_concentration_counts_multi_replicate_scenarios_correctly() -> None:
+    """Regression for the run_index collapse bug.
+
+    The framework emits one cell per (case, mode, run_index), but
+    ``run_index`` isn't in the cell dict — it's only encoded in the
+    filename. The prior implementation keyed cells by
+    ``(case_id, run.get("run_index", 0))`` so all 3 replicates of a case
+    landed under the same key and only the last replicate survived. With
+    runs_per_case=3, Guard C operated on ≤ 1/3 of the intended flips.
+
+    Build a case with 3 baseline replicates (all a1=0) and 3 variant
+    replicates (all a1=1) for each of two distinct cases. The fixed
+    implementation should count 2 flips; the buggy implementation would
+    have counted 2 only by coincidence (last-replicate wins), but would
+    miss flips whose last replicate wasn't a clear-cut rescue.
+    """
+    base_cells = []
+    var_cells = []
+    for case_id, system, cat, gt in [
+        ("c1", "boutique", "runtime", "app/checkoutservice"),
+        ("c2", "trainticket", "admission", "app/ts-payment-service"),
+    ]:
+        for _ in range(3):
+            base_cells.append(
+                _make_cell(case_id, system=system, fault_category=cat, a1=0.0, gt_fault_object=gt)
+            )
+            var_cells.append(
+                _make_cell(case_id, system=system, fault_category=cat, a1=1.0, gt_fault_object=gt)
+            )
+    verdict = flipped_loss_to_win_clusters(base_cells, var_cells, "opensre+llm")
+    assert verdict.passed
+    assert verdict.detail["total_flips"] == 2  # two scenarios flipped, not 6 cells
+
+
+def test_cluster_concentration_treats_partial_replicate_rescue_as_flip() -> None:
+    """Scenario-level semantics: variant majority-win counts as a flip
+    even if not every variant replicate scored. Baseline must be all-fail
+    (every replicate a1=0) AND variant must be majority-win (mean ≥ 0.5)."""
+    base_cells = []
+    var_cells = []
+    # case c1: 3 baseline lose, 2 of 3 variant win → flip
+    for _ in range(3):
+        base_cells.append(_make_cell("c1", system="boutique", fault_category="runtime", a1=0.0))
+    var_cells.append(_make_cell("c1", system="boutique", fault_category="runtime", a1=1.0))
+    var_cells.append(_make_cell("c1", system="boutique", fault_category="runtime", a1=1.0))
+    var_cells.append(_make_cell("c1", system="boutique", fault_category="runtime", a1=0.0))
+    # case c2: 3 baseline lose, 1 of 3 variant wins (minority) → NOT a flip
+    for _ in range(3):
+        base_cells.append(_make_cell("c2", system="boutique", fault_category="runtime", a1=0.0))
+    var_cells.append(_make_cell("c2", system="boutique", fault_category="runtime", a1=1.0))
+    var_cells.append(_make_cell("c2", system="boutique", fault_category="runtime", a1=0.0))
+    var_cells.append(_make_cell("c2", system="boutique", fault_category="runtime", a1=0.0))
+
+    verdict = flipped_loss_to_win_clusters(base_cells, var_cells, "opensre+llm")
+    # Only c1 should be counted (majority-win); c2 is a minority blip.
+    assert verdict.detail["total_flips"] == 1
+
+
 def test_cluster_concentration_handles_no_flips() -> None:
     baseline, variant = _merge(
         _scenario("s1", baseline_a1=1.0, variant_a1=1.0),
