@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from tests.benchmarks._framework.overfit import (
     a_a_consistency,
     aggregate_lift,
@@ -164,7 +166,10 @@ def test_per_stratum_uniformity_fails_when_one_category_dominates() -> None:
     )
     verdict = per_stratum_uniformity(baseline, variant, "opensre+llm")
     assert not verdict.passed
-    assert verdict.measurement == 10.0  # 1.0 / 0.1 (median of three) = 10x
+    # Float division of 1.0 / 0.1: exact 10.0 on CPython 3.12, but IEEE 754
+    # makes the result implementation-defined across versions/platforms.
+    # ``pytest.approx`` shields the test from that drift.
+    assert verdict.measurement == pytest.approx(10.0)
 
 
 def test_per_stratum_uniformity_handles_no_positive_lifts() -> None:
