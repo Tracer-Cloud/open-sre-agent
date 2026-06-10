@@ -165,6 +165,14 @@ def emit_paper_predictions_structured(
     )
 
     try:
+        # Intentionally NOT passing `seed=` to the OpenAI API. Fixing the seed
+        # at this layer makes every replicate-run identical, which (a) defeats
+        # ``runs_per_case`` (the three runs collapse to one), and (b) makes the
+        # A/A consistency guard (``seed_pair: [42, 43]``) report a trivial 0
+        # diff regardless of the bench's true variance floor. The text
+        # predictor in ``llm_call.py`` also omits ``seed`` for the same
+        # reason. Structural reproducibility comes from pinned model version
+        # + dataset SHA + framework + vocabulary, not from API-level seeding.
         completion = retry_on_rate_limit(
             lambda: resolved_client.beta.chat.completions.parse(
                 model=resolved_model,
@@ -173,7 +181,6 @@ def emit_paper_predictions_structured(
                     {"role": "user", "content": user_content},
                 ],
                 response_format=_PredictionsResponse,
-                seed=42,
             ),
             label="predictor_structured",
         )
