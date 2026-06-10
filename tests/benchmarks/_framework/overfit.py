@@ -20,9 +20,16 @@ Public API:
   - ``per_stratum_uniformity`` — Guard B: per fault-category lift concentration.
   - ``flipped_loss_to_win_clusters`` — Guard C: which (system, category,
     GT-prefix) clusters absorbed the loss→win flips.
-  - ``held_out_split`` — Guard D: 80/20 split using the seeded protocol.
+  - ``held_out_generalization_gate`` — Guard D: 80/20 split using the
+    seeded protocol; ``held_out_split`` is the underlying utility.
+  - ``a_a_consistency`` — Guard E: two-seed same-variant aggregate diff
+    bounds the bench's intrinsic noise floor. Requires a second variant
+    run (seed differs from the main one). When the second run isn't
+    supplied, ``analyze`` returns a "not evaluated" verdict that fails
+    the ship check — the A/A run cannot be silently skipped.
   - ``aggregate_lift`` — utility: paired per-scenario A@1 delta between runs.
-  - ``analyze`` — runs all four guards, returns a structured ``OverfitReport``.
+  - ``analyze`` — runs all five guards (A/A as not-evaluated when its
+    second variant run isn't provided), returns ``OverfitReport``.
 
 Constants are aligned to ``exp_structured_outputs_v1.yml`` thresholds and
 ``cloudopsbench_v1.yml`` held-out seed. Changing either requires updating
@@ -54,6 +61,7 @@ REJECT_RATIO_THRESHOLD = 0.30  # < this → reject as overfit
 PER_SYSTEM_UNIFORMITY_MAX = 0.05  # boutique vs trainticket lift spread cap
 PER_STRATUM_CONCENTRATION_MAX = 2.0  # max-stratum-lift / median-stratum-lift cap
 CLUSTER_CONCENTRATION_MAX = 0.60  # any single flip-cluster's share cap
+A_A_AGGREGATE_DIFF_MAX = 0.02  # two seeds, same variant: aggregate diff cap
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -433,6 +441,86 @@ def held_out_generalization_gate(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Guard E — A/A consistency (two-seed same-variant)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def a_a_consistency(
+    variant_seed_a: list[dict[str, Any]],
+    variant_seed_b: list[dict[str, Any]],
+    mode: str,
+    threshold: float = A_A_AGGREGATE_DIFF_MAX,
+) -> GuardVerdict:
+    """Two runs of the SAME variant with different seeds must agree closely.
+
+    Establishes the bench's intrinsic noise floor. If the two A/A runs'
+    aggregate A@1 differ by more than ``threshold``, any "lift" measured
+    against a baseline is potentially within sampling noise — the
+    mechanism attribution is fragile and the variant cannot be promoted.
+
+    Both runs must be of the SAME variant config; only the seed should
+    differ. Mixing variant configs into this call defeats the noise-floor
+    semantics — there's no input check for it (call sites are responsible).
+    """
+    mean_a = _mean_a1_by_case(variant_seed_a, mode)
+    mean_b = _mean_a1_by_case(variant_seed_b, mode)
+    common = set(mean_a) & set(mean_b)
+    if not common:
+        return GuardVerdict(
+            name="a_a_consistency",
+            passed=False,
+            measurement=None,
+            threshold=threshold,
+            detail={
+                "reason": (
+                    "no overlapping case_ids between the two A/A runs — "
+                    "cannot bound the noise floor"
+                ),
+                "seed_a_n": len(mean_a),
+                "seed_b_n": len(mean_b),
+            },
+        )
+    agg_a = sum(mean_a[cid] for cid in common) / len(common)
+    agg_b = sum(mean_b[cid] for cid in common) / len(common)
+    diff = abs(agg_a - agg_b)
+    return GuardVerdict(
+        name="a_a_consistency",
+        passed=diff <= threshold,
+        measurement=diff,
+        threshold=threshold,
+        detail={
+            "seed_a_aggregate_a1": agg_a,
+            "seed_b_aggregate_a1": agg_b,
+            "paired_n": len(common),
+        },
+    )
+
+
+def _a_a_not_evaluated(threshold: float = A_A_AGGREGATE_DIFF_MAX) -> GuardVerdict:
+    """The A/A guard verdict when no second variant run was provided.
+
+    Returns ``passed=False`` so ``OverfitReport.ship`` rejects shipping
+    until the A/A run lands — the guard cannot be silently skipped. The
+    pre-registration locks A/A as a required gate; this reproduces that
+    semantics in code so the runtime can't promote without it.
+    """
+    return GuardVerdict(
+        name="a_a_consistency",
+        passed=False,
+        measurement=None,
+        threshold=threshold,
+        detail={
+            "reason": (
+                "A/A consistency was not evaluated — pass a second variant "
+                "run (different seed, same config) via ``analyze(..., a_a_variant=...)`` "
+                "or the CLI's ``--a-a-variant-dir`` flag. Required by the "
+                "pre-registered decision matrix; ship is rejected until it runs."
+            ),
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Aggregator
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -441,6 +529,7 @@ def analyze(
     baseline: list[dict[str, Any]],
     variant: list[dict[str, Any]],
     mode: str = "opensre+llm",
+    a_a_variant: list[dict[str, Any]] | None = None,
 ) -> OverfitReport:
     """Run every guard and aggregate verdicts into a single ``OverfitReport``.
 
@@ -448,18 +537,29 @@ def analyze(
     ``OverfitReport.ship`` for the all-or-nothing decision. Mode defaults
     to ``opensre+llm`` because that's the only arm structural lifts apply
     to in the bench's current schema.
+
+    ``a_a_variant`` is the second variant run (different seed, same config)
+    used by Guard E. When omitted, the A/A guard returns a "not evaluated"
+    verdict that fails — the report cannot ship without the A/A pair, by
+    design. The pre-registered decision matrix locks A/A as required, and
+    this aggregator enforces it at the runtime layer.
     """
     full_lift, full_n = aggregate_lift(baseline, variant, mode)
+    guards = [
+        per_system_uniformity(baseline, variant, mode),
+        per_stratum_uniformity(baseline, variant, mode),
+        flipped_loss_to_win_clusters(baseline, variant, mode),
+        held_out_generalization_gate(baseline, variant, mode),
+    ]
+    if a_a_variant is None:
+        guards.append(_a_a_not_evaluated())
+    else:
+        guards.append(a_a_consistency(variant, a_a_variant, mode))
     return OverfitReport(
         mode=mode,
         full_corpus_lift=full_lift,
         full_corpus_n=full_n,
-        guards=[
-            per_system_uniformity(baseline, variant, mode),
-            per_stratum_uniformity(baseline, variant, mode),
-            flipped_loss_to_win_clusters(baseline, variant, mode),
-            held_out_generalization_gate(baseline, variant, mode),
-        ],
+        guards=guards,
     )
 
 
@@ -493,10 +593,27 @@ def _format_report(report: OverfitReport) -> str:
 
 def main() -> int:
     """CLI entry: ``python -m tests.benchmarks._framework.overfit
-    --baseline-dir <path> --variant-dir <path> [--mode opensre+llm]``."""
+    --baseline-dir <path> --variant-dir <path> [--a-a-variant-dir <path>]
+    [--mode opensre+llm] [--json]``.
+
+    Without ``--a-a-variant-dir`` the report's A/A guard is "not evaluated"
+    and ``ship`` is False — provide the second variant run (different
+    seed, same config) to satisfy the pre-registered A/A consistency gate.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline-dir", type=Path, required=True)
     parser.add_argument("--variant-dir", type=Path, required=True)
+    parser.add_argument(
+        "--a-a-variant-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Optional second variant run (different seed, same config). "
+            "Required to satisfy the A/A consistency guard before the "
+            "report can ship. Without it, the A/A guard is recorded as "
+            "'not evaluated' and the report ship verdict is False."
+        ),
+    )
     parser.add_argument("--mode", default="opensre+llm")
     parser.add_argument(
         "--json", action="store_true", help="Emit a JSON report instead of human-readable text."
@@ -505,7 +622,8 @@ def main() -> int:
 
     baseline = load_cells(args.baseline_dir)
     variant = load_cells(args.variant_dir)
-    report = analyze(baseline, variant, mode=args.mode)
+    a_a_variant = load_cells(args.a_a_variant_dir) if args.a_a_variant_dir is not None else None
+    report = analyze(baseline, variant, mode=args.mode, a_a_variant=a_a_variant)
 
     if args.json:
         print(

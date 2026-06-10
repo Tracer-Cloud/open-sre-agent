@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.benchmarks._framework.overfit import (
+    a_a_consistency,
     aggregate_lift,
     analyze,
     flipped_loss_to_win_clusters,
@@ -351,13 +352,85 @@ def test_held_out_generalization_handles_no_optimize_lift() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Guard E — A/A consistency
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _variant_cells(*case_a1: tuple[str, float]) -> list[dict[str, Any]]:
+    """Build a list of variant cells for the A/A tests — same shape as the
+    framework emits but constructed directly to skip the (baseline, variant)
+    pair abstraction the other helpers use."""
+    return [
+        _make_cell(case_id, system="boutique", fault_category="runtime", a1=a1)
+        for case_id, a1 in case_a1
+    ]
+
+
+def test_a_a_consistency_passes_when_two_seeds_agree() -> None:
+    """Two A/A runs with identical aggregate A@1 → diff = 0 → pass."""
+    seed_a = _variant_cells(("c1", 0.5), ("c2", 0.5))
+    seed_b = _variant_cells(("c1", 0.5), ("c2", 0.5))
+    verdict = a_a_consistency(seed_a, seed_b, "opensre+llm")
+    assert verdict.passed
+    assert verdict.measurement == 0.0
+
+
+def test_a_a_consistency_fails_when_two_seeds_diverge() -> None:
+    """Two A/A runs differing by 0.3 in aggregate → diff > 0.02 → fail."""
+    seed_a = _variant_cells(("c1", 0.8), ("c2", 0.8))
+    seed_b = _variant_cells(("c1", 0.5), ("c2", 0.5))
+    verdict = a_a_consistency(seed_a, seed_b, "opensre+llm")
+    assert not verdict.passed
+    assert verdict.measurement is not None
+    assert abs(verdict.measurement - 0.3) < 1e-9
+
+
+def test_a_a_consistency_fails_when_no_overlapping_cases() -> None:
+    """If the two A/A runs share zero case_ids, the noise floor cannot be
+    bounded and the guard must fail (not silently pass on an empty paired set)."""
+    seed_a = _variant_cells(("c1", 0.5))
+    seed_b = _variant_cells(("c2", 0.5))
+    verdict = a_a_consistency(seed_a, seed_b, "opensre+llm")
+    assert not verdict.passed
+    assert "no overlapping case_ids" in verdict.detail["reason"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # analyze() aggregator
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_analyze_returns_ship_true_when_all_guards_pass() -> None:
-    """A real-mechanism win: uniform lift, balanced flips, held-out generalizes."""
+def test_analyze_without_a_a_variant_marks_a_a_not_evaluated_and_blocks_ship() -> None:
+    """The pre-reg requires the A/A guard. Omitting the second variant run
+    must NOT let a report ship — the A/A guard appears as not-evaluated
+    and ``ship`` returns False even when the four other guards pass."""
     pairs = []
+    systems = ["boutique", "trainticket"]
+    categories = ["runtime", "admission", "performance", "startup"]
+    for i in range(40):
+        pairs.append(
+            _scenario(
+                f"c{i}",
+                system=systems[i % 2],
+                fault_category=categories[i % 4],
+                baseline_a1=0.5,
+                variant_a1=0.75,
+                gt=f"app/service-{i}",
+            )
+        )
+    baseline, variant = _merge(*pairs)
+    report = analyze(baseline, variant)  # no a_a_variant
+    assert not report.ship
+    a_a = next(g for g in report.guards if g.name == "a_a_consistency")
+    assert not a_a.passed
+    assert "not evaluated" in a_a.detail["reason"]
+
+
+def test_analyze_returns_ship_true_when_all_guards_pass() -> None:
+    """A real-mechanism win: uniform lift, balanced flips, held-out generalizes,
+    AND the A/A consistency pair agrees within the noise floor."""
+    pairs = []
+    a_a_pairs = []
     systems = ["boutique", "trainticket"]
     categories = ["runtime", "admission", "performance", "startup"]
     for i in range(40):
@@ -373,13 +446,31 @@ def test_analyze_returns_ship_true_when_all_guards_pass() -> None:
                 gt=f"app/service-{i}",  # distinct per-case prefixes prevent cluster concentration
             )
         )
+        # A/A pair: second variant run with identical per-case A@1 so the
+        # noise-floor diff is exactly 0 — passes the A/A guard.
+        a_a_pairs.append(
+            _scenario(
+                f"c{i}",
+                system=sys,
+                fault_category=cat,
+                baseline_a1=0.5,
+                variant_a1=0.75,
+                gt=f"app/service-{i}",
+            )
+        )
     baseline, variant = _merge(*pairs)
-    report = analyze(baseline, variant)
+    _, a_a_variant = _merge(*a_a_pairs)
+    report = analyze(baseline, variant, a_a_variant=a_a_variant)
     assert report.ship
 
 
 def test_analyze_returns_ship_false_when_held_out_collapses() -> None:
-    """Concentrated lift on optimize, flat on held-out → overfit signal → no ship."""
+    """Concentrated lift on optimize, flat on held-out → overfit signal → no ship.
+
+    Passes a deterministic A/A variant (identical to ``variant``) so the A/A
+    guard succeeds trivially and ship=False is unambiguously attributable
+    to the held-out collapse, not A/A non-evaluation.
+    """
     case_ids = [f"c{i}" for i in range(100)]
     held = held_out_split(case_ids, seed=42)
     pairs = []
@@ -409,7 +500,9 @@ def test_analyze_returns_ship_false_when_held_out_collapses() -> None:
                 )
             )
     baseline, variant = _merge(*pairs)
-    report = analyze(baseline, variant)
+    report = analyze(baseline, variant, a_a_variant=variant)
     assert not report.ship
     held_out_verdict = next(g for g in report.guards if g.name == "held_out_generalization")
     assert not held_out_verdict.passed
+    a_a_verdict = next(g for g in report.guards if g.name == "a_a_consistency")
+    assert a_a_verdict.passed  # A/A trivially passed; held-out alone tanked ship
