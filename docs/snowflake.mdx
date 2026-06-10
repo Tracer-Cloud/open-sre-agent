@@ -1,19 +1,20 @@
 ---
+
 title: "Snowflake"
 description: "Connect Snowflake so OpenSRE can query data warehouse and investigate analytics issues"
----
+-----------------------------------------------------------------------------------------------------
 
-Analytics pipelines can fail in subtle ways. OpenSRE connects to your Snowflake warehouse to quickly investigate what went wrong — querying your tables, checking warehouse health, analyzing query history, and spotting performance bottlenecks in your data flows.
+Analytics pipelines can fail in subtle ways. OpenSRE connects to your Snowflake warehouse to help investigate issues by querying warehouse metadata, reviewing query history, checking warehouse health, and identifying performance bottlenecks.
 
 ## Before you start
 
 You'll need:
 
-- A Snowflake account (trial or production)
-- A warehouse that's already set up
-- Snowflake login credentials (or a service account)
-- A database and schema to query against
-- Network access from your OpenSRE environment
+* A Snowflake account (trial or production)
+* A configured warehouse
+* Snowflake credentials with appropriate permissions
+* A database and schema to query
+* Network access from your OpenSRE environment to Snowflake
 
 ## Connecting to Snowflake
 
@@ -25,14 +26,14 @@ For a step-by-step walkthrough:
 opensre integrations setup
 ```
 
-Choose **Snowflake** and answer the prompts.
+Choose **Snowflake** and follow the prompts.
 
 ### The direct way: Environment variables
 
-Or just add these to your `.env`:
+Or add these to your `.env`:
 
 ```bash
-SNOWFLAKE_ACCOUNT=xy12345
+SNOWFLAKE_ACCOUNT_IDENTIFIER=xy12345.us-east-1
 SNOWFLAKE_USER=opensre_user
 SNOWFLAKE_PASSWORD=your_password
 SNOWFLAKE_WAREHOUSE=COMPUTE_WH
@@ -41,15 +42,17 @@ SNOWFLAKE_SCHEMA=public
 SNOWFLAKE_ROLE=viewer
 ```
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `SNOWFLAKE_ACCOUNT` | — | **Required.** Snowflake account identifier |
-| `SNOWFLAKE_USER` | — | **Required.** Snowflake username |
-| `SNOWFLAKE_PASSWORD` | — | **Required.** Snowflake password |
-| `SNOWFLAKE_WAREHOUSE` | — | Warehouse name (e.g., `COMPUTE_WH`) |
-| `SNOWFLAKE_DATABASE` | — | Default database |
-| `SNOWFLAKE_SCHEMA` | — | Default schema |
-| `SNOWFLAKE_ROLE` | — | Database role with appropriate permissions |
+| Variable                       | Default   | Description                                                   |
+| ------------------------------ | --------- | ------------------------------------------------------------- |
+| `SNOWFLAKE_ACCOUNT_IDENTIFIER` | —         | **Required.** Snowflake account identifier                    |
+| `SNOWFLAKE_ACCOUNT`            | —         | Alternative Snowflake account variable                        |
+| `SNOWFLAKE_USER`               | —         | **Required.** Snowflake username                              |
+| `SNOWFLAKE_PASSWORD`           | —         | **Required.** Snowflake password                              |
+| `SNOWFLAKE_WAREHOUSE`          | —         | Warehouse name (for example, `COMPUTE_WH`)                    |
+| `SNOWFLAKE_DATABASE`           | —         | Default database                                              |
+| `SNOWFLAKE_SCHEMA`             | —         | Default schema                                                |
+| `SNOWFLAKE_ROLE`               | —         | Role with appropriate permissions                             |
+| `SNOWFLAKE_TOKEN`              | *(empty)* | Optional authentication token if supported by your deployment |
 
 ### Option 3: Persistent store
 
@@ -62,7 +65,7 @@ SNOWFLAKE_ROLE=viewer
       "service": "snowflake",
       "status": "active",
       "credentials": {
-        "account": "xy12345",
+        "account": "xy12345.us-east-1",
         "user": "opensre_user",
         "password": "your_password",
         "warehouse": "COMPUTE_WH",
@@ -75,55 +78,58 @@ SNOWFLAKE_ROLE=viewer
 }
 ```
 
-## Finding your account ID
+## Finding your account identifier
 
-Your Snowflake account identifier is easy to find:
+Snowflake account identifiers can vary depending on your region and organization setup.
 
-1. Open the Snowflake web UI
-2. Click your profile avatar (bottom left)
-3. You'll see your account ID (looks like `xy12345.us-east-1`)
-4. Use just the first part for `SNOWFLAKE_ACCOUNT` (e.g., `xy12345`)
+1. Open the Snowflake web interface
+2. Open your account or profile settings
+3. Locate your account identifier
+4. Use the full value for `SNOWFLAKE_ACCOUNT_IDENTIFIER`
+
+Examples:
+
+```text
+xy12345
+xy12345.us-east-1
+myorg-myaccount
+myorg-myaccount.eu-west-1
+```
+
+<Info>
+Use the full account identifier shown by Snowflake. Do not remove region or organization information unless your Snowflake deployment documentation explicitly instructs you to do so.
+</Info>
 
 ## Best practice: Create a dedicated role for OpenSRE
 
-Instead of using your admin account, create a limited-permission role for better security:
+Instead of using an administrative account, create a role with only the permissions OpenSRE requires.
 
 ```sql
--- Create a read-only role
 CREATE ROLE opensre_viewer;
 
--- Grant minimal permissions
 GRANT SELECT ON ALL TABLES IN DATABASE analytics TO ROLE opensre_viewer;
 GRANT MONITOR ON WAREHOUSE COMPUTE_WH TO ROLE opensre_viewer;
 
--- Create a user for OpenSRE
 CREATE USER opensre_user IDENTIFIED BY 'strong_secure_password';
 
--- Assign the role to the user
 GRANT ROLE opensre_viewer TO USER opensre_user;
 ```
 
-Then use these credentials in your OpenSRE config.
+Then use those credentials in your OpenSRE configuration.
 
-## Stronger security: Key pair authentication
+## Security recommendations
 
-For production, we recommend key pair authentication instead of passwords:
-
-```bash
-SNOWFLAKE_ACCOUNT=xy12345
-SNOWFLAKE_USER=opensre_user
-SNOWFLAKE_PRIVATE_KEY_PATH=/path/to/private_key.pem
-SNOWFLAKE_PRIVATE_KEY_PASSPHRASE=your_passphrase
-```
-
-This is more secure and easier to rotate.
+* Use a dedicated Snowflake user for OpenSRE
+* Grant only the permissions required for investigations
+* Rotate credentials regularly
+* Monitor access through Snowflake audit logs
 
 ## Test the connection
 
 Let's verify everything is working:
 
 ```bash
-opensre integrations verify --id snowflake-prod
+opensre integrations verify
 ```
 
-This checks connectivity and validates your warehouse and database access.
+This checks connectivity and validates access to the configured warehouse, database, and schema.

@@ -1,44 +1,45 @@
 ---
 title: "MongoDB Atlas"
-description: "Connect MongoDB Atlas so OpenSRE can diagnose cloud-hosted database issues during investigations"
+description: "Connect MongoDB Atlas to give OpenSRE visibility into cluster health, performance metrics, deployment status, and operational insights during investigations"
 ---
 
 Databases in the cloud can be harder to troubleshoot. That's where OpenSRE comes in. Connect to your MongoDB Atlas cluster to get instant visibility into cluster health, performance metrics, slow queries, and replica set status when alerts fire.
 
 ## What you'll need
 
-- A MongoDB Atlas account with an active cluster
-- Your cluster's connection string (we'll show you where to find it)
-- Database user credentials with read access
-- Network allowlist configured (so OpenSRE can reach your cluster)
+- MongoDB Atlas API Public Key
+- MongoDB Atlas API Private Key
+- Atlas Project ID
+- Permissions to view cluster metrics and configuration
 
 ## Getting connected
 
-### Quick setup: Interactive mode
+### Quick setup: Interactive mode 
 
 Let's walk through it step by step:
 
 ```bash
 opensre integrations setup
 ```
-
-Choose **MongoDB Atlas** and paste your connection string when prompted.
+Choose **MongoDB Atlas** and enter your Atlas API credentials when prompted.
 
 ### DIY mode: Environment variables
 
 Prefer manual config? Add these to your `.env`:
 
 ```bash
-MONGODB_ATLAS_CONNECTION_STRING=mongodb+srv://user:pass@cluster.example.net
-MONGODB_ATLAS_DATABASE=production
-MONGODB_ATLAS_AUTH_SOURCE=admin
+MONGODB_ATLAS_PUBLIC_KEY=your_public_key
+MONGODB_ATLAS_PRIVATE_KEY=your_private_key
+MONGODB_ATLAS_PROJECT_ID=your_project_id
+MONGODB_ATLAS_BASE_URL=https://cloud.mongodb.com/api/atlas/v2
 ```
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MONGODB_ATLAS_CONNECTION_STRING` | — | **Required.** MongoDB Atlas SRV connection URI |
-| `MONGODB_ATLAS_DATABASE` | _(empty)_ | Target database for profiler and collection stats |
-| `MONGODB_ATLAS_AUTH_SOURCE` | `admin` | Authentication database |
+| Variable                    | Description              |
+| --------------------------- | ------------------------ |
+| `MONGODB_ATLAS_PUBLIC_KEY`  | Atlas API public key     |
+| `MONGODB_ATLAS_PRIVATE_KEY` | Atlas API private key    |
+| `MONGODB_ATLAS_PROJECT_ID`  | Atlas project identifier |
+
 
 ### Option 3: Persistent store
 
@@ -51,62 +52,32 @@ MONGODB_ATLAS_AUTH_SOURCE=admin
       "service": "mongodb_atlas",
       "status": "active",
       "credentials": {
-        "connection_string": "mongodb+srv://user:pass@cluster.example.net",
-        "database": "production",
-        "auth_source": "admin"
+        "public_key": "your_public_key",
+        "private_key": "your_private_key",
+        "project_id": "your_project_id"
       }
     }
   ]
 }
 ```
 
-## Finding your connection string
+## Finding your Atlas API credentials
 
-Here's where to grab your connection string from MongoDB Atlas:
+1. Log in to MongoDB Atlas
+2. Navigate to Access Manager → API Keys
+3. Create a Project API Key
+4. Copy the Public Key
+5. Copy the Private Key
+6. Locate your Project ID from the Atlas project settings
 
-1. Log into MongoDB Atlas
-2. Go to **Database Deployments** and pick your cluster
-3. Click the **Connect** button
-4. Choose **Drivers**
-5. Copy the connection string (it starts with `mongodb+srv://`)
-6. Replace `<username>` and `<password>` with your actual credentials
 
-## Network setup: IP allowlist
-
-MongoDB Atlas requires you to explicitly allow IPs to connect. Quick setup:
-
-1. In Atlas, go to **Network Access** → **IP Allowlist**
-2. Click **+ Add IP Address**
-3. Paste your OpenSRE environment's IP
-4. Click **Confirm**
-
-<Tip>
-For development, you can temporarily add `0.0.0.0/0` to allow all IPs, but always lock it down before production.
-</Tip>
-
-## Connection string examples
-
-```bash
-# Standard SRV (what you'll usually copy from Atlas)
-mongodb+srv://user:password@cluster.example.net
-
-# Full cluster with database
-mongodb+srv://user:password@cluster.example.net/mydb
-
-# Advanced format
-mongodb://user:password@host1:27017,host2:27017,host3:27017/?authSource=admin&replicaSet=rs0
-```
-
-<Info>
-Special characters in passwords need URL encoding: `@` becomes `%40`, `:` becomes `%3A`, etc. Your copied connection string usually handles this automatically.
-</Info>
 
 ## Verify it works
 
 Let's make sure everything's connected:
 
 ```bash
-opensre integrations verify --id mongodb-atlas-prod
+opensre integrations verify
 ```
 
 This checks connectivity and verifies you've got the right database access.
