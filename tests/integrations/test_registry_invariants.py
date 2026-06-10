@@ -29,13 +29,6 @@ def _duplicates(values: list[int]) -> set[int]:
     return {value for value, count in Counter(values).items() if count > 1}
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Pre-existing duplicate setup_order values in INTEGRATION_SPECS. "
-        "Renumber PR flips this strict."
-    ),
-)
 def test_setup_orders_are_unique() -> None:
     orders = [s.setup_order for s in INTEGRATION_SPECS if s.setup_order is not None]
     duplicates = _duplicates(orders)
@@ -50,13 +43,6 @@ def test_setup_orders_are_unique() -> None:
         )
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Pre-existing duplicate verify_order values in INTEGRATION_SPECS. "
-        "Renumber PR flips this strict."
-    ),
-)
 def test_verify_orders_are_unique() -> None:
     orders = [s.verify_order for s in INTEGRATION_SPECS if s.verify_order is not None]
     duplicates = _duplicates(orders)
