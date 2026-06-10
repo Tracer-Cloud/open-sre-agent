@@ -108,7 +108,7 @@ def validate_tempo_config(config: TempoConfig) -> TempoValidationResult:
         response.raise_for_status()
         return TempoValidationResult(
             ok=True,
-            detail="Connected to Grafana Tempo HTTP API (/api/search, /api/traces).",
+            detail="Connected to Grafana Tempo HTTP API (/api/search/tags).",
         )
     except httpx.HTTPStatusError as err:
         snippet = err.response.text[:200].strip()

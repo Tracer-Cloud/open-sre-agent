@@ -379,8 +379,8 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="tempo",
         verifier=_verify_tempo,
         direct_effective=True,
-        setup_order=24,
-        verify_order=36,
+        setup_order=25,
+        verify_order=37,
     ),
 )
 

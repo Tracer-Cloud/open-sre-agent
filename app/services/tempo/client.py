@@ -88,15 +88,6 @@ class TempoClient:
 
     def __init__(self, config: TempoConfig) -> None:
         self.config = config
-        self._client: httpx.Client | None = None
-
-    def _get_client(self) -> httpx.Client:
-        if self._client is None:
-            self._client = httpx.Client(
-                headers=self.config.auth_headers(),
-                timeout=self.config.timeout_seconds,
-            )
-        return self._client
 
     def _configuration_error(self) -> str | None:
         if self.config.is_configured:
@@ -107,9 +98,11 @@ class TempoClient:
         self, path: str, params: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any] | None, str | None]:
         try:
-            response = self._get_client().get(
+            response = httpx.get(
                 f"{self.config.base_url()}{path}",
                 params=params,
+                headers=self.config.auth_headers(),
+                timeout=self.config.timeout_seconds,
             )
             response.raise_for_status()
             parsed = response.json()

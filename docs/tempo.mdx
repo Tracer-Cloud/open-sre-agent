@@ -9,7 +9,7 @@ This integration talks to Tempo **directly** via its HTTP API. It does not requi
 
 ## Prerequisites
 
-- Grafana Tempo 2.0+
+- Grafana Tempo 1.4+
 - Network access from the OpenSRE environment to your Tempo instance
 - Auth credentials only if your deployment requires them (many run without auth behind a gateway)
 
@@ -30,9 +30,9 @@ Add to your `.env`:
 ```bash
 TEMPO_URL=http://localhost:3200
 TEMPO_API_KEY=<bearer-token>       # optional
-TEMPO_USERNAME=<tenant-id>         # optional (basic auth)
+TEMPO_USERNAME=<username>          # optional (basic auth)
 TEMPO_PASSWORD=<token>             # optional (basic auth)
-TEMPO_ORG_ID=<tenant>              # optional (X-Scope-OrgID for multi-tenant)
+TEMPO_ORG_ID=<tenant-id>           # optional (X-Scope-OrgID for multi-tenant)
 ```
 
 | Variable | Default | Description |
@@ -41,7 +41,7 @@ TEMPO_ORG_ID=<tenant>              # optional (X-Scope-OrgID for multi-tenant)
 | `TEMPO_API_KEY` | _(empty)_ | Bearer token for auth |
 | `TEMPO_USERNAME` | _(empty)_ | Username for basic auth |
 | `TEMPO_PASSWORD` | _(empty)_ | Password for basic auth |
-| `TEMPO_ORG_ID` | _(empty)_ | Tenant ID sent as `X-Scope-OrgID` |
+| `TEMPO_ORG_ID` | _(empty)_ | Tenant ID sent as `X-Scope-OrgID` for multi-tenant deployments |
 
 ### Option 3: Persistent store
 

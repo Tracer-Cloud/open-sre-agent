@@ -39,7 +39,7 @@ class _ErrorResponse:
 
 
 class _FakeClient:
-    """Minimal httpx.Client stand-in that records calls."""
+    """Minimal httpx.get stand-in that records calls."""
 
     def __init__(self, responses: list[Any]) -> None:
         self._responses = iter(responses)
@@ -57,8 +57,8 @@ def _client() -> TempoClient:
 def _patch_client(monkeypatch: Any, *responses: Any) -> _FakeClient:
     fake = _FakeClient(list(responses))
     monkeypatch.setattr(
-        "app.services.tempo.client.httpx.Client",
-        lambda **_kwargs: fake,
+        "app.services.tempo.client.httpx.get",
+        fake.get,
     )
     return fake
 
