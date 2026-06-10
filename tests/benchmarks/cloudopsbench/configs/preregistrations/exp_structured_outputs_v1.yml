@@ -108,13 +108,16 @@ overfit_guards:
 
   held_out_generalization_gate:
     description: |
-      Lift on the held-out stratum must be within 0.03 of lift on the
-      optimize stratum. If optimize lifts but held-out is flat, the
-      variant overfit to the development split.
+      The ratio (held_out_lift / optimize_lift) must clear
+      ship_ratio_threshold. Below reject_ratio_threshold the variant is
+      rejected as overfit. The space between the two ratios is the
+      "inspect" zone — manual review, no auto-ship. If optimize lifts but
+      held-out collapses, the variant overfit to the development split.
     held_out_split_frac: 0.20
     held_out_seed: 42  # Same as cloudopsbench_v1.yml — DO NOT regenerate
     ship_ratio_threshold: 0.70  # held_out_lift / optimize_lift ≥ 0.70 to ship
     reject_ratio_threshold: 0.30  # < 0.30 → reject as overfit
+    implemented_by: tests/benchmarks/_framework/overfit.py::held_out_generalization_gate
 
   per_system_uniformity:
     description: |
@@ -147,6 +150,7 @@ overfit_guards:
       they differ more, the "lift" is sampling noise, not mechanism.
     seed_pair: [42, 43]
     max_aggregate_diff: 0.02
+    implemented_by: tests/benchmarks/_framework/overfit.py::a_a_consistency
 
 # --------------------------------------------------------------------------- #
 # Generalization gate (mirrors cloudopsbench_v1.yml for explicit reference)   #
