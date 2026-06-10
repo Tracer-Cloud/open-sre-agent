@@ -7,12 +7,19 @@ focused modules so the upcoming structured-outputs experiment can land in
 Module layout:
   - ``vocabulary.py`` — closed-vocabulary constants (taxonomies, root_causes,
     fault_object services / nodes / namespaces). Single source of truth for
-    the scorer enum surfaces.
+    the scorer enum surfaces and the structured-output schema enums.
   - ``snapping.py`` — Lever A: controlled-vocabulary snapping with the
     cross-concept blocklist guard.
   - ``rerank.py`` — Lever D: conservative evidence-weighted top-3 rescue.
-  - ``llm_call.py`` — the predictor LLM call + prompt construction +
-    response parsing.
+  - ``llm_call.py`` — the default text-emit predictor LLM call + prompt
+    construction + response parsing.
+  - ``llm_call_structured_openai.py`` — OpenAI structured-outputs predictor
+    variant. Same prompts as ``llm_call.py``, but grammar-constrained
+    sampling at the API layer via ``response_format`` + Pydantic Literal
+    enums from ``vocabulary.py``. Selected via
+    ``predictor_variant: "structured"`` in the bench config. Future
+    multi-provider peers: ``llm_call_structured_anthropic.py``,
+    ``llm_call_structured_deepseek.py``.
 
 Backward-compat re-exports: existing
 ``from tests.benchmarks.cloudopsbench.predictor import X`` callers keep
@@ -28,6 +35,9 @@ from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _build_user_prompt,
     _parse_predictions,
     emit_paper_predictions,
+)
+from tests.benchmarks.cloudopsbench.predictor.llm_call_structured_openai import (
+    emit_paper_predictions_structured,
 )
 from tests.benchmarks.cloudopsbench.predictor.rerank import (
     _RERANK_MIN_TOKEN_LEN,
@@ -82,4 +92,6 @@ __all__ = [
     "_build_user_prompt",
     "_parse_predictions",
     "emit_paper_predictions",
+    # llm_call_structured_openai
+    "emit_paper_predictions_structured",
 ]

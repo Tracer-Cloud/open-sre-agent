@@ -171,6 +171,10 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         # start); read-only during cell execution → safe for the framework
         # runner's ThreadPoolExecutor.
         self._cases_by_id: dict[str, CloudOpsCase] = {}
+        # Predictor variant — set via apply_config_overrides at run start;
+        # checked at score_case time to dispatch between the text-emit
+        # predictor (default) and the OpenAI structured-outputs variant.
+        self._predictor_variant: str = "default"
 
     @property
     def benchmark_dir(self) -> Path:
@@ -230,6 +234,17 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                 "BenchInvestigationAgentTrimmedPrompt "
                 "(from config.agent_variant=trimmed_prompt)"
             )
+
+        predictor_variant = getattr(config, "predictor_variant", "default")
+        if predictor_variant in ("default", "structured"):
+            self._predictor_variant = predictor_variant
+            if predictor_variant == "structured":
+                print(
+                    "  ✓ adapter._predictor_variant = structured "
+                    "(from config.predictor_variant=structured) — "
+                    "OpenAI grammar-constrained sampling will be used "
+                    "in score_case"
+                )
 
     def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:
         """Stream cases matching the filter, with seeded random selection
@@ -490,13 +505,31 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         except Exception:  # noqa: BLE001 — best-effort hook; never block scoring
             return run
 
-        payload = emit_paper_predictions(
-            alert_text=_alert_text_for_predictor(alert.normalized),
-            investigation_summary=investigation_summary,
-            metric_alerts=metric_alerts,
-            performance_localization_hint=perf_hint,
-            llm=llm,
-        )
+        # Dispatch on predictor_variant — default text-emit (uses opensre's
+        # LLM client) vs OpenAI structured-outputs (bypasses opensre's client
+        # to use openai.beta.chat.completions.parse for schema enforcement).
+        # The structured variant ignores ``llm`` because it talks to OpenAI
+        # directly; the cross-field lint in config.py ensures it only fires
+        # with OpenAI-model bench configs.
+        if self._predictor_variant == "structured":
+            from tests.benchmarks.cloudopsbench.predictor.llm_call_structured_openai import (
+                emit_paper_predictions_structured,
+            )
+
+            payload = emit_paper_predictions_structured(
+                alert_text=_alert_text_for_predictor(alert.normalized),
+                investigation_summary=investigation_summary,
+                metric_alerts=metric_alerts,
+                performance_localization_hint=perf_hint,
+            )
+        else:
+            payload = emit_paper_predictions(
+                alert_text=_alert_text_for_predictor(alert.normalized),
+                investigation_summary=investigation_summary,
+                metric_alerts=metric_alerts,
+                performance_localization_hint=perf_hint,
+                llm=llm,
+            )
         if payload is None:
             return run
 
