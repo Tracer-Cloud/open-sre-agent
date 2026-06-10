@@ -122,6 +122,7 @@ overfit_guards:
       Lift concentrated in one system = the variant learned that system's
       structure.
     threshold: 0.05
+    implemented_by: tests/benchmarks/_framework/overfit.py::per_system_uniformity
 
   per_stratum_uniformity:
     description: |
@@ -129,6 +130,7 @@ overfit_guards:
       must not show one category with lift > 2× the median category's lift.
       Concentration = category-specific overfit.
     concentration_ratio_max: 2.0
+    implemented_by: tests/benchmarks/_framework/overfit.py::per_stratum_uniformity
 
   per_case_attribution:
     description: |
@@ -136,6 +138,7 @@ overfit_guards:
       cells by (system, fault_category, GT-service-prefix). If one cluster
       owns > 60% of flips, that cluster is the overfit fingerprint.
     cluster_concentration_max: 0.60
+    implemented_by: tests/benchmarks/_framework/overfit.py::flipped_loss_to_win_clusters
 
   a_a_consistency:
     description: |
