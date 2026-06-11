@@ -83,15 +83,15 @@ def align_predictions_to_investigation(
 ) -> list[dict[str, Any]]:
     """Promote a better-evidenced alt when rank-1 contradicts the investigation.
 
-    Returns a new list; input is not mutated. ``rank`` fields are rewritten
-  to match the new 1-based order. Taxonomy is re-derived from root_cause
-    after any swap so the triple stays scorer-consistent.
+      Returns a new list; input is not mutated. ``rank`` fields are rewritten
+    to match the new 1-based order. Taxonomy is re-derived from root_cause
+      after any swap so the triple stays scorer-consistent.
 
-    Args:
-        predictions: cleaned top-3 from ``_parse_predictions`` (already snapped).
-        investigation_summary: text from ``_summarize_investigation``; empty
-            on control arms → caller should skip, but this function is a no-op
-            on empty input anyway.
+      Args:
+          predictions: cleaned top-3 from ``_parse_predictions`` (already snapped).
+          investigation_summary: text from ``_summarize_investigation``; empty
+              on control arms → caller should skip, but this function is a no-op
+              on empty input anyway.
     """
     if len(predictions) <= 1 or not (investigation_summary or "").strip():
         return list(predictions)
@@ -137,9 +137,7 @@ def align_predictions_to_investigation(
         {
             **prediction,
             "rank": new_rank + 1,
-            "fault_taxonomy": _taxonomy_for_root_cause(
-                str(prediction.get("root_cause") or "")
-            ),
+            "fault_taxonomy": _taxonomy_for_root_cause(str(prediction.get("root_cause") or "")),
         }
         for new_rank, prediction in enumerate(new_order)
     ]
