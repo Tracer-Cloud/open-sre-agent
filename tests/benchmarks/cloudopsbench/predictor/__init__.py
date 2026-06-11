@@ -29,6 +29,10 @@ modules above is re-exported here.
 
 from __future__ import annotations
 
+from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
+    align_predictions_to_investigation,
+    apply_investigation_handoff,
+)
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _FENCED_JSON,
     _build_system_prompt,
@@ -38,10 +42,6 @@ from tests.benchmarks.cloudopsbench.predictor.llm_call import (
 )
 from tests.benchmarks.cloudopsbench.predictor.llm_call_structured_openai import (
     emit_paper_predictions_structured,
-)
-from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
-    align_predictions_to_investigation,
-    apply_investigation_handoff,
 )
 from tests.benchmarks.cloudopsbench.predictor.rerank import (
     _RERANK_MIN_TOKEN_LEN,
