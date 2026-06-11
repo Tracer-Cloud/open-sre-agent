@@ -542,19 +542,19 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         if payload is None:
             return run
 
-        # Lever D — rerank deliberately NOT wired into the pipeline.
-        # The conservative-rescue variant (see ``rerank_predictions_by_evidence``)
-        # was empirically validated against the 11:46 case data and found to
-        # have zero rescue surface: 76/77 failures have rank-1 with at least
-        # one substring hit in the LLM's own investigation narrative, so the
-        # "rank-1 unmentioned" gate never fires. Additionally, the per-case
-        # ``evidence_entries`` field is empty (separate plumbing bug — needs
-        # the runner to propagate tool results before any text-based rerank
-        # has a richer signal to use). Keep the function + tests in tree as
-        # a documented attempt; revisit when tool results are persisted or
-        # when an LLM-as-judge variant is worth its per-cell cost.
+        # B1 + conservative rerank — only when opensre produced an investigation
+        # summary. Control arms pass an empty summary; their predictor path is
+        # unchanged so the paired contrast stays honest.
+        from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
+            apply_investigation_handoff,
+        )
+
+        predictions = apply_investigation_handoff(
+            payload["top_3_predictions"],
+            investigation_summary,
+        )
         enriched_diagnosis = dict(run.final_diagnosis)
-        enriched_diagnosis["top_3_predictions"] = payload["top_3_predictions"]
+        enriched_diagnosis["top_3_predictions"] = predictions
         return replace(run, final_diagnosis=enriched_diagnosis)
 
     def select_best_run(
