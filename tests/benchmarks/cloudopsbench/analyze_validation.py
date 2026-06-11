@@ -295,16 +295,37 @@ def _cell_a1(row: dict) -> int:
 
 
 def _investigation_a1_hit(row: dict, gt: tuple[str, str, str]) -> int:
-    """1 when opensre's investigation names the GT triple (L0 metric)."""
+    """1 when opensre's investigation names the GT triple (L0 metric).
+
+    Primary path: read ``investigation_a1`` from the cell's recorded metrics.
+    This is the source of truth — it's what the scorer wrote at run time
+    using the full ``case_data`` dict.
+
+    Fallback (legacy artifacts that pre-date this metric): rebuild a
+    pseudo-``case_data`` from ``final_diagnosis`` fields and re-run the
+    keyword parser. The fallback is **best-effort** and may undercount the
+    scorer's value when ``causal_chain`` / ``validated_claims`` were
+    captured at a path the synthesized dict doesn't probe — e.g. directly
+    on ``run`` rather than nested inside ``final_diagnosis``. We try both
+    locations here to cover the most common artifact shapes, but for
+    authoritative L0 numbers on legacy data, re-score the run rather than
+    rely on this fallback.
+    """
     scored = _metric(row, "investigation_a1")
     if scored is not None:
         return 1 if scored >= 1.0 else 0
     run = row.get("run", {})
     diag = run.get("final_diagnosis") or {}
+    # ``final_state`` may live nested in ``final_diagnosis`` (current shape)
+    # or directly on ``run`` (older artifacts). Prefer the nested form when
+    # both are present — that's what the scorer would have read first.
+    final_state = diag.get("final_state")
+    if not isinstance(final_state, dict):
+        final_state = run.get("final_state")
     case_data = {
         "root_cause": diag.get("root_cause"),
         "report": diag.get("report"),
-        "final_state": diag.get("final_state"),
+        "final_state": final_state if isinstance(final_state, dict) else None,
     }
     payload = infer_final_answer_from_opensre_text(case_data, include_predictor_output=False)
     if not payload:

@@ -264,6 +264,15 @@ def _infer_fault_object(text: str) -> str:
 
     Longest names first so ``ts-order-other-service`` wins over ``ts-order-service``.
     Kept in sync with ``predictor.vocabulary._FAULT_OBJECT_*``.
+
+    Namespace match REQUIRES the literal word ``namespace`` to appear in the
+    text as a precision guard. Without it, prose like "boutique system has
+    memory pressure" would incorrectly return ``namespace/boutique`` whenever
+    the cluster name is mentioned in passing — overriding the empty-string
+    "no localization" result and producing a spurious wrong-shape match on
+    cases whose GT is a ``namespace/<X>`` fault. Original guard preserved
+    here after a 2026-06 refactor (commit 8dac68c7) dropped it; the
+    regression is fixed without losing the vocab-import simplification.
     """
     from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
         _FAULT_OBJECT_NAMESPACES,
@@ -277,9 +286,10 @@ def _infer_fault_object(text: str) -> str:
     for node_name in _FAULT_OBJECT_NODES:
         if node_name in text:
             return f"node/{node_name}"
-    for ns_name in _FAULT_OBJECT_NAMESPACES:
-        if ns_name in text:
-            return f"namespace/{ns_name}"
+    if "namespace" in text:
+        for ns_name in _FAULT_OBJECT_NAMESPACES:
+            if ns_name in text:
+                return f"namespace/{ns_name}"
     return ""
 
 

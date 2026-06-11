@@ -141,6 +141,31 @@ def test_infer_fault_object_uses_full_train_ticket_vocabulary() -> None:
     assert _infer_fault_object(text) == "app/ts-order-other-service"
 
 
+def test_infer_fault_object_namespace_requires_anchor_word() -> None:
+    """Precision guard: namespace match requires the literal word ``namespace``
+    in the text. Without it, prose like "boutique system has memory pressure"
+    would falsely return ``namespace/boutique`` and inflate investigation_a1
+    on the small fraction of cases whose GT is actually a ``namespace/<X>``
+    fault, while shifting investigation outputs on every case whose GT is a
+    service or node. Regression guard for the 2026-06 vocab-import refactor
+    that dropped this anchor."""
+    # Casual cluster-name mention WITHOUT the word "namespace" → empty.
+    # No service / node match → must NOT fall through to namespace match.
+    assert _infer_fault_object("boutique system has memory pressure") == ""
+    assert _infer_fault_object("train-ticket cluster was slow today") == ""
+    # Explicit namespace localization DOES match — the guard is the literal
+    # word "namespace", not a stricter grammar.
+    assert _infer_fault_object("issue localized to the boutique namespace") == "namespace/boutique"
+    assert (
+        _infer_fault_object("the train-ticket namespace was quota-throttled")
+        == "namespace/train-ticket"
+    )
+    # Service match still wins even when both "namespace" + cluster name
+    # appear — the service loop runs first.
+    text = "cartservice failure in the boutique namespace"
+    assert _infer_fault_object(text) == "app/cartservice"
+
+
 def test_investigation_a1_zero_when_root_cause_phrasing_does_not_match() -> None:
     """Parser sees the service name but the root cause phrasing doesn't match
     any keyword set → all zeros, because ``infer_final_answer_from_opensre_text``
