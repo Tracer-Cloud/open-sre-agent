@@ -389,13 +389,17 @@ def test_trimmed_prompt_carries_alert_anchored_rule() -> None:
     assert "primary suspect" in lower
     # The structural claim: downstream noise can mask the upstream slowness.
     assert "victims" in lower
-    # Root-cause-shape consistency clause: once anchored on the alert's
-    # service, the RC must be performance-shaped, not runtime-shape. Added
-    # after the Performance smoke v2 showed the rule was pulling the agent
-    # to the right service but it was still assigning Runtime root causes
-    # (readiness_probe_*, oom_killed) to that anchored service.
-    assert "root-cause-shape consistency" in lower
-    assert "must also be performance-shaped" in lower
+    # Root-cause-shape consistency clause was REMOVED after the V3
+    # Performance smoke (2026-06-11T17-57-57Z) showed it made the score
+    # WORSE (0.493 → 0.387, regressed below the V1 no-rule baseline of
+    # 0.427 and even below llm_alone_pure at 0.440). At n=25 the noise
+    # floor is ~11pp across runs of identical input, larger than any
+    # prompt-level effect. Keeping only the V2 alert-anchored rule as
+    # the structural anchor and moving to full-N (n=452) for proper
+    # power. Do not re-add prompt clauses to address the Performance
+    # gap without first running at full-N to confirm whether the gap
+    # exists at proper scale.
+    assert "root-cause-shape" not in lower
     # No corpus-specific tokens leaked into the prompt.
     for forbidden in (
         "tsdb-mysql",
