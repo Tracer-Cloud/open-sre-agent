@@ -184,7 +184,10 @@ def analyze(run_dir: Path) -> int:
     if "opensre+llm" in arms and control_arm in arms:
         for metric_label, hit_fn in (
             ("a1 (predictor rank-1)", _cell_a1),
-            ("investigation_a1 (opensre prose)", lambda r: _investigation_a1_hit(r, _gt(r["case"]))),
+            (
+                "investigation_a1 (opensre prose)",
+                lambda r: _investigation_a1_hit(r, _gt(r["case"])),
+            ),
         ):
             print(f"=== paired {metric_label}: (opensre+llm) − ({control_arm}) ===")
             for seen in (True, False, None):
