@@ -10,10 +10,15 @@ runs when a non-empty ``investigation_summary`` is present (``opensre+llm``
 path). Control arms with an empty summary are unchanged.
 
 Promotion rule (mechanism-level, not per-case):
-  - Score each prediction's ``root_cause`` by how many of its identifying
-    tokens appear in the investigation text.
+  - Score each prediction from (a) root_cause tokens in the investigation,
+    with double weight on the conclusion lines Fix-A leads with, plus (b)
+    whether the prediction's ``fault_object`` scope name appears in the text.
   - If a non-rank-1 prediction strictly outscores rank-1 AND meets a
-    minimum support threshold, promote it to rank-1 (swap ordering).
+    minimum support threshold, promote it — but only when the object gate
+    passes (same object as rank-1, or the promoted object's canonical name
+    is named in the investigation). This blocks promoting a correct-looking
+    root_cause on the wrong ``fault_object`` when the investigation localized
+    elsewhere (DB-localization failure class).
 
 This is stronger than ``rerank_predictions_by_evidence``'s conservative
 gate (rank-1 must have *zero* hits). Here we promote when rank-2 is
@@ -55,9 +60,38 @@ _INVESTIGATION_STOPWORDS: frozenset[str] = frozenset(
 
 _INVESTIGATION_TOKEN_MIN_LEN: int = 4
 
-# Require at least this many distinct root-cause tokens in the investigation
+# Require at least this many combined root_cause + object support points
 # before we override the predictor's confidence ordering.
 _MIN_PROMOTION_SCORE: int = 2
+
+
+def _extract_conclusion_haystack(summary: str) -> str:
+    """Lines carrying opensre's stated component / conclusion (Fix-A ordering)."""
+    parts: list[str] = []
+    for line in summary.splitlines():
+        lower = line.lower()
+        if lower.startswith("identified component:") or lower.startswith(
+            "investigation conclusion (root cause):"
+        ):
+            parts.append(line)
+    return "\n".join(parts).lower()
+
+
+def _fault_object_scope_name(fault_object: str) -> str:
+    """Canonical scope name after ``app/``, ``node/``, or ``namespace/``."""
+    fo = (fault_object or "").strip().lower()
+    if "/" in fo:
+        _, _, name = fo.partition("/")
+        return name
+    return fo
+
+
+def _fault_object_investigation_score(haystack: str, fault_object: str) -> int:
+    """1 when the prediction's scope name appears in investigation prose."""
+    name = _fault_object_scope_name(fault_object)
+    if not name:
+        return 0
+    return 1 if name in haystack else 0
 
 
 def _root_cause_investigation_tokens(root_cause: str) -> set[str]:
@@ -69,12 +103,64 @@ def _root_cause_investigation_tokens(root_cause: str) -> set[str]:
     return tokens
 
 
-def _root_cause_investigation_score(haystack: str, root_cause: str) -> int:
-    """Count how many root_cause tokens appear in investigation prose."""
+def _root_cause_investigation_score(
+    haystack: str,
+    conclusion_haystack: str,
+    root_cause: str,
+) -> int:
+    """Count root_cause token hits; double-count tokens in conclusion lines."""
     tokens = _root_cause_investigation_tokens(root_cause)
     if not tokens:
         return 0
-    return sum(1 for tok in tokens if tok in haystack)
+    score = 0
+    for tok in tokens:
+        if tok in haystack:
+            score += 1
+        if tok in conclusion_haystack:
+            score += 1
+    return score
+
+
+def _prediction_investigation_score(
+    haystack: str,
+    conclusion_haystack: str,
+    prediction: dict[str, Any],
+) -> int:
+    """Combined root_cause + fault_object support in investigation prose."""
+    rc_score = _root_cause_investigation_score(
+        haystack,
+        conclusion_haystack,
+        str(prediction.get("root_cause") or ""),
+    )
+    obj_score = _fault_object_investigation_score(
+        haystack,
+        str(prediction.get("fault_object") or ""),
+    )
+    return rc_score + obj_score
+
+
+def _object_gate_allows_promotion(
+    conclusion_haystack: str,
+    promoted_fault_object: str,
+    rank1_fault_object: str,
+) -> bool:
+    """Block cross-object promotion unless the alt object is named in the
+    investigation's conclusion lines.
+
+    Checks ``conclusion_haystack`` (the "Identified component:" /
+    "Investigation conclusion (root cause):" lines), NOT the full haystack.
+    DB-failure error messages routinely mention the DB service name in the
+    *caller's* logs (e.g. "connection to tsdb-mysql failed (Access denied)"),
+    so a full-haystack check would silently allow cross-object promotion
+    whenever the predictor's alt happens to name a service mentioned in the
+    upstream caller's logs — exactly the DB-localization failure mode this
+    gate exists to prevent.
+    """
+    promoted = (promoted_fault_object or "").strip().lower()
+    rank1 = (rank1_fault_object or "").strip().lower()
+    if promoted == rank1:
+        return True
+    return _fault_object_investigation_score(conclusion_haystack, promoted_fault_object) >= 1
 
 
 def align_predictions_to_investigation(
@@ -83,23 +169,23 @@ def align_predictions_to_investigation(
 ) -> list[dict[str, Any]]:
     """Promote a better-evidenced alt when rank-1 contradicts the investigation.
 
-      Returns a new list; input is not mutated. ``rank`` fields are rewritten
+    Returns a new list; input is not mutated. ``rank`` fields are rewritten
     to match the new 1-based order. Taxonomy is re-derived from root_cause
-      after any swap so the triple stays scorer-consistent.
+    after any swap so the triple stays scorer-consistent.
 
-      Args:
-          predictions: cleaned top-3 from ``_parse_predictions`` (already snapped).
-          investigation_summary: text from ``_summarize_investigation``; empty
-              on control arms → caller should skip, but this function is a no-op
-              on empty input anyway.
+    Args:
+        predictions: cleaned top-3 from ``_parse_predictions`` (already snapped).
+        investigation_summary: text from ``_summarize_investigation``; empty
+            on control arms → caller should skip, but this function is a no-op
+            on empty input anyway.
     """
     if len(predictions) <= 1 or not (investigation_summary or "").strip():
         return list(predictions)
 
     haystack = investigation_summary.lower()
+    conclusion_haystack = _extract_conclusion_haystack(investigation_summary)
     scores = [
-        _root_cause_investigation_score(haystack, str(p.get("root_cause") or ""))
-        for p in predictions
+        _prediction_investigation_score(haystack, conclusion_haystack, p) for p in predictions
     ]
     rank1_score = scores[0]
 
@@ -118,11 +204,19 @@ def align_predictions_to_investigation(
         return list(predictions)
 
     promoted = predictions[best_alt_idx]
+    if not _object_gate_allows_promotion(
+        conclusion_haystack,
+        str(promoted.get("fault_object") or ""),
+        str(predictions[0].get("fault_object") or ""),
+    ):
+        return list(predictions)
+
     logger.info(
-        "[investigation_handoff] promoting rank %d → 1: root_cause=%r "
+        "[investigation_handoff] promoting rank %d → 1: root_cause=%r fault_object=%r "
         "(investigation score %d vs rank-1 score %d)",
         best_alt_idx + 1,
         promoted.get("root_cause"),
+        promoted.get("fault_object"),
         best_alt_score,
         rank1_score,
     )

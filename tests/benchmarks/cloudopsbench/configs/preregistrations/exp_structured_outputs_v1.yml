@@ -277,7 +277,15 @@ stopping_rules:
     for OpenAI runs).
 
   null_result: |
-    Aggregate lift CI overlaps 0 AND OBJECT_HIT_RC_MISS share unchanged.
+    AMENDED 2026-06-11: aligned with ``decision_rules.full_n_353.reject_as_no_effect``
+    which was rewritten in AMENDMENT 1 (2026-06-10). Original referenced
+    the ``OBJECT_HIT_RC_MISS share unchanged`` metric which AMENDMENT 1
+    replaced with ``mysql_confusion_reduction < 50%``. Updated here for
+    consistency — does NOT change the runtime decision (the framework
+    reads ``decision_rules``, not ``stopping_rules``); this is documentation
+    cleanup only.
+
+    Aggregate lift CI overlaps 0 AND mysql_confusion_reduction_pct < 50%.
     Document as null result. The structured variant stays in the code base
     as an opt-in for future researchers but is not the default. No prompt
     changes, no follow-up tuning.

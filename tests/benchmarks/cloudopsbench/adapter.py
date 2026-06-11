@@ -542,17 +542,34 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         if payload is None:
             return run
 
-        # B1 + conservative rerank — only when opensre produced an investigation
-        # summary. Control arms pass an empty summary; their predictor path is
-        # unchanged so the paired contrast stays honest.
-        from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
-            apply_investigation_handoff,
-        )
+        # B1 investigation handoff — gated to ``predictor_variant == "default"``
+        # so the mechanism is independently attributable per variant.
+        #
+        # WHY this gate: the structured-outputs variant uses grammar-constrained
+        # sampling at the OpenAI API layer to prevent off-vocab predictor drift
+        # (its own independent mechanism). Layering B1's token-overlap promotion
+        # on top would conflate the two:
+        #   - couldn't tell whether a lift was from schema enforcement or B1
+        #   - could silently mask a structured-variant regression that B1 rescued
+        #   - could amplify a spurious structured-variant lift via B1's prose
+        #     alignment
+        # The structured-outputs variant was REJECTED at full-N (2026-06-10);
+        # future runs of that variant (cross-LLM ablations, layer-attribution
+        # studies) MUST stay clean for the comparison to be honest.
+        #
+        # Control arms pass an empty summary — apply_investigation_handoff is a
+        # no-op there, so paired contrasts on llm_alone / llm_alone_pure stay valid.
+        if self._predictor_variant == "default":
+            from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
+                apply_investigation_handoff,
+            )
 
-        predictions = apply_investigation_handoff(
-            payload["top_3_predictions"],
-            investigation_summary,
-        )
+            predictions = apply_investigation_handoff(
+                payload["top_3_predictions"],
+                investigation_summary,
+            )
+        else:
+            predictions = payload["top_3_predictions"]
         enriched_diagnosis = dict(run.final_diagnosis)
         enriched_diagnosis["top_3_predictions"] = predictions
         return replace(run, final_diagnosis=enriched_diagnosis)
