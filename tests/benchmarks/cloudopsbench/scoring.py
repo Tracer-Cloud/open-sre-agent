@@ -6,7 +6,19 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from tests.benchmarks.cloudopsbench.case_loader import CloudOpsCase
+from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
+    _FAULT_OBJECT_NAMESPACES,
+    _FAULT_OBJECT_NODES,
+    _FAULT_OBJECT_SERVICES,
+)
 from tests.benchmarks.cloudopsbench.replay_backend import normalize_resource_type
+
+# Longest service names first so ``ts-order-other-service`` shadows
+# ``ts-order-service`` on substring match. Computed once at module load —
+# the underlying vocabulary tuple is stable for the process lifetime.
+_FAULT_OBJECT_SERVICES_BY_LENGTH: tuple[str, ...] = tuple(
+    sorted(_FAULT_OBJECT_SERVICES, key=len, reverse=True)
+)
 
 TOOL_KEY_PARAMS: dict[str, list[str]] = {
     "GetResources": ["resource_type"],
@@ -262,25 +274,20 @@ def _infer_root_cause(text: str) -> str:
 def _infer_fault_object(text: str) -> str:
     """Substring match against the predictor's closed service vocabulary.
 
-    Longest names first so ``ts-order-other-service`` wins over ``ts-order-service``.
-    Kept in sync with ``predictor.vocabulary._FAULT_OBJECT_*``.
+    Longest names first (precomputed in ``_FAULT_OBJECT_SERVICES_BY_LENGTH``)
+    so ``ts-order-other-service`` wins over ``ts-order-service``. Kept in
+    sync with ``predictor.vocabulary._FAULT_OBJECT_*``.
 
-    Namespace match REQUIRES the literal word ``namespace`` to appear in the
-    text as a precision guard. Without it, prose like "boutique system has
-    memory pressure" would incorrectly return ``namespace/boutique`` whenever
-    the cluster name is mentioned in passing — overriding the empty-string
-    "no localization" result and producing a spurious wrong-shape match on
-    cases whose GT is a ``namespace/<X>`` fault. Original guard preserved
-    here after a 2026-06 refactor (commit 8dac68c7) dropped it; the
-    regression is fixed without losing the vocab-import simplification.
+    Namespace match REQUIRES the literal word ``namespace`` to appear in
+    the text as a precision guard. Without it, prose like "boutique system
+    has memory pressure" would incorrectly return ``namespace/boutique``
+    whenever the cluster name is mentioned in passing — overriding the
+    empty-string "no localization" result and producing a spurious
+    wrong-shape match on cases whose GT is a ``namespace/<X>`` fault. The
+    original guard was preserved here after a 2026-06 refactor (commit
+    8dac68c7) dropped it.
     """
-    from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
-        _FAULT_OBJECT_NAMESPACES,
-        _FAULT_OBJECT_NODES,
-        _FAULT_OBJECT_SERVICES,
-    )
-
-    for service_name in sorted(_FAULT_OBJECT_SERVICES, key=len, reverse=True):
+    for service_name in _FAULT_OBJECT_SERVICES_BY_LENGTH:
         if service_name in text:
             return f"app/{service_name}"
     for node_name in _FAULT_OBJECT_NODES:
