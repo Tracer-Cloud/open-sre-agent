@@ -79,10 +79,17 @@
 # bump).
 # Wall time: ~30-45 min Fargate at workers=1.
 #
+# Post-run analysis (read L0 vs L1):
+#   uv run python -m tests.benchmarks.cloudopsbench.analyze_validation \
+#     .bench-results/cloudopsbench_db_pod_logs_smoke_openai/<run-id>
+#   The analyzer prints investigation_a1 (opensre prose) beside a1 (predictor
+#   rank-1) and paired Δ on BOTH — use investigation_a1 to judge opensre;
+#   use a1 for the paper-compatible pipeline.
+#
 # Smoke gate (advance to full-N):
 #   ALL of:
-#   (a) opensre+llm aggregate A@1 ≥ baseline + 0.02 (point estimate; smoke
-#       CI need not exclude 0). Joint mechanism lift.
+#   (a) opensre+llm aggregate investigation_a1 ≥ control + 0.02 (PRIMARY —
+#       opensre investigation quality). Pipeline a1 lift is secondary.
 #   (b1) Planner rule fired: opensre's evidence_entries on DB-backed cases
 #        SHOULD contain at least one GetErrorLogs::tsdb-mysql / nacosdb-
 #        mysql / redis-cart on ≥30% of opensre+llm cells where GT

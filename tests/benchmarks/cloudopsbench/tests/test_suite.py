@@ -93,3 +93,69 @@ def test_scoring_matches_reference_semantics_for_canned_trace() -> None:
     assert score.metrics.any_order == 1.0
     assert score.metrics.cov == 1.0
     assert summary["metrics"]["Accuracy @1"] == 1.0
+
+
+def test_translation_loss_fires_when_investigation_correct_predictor_wrong() -> None:
+    """End-to-end: opensre's prose names the GT triple (investigation_a1=1)
+    but the predictor's top-3 misses it (a1=0). ``translation_loss`` must
+    flag this — it's the signal that the LLM wrapping opensre's output
+    dropped what opensre found.
+    """
+    case = load_case("boutique", "service", "1")
+    case_data = {
+        # opensre prose: names cartservice + the GT root cause
+        "report": (
+            "Identified component: cartservice.\n"
+            "Investigation conclusion (root cause): cartservice has an "
+            "invalid environment variable for the redis-cart-invalid "
+            "address (wrong hostname)."
+        ),
+        # predictor output: wrong triple
+        "final_answer": {
+            "top_3_predictions": [
+                {
+                    "rank": 1,
+                    "fault_taxonomy": "Runtime_Fault",
+                    "fault_object": "app/frontend",
+                    "root_cause": "oom_killed",
+                }
+            ]
+        },
+        "steps": [],
+    }
+
+    score = score_case(case, case_data)
+
+    assert score.metrics.investigation_a1 == 1.0
+    assert score.metrics.a1 == 0.0
+    assert score.metrics.translation_loss == 1.0
+
+
+def test_translation_loss_zero_when_both_correct() -> None:
+    """When both layers get it right, translation_loss must NOT fire."""
+    case = load_case("boutique", "service", "1")
+    case_data = {
+        "report": (
+            "Identified component: cartservice.\n"
+            "Investigation conclusion (root cause): cartservice has an "
+            "invalid environment variable for the redis-cart-invalid "
+            "address (wrong hostname)."
+        ),
+        "final_answer": {
+            "top_3_predictions": [
+                {
+                    "rank": 1,
+                    "fault_taxonomy": "Service_Routing_Fault",
+                    "fault_object": "app/cartservice",
+                    "root_cause": "service_env_var_address_mismatch",
+                }
+            ]
+        },
+        "steps": [],
+    }
+
+    score = score_case(case, case_data)
+
+    assert score.metrics.investigation_a1 == 1.0
+    assert score.metrics.a1 == 1.0
+    assert score.metrics.translation_loss == 0.0

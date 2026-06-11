@@ -48,6 +48,25 @@ class CloudOpsMetrics:
     # object correct; object_a3 = correct object anywhere in the top-3.
     object_a1: float
     object_a3: float
+    # Investigation-native scoring: rebuild a single triple from opensre's
+    # prose (report + root_cause + causal_chain + validated_claims) using the
+    # deterministic keyword parser ``infer_final_answer_from_opensre_text``,
+    # then score it the same way. This isolates opensre's investigation
+    # quality from the LLM predictor that formalizes the prose into
+    # ``top_3_predictions``: a lift on ``a1`` could come from a better
+    # investigation OR a better predictor — ``investigation_a1`` only moves
+    # when the investigation itself names the correct triple.
+    #
+    # ``investigation_a1`` is a CONSERVATIVE lower bound on investigation
+    # quality: the keyword parser misses synonyms and freer phrasings.
+    # ``translation_loss`` flips on cases where investigation_a1 is right but
+    # ``a1`` is wrong — the formalization step lost what opensre found.
+    # Read together they answer "is opensre getting better, or just the
+    # wrapper around it?"
+    investigation_a1: float
+    investigation_partial_a1: float
+    investigation_object_a1: float
+    translation_loss: float
     tcr: float
     exact: float
     in_order: float
@@ -154,13 +173,27 @@ def extract_final_answer_payload(case_data: dict[str, Any]) -> tuple[dict[str, A
     return None, "unparsed"
 
 
-def infer_final_answer_from_opensre_text(case_data: dict[str, Any]) -> dict[str, Any] | None:
+def infer_final_answer_from_opensre_text(
+    case_data: dict[str, Any],
+    *,
+    include_predictor_output: bool = True,
+) -> dict[str, Any] | None:
+    """Parse opensre's free-text RCA into a single-prediction paper triple.
+
+    Set ``include_predictor_output=False`` for investigation-native scoring:
+    by default this function also reads ``case_data["final_answer"]`` (the
+    structured-predictor JSON, stringified) which would feed predictor
+    signal back through the keyword parser and defeat the purpose of an
+    "is opensre alone right?" metric. Existing callers (legacy fallback in
+    ``extract_final_answer_payload``) keep the default behavior.
+    """
     final_state = case_data.get("final_state")
     texts = [
         case_data.get("root_cause"),
         case_data.get("report"),
-        case_data.get("final_answer"),
     ]
+    if include_predictor_output:
+        texts.append(case_data.get("final_answer"))
     if isinstance(final_state, dict):
         texts.extend(
             [
@@ -227,37 +260,26 @@ def _infer_root_cause(text: str) -> str:
 
 
 def _infer_fault_object(text: str) -> str:
-    service_names = [
-        "adservice",
-        "cartservice",
-        "checkoutservice",
-        "currencyservice",
-        "emailservice",
-        "frontend",
-        "paymentservice",
-        "productcatalogservice",
-        "recommendationservice",
-        "redis-cart",
-        "shippingservice",
-        "ts-gateway-service",
-        "ts-order-service",
-        "ts-payment-service",
-        "ts-travel-service",
-        "ts-user-service",
-        "ts-auth-service",
-        "ts-route-service",
-        "ts-ticket-office-service",
-    ]
-    for service_name in service_names:
+    """Substring match against the predictor's closed service vocabulary.
+
+    Longest names first so ``ts-order-other-service`` wins over ``ts-order-service``.
+    Kept in sync with ``predictor.vocabulary._FAULT_OBJECT_*``.
+    """
+    from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
+        _FAULT_OBJECT_NAMESPACES,
+        _FAULT_OBJECT_NODES,
+        _FAULT_OBJECT_SERVICES,
+    )
+
+    for service_name in sorted(_FAULT_OBJECT_SERVICES, key=len, reverse=True):
         if service_name in text:
             return f"app/{service_name}"
-    for node_name in ("master", "worker-01", "worker-02", "worker-03"):
+    for node_name in _FAULT_OBJECT_NODES:
         if node_name in text:
             return f"node/{node_name}"
-    if "namespace" in text and "boutique" in text:
-        return "namespace/boutique"
-    if "namespace" in text and "train-ticket" in text:
-        return "namespace/train-ticket"
+    for ns_name in _FAULT_OBJECT_NAMESPACES:
+        if ns_name in text:
+            return f"namespace/{ns_name}"
     return ""
 
 
@@ -581,6 +603,34 @@ def calculate_total_latency(case_data: dict[str, Any]) -> float:
     return total
 
 
+def _score_investigation_native(
+    case_data: dict[str, Any],
+    ground_truth: dict[str, Any],
+) -> dict[str, float]:
+    """Score opensre's investigation prose directly, bypassing the predictor.
+
+    Builds a single-prediction triple from opensre's text via the
+    deterministic keyword parser ``infer_final_answer_from_opensre_text``,
+    then runs it through ``score_predictions`` against ground truth. Returns
+    the same key shape as ``score_predictions`` so the call site can mirror
+    its handling. Returns all zeros when the parser cannot extract a triple
+    (empty text or unmatched root_cause / fault_object), which is the honest
+    floor — we have no evidence the investigation named the right answer.
+    """
+    inferred = infer_final_answer_from_opensre_text(case_data, include_predictor_output=False)
+    if not inferred:
+        return {"a1": 0.0, "partial_a1": 0.0, "object_a1": 0.0}
+    predictions = inferred.get("top_3_predictions", []) or []
+    if not isinstance(predictions, list) or not predictions:
+        return {"a1": 0.0, "partial_a1": 0.0, "object_a1": 0.0}
+    scored = score_predictions(predictions, ground_truth)
+    return {
+        "a1": scored["a1"],
+        "partial_a1": scored["partial_a1"],
+        "object_a1": scored["object_a1"],
+    }
+
+
 def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseScore:
     ground_truth = {
         "fault_taxonomy": case.result.fault_taxonomy,
@@ -605,6 +655,11 @@ def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseSco
         }
     )
 
+    investigation_scores = _score_investigation_native(case_data, ground_truth)
+    translation_loss = (
+        1.0 if investigation_scores["a1"] >= 1.0 and outcome_scores["a1"] < 1.0 else 0.0
+    )
+
     agent_steps, invalid_count, invalid_reasons = standardize_agent_steps(case_data)
     best_path = choose_best_path(agent_steps, case.process)
     steps = len(agent_steps)
@@ -616,6 +671,10 @@ def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseSco
         partial_a3=outcome_scores["partial_a3"],
         object_a1=outcome_scores["object_a1"],
         object_a3=outcome_scores["object_a3"],
+        investigation_a1=investigation_scores["a1"],
+        investigation_partial_a1=investigation_scores["partial_a1"],
+        investigation_object_a1=investigation_scores["object_a1"],
+        translation_loss=translation_loss,
         tcr=1.0 if predictions else 0.0,
         exact=best_path["exact"],
         in_order=best_path["in_order"],
@@ -651,6 +710,10 @@ def summarize_scores(scores: list[CloudOpsCaseScore]) -> dict[str, Any]:
         "partial_a3",
         "object_a1",
         "object_a3",
+        "investigation_a1",
+        "investigation_partial_a1",
+        "investigation_object_a1",
+        "translation_loss",
         "tcr",
         "exact",
         "in_order",
@@ -686,6 +749,10 @@ def summarize_scores(scores: list[CloudOpsCaseScore]) -> dict[str, Any]:
             "Partial Accuracy @3": averages["partial_a3"],
             "Object Accuracy @1": averages["object_a1"],
             "Object Accuracy @3": averages["object_a3"],
+            "Investigation Accuracy @1": averages["investigation_a1"],
+            "Investigation Partial Accuracy @1": averages["investigation_partial_a1"],
+            "Investigation Object Accuracy @1": averages["investigation_object_a1"],
+            "Translation Loss Rate": averages["translation_loss"],
             "Task Completion Rate": averages["tcr"],
             "ExactMatch": averages["exact"],
             "InOrder": averages["in_order"],

@@ -497,9 +497,11 @@ class BenchmarkRunner:
             encoding="utf-8",
         )
 
+        inv_a1 = score.metrics.get("investigation_a1")
+        inv_suffix = f" inv_a1={inv_a1:.2f}" if inv_a1 is not None else ""
         print(
             f"  {case.case_id} [{mode} · {llm} · run {run_index}] "
-            f"a1={score.metrics.get('a1', 0):.2f} "
+            f"a1={score.metrics.get('a1', 0):.2f}{inv_suffix} "
             f"steps={score.metrics.get('steps', 0):.0f} "
             f"{latency_ms}ms"
         )

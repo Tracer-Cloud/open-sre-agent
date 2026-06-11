@@ -87,7 +87,19 @@ BENCHMARK_NAME = "cloudopsbench"
 # --------------------------------------------------------------------------- #
 
 _PAPER_METRIC_SCHEMA = MetricSchema(
-    outcome_metrics=["a1", "a3", "partial_a1", "partial_a3", "object_a1", "object_a3", "tcr"],
+    outcome_metrics=[
+        "a1",
+        "a3",
+        "partial_a1",
+        "partial_a3",
+        "object_a1",
+        "object_a3",
+        "investigation_a1",
+        "investigation_partial_a1",
+        "investigation_object_a1",
+        "translation_loss",
+        "tcr",
+    ],
     process_metrics=["exact", "in_order", "any_order", "rel", "cov"],
     efficiency_metrics=["steps", "mtti"],
     robustness_metrics=["iac", "rar", "ztdr"],
@@ -106,6 +118,10 @@ _PAPER_METRIC_SCHEMA = MetricSchema(
         "partial_a3": True,
         "object_a1": True,
         "object_a3": True,
+        "investigation_a1": True,
+        "investigation_partial_a1": True,
+        "investigation_object_a1": True,
+        "translation_loss": False,
         "tcr": True,
         # Process — trajectory alignment + tool usage (higher better)
         "exact": True,
