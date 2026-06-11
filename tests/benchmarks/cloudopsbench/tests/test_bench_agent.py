@@ -353,6 +353,56 @@ def test_trimmed_prompt_agent_uses_trimmed_system_prompt() -> None:
     assert "do not hedge" in prompt.lower()
 
 
+def test_trimmed_prompt_carries_dependency_traversal_rule() -> None:
+    """Layer 1 rule: prompt must instruct dependency-pod log queries when the
+    failing service shows connection-shaped errors. Pinned so a future
+    refactor doesn't silently drop the rule that drives DB-evidence
+    pipeline lift on the Admission category."""
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        _TRIMMED_BENCH_SYSTEM_PROMPT,
+    )
+
+    lower = _TRIMMED_BENCH_SYSTEM_PROMPT.lower()
+    assert "dependency-traversal rule" in lower
+    assert "connection-related errors" in lower
+    assert "dependency pod itself" in lower
+
+
+def test_trimmed_prompt_carries_alert_anchored_rule() -> None:
+    """Alert-anchored rule: prompt must instruct the agent to trust the
+    alert's named service when the alert describes a performance / latency /
+    network / resource issue. Catches the Performance → Runtime confusion
+    pattern (7 of 8 confusion cases were pod_network_delay scenarios where
+    opensre chased noisy downstream logs instead of the quiet upstream
+    service named in the alert).
+
+    The rule is mechanism-only — no service names or system names from the
+    corpus appear in the prompt. The principle is structural: slow upstream
+    → noisy downstream victims.
+    """
+    from tests.benchmarks.cloudopsbench.bench_agent import (
+        _TRIMMED_BENCH_SYSTEM_PROMPT,
+    )
+
+    lower = _TRIMMED_BENCH_SYSTEM_PROMPT.lower()
+    assert "alert-anchored" in lower
+    assert "primary suspect" in lower
+    # The structural claim: downstream noise can mask the upstream slowness.
+    assert "victims" in lower
+    # No corpus-specific tokens leaked into the prompt.
+    for forbidden in (
+        "tsdb-mysql",
+        "ts-order-service",
+        "ts-inside-payment",
+        "boutique",
+        "train-ticket",
+        "trainticket",
+        "cartservice",
+        "frontend",
+    ):
+        assert forbidden not in lower, f"corpus-specific token {forbidden!r} leaked into prompt"
+
+
 def test_trimmed_prompt_agent_inherits_floor_override() -> None:
     """The trimmed variant must read the floor from the SAME class attribute
     the CLI overrides (BenchInvestigationAgent.MIN_TOOL_CALLS) — otherwise
