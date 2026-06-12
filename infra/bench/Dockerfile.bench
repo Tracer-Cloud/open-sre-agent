@@ -69,9 +69,22 @@ RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim AS bench
 
+# OPENSRE_SHA: the source SHA the bench code was built from. Stamped into
+# the image at build time by the benchmark-image workflow (--build-arg
+# OPENSRE_SHA=<sha>). _git_sha() in tests/benchmarks/_framework/runner.py
+# reads this env var first; without it, the runtime falls back to
+# `git rev-parse` (which fails — no .git in the container) and stamps
+# (no-git) into provenance.json. The promotable-run integrity gate now
+# rejects (no-git), so a missing OPENSRE_SHA breaks the promotable cycle
+# loudly at run start rather than silently producing unverifiable
+# artifacts. Default is (no-git) so manual `docker build` without the
+# build arg still completes (and is appropriately marked unverifiable).
+ARG OPENSRE_SHA="(no-git)"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:${PATH}"
+    PATH="/app/.venv/bin:${PATH}" \
+    OPENSRE_SHA=${OPENSRE_SHA}
 
 WORKDIR /app
 

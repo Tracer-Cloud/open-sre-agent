@@ -57,6 +57,7 @@ from tests.benchmarks._framework.cost import CostBudgetExceeded, CostTracker, Un
 from tests.benchmarks._framework.integrity import (
     BenchmarkReport,
     IntegrityGuard,
+    IntegrityViolation,
     make_baseline_report,
 )
 from tests.benchmarks._framework.llm_dispatch import (
@@ -140,6 +141,26 @@ class BenchmarkRunner:
     def run(self) -> RunOutcome:
         """Production entry point: enforces all integrity gates."""
         self.integrity.pre_flight(self.config, self.adapter)
+        # Reject promotable runs whose opensre_sha could not be resolved.
+        # The 2026-06-11 partial full-N landed with opensre_sha=(no-git)
+        # because the Fargate container has no .git directory and the bench
+        # image build workflow did not stamp OPENSRE_SHA at build time.
+        # Without a real SHA the run is not reproducible from artifacts and
+        # is therefore not promotable — fail loudly here rather than letting
+        # an unverifiable number reach a report. Use ``run_without_integrity``
+        # (dev_mode=true) for exploratory runs that don't need a real SHA.
+        if self._opensre_sha in ("(no-git)", "(unknown)", "", None):
+            raise IntegrityViolation(
+                [
+                    f"opensre_sha={self._opensre_sha!r} when integrity gates are "
+                    f"enforced. The promotable run path requires a real SHA, "
+                    f"resolved via the OPENSRE_SHA env var (stamped by the bench "
+                    f"image build workflow) or git rev-parse from a checked-out "
+                    f"source tree. Fix the SHA capture path (see _git_sha() in "
+                    f"runner.py) or use run_without_integrity() for exploratory "
+                    f"runs."
+                ]
+            )
         return self._run_inner(dev_mode=False)
 
     def run_without_integrity(self) -> RunOutcome:
@@ -662,7 +683,26 @@ def _hash_config(config: BenchmarkConfig) -> str:
 
 
 def _git_sha() -> str:
-    """opensre git SHA for the running code. Used in RunResult for reproducibility."""
+    """opensre git SHA for the running code. Used in RunResult for reproducibility.
+
+    Resolution order:
+      1. ``OPENSRE_SHA`` environment variable — set by the bench image build
+         workflow (.github/workflows/benchmark-image.yml) so Fargate runs,
+         which have no ``.git`` directory, can still stamp the real SHA.
+      2. ``git rev-parse HEAD`` — used by local developer runs.
+      3. ``(no-git)`` — fallback when neither is available.
+
+    The env-var path is required because the bench image is built from a
+    checked-out source tree but the resulting container ships only the
+    runtime code (no .git). Without OPENSRE_SHA, every Fargate run stamps
+    ``(no-git)``, which the integrity gate then rejects for promotable
+    cycles. The build workflow must export OPENSRE_SHA at image-build time
+    (e.g. ``ENV OPENSRE_SHA=${GITHUB_SHA::7}`` in the Dockerfile, or pass
+    as an ECS container override).
+    """
+    env_sha = os.environ.get("OPENSRE_SHA", "").strip()
+    if env_sha:
+        return env_sha
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

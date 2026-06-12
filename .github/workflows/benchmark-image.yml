@@ -117,6 +117,14 @@ jobs:
           push: true
           tags: |
             ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
+          # Stamp the source SHA into the image so the runtime can read it
+          # via the OPENSRE_SHA env var. Without this, every Fargate run
+          # stamps opensre_sha=(no-git) (no .git in container) and the
+          # promotable integrity gate rejects the run. The build arg flows
+          # to ARG OPENSRE_SHA in Dockerfile.bench; the ENV directive there
+          # exposes it to the runtime process.
+          build-args: |
+            OPENSRE_SHA=${{ steps.tag.outputs.tag }}
           # GitHub Actions cache for Docker layers - speeds up rebuilds
           # when only the source changes (deps stay in the cached layer).
           cache-from: type=gha

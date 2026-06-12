@@ -37,8 +37,11 @@
 # resulting numbers are NOT promotable to a baseline.
 #
 # Cost: ~$65 expected (anchored to perf-only smoke at $0.016/cell × 4068
-# cells). Budget set to $80 with headroom for the per-cell cost variance
-# observed across smokes (DB-shape cases tend to add 1-2 tool calls).
+# cells). Budget set to $120 (raised from $80 after the 2026-06-11T21-03Z
+# run aborted at 66% completion). The cells we did complete suggest the
+# per-cell cost was within estimate; the abort was wall-budget-bounded,
+# not per-cell-cost-bounded. The extra $40 of headroom prevents the same
+# mid-run cutoff while still capping liability.
 # Wall time: ~3.5h Fargate at workers=4 (parallelism per BENCH infra
 # defaults; framework auto-scales within ECS task definition limits).
 #
@@ -65,7 +68,7 @@ model_versions:
 
 runs_per_case: 3
 workers: 4
-cost_budget_usd: 80.0
+cost_budget_usd: 120.0
 seed: 42
 
 output_dir: .bench-results/cloudopsbench_db_evidence_pipeline_full_openai/
