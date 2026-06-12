@@ -8,6 +8,18 @@ from ``predictor.vocabulary`` for backward compatibility.
 
 from __future__ import annotations
 
+# Declaring ``__all__`` tells CodeQL that these names are the module's
+# public surface — they are not "unused globals" but intentional
+# re-exports consumed by ``taxonomy``, ``scoring``, and
+# ``predictor.vocabulary`` (which re-exports them for legacy callers).
+__all__ = [
+    "_FAULT_OBJECT_NAMESPACES",
+    "_FAULT_OBJECT_NODES",
+    "_FAULT_OBJECT_SERVICES",
+    "_ROOT_CAUSES",
+    "_TAXONOMY_CATEGORIES",
+]
+
 _TAXONOMY_CATEGORIES: tuple[str, ...] = (
     "Admission_Fault",
     "Scheduling_Fault",

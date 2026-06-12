@@ -18,6 +18,19 @@ from tests.benchmarks.cloudopsbench.closed_vocabulary import (
     _FAULT_OBJECT_SERVICES,
 )
 
+# Declaring ``__all__`` tells CodeQL that the underscore-prefixed
+# backward-compat aliases at the bottom of this file are not "unused
+# globals" but intentional re-exports for callers that hardcoded the
+# pre-refactor ``_infer_fault_object`` / ``_taxonomy_for_root_cause``
+# names (e.g. ``scoring`` re-aliases through these).
+__all__ = [
+    "_FAULT_OBJECT_SERVICES_BY_LENGTH",
+    "_infer_fault_object",
+    "_taxonomy_for_root_cause",
+    "infer_fault_object",
+    "taxonomy_for_root_cause",
+]
+
 # Longest service names first so ``ts-order-other-service`` shadows
 # ``ts-order-service`` on substring match.
 _FAULT_OBJECT_SERVICES_BY_LENGTH: tuple[str, ...] = tuple(
