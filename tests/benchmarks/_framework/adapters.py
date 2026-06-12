@@ -19,9 +19,10 @@ directly.
 
 from __future__ import annotations
 
-from tests.benchmarks._framework.adapter_base import BenchmarkAdapter
+from tests.benchmarks._framework.adapter_base import AdapterCapabilities, BenchmarkAdapter
 from tests.benchmarks._framework.registry import (
     build_adapter,
+    capabilities_for,
     ensure_known_adapters_registered,
     known_adapters,
     register_adapter,
@@ -38,6 +39,7 @@ from tests.benchmarks._framework.types import (
 )
 
 __all__ = [
+    "AdapterCapabilities",
     "AlertPayload",
     "BenchmarkAdapter",
     "BenchmarkCase",
@@ -48,6 +50,7 @@ __all__ = [
     "RunContext",
     "RunResult",
     "build_adapter",
+    "capabilities_for",
     "ensure_known_adapters_registered",
     "known_adapters",
     "register_adapter",

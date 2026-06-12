@@ -152,28 +152,76 @@ def test_agent_variant_rejects_unknown_value(tmp_path: Path) -> None:
         BenchmarkConfig.model_validate(raw)
 
 
-def test_agent_variant_non_default_rejected_for_non_cloudopsbench(
+def test_agent_variant_non_default_rejected_for_adapter_without_capability(
     tmp_path: Path,
 ) -> None:
-    """Cross-field guard: agent_variant is honored only by the cloudopsbench
-    adapter. A config that sets agent_variant=trimmed_prompt on a different
-    benchmark would silently run the default agent. The lint gate must
-    reject so the intent is explicit."""
+    """Cross-field guard: ``agent_variant`` is honored only by adapters
+    that declare ``supports_agent_variant=True`` in their
+    ``AdapterCapabilities``. A config that sets agent_variant on an
+    adapter without that flag (or on an unknown adapter — the lint path
+    treats unknown as all-False to surface typos) would silently run
+    the default agent. The lint gate must reject so the intent is
+    explicit. The error message names ``supports_agent_variant`` so
+    operators see exactly what to fix in the adapter declaration."""
     raw = _minimal_raw(tmp_path, benchmark="some_other_bench", agent_variant="trimmed_prompt")
     config = BenchmarkConfig.model_validate(raw)
     errors = config.lint()
-    assert any("agent_variant" in e and "cloudopsbench" in e for e in errors), (
-        f"Expected an agent_variant cross-field error; got: {errors}"
+    assert any("agent_variant" in e and "supports_agent_variant" in e for e in errors), (
+        f"Expected a capability-based agent_variant error; got: {errors}"
     )
 
 
 def test_agent_variant_default_passes_lint_for_any_benchmark(tmp_path: Path) -> None:
-    """The default value must not block non-cloudopsbench benchmarks —
+    """The default value must not block adapters without the capability —
     only non-default values trigger the cross-field guard."""
     raw = _minimal_raw(tmp_path, benchmark="some_other_bench")
     config = BenchmarkConfig.model_validate(raw)
     errors = config.lint()
     assert not any("agent_variant" in e for e in errors)
+
+
+def test_agent_variant_non_default_passes_lint_for_capable_adapter(tmp_path: Path) -> None:
+    """The lint guard must accept ``agent_variant`` on adapters that
+    declare ``supports_agent_variant=True``. CloudOpsBench is the
+    current truth source. Pin so a future capability regression on the
+    CloudOpsBench adapter immediately surfaces here rather than later
+    when bench configs start failing in CI."""
+    raw = _minimal_raw(tmp_path, benchmark="cloudopsbench", agent_variant="trimmed_prompt")
+    config = BenchmarkConfig.model_validate(raw)
+    errors = config.lint()
+    assert not any("agent_variant" in e for e in errors), errors
+
+
+def test_predictor_variant_structured_rejected_for_adapter_without_capability(
+    tmp_path: Path,
+) -> None:
+    """Cross-field guard: ``predictor_variant=structured`` requires the
+    adapter to declare ``supports_predictor_variant=True``. An adapter
+    without a predictor stage (or an unknown one) is refused."""
+    raw = _minimal_raw(tmp_path, benchmark="some_other_bench", predictor_variant="structured")
+    config = BenchmarkConfig.model_validate(raw)
+    errors = config.lint()
+    assert any("predictor_variant" in e and "supports_predictor_variant" in e for e in errors), (
+        f"Expected a capability-based predictor_variant error; got: {errors}"
+    )
+
+
+def test_predictor_variant_structured_passes_lint_for_capable_adapter(
+    tmp_path: Path,
+) -> None:
+    """The lint guard must accept ``predictor_variant=structured`` on
+    adapters that declare ``supports_predictor_variant=True`` AND use
+    an OpenAI-compatible LLM (the second guard is independent and lives
+    next to the capability check). Pin both at once."""
+    raw = _minimal_raw(tmp_path, benchmark="cloudopsbench", predictor_variant="structured")
+    config = BenchmarkConfig.model_validate(raw)
+    errors = config.lint()
+    # The OpenAI-LLM guard still fires on its own merits if the LLM list
+    # is non-OpenAI, but the capability guard must NOT fire when the
+    # adapter declares it.
+    assert not any(
+        "predictor_variant" in e and "supports_predictor_variant" in e for e in errors
+    ), errors
 
 
 def test_report_formats_must_be_non_empty(tmp_path: Path) -> None:

@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.benchmarks._framework.adapters import (
+    AdapterCapabilities,
     AlertPayload,
     BenchmarkAdapter,
     BenchmarkCase,
@@ -164,6 +165,15 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
 
     name = BENCHMARK_NAME
     version = "1.0.0"
+    # Framework features this adapter opts into. Replaces the hardcoded
+    # ``if config.benchmark != "cloudopsbench"`` guards that previously
+    # lived in ``_framework/config.py``. The framework now validates
+    # config knobs against this declaration; a new adapter that wants to
+    # use ``agent_variant`` or ``predictor_variant`` opts in the same way.
+    capabilities = AdapterCapabilities(
+        supports_agent_variant=True,
+        supports_predictor_variant=True,
+    )
 
     # M7 (IntegrityGuard.pre_flight) — a documented data-contamination review
     # has been performed: Cloud-OpsBench was published 2026-02 and every model

@@ -22,12 +22,33 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from tests.benchmarks._framework.adapters import Mode
+from tests.benchmarks._framework.adapters import AdapterCapabilities, Mode
 
 
 def _default_report_formats() -> list[Literal["json", "markdown", "html"]]:
     """Module-level factory keeps mypy happy with the Literal element type."""
     return ["json", "markdown"]
+
+
+def _capabilities_for_lint(benchmark_name: str) -> AdapterCapabilities:
+    """Look up an adapter's capabilities for use during config lint.
+
+    Unknown adapters return the all-False default — every gated feature
+    is refused. This is intentional: a typo in ``config.benchmark`` (e.g.
+    ``cloudopsbnech``) must NOT silently bypass capability-based guards
+    just because the adapter cannot be looked up. The user gets a clear
+    "this feature requires the adapter to declare X" error for each
+    gated knob, plus the underlying unknown-benchmark error when the
+    runner subsequently tries to build the adapter via ``build_adapter``.
+    """
+    # Late import — registry imports adapter_base; importing it at module
+    # load time would create a cycle through this file's own re-exports.
+    from tests.benchmarks._framework.registry import capabilities_for
+
+    try:
+        return capabilities_for(benchmark_name)
+    except (KeyError, ImportError):
+        return AdapterCapabilities()
 
 
 # --------------------------------------------------------------------------- #
@@ -215,27 +236,39 @@ class BenchmarkConfig(BaseModel):
             )
 
         # Cross-field guard: agent_variant is silently ignored by adapters
-        # other than CloudOpsBench. Setting it on a non-cloudopsbench config
-        # would run the wrong agent without warning — refuse the config so
-        # the intent is explicit. ``"default"`` is always allowed.
-        if self.agent_variant != "default" and self.benchmark != "cloudopsbench":
+        # that don't declare ``supports_agent_variant=True`` in their
+        # ``AdapterCapabilities``. Setting it on such a config would run
+        # the wrong agent without warning — refuse the config so the
+        # intent is explicit. ``"default"`` is always allowed.
+        #
+        # Looking up capabilities by adapter (not by hardcoded
+        # ``benchmark == "cloudopsbench"``) means a new adapter that opts
+        # in to ``supports_agent_variant=True`` is automatically accepted
+        # by the framework without changes here.
+        adapter_caps = _capabilities_for_lint(self.benchmark)
+        if self.agent_variant != "default" and not adapter_caps.supports_agent_variant:
             errors.append(
-                f"agent_variant={self.agent_variant!r} is honored only by the "
-                f"cloudopsbench adapter, but benchmark={self.benchmark!r}. The "
-                "field would be silently ignored, producing an experiment "
-                "that measures the default agent. Set agent_variant: default "
-                "or run against the cloudopsbench adapter."
+                f"agent_variant={self.agent_variant!r} requires the "
+                f"benchmark adapter to declare "
+                f"``supports_agent_variant=True`` in its "
+                f"``AdapterCapabilities``, but benchmark={self.benchmark!r} "
+                f"does not. The field would be silently ignored, producing "
+                f"an experiment that measures the default agent. Set "
+                f"agent_variant: default or use an adapter that supports it."
             )
 
-        # Cross-field guard: predictor_variant="structured" requires the
-        # cloudopsbench adapter (only adapter with a predictor stage) AND
-        # an OpenAI-compatible LLM (structured outputs is OpenAI-only).
+        # Cross-field guard: predictor_variant="structured" requires an
+        # adapter that declares a predictor stage AND an OpenAI-compatible
+        # LLM (structured outputs is OpenAI-only on the predictor side).
         if self.predictor_variant == "structured":
-            if self.benchmark != "cloudopsbench":
+            if not adapter_caps.supports_predictor_variant:
                 errors.append(
-                    f"predictor_variant=structured is honored only by the "
-                    f"cloudopsbench adapter, but benchmark={self.benchmark!r}. "
-                    "Set predictor_variant: default or run against cloudopsbench."
+                    f"predictor_variant=structured requires the benchmark "
+                    f"adapter to declare ``supports_predictor_variant=True`` "
+                    f"in its ``AdapterCapabilities``, but "
+                    f"benchmark={self.benchmark!r} does not. "
+                    f"Set predictor_variant: default or use an adapter "
+                    f"that has a predictor stage."
                 )
             # Prefixes for OpenAI models that support structured outputs.
             # Includes the o-series (o1, o3, o4-mini) and gpt-series. Other

@@ -20,7 +20,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import BaseModel, ConfigDict
 
 from tests.benchmarks._framework.types import (
     AlertPayload,
@@ -37,6 +39,55 @@ if TYPE_CHECKING:
     # constraint at runtime while still letting type-checkers validate
     # that adapter overrides return an investigation-agent subclass.
     from app.agent.investigation import ConnectedInvestigationAgent
+
+
+# --------------------------------------------------------------------------- #
+# Capability flags                                                            #
+# --------------------------------------------------------------------------- #
+
+
+class AdapterCapabilities(BaseModel):
+    """Boolean feature flags an adapter declares to the framework.
+
+    Replaces hardcoded ``if config.benchmark != "cloudopsbench"`` checks
+    in the framework. Each capability flag describes a framework-level
+    feature the adapter explicitly opts into. The framework then enables
+    or refuses the matching config knob based on the adapter's
+    declaration — no name-based dispatch.
+
+    Default is ``False`` for every capability so a new adapter is locked
+    down to the minimum surface until it opts in deliberately. Adding a
+    new capability extends this model with another default-``False``
+    field; existing adapters keep working without changes.
+
+    Adapters declare capabilities as a class attribute:
+
+        class MyAdapter(BenchmarkAdapter):
+            capabilities = AdapterCapabilities(
+                supports_agent_variant=True,
+            )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    supports_agent_variant: bool = False
+    """The adapter honors the ``agent_variant`` config field.
+
+    When False, a config with ``agent_variant != "default"`` is refused
+    at validation time so the run does not silently exercise the wrong
+    agent. CloudOpsBench currently honors this via its
+    ``BenchInvestigationAgentTrimmedPrompt`` variant; other adapters
+    have no equivalent and should leave this False until they do.
+    """
+
+    supports_predictor_variant: bool = False
+    """The adapter has a predictor stage and honors ``predictor_variant``.
+
+    When False, a config setting ``predictor_variant != "default"`` is
+    refused. CloudOpsBench has a predictor stage (paper-format triple
+    emission); adapters without one (pure investigation benchmarks,
+    tool-call benchmarks) keep this False.
+    """
 
 
 # --------------------------------------------------------------------------- #
@@ -63,6 +114,12 @@ class BenchmarkAdapter(ABC):
 
     name: str  # e.g. "cloudopsbench"
     version: str  # adapter version, separate from corpus version
+    capabilities: ClassVar[AdapterCapabilities] = AdapterCapabilities()
+    """Framework features this adapter opts into.
+
+    Default is the all-False instance: a new adapter is locked down to
+    the minimum surface until it explicitly declares each capability.
+    See :class:`AdapterCapabilities` for the available flags."""
 
     def apply_config_overrides(self, config: Any) -> None:  # noqa: ARG002 — default no-op
         """Optional: apply adapter-specific config-driven runtime setup.
