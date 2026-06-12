@@ -272,6 +272,36 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
                     "in score_case"
                 )
 
+    def extend_provenance(self, provenance: dict[str, Any]) -> dict[str, Any]:
+        """Inject CloudOpsBench-specific knob values into ``run_inputs``.
+
+        Phase 4 of the framework decoupling moved this capture out of
+        ``_framework/provenance.py`` (which used to import
+        ``cloudopsbench.bench_agent._resolve_min_tool_calls`` directly)
+        into the adapter that owns the knob. The framework still calls
+        ``capture_provenance`` once per run; the adapter decides what
+        adapter-specific keys belong in the artifact.
+
+        ``min_tool_calls`` is the effective ``BenchInvestigationAgent.
+        MIN_TOOL_CALLS`` floor for the opensre+llm arm. Recording it
+        means a sweep over ``BENCH_MIN_TOOL_CALLS`` is self-documenting:
+        the report no longer has to be cross-referenced with the shell
+        that launched it. Best-effort — when ``bench_agent`` cannot be
+        imported (e.g. opensre deps absent in a unit-test sandbox), the
+        field falls back to ``None`` rather than raising, so the
+        provenance artifact remains valid.
+        """
+        try:
+            from tests.benchmarks.cloudopsbench.bench_agent import _resolve_min_tool_calls
+
+            min_tool_calls: int | None = _resolve_min_tool_calls()
+        except Exception:
+            min_tool_calls = None
+        run_inputs = provenance.get("run_inputs")
+        if isinstance(run_inputs, dict):
+            run_inputs["min_tool_calls"] = min_tool_calls
+        return provenance
+
     def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:
         """Stream cases matching the filter, with seeded random selection
         when ``filters.seed`` is set.

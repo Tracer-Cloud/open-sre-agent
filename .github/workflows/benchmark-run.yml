@@ -1,13 +1,20 @@
-name: Benchmark — run on Fargate
+name: Benchmark — run on Fargate (any adapter)
 
 # Manually-triggered benchmark run on AWS Fargate.
 #
-# Why ECS RunTask instead of running on a GitHub-hosted ubuntu runner:
-# a full Cloud-OpsBench grid runs for hours and writes hundreds of MB of
-# artifacts — Fargate handles it cleanly, has the AWS Secrets Manager
-# entries already wired in via infra/bench/, and writes to the
-# per-run S3 bucket. The workflow's job is just to launch the task and
-# print where to watch.
+# Adapter-agnostic. This workflow does NOT know or care which benchmark
+# is running. The ``config`` input names a YAML file; the YAML names an
+# adapter (``benchmark: <name>``); the framework's registry resolves it
+# to a registered ``BenchmarkAdapter`` subclass. The same workflow runs
+# any adapter packaged into the bench image — CloudOpsBench today,
+# OpenRCA / ToolCallBench / future adapters tomorrow, with zero changes
+# here. See ``tests/benchmarks/_framework/registry.py``.
+#
+# Why ECS RunTask instead of a GitHub-hosted ubuntu runner: a full bench
+# grid runs for hours and writes hundreds of MB of artifacts — Fargate
+# handles it cleanly, has AWS Secrets Manager wired in via infra/bench/,
+# and writes to the per-run S3 bucket. The workflow's job is just to
+# launch the task and print where to watch.
 #
 # Trigger from the GitHub UI:
 #   Actions → "Benchmark run (manual)" → Run workflow → fill inputs
@@ -24,9 +31,14 @@ on:
   workflow_dispatch:
     inputs:
       config:
-        description: 'Path to YAML config inside the container'
+        # No adapter-specific default — the operator must point at a
+        # specific config. Leaving the field empty surfaces the choice
+        # rather than silently dispatching the CloudOpsBench smoke. The
+        # path is relative to the container's repo root. Examples:
+        #   tests/benchmarks/cloudopsbench/configs/cloudopsbench_smoke.yml
+        #   tests/benchmarks/<adapter>/configs/<config>.yml
+        description: 'Path to YAML config inside the container (e.g. tests/benchmarks/<adapter>/configs/<config>.yml)'
         required: true
-        default: 'tests/benchmarks/cloudopsbench/configs/cloudopsbench_smoke.yml'
       dev_mode:
         description: 'Dev mode (skip integrity gates, no pre-reg needed)'
         type: boolean
@@ -64,7 +76,7 @@ jobs:
         # Fail loudly BEFORE the AWS auth step if any required repo variable
         # is missing. Without this, an unset var would surface downstream as
         # an opaque error like "Task Definition can not be blank" from
-        # describe-task-definition. See tests/benchmarks/cloudopsbench/AWS_BENCH_SETUP.md step 4 for how
+        # describe-task-definition. See infra/bench/AWS_BENCH_SETUP.md step 4 for how
         # to set these.
         env:
           AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
@@ -83,7 +95,7 @@ jobs:
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::Missing repo variable(s): ${missing[*]}"
             echo "::error::Set them under Settings → Secrets and variables → Actions → Variables."
-            echo "::error::Values come from \`cd infra/bench && terraform output\` — see tests/benchmarks/cloudopsbench/AWS_BENCH_SETUP.md step 4."
+            echo "::error::Values come from \`cd infra/bench && terraform output\` — see infra/bench/AWS_BENCH_SETUP.md step 4."
             exit 1
           fi
           echo "All 5 required repo variables are set."

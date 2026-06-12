@@ -91,6 +91,47 @@ class AdapterCapabilities(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Overfit-dimensions schema                                                   #
+# --------------------------------------------------------------------------- #
+
+
+class OverfitDimensions(BaseModel):
+    """Metadata keys that overfit guards use to extract case attributes.
+
+    The framework's overfit module (``_framework/overfit.py``) runs
+    five guards that attribute lift across (a) the corpus's "system"
+    dimension, (b) the corpus's "stratum" / fault-category dimension,
+    and (c) per-case ground-truth objects. Different adapters emit
+    cells with different metadata layouts — CloudOpsBench uses
+    ``metadata["system"]`` / ``metadata["fault_category"]`` /
+    ``metadata["ground_truth"]["fault_object"]``; another adapter may
+    use different key names.
+
+    This model lets each adapter declare its key names without
+    requiring the framework to know about them. The defaults match
+    CloudOpsBench's schema so existing call sites continue to work;
+    other adapters override ``BenchmarkAdapter.overfit_dimensions``
+    to point at their own keys.
+
+    Phase 3 of the framework decoupling: the previous overfit guards
+    hardcoded ``c["case"]["metadata"]["system"]`` etc. inline, which
+    silently coupled the framework to CloudOpsBench's metadata shape.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    system_key: str = "system"
+    """``case.metadata[<key>]`` — the corpus's "system" attribute."""
+
+    stratum_key: str = "fault_category"
+    """``case.metadata[<key>]`` — the corpus's stratum / category attribute."""
+
+    gt_object_key: str = "fault_object"
+    """``case.metadata["ground_truth"][<key>]`` — the GT object name used
+    by Guard C's cluster fingerprinting."""
+
+
+# --------------------------------------------------------------------------- #
 # The adapter interface                                                       #
 # --------------------------------------------------------------------------- #
 
@@ -136,6 +177,47 @@ class BenchmarkAdapter(ABC):
         own knob-handling, keeping framework/adapter coupling minimal.
         """
         return None
+
+    def overfit_dimensions(self) -> OverfitDimensions:
+        """Metadata keys the overfit guards should consult for this adapter.
+
+        Default returns ``OverfitDimensions()`` which matches the
+        CloudOpsBench schema (``system``, ``fault_category``,
+        ``ground_truth.fault_object``). Adapters with a different
+        metadata layout override this to point the guards at their own
+        keys.
+
+        Phase 3 of the framework decoupling: previously
+        ``_framework/overfit.py`` indexed into these keys inline,
+        coupling the framework to one adapter's metadata shape. This
+        hook moves the schema declaration to the adapter that owns it.
+        """
+        return OverfitDimensions()
+
+    def extend_provenance(self, provenance: dict[str, Any]) -> dict[str, Any]:
+        """Optional: inject adapter-specific fields into the provenance dict.
+
+        Called by ``_framework/provenance.py::capture_provenance`` after
+        the framework finishes assembling its standard sections
+        (``code``, ``config``, ``pre_registration``, ``models``,
+        ``environment``, ``dataset``, ``run_inputs``). Adapters can:
+          - add a new top-level key (e.g. an adapter-specific run note)
+          - extend an existing section (e.g. add ``min_tool_calls`` to
+            ``run_inputs``)
+          - return the dict unchanged
+
+        Default is identity. The hook exists so the framework's
+        provenance module stays adapter-agnostic — it does NOT import or
+        reach into any adapter's internals to build the artifact. Before
+        Phase 4 the framework imported ``cloudopsbench.bench_agent``
+        directly to read ``min_tool_calls``; that import is gone and
+        CloudOpsBench now overrides this hook instead.
+
+        Implementations should mutate-and-return for performance, or
+        return a fresh dict if a non-destructive transform is needed —
+        the framework respects the return value either way.
+        """
+        return provenance
 
     @abstractmethod
     def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:

@@ -5,14 +5,19 @@ dispatches on ``config.benchmark`` via this registry rather than an
 if/elif chain.
 
 Adding a new benchmark adapter:
-  (1) Adapter module calls ``register_adapter(NAME, FactoryClass)`` at
-      module load time.
-  (2) Add the module path to ``_KNOWN_ADAPTER_MODULES`` below so the
-      framework knows to lazily import it on first bootstrap.
+  (1) Create ``tests/benchmarks/<name>/adapter.py``.
+  (2) At module load time the adapter file calls
+      ``register_adapter(NAME, FactoryClass)``.
 
-That second step is a deliberate trade-off: a pure entry-points discovery
-scheme would remove it, but at this scale (one repo, single-digit
-adapters) the hardcoded list is more visible and easier to grep.
+That's it. Phase 5 of the framework decoupling removed the previous
+hardcoded ``_KNOWN_ADAPTER_MODULES`` tuple in favour of filesystem
+auto-discovery: the bootstrap walks ``tests/benchmarks/*/adapter.py``
+and imports each, so the registry knows about every adapter without
+manual list-maintenance. The discovery rule is deliberately strict —
+a subdirectory of ``tests/benchmarks/`` is recognised as an adapter
+ONLY if it contains an ``adapter.py`` file, so helper packages like
+``_framework/`` and stub directories without an adapter file
+(e.g. ``interactive_shell/``) are skipped automatically.
 
 Lazy registration is the right policy: each adapter module pulls in its
 own transitive dependencies (HF dataset loaders, replay backends, etc.)
@@ -25,6 +30,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from tests.benchmarks._framework.adapter_base import AdapterCapabilities, BenchmarkAdapter
 
@@ -46,12 +52,38 @@ _ADAPTER_FACTORIES: dict[str, AdapterFactory] = {}
 # mutation pattern as ``_ADAPTER_FACTORIES`` itself.
 _REGISTRY_STATE: dict[str, bool] = {"bootstrapped": False}
 
-# Adapter modules the framework imports on first bootstrap. Each is
-# expected to call ``register_adapter(name, factory)`` at module load.
-_KNOWN_ADAPTER_MODULES: tuple[str, ...] = (
-    "tests.benchmarks.cloudopsbench.adapter",
-    # Add new adapter module paths here.
-)
+
+def _discover_adapter_modules() -> tuple[str, ...]:
+    """Find every ``tests/benchmarks/<name>/adapter.py`` on disk.
+
+    Returns the importable module paths (``tests.benchmarks.<name>.adapter``)
+    in sorted order so the bootstrap is deterministic.
+
+    Discovery rules:
+      - Iterate immediate subdirectories of ``tests/benchmarks/``.
+      - Skip directories whose name starts with ``_`` (e.g. ``_framework``)
+        or ``.`` (hidden dirs). Adapter packages are user-facing and never
+        start with a leading underscore.
+      - Require an ``adapter.py`` file inside the subdirectory. Stub
+        directories without an adapter (e.g. ``interactive_shell/``)
+        are skipped automatically — they may be reused for non-adapter
+        utilities without polluting the registry.
+
+    Phase 5 of the framework decoupling replaced a hardcoded module
+    list with this walk. Adding a new adapter under
+    ``tests/benchmarks/`` now requires zero framework changes.
+    """
+    benchmarks_dir = Path(__file__).resolve().parent.parent
+    discovered: list[str] = []
+    for child in sorted(benchmarks_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name.startswith(("_", ".")):
+            continue
+        if not (child / "adapter.py").is_file():
+            continue
+        discovered.append(f"tests.benchmarks.{child.name}.adapter")
+    return tuple(discovered)
 
 
 def register_adapter(name: str, factory: AdapterFactory) -> None:
@@ -157,7 +189,7 @@ def ensure_known_adapters_registered() -> None:
     _REGISTRY_STATE["bootstrapped"] = True
     import importlib
 
-    for module_path in _KNOWN_ADAPTER_MODULES:
+    for module_path in _discover_adapter_modules():
         try:
             importlib.import_module(module_path)
         except ImportError as exc:

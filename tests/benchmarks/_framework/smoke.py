@@ -26,12 +26,13 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from tests.benchmarks._framework.adapters import (
+    BenchmarkAdapter,
     BenchmarkCase,
     CaseFilters,
     RunContext,
     RunResult,
+    build_adapter,
 )
-from tests.benchmarks.cloudopsbench.adapter import CloudOpsBenchAdapter
 
 
 def _fake_run_result(case: BenchmarkCase) -> RunResult:
@@ -64,7 +65,7 @@ def _fake_run_result(case: BenchmarkCase) -> RunResult:
     )
 
 
-def _real_run_result(case: BenchmarkCase, adapter: CloudOpsBenchAdapter) -> RunResult:
+def _real_run_result(case: BenchmarkCase, adapter: BenchmarkAdapter) -> RunResult:
     """Invoke opensre's run_investigation for real. Requires LLM credentials."""
     # Late import — only needed in this branch, keeps adapter-only path
     # importable without the full opensre dep tree.
@@ -131,7 +132,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     print()
 
-    adapter = CloudOpsBenchAdapter()
+    # Resolved through the registry so this smoke does not hold a direct
+    # import to any specific adapter. The default is CloudOpsBench
+    # because it's the only adapter today; when a second adapter lands
+    # this script can take a ``--adapter`` arg without code changes here.
+    adapter = build_adapter("cloudopsbench")
 
     print("==> Loading cases")
     cases = list(adapter.load_cases(CaseFilters(limit=args.limit, seed=args.seed)))

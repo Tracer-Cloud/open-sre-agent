@@ -48,6 +48,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from tests.benchmarks._framework.adapter_base import OverfitDimensions
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants — mirror the pre-registration. Changing these requires updating
 # the matching pre-reg file in the same PR (single source of truth).
@@ -194,14 +196,21 @@ def per_system_uniformity(
     variant: list[dict[str, Any]],
     mode: str,
     threshold: float = PER_SYSTEM_UNIFORMITY_MAX,
+    dimensions: OverfitDimensions | None = None,
 ) -> GuardVerdict:
     """A real mechanism lifts both ``boutique`` and ``trainticket`` similarly.
 
     Spread (max − min) above ``threshold`` indicates the variant learned a
     system-specific pattern instead of a general mechanism.
+
+    ``dimensions`` selects the ``case.metadata`` key used to read each
+    case's "system" attribute. Default falls back to CloudOpsBench's
+    schema; other adapters pass their own ``OverfitDimensions`` so the
+    guard knows which key holds the corpus's system label.
     """
+    dims = dimensions or OverfitDimensions()
     per_system = _per_attribute_lift(
-        baseline, variant, mode, lambda c: c["case"]["metadata"]["system"]
+        baseline, variant, mode, lambda c: c["case"]["metadata"][dims.system_key]
     )
     if not per_system:
         return GuardVerdict(
@@ -234,6 +243,7 @@ def per_stratum_uniformity(
     variant: list[dict[str, Any]],
     mode: str,
     threshold: float = PER_STRATUM_CONCENTRATION_MAX,
+    dimensions: OverfitDimensions | None = None,
 ) -> GuardVerdict:
     """No single fault category should dominate the lift.
 
@@ -251,8 +261,9 @@ def per_stratum_uniformity(
         must be ≤ threshold. The ratio measures how disproportionate the
         biggest lift is vs the typical lift.
     """
+    dims = dimensions or OverfitDimensions()
     per_stratum = _per_attribute_lift(
-        baseline, variant, mode, lambda c: c["case"]["metadata"]["fault_category"]
+        baseline, variant, mode, lambda c: c["case"]["metadata"][dims.stratum_key]
     )
     pos_lifts = [lift for lift, _ in per_stratum.values() if lift > 0]
     per_stratum_detail = {s: {"lift": lift, "n": n} for s, (lift, n) in per_stratum.items()}
@@ -311,6 +322,7 @@ def flipped_loss_to_win_clusters(
     variant: list[dict[str, Any]],
     mode: str,
     threshold: float = CLUSTER_CONCENTRATION_MAX,
+    dimensions: OverfitDimensions | None = None,
 ) -> GuardVerdict:
     """Cluster scenarios the variant rescued (baseline all-fail → variant
     majority-win) by ``(system, fault_category, GT-service-prefix)``.
@@ -330,6 +342,7 @@ def flipped_loss_to_win_clusters(
     the mean across replicates is both correct and resilient to that
     schema gap.
     """
+    dims = dimensions or OverfitDimensions()
     base_by_case = _mean_a1_by_case(baseline, mode)
     var_by_case = _mean_a1_by_case(variant, mode)
     case_meta = {c["case"]["case_id"]: c["case"]["metadata"] for c in baseline + variant}
@@ -338,12 +351,12 @@ def flipped_loss_to_win_clusters(
         # All baseline replicates lost AND majority of variant replicates won.
         if base_by_case[case_id] == 0.0 and var_by_case[case_id] >= 0.5:
             meta = case_meta[case_id]
-            gt_fo = meta["ground_truth"].get("fault_object", "")
+            gt_fo = meta["ground_truth"].get(dims.gt_object_key, "")
             # Prefix-strip the last "-<word>" segment so service families
             # (ts-payment-*, ts-order-*) cluster together rather than each
             # specific service forming its own singleton.
             gt_prefix = gt_fo.rsplit("-", 1)[0] if "-" in gt_fo else gt_fo
-            clusters[(meta["system"], meta["fault_category"], gt_prefix)] += 1
+            clusters[(meta[dims.system_key], meta[dims.stratum_key], gt_prefix)] += 1
     total_flips = sum(clusters.values())
     if total_flips == 0:
         return GuardVerdict(
@@ -534,6 +547,7 @@ def analyze(
     variant: list[dict[str, Any]],
     mode: str = "opensre+llm",
     a_a_variant: list[dict[str, Any]] | None = None,
+    dimensions: OverfitDimensions | None = None,
 ) -> OverfitReport:
     """Run every guard and aggregate verdicts into a single ``OverfitReport``.
 
@@ -547,12 +561,19 @@ def analyze(
     verdict that fails — the report cannot ship without the A/A pair, by
     design. The pre-registered decision matrix locks A/A as required, and
     this aggregator enforces it at the runtime layer.
+
+    ``dimensions`` is forwarded to Guards A, B, and C so the framework
+    does not hardcode which ``case.metadata`` keys hold the system /
+    stratum / GT-object attributes. ``None`` falls back to
+    CloudOpsBench's schema (back-compat); other adapters pass their own
+    ``OverfitDimensions`` (typically obtained from
+    ``adapter.overfit_dimensions()``).
     """
     full_lift, full_n = aggregate_lift(baseline, variant, mode)
     guards = [
-        per_system_uniformity(baseline, variant, mode),
-        per_stratum_uniformity(baseline, variant, mode),
-        flipped_loss_to_win_clusters(baseline, variant, mode),
+        per_system_uniformity(baseline, variant, mode, dimensions=dimensions),
+        per_stratum_uniformity(baseline, variant, mode, dimensions=dimensions),
+        flipped_loss_to_win_clusters(baseline, variant, mode, dimensions=dimensions),
         held_out_generalization_gate(baseline, variant, mode),
     ]
     if a_a_variant is None:

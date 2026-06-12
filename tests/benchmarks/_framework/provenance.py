@@ -122,7 +122,7 @@ def capture_provenance(
         Plain dict, JSON-serializable, suitable for ``json.dump`` to
         ``provenance.json`` in the run directory.
     """
-    return {
+    provenance: dict[str, Any] = {
         "schema_version": PROVENANCE_SCHEMA_VERSION,
         "run_id": run_id,
         "started_at": started_at,
@@ -136,6 +136,10 @@ def capture_provenance(
         "dataset": _dataset_section(adapter),
         "run_inputs": _run_inputs_section(config),
     }
+    # Strategy hook — the framework's job is to assemble the standard
+    # sections; adapters extend with their own keys (e.g. CloudOpsBench
+    # adds ``min_tool_calls`` to ``run_inputs``). See BenchmarkAdapter.
+    return adapter.extend_provenance(provenance)
 
 
 # --------------------------------------------------------------------------- #
@@ -339,6 +343,10 @@ def _stringify_optional_path(value: Any) -> str | None:
 
 
 def _run_inputs_section(config: BenchmarkConfig) -> dict[str, Any]:
+    # Adapter-agnostic. Knobs that belong to a specific adapter (e.g.
+    # CloudOpsBench's ``min_tool_calls``) are injected via the adapter's
+    # ``extend_provenance`` hook, NOT by the framework reaching into the
+    # adapter's internals. See BenchmarkAdapter.extend_provenance.
     return {
         "modes": list(config.modes),
         "llms": list(config.llms),
@@ -349,24 +357,7 @@ def _run_inputs_section(config: BenchmarkConfig) -> dict[str, Any]:
         "seed": config.seed,
         "filters": config.filters.model_dump(),
         "report_formats": list(config.report_formats),
-        "min_tool_calls": _resolved_min_tool_calls(),
     }
-
-
-def _resolved_min_tool_calls() -> int | None:
-    """The effective MIN_TOOL_CALLS floor for the opensre+llm arm this run.
-
-    Recorded so a sweep over ``BENCH_MIN_TOOL_CALLS`` is self-documenting:
-    the report no longer has to be cross-referenced with the shell that
-    launched it. Best-effort — if the bench agent can't be imported (e.g.
-    opensre deps absent in a unit-test sandbox), return None rather than fail.
-    """
-    try:
-        from tests.benchmarks.cloudopsbench.bench_agent import _resolve_min_tool_calls
-
-        return _resolve_min_tool_calls()
-    except Exception:
-        return None
 
 
 # --------------------------------------------------------------------------- #

@@ -19,7 +19,11 @@ directly.
 
 from __future__ import annotations
 
-from tests.benchmarks._framework.adapter_base import AdapterCapabilities, BenchmarkAdapter
+from tests.benchmarks._framework.adapter_base import (
+    AdapterCapabilities,
+    BenchmarkAdapter,
+    OverfitDimensions,
+)
 from tests.benchmarks._framework.registry import (
     build_adapter,
     capabilities_for,
@@ -47,6 +51,7 @@ __all__ = [
     "CaseScore",
     "MetricSchema",
     "Mode",
+    "OverfitDimensions",
     "RunContext",
     "RunResult",
     "build_adapter",

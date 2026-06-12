@@ -426,6 +426,70 @@ def test_run_inputs_section_echoes_key_config_fields(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# extend_provenance hook (Phase 4 of framework decoupling)                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_default_extend_provenance_returns_dict_unchanged(tmp_path: Path) -> None:
+    """The ABC's default ``extend_provenance`` is identity. An adapter
+    that doesn't override the hook must leave the framework's standard
+    provenance shape intact — no extra keys, no missing keys."""
+    config, config_path, _ = _make_config(tmp_path)
+    prov = capture_provenance(
+        config=config,
+        adapter=_FakeAdapter(),
+        run_id="r1",
+        started_at="x",
+        config_path=config_path,
+    )
+    # The framework's run_inputs section is adapter-agnostic. The
+    # previous ``min_tool_calls`` key (which used to be injected by the
+    # framework directly importing CloudOpsBench) must be absent for an
+    # adapter that doesn't opt in via extend_provenance.
+    assert "min_tool_calls" not in prov["run_inputs"]
+
+
+def test_extend_provenance_can_inject_adapter_specific_keys(tmp_path: Path) -> None:
+    """An adapter that overrides ``extend_provenance`` can add keys to
+    any section of the provenance dict. The framework respects the
+    returned dict — this is the strategy-pattern hook that replaces the
+    Phase 3 direct import of CloudOpsBench from the framework."""
+
+    class _ExtendingAdapter(_FakeAdapter):  # type: ignore[misc]
+        def extend_provenance(self, provenance: dict[str, Any]) -> dict[str, Any]:
+            provenance["run_inputs"]["my_adapter_knob"] = "sentinel-value"
+            provenance["my_top_level_key"] = "another-sentinel"
+            return provenance
+
+    config, config_path, _ = _make_config(tmp_path)
+    prov = capture_provenance(
+        config=config,
+        adapter=_ExtendingAdapter(),
+        run_id="r1",
+        started_at="x",
+        config_path=config_path,
+    )
+    assert prov["run_inputs"]["my_adapter_knob"] == "sentinel-value"
+    assert prov["my_top_level_key"] == "another-sentinel"
+
+
+def test_cloudopsbench_adapter_injects_min_tool_calls_into_run_inputs() -> None:
+    """The CloudOpsBench adapter overrides ``extend_provenance`` to
+    inject ``min_tool_calls`` into the ``run_inputs`` section. Phase 4
+    moved this capture out of the framework and into the adapter that
+    owns the knob; this test pins the contract end-to-end."""
+    from tests.benchmarks.cloudopsbench.adapter import CloudOpsBenchAdapter
+
+    adapter = CloudOpsBenchAdapter.__new__(CloudOpsBenchAdapter)
+    provenance: dict[str, Any] = {"run_inputs": {}}
+    extended = adapter.extend_provenance(provenance)
+    # The key must be present. The value may be ``None`` (when the
+    # bench_agent import fails in a sandbox) or an int (when opensre
+    # deps are available) — both are valid; the contract is "key exists".
+    assert "min_tool_calls" in extended["run_inputs"]
+
+
 def test_two_captures_of_same_state_are_equivalent(tmp_path: Path) -> None:
     """Capture is pure (modulo git state) — back-to-back calls return
     equivalent data."""
