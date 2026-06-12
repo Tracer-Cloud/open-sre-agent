@@ -966,6 +966,7 @@ _HANDLERS["azure_sql"] = _setup_azure_sql
 
 _SETUP_SERVICES = tuple(service for service in SUPPORTED_SETUP_SERVICES if service in _HANDLERS)
 
+
 SUPPORTED = ", ".join(_SETUP_SERVICES)
 SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
 
