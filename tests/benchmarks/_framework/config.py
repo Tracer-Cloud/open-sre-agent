@@ -34,8 +34,8 @@ def _default_report_formats() -> list[Literal["json", "markdown", "html"]]:
     return ["json", "markdown"]
 
 
-def _capabilities_for_lint(benchmark_name: str) -> AdapterCapabilities:
-    """Look up an adapter's capabilities for use during config lint.
+def _resolve_capabilities_or_default(benchmark_name: str) -> AdapterCapabilities:
+    """Look up an adapter's capabilities; fall back to the all-False default.
 
     Unknown adapters return the all-False default — every gated feature
     is refused. This is intentional: a typo in ``config.benchmark`` (e.g.
@@ -245,7 +245,7 @@ class BenchmarkConfig(BaseModel):
         # ``benchmark == "cloudopsbench"``) means a new adapter that opts
         # in to ``supports_agent_variant=True`` is automatically accepted
         # by the framework without changes here.
-        adapter_caps = _capabilities_for_lint(self.benchmark)
+        adapter_caps = _resolve_capabilities_or_default(self.benchmark)
         if self.agent_variant != "default" and not adapter_caps.supports_agent_variant:
             errors.append(
                 f"agent_variant={self.agent_variant!r} requires the "

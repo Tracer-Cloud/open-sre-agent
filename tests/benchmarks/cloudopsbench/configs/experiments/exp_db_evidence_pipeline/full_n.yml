@@ -28,7 +28,7 @@
 #   2. gh workflow run "Benchmark image — build + push to ECR" --ref <branch>
 #   3. gh workflow run "Benchmark image — promote" --ref <branch> -f image_tag=<sha>
 #   4. gh workflow run "Benchmark — run on Fargate" --ref <branch> \
-#        -f config="tests/benchmarks/cloudopsbench/configs/cloudopsbench_db_evidence_pipeline_full_openai.yml" \
+#        -f config="tests/benchmarks/cloudopsbench/configs/experiments/exp_db_evidence_pipeline/full_n.yml" \
 #        -f dev_mode=false
 #
 # dev_mode=false is REQUIRED for this run. This is the promotable cycle:

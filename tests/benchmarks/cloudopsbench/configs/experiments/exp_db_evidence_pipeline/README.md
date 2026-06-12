@@ -21,7 +21,7 @@ Both rules live in
 | `preregistration.yml` | Locked predictions + decision matrix + rollback rules. Committed before any full-N run. |
 | `smoke_db_pod_logs.yml` | n=40 three-arm smoke; first observation of the dual-layer pipeline. |
 | `smoke_perf_only.yml` | n=25 Performance-only diagnostic; isolates the Performance category to test for regression. |
-| `full.yml` | n=452 full-N promotable run. Uses `preregistration.yml`. |
+| `full_n.yml` | n=452 full-N promotable run. Uses `preregistration.yml`. |
 
 ## Runs (config ↔ result ledger)
 
@@ -35,8 +35,8 @@ when a new run lands.
 | 2026-06-11T12:56Z | `1ae5c83` | [`smoke_perf_only.yml`](smoke_perf_only.yml) (V1) | `runs/cloudopsbench_perf_only_smoke_openai/dev-2026-06-11T12-56-37Z_cloudopsbench/` | Completed | Performance −9.3pp ns | [exp_perf_only_smoke.md](../../../../../../opensre-notes/exp_perf_only_smoke.md) |
 | 2026-06-11T16:08Z | `ec2c675` | [`smoke_perf_only.yml`](smoke_perf_only.yml) (V2) | `runs/cloudopsbench_perf_only_smoke_openai/dev-2026-06-11T16-08-59Z_cloudopsbench/` | Completed | Performance −6.7pp ns | (in exp_perf_only_smoke.md) |
 | 2026-06-11T17:57Z | `65f69e0` | [`smoke_perf_only.yml`](smoke_perf_only.yml) (V3) | `runs/cloudopsbench_perf_only_smoke_openai/dev-2026-06-11T17-57-57Z_cloudopsbench/` | Completed (V3 rolled back) | Performance −13.3pp ns; worse than V1 | (in exp_perf_only_smoke.md) |
-| 2026-06-11T21:03Z | `3d20513` | [`full.yml`](full.yml) | `runs/cloudopsbench_db_evidence_pipeline_full_openai/2026-06-11T21-03-03Z_cloudopsbench/` | Aborted at 66% (cost budget) | Aggregate +7.13pp SIG · Admission +41.5pp SIG · Unseen +18.8pp SIG — **NOT promotable** (partial + SHA gap) | [exp_db_evidence_pipeline_full_partial.md](../../../../../../opensre-notes/exp_db_evidence_pipeline_full_partial.md) |
-| 2026-06-12T~ (in flight) | `c27bee9` | [`full.yml`](full.yml) | `runs/cloudopsbench_db_evidence_pipeline_full_openai/<pending>/` | Running | (pending) | (pending) |
+| 2026-06-11T21:03Z | `3d20513` | [`full_n.yml`](full_n.yml) | `runs/cloudopsbench_db_evidence_pipeline_full_openai/2026-06-11T21-03-03Z_cloudopsbench/` | Aborted at 66% (cost budget) | Aggregate +7.13pp SIG · Admission +41.5pp SIG · Unseen +18.8pp SIG — **NOT promotable** (partial + SHA gap) | [exp_db_evidence_pipeline_full_partial.md](../../../../../../opensre-notes/exp_db_evidence_pipeline_full_partial.md) |
+| 2026-06-12T~ (in flight) | `c27bee9` | [`full_n.yml`](full_n.yml) | `runs/cloudopsbench_db_evidence_pipeline_full_openai/<pending>/` | Running | (pending) | (pending) |
 
 S3 bucket: `s3://tracer-cloud-bench-results/`. To pull a run locally:
 

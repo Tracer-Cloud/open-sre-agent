@@ -16,7 +16,7 @@ configs/
 │       ├── preregistration.yml              # locked predictions / decision matrix
 │       ├── smoke_db_pod_logs.yml            # the first smoke
 │       ├── smoke_perf_only.yml              # diagnostic smoke
-│       └── full.yml                         # the promotable full-N
+│       └── full_n.yml                       # the promotable full-N
 ├── preregistrations/                        # standalone pre-regs
 │   ├── cloudopsbench_smoke.yml              # generic smoke pre-reg (placeholder for exploratory runs)
 │   ├── cloudopsbench_v1.yml                 # baseline (cycle 1) pre-reg
@@ -81,7 +81,7 @@ follow-up — not blocking. Mapping below for future reference:
 |---|---|
 | `preregistration.yml` | The locked pre-reg (exactly one per experiment). |
 | `smoke_<focus>.yml` | A small-N exploratory run (≤ 100 cases). The `<focus>` describes the slice (e.g. `perf_only`, `db_pod_logs`). |
-| `full.yml` | The full-corpus run (n=452 for CloudOpsBench v1). Promotable. |
+| `full_n.yml` | The full-corpus run (n=452 for CloudOpsBench v1). Promotable. |
 | `ablation_<arm>.yml` | An ablation that drops one mechanism. The `<arm>` names what was dropped (e.g. `layer1_only`). |
 
 ## What a config must contain
