@@ -29,10 +29,8 @@ modules above is re-exported here.
 
 from __future__ import annotations
 
-from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
-    align_predictions_to_investigation,
-    apply_investigation_handoff,
-)
+from typing import Any
+
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _FENCED_JSON,
     _build_system_prompt,
@@ -102,3 +100,24 @@ __all__ = [
     # llm_call_structured_openai
     "emit_paper_predictions_structured",
 ]
+
+_INVESTIGATION_HANDOFF_EXPORTS = frozenset(
+    {"align_predictions_to_investigation", "apply_investigation_handoff"}
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy-load investigation handoff so ``scoring`` can import ``vocabulary``
+    without a circular import (handoff imports ``_taxonomy_for_root_cause`` from
+    ``scoring``)."""
+    if name in _INVESTIGATION_HANDOFF_EXPORTS:
+        from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
+            align_predictions_to_investigation,
+            apply_investigation_handoff,
+        )
+
+        return {
+            "align_predictions_to_investigation": align_predictions_to_investigation,
+            "apply_investigation_handoff": apply_investigation_handoff,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
