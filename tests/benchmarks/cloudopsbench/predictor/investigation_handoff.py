@@ -31,7 +31,7 @@ import logging
 import re
 from typing import Any
 
-from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
+from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ def align_predictions_to_investigation(
         {
             **prediction,
             "rank": new_rank + 1,
-            "fault_taxonomy": _taxonomy_for_root_cause(str(prediction.get("root_cause") or "")),
+            "fault_taxonomy": taxonomy_for_root_cause(str(prediction.get("root_cause") or "")),
         }
         for new_rank, prediction in enumerate(new_order)
     ]

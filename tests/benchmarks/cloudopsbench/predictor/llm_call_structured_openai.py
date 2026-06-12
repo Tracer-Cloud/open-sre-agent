@@ -71,7 +71,7 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _ROOT_CAUSES,
     _TAXONOMY_CATEGORIES,
 )
-from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
+from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,7 @@ def emit_paper_predictions_structured(
         # though the schema constrains the LLM's emit, the scorer's mapping
         # is the canonical ground truth and may differ from what the LLM
         # picked for the same root_cause.
-        derived_taxonomy = _taxonomy_for_root_cause(prediction.root_cause)
+        derived_taxonomy = taxonomy_for_root_cause(prediction.root_cause)
         cleaned.append(
             {
                 "rank": prediction.rank,

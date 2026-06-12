@@ -41,7 +41,7 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _ROOT_CAUSES,
     _TAXONOMY_CATEGORIES,
 )
-from tests.benchmarks.cloudopsbench.scoring import _taxonomy_for_root_cause
+from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
 
 logger = logging.getLogger(__name__)
 
@@ -312,7 +312,7 @@ def _parse_predictions(text: str) -> dict[str, Any] | None:
         # Lever A: snap onto the dataset's closed vocabulary before scoring so
         # near-miss tokens don't auto-fail the exact-match scorer.
         normalized_root_cause = _snap_root_cause(root_cause)
-        derived_taxonomy = _taxonomy_for_root_cause(normalized_root_cause)
+        derived_taxonomy = taxonomy_for_root_cause(normalized_root_cause)
         llm_taxonomy = (prediction.get("fault_taxonomy") or "").strip()
         if llm_taxonomy and llm_taxonomy != derived_taxonomy:
             logger.info(

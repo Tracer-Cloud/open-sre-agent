@@ -226,6 +226,16 @@ _NON_COMPARABLE_METRICS = {
 # opensre-only instrumentation. Useful as internal diagnostics, but NOT present
 # in the paper, so they are reported in a separate panel to avoid implying a
 # comparison that doesn't exist.
+# L0 investigation-native metrics (opensre prose, keyword parser). Distinct from
+# L1 ``a1`` which scores the predictor's rank-1 formalization.
+_L0_INVESTIGATION_METRICS = [
+    "investigation_a1",
+    "investigation_partial_a1",
+    "investigation_object_a1",
+    "translation_loss",
+]
+_L0_CI_METRICS = frozenset({"investigation_a1", "investigation_object_a1"})
+
 _OPENSRE_ONLY_METRICS = [
     "partial_a1",
     "partial_a3",
@@ -696,6 +706,92 @@ def _render_decomposition_html(
     return parts
 
 
+def _render_l0_investigation_markdown(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[str]:
+    """L0 panel: investigation-native metrics from opensre prose (not predictor)."""
+    if not by_lm:
+        return []
+    flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+    present = [m for m in _L0_INVESTIGATION_METRICS if _per_cell_metric(flat, m)]
+    if not present:
+        return []
+
+    lines: list[str] = []
+    lines.append("### Investigation quality — L0 (opensre prose, not paper-comparable)")
+    lines.append("")
+    lines.append(
+        "_L0 scores a keyword-parsed triple from opensre's investigation prose "
+        "(``report`` / ``root_cause`` / causal chain). L1 ``a1`` in the headline "
+        "scores the predictor's rank-1 formalization. The gap "
+        "``a1 − investigation_a1`` is translation loss; "
+        "``translation_loss`` flags cases where L0 is right but L1 is wrong._"
+    )
+    lines.append("")
+    header = "| LLM | variant | " + " | ".join(present) + " |"
+    sep = "|" + "|".join(["---"] * (len(present) + 2)) + "|"
+    lines.append(header)
+    lines.append(sep)
+    for llm in sorted(by_lm.keys()):
+        for mode in sorted(by_lm[llm].keys()):
+            mode_cells = by_lm[llm][mode]
+            row = [f"`{llm}`", mode]
+            for metric in present:
+                scen_vals = _scenario_means(mode_cells, metric)
+                mean, lo, hi, n = _mean_with_ci(scen_vals)
+                if metric in _L0_CI_METRICS and len(scen_vals) >= 2:
+                    row.append(f"{mean:.2f} [{lo:.2f}–{hi:.2f}]")
+                elif n:
+                    row.append(f"{mean:.2f}")
+                else:
+                    row.append("—")
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+    return lines
+
+
+def _render_l0_investigation_html(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    esc: Any,
+) -> list[str]:
+    """HTML mirror of :func:`_render_l0_investigation_markdown`."""
+    if not by_lm:
+        return []
+    flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+    present = [m for m in _L0_INVESTIGATION_METRICS if _per_cell_metric(flat, m)]
+    if not present:
+        return []
+
+    parts: list[str] = []
+    parts.append("<h3>Investigation quality — L0 (opensre prose, not paper-comparable)</h3>")
+    parts.append(
+        "<p><small>L0 scores a keyword-parsed triple from opensre's investigation "
+        "prose. L1 <code>a1</code> scores the predictor's rank-1 formalization. "
+        "The gap <code>a1 − investigation_a1</code> is translation loss.</small></p>"
+    )
+    parts.append("<table><thead><tr><th>LLM</th><th>variant</th>")
+    for m in present:
+        parts.append(f"<th>{esc(m)}</th>")
+    parts.append("</tr></thead><tbody>")
+    for llm in sorted(by_lm.keys()):
+        for mode in sorted(by_lm[llm].keys()):
+            mode_cells = by_lm[llm][mode]
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>")
+            for metric in present:
+                scen_vals = _scenario_means(mode_cells, metric)
+                mean, lo, hi, n = _mean_with_ci(scen_vals)
+                if metric in _L0_CI_METRICS and len(scen_vals) >= 2:
+                    cell_txt = f"{mean:.2f}<br><small>[{lo:.2f}–{hi:.2f}]</small>"
+                elif n:
+                    cell_txt = f"{mean:.2f}"
+                else:
+                    cell_txt = "—"
+                parts.append(f'<td class="metric">{cell_txt}</td>')
+            parts.append("</tr>")
+    parts.append("</tbody></table>")
+    return parts
+
+
 # --------------------------------------------------------------------------- #
 # Markdown rendering                                                          #
 # --------------------------------------------------------------------------- #
@@ -805,6 +901,9 @@ def _render_markdown(
 
     # --- Decomposition: where the accuracy goes (Track 2) ---
     lines.extend(_render_decomposition_markdown(cells, by_lm))
+
+    # --- L0 investigation quality (opensre prose — not paper-comparable) ---
+    lines.extend(_render_l0_investigation_markdown(by_lm))
 
     # --- opensre-only diagnostics (NOT in the paper, NOT comparable) ---
     if by_lm:
@@ -1109,6 +1208,9 @@ def _render_html(
 
         # Decomposition (Track 2)
         parts.extend(_render_decomposition_html(cells, by_lm, esc))
+
+        # L0 investigation quality
+        parts.extend(_render_l0_investigation_html(by_lm, esc))
 
         # opensre-only diagnostics (segregated — not paper-comparable)
         flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]

@@ -107,9 +107,8 @@ _INVESTIGATION_HANDOFF_EXPORTS = frozenset(
 
 
 def __getattr__(name: str) -> Any:
-    """Lazy-load investigation handoff so ``scoring`` can import ``vocabulary``
-    without a circular import (handoff imports ``_taxonomy_for_root_cause`` from
-    ``scoring``)."""
+    """Lazy-load investigation handoff so importing ``vocabulary`` from this
+    package does not pull in handoff (and its scoring dependencies) at init."""
     if name in _INVESTIGATION_HANDOFF_EXPORTS:
         from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
             align_predictions_to_investigation,

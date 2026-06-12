@@ -6,18 +6,12 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from tests.benchmarks.cloudopsbench.case_loader import CloudOpsCase
-from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
-    _FAULT_OBJECT_NAMESPACES,
-    _FAULT_OBJECT_NODES,
-    _FAULT_OBJECT_SERVICES,
-)
 from tests.benchmarks.cloudopsbench.replay_backend import normalize_resource_type
-
-# Longest service names first so ``ts-order-other-service`` shadows
-# ``ts-order-service`` on substring match. Computed once at module load —
-# the underlying vocabulary tuple is stable for the process lifetime.
-_FAULT_OBJECT_SERVICES_BY_LENGTH: tuple[str, ...] = tuple(
-    sorted(_FAULT_OBJECT_SERVICES, key=len, reverse=True)
+from tests.benchmarks.cloudopsbench.taxonomy import (
+    infer_fault_object as _infer_fault_object,
+)
+from tests.benchmarks.cloudopsbench.taxonomy import (
+    taxonomy_for_root_cause as _taxonomy_for_root_cause,
 )
 
 TOOL_KEY_PARAMS: dict[str, list[str]] = {
@@ -269,117 +263,6 @@ def _infer_root_cause(text: str) -> str:
         if all(token in text for token in tokens):
             return root_cause
     return ""
-
-
-def _infer_fault_object(text: str) -> str:
-    """Substring match against the predictor's closed service vocabulary.
-
-    Longest names first (precomputed in ``_FAULT_OBJECT_SERVICES_BY_LENGTH``)
-    so ``ts-order-other-service`` wins over ``ts-order-service``. Kept in
-    sync with ``predictor.vocabulary._FAULT_OBJECT_*``.
-
-    Namespace match REQUIRES the literal word ``namespace`` to appear in
-    the text as a precision guard. Without it, prose like "boutique system
-    has memory pressure" would incorrectly return ``namespace/boutique``
-    whenever the cluster name is mentioned in passing — overriding the
-    empty-string "no localization" result and producing a spurious
-    wrong-shape match on cases whose GT is a ``namespace/<X>`` fault. The
-    original guard was preserved here after a 2026-06 refactor (commit
-    8dac68c7) dropped it.
-    """
-    for service_name in _FAULT_OBJECT_SERVICES_BY_LENGTH:
-        if service_name in text:
-            return f"app/{service_name}"
-    for node_name in _FAULT_OBJECT_NODES:
-        if node_name in text:
-            return f"node/{node_name}"
-    if "namespace" in text:
-        for ns_name in _FAULT_OBJECT_NAMESPACES:
-            if ns_name in text:
-                return f"namespace/{ns_name}"
-    return ""
-
-
-def _taxonomy_for_root_cause(root_cause: str) -> str:
-    """Map a CloudOpsBench root_cause to its paper-taxonomy bucket.
-
-    The mapping below is **audited against the dataset's actual ground-truth
-    fault_taxonomy values** (see metadata.json files under
-    tests/benchmarks/cloudopsbench/benchmark/), not derived independently.
-    Two assignments were previously wrong and silently cost a1 points on
-    every case using those root_causes:
-
-    - ``missing_secret_binding`` — dataset says ``Startup_Fault`` (the failure
-      surfaces when a pod tries to start with an unbindable secret), not
-      ``Runtime_Fault``.
-    - ``service_sidecar_port_conflict`` — dataset says ``Runtime_Fault`` (the
-      port conflict manifests when the istio sidecar tries to bind at runtime),
-      not ``Service_Routing_Fault``.
-    - ``missing_service_account`` — dataset says ``Admission_Fault`` (all 10
-      boutique/admission/* cases; the apiserver rejects pod creation at admission
-      time), not ``Scheduling_Fault``.
-
-    All three are now placed in the buckets the paper's dataset uses.
-    """
-    if root_cause.startswith("namespace_") or root_cause == "missing_service_account":
-        return "Admission_Fault"
-    if root_cause in {
-        "node_cordon_mismatch",
-        "node_affinity_mismatch",
-        "node_selector_mismatch",
-        "pod_anti_affinity_conflict",
-        "taint_toleration_mismatch",
-        "cpu_capacity_mismatch",
-        "memory_capacity_mismatch",
-    }:
-        return "Scheduling_Fault"
-    if root_cause in {
-        "node_network_delay",
-        "node_network_packet_loss",
-        "containerd_unavailable",
-        "kubelet_unavailable",
-        "kube_proxy_unavailable",
-        "kube_scheduler_unavailable",
-    }:
-        return "Infrastructure_Fault"
-    if root_cause in {
-        "image_registry_dns_failure",
-        "incorrect_image_reference",
-        "missing_image_pull_secret",
-        "missing_secret_binding",  # dataset GT: Startup_Fault (moved from Runtime)
-        "pvc_selector_mismatch",
-        "pvc_storage_class_mismatch",
-        "pvc_access_mode_mismatch",
-        "pvc_capacity_mismatch",
-        "pv_binding_occupied",
-        "volume_mount_permission_denied",
-    }:
-        return "Startup_Fault"
-    if root_cause in {
-        "oom_killed",
-        "liveness_probe_incorrect_protocol",
-        "liveness_probe_incorrect_port",
-        "liveness_probe_incorrect_timing",
-        "readiness_probe_incorrect_protocol",
-        "readiness_probe_incorrect_port",
-        "mysql_invalid_credentials",
-        "mysql_invalid_port",
-        "db_connection_exhaustion",
-        "db_readonly_mode",
-        "gateway_misrouted",
-        "deployment_zero_replicas",
-        "service_sidecar_port_conflict",  # dataset GT: Runtime_Fault (moved from Service_Routing)
-    }:
-        return "Runtime_Fault"
-    if root_cause in {
-        "service_selector_mismatch",
-        "service_port_mapping_mismatch",
-        "service_protocol_mismatch",
-        "service_env_var_address_mismatch",
-        "service_dns_resolution_failure",
-    }:
-        return "Service_Routing_Fault"
-    return "Performance_Fault"
 
 
 def compare_prediction(

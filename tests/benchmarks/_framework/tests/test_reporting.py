@@ -183,6 +183,31 @@ def test_html_includes_inline_style_no_external_deps(tmp_path: Path) -> None:
     assert "<script src=" not in html
 
 
+def test_markdown_includes_l0_investigation_panel_when_metrics_present(tmp_path: Path) -> None:
+    """L0 investigation metrics surface in report.md when cells record them."""
+    _write_report_json(tmp_path)
+    cases_dir = tmp_path / "cases"
+    cell = {
+        "case": {"case_id": "case-001", "metadata": {"fault_category": "Runtime"}},
+        "run": {"mode": "opensre+llm", "llm": "claude_sonnet"},
+        "score": {
+            "metrics": {
+                "a1": 0.0,
+                "investigation_a1": 0.75,
+                "investigation_object_a1": 0.80,
+                "translation_loss": 0.25,
+            }
+        },
+        "ok": True,
+    }
+    (cases_dir / "case-001__opensre+llm__claude_sonnet__0.json").write_text(json.dumps(cell))
+    out = render_report_dir(tmp_path, formats=["markdown"])
+    md = out["markdown"].read_text()
+    assert "Investigation quality — L0" in md
+    assert "investigation_a1" in md
+    assert "translation_loss" in md
+
+
 def test_render_works_without_cases_directory(tmp_path: Path) -> None:
     """report.json is the source of truth; cases/ is optional."""
     _write_report_json(tmp_path)
