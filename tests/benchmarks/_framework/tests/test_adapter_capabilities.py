@@ -109,3 +109,70 @@ def test_capabilities_for_raises_keyerror_for_unknown_adapter() -> None:
     lists the registered adapters — same UX contract as ``build_adapter``."""
     with pytest.raises(KeyError, match="known adapters"):
         capabilities_for("not-a-real-benchmark")
+
+
+def test_capabilities_for_does_not_instantiate_class_factory() -> None:
+    """Performance + no-side-effect contract: when the registered factory
+    is the adapter class itself (the common pattern, e.g.
+    ``register_adapter("X", XAdapter)``), ``capabilities_for`` must read
+    the ClassVar directly without calling ``__init__``. Adapter __init__
+    can do real work (HF dataset loads, replay backend setup); running
+    that during config lint would be wasted work at best, surprising
+    side effects at worst."""
+    from tests.benchmarks._framework.adapter_base import (
+        AdapterCapabilities,
+        BenchmarkAdapter,
+    )
+    from tests.benchmarks._framework.registry import (
+        capabilities_for,
+        register_adapter,
+    )
+
+    init_calls: list[int] = []
+
+    class _NoInitAdapter(BenchmarkAdapter):
+        """Adapter whose __init__ records every invocation. The
+        capability lookup must NEVER append to this list."""
+
+        name = "test-no-init-adapter"
+        version = "0.0.0"
+        capabilities = AdapterCapabilities(supports_agent_variant=True)
+
+        def __init__(self) -> None:
+            init_calls.append(1)
+
+        # The abstract surface — stubs are fine for this contract test;
+        # capabilities_for must never reach them. The unused-arg noqa
+        # comments document the intent: these are deliberate trip-wires,
+        # not signatures the test exercises.
+        def load_cases(self, filters):  # type: ignore[no-untyped-def]  # noqa: ARG002
+            raise AssertionError("load_cases reached")
+
+        def build_alert(self, case):  # type: ignore[no-untyped-def]  # noqa: ARG002
+            raise AssertionError("build_alert reached")
+
+        def build_opensre_integrations(self, case):  # type: ignore[no-untyped-def]  # noqa: ARG002
+            raise AssertionError("build_opensre_integrations reached")
+
+        def build_baseline_tools(self, case):  # type: ignore[no-untyped-def]  # noqa: ARG002
+            raise AssertionError("build_baseline_tools reached")
+
+        def score_case(self, case, run, context):  # type: ignore[no-untyped-def]  # noqa: ARG002
+            raise AssertionError("score_case reached")
+
+        def metric_schema(self):  # type: ignore[no-untyped-def]
+            raise AssertionError("metric_schema reached")
+
+    register_adapter(_NoInitAdapter.name, _NoInitAdapter)
+    try:
+        caps = capabilities_for(_NoInitAdapter.name)
+        assert caps.supports_agent_variant is True
+        assert init_calls == [], (
+            f"capabilities_for unexpectedly instantiated the adapter "
+            f"({len(init_calls)} __init__ call(s))"
+        )
+    finally:
+        # Clean up the test-only registration so other tests see a clean slate.
+        from tests.benchmarks._framework.registry import _ADAPTER_FACTORIES
+
+        _ADAPTER_FACTORIES.pop(_NoInitAdapter.name, None)

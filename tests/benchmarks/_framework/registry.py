@@ -96,17 +96,33 @@ def capabilities_for(name: str) -> AdapterCapabilities:
 
     Used by config validation (and any future framework-level
     capability gating) to avoid hardcoded ``if benchmark == "cloudopsbench"``
-    branches. The flags are a class attribute on the adapter, so the
-    one-time factory invocation here costs only as much as the adapter's
-    ``__init__`` — typically free, since most adapter init work is
-    deferred to ``load_cases`` / ``score_case``.
+    branches.
+
+    Capabilities live as a class attribute on the adapter
+    (``ClassVar[AdapterCapabilities]``), so when the registered factory
+    IS the adapter class — the common pattern, e.g.
+    ``register_adapter("cloudopsbench", CloudOpsBenchAdapter)`` — we
+    read the attribute off the class directly. No instantiation, no
+    adapter-specific side effects (HF dataset load, replay backend
+    setup). The fallback covers the less common closure-factory pattern.
 
     Raises ``KeyError`` with the same "known adapters" hint as
     ``build_adapter`` when ``name`` is not registered. A typo in
     ``config.benchmark`` surfaces with a useful message rather than
     silently bypassing capability checks.
     """
-    return build_adapter(name).capabilities
+    ensure_known_adapters_registered()
+    if name not in _ADAPTER_FACTORIES:
+        raise KeyError(
+            f"no adapter registered as {name!r}. "
+            f"known adapters: {known_adapters() or '<none registered>'}"
+        )
+    factory = _ADAPTER_FACTORIES[name]
+    if isinstance(factory, type) and issubclass(factory, BenchmarkAdapter):
+        return factory.capabilities
+    # Closure / lambda factory — fall back to instantiation. Uncommon
+    # but supported; the registry accepts any zero-arg callable.
+    return factory().capabilities
 
 
 def known_adapters() -> list[str]:

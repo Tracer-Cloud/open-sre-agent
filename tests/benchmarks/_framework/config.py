@@ -22,7 +22,11 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from tests.benchmarks._framework.adapters import AdapterCapabilities, Mode
+from tests.benchmarks._framework.adapters import (
+    AdapterCapabilities,
+    Mode,
+    capabilities_for,
+)
 
 
 def _default_report_formats() -> list[Literal["json", "markdown", "html"]]:
@@ -41,10 +45,6 @@ def _capabilities_for_lint(benchmark_name: str) -> AdapterCapabilities:
     gated knob, plus the underlying unknown-benchmark error when the
     runner subsequently tries to build the adapter via ``build_adapter``.
     """
-    # Late import — registry imports adapter_base; importing it at module
-    # load time would create a cycle through this file's own re-exports.
-    from tests.benchmarks._framework.registry import capabilities_for
-
     try:
         return capabilities_for(benchmark_name)
     except (KeyError, ImportError):
