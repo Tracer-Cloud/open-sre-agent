@@ -182,15 +182,29 @@ def test_per_stratum_uniformity_uses_custom_stratum_key() -> None:
 def test_cluster_concentration_uses_custom_keys_for_cluster_key() -> None:
     """Guard C's cluster key is ``(system, stratum, gt_object_prefix)``.
     All three components come from the dimensions model; pin that the
-    cluster fingerprint honours every override."""
+    cluster fingerprint honours every override AND that the OUTPUT
+    schema labels each component with the adapter's dimension key name.
+
+    Prior to Phase 3 the output dict was hardcoded as
+    ``{"system": ..., "fault_category": ..., "gt_prefix": ...}`` —
+    correct for CloudOpsBench but silently misleading for any adapter
+    whose dimension names differ. The current shape uses
+    ``dims.system_key`` / ``dims.stratum_key`` as the actual key names
+    so a ``cluster``-shaped adapter sees a ``cluster``-shaped report.
+    """
     dims = OverfitDimensions(system_key="cluster", stratum_key="category", gt_object_key="target")
     baseline = [_cell_custom_keys("s1", cluster="east", category="alpha", a1=0.0)]
     variant = [_cell_custom_keys("s1", cluster="east", category="alpha", a1=1.0)]
     verdict = flipped_loss_to_win_clusters(baseline, variant, "opensre+llm", dimensions=dims)
     assert verdict.detail["total_flips"] == 1
     top = verdict.detail["top_clusters"][0]
-    assert top["system"] == "east"
-    assert top["fault_category"] == "alpha"
+    # Adapter-aligned output: keys come from the dimensions model.
+    assert top["cluster"] == "east"
+    assert top["category"] == "alpha"
+    # CloudOpsBench-only legacy labels must NOT appear when a non-default
+    # adapter is in use — that was the silent-misrepresentation bug.
+    assert "system" not in top
+    assert "fault_category" not in top
 
 
 def test_analyze_forwards_dimensions_to_guards() -> None:

@@ -122,27 +122,38 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip run_investigation; use a fake RunResult to test the adapter only.",
     )
+    parser.add_argument(
+        "--adapter",
+        default="cloudopsbench",
+        help=(
+            "Name of the registered benchmark adapter to smoke-test. Default "
+            "is ``cloudopsbench`` (the only adapter shipped today)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     use_real_runner = args.run_investigation and not args.adapter_only
 
-    print("==> CloudOpsBench adapter end-to-end smoke")
+    # Resolved through the registry so this smoke does not hold a direct
+    # import to any specific adapter. The adapter name comes from a CLI
+    # flag; default is CloudOpsBench because it's the only registered
+    # adapter today, and a non-CloudOpsBench user can pass
+    # ``--adapter <name>`` without source changes here.
+    adapter_name = args.adapter
+    print(f"==> {adapter_name} adapter end-to-end smoke")
     print(
         f"    limit={args.limit}  seed={args.seed}  mode={'real' if use_real_runner else 'adapter-only'}"
     )
     print()
 
-    # Resolved through the registry so this smoke does not hold a direct
-    # import to any specific adapter. The default is CloudOpsBench
-    # because it's the only adapter today; when a second adapter lands
-    # this script can take a ``--adapter`` arg without code changes here.
-    adapter = build_adapter("cloudopsbench")
+    adapter = build_adapter(adapter_name)
 
     print("==> Loading cases")
     cases = list(adapter.load_cases(CaseFilters(limit=args.limit, seed=args.seed)))
     if not cases:
-        print("  ✗ No cases loaded. Is the corpus downloaded?")
-        print("    Run: make download-cloudopsbench-hf")
+        print(f"  ✗ No cases loaded from adapter {adapter_name!r}.")
+        print(f"    Check that the {adapter_name} corpus is available on disk")
+        print("    (for cloudopsbench: ``make download-cloudopsbench-hf``).")
         return 1
     print(f"  ✓ loaded {len(cases)} case(s)")
     for c in cases:
