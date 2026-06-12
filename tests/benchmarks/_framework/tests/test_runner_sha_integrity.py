@@ -107,6 +107,80 @@ def test_run_rejects_unknown_sha() -> None:
         runner.run()
 
 
+@pytest.mark.parametrize(
+    "bad_sha",
+    [
+        "hotfix-june",  # human-friendly tag from workflow_dispatch
+        "v1.0",  # semver tag
+        "my-test-run",  # arbitrary string
+        "main",  # branch name
+        "ABC1234",  # uppercase (git uses lowercase)
+        "abc123",  # too short (6 chars; minimum is 7)
+        "a" * 41,  # too long (41 chars; maximum is 40)
+        "g1234567",  # 'g' is not hex
+        "abc 1234",  # contains an embedded space
+    ],
+)
+def test_run_rejects_non_sha_strings(bad_sha: str) -> None:
+    """Defense-in-depth: the original gate only rejected the (no-git) /
+    (unknown) / empty sentinels. A user-supplied image tag like
+    ``hotfix-june`` or ``v1.0`` would have stamped that string into
+    provenance.json as the opensre_sha, passing the original gate but
+    failing the reproducibility contract (you cannot git-checkout
+    ``hotfix-june`` to reproduce the run). The hardened gate validates
+    SHA shape (7-40 lowercase hex)."""
+    from unittest.mock import MagicMock
+
+    from tests.benchmarks._framework.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner.__new__(BenchmarkRunner)
+    runner.config = MagicMock()
+    runner.adapter = MagicMock()
+    runner.integrity = MagicMock()
+    runner.integrity.pre_flight = MagicMock(return_value=None)
+    runner._opensre_sha = bad_sha
+
+    with pytest.raises(IntegrityViolation) as excinfo:
+        runner.run()
+
+    # The error message must surface the bad value so operators see what
+    # was rejected, not just "an integrity violation occurred".
+    msg = "\n".join(excinfo.value.violations)
+    assert bad_sha in msg, f"violation message did not include the rejected value {bad_sha!r}"
+
+
+@pytest.mark.parametrize(
+    "good_sha",
+    [
+        "abc1234",  # 7-char short SHA (git rev-parse --short HEAD default)
+        "abc1234567",  # 10-char short SHA
+        "abc1234abcdef5678",  # mid-length
+        "a" * 40,  # full 40-char SHA
+        "0123456789abcdef0123456789abcdef01234567",  # full hex SHA
+    ],
+)
+def test_run_accepts_valid_sha_shapes(good_sha: str) -> None:
+    """Mirror of the rejection test: valid SHA shapes (7-40 lowercase
+    hex chars) must pass the gate. Pins both ends of the allowed range
+    so the regex doesn't silently tighten."""
+    from unittest.mock import MagicMock, patch
+
+    from tests.benchmarks._framework.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner.__new__(BenchmarkRunner)
+    runner.config = MagicMock()
+    runner.adapter = MagicMock()
+    runner.integrity = MagicMock()
+    runner.integrity.pre_flight = MagicMock(return_value=None)
+    runner._opensre_sha = good_sha
+
+    sentinel = object()
+    with patch.object(runner, "_run_inner", return_value=sentinel) as mocked:
+        result = runner.run()
+    assert result is sentinel
+    mocked.assert_called_once_with(dev_mode=False)
+
+
 def test_run_without_integrity_accepts_no_git_sha() -> None:
     """The dev-mode path (``run_without_integrity``) must NOT reject
     (no-git); it's the explicit escape hatch for exploratory local runs

@@ -36,7 +36,14 @@ target_corpus:
   hf_revision: ce0ded4f196f01e176cf1d69ec15c2db42b2a677
   paper: arXiv:2603.00468v1
   case_count: 452
-opensre_sha: REPLACE_AT_COMMIT_TIME
+# Stamped into provenance.json at run time from the OPENSRE_SHA env var
+# (built into the bench image from github.sha via the benchmark-image
+# workflow). The runtime integrity gate (BenchmarkRunner.run() in
+# runner.py) rejects any value that is not a 7-40 lowercase hex SHA, so
+# this field cannot be silently bypassed with a placeholder or arbitrary
+# string. Leaving as an explicit note prevents reviewers from mistaking
+# the previous ``REPLACE_AT_COMMIT_TIME`` literal for a real identifier.
+opensre_sha: "(stamped-at-run-time-from-OPENSRE_SHA-env-var)"
 framework_version: 0.1.0
 
 # --------------------------------------------------------------------------- #

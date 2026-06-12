@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -141,26 +142,23 @@ class BenchmarkRunner:
     def run(self) -> RunOutcome:
         """Production entry point: enforces all integrity gates."""
         self.integrity.pre_flight(self.config, self.adapter)
-        # Reject promotable runs whose opensre_sha could not be resolved.
-        # The 2026-06-11 partial full-N landed with opensre_sha=(no-git)
-        # because the Fargate container has no .git directory and the bench
-        # image build workflow did not stamp OPENSRE_SHA at build time.
-        # Without a real SHA the run is not reproducible from artifacts and
-        # is therefore not promotable — fail loudly here rather than letting
-        # an unverifiable number reach a report. Use ``run_without_integrity``
-        # (dev_mode=true) for exploratory runs that don't need a real SHA.
-        if self._opensre_sha in ("(no-git)", "(unknown)", "", None):
-            raise IntegrityViolation(
-                [
-                    f"opensre_sha={self._opensre_sha!r} when integrity gates are "
-                    f"enforced. The promotable run path requires a real SHA, "
-                    f"resolved via the OPENSRE_SHA env var (stamped by the bench "
-                    f"image build workflow) or git rev-parse from a checked-out "
-                    f"source tree. Fix the SHA capture path (see _git_sha() in "
-                    f"runner.py) or use run_without_integrity() for exploratory "
-                    f"runs."
-                ]
-            )
+        # Reject promotable runs whose opensre_sha is not a verifiable git
+        # SHA. Two failure modes the gate must catch:
+        #
+        # 1. ``(no-git)`` / ``(unknown)`` / empty — the 2026-06-11 partial
+        #    full-N's failure mode. Fargate container had no .git directory,
+        #    OPENSRE_SHA was not stamped, the runner reported (no-git), and
+        #    no integrity check rejected it.
+        # 2. Arbitrary non-SHA strings like ``hotfix-june`` or ``v1.0``.
+        #    Possible when a manual image build sets OPENSRE_SHA from a
+        #    user-supplied tag instead of the real commit SHA. Such values
+        #    pass the ``not (no-git)`` check but are unverifiable — you
+        #    cannot ``git checkout hotfix-june`` and reproduce the run.
+        #
+        # A valid git SHA is 7-40 lowercase hex characters (short or full
+        # form). Anything else is rejected. ``run_without_integrity`` is
+        # the explicit escape hatch for exploratory runs.
+        _validate_promotable_sha(self._opensre_sha)
         return self._run_inner(dev_mode=False)
 
     def run_without_integrity(self) -> RunOutcome:
@@ -680,6 +678,35 @@ def _hash_config(config: BenchmarkConfig) -> str:
     """Stable hash of the config so two runs of the same config can be diffed."""
     serialized = json.dumps(config.model_dump(mode="json"), sort_keys=True, default=str)
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+
+
+_SHA_SHAPE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def _validate_promotable_sha(sha: str | None) -> None:
+    """Raise IntegrityViolation if ``sha`` is not a verifiable git SHA.
+
+    A real git SHA is 7-40 hex characters (lowercase). Anything else —
+    ``(no-git)``, ``(unknown)``, empty, or arbitrary tags like
+    ``hotfix-june`` / ``v1.0`` — cannot be checked out and therefore
+    breaks the reproducibility contract the promotable cycle depends on.
+    """
+    sha_str = (sha or "").strip()
+    if sha_str and _SHA_SHAPE.fullmatch(sha_str):
+        return
+    raise IntegrityViolation(
+        [
+            f"opensre_sha={sha!r} is not a verifiable git SHA (expected 7-40 "
+            f"lowercase hex characters). The promotable run path requires a "
+            f"real commit SHA so the artifacts can be reproduced. Resolution "
+            f"sources, in order: the OPENSRE_SHA env var stamped by the bench "
+            f"image build workflow (.github/workflows/benchmark-image.yml — "
+            f"set from github.sha, NOT the user-supplied image tag), or "
+            f"git rev-parse from a checked-out source tree. Use "
+            f"run_without_integrity() for exploratory runs that don't need "
+            f"a verifiable SHA."
+        ]
+    )
 
 
 def _git_sha() -> str:
