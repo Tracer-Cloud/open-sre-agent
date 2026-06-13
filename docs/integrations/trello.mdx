@@ -102,6 +102,16 @@ Your Trello token should have:
 - **read** — Allows OpenSRE to view boards, lists, and cards
 - **write** — Allows OpenSRE to create or update cards during investigations
 
+## Usage
+
+Once configured, OpenSRE can:
+
+- Create Trello cards from investigation findings
+- Send incident titles and descriptions to a target list
+- Track follow-up tasks on your incident board
+
+Set `TRELLO_LIST_ID` to the list where new cards should appear. If omitted, card creation requires the list ID at investigation time.
+
 <Info>
 Trello does not currently support `opensre integrations verify trello`. Confirm your credentials during interactive setup or by creating a test card from an investigation.
 </Info>

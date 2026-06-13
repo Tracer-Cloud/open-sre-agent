@@ -105,4 +105,19 @@ Make sure everything is configured correctly:
 opensre integrations verify openobserve
 ```
 
-This validates connectivity and confirms that OpenSRE can access the configured OpenObserve organization.
+Expected output:
+
+```
+Service: openobserve
+Status: passed
+Detail: Configured for OpenObserve at https://openobserve.example.com
+```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **401 Unauthorized** | Regenerate the access token or confirm username/password credentials. |
+| **404 on query** | Check `OPENOBSERVE_ORG` matches your organization slug. Verify the stream name if `OPENOBSERVE_STREAM` is set. |
+| **Connection refused** | Confirm `OPENOBSERVE_URL` includes the correct protocol and port. Ensure network access from OpenSRE to the instance. |
+| **Empty log results** | Widen the time range in the investigation query. Confirm logs are ingested into the target stream. |
