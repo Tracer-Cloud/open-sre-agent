@@ -1,0 +1,106 @@
+---
+title: "AWS SQS"
+description: "Inspect SQS queue depth, in-flight counts, visibility timeout, and DLQ wiring during incidents"
+---
+
+OpenSRE uses AWS SQS to surface queue state during incidents — message depth, in-flight count, oldest-message age, visibility timeout, and dead-letter queue configuration. These three fields from a single `GetQueueAttributes` call are enough to distinguish a normal backlog from stuck consumers cycling a poison-pill message.
+
+All SQS API calls are read-only and routed through the shared `aws_sdk_client` allowlist.
+
+## Prerequisites
+
+- AWS credentials configured per the [AWS integration](/aws) (role ARN recommended)
+- IAM permissions for the two SQS actions listed below
+
+## Setup
+
+### Environment variables
+
+```bash
+AWS_REGION=us-east-1
+# Optional: scope the tool to a specific queue prefix by default
+SQS_QUEUE_NAME_PREFIX=payments-
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AWS_REGION` | — | AWS region. Shared with other AWS integrations. |
+| `SQS_REGION` | `us-east-1` | Fallback when `AWS_REGION` is not set. |
+| `SQS_QUEUE_NAME_PREFIX` | `""` | Optional default prefix filter. Can be overridden per investigation. |
+
+Region resolution order (highest priority first):
+
+1. `region` field on the source dict (when configured via the integrations store)
+2. `AWS_REGION` environment variable
+3. `SQS_REGION` environment variable
+4. `us-east-1` (default)
+
+## IAM permissions
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ListQueues",
+        "sqs:GetQueueAttributes"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Attach this policy to the same IAM role or user already configured for the [AWS integration](/aws). Both actions are included in the AWS managed `ReadOnlyAccess` policy.
+
+## Tools
+
+| Tool | AWS API calls | What it returns |
+| --- | --- | --- |
+| `get_sqs_queue_attributes` | `sqs:ListQueues` → `sqs:GetQueueAttributes` | Per-queue: visible message count, in-flight count, oldest-message age (seconds), visibility timeout, DLQ config (`has_dlq` + parsed redrive policy), FIFO flag. |
+
+The tool accepts a `queue_name_prefix` filter (empty = all queues) and a `max_queues` cap (default 20, max 100).
+
+### Use cases
+
+- Detecting stuck consumers: `in_flight_count` equals pod count, `visible_count` ≈ 0, no DLQ
+- Identifying a poison-pill loop: short `visibility_timeout_seconds` combined with a very old `oldest_message_age_seconds`
+- Verifying DLQ wiring before and after a configuration change
+- Assessing backlog depth when an `ApproximateAgeOfOldestMessage` alert fires
+
+## Output fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `visible_count` | integer | `ApproximateNumberOfMessages` — messages available for delivery |
+| `in_flight_count` | integer | `ApproximateNumberOfMessagesNotVisible` — messages held by consumers |
+| `oldest_message_age_seconds` | integer | Age of the oldest message in the queue |
+| `visibility_timeout_seconds` | integer | How long a consumer has before the message is re-delivered |
+| `has_dlq` | boolean | Whether a dead-letter queue is configured |
+| `redrive_policy` | object \| null | Parsed `RedrivePolicy` JSON including `deadLetterTargetArn` and `maxReceiveCount` |
+| `is_fifo` | boolean | Whether the queue uses FIFO ordering |
+
+## Diagnosing a poison-pill incident
+
+A stuck-consumer pattern produces a characteristic fingerprint:
+
+```
+visible_count              = 0   ← no messages waiting (all in flight)
+in_flight_count            = 3   ← equals number of consumer pods
+oldest_message_age_seconds = 3600
+visibility_timeout_seconds = 30  ← shorter than processing time
+has_dlq                    = false
+```
+
+The short `visibility_timeout_seconds` means the same message is re-delivered to every pod after 30 seconds. Without a DLQ, the message cycles indefinitely. Fix: increase `VisibilityTimeout` to exceed the maximum expected processing time and add a `RedrivePolicy`.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **Tool returns `available: false`** | Confirm `AWS_REGION` or `SQS_REGION` is set and AWS credentials are valid. |
+| **`AccessDenied` on `sqs:ListQueues`** | Add the IAM policy above to the role used by the AWS integration. |
+| **Queue missing from results** | Check `queue_name_prefix` matches the queue name; increase `max_queues` if the list is truncated. |
+| **`attributes_error` on a specific queue** | The role lacks `sqs:GetQueueAttributes` for that queue, or the queue was deleted between list and describe calls. |

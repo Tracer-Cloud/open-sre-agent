@@ -173,6 +173,7 @@
               "prefect",
               "rabbitmq",
               "rds",
+              "sqs_queues",
               "snowflake",
               "supabase"
             ]
