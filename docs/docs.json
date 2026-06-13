@@ -139,7 +139,7 @@
               "helm",
               "jenkins",
               "jira",
-              "trello",
+              "integrations/trello",
               "vercel"
             ]
           },

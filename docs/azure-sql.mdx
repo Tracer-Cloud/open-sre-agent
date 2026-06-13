@@ -36,7 +36,6 @@ AZURE_SQL_DATABASE=mydb
 AZURE_SQL_USERNAME=sqladmin
 AZURE_SQL_PASSWORD=your_password
 AZURE_SQL_ENCRYPT=true
-AZURE_SQL_TRUST_CERT=false
 ```
 
 | Variable | Default | Description |
@@ -46,7 +45,6 @@ AZURE_SQL_TRUST_CERT=false
 | `AZURE_SQL_USERNAME` | — | **Required.** SQL authentication username |
 | `AZURE_SQL_PASSWORD` | — | **Required.** SQL authentication password |
 | `AZURE_SQL_ENCRYPT` | `true` | Encrypt your connection for security |
-| `AZURE_SQL_TRUST_CERT` | `false` | Only set to `true` for local development |
 
 ### The permanent way: Integration store
 
@@ -65,8 +63,7 @@ You can also save your connection details to `~/.opensre/integrations.json`:
         "database": "mydb",
         "username": "sqladmin",
         "password": "your_password",
-        "encrypt": true,
-        "trust_cert": false
+        "encrypt": true
       }
     }
   ]
@@ -99,7 +96,7 @@ If you're not sure of your IP, start with a permissive rule temporarily, get Ope
 Ready to verify everything works?
 
 ```bash
-opensre integrations verify --id azure-sql-prod
+opensre integrations verify azure_sql
 ```
 
 This will test your connection and make sure OpenSRE has the right permissions.

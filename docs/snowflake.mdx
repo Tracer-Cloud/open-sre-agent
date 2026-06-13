@@ -1,8 +1,7 @@
 ---
-
 title: "Snowflake"
 description: "Connect Snowflake so OpenSRE can query data warehouse and investigate analytics issues"
------------------------------------------------------------------------------------------------------
+---
 
 Analytics pipelines can fail in subtle ways. OpenSRE connects to your Snowflake warehouse to help investigate issues by querying warehouse metadata, reviewing query history, checking warehouse health, and identifying performance bottlenecks.
 
@@ -129,7 +128,7 @@ Then use those credentials in your OpenSRE configuration.
 Let's verify everything is working:
 
 ```bash
-opensre integrations verify
+opensre integrations verify snowflake
 ```
 
 This checks connectivity and validates access to the configured warehouse, database, and schema.
