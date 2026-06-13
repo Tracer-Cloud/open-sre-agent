@@ -211,6 +211,9 @@ async def run_interactive(
             spinner.start()
             set_prompt_suppress_fn(console.suppress_prompt_spinner)
         try:
+            state.total_confirm_duration = 0.0
+            state.confirm_start_time = None
+
             # Commands that take exclusive stdin ownership (e.g. bare
             # ``/investigate`` and other inline pickers) can safely use the
             # full Rich Live investigation stream because prompt_toolkit is not
@@ -294,7 +297,7 @@ async def run_interactive(
         if state.is_awaiting_confirmation():
             confirm_text = state.confirm_prompt_text
             return ANSI(f"{confirm_text}\n{base}")
-        prefix = spinner.inline_spinner_ansi() or spinner.idle_hint_ansi()
+        prefix = spinner.inline_spinner_ansi(state) or spinner.idle_hint_ansi()
         return ANSI(f"{prefix}\n{base}")
 
     async def _spinner_ticker() -> None:

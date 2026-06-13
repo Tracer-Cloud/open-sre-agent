@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import replace
 
+from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from rich.console import Console
@@ -118,7 +120,8 @@ def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
 
     command_decision = resolve_cli_command(t, session)
     if command_decision is None:
-        return False
+        route_decision = _router.route_input(t, session)
+        return route_decision.route_kind.value == "new_alert"
     dispatch_text = command_decision.command_text or t
 
     parts = dispatch_text.split()
@@ -127,13 +130,18 @@ def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
     name = parts[0].lower()
     args = [arg.lower() for arg in parts[1:]]
 
-    if name in _WAIT_FOR_COMPLETION_COMMANDS:
-        return True
-    if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
-        return True
-    if name == "/tests" and not args:
-        return True
-    return bool(args and (name, args[0]) in _EXCLUSIVE_STDIN_SUBCOMMANDS)
+    # /watch commands run asynchronously in the background, so they don't need exclusive stdin
+    if name in {"/watch", "/watches", "/unwatch"}:
+        return False
+
+    # /tests run/synthetic/cloudopsbench are run as background tasks, others are synchronous
+    if name == "/tests":
+        _BACKGROUND_TEST_SUBCOMMANDS = {"run", "synthetic", "cloudopsbench"}
+        return not (args and args[0] in _BACKGROUND_TEST_SUBCOMMANDS)
+
+    # Any other slash command (e.g. /update, /config, /integrations, /history, /exit, etc.)
+    # runs synchronously or uses menus, so it requires exclusive stdin to prevent overlap/leakage.
+    return True
 
 
 def dispatch_one_turn(
@@ -193,8 +201,13 @@ def run_initial_input(
 
 
 def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
+    app = get_app_or_none()
+    if app is not None:
+        setattr(app, "_is_awaiting_confirm", True)  # noqa: B010
+
     response_event = threading.Event()
     state.begin_confirmation(response_event, prompt_text)
+    state.confirm_start_time = time.monotonic()
     try:
         while not response_event.is_set():
             cancel = state.current_cancel_event
@@ -205,6 +218,11 @@ def route_confirm_through_prompt(state: ReplState, prompt_text: str) -> str:
             raise DispatchCancelled("cancelled while awaiting confirmation")
         return state.confirm_response[0]
     finally:
+        if state.confirm_start_time is not None:
+            state.total_confirm_duration += time.monotonic() - state.confirm_start_time
+            state.confirm_start_time = None
+        if app is not None:
+            setattr(app, "_is_awaiting_confirm", False)  # noqa: B010
         state.clear_confirmation()
 
 

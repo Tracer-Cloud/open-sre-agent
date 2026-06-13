@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.application.current import get_app
+from prompt_toolkit.application.current import get_app, get_app_or_none
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
@@ -336,6 +336,10 @@ _DEFAULT_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ANSI_RE
 
 def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
+    app = get_app_or_none()
+    if app is not None and getattr(app, "_is_awaiting_confirm", False):
+        return ANSI("")
+
     parts: list[str] = []
     if session.trust_mode:
         parts.append("trust on")

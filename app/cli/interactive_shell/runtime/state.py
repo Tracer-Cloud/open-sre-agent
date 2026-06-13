@@ -29,6 +29,8 @@ class ReplState:
     confirm_event: threading.Event | None = None
     confirm_response: list[str] = field(default_factory=list)
     confirm_prompt_text: str = ""
+    confirm_start_time: float | None = None
+    total_confirm_duration: float = 0.0
 
     def is_dispatch_running(self) -> bool:
         return self.current_task is not None and not self.current_task.done()
@@ -139,10 +141,15 @@ class SpinnerState:
             hint += "  ·  esc to clear"
         return f"{ANSI_DIM}{hint}{ANSI_RESET}"
 
-    def inline_spinner_ansi(self) -> str:
+    def inline_spinner_ansi(self, state: ReplState | None = None) -> str:
         if not self.streaming:
             return ""
-        elapsed = time.monotonic() - self.started_at
+        confirm_dur = 0.0
+        if state is not None:
+            confirm_dur = state.total_confirm_duration
+            if state.confirm_start_time is not None:
+                confirm_dur += time.monotonic() - state.confirm_start_time
+        elapsed = max(0.0, time.monotonic() - self.started_at - confirm_dur)
         token_count = self.bytes_in // _CHARS_PER_TOKEN
         glyph = self._SPINNER_FRAMES[self._frame_idx % len(self._SPINNER_FRAMES)]
         self._frame_idx += 1

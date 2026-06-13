@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,9 @@ from app.config import (
 from app.integrations.llm_cli.base import LLMCLIAdapter
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if getattr(sys, "frozen", False) or not (PROJECT_ROOT / "pyproject.toml").exists():
+    PROJECT_ROOT = Path.cwd()
+
 PROJECT_ENV_PATH = Path(os.getenv("OPENSRE_PROJECT_ENV_PATH", PROJECT_ROOT / ".env"))
 
 CredentialKind = Literal["api_key", "host", "cli", "none"]

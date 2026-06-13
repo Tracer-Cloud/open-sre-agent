@@ -465,7 +465,7 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     monkeypatch.setattr(output.sys, "stdout", _TTY())
     monkeypatch.setattr(output, "select", _Select)
     monkeypatch.setattr(output, "termios", _Termios)
-    monkeypatch.setattr(output.os, "fpathconf", lambda _fd, _name: 0)
+    monkeypatch.setattr(output.os, "fpathconf", lambda _fd, _name: 0, raising=False)
 
     watcher = output.CtrlOToggleWatcher(lambda: None)
     watcher.start()
