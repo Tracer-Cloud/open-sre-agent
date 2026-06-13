@@ -1,0 +1,55 @@
+---
+title: "AWS CloudTrail"
+description: "Lookup AWS CloudTrail events for configuration-change forensics"
+---
+
+OpenSRE integrates with AWS CloudTrail to lookup operational events and audit logs. This integration allows the agent to inspect resource modifications, configuration changes, and actions performed by IAM principals during incident timeframes.
+
+## Prerequisites
+
+- AWS credentials configured (reuses credentials from EKS, RDS, EC2, or CloudWatch integrations).
+- CloudTrail IAM permissions to lookup events.
+
+## Tools
+
+| Tool | Description |
+| --- | --- |
+| `lookup_cloudtrail_events` | Look up AWS CloudTrail events filtered by username, event source, or resource name within a given duration. |
+
+## IAM Permissions
+
+Ensure the following read-only actions are permitted in your IAM policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudtrail:LookupEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+## Setup
+
+The CloudTrail integration automatically derives configuration and credentials from your existing AWS integrations (such as EKS or EC2).
+
+## Example Usage
+
+When checking who modified or deleted a resource (like a database, security group, or queue), you can run the following tool command or ask the agent:
+
+```bash
+Look up CloudTrail events for resource "my-db-instance" in the last 120 minutes
+```
+
+This returns a list of events containing:
+- `event_id` and `event_name`
+- `event_time`
+- `event_source` (e.g., `rds.amazonaws.com`)
+- `username` (the IAM principal who initiated the action)
+- `resources` (list of resources affected by the event)

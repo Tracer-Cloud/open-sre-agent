@@ -131,6 +131,7 @@
             "pages": [
               "argocd",
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
               "integrations/github-actions",
@@ -173,6 +174,7 @@
               "prefect",
               "rabbitmq",
               "rds",
+              "sqs_queues",
               "snowflake",
               "supabase"
             ]

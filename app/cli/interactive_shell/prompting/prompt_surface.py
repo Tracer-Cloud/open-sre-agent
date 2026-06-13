@@ -210,6 +210,40 @@ class ShellCompleter(Completer):
                         yield _slash_completion(cmd, -len(parts[0]))
             return
 
+        if len(parts) >= 2:
+            cmd_name = parts[0].lower()
+            if cmd_name == "/agents" and len(parts) in (2, 3):
+                sub = parts[1].lower().strip()
+                if sub in ("kill", "trace", "wait") and (
+                    (len(parts) == 2 and trailing_space) or len(parts) == 3
+                ):
+                    raw_arg = "" if len(parts) == 2 else parts[2]
+                    from app.agents.registry import AgentRegistry
+
+                    registry = AgentRegistry()
+                    prefix = raw_arg.lower()
+                    seen_completions = set()
+                    for record in registry.list():
+                        pid_str = str(record.pid)
+                        name_str = record.name
+                        if name_str.lower().startswith(prefix) and name_str not in seen_completions:
+                            seen_completions.add(name_str)
+                            yield Completion(
+                                name_str,
+                                start_position=-len(raw_arg),
+                                display=name_str,
+                                display_meta=f"agent process (pid: {record.pid})",
+                            )
+                        if pid_str.startswith(prefix) and pid_str not in seen_completions:
+                            seen_completions.add(pid_str)
+                            yield Completion(
+                                pid_str,
+                                start_position=-len(raw_arg),
+                                display=pid_str,
+                                display_meta=f"agent name: {record.name}",
+                            )
+                    return
+
         if len(parts) <= 2:
             cmd_name = parts[0].lower()
             raw_arg = "" if trailing_space or len(parts) < 2 else parts[1]

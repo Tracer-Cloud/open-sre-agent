@@ -156,3 +156,45 @@ class AgentRegistry:
             tmp.replace(self._path)
         except OSError:
             logger.warning("Failed to rewrite agent registry at %s", self._path)
+
+
+def resolve_agent_arg(arg: str, registry: AgentRegistry) -> int:
+    """Resolve a PID or agent name to a PID.
+
+    Applies the following rules in order:
+    1. If arg parses as a positive integer and matches a PID in the registry -> that PID.
+    2. Else if arg matches exactly one registered agent name -> that agent's current PID.
+    3. Else if arg parses as a positive integer with no registry hit -> return that integer.
+    4. Else if arg matches multiple agent names -> raise ValueError.
+    5. Else raise ValueError.
+    """
+    is_positive_int = False
+    try:
+        val = int(arg)
+        if val > 0:
+            is_positive_int = True
+    except ValueError:
+        pass
+
+    if is_positive_int:
+        pid = int(arg)
+        if registry.get(pid) is not None:
+            return pid
+
+    records = registry.list()
+    matching_records = [r for r in records if r.name == arg]
+
+    if len(matching_records) == 1:
+        return matching_records[0].pid
+
+    if is_positive_int:
+        return int(arg)
+
+    if len(matching_records) > 1:
+        pids = sorted(r.pid for r in matching_records)
+        pids_str = ", ".join(map(str, pids))
+        raise ValueError(
+            f"ambiguous: {len(matching_records)} registered agents named {arg} (pids: {pids_str})"
+        )
+
+    raise ValueError("invalid pid or unknown agent name")

@@ -60,6 +60,11 @@ from app.integrations.registry import (
 )
 from app.integrations.sentry import build_sentry_config
 from app.integrations.signoz import build_signoz_config, signoz_config_from_env
+from app.integrations.sqs import (
+    DEFAULT_SQS_REGION,
+    build_sqs_config,
+    sqs_config_from_env,
+)
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
 from app.llm_credentials import resolve_env_credential
@@ -698,6 +703,21 @@ def _classify_service_instance(
             return None, None
         if rds_config.is_configured:
             return {**rds_config.model_dump(), "integration_id": record_id}, "rds"
+        return None, None
+
+    if key == "sqs":
+        try:
+            sqs_config = build_sqs_config(
+                {
+                    "queue_name_prefix": credentials.get("queue_name_prefix", ""),
+                    "region": credentials.get("region", DEFAULT_SQS_REGION),
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if sqs_config.is_configured:
+            return {**sqs_config.model_dump(), "integration_id": record_id}, "sqs"
         return None, None
 
     if key == "airflow":
@@ -1670,6 +1690,19 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _active_env_record(
                 "rds",
                 rds_config.model_dump(exclude={"integration_id"}),
+            )
+        )
+
+    try:
+        sqs_config = sqs_config_from_env()
+    except Exception as exc:
+        sqs_config = None
+        _report_env_loader_failure(exc, integration="sqs")
+    if sqs_config is not None and sqs_config.is_configured:
+        integrations.append(
+            _active_env_record(
+                "sqs",
+                sqs_config.model_dump(exclude={"integration_id"}),
             )
         )
 

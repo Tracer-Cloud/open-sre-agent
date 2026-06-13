@@ -362,6 +362,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(service="posthog"),
     IntegrationSpec(service="trello"),
     IntegrationSpec(service="rds", setup_order=11),
+    IntegrationSpec(service="sqs", setup_order=12),
     IntegrationSpec(
         service="supabase",
         verifier=_verify_supabase,

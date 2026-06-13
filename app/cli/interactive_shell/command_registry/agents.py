@@ -38,7 +38,7 @@ from app.agents.conflicts import (
 from app.agents.coordination import BranchClaims
 from app.agents.discovery import registered_and_discovered_agents
 from app.agents.lifecycle import TerminateResult, terminate
-from app.agents.registry import AgentRegistry
+from app.agents.registry import AgentRegistry, resolve_agent_arg
 from app.agents.tail import AttachSession, AttachUnsupported, attach
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
@@ -362,10 +362,11 @@ def _cmd_agents_kill(
         return True
 
     raw_pid = positional[0]
+    registry = AgentRegistry()
     try:
-        pid = int(raw_pid)
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(raw_pid)} is not an integer")
+        pid = resolve_agent_arg(raw_pid, registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -504,10 +505,11 @@ def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -
         console.print(f"[{ERROR}]usage:[/] /agents trace <pid>")
         session.mark_latest(ok=False, kind="slash")
         return True
+    registry = AgentRegistry()
     try:
-        pid = int(args[0])
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        pid = resolve_agent_arg(args[0], registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -536,17 +538,18 @@ def _cmd_agents_wait(session: ReplSession, console: Console, args: list[str]) ->
         session.mark_latest(ok=False, kind="slash")
         return True
 
+    registry = AgentRegistry()
     try:
-        pid = int(args[0])
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        pid = resolve_agent_arg(args[0], registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
     try:
-        on_pid = int(args[2])
-    except ValueError:
-        console.print(f"[{ERROR}]invalid other-pid:[/] {escape(args[2])}")
+        on_pid = resolve_agent_arg(args[2], registry)
+    except ValueError as exc:
+        console.print(f"[{ERROR}]{escape(str(exc))}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -554,8 +557,6 @@ def _cmd_agents_wait(session: ReplSession, console: Console, args: list[str]) ->
         console.print(f"[{ERROR}]invalid pid:[/] {pid} waiting for itself")
         session.mark_latest(ok=False, kind="slash")
         return True
-
-    registry = AgentRegistry()
     waiter = registry.get(pid)
     if waiter is None:
         console.print(f"[{ERROR}]pid {pid} is not in the agent registry[/]")

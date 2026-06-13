@@ -689,3 +689,82 @@ def get_table_stats(
             method="get_table_stats",
         )
         return {"source": "postgresql", "available": False, "error": str(err)}
+
+
+def get_blocking_queries(config: PostgreSQLConfig) -> dict[str, Any]:
+    """Retrieve blocking and blocked queries to diagnose lock contention.
+
+    Read-only: queries pg_stat_activity and pg_blocking_pids.
+    Results are capped at config.max_results.
+    """
+    if not config.is_configured:
+        return {"source": "postgresql", "available": False, "error": "Not configured."}
+
+    try:
+        conn = _get_connection(config)
+        try:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                WITH lock_graph AS (
+                    SELECT
+                        pid,
+                        pg_blocking_pids(pid) AS blocking_pids
+                    FROM pg_stat_activity
+                )
+                SELECT
+                    l.pid,
+                    a.usename,
+                    a.application_name,
+                    a.client_addr::text,
+                    a.state,
+                    a.query_start,
+                    extract(epoch from (now() - a.query_start))::int as duration_seconds,
+                    a.wait_event_type,
+                    a.wait_event,
+                    l.blocking_pids,
+                    left(a.query, 1000) as query_truncated
+                FROM lock_graph l
+                JOIN pg_stat_activity a ON l.pid = a.pid
+                WHERE cardinality(l.blocking_pids) > 0 OR l.pid IN (SELECT DISTINCT unnest(blocking_pids) FROM lock_graph)
+                LIMIT %s
+            """,
+                (config.max_results,),
+            )
+
+            queries = []
+            for row in cursor.fetchall():
+                queries.append(
+                    {
+                        "pid": row[0],
+                        "username": row[1],
+                        "application_name": row[2] or "",
+                        "client_addr": row[3] or "local",
+                        "state": row[4],
+                        "query_start": str(row[5]),
+                        "duration_seconds": row[6],
+                        "wait_event_type": row[7] or "",
+                        "wait_event": row[8] or "",
+                        "blocking_pids": row[9] or [],
+                        "query_truncated": row[10] or "",
+                    }
+                )
+
+            cursor.close()
+            return {
+                "source": "postgresql",
+                "available": True,
+                "total_queries": len(queries),
+                "queries": queries,
+            }
+        finally:
+            conn.close()
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_blocking_queries",
+        )
+        return {"source": "postgresql", "available": False, "error": str(err)}

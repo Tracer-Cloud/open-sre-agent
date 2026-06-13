@@ -1,0 +1,65 @@
+---
+title: "AWS SQS"
+description: "Diagnose SQS queue message backlogs and consumer issues"
+---
+
+OpenSRE integrates with Amazon Simple Queue Service (SQS) to fetch queue characteristics and operational metrics. This integration allows the agent to diagnose message backlogs, stuck consumers, and configuration issues (like dead-letter queues).
+
+## Prerequisites
+
+- AWS credentials configured (reuses credentials from EKS, RDS, EC2, or CloudWatch integrations).
+- SQS IAM permissions to list queues and read queue attributes.
+
+## Tools
+
+| Tool | Description |
+| --- | --- |
+| `get_sqs_queue_attributes` | List active SQS queues and return operational attributes (visible depth, in-flight, oldest-message age, visibility timeout, and DLQ configuration). |
+
+## IAM Permissions
+
+Ensure the following read-only actions are permitted in your IAM policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ListQueues",
+        "sqs:GetQueueAttributes"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+## Setup
+
+The SQS integration automatically derives configuration and credentials from your existing AWS integrations (such as EKS or EC2).
+
+To filter SQS queues or specify a region, you can set the following environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AWS_REGION` | `us-east-1` | Target AWS region to query queues |
+| `SQS_QUEUE_NAME_PREFIX` | — | Optional string to filter queues by name prefix |
+
+## Example Usage
+
+When investigating a backlog or consumer timeout, you can run the following tool command or ask the agent:
+
+```bash
+Get SQS queue attributes for queues matching "orders-" prefix
+```
+
+This returns data containing:
+- `queue_name` and `queue_url`
+- `visible_messages` (queue depth)
+- `in_flight_messages` (messages being processed)
+- `oldest_message_age_seconds`
+- `visibility_timeout_seconds`
+- `has_dlq` and detailed `redrive_policy` (dead letter queue details)
+- `is_fifo`
