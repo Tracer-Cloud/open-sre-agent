@@ -5,7 +5,55 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
+from app.integrations.sqs import sqs_extract_params, sqs_is_available
 from app.tools.SQSQueueAttributesTool import get_sqs_queue_attributes
+from tests.tools.conftest import BaseToolContract
+
+
+class TestSQSQueueAttributesToolContract(BaseToolContract):
+    def get_tool_under_test(self):
+        return get_sqs_queue_attributes.__opensre_registered_tool__
+
+
+def test_is_available_with_backend_source() -> None:
+    assert sqs_is_available({"sqs": {"_backend": object()}}) is True
+
+
+def test_is_available_with_env_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SQS_REGION", raising=False)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    assert sqs_is_available({}) is True
+
+
+def test_is_available_false_when_no_source_or_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("SQS_REGION", raising=False)
+    assert sqs_is_available({}) is False
+
+
+def test_extract_params_clamps_max_queues_and_uses_region_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.setenv("SQS_REGION", "ap-south-1")
+
+    backend = object()
+    params = sqs_extract_params(
+        {
+            "sqs": {
+                "queue_name_prefix": "payments-",
+                "max_queues": 999,
+                "_backend": backend,
+            }
+        }
+    )
+
+    assert params["queue_name_prefix"] == "payments-"
+    assert params["max_queues"] == 100
+    assert params["region"] == "ap-south-1"
+    assert params["aws_backend"] is backend
 
 
 # ---------------------------------------------------------------------------
