@@ -14,6 +14,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     PlannedAction,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    finalize_planner_result_with_trace,
     plan_actions_with_llm,
     plan_actions_with_llm_result,
 )
@@ -31,6 +32,25 @@ from app.cli.interactive_shell.ui import DIM, print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
 
 _DEFAULT_PLAN_ACTIONS_WITH_LLM = plan_actions_with_llm
+
+
+def _recover_when_planner_unavailable(
+    message: str, session: ReplSession
+) -> _ActionPlanningDecision | None:
+    recovered = finalize_planner_result_with_trace(
+        message,
+        [],
+        True,
+        session=session,
+    )
+    if not recovered.actions:
+        return None
+    return _ActionPlanningDecision(
+        actions=tuple(recovered.actions),
+        has_unhandled_clause=recovered.has_unhandled,
+        denied=False,
+        policy_trace=("planner_unavailable_recovered", *(str(tag) for tag in recovered.applied_policies)),
+    )
 
 
 @dataclass(frozen=True)
@@ -128,6 +148,9 @@ def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision
     if plan_actions_with_llm is _DEFAULT_PLAN_ACTIONS_WITH_LLM:
         llm_plan_result = plan_actions_with_llm_result(message, session=session)
         if llm_plan_result is None:
+            recovered_plan = _recover_when_planner_unavailable(message, session)
+            if recovered_plan is not None:
+                return recovered_plan
             return _ActionPlanningDecision((), True, True, ("planner_unavailable",))
         actions = list(llm_plan_result.actions)
         has_unhandled_clause = llm_plan_result.has_unhandled_clause
@@ -136,6 +159,9 @@ def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision
         # Preserve existing monkeypatch seam used by unit tests and debug harnesses.
         llm_plan_legacy = plan_actions_with_llm(message, session=session)
         if llm_plan_legacy is None:
+            recovered_plan = _recover_when_planner_unavailable(message, session)
+            if recovered_plan is not None:
+                return recovered_plan
             return _ActionPlanningDecision((), True, True, ("planner_unavailable",))
         actions, has_unhandled_clause = llm_plan_legacy
         policy_trace = ()

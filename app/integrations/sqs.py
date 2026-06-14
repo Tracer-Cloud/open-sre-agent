@@ -14,6 +14,7 @@ from app.integrations._relational import env_str
 from app.strict_config import StrictConfigModel
 
 DEFAULT_SQS_REGION = "us-east-1"
+DEFAULT_SQS_MAX_QUEUES = 20
 
 
 class SQSConfig(StrictConfigModel):
@@ -21,11 +22,16 @@ class SQSConfig(StrictConfigModel):
 
     queue_name_prefix: str = ""
     region: str = DEFAULT_SQS_REGION
-    max_queues: int = 20
+    max_queues: int = DEFAULT_SQS_MAX_QUEUES
 
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.region)
+
+def coerce_sqs_max_queues(raw_max_queues: Any) -> int:
+    """Normalize the max_queues value into the supported range [1, 100]."""
+    try:
+        parsed = int(raw_max_queues)
+    except (TypeError, ValueError):
+        return DEFAULT_SQS_MAX_QUEUES
+    return max(1, min(100, parsed))
 
 
 def build_sqs_config(raw: dict[str, Any] | None) -> SQSConfig:
@@ -76,11 +82,7 @@ def sqs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         or env_str("SQS_REGION")
         or DEFAULT_SQS_REGION
     )
-    raw_max = sqs.get("max_queues", 20)
-    try:
-        max_queues = max(1, min(100, int(raw_max)))
-    except (TypeError, ValueError):
-        max_queues = 20
+    max_queues = coerce_sqs_max_queues(sqs.get("max_queues", DEFAULT_SQS_MAX_QUEUES))
     return {
         "queue_name_prefix": str(sqs.get("queue_name_prefix") or "").strip(),
         "max_queues": max_queues,

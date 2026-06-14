@@ -28,6 +28,26 @@ from .constants import (
     is_rich_pasted_incident,
 )
 
+_FOLLOW_UP_LAST_FAILURE_RE = re.compile(r"\bwhy\b.*\bfail(?:ed|ure)?\b", re.IGNORECASE)
+_FOLLOW_UP_SPIKE_CAUSE_RE = re.compile(r"\b(?:caused?|cause)\b.*\bspike\b", re.IGNORECASE)
+_FOLLOW_UP_LAST_INVESTIGATION_RE = re.compile(
+    r"\b(?:what happened|last investigation|during the last investigation)\b",
+    re.IGNORECASE,
+)
+
+
+def _follow_up_handoff_content(message: str) -> str | None:
+    lowered = message.strip().lower()
+    if not lowered:
+        return None
+    if _FOLLOW_UP_LAST_FAILURE_RE.search(lowered):
+        return "follow_up:last_failure"
+    if _FOLLOW_UP_SPIKE_CAUSE_RE.search(lowered):
+        return "follow_up:spike_cause"
+    if _FOLLOW_UP_LAST_INVESTIGATION_RE.search(lowered):
+        return "follow_up:last_investigation_summary"
+    return None
+
 
 class PlannerPolicyResult:
     """Finalized planner output with an explicit policy trace."""
@@ -87,6 +107,30 @@ def _coerce_supported_integrations_to_handoff(
         PlannedAction(
             kind="assistant_handoff",
             content="docs:supported_integrations",
+            position=0,
+            source="llm",
+        )
+    ], False
+
+
+def _coerce_follow_up_with_prior_state(
+    message: str,
+    session: Any | None,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+) -> tuple[list[PlannedAction], bool]:
+    if actions:
+        return actions, has_unhandled
+    if session is None or not isinstance(getattr(session, "last_state", None), dict):
+        return actions, has_unhandled
+
+    content = _follow_up_handoff_content(message)
+    if content is None:
+        return actions, has_unhandled
+    return [
+        PlannedAction(
+            kind="assistant_handoff",
+            content=content,
             position=0,
             source="llm",
         )
@@ -239,6 +283,11 @@ def finalize_planner_result_with_trace(
         )
 
     initial = _PlannerPostprocessState(actions=actions, has_unhandled=has_unhandled)
+    allow_follow_up_recovery = (
+        session is not None
+        and isinstance(getattr(session, "last_state", None), dict)
+        and _follow_up_handoff_content(message) is not None
+    )
     phases: tuple[TransformPhase[_PlannerPostprocessState, PlannerPostprocessPolicyTag], ...] = (
         TransformPhase(
             PlannerPostprocessPolicyTag.FAIL_CLOSED_UNCONFIGURED_INTEGRATION_DETAIL,
@@ -256,6 +305,17 @@ def finalize_planner_result_with_trace(
             lambda state: _PlannerPostprocessState(
                 *_coerce_supported_integrations_to_handoff(
                     message,
+                    state.actions,
+                    state.has_unhandled,
+                )
+            ),
+        ),
+        TransformPhase(
+            PlannerPostprocessPolicyTag.COERCE_FOLLOW_UP_WITH_PRIOR_STATE,
+            lambda state: _PlannerPostprocessState(
+                *_coerce_follow_up_with_prior_state(
+                    message,
+                    session,
                     state.actions,
                     state.has_unhandled,
                 )
@@ -286,7 +346,9 @@ def finalize_planner_result_with_trace(
         changed=lambda prev, nxt: (
             (prev.actions, prev.has_unhandled) != (nxt.actions, nxt.has_unhandled)
         ),
-        stop_when=lambda state: not state.actions and state.has_unhandled,
+        stop_when=lambda state: (
+            not state.actions and state.has_unhandled and not allow_follow_up_recovery
+        ),
     )
     applied_list = list(applied)
     if not final_state.actions and final_state.has_unhandled:

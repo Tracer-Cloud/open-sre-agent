@@ -109,3 +109,18 @@ def test_planner_policy_trace_marks_incident_paste_coercion() -> None:
     assert len(result.actions) == 1
     assert result.actions[0].kind == "assistant_handoff"
     assert PlannerPostprocessPolicyTag.COERCE_INCIDENT_PASTE_HANDOFF in result.applied_policies
+
+
+def test_planner_policy_trace_coerces_follow_up_with_prior_state() -> None:
+    session = ReplSession()
+    session.last_state = {"root_cause": "disk full on orders-api"}
+    result = finalize_planner_result_with_trace(
+        "No, during the last investigation",
+        [],
+        True,
+        session=session,
+    )
+    assert len(result.actions) == 1
+    assert result.actions[0].kind == "assistant_handoff"
+    assert result.actions[0].content == "follow_up:last_investigation_summary"
+    assert PlannerPostprocessPolicyTag.COERCE_FOLLOW_UP_WITH_PRIOR_STATE in result.applied_policies

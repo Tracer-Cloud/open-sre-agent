@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.sqs import sqs_extract_params, sqs_is_available
+from app.integrations.sqs import DEFAULT_SQS_MAX_QUEUES, sqs_extract_params, sqs_is_available
 from app.tools.SQSQueueAttributesTool import get_sqs_queue_attributes
 from tests.tools.conftest import BaseToolContract
 
@@ -56,6 +56,14 @@ def test_extract_params_clamps_max_queues_and_uses_region_fallback(
     assert params["aws_backend"] is backend
 
 
+def test_extract_params_uses_shared_default_for_invalid_max(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    params = sqs_extract_params({"sqs": {"max_queues": "invalid"}})
+    assert params["max_queues"] == DEFAULT_SQS_MAX_QUEUES
+
+
 # ---------------------------------------------------------------------------
 # Fake backend for synthetic-mode short-circuit tests
 # ---------------------------------------------------------------------------
@@ -71,7 +79,7 @@ class _FakeAWSBackend:
     def get_sqs_queue_attributes(
         self,
         queue_name_prefix: str = "",
-        max_queues: int = 20,
+        max_queues: int = DEFAULT_SQS_MAX_QUEUES,
         region: str = "",
         **_: Any,
     ) -> dict[str, Any]:
@@ -323,14 +331,18 @@ def test_short_circuits_to_aws_backend(mock_call) -> None:
 
     result = get_sqs_queue_attributes(
         queue_name_prefix="payments",
-        max_queues=20,
+        max_queues=DEFAULT_SQS_MAX_QUEUES,
         region="us-east-1",
         aws_backend=backend,
     )
 
     mock_call.assert_not_called()
     assert backend.calls == [
-        {"queue_name_prefix": "payments", "max_queues": 20, "region": "us-east-1"}
+        {
+            "queue_name_prefix": "payments",
+            "max_queues": DEFAULT_SQS_MAX_QUEUES,
+            "region": "us-east-1",
+        }
     ]
     assert result["total_queues"] == 1
     assert result["queues"][0]["has_dlq"] is False

@@ -7,7 +7,9 @@ import logging
 from typing import Any, cast
 
 from app.integrations.sqs import (
+    DEFAULT_SQS_MAX_QUEUES,
     DEFAULT_SQS_REGION,
+    coerce_sqs_max_queues,
     sqs_extract_params,
     sqs_is_available,
 )
@@ -15,8 +17,6 @@ from app.services.aws_sdk_client import execute_aws_sdk_call
 from app.tools.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MAX_QUEUES = 20
 
 
 def _queue_name_from_url(url: str) -> str:
@@ -87,7 +87,7 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
             },
             "max_queues": {
                 "type": "integer",
-                "default": DEFAULT_MAX_QUEUES,
+                "default": DEFAULT_SQS_MAX_QUEUES,
                 "minimum": 1,
                 "maximum": 100,
                 "description": "Maximum number of queues to inspect (default 20, max 100).",
@@ -101,7 +101,7 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
 )
 def get_sqs_queue_attributes(
     queue_name_prefix: str = "",
-    max_queues: int = DEFAULT_MAX_QUEUES,
+    max_queues: int = DEFAULT_SQS_MAX_QUEUES,
     region: str = DEFAULT_SQS_REGION,
     aws_backend: Any = None,
     **_kwargs: Any,
@@ -129,7 +129,7 @@ def get_sqs_queue_attributes(
             ),
         )
 
-    capped = max(1, min(100, max_queues))
+    capped = coerce_sqs_max_queues(max_queues)
     list_params: dict[str, Any] = {"MaxResults": capped}
     if queue_name_prefix:
         list_params["QueueNamePrefix"] = queue_name_prefix
