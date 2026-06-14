@@ -243,7 +243,8 @@ class TemporalClient:
                 method="probe_access",
             )
             return ProbeResult.failed(
-                f"Failed to connect to Temporal: {exc.response.status_code}: {exc.response.text[:200]}.")
+                f"Failed to connect to Temporal: {exc.response.status_code}: {exc.response.text[:200]}."
+            )
         except Exception as exc:
             capture_service_error(
                 exc,

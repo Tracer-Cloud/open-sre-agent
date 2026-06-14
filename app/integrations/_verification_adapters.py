@@ -60,6 +60,7 @@ from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
 from app.services.pagerduty import PagerDutyClient, PagerDutyConfig
 from app.services.splunk import SplunkClient, SplunkConfig
+from app.services.temporal import TemporalClient, TemporalConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
 from app.services.victoria_logs import VictoriaLogsClient, VictoriaLogsConfig
@@ -737,6 +738,11 @@ _verify_victoria_logs = build_probe_verifier(
     build_config=VictoriaLogsConfig.model_validate,
     client_factory=VictoriaLogsClient,
 )
+_verify_temporal = build_probe_verifier(
+    "temporal",
+    build_config=TemporalConfig.model_validate,
+    client_factory=TemporalClient,
+)
 
 
 def _verify_slack_without_test(source: str, config: dict[str, Any]) -> dict[str, str]:
@@ -805,6 +811,7 @@ __all__ = [
     "_verify_vercel",
     "_verify_victoria_logs",
     "_verify_whatsapp",
+    "_verify_temporal",
     "build_probe_verifier",
     "build_validation_verifier",
     "result",
