@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from app.integrations.config_models import TemporalIntegrationConfig
+from app.integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)
@@ -224,6 +225,33 @@ class TemporalClient:
                 method="get_namespace_info",
             )
             return {"success": False, "error": str(exc)}
+
+    def probe_access(self) -> ProbeResult:
+        if not self.is_configured:
+            return ProbeResult.failed("Temporal Client is not configured.")
+
+        try:
+            r = self._client.get(f"/api/v1/namespaces/{self.config.namespace}")
+            r.raise_for_status()
+
+            return ProbeResult.passed("Successfully connected to Temporal.")
+        except httpx.HTTPStatusError as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="temporal",
+                method="probe_access",
+            )
+            return ProbeResult.failed(
+                f"Failed to connect to Temporal: {exc.response.status_code}: {exc.response.text[:200]}.")
+        except Exception as exc:
+            capture_service_error(
+                exc,
+                logger=logger,
+                integration="temporal",
+                method="probe_access",
+            )
+            return ProbeResult.failed(f"Failed to connect to Temporal: {str(exc)}.")
 
     def close(self) -> None:
         if self._client is not None:

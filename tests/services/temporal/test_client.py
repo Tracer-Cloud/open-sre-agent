@@ -318,3 +318,45 @@ def test_get_namespace_info_exception(monkeypatch):
 
     assert response["success"] is False
     assert response["error"] == "connection refused"
+
+
+def test_probe_access_success(monkeypatch):
+    payload = {
+        "namespaceInfo": {
+            "name": "default",
+            "state": "NAMESPACE_STATE_REGISTERED",
+            "description": "Default namespace",
+            "ownerEmail": "team@example.com",
+            "id": "ns-id-123",
+        },
+        "config": {},
+        "isGlobalNamespace": False,
+    }
+
+    def fake_get(_url, **_kwargs):
+        return _FakeResponse(payload)
+
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", fake_get)
+
+    result = temporal.probe_access()
+
+    assert result.ok is True
+
+
+def test_probe_access_failure(monkeypatch):
+    temporal = _client()
+
+    def fake_get(_url, **_kwargs):
+        return _FakeResponse(error_payload(), 404)
+
+    monkeypatch.setattr(temporal._client, "get", fake_get)
+    result = temporal.probe_access()
+
+    assert result.ok is False
+
+
+def test_probe_access_on_unconfigured_client(monkeypatch):
+    temporal = TemporalClient(TemporalConfig(base_url="", namespace=""))
+    result = temporal.probe_access()
+    assert result.ok is False
