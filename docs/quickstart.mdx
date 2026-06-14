@@ -42,6 +42,12 @@ slug: "quickstart"
     opensre onboard
     ```
 
+    On desktop systems, OpenSRE stores LLM API keys in your system keychain. On
+    headless servers where no keychain is available, onboarding can save the
+    active LLM key in the project `.env` file instead; OpenSRE restricts that
+    file to owner-only permissions when the platform supports it. Do not commit
+    `.env`.
+
     <Tabs>
       <Tab title="macOS / Linux">
         <Frame>

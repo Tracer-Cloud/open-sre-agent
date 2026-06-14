@@ -101,6 +101,32 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
+def test_sync_provider_env_writes_llm_api_key_when_plaintext_passed(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=openai\nOPENAI_API_KEY=old-openai-key\nGITLAB_ACCESS_TOKEN=legacy-token\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["anthropic"],
+        model=PROVIDER_BY_VALUE["anthropic"].default_model,
+        env_path=env_path,
+        llm_api_key_plaintext=" sk-env-fallback ",
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=anthropic\n" in content
+    assert "ANTHROPIC_API_KEY=sk-env-fallback\n" in content
+    assert "OPENAI_API_KEY=" not in content
+    assert "GITLAB_ACCESS_TOKEN=" not in content
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-env-fallback"
+    if os.name != "nt":
+        assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+
+
 def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)

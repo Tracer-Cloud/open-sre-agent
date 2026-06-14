@@ -42,12 +42,15 @@ def _is_sensitive_env_key(key: str) -> bool:
     return any(needle in lowered for needle in _SENSITIVE_SUBSTRINGS)
 
 
-def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
+def _strip_sensitive_env_lines(
+    lines: list[str], *, allowed_plaintext_keys: set[str] | None = None
+) -> list[str]:
     """Remove secret assignments so .env only carries non-sensitive config."""
+    allowed_keys = allowed_plaintext_keys or set()
     stripped: list[str] = []
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
-        if match and _is_sensitive_env_key(match.group(1)):
+        if match and _is_sensitive_env_key(match.group(1)) and match.group(1) not in allowed_keys:
             continue
         stripped.append(line)
     return stripped
@@ -66,8 +69,15 @@ def _persist_env_secret(key: str, value: str) -> bool:
     return True
 
 
-def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
-    if _is_sensitive_env_key(key):
+def _set_env_value(
+    lines: list[str],
+    key: str,
+    value: str,
+    *,
+    allowed_plaintext_keys: set[str] | None = None,
+) -> list[str]:
+    allowed_keys = allowed_plaintext_keys or set()
+    if _is_sensitive_env_key(key) and key not in allowed_keys:
         raise RuntimeError(
             f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
         )
@@ -89,20 +99,28 @@ def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
     return updated
 
 
-def _ensure_no_sensitive_env_lines(lines: list[str]) -> None:
+def _ensure_no_sensitive_env_lines(
+    lines: list[str], *, allowed_plaintext_keys: set[str] | None = None
+) -> None:
     """Fail closed when a sensitive assignment would be written to disk."""
+    allowed_keys = allowed_plaintext_keys or set()
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
-        if match and _is_sensitive_env_key(match.group(1)):
+        if match and _is_sensitive_env_key(match.group(1)) and match.group(1) not in allowed_keys:
             raise RuntimeError(
                 f"Refusing to write sensitive env key {match.group(1)!r} to .env; use the system keyring."
             )
 
 
-def _write_env(target_path: Path, lines: list[str]) -> None:
+def _write_env(
+    target_path: Path,
+    lines: list[str],
+    *,
+    allowed_plaintext_keys: set[str] | None = None,
+) -> None:
     """Write non-sensitive .env lines with owner-only permissions when possible."""
-    public_lines = _strip_sensitive_env_lines(lines)
-    _ensure_no_sensitive_env_lines(public_lines)
+    public_lines = _strip_sensitive_env_lines(lines, allowed_plaintext_keys=allowed_plaintext_keys)
+    _ensure_no_sensitive_env_lines(public_lines, allowed_plaintext_keys=allowed_plaintext_keys)
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
@@ -212,6 +230,7 @@ def sync_provider_env(
     model: str,
     toolcall_model: str | None = None,
     env_path: Path | None = None,
+    llm_api_key_plaintext: str | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
 
@@ -219,6 +238,10 @@ def sync_provider_env(
     is in the keyring, or when switching LLM provider. If the user still has
     the active provider's key only in ``.env`` (same ``LLM_PROVIDER``), that
     line is kept until they save to the keyring.
+
+    When keychain storage is unavailable, the onboarding wizard may pass
+    ``llm_api_key_plaintext`` to allow exactly the active provider's API key
+    into the project ``.env`` fallback. Other sensitive keys remain stripped.
     """
     from app.cli.wizard.config import SUPPORTED_PROVIDERS
 
@@ -256,6 +279,12 @@ def sync_provider_env(
     ):
         keys_to_remove.discard(provider.api_key_env)
 
+    allowed_plaintext_keys: set[str] = set()
+    normalized_plaintext_key = (llm_api_key_plaintext or "").strip()
+    if normalized_plaintext_key and provider.api_key_env:
+        allowed_plaintext_keys.add(provider.api_key_env)
+        keys_to_remove.discard(provider.api_key_env)
+
     lines = _remove_keys(existing, keys_to_remove)
 
     values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
@@ -263,11 +292,13 @@ def sync_provider_env(
         values[provider.legacy_model_env] = model
     if toolcall_model and provider.toolcall_model_env:
         values[provider.toolcall_model_env] = toolcall_model
+    if normalized_plaintext_key and provider.api_key_env:
+        values[provider.api_key_env] = normalized_plaintext_key
 
     for key, value in values.items():
-        lines = _set_env_value(lines, key, value)
+        lines = _set_env_value(lines, key, value, allowed_plaintext_keys=allowed_plaintext_keys)
 
-    _write_env(target_path, lines)
+    _write_env(target_path, lines, allowed_plaintext_keys=allowed_plaintext_keys)
 
     for key in keys_to_remove:
         os.environ.pop(key, None)
