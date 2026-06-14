@@ -82,6 +82,7 @@ The tool accepts a `queue_name_prefix` filter (empty = all queues) and a `max_qu
 | `redrive_policy` | object \| null | Parsed `RedrivePolicy` JSON including `deadLetterTargetArn` and `maxReceiveCount` |
 | `is_fifo` | boolean | Whether the queue uses FIFO ordering |
 | `content_based_deduplication` | boolean | Whether FIFO content-based deduplication is enabled (`ContentBasedDeduplication`) |
+| `truncated` | boolean | Whether queue listing hit the `max_queues` cap while more queues remained (`NextToken` present) |
 
 ## Diagnosing a poison-pill incident
 

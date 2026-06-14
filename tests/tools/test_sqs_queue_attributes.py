@@ -127,6 +127,7 @@ def test_get_sqs_queue_attributes_success(mock_call) -> None:
 
     assert result["available"] is True
     assert result["total_queues"] == 1
+    assert result["truncated"] is False
     assert result["error"] is None
 
     q = result["queues"][0]
@@ -153,7 +154,39 @@ def test_get_sqs_queue_attributes_no_queues(mock_call) -> None:
 
     assert result["available"] is True
     assert result["total_queues"] == 0
+    assert result["truncated"] is False
     assert result["queues"] == []
+
+
+@patch("app.tools.SQSQueueAttributesTool.execute_aws_sdk_call")
+def test_get_sqs_queue_attributes_marks_truncated_when_next_token_present(mock_call) -> None:
+    mock_call.side_effect = [
+        {
+            "success": True,
+            "data": {
+                "QueueUrls": ["https://sqs.us-east-1.amazonaws.com/123456/queue-a"],
+                "NextToken": "token-1",
+            },
+        },
+        {
+            "success": True,
+            "data": {
+                "Attributes": {
+                    "ApproximateNumberOfMessages": "1",
+                    "ApproximateNumberOfMessagesNotVisible": "0",
+                    "ApproximateAgeOfOldestMessage": "5",
+                    "VisibilityTimeout": "30",
+                    "FifoQueue": "false",
+                }
+            },
+        },
+    ]
+
+    result = get_sqs_queue_attributes(max_queues=1)
+
+    assert result["available"] is True
+    assert result["total_queues"] == 1
+    assert result["truncated"] is True
 
 
 # ---------------------------------------------------------------------------

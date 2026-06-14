@@ -28,11 +28,10 @@ from .constants import (
     is_rich_pasted_incident,
 )
 
-_FOLLOW_UP_LAST_FAILURE_RE = re.compile(r"\bwhy\b.*\bfail(?:ed|ure)?\b", re.IGNORECASE)
-_FOLLOW_UP_SPIKE_CAUSE_RE = re.compile(r"\b(?:caused?|cause)\b.*\bspike\b", re.IGNORECASE)
+_FOLLOW_UP_LAST_FAILURE_RE = re.compile(r"\bwhy\b.*\bfail(?:ed|ure)?\b")
+_FOLLOW_UP_SPIKE_CAUSE_RE = re.compile(r"\b(?:caused?|cause)\b.*\bspike\b")
 _FOLLOW_UP_LAST_INVESTIGATION_RE = re.compile(
-    r"\b(?:what happened|last investigation|during the last investigation)\b",
-    re.IGNORECASE,
+    r"\b(?:what happened|last investigation|during the last investigation)\b"
 )
 
 

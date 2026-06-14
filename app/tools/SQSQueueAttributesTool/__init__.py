@@ -130,32 +130,53 @@ def get_sqs_queue_attributes(
         )
 
     capped = coerce_sqs_max_queues(max_queues)
-    list_params: dict[str, Any] = {"MaxResults": capped}
-    if queue_name_prefix:
-        list_params["QueueNamePrefix"] = queue_name_prefix
+    queue_urls: list[str] = []
+    next_token: str | None = None
+    truncated = False
+    while len(queue_urls) < capped:
+        list_params: dict[str, Any] = {"MaxResults": capped - len(queue_urls)}
+        if queue_name_prefix:
+            list_params["QueueNamePrefix"] = queue_name_prefix
+        if next_token:
+            list_params["NextToken"] = next_token
 
-    list_result = execute_aws_sdk_call(
-        service_name="sqs",
-        operation_name="list_queues",
-        parameters=list_params,
-        region=region,
-    )
-
-    if not list_result.get("success"):
-        logger.error(
-            "[sqs] list_queues failed prefix=%r region=%s: %s",
-            queue_name_prefix,
-            region,
-            list_result.get("error"),
+        list_result = execute_aws_sdk_call(
+            service_name="sqs",
+            operation_name="list_queues",
+            parameters=list_params,
+            region=region,
         )
-        return {
-            "source": "sqs",
-            "available": False,
-            "queue_name_prefix": queue_name_prefix,
-            "error": "Failed to list SQS queues. Check server logs for details.",
-        }
+        if not list_result.get("success"):
+            logger.error(
+                "[sqs] list_queues failed prefix=%r region=%s: %s",
+                queue_name_prefix,
+                region,
+                list_result.get("error"),
+            )
+            return {
+                "source": "sqs",
+                "available": False,
+                "queue_name_prefix": queue_name_prefix,
+                "error": "Failed to list SQS queues. Check server logs for details.",
+            }
 
-    queue_urls: list[str] = (list_result.get("data") or {}).get("QueueUrls") or []
+        data = (list_result.get("data") or {})
+        page_urls = data.get("QueueUrls") or []
+        if isinstance(page_urls, list):
+            queue_urls.extend(str(url) for url in page_urls)
+
+        raw_token = data.get("NextToken")
+        next_token = str(raw_token).strip() if raw_token else None
+        if not next_token:
+            break
+        if len(queue_urls) >= capped:
+            truncated = True
+            break
+    if len(queue_urls) > capped:
+        queue_urls = queue_urls[:capped]
+        truncated = True
+    if next_token:
+        truncated = True
     queues: list[dict[str, Any]] = []
 
     for url in queue_urls:
@@ -192,6 +213,7 @@ def get_sqs_queue_attributes(
         "queue_name_prefix": queue_name_prefix,
         "region": region,
         "total_queues": len(queues),
+        "truncated": truncated,
         "queues": queues,
         "error": None,
     }

@@ -55,14 +55,11 @@ def sqs_config_from_env() -> SQSConfig | None:
 def sqs_is_available(sources: dict[str, dict]) -> bool:
     """Check if SQS integration is available.
 
-    A scenario-injected ``_backend`` (FixtureAWSBackend in synthetic tests)
-    counts on its own. Otherwise, the integration is available when the sqs
-    source dict carries config, or when AWS_REGION / SQS_REGION is set in
-    the environment (same credential path as EKS/CloudWatch).
+    Any non-empty sqs source dict counts as configured, including a
+    scenario-injected ``_backend`` (FixtureAWSBackend in synthetic tests).
+    Otherwise availability falls back to AWS_REGION / SQS_REGION in env.
     """
     sqs = sources.get("sqs", {})
-    if sqs.get("_backend"):
-        return True
     if sqs:
         return True
     return bool(os.getenv("AWS_REGION") or os.getenv("SQS_REGION"))

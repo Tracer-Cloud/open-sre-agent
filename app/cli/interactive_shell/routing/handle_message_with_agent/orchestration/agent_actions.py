@@ -27,6 +27,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
     REGISTRY,
     ToolContext,
 )
+from app.cli.interactive_shell.routing.policy_tags import PlannerPostprocessPolicyTag
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, print_planned_actions
 from app.cli.interactive_shell.ui.streaming import render_response_header
@@ -166,7 +167,10 @@ def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision
         actions, has_unhandled_clause = llm_plan_legacy
         policy_trace = ()
     if not actions:
-        if "fail_closed_meta_self_improvement" in policy_trace:
+        if (
+            PlannerPostprocessPolicyTag.FAIL_CLOSED_META_SELF_IMPROVEMENT.value
+            in policy_trace
+        ):
             return _ActionPlanningDecision((), has_unhandled_clause, True, policy_trace)
         return _ActionPlanningDecision((), has_unhandled_clause, False, policy_trace)
     if all(action.kind == "assistant_handoff" for action in actions):
