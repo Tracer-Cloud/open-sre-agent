@@ -10,6 +10,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
@@ -175,7 +176,16 @@ def test_live_llm_planner_matches_prompt_contract(
 ) -> None:
     assert route_input(case["input"], ReplSession()).route_kind.value == case["expected_kind"]
     caplog.clear()
-    actual = _normalize_for_assertion(_actions_for_case(case))
+    try:
+        actual = _normalize_for_assertion(_actions_for_case(case))
+    except PlannerLLMError as exc:
+        lowered = str(exc).lower()
+        if any(
+            token in lowered
+            for token in ("rate limit", "quota", "billing", "temporarily unavailable")
+        ):
+            pytest.skip("Skipping live LLM planner case due to transient provider/billing limits.")
+        raise
     if not actual and _is_transient_llm_provider_failure(caplog.records):
         pytest.skip("Skipping live LLM planner case due to transient provider/billing limits.")
     if not actual:

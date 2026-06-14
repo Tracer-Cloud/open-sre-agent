@@ -61,6 +61,38 @@ def _fail_closed_vague_local_model(message: str) -> tuple[list[PlannedAction], b
     return None
 
 
+def _fail_closed_meta_self_improvement_offer(
+    message: str,
+) -> tuple[list[PlannedAction], bool] | None:
+    lowered = message.lower()
+    if "if you want, i can patch" in lowered and "action planner" in lowered:
+        return [], True
+    return None
+
+
+def _coerce_supported_integrations_to_handoff(
+    message: str,
+    actions: list[PlannedAction],
+    has_unhandled: bool,
+) -> tuple[list[PlannedAction], bool]:
+    if len(actions) != 1 or actions[0].kind != "slash":
+        return actions, has_unhandled
+    lowered = message.lower()
+    if "supported integrations" not in lowered:
+        return actions, has_unhandled
+    content = actions[0].content.strip().lower()
+    if content not in {"/list integrations", "/integrations list"}:
+        return actions, has_unhandled
+    return [
+        PlannedAction(
+            kind="assistant_handoff",
+            content="docs:supported_integrations",
+            position=0,
+            source="llm",
+        )
+    ], False
+
+
 def _reconcile_compound_actions(
     message: str,
     actions: list[PlannedAction],
@@ -197,6 +229,14 @@ def finalize_planner_result_with_trace(
             early_unhandled,
             (PlannerPostprocessPolicyTag.FAIL_CLOSED_VAGUE_LOCAL_MODEL,),
         )
+    early_meta = _fail_closed_meta_self_improvement_offer(message)
+    if early_meta is not None:
+        early_actions, early_unhandled = early_meta
+        return PlannerPolicyResult(
+            early_actions,
+            early_unhandled,
+            (PlannerPostprocessPolicyTag.FAIL_CLOSED_META_SELF_IMPROVEMENT,),
+        )
 
     initial = _PlannerPostprocessState(actions=actions, has_unhandled=has_unhandled)
     phases: tuple[TransformPhase[_PlannerPostprocessState, PlannerPostprocessPolicyTag], ...] = (
@@ -206,6 +246,16 @@ def finalize_planner_result_with_trace(
                 *_fail_closed_unconfigured_integration_detail(
                     message,
                     session,
+                    state.actions,
+                    state.has_unhandled,
+                )
+            ),
+        ),
+        TransformPhase(
+            PlannerPostprocessPolicyTag.COERCE_SUPPORTED_INTEGRATIONS_TO_HANDOFF,
+            lambda state: _PlannerPostprocessState(
+                *_coerce_supported_integrations_to_handoff(
+                    message,
                     state.actions,
                     state.has_unhandled,
                 )

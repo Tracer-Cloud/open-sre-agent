@@ -245,6 +245,12 @@ def test_live_turn_execution_oracle(
         return
 
     failed_details = [item.details for item in run_results if not item.passed]
+    if failed_details and all(
+        bool(detail.get("transient_provider_failure", False)) for detail in failed_details
+    ):
+        pytest.skip(
+            f"Skipping oracle case {live_oracle_case.scenario.id!r} due to transient provider limits."
+        )
     artifact_dir = tmp_path_factory.mktemp("router_live_action_oracles")
     artifact_file = Path(artifact_dir) / f"{live_oracle_case.scenario.id}.json"
     artifact_file.write_text(

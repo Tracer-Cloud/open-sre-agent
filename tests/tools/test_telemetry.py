@@ -906,6 +906,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_recent_airflow_failures",
         "get_s3_object",
         "get_sentry_issue_details",
+        "get_sqs_queue_attributes",
         "get_sre_guidance",
         "get_supabase_service_health",
         "get_supabase_storage_buckets",

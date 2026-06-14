@@ -37,7 +37,9 @@ class PlannerPostprocessPolicyTag(StrEnum):
 
     FAIL_CLOSED_VAGUE_LOCAL_MODEL = "fail_closed_vague_local_model"
     FAIL_CLOSED_UNCONFIGURED_INTEGRATION_DETAIL = "fail_closed_unconfigured_integration_detail"
+    FAIL_CLOSED_META_SELF_IMPROVEMENT = "fail_closed_meta_self_improvement"
     RECONCILE_COMPOUND_WITH_DETERMINISTIC = "reconcile_compound_with_deterministic"
+    COERCE_SUPPORTED_INTEGRATIONS_TO_HANDOFF = "coerce_supported_integrations_to_handoff"
     UPGRADE_HANDOFF_TO_INCIDENT = "upgrade_handoff_to_incident"
     COERCE_INCIDENT_PASTE_HANDOFF = "coerce_incident_paste_handoff"
     FAIL_CLOSED_AFTER_POLICY = "fail_closed_after_policy"

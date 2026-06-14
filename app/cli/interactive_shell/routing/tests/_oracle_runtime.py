@@ -77,6 +77,21 @@ def contains_all(haystack: str, needles: list[str]) -> bool:
     return all(needle in haystack for needle in normalized_needles)
 
 
+def _is_transient_provider_failure(response: str) -> bool:
+    lowered = response.lower()
+    return any(
+        token in lowered
+        for token in (
+            "rate limit",
+            "quota",
+            "billing",
+            "temporarily unavailable",
+            "service unavailable",
+            "http 429",
+        )
+    )
+
+
 def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
     if len(actual) != len(expected):
         return False
@@ -266,5 +281,6 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             "forbidden_tokens_matched": forbidden_tokens,
             "forbidden_executed_kinds": forbidden_executed,
             "last_assistant_intent": session.last_assistant_intent,
+            "transient_provider_failure": _is_transient_provider_failure(normalized_response),
         },
     )

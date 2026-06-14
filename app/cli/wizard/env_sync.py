@@ -270,6 +270,12 @@ def sync_provider_env(
     _write_env(target_path, lines)
 
     for key in keys_to_remove:
+        # Do not purge secret env vars supplied by the caller shell (for example
+        # OPENAI_API_KEY during live routing tests). We remove them from .env, but
+        # keeping process env credentials avoids mid-session auth regressions after
+        # provider/model switches.
+        if _is_sensitive_env_key(key):
+            continue
         os.environ.pop(key, None)
     for key in active_non_secret:
         preserved = _env_value_from_lines(lines, key)
