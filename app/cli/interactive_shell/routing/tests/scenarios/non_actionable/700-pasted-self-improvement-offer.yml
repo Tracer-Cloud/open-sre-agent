@@ -35,6 +35,6 @@ response_contract:
 history:
   expected:
   - type: cli_agent
-    ok: true
+    ok: false
 tier: full
 runs: 3

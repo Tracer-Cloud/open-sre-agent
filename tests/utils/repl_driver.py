@@ -47,7 +47,9 @@ import os
 import pty
 import re
 import select
+import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -56,6 +58,14 @@ from dotenv import dotenv_values
 
 _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _REPO_ROOT = Path(__file__).parent.parent.parent
+
+
+def _repl_command() -> list[str]:
+    """Prefer uv-backed CLI; fall back to module entrypoint when uv is unavailable."""
+
+    if shutil.which("uv"):
+        return ["uv", "run", "opensre"]
+    return [sys.executable, "-m", "app.cli"]
 
 
 def _load_env(*, home: str | None = None) -> dict[str, str]:
@@ -94,7 +104,7 @@ class ReplDriver:
         self._master = master
         try:
             self._proc = subprocess.Popen(
-                ["uv", "run", "opensre"],
+                _repl_command(),
                 stdin=slave,
                 stdout=slave,
                 stderr=slave,

@@ -8,11 +8,12 @@ use the same transport and parsing logic.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import os
 from collections.abc import AsyncIterator, Sequence
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 from urllib.parse import urlparse, urlunparse
@@ -506,9 +507,16 @@ def _run_async(coro: Any) -> Any:
     try:
         return asyncio.run(coro)
     except BaseException:
+        if inspect.iscoroutine(coro):
+            # ``coroutine.close()`` on Python 3.12 does not always clear ``cr_frame``
+            # when the coroutine was never started. Throwing ``GeneratorExit`` ensures
+            # the coroutine is finalized and avoids leaked pending coroutine warnings.
+            with suppress(BaseException):
+                coro.throw(GeneratorExit)
         close = getattr(coro, "close", None)
         if callable(close):
-            close()
+            with suppress(BaseException):
+                close()
         raise
 
 

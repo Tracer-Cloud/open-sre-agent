@@ -140,6 +140,8 @@ def _plan_actions(message: str, session: ReplSession) -> _ActionPlanningDecision
         actions, has_unhandled_clause = llm_plan_legacy
         policy_trace = ()
     if not actions:
+        if "fail_closed_meta_self_improvement" in policy_trace:
+            return _ActionPlanningDecision((), has_unhandled_clause, True, policy_trace)
         return _ActionPlanningDecision((), has_unhandled_clause, False, policy_trace)
     if all(action.kind == "assistant_handoff" for action in actions):
         # If the planner surfaced an assistant handoff *and* flagged unhandled
