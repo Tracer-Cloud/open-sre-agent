@@ -467,14 +467,14 @@ def _persist_llm_api_key(env_var: str, value: str) -> Literal["keychain", "env"]
         _console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"
         )
-        for line in get_keyring_setup_instructions(env_var):
-            _console.print(f"[{SECONDARY}]    {line}[/]")
-
-        if sys.stdin.isatty() and not _confirm(
-            "Save the API key to project .env instead? (common on SSH/headless servers)",
-            default=True,
-        ):
-            return None
+        if sys.stdin.isatty():
+            for line in get_keyring_setup_instructions(env_var):
+                _console.print(f"[{SECONDARY}]    {line}[/]")
+            if not _confirm(
+                "Save the API key to project .env instead? (common on SSH/headless servers)",
+                default=True,
+            ):
+                return None
         _console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  Storing {env_var} in project .env with owner-only permissions.[/]"
         )
@@ -2428,8 +2428,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         model=model,
         llm_api_key_plaintext=llm_api_key_plaintext_for_env,
     )
-    if llm_api_key_plaintext_for_env and provider.api_key_env:
-        os.environ[provider.api_key_env] = llm_api_key_plaintext_for_env.strip()
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
