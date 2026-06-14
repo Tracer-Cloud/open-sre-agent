@@ -19,7 +19,7 @@ TemporalConfig = TemporalIntegrationConfig
 class TemporalClient:
     def __init__(self, config: TemporalConfig):
         self.config = config
-        self._client = httpx.Client(
+        self._client: httpx.Client = httpx.Client(
             base_url=self.config.base_url,
             headers=self.config.headers,
             timeout=_DEFAULT_TIMEOUT,
@@ -35,7 +35,7 @@ class TemporalClient:
         Returns paginated workflow executions for the configured namespace.
         Each execution includes workflowId, type, status, taskQueue, and timing info.
         """
-        params = {
+        params: dict[str, str | int | bool] = {
             "pageSize": _DEFAULT_PAGE_SIZE,
         }
         if next_page_token is not None:
@@ -85,7 +85,7 @@ class TemporalClient:
         activity failed, workflow failed, etc.) that tells the story of what
         happened during the execution. Essential for diagnosing why a workflow failed.
         """
-        params = {
+        params: dict[str, str | int | bool] = {
             "pageSize": _DEFAULT_PAGE_SIZE,
         }
         if next_page_token is not None:
@@ -141,7 +141,9 @@ class TemporalClient:
         Use the taskQueue field from list_workflow_executions() results to
         identify which queues to inspect.
         """
-        params = {"reportStats": True, "taskQueueType": "TASK_QUEUE_TYPE_WORKFLOW"}
+        params: dict[str, str | int | bool] = {
+            "reportStats": True, "taskQueueType": "TASK_QUEUE_TYPE_WORKFLOW",
+        }
         try:
             r = self._client.get(
                 f"/api/v1/namespaces/{self.config.namespace}/task-queues/{task_queue_name}",
@@ -255,9 +257,7 @@ class TemporalClient:
             return ProbeResult.failed(f"Failed to connect to Temporal: {str(exc)}.")
 
     def close(self) -> None:
-        if self._client is not None:
             self._client.close()
-            self._client = None
 
     def __enter__(self) -> TemporalClient:
         return self

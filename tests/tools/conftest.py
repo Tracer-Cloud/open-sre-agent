@@ -171,6 +171,11 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "default_query": 'index=main "NullPointerException" | head 50',
             "time_range_minutes": 60,
         },
+        "temporal": {
+            "base_url": "http://localhost:7233",
+            "api_key": "",
+            "namespace": "default",
+        },
     }
     if overrides:
         for key, value in overrides.items():
