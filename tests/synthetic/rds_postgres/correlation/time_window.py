@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.correlation.scoring import (
+from app.agent.correlation.scoring import (
     TimeSeries,
     TimeWindowCorrelation,
     score_time_window_correlation,

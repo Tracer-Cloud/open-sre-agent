@@ -53,6 +53,7 @@ DEFAULT_OPENCLAW_MCP_COMMAND = "openclaw"
 DEFAULT_OPENCLAW_MCP_ARGS = ("mcp", "serve")
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
+WIZARD_TOTAL_STEPS = 4
 
 
 # Re-export build_demo_action_response from validation as a stable module-level
@@ -362,14 +363,15 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     "Enter custom model ID" escape hatch is always available.
     """
     resolved_default = (default or "").strip()
-    if not provider.models:
+    models = provider.models
+    if not models:
         return resolved_default or provider.default_model
 
     _step("Model")
 
-    curated_values = {option.value for option in provider.models}
+    curated_values = {option.value for option in models}
     curated_choices: list[Choice] = [
-        Choice(value=option.value, label=option.label) for option in provider.models
+        Choice(value=option.value, label=option.label) for option in models
     ]
 
     extra_choices: list[Choice] = []
@@ -2343,7 +2345,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         else SUPPORTED_PROVIDERS[0].value
     )
 
-    _step_header(1, 4, "Setup Mode")
+    _step_header(1, WIZARD_TOTAL_STEPS, "Setup Mode")
     wizard_mode = _choose(
         "How do you want to get started?",
         [
@@ -2383,7 +2385,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     provider: ProviderOption
     model: str
     while True:
-        _step_header(2, 4, "LLM Provider")
+        _step_header(2, WIZARD_TOTAL_STEPS, "LLM Provider")
         saved_provider = (
             PROVIDER_BY_VALUE.get(saved_provider_value) if saved_provider_value else None
         )
@@ -2482,7 +2484,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     )
     env_path = sync_provider_env(provider=provider, model=model)
 
-    _step_header(3, 4, "Integrations")
+    _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
         configured_integrations, integration_env_path = _configure_selected_integrations()
     except KeyboardInterrupt:
@@ -2495,6 +2497,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     summary_env_path = integration_env_path or str(env_path)
 
+    _step_header(4, WIZARD_TOTAL_STEPS, "Summary")
     _render_saved_summary(
         provider_label=provider.label,
         model=model,

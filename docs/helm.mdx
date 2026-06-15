@@ -6,7 +6,7 @@ description: "Connect Helm 3 so OpenSRE can list releases, inspect status and hi
 OpenSRE runs the **Helm 3** command-line client on the machine where the agent executes. It uses **read-only** subcommands (`helm list`, `helm status`, `helm history`, `helm get values`, `helm get manifest`) with explicit `--kube-context` and `--kubeconfig` flags so investigations target the same cluster your engineers use.
 
 <Note>
-  **Helm 2 is not supported.** Verification checks `helm version --client` and requires a Helm **3.x** client.
+  **Helm 2 is not supported.** Verification checks `helm version` and requires a Helm **3.x** client.
 </Note>
 
 ## Prerequisites
@@ -81,7 +81,7 @@ Add an active `helm` record to `~/.opensre/integrations.json`:
 opensre integrations verify helm
 ```
 
-A passing check runs `helm version --client` (must report Helm 3) and a minimal `helm list -A --max 1 -o json` against your cluster to validate JSON output and reachability.
+A passing check runs `helm version` (must report Helm 3) and a minimal `helm list -A --max 1 -o json` against your cluster to validate JSON output and reachability.
 
 ## Usage in investigations
 

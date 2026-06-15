@@ -166,6 +166,7 @@ LLMProvider = Literal[
     "opencode",
     "kimi",
     "copilot",
+    "grok-cli",
 ]
 
 KEYLESS_LLM_PROVIDERS = frozenset(
@@ -180,6 +181,7 @@ KEYLESS_LLM_PROVIDERS = frozenset(
         "opencode",
         "kimi",
         "copilot",
+        "grok-cli",
     }
 )
 LLM_PROVIDER_API_KEY_ENVS = {
@@ -445,6 +447,7 @@ class LLMSettings(StrictConfigModel):
             "opencode",
             "kimi",
             "copilot",
+            "grok-cli",
         )
         if provider in valid_providers:
             return provider

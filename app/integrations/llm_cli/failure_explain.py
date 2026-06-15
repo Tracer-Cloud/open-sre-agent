@@ -24,12 +24,23 @@ _AUTH_RE = re.compile(
     r"permission denied|access denied|403|forbidden",
     re.IGNORECASE,
 )
-_CONTEXT_RE = re.compile(
-    r"context.?length|context.?window|max.?token|token.?limit|"
-    r"too.?long|input.*exceed|prompt.*too.?large|reduce.*context|"
-    r"string too long",
+_CONTEXT_OVERFLOW_RE = re.compile(
+    r"context.?length|context.?window|max(?:imum)?\s+context\s+length|"
+    r"max.?token|token.?limit|prompt.*too\s+long|prompt.*too.?large|"
+    r"input.*exceed|reduce.*context|string too long",
     re.IGNORECASE,
 )
+
+
+def is_context_length_overflow(message: str) -> bool:
+    """Return True when *message* indicates prompt/context/token limit exhaustion.
+
+    Avoids bare ``too long`` so timeout strings like "request took too long"
+    are not misclassified as context overflow.
+    """
+    return _CONTEXT_OVERFLOW_RE.search(message) is not None
+
+
 _NETWORK_RE = re.compile(
     r"network.*error|connection.*refused|dns.*fail|unreachable|"
     r"no route to host|connection reset|ssl.*error|certificate.*error|"
@@ -52,7 +63,7 @@ def classify_cli_failure_category_hint(stdout: str, stderr: str, _returncode: in
         return "quota or rate limit exceeded — check your plan/billing or wait before retrying"
     if _AUTH_RE.search(combined):
         return "authentication failed — verify your API key or re-login with the provider CLI"
-    if _CONTEXT_RE.search(combined):
+    if is_context_length_overflow(combined):
         return (
             "prompt too long — shorten the input or reduce accumulated context "
             "(/context to inspect)"

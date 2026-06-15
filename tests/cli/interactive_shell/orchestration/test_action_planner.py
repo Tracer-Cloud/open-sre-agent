@@ -9,7 +9,7 @@ import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration
 
 def test_plan_cli_actions_health_and_list() -> None:
     msg = "check opensre health and show connected services"
-    assert action_planner_module.map_cli_actions(msg) == ["/health", "/list integrations"]
+    assert action_planner_module.map_cli_actions(msg) == ["/health", "/integrations list"]
 
 
 def test_plan_actions_with_unhandled_all_handled() -> None:

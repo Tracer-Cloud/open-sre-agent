@@ -106,6 +106,51 @@ class CliSandbox:
             encoding="utf-8",
         )
 
+    def seed_wizard_store(
+        self,
+        *,
+        provider: str = "anthropic",
+        model: str = "claude-opus-4-7",
+    ) -> None:
+        self.wizard_store_path.parent.mkdir(parents=True, exist_ok=True)
+        self.wizard_store_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "wizard": {
+                        "mode": "quickstart",
+                        "configured_target": "local",
+                        "updated_at": "2026-01-01T00:00:00+00:00",
+                    },
+                    "targets": {
+                        "local": {
+                            "provider": provider,
+                            "model": model,
+                            "api_key_env": f"{provider.upper()}_API_KEY",
+                            "model_env": f"{provider.upper()}_REASONING_MODEL",
+                            "updated_at": "2026-01-01T00:00:00+00:00",
+                        }
+                    },
+                    "probes": {"local": {}, "remote": {}},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def seed_project_env(
+        self,
+        *,
+        provider: str = "anthropic",
+        model: str = "claude-opus-4-7",
+    ) -> None:
+        model_env = f"{provider.upper()}_REASONING_MODEL"
+        self.project_env_path.write_text(
+            f"LLM_PROVIDER={provider}\n{model_env}={model}\n",
+            encoding="utf-8",
+        )
+
     def read_integrations(self) -> list[dict[str, object]]:
         if not self.integration_store_path.exists():
             return []
@@ -386,8 +431,11 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
     result = _run_cli(cli_sandbox, "-h")
 
     assert result.exit_code == 0
+    assert "Welcome back" not in result.stdout
     assert "Commands:" in result.stdout
     assert "integrations" in result.stdout
+    assert "--interactive / --no-interactive" in result.stdout
+    assert "--layout [classic|pinned]" in result.stdout
     assert "update" in result.stdout
 
 
@@ -443,6 +491,53 @@ def test_investigate_print_template_smoke(cli_sandbox: CliSandbox) -> None:
     payload = json.loads(result.stdout)
     assert payload["alert_source"] == "generic"
     assert payload["message"]
+
+
+def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Path) -> None:
+    """project.env written by onboard is read by investigate before it reaches the LLM.
+
+    Only the project .env handoff is exercised here — investigate reads
+    LLM_PROVIDER and model env vars from that file, not from the wizard store.
+    No real API key is required. The test proves the plumbing works by asserting
+    the CLI reaches the LLM credential check (exit 1 + ANTHROPIC_API_KEY named
+    in the error) rather than crashing in config loading or file parsing.
+
+    LLM_PROVIDER is passed explicitly via extra_env so the assertion holds even
+    on CI runners where the variable is set to a different provider in the
+    parent environment.
+    """
+    cli_sandbox.seed_project_env(provider="anthropic", model="claude-opus-4-7")
+
+    alert_path = tmp_path / "alert.json"
+    alert_path.write_text(
+        json.dumps(
+            {
+                "alert_name": "High CPU on orders-rds-prod",
+                "pipeline_name": "orders",
+                "severity": "critical",
+                "message": "CPU utilisation exceeded 90% for 5 minutes.",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_cli(
+        cli_sandbox,
+        "investigate",
+        "-i",
+        str(alert_path),
+        extra_env={"LLM_PROVIDER": "anthropic"},
+    )
+
+    # Exit 1 is expected — no real API key in CI.
+    assert result.exit_code == 1
+    # The failure must name the missing credential specifically — not a generic
+    # "run opensre onboard" fallback that would also appear when config loading
+    # itself is broken (the scenario this test is designed to catch).
+    combined = result.stdout + result.stderr
+    assert "ANTHROPIC_API_KEY" in combined, (
+        f"Expected a missing-credential error naming ANTHROPIC_API_KEY, got:\n{combined}"
+    )
 
 
 def test_integrations_list_and_show_smoke(cli_sandbox: CliSandbox) -> None:

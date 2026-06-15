@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
+from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application.current import get_app
@@ -328,7 +330,48 @@ def _build_prompt_style() -> Style:
     )
 
 
-_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}Type a message, /command, or paste an alert{ANSI_RESET}")
+_DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
+_DEFAULT_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ANSI_RESET}")
+
+
+def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
+    """Contextual ghost text when the input buffer is empty."""
+    parts: list[str] = []
+    if session.trust_mode:
+        parts.append("trust on")
+    running = session.task_registry.running_count()
+    if running:
+        parts.append(f"{running} task{'s' if running != 1 else ''} running")
+    if session.resumed_from_name:
+        parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
+    if parts:
+        return ANSI(f"{ANSI_DIM}{' · '.join(parts)}{ANSI_RESET}")
+    return _DEFAULT_PLACEHOLDER_ANSI
+
+
+def wire_prompt_refresh(
+    session: ReplSession,
+    pt_app: Any,
+    loop: asyncio.AbstractEventLoop,
+) -> Callable[[], None]:
+    """Register session hook to prefill pending text and redraw the active prompt."""
+
+    def invalidate_prompt() -> None:
+        loop.call_soon_threadsafe(pt_app.invalidate)
+
+    def refresh_active_prompt() -> None:
+        def _apply() -> None:
+            pending = session.pending_prompt_default
+            if pending and pt_app.is_running and not pt_app.current_buffer.text:
+                session.pending_prompt_default = None
+                pt_app.current_buffer.text = pending
+            invalidate_prompt()
+
+        loop.call_soon_threadsafe(_apply)
+
+    session.prompt_refresh_fn = refresh_active_prompt
+    return invalidate_prompt
+
 
 # Commands where bare invocation opens an inline picker in TTY mode.
 _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
@@ -336,7 +379,6 @@ _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
         "/history",
         "/integrations",
         "/investigate",
-        "/list",
         "/mcp",
         "/model",
         "/template",
@@ -352,7 +394,12 @@ def _suppress_empty_arg_completions_for_inline_picker(cmd_name: str, raw_arg: st
     return repl_tty_interactive() and not raw_arg and cmd_name in _INLINE_PICKER_COMMANDS
 
 
-def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[str]:
+def _build_prompt_session(session: ReplSession | None = None) -> PromptSession[str]:
+    placeholder = (
+        (lambda: resolve_prompt_placeholder(session))
+        if session is not None
+        else _DEFAULT_PLACEHOLDER_ANSI
+    )
     return _install_prompt_frame(
         PromptSession(
             completer=ShellCompleter(),
@@ -364,7 +411,7 @@ def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[
             key_bindings=_build_prompt_key_bindings(),
             style=_build_prompt_style(),
             erase_when_done=True,
-            placeholder=_PLACEHOLDER_ANSI,
+            placeholder=placeholder,
         )
     )
 
@@ -382,4 +429,6 @@ __all__ = [
     "ReplInputLexer",
     "ShellCompleter",
     "render_submitted_prompt",
+    "resolve_prompt_placeholder",
+    "wire_prompt_refresh",
 ]

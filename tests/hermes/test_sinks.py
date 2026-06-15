@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.hermes.sinks`."""
+"""Tests for :mod:`app.integrations.hermes.sinks`."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from app.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
-from app.hermes.investigation import run_incident_investigation
-from app.hermes.sinks import TelegramSink, TelegramSinkConfig, make_telegram_sink
+from app.integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
+from app.integrations.hermes.investigation import run_incident_investigation
+from app.integrations.hermes.sinks import TelegramSink, TelegramSinkConfig, make_telegram_sink
 from app.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
 
 _TS = datetime(2026, 5, 12, 0, 0, 0)

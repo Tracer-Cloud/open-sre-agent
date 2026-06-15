@@ -236,18 +236,18 @@
   expected_route_kind: "cli_agent"
   expected_planned_actions:
     - kind: "slash"
-      content: "/list integrations"
+      content: "/integrations list"
   expected_executed_actions:
     - kind: "slash"
-      content: "/list integrations"
+      content: "/integrations list"
   expected_terminal_response_contains:
-    - "ran /list integrations"
+    - "ran /integrations list"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "show me connected services"
       ok: true
     - type: "slash"
-      text: "/list integrations"
+      text: "/integrations list"
       ok: true
 
 - id: cli_agent_health_then_connected_services
@@ -257,15 +257,15 @@
     - kind: "slash"
       content: "/health"
     - kind: "slash"
-      content: "/list integrations"
+      content: "/integrations list"
   expected_executed_actions:
     - kind: "slash"
       content: "/health"
     - kind: "slash"
-      content: "/list integrations"
+      content: "/integrations list"
   expected_terminal_response_contains:
     - "ran /health"
-    - "ran /list integrations"
+    - "ran /integrations list"
   expected_session_history_delta:
     - type: "cli_agent"
       text: "check the health of my opensre and then show me all connected services"
@@ -274,7 +274,7 @@
       text: "/health"
       ok: true
     - type: "slash"
-      text: "/list integrations"
+      text: "/integrations list"
       ok: true
 
 - id: cli_agent_connect_local_llama

@@ -75,6 +75,28 @@ If the prefix is ambiguous (matches more than one session), OpenSRE will ask you
 
 ---
 
+## When you exit
+
+When you leave the REPL, OpenSRE prints your session ID so you can resume later:
+
+| Exit path | Behavior |
+| --- | --- |
+| `/exit` or `/quit` | Prints `Resume this session with:` and `/resume <session-id>`, then goodbye |
+| **Ctrl+C** twice within 2 seconds | Same resume hint, then exits |
+| **Ctrl+D** (EOF) | Same resume hint when no dispatch is running |
+
+Example:
+
+```
+Resume this session with:
+/resume 3f8a1c2d-…
+Goodbye!
+```
+
+Copy the `/resume …` line from the terminal, or find the session later with `/sessions`.
+
+---
+
 ## Starting fresh with context — `/new`
 
 `/new` closes the current session and opens a new one, but carries the conversation forward so you don't lose context:

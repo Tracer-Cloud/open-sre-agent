@@ -350,6 +350,11 @@ class TaskRegistry:
             return None
         return matches[0]
 
+    def running_count(self) -> int:
+        """Count in-memory running tasks (no disk merge — safe for hot prompt refresh)."""
+        with self._lock:
+            return sum(1 for task in self._tasks if task.status == TaskStatus.RUNNING)
+
     def list_recent(self, n: int = 20) -> list[TaskRecord]:
         """Return up to ``n`` tasks, newer tasks first.
 

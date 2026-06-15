@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -20,6 +22,21 @@ InterventionKind = Literal["ctrl_c", "correction"]
 # Prefilled into the next prompt after a background synthetic test exits non-zero,
 # so the user can ask the CLI assistant for a quick RCA explanation.
 SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST = "why did it fail?"
+
+_SCENARIO_FLAG_RE = re.compile(r"--scenario\s+(\S+)")
+_SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
+
+
+def _scenario_id_from_synthetic_label(label: str) -> str:
+    """Extract a scenario id from a synthetic command or ``suite:scenario`` label."""
+    match = _SCENARIO_FLAG_RE.search(label)
+    if match is not None:
+        candidate = match.group(1).strip()
+        return candidate if _SYNTHETIC_SCENARIO_ID_RE.fullmatch(candidate) else ""
+    if ":" in label:
+        candidate = label.rsplit(":", 1)[-1].strip()
+        return candidate if _SYNTHETIC_SCENARIO_ID_RE.fullmatch(candidate) else ""
+    return ""
 
 
 @dataclass
@@ -124,6 +141,9 @@ class ReplSession:
     pending_prompt_default: str | None = None
     """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
 
+    prompt_refresh_fn: Callable[[], None] | None = field(default=None, repr=False)
+    """Loop-owned hook to apply pending prefill and redraw the active prompt."""
+
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
@@ -148,6 +168,35 @@ class ReplSession:
         value = self.pending_prompt_default
         self.pending_prompt_default = None
         return value or ""
+
+    def notify_prompt_changed(self) -> None:
+        """Redraw the active prompt (placeholder state and pending prefill)."""
+        if self.prompt_refresh_fn is not None:
+            self.prompt_refresh_fn()
+
+    def suggest_synthetic_failure_follow_up(self, *, label: str = "") -> None:
+        """Queue RCA prefill after a failed synthetic run and refresh the active prompt."""
+        self.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        self.notify_prompt_changed()
+        self._bind_last_synthetic_observation(_scenario_id_from_synthetic_label(label))
+        self.notify_prompt_changed()
+
+    def _bind_last_synthetic_observation(self, scenario_id: str) -> None:
+        if not scenario_id:
+            self.last_synthetic_observation_path = None
+            return
+        try:
+            from app.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+        except Exception:
+            self.last_synthetic_observation_path = None
+            return
+        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
+        for _ in range(8):
+            if latest.is_file():
+                self.last_synthetic_observation_path = str(latest.resolve())
+                return
+            time.sleep(0.06)
+        self.last_synthetic_observation_path = None
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append an entry to the session history.

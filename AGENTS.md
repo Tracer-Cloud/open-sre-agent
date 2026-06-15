@@ -44,6 +44,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
 - `app/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
+- `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
 - `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `app/pipeline/` — Investigation orchestration and runner helpers (`run_investigation`, `run_chat`).
@@ -121,6 +122,7 @@ Examples from the repo:
 
 - Datadog: `app/services/datadog/client.py`, `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
 - Grafana: `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/Grafana*`, `app/cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Hermes: `app/integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `app/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 

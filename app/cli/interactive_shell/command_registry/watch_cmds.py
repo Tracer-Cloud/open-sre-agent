@@ -11,7 +11,10 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.agents.probe import pid_exists
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -339,6 +342,7 @@ COMMANDS: list[SlashCommand] = [
         "/watches",
         "List watchdog background tasks with the latest resource sample.",
         _cmd_watches,
+        usage=("/watches",),
     ),
     SlashCommand(
         "/unwatch",

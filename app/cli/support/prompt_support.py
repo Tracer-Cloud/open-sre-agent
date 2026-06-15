@@ -190,9 +190,12 @@ def repl_reset_ctrl_c_gate() -> None:
     _last_ctrl_c[0] = None
 
 
-def repl_prompt_note_ctrl_c(console: Console) -> bool:
+def repl_prompt_note_ctrl_c(console: Console, session_id: str | None = None) -> bool:
     now = time.monotonic()
     if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
+        console.print()
+        console.print(f"[{DIM}]Resume this session with:[/]")
+        console.print(f"[{DIM}]/resume {session_id}[/]")
         console.print(f"[{DIM}]Goodbye![/]")
         _last_ctrl_c[0] = None
         return True

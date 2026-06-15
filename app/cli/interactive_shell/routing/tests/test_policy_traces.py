@@ -58,7 +58,7 @@ def test_planner_policy_trace_marks_compound_reconciliation() -> None:
         llm_actions,
         False,
     )
-    assert [action.content for action in result.actions] == ["/health", "/list integrations"]
+    assert [action.content for action in result.actions] == ["/health", "/integrations list"]
     assert (
         PlannerPostprocessPolicyTag.RECONCILE_COMPOUND_WITH_DETERMINISTIC in result.applied_policies
     )

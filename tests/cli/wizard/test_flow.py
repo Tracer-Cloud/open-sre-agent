@@ -64,8 +64,11 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved_llm_keys == [("ANTHROPIC_API_KEY", "secret-key")]
 
     output = capsys.readouterr().out
+    assert "Summary" in output
+    assert "4/4" in output
     assert "next" in output
     assert "Done." in output
+    assert output.index("Summary") < output.index("Done.")
 
 
 def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> None:

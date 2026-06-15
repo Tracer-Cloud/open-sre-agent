@@ -18,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from app.hermes.classifier import IncidentClassifier
-from app.hermes.incident import HermesIncident
-from app.hermes.sinks import TelegramSink, TelegramSinkConfig
+from app.integrations.hermes.classifier import IncidentClassifier
+from app.integrations.hermes.incident import HermesIncident
+from app.integrations.hermes.sinks import TelegramSink, TelegramSinkConfig
 from app.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
 from tests.synthetic.hermes.scenario_loader import (
     SUITE_DIR,

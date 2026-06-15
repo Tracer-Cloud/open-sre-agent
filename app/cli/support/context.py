@@ -6,6 +6,8 @@ Uses ``click.get_current_context()`` so commands don't need
 
 from __future__ import annotations
 
+import os
+
 import click
 
 
@@ -16,6 +18,13 @@ def _root_obj() -> dict[str, object]:
     while ctx.parent is not None:
         ctx = ctx.parent
     return ctx.obj or {}
+
+
+def is_interactive_env() -> bool:
+    """True unless OPENSRE_INTERACTIVE=0 in env or the context has interactive=False."""
+    if os.environ.get("OPENSRE_INTERACTIVE") == "0":
+        return False
+    return bool(_root_obj().get("interactive", True))
 
 
 def is_json_output() -> bool:

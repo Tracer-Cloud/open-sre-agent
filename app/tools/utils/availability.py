@@ -19,6 +19,12 @@ def eks_available_or_backend(sources: dict[str, dict]) -> bool:
     mock ``eks_backend`` for synthetic tests.  Tools without backend
     support continue to use the narrower check in
     ``app.tools.EKSListClustersTool._eks_available``.
+
+    The ``_backend`` slot is reserved for fixture backends that implement
+    the EKS tool API (``list_pods``, ``get_pod_logs``, ...). Other backend
+    types that speak different protocols should be placed in their own
+    distinct source slots and are invisible to this check — the real EKS
+    tools stay deactivated for those modes.
     """
     eks = sources.get("eks", {})
     return bool(eks.get("connection_verified") or eks.get("_backend"))

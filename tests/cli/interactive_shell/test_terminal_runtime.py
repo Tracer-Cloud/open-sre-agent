@@ -180,7 +180,8 @@ def test_shell_completer_previews_all_commands() -> None:
 
     assert "/help" in names
     assert "/effort" in names
-    assert "/list" in names
+    assert "/integrations" in names
+    assert "/tools" in names
     assert "/model" in names
     assert all(name.startswith("/") for name in names)
 
@@ -188,23 +189,23 @@ def test_shell_completer_previews_all_commands() -> None:
 def test_shell_completer_filters_by_prefix() -> None:
     completions = list(
         ShellCompleter().get_completions(
-            Document("/li"),
+            Document("/to"),
             CompleteEvent(text_inserted=True),
         )
     )
 
-    assert [completion.text for completion in completions] == ["/list"]
+    assert [completion.text for completion in completions] == ["/tools"]
 
 
-def test_shell_completer_suggests_subcommands_for_list() -> None:
+def test_shell_completer_suggests_subcommands_for_tools() -> None:
     completions = list(
         ShellCompleter().get_completions(
-            Document("/list "),
+            Document("/tools "),
             CompleteEvent(text_inserted=True),
         )
     )
     names = sorted({c.text for c in completions})
-    assert names == ["integrations", "mcp", "models", "tools"]
+    assert names == ["list"]
 
 
 def test_shell_completer_hides_inline_picker_autocomplete_in_tty(
@@ -564,6 +565,52 @@ def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     )
 
     assert exit_calls == [None]
+
+
+def test_dispatch_one_turn_passes_is_tty_and_confirm_fn_to_dispatch_slash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from rich.console import Console
+
+    args_passed: list[dict[str, object]] = []
+
+    def _fake_dispatch_slash(*args: object, **kwargs: object) -> bool:
+        args_passed.append(kwargs)
+        return True
+
+    monkeypatch.setattr(loop_execution, "dispatch_slash", _fake_dispatch_slash)
+    session = ReplSession()
+    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+    def fake_confirm(prompt: str) -> str:
+        _ = prompt
+        return "y"
+
+    loop_dispatch.dispatch_one_turn(
+        "/exit",
+        session,
+        console,
+        on_exit=lambda: None,
+        confirm_fn=fake_confirm,
+        is_tty=False,
+    )
+
+    assert len(args_passed) == 1
+    assert args_passed[0]["confirm_fn"] is fake_confirm
+    assert args_passed[0]["is_tty"] is False
+
+
+def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_dispatch_one_turn(*args: object, **kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(loop_dispatch, "dispatch_one_turn", _fake_dispatch_one_turn)
+
+    assert loop_dispatch.run_initial_input("/remote", ReplSession()) == 0
+    assert len(calls) == 1
+    assert calls[0]["is_tty"] is False
 
 
 class TestLooksLikeCorrection:

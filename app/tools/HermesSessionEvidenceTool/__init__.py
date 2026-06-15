@@ -86,6 +86,33 @@ def get_hermes_provider_traffic(
 
 
 @tool(
+    name="get_hermes_adapter_catalog",
+    source="hermes",
+    description="Get Hermes adapter catalog and registered surface families.",
+    use_cases=[
+        "Identify messaging adapters, LLM providers, execution backends, and unknown adapter attribution"
+    ],
+    surfaces=("investigation",),
+    input_schema={
+        "type": "object",
+        "properties": {"session_id": {"type": "string"}},
+        "required": [],
+    },
+    is_available=_fixture_backend_only,
+    extract_params=_extract_params,
+)
+def get_hermes_adapter_catalog(
+    session_id: str = "",
+    hermes_backend: Any = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    backend = _backend_or_error(hermes_backend, "get_hermes_adapter_catalog")
+    if isinstance(backend, dict):
+        return backend
+    return cast(dict[str, Any], backend.get_adapter_catalog(session_id=session_id))
+
+
+@tool(
     name="get_hermes_config",
     source="hermes",
     description="Get resolved Hermes provider, model, region, and transport configuration.",
@@ -465,6 +492,7 @@ def get_hermes_workflow_run(
 __all__ = [
     "get_hermes_session_log",
     "get_hermes_provider_traffic",
+    "get_hermes_adapter_catalog",
     "get_hermes_config",
     "get_hermes_message_history",
     "get_hermes_kv_cache_state",

@@ -218,10 +218,13 @@ class OpenCodeAdapter:
         )
 
     def parse(self, *, stdout: str, stderr: str, returncode: int) -> str:
-        """Extract the agent's final response from stdout."""
-        del stderr, returncode
-        # OpenCode writes the agent's response to stdout; stderr may contain logs
-        return (stdout or "").strip()
+        result = (stdout or "").strip()
+        if not result:
+            raise RuntimeError(
+                self.explain_failure(stdout=stdout, stderr=stderr, returncode=returncode)
+                + " (empty output)"
+            )
+        return result
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
         from app.integrations.llm_cli.failure_explain import explain_cli_failure

@@ -38,6 +38,41 @@ class TestEksAvailableOrBackend:
         sources = {"eks": {"connection_verified": False, "_backend": object()}}
         assert eks_available_or_backend(sources) is True
 
+    def test_eks_check_ignores_bench_backend_in_dedicated_slot(self) -> None:
+        """The bench adapter puts its replay backend at ``_bench_backend``,
+        NOT ``_backend``. Production availability checks only look at
+        ``_backend`` and ``connection_verified`` — they must stay completely
+        unaware of bench backends. Regression-pin for the slot-separation
+        refactor (no more ``is_cloudopsbench_backend`` marker checks)."""
+        # Bench-style backend in its own slot — _backend remains None.
+        sources = {"eks": {"_bench_backend": object()}}
+        assert eks_available_or_backend(sources) is False
+
+    def test_eks_check_uses_only_backend_and_verified_no_provider_specific_logic(
+        self,
+    ) -> None:
+        """Belt-and-suspenders: the function's full decision MUST be a clean
+        ``bool(connection_verified or _backend)``. No special-case branches,
+        no marker attribute lookups, no provider-aware logic. Adding
+        provider-specific branches here would re-couple production tool
+        availability to bench backend types."""
+        # Connection verified alone → True
+        assert eks_available_or_backend({"eks": {"connection_verified": True}}) is True
+        # Backend alone → True
+        assert eks_available_or_backend({"eks": {"_backend": object()}}) is True
+        # Both → True
+        assert (
+            eks_available_or_backend({"eks": {"connection_verified": True, "_backend": object()}})
+            is True
+        )
+        # Neither → False
+        assert eks_available_or_backend({"eks": {}}) is False
+        # Extra unrelated slots (like _bench_backend) must not affect the result
+        assert (
+            eks_available_or_backend({"eks": {"_bench_backend": object(), "anything": True}})
+            is False
+        )
+
 
 class TestDatadogAvailableOrBackend:
     def test_datadog_missing(self) -> None:

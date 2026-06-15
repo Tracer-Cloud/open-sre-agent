@@ -7,6 +7,12 @@ from typing import Any
 
 from tests.benchmarks.cloudopsbench.case_loader import CloudOpsCase
 from tests.benchmarks.cloudopsbench.replay_backend import normalize_resource_type
+from tests.benchmarks.cloudopsbench.taxonomy import (
+    infer_fault_object as _infer_fault_object,
+)
+from tests.benchmarks.cloudopsbench.taxonomy import (
+    taxonomy_for_root_cause as _taxonomy_for_root_cause,
+)
 
 TOOL_KEY_PARAMS: dict[str, list[str]] = {
     "GetResources": ["resource_type"],
@@ -41,6 +47,32 @@ class CloudOpsMetrics:
     a3: float
     partial_a1: float
     partial_a3: float
+    # Localization-only accuracy: fault_object correct regardless of whether
+    # the root_cause/taxonomy strings also matched. Isolates "did we find the
+    # right thing" from "did we name the failure with the exact dataset token",
+    # which the strict triple-match a1/partial_a1 conflate. object_a1 = rank-1
+    # object correct; object_a3 = correct object anywhere in the top-3.
+    object_a1: float
+    object_a3: float
+    # Investigation-native scoring: rebuild a single triple from opensre's
+    # prose (report + root_cause + causal_chain + validated_claims) using the
+    # deterministic keyword parser ``infer_final_answer_from_opensre_text``,
+    # then score it the same way. This isolates opensre's investigation
+    # quality from the LLM predictor that formalizes the prose into
+    # ``top_3_predictions``: a lift on ``a1`` could come from a better
+    # investigation OR a better predictor — ``investigation_a1`` only moves
+    # when the investigation itself names the correct triple.
+    #
+    # ``investigation_a1`` is a CONSERVATIVE lower bound on investigation
+    # quality: the keyword parser misses synonyms and freer phrasings.
+    # ``translation_loss`` flips on cases where investigation_a1 is right but
+    # ``a1`` is wrong — the formalization step lost what opensre found.
+    # Read together they answer "is opensre getting better, or just the
+    # wrapper around it?"
+    investigation_a1: float
+    investigation_partial_a1: float
+    investigation_object_a1: float
+    translation_loss: float
     tcr: float
     exact: float
     in_order: float
@@ -147,13 +179,27 @@ def extract_final_answer_payload(case_data: dict[str, Any]) -> tuple[dict[str, A
     return None, "unparsed"
 
 
-def infer_final_answer_from_opensre_text(case_data: dict[str, Any]) -> dict[str, Any] | None:
+def infer_final_answer_from_opensre_text(
+    case_data: dict[str, Any],
+    *,
+    include_predictor_output: bool = True,
+) -> dict[str, Any] | None:
+    """Parse opensre's free-text RCA into a single-prediction paper triple.
+
+    Set ``include_predictor_output=False`` for investigation-native scoring:
+    by default this function also reads ``case_data["final_answer"]`` (the
+    structured-predictor JSON, stringified) which would feed predictor
+    signal back through the keyword parser and defeat the purpose of an
+    "is opensre alone right?" metric. Existing callers (legacy fallback in
+    ``extract_final_answer_payload``) keep the default behavior.
+    """
     final_state = case_data.get("final_state")
     texts = [
         case_data.get("root_cause"),
         case_data.get("report"),
-        case_data.get("final_answer"),
     ]
+    if include_predictor_output:
+        texts.append(case_data.get("final_answer"))
     if isinstance(final_state, dict):
         texts.extend(
             [
@@ -219,104 +265,6 @@ def _infer_root_cause(text: str) -> str:
     return ""
 
 
-def _infer_fault_object(text: str) -> str:
-    service_names = [
-        "adservice",
-        "cartservice",
-        "checkoutservice",
-        "currencyservice",
-        "emailservice",
-        "frontend",
-        "paymentservice",
-        "productcatalogservice",
-        "recommendationservice",
-        "redis-cart",
-        "shippingservice",
-        "ts-gateway-service",
-        "ts-order-service",
-        "ts-payment-service",
-        "ts-travel-service",
-        "ts-user-service",
-        "ts-auth-service",
-        "ts-route-service",
-        "ts-ticket-office-service",
-    ]
-    for service_name in service_names:
-        if service_name in text:
-            return f"app/{service_name}"
-    for node_name in ("master", "worker-01", "worker-02", "worker-03"):
-        if node_name in text:
-            return f"node/{node_name}"
-    if "namespace" in text and "boutique" in text:
-        return "namespace/boutique"
-    if "namespace" in text and "train-ticket" in text:
-        return "namespace/train-ticket"
-    return ""
-
-
-def _taxonomy_for_root_cause(root_cause: str) -> str:
-    if root_cause.startswith("namespace_"):
-        return "Admission_Fault"
-    if root_cause in {
-        "missing_service_account",
-        "node_cordon_mismatch",
-        "node_affinity_mismatch",
-        "node_selector_mismatch",
-        "pod_anti_affinity_conflict",
-        "taint_toleration_mismatch",
-        "cpu_capacity_mismatch",
-        "memory_capacity_mismatch",
-    }:
-        return "Scheduling_Fault"
-    if root_cause in {
-        "node_network_delay",
-        "node_network_packet_loss",
-        "containerd_unavailable",
-        "kubelet_unavailable",
-        "kube_proxy_unavailable",
-        "kube_scheduler_unavailable",
-    }:
-        return "Infrastructure_Fault"
-    if root_cause in {
-        "image_registry_dns_failure",
-        "incorrect_image_reference",
-        "missing_image_pull_secret",
-        "pvc_selector_mismatch",
-        "pvc_storage_class_mismatch",
-        "pvc_access_mode_mismatch",
-        "pvc_capacity_mismatch",
-        "pv_binding_occupied",
-        "volume_mount_permission_denied",
-    }:
-        return "Startup_Fault"
-    if root_cause in {
-        "oom_killed",
-        "liveness_probe_incorrect_protocol",
-        "liveness_probe_incorrect_port",
-        "liveness_probe_incorrect_timing",
-        "readiness_probe_incorrect_protocol",
-        "readiness_probe_incorrect_port",
-        "mysql_invalid_credentials",
-        "mysql_invalid_port",
-        "missing_secret_binding",
-        "db_connection_exhaustion",
-        "db_readonly_mode",
-        "gateway_misrouted",
-        "deployment_zero_replicas",
-    }:
-        return "Runtime_Fault"
-    if root_cause in {
-        "service_selector_mismatch",
-        "service_port_mapping_mismatch",
-        "service_protocol_mismatch",
-        "service_env_var_address_mismatch",
-        "service_sidecar_port_conflict",
-        "service_dns_resolution_failure",
-    }:
-        return "Service_Routing_Fault"
-    return "Performance_Fault"
-
-
 def compare_prediction(
     prediction: dict[str, Any], ground_truth: dict[str, Any]
 ) -> tuple[bool, bool]:
@@ -339,6 +287,9 @@ def score_predictions(
     a3 = 0.0
     partial_a1 = 0.0
     partial_a3 = 0.0
+    object_a1 = 0.0
+    object_a3 = 0.0
+    gt_obj = normalize_text(ground_truth.get("fault_object"))
     for idx, prediction in enumerate(predictions[:3]):
         full_match, partial_match = compare_prediction(prediction, ground_truth)
         if full_match:
@@ -349,11 +300,17 @@ def score_predictions(
             if idx == 0:
                 partial_a1 = 1.0
             partial_a3 = 1.0
+        if normalize_text(prediction.get("fault_object")) == gt_obj:
+            if idx == 0:
+                object_a1 = 1.0
+            object_a3 = 1.0
     return {
         "a1": a1,
         "a3": a3,
         "partial_a1": partial_a1,
         "partial_a3": partial_a3,
+        "object_a1": object_a1,
+        "object_a3": object_a3,
     }
 
 
@@ -512,6 +469,29 @@ def calculate_rar(agent_steps: list[str]) -> float:
 
 
 def calculate_total_latency(case_data: dict[str, Any]) -> float:
+    """Mean-time-to-identify, in seconds: wall-clock from investigation start
+    to the agent's diagnosis.
+
+    The benchmark replays tool results deterministically, so per-step
+    ``tool_latency`` is meaningless (~microseconds of dict lookup). The honest
+    signal is the LLM-dominated wall-clock the runner already measures with a
+    monotonic timer around ``run_investigation`` and stores on
+    ``RunResult.latency_ms`` (the scoring-only predictor call runs *after* that
+    stop-watch, so it isn't counted — exactly the paper's "time to identify").
+
+    Priority:
+      1. Real measured wall-clock — ``case_data["latency_ms"]`` (preferred).
+      2. Sum of per-step ``model_latency``/``tool_latency`` — kept for any
+         future per-step instrumentation and for callers that pass timed steps.
+
+    Returns 0.0 only when neither source is present (e.g. a hand-built
+    ``case_data`` in a unit test), so a missing measurement is visibly 0
+    rather than a silently fabricated number.
+    """
+    latency_ms = case_data.get("latency_ms")
+    if isinstance(latency_ms, (int, float)) and latency_ms > 0:
+        return float(latency_ms) / 1000.0
+
     total = 0.0
     for step in case_data.get("steps", []):
         if not isinstance(step, dict):
@@ -521,6 +501,34 @@ def calculate_total_latency(case_data: dict[str, Any]) -> float:
             if isinstance(value, (int, float)):
                 total += float(value)
     return total
+
+
+def _score_investigation_native(
+    case_data: dict[str, Any],
+    ground_truth: dict[str, Any],
+) -> dict[str, float]:
+    """Score opensre's investigation prose directly, bypassing the predictor.
+
+    Builds a single-prediction triple from opensre's text via the
+    deterministic keyword parser ``infer_final_answer_from_opensre_text``,
+    then runs it through ``score_predictions`` against ground truth. Returns
+    the same key shape as ``score_predictions`` so the call site can mirror
+    its handling. Returns all zeros when the parser cannot extract a triple
+    (empty text or unmatched root_cause / fault_object), which is the honest
+    floor — we have no evidence the investigation named the right answer.
+    """
+    inferred = infer_final_answer_from_opensre_text(case_data, include_predictor_output=False)
+    if not inferred:
+        return {"a1": 0.0, "partial_a1": 0.0, "object_a1": 0.0}
+    predictions = inferred.get("top_3_predictions", []) or []
+    if not isinstance(predictions, list) or not predictions:
+        return {"a1": 0.0, "partial_a1": 0.0, "object_a1": 0.0}
+    scored = score_predictions(predictions, ground_truth)
+    return {
+        "a1": scored["a1"],
+        "partial_a1": scored["partial_a1"],
+        "object_a1": scored["object_a1"],
+    }
 
 
 def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseScore:
@@ -537,7 +545,19 @@ def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseSco
     outcome_scores = (
         score_predictions(predictions, ground_truth)
         if predictions
-        else {"a1": 0.0, "a3": 0.0, "partial_a1": 0.0, "partial_a3": 0.0}
+        else {
+            "a1": 0.0,
+            "a3": 0.0,
+            "partial_a1": 0.0,
+            "partial_a3": 0.0,
+            "object_a1": 0.0,
+            "object_a3": 0.0,
+        }
+    )
+
+    investigation_scores = _score_investigation_native(case_data, ground_truth)
+    translation_loss = (
+        1.0 if investigation_scores["a1"] >= 1.0 and outcome_scores["a1"] < 1.0 else 0.0
     )
 
     agent_steps, invalid_count, invalid_reasons = standardize_agent_steps(case_data)
@@ -549,6 +569,12 @@ def score_case(case: CloudOpsCase, case_data: dict[str, Any]) -> CloudOpsCaseSco
         a3=outcome_scores["a3"],
         partial_a1=outcome_scores["partial_a1"],
         partial_a3=outcome_scores["partial_a3"],
+        object_a1=outcome_scores["object_a1"],
+        object_a3=outcome_scores["object_a3"],
+        investigation_a1=investigation_scores["a1"],
+        investigation_partial_a1=investigation_scores["partial_a1"],
+        investigation_object_a1=investigation_scores["object_a1"],
+        translation_loss=translation_loss,
         tcr=1.0 if predictions else 0.0,
         exact=best_path["exact"],
         in_order=best_path["in_order"],
@@ -582,6 +608,12 @@ def summarize_scores(scores: list[CloudOpsCaseScore]) -> dict[str, Any]:
         "a3",
         "partial_a1",
         "partial_a3",
+        "object_a1",
+        "object_a3",
+        "investigation_a1",
+        "investigation_partial_a1",
+        "investigation_object_a1",
+        "translation_loss",
         "tcr",
         "exact",
         "in_order",
@@ -615,6 +647,12 @@ def summarize_scores(scores: list[CloudOpsCaseScore]) -> dict[str, Any]:
             "Accuracy @3": averages["a3"],
             "Partial Accuracy @1": averages["partial_a1"],
             "Partial Accuracy @3": averages["partial_a3"],
+            "Object Accuracy @1": averages["object_a1"],
+            "Object Accuracy @3": averages["object_a3"],
+            "Investigation Accuracy @1": averages["investigation_a1"],
+            "Investigation Partial Accuracy @1": averages["investigation_partial_a1"],
+            "Investigation Object Accuracy @1": averages["investigation_object_a1"],
+            "Translation Loss Rate": averages["translation_loss"],
             "Task Completion Rate": averages["tcr"],
             "ExactMatch": averages["exact"],
             "InOrder": averages["in_order"],

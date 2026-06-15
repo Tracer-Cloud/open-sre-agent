@@ -26,10 +26,247 @@ from __future__ import annotations
 
 import html
 import json
-import statistics
+import random
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+# --------------------------------------------------------------------------- #
+# Paper reference baselines — Wang et al. 2026, "Cloud-OpsBench" Table 4       #
+# (arXiv:2603.00468v1), the "Base" (zero-shot) setting over the full 452-case  #
+# corpus, single run per case. A@k there is a MEAN over cases (Eq. in §4.2.1), #
+# not a median, and a diagnosis counts only on a strict triple match of        #
+# <Stage, Component, Root Cause>. These figures are what our headline must be   #
+# compared against — and the comparison is only valid for the single-shot,     #
+# full-corpus stratum (see headline note).                                     #
+# --------------------------------------------------------------------------- #
+
+# Full Table 4 row per model: outcome (a1/a3/tcr) + process (exact/in_order/
+# any_order/rel/cov) + efficiency/robustness (steps/iac/rar/ztdr). MTTI is
+# deliberately omitted — wall-clock seconds, hardware/provider dependent, and
+# not measured in this harness (see _NON_COMPARABLE_METRICS).
+_PAPER_BASELINE: dict[str, dict[str, float]] = {
+    "gpt-4o": {
+        "a1": 0.49,
+        "a3": 0.55,
+        "tcr": 0.99,
+        "exact": 0.14,
+        "in_order": 0.45,
+        "any_order": 0.46,
+        "rel": 0.63,
+        "cov": 0.78,
+        "steps": 5.67,
+        "iac": 0.27,
+        "rar": 0.02,
+        "ztdr": 0.02,
+    },  # noqa: E501
+    "gpt-5": {
+        "a1": 0.67,
+        "a3": 0.75,
+        "tcr": 0.99,
+        "exact": 0.16,
+        "in_order": 0.38,
+        "any_order": 0.48,
+        "rel": 0.65,
+        "cov": 0.77,
+        "steps": 5.57,
+        "iac": 0.04,
+        "rar": 0.05,
+        "ztdr": 0.04,
+    },  # noqa: E501
+    "claude-4-sonnet": {
+        "a1": 0.50,
+        "a3": 0.54,
+        "tcr": 0.98,
+        "exact": 0.05,
+        "in_order": 0.24,
+        "any_order": 0.25,
+        "rel": 0.46,
+        "cov": 0.52,
+        "steps": 4.25,
+        "iac": 0.12,
+        "rar": 0.05,
+        "ztdr": 0.32,
+    },  # noqa: E501
+    "deepseek-v3.2": {
+        "a1": 0.73,
+        "a3": 0.79,
+        "tcr": 0.99,
+        "exact": 0.0,
+        "in_order": 0.53,
+        "any_order": 0.63,
+        "rel": 0.43,
+        "cov": 0.88,
+        "steps": 10.0,
+        "iac": 0.25,
+        "rar": 0.11,
+        "ztdr": 0.0,
+    },  # noqa: E501
+    "qwen3-235b": {
+        "a1": 0.50,
+        "a3": 0.53,
+        "tcr": 0.96,
+        "exact": 0.13,
+        "in_order": 0.38,
+        "any_order": 0.41,
+        "rel": 0.55,
+        "cov": 0.67,
+        "steps": 5.34,
+        "iac": 0.22,
+        "rar": 0.06,
+        "ztdr": 0.17,
+    },  # noqa: E501
+    "qwen3-14b": {
+        "a1": 0.34,
+        "a3": 0.43,
+        "tcr": 0.82,
+        "exact": 0.04,
+        "in_order": 0.31,
+        "any_order": 0.42,
+        "rel": 0.63,
+        "cov": 0.71,
+        "steps": 5.82,
+        "iac": 0.40,
+        "rar": 0.10,
+        "ztdr": 0.0,
+    },  # noqa: E501
+    "qwen3-8b": {
+        "a1": 0.21,
+        "a3": 0.23,
+        "tcr": 0.92,
+        "exact": 0.01,
+        "in_order": 0.15,
+        "any_order": 0.20,
+        "rel": 0.36,
+        "cov": 0.47,
+        "steps": 5.46,
+        "iac": 0.40,
+        "rar": 0.16,
+        "ztdr": 0.27,
+    },  # noqa: E501
+}
+
+# Paper Table 5 — In-Context Learning (3 retrieved diagnostic traces, NO agent
+# framework). The cost-equivalent baseline opensre actually has to beat: a few
+# in-context demos lift GPT-4o 0.49 -> 0.70 with no orchestration. Only the
+# three models the paper ran under ICL are present.
+_PAPER_ICL: dict[str, dict[str, float]] = {
+    "gpt-4o": {
+        "a1": 0.70,
+        "a3": 0.75,
+        "tcr": 0.97,
+        "exact": 0.28,
+        "in_order": 0.49,
+        "any_order": 0.52,
+        "rel": 0.67,
+        "cov": 0.76,
+        "steps": 4.40,
+        "iac": 0.08,
+        "rar": 0.0,
+        "ztdr": 0.13,
+    },  # noqa: E501
+    "qwen3-235b": {
+        "a1": 0.59,
+        "a3": 0.63,
+        "tcr": 0.98,
+        "exact": 0.27,
+        "in_order": 0.52,
+        "any_order": 0.54,
+        "rel": 0.57,
+        "cov": 0.66,
+        "steps": 3.11,
+        "iac": 0.09,
+        "rar": 0.03,
+        "ztdr": 0.30,
+    },  # noqa: E501
+    "qwen3-14b": {
+        "a1": 0.71,
+        "a3": 0.75,
+        "tcr": 0.99,
+        "exact": 0.11,
+        "in_order": 0.44,
+        "any_order": 0.59,
+        "rel": 0.70,
+        "cov": 0.86,
+        "steps": 6.29,
+        "iac": 0.29,
+        "rar": 0.11,
+        "ztdr": 0.0,
+    },  # noqa: E501
+}
+
+# Metrics defined identically in the paper (Table 4) — the only set for which a
+# head-to-head number against the published baseline is meaningful. MTTI is
+# excluded on purpose (see _NON_COMPARABLE_METRICS).
+_PAPER_COMPARABLE_METRICS = [
+    "a1",
+    "a3",
+    "exact",
+    "in_order",
+    "any_order",
+    "rel",
+    "cov",
+    "steps",
+    "iac",
+    "rar",
+    "ztdr",
+]
+
+# Computed by our scorer but NOT comparable to the paper, with the reason.
+# Surfaced as a footnote so a reader doesn't mistake a structural 0 (or a
+# saturated 1.0) for a result.
+_NON_COMPARABLE_METRICS = {
+    "mtti": "measured wall-clock seconds to diagnosis, but hardware/provider/"
+    "network dependent — useful for internal A/B (e.g. floor sweeps), not a "
+    "like-for-like number against the paper's setup",
+    "tcr": "saturated at 1.0 — the predictor always emits structured output, so this "
+    "does not track the paper's crash/schema-violation rate",
+}
+
+# opensre-only instrumentation. Useful as internal diagnostics, but NOT present
+# in the paper, so they are reported in a separate panel to avoid implying a
+# comparison that doesn't exist.
+# L0 investigation-native metrics (opensre prose, keyword parser). Distinct from
+# L1 ``a1`` which scores the predictor's rank-1 formalization.
+_L0_INVESTIGATION_METRICS = [
+    "investigation_a1",
+    "investigation_partial_a1",
+    "investigation_object_a1",
+    "translation_loss",
+]
+_L0_CI_METRICS = frozenset({"investigation_a1", "investigation_object_a1"})
+
+_OPENSRE_ONLY_METRICS = [
+    "partial_a1",
+    "partial_a3",
+    "object_a1",
+    "object_a3",
+    "citation_grounding_rate",
+    "entity_existence_rate",
+    "kubectl_actionability_rate",
+]
+
+
+def _match_paper_row(table: dict[str, dict[str, float]], llm: str) -> dict[str, float] | None:
+    """Best-effort match of a run's LLM label to a row in a paper table."""
+    key = llm.strip().lower()
+    if key in table:
+        return table[key]
+    for name, row in table.items():
+        if name in key or key in name:
+            return row
+    return None
+
+
+def _match_paper_baseline(llm: str) -> dict[str, float] | None:
+    """Paper Table 4 Base (zero-shot) row for this LLM, if any."""
+    return _match_paper_row(_PAPER_BASELINE, llm)
+
+
+def _match_paper_icl(llm: str) -> dict[str, float] | None:
+    """Paper Table 5 ICL row for this LLM, if any (only 3 models exist)."""
+    return _match_paper_row(_PAPER_ICL, llm)
+
 
 # --------------------------------------------------------------------------- #
 # Public API                                                                  #
@@ -119,30 +356,440 @@ def _per_cell_metric(cells: list[dict[str, Any]], metric: str) -> list[float]:
     return out
 
 
-def _cells_by_llm(cells: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    out: dict[str, list[dict[str, Any]]] = {}
+def _cell_mode(cell: dict[str, Any]) -> str:
+    return cell.get("run", {}).get("mode", "(unknown)")
+
+
+def _cell_category(cell: dict[str, Any]) -> str:
+    return cell.get("case", {}).get("metadata", {}).get("fault_category", "(unknown)")
+
+
+def _cells_by_llm_mode(
+    cells: list[dict[str, Any]],
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """Group cells as ``{llm: {mode: [cells]}}``.
+
+    Splitting on mode matters once the ``llm_alone`` control arm runs:
+    pooling both modes into one LLM bucket would silently average the
+    opensre+llm result with its own baseline.
+    """
+    out: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for cell in cells:
         if "_load_error" in cell:
             continue
         llm = cell.get("run", {}).get("llm", "(unknown)")
-        out.setdefault(llm, []).append(cell)
+        mode = _cell_mode(cell)
+        out.setdefault(llm, {}).setdefault(mode, []).append(cell)
     return out
 
 
-def _summarize(values: list[float]) -> tuple[float, float, float, int]:
-    """Return (median, p25, p75, n). All zeros when empty."""
-    if not values:
+def _paired_scenario_deltas(
+    cells: list[dict[str, Any]],
+    llm: str,
+    metric: str,
+    mode_a: str,
+    mode_b: str,
+) -> list[float]:
+    """Per-scenario ``metric(mode_a) − metric(mode_b)`` for one LLM.
+
+    Only scenarios present in BOTH modes contribute (a paired difference),
+    so the control delta isolates opensre's policy from scenario mix. Seeds
+    within a scenario are averaged before differencing.
+    """
+    a: dict[str, list[float]] = {}
+    b: dict[str, list[float]] = {}
+    for cell in cells:
+        if cell.get("run", {}).get("llm") != llm:
+            continue
+        value = cell.get("score", {}).get("metrics", {}).get(metric)
+        if not isinstance(value, (int, float)):
+            continue
+        case_id = cell.get("case", {}).get("case_id", "(unknown)")
+        mode = _cell_mode(cell)
+        if mode == mode_a:
+            a.setdefault(case_id, []).append(float(value))
+        elif mode == mode_b:
+            b.setdefault(case_id, []).append(float(value))
+    deltas: list[float] = []
+    for case_id in a.keys() & b.keys():
+        mean_a = sum(a[case_id]) / len(a[case_id])
+        mean_b = sum(b[case_id]) / len(b[case_id])
+        deltas.append(mean_a - mean_b)
+    return deltas
+
+
+def _scenario_means(cells: list[dict[str, Any]], metric: str) -> list[float]:
+    """Collapse per-seed cells to one value per scenario (case_id).
+
+    The benchmark runs multiple seeds per scenario; those repeats are
+    *correlated*, not independent samples. Treating each run as an
+    independent observation under-states the variance and inflates
+    significance. The scenario is the independent unit, so we average the
+    seeds within each scenario first and return one value per scenario.
+    """
+    buckets: dict[str, list[float]] = {}
+    for cell in cells:
+        value = cell.get("score", {}).get("metrics", {}).get(metric)
+        if not isinstance(value, (int, float)):
+            continue
+        case_id = cell.get("case", {}).get("case_id", "(unknown)")
+        buckets.setdefault(case_id, []).append(float(value))
+    return [sum(vs) / len(vs) for vs in buckets.values() if vs]
+
+
+def _mean_with_ci(
+    scenario_values: list[float],
+    *,
+    iters: int = 2000,
+    seed: int = 12345,
+) -> tuple[float, float, float, int]:
+    """Mean + 95% scenario-clustered bootstrap CI.
+
+    Resamples scenarios (not runs) with replacement so the interval reflects
+    between-scenario variability — the level at which the paper's A@k is a
+    per-case mean. Returns ``(mean, ci_low, ci_high, n_scenarios)``. With
+    fewer than 2 scenarios a CI is undefined, so low==high==mean.
+    """
+    n = len(scenario_values)
+    if n == 0:
         return 0.0, 0.0, 0.0, 0
-    if len(values) == 1:
-        v = values[0]
-        return v, v, v, 1
-    s = sorted(values)
-    n = len(s)
-    median = statistics.median(s)
-    # Tukey-ish quartiles — good enough for reporting
-    p25 = s[max(0, (n - 1) // 4)]
-    p75 = s[min(n - 1, 3 * (n - 1) // 4)]
-    return median, p25, p75, n
+    mean = sum(scenario_values) / n
+    if n < 2:
+        return mean, mean, mean, n
+    rng = random.Random(seed)
+    boot_means: list[float] = []
+    for _ in range(iters):
+        sample_sum = 0.0
+        for _ in range(n):
+            sample_sum += scenario_values[rng.randrange(n)]
+        boot_means.append(sample_sum / n)
+    boot_means.sort()
+    lo = boot_means[int(0.025 * iters)]
+    hi = boot_means[min(iters - 1, int(0.975 * iters))]
+    return mean, lo, hi, n
+
+
+# --------------------------------------------------------------------------- #
+# Decomposition — "where does the accuracy go?" (shared md/html data)          #
+# --------------------------------------------------------------------------- #
+
+_PRIMARY_MODE = "opensre+llm"
+_CONTROL_MODE = "llm_alone"
+
+
+def _control_contrast_rows(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[tuple[str, float, float, float, int, str]]:
+    """Per-LLM paired control delta on a1: opensre+llm − llm_alone.
+
+    Returns ``(llm, mean_delta, lo, hi, n_paired, verdict)`` for LLMs that
+    ran BOTH arms. Empty when the control arm wasn't run.
+    """
+    rows: list[tuple[str, float, float, float, int, str]] = []
+    for llm in sorted(by_lm.keys()):
+        modes = by_lm[llm]
+        if _PRIMARY_MODE not in modes or _CONTROL_MODE not in modes:
+            continue
+        deltas = _paired_scenario_deltas(cells, llm, "a1", _PRIMARY_MODE, _CONTROL_MODE)
+        mean, lo, hi, n = _mean_with_ci(deltas)
+        if n < 2:
+            verdict = "too few paired scenarios"
+        elif lo <= 0.0 <= hi:
+            verdict = "no significant effect (CI contains 0)"
+        elif mean > 0:
+            verdict = "opensre helps"
+        else:
+            verdict = "opensre hurts"
+        rows.append((llm, mean, lo, hi, n, verdict))
+    return rows
+
+
+def _category_a1(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    llm: str,
+    mode: str,
+) -> dict[str, tuple[float, int]]:
+    """Mean a1 per fault_category for one (llm, mode), with scenario count."""
+    cells = by_lm.get(llm, {}).get(mode, [])
+    by_cat: dict[str, list[dict[str, Any]]] = {}
+    for cell in cells:
+        by_cat.setdefault(_cell_category(cell), []).append(cell)
+    out: dict[str, tuple[float, int]] = {}
+    for cat, cat_cells in by_cat.items():
+        scen_vals = _scenario_means(cat_cells, "a1")
+        mean, _, _, n = _mean_with_ci(scen_vals)
+        out[cat] = (mean, n)
+    return out
+
+
+def _render_decomposition_markdown(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[str]:
+    """Track-2 decomposition: control delta, localization-vs-labeling, by category."""
+    if not by_lm:
+        return []
+    lines: list[str] = []
+    lines.append("## Decomposition — where the accuracy goes")
+    lines.append("")
+
+    # 1. Control contrast (the number that isolates opensre's contribution)
+    lines.append("### Control contrast — A@1(opensre+llm) − A@1(llm_alone), same model")
+    lines.append("")
+    contrast = _control_contrast_rows(cells, by_lm)
+    if not contrast:
+        lines.append(
+            "_No control arm in this run — add `llm_alone` to `modes` so the "
+            "delta that isolates opensre's policy (vs the model's intrinsic "
+            "skill) can be computed. This is the single most important number._"
+        )
+    else:
+        lines.append("| LLM | Δ A@1 (paired) | 95% CI | n | verdict |")
+        lines.append("|---|---|---|---|---|")
+        for llm, mean, lo, hi, n, verdict in contrast:
+            lines.append(f"| `{llm}` | {mean:+.2f} | [{lo:+.2f}, {hi:+.2f}] | {n} | {verdict} |")
+        lines.append("")
+        lines.append(
+            "_Paired per-scenario difference (seeds averaged first). A CI that "
+            "contains 0 means opensre's pipeline is statistically indistinguishable "
+            "from bare tool-use on this model._"
+        )
+    lines.append("")
+
+    # 2. Localization vs labeling (opensre+llm) — is it finding the right place?
+    has_decomp = any(
+        _per_cell_metric(by_lm[llm].get(_PRIMARY_MODE, []), m)
+        for llm in by_lm
+        for m in ("object_a1", "partial_a1")
+    )
+    if has_decomp:
+        lines.append("### Localization vs labeling (opensre+llm)")
+        lines.append("")
+        lines.append("| LLM | a1 (triple) | object_a1 (component) | partial_a1 (relaxed) |")
+        lines.append("|---|---|---|---|")
+        for llm in sorted(by_lm.keys()):
+            op_cells = by_lm[llm].get(_PRIMARY_MODE, [])
+            vals = []
+            for m in ("a1", "object_a1", "partial_a1"):
+                mean, _, _, n = _mean_with_ci(_scenario_means(op_cells, m))
+                vals.append(f"{mean:.2f}" if n else "—")
+            lines.append(f"| `{llm}` | {vals[0]} | {vals[1]} | {vals[2]} |")
+        lines.append("")
+        lines.append(
+            "_If `object_a1` ≫ `a1`, opensre finds the right component but "
+            "mislabels the root cause — a predictor/translation problem, not a "
+            "reasoning one. If both are low, the investigation missed the place._"
+        )
+        lines.append("")
+
+    # 3. Per fault-category A@1 (opensre+llm) — vs paper Fig. 3 difficulty
+    categories = sorted({_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE})
+    if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
+        lines.append("### Per fault-category A@1 (opensre+llm)")
+        lines.append("")
+        header = "| LLM | " + " | ".join(categories) + " |"
+        sep = "|" + "|".join(["---"] * (len(categories) + 1)) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for llm in sorted(by_lm.keys()):
+            cat_map = _category_a1(by_lm, llm, _PRIMARY_MODE)
+            row = [f"`{llm}`"]
+            for cat in categories:
+                mean, n = cat_map.get(cat, (0.0, 0))
+                row.append(f"{mean:.2f} (n={n})" if n else "—")
+            lines.append("| " + " | ".join(row) + " |")
+        lines.append("")
+        lines.append(
+            "_Paper Fig. 3: Startup/Runtime are easy (A@1 > 0.65), "
+            "Admission/Performance are hard (A@1 < 0.36). Losing only where the "
+            "paper loses = corpus difficulty; losing broadly = opensre._"
+        )
+        lines.append("")
+
+    return lines
+
+
+def _render_decomposition_html(
+    cells: list[dict[str, Any]],
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    esc: Any,
+) -> list[str]:
+    """HTML mirror of :func:`_render_decomposition_markdown`."""
+    if not by_lm:
+        return []
+    parts: list[str] = []
+    parts.append("<h2>Decomposition — where the accuracy goes</h2>")
+
+    # 1. Control contrast
+    parts.append("<h3>Control contrast — A@1(opensre+llm) − A@1(llm_alone), same model</h3>")
+    contrast = _control_contrast_rows(cells, by_lm)
+    if not contrast:
+        parts.append(
+            '<div class="callout warn"><p>No control arm in this run — add '
+            "<code>llm_alone</code> to <code>modes</code> so the delta that "
+            "isolates opensre's policy (vs the model's intrinsic skill) can be "
+            "computed. This is the single most important number.</p></div>"
+        )
+    else:
+        parts.append(
+            "<table><thead><tr><th>LLM</th><th>Δ A@1 (paired)</th>"
+            "<th>95% CI</th><th>n</th><th>verdict</th></tr></thead><tbody>"
+        )
+        for llm, mean, lo, hi, n, verdict in contrast:
+            parts.append(
+                f"<tr><td><code>{esc(llm)}</code></td>"
+                f'<td class="metric">{mean:+.2f}</td>'
+                f'<td class="metric">[{lo:+.2f}, {hi:+.2f}]</td>'
+                f'<td class="metric">{n}</td><td>{esc(verdict)}</td></tr>'
+            )
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>Paired per-scenario difference (seeds averaged first). "
+            "A CI containing 0 means opensre's pipeline is statistically "
+            "indistinguishable from bare tool-use on this model.</small></p>"
+        )
+
+    # 2. Localization vs labeling
+    has_decomp = any(
+        _per_cell_metric(by_lm[llm].get(_PRIMARY_MODE, []), m)
+        for llm in by_lm
+        for m in ("object_a1", "partial_a1")
+    )
+    if has_decomp:
+        parts.append("<h3>Localization vs labeling (opensre+llm)</h3>")
+        parts.append(
+            "<table><thead><tr><th>LLM</th><th>a1 (triple)</th>"
+            "<th>object_a1 (component)</th><th>partial_a1 (relaxed)</th>"
+            "</tr></thead><tbody>"
+        )
+        for llm in sorted(by_lm.keys()):
+            op_cells = by_lm[llm].get(_PRIMARY_MODE, [])
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td>")
+            for m in ("a1", "object_a1", "partial_a1"):
+                mean, _, _, n = _mean_with_ci(_scenario_means(op_cells, m))
+                parts.append(f'<td class="metric">{mean:.2f}</td>' if n else "<td>—</td>")
+            parts.append("</tr>")
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>If <code>object_a1</code> ≫ <code>a1</code>, opensre "
+            "finds the right component but mislabels the root cause — a "
+            "predictor/translation problem, not a reasoning one.</small></p>"
+        )
+
+    # 3. Per fault-category A@1
+    categories = sorted({_cell_category(c) for c in cells if _cell_mode(c) == _PRIMARY_MODE})
+    if categories and any(by_lm[llm].get(_PRIMARY_MODE) for llm in by_lm):
+        parts.append("<h3>Per fault-category A@1 (opensre+llm)</h3>")
+        parts.append("<table><thead><tr><th>LLM</th>")
+        for cat in categories:
+            parts.append(f"<th>{esc(cat)}</th>")
+        parts.append("</tr></thead><tbody>")
+        for llm in sorted(by_lm.keys()):
+            cat_map = _category_a1(by_lm, llm, _PRIMARY_MODE)
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td>")
+            for cat in categories:
+                mean, n = cat_map.get(cat, (0.0, 0))
+                parts.append(
+                    f'<td class="metric">{mean:.2f}<br><small>n={n}</small></td>'
+                    if n
+                    else "<td>—</td>"
+                )
+            parts.append("</tr>")
+        parts.append("</tbody></table>")
+        parts.append(
+            "<p><small>Paper Fig. 3: Startup/Runtime easy (A@1 &gt; 0.65), "
+            "Admission/Performance hard (A@1 &lt; 0.36). Losing only where the "
+            "paper loses = corpus difficulty; losing broadly = opensre.</small></p>"
+        )
+
+    return parts
+
+
+def _render_l0_investigation_markdown(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[str]:
+    """L0 panel: investigation-native metrics from opensre prose (not predictor)."""
+    if not by_lm:
+        return []
+    flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+    present = [m for m in _L0_INVESTIGATION_METRICS if _per_cell_metric(flat, m)]
+    if not present:
+        return []
+
+    lines: list[str] = []
+    lines.append("### Investigation quality — L0 (opensre prose, not paper-comparable)")
+    lines.append("")
+    lines.append(
+        "_L0 scores a keyword-parsed triple from opensre's investigation prose "
+        "(``report`` / ``root_cause`` / causal chain). L1 ``a1`` in the headline "
+        "scores the predictor's rank-1 formalization. The gap "
+        "``a1 − investigation_a1`` is translation loss; "
+        "``translation_loss`` flags cases where L0 is right but L1 is wrong._"
+    )
+    lines.append("")
+    header = "| LLM | variant | " + " | ".join(present) + " |"
+    sep = "|" + "|".join(["---"] * (len(present) + 2)) + "|"
+    lines.append(header)
+    lines.append(sep)
+    for llm in sorted(by_lm.keys()):
+        for mode in sorted(by_lm[llm].keys()):
+            mode_cells = by_lm[llm][mode]
+            row = [f"`{llm}`", mode]
+            for metric in present:
+                scen_vals = _scenario_means(mode_cells, metric)
+                mean, lo, hi, n = _mean_with_ci(scen_vals)
+                if metric in _L0_CI_METRICS and len(scen_vals) >= 2:
+                    row.append(f"{mean:.2f} [{lo:.2f}–{hi:.2f}]")
+                elif n:
+                    row.append(f"{mean:.2f}")
+                else:
+                    row.append("—")
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+    return lines
+
+
+def _render_l0_investigation_html(
+    by_lm: dict[str, dict[str, list[dict[str, Any]]]],
+    esc: Any,
+) -> list[str]:
+    """HTML mirror of :func:`_render_l0_investigation_markdown`."""
+    if not by_lm:
+        return []
+    flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+    present = [m for m in _L0_INVESTIGATION_METRICS if _per_cell_metric(flat, m)]
+    if not present:
+        return []
+
+    parts: list[str] = []
+    parts.append("<h3>Investigation quality — L0 (opensre prose, not paper-comparable)</h3>")
+    parts.append(
+        "<p><small>L0 scores a keyword-parsed triple from opensre's investigation "
+        "prose. L1 <code>a1</code> scores the predictor's rank-1 formalization. "
+        "The gap <code>a1 − investigation_a1</code> is translation loss.</small></p>"
+    )
+    parts.append("<table><thead><tr><th>LLM</th><th>variant</th>")
+    for m in present:
+        parts.append(f"<th>{esc(m)}</th>")
+    parts.append("</tr></thead><tbody>")
+    for llm in sorted(by_lm.keys()):
+        for mode in sorted(by_lm[llm].keys()):
+            mode_cells = by_lm[llm][mode]
+            parts.append(f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>")
+            for metric in present:
+                scen_vals = _scenario_means(mode_cells, metric)
+                mean, lo, hi, n = _mean_with_ci(scen_vals)
+                if metric in _L0_CI_METRICS and len(scen_vals) >= 2:
+                    cell_txt = f"{mean:.2f}<br><small>[{lo:.2f}–{hi:.2f}]</small>"
+                elif n:
+                    cell_txt = f"{mean:.2f}"
+                else:
+                    cell_txt = "—"
+                parts.append(f'<td class="metric">{cell_txt}</td>')
+            parts.append("</tr>")
+    parts.append("</tbody></table>")
+    return parts
 
 
 # --------------------------------------------------------------------------- #
@@ -188,45 +835,129 @@ def _render_markdown(
             lines.append(paragraph.strip())
             lines.append("")
 
-    # --- Headline panel (per-LLM medians on the "all" stratum) ---
-    lines.append("## Headline (medians across all cases)")
+    # --- Headline panel (paper-comparable: per-LLM MEAN + clustered CI) ---
+    lines.append("## Headline — mean per scenario, single-shot (paper-comparable)")
     lines.append("")
-    by_llm = _cells_by_llm(cells)
-    if not by_llm:
+    lines.append(
+        "Point estimates are **means**, the same aggregation the paper uses "
+        "(A@k is a per-case mean, Wang et al. 2026 §4.2.1). CIs are 95% "
+        "scenario-clustered bootstrap intervals — the independent unit is the "
+        "scenario, not the seed. The `paper` row is the published **Base** "
+        "(zero-shot) baseline over the **full 452-case** corpus (Table 4). A "
+        "head-to-head claim is only valid when our run is also single-shot and "
+        "full-corpus; if the CI overlaps the paper value, the two are "
+        "statistically indistinguishable."
+    )
+    lines.append("")
+    by_lm = _cells_by_llm_mode(cells)
+    if not by_lm:
         lines.append("_no cells executed_")
     else:
-        headline_metrics = [
-            "a1",
-            "a3",
-            "tcr",
-            "cov",
-            "steps",
-            "iac",
-            "citation_grounding_rate",
-            "entity_existence_rate",
-            "kubectl_actionability_rate",
-        ]
-        header = "| LLM | n | " + " | ".join(headline_metrics) + " |"
-        sep = "|" + "|".join(["---"] * (len(headline_metrics) + 2)) + "|"
+        header = "| LLM | variant | n | " + " | ".join(_PAPER_COMPARABLE_METRICS) + " |"
+        sep = "|" + "|".join(["---"] * (len(_PAPER_COMPARABLE_METRICS) + 3)) + "|"
         lines.append(header)
         lines.append(sep)
-        for llm in sorted(by_llm.keys()):
-            llm_cells = by_llm[llm]
-            row = [f"`{llm}`", str(len(llm_cells))]
-            for metric in headline_metrics:
-                values = _per_cell_metric(llm_cells, metric)
-                median, _, _, _ = _summarize(values)
-                row.append(f"{median:.2f}")
-            lines.append("| " + " | ".join(row) + " |")
+        for llm in sorted(by_lm.keys()):
+            for mode in sorted(by_lm[llm].keys()):
+                mode_cells = by_lm[llm][mode]
+                n_scen = len({c.get("case", {}).get("case_id", "?") for c in mode_cells})
+                row = [f"`{llm}`", mode, str(n_scen)]
+                for metric in _PAPER_COMPARABLE_METRICS:
+                    scen_vals = _scenario_means(mode_cells, metric)
+                    mean, lo, hi, _ = _mean_with_ci(scen_vals)
+                    if metric in ("a1", "a3") and len(scen_vals) >= 2:
+                        row.append(f"{mean:.2f} [{lo:.2f}–{hi:.2f}]")
+                    else:
+                        row.append(f"{mean:.2f}")
+                lines.append("| " + " | ".join(row) + " |")
+            baseline = _match_paper_baseline(llm)
+            if baseline is not None:
+                prow = [f"`{llm}`", "paper-Base", "452"]
+                for metric in _PAPER_COMPARABLE_METRICS:
+                    val = baseline.get(metric)
+                    prow.append(f"{val:.2f}" if isinstance(val, (int, float)) else "—")
+                lines.append("| " + " | ".join(prow) + " |")
+            icl = _match_paper_icl(llm)
+            if icl is not None:
+                irow = [f"`{llm}`", "paper-ICL", "452"]
+                for metric in _PAPER_COMPARABLE_METRICS:
+                    val = icl.get(metric)
+                    irow.append(f"{val:.2f}" if isinstance(val, (int, float)) else "—")
+                lines.append("| " + " | ".join(irow) + " |")
     lines.append("")
+    lines.append(
+        "_`opensre+llm` is the primary arm; `llm_alone` is the same-model "
+        "control. `paper-Base` = zero-shot agent (Table 4); `paper-ICL` = 3 "
+        "retrieved in-context traces, **no agent framework** (Table 5) — the "
+        "cost-equivalent baseline opensre must beat. ICL exists only for the "
+        "three models the paper ran it on._"
+    )
+    lines.append("")
+    lines.append(
+        "_Excluded from the comparison: "
+        + "; ".join(f"**{m}** ({why})" for m, why in _NON_COMPARABLE_METRICS.items())
+        + "._"
+    )
+
+    # --- Decomposition: where the accuracy goes (Track 2) ---
+    lines.extend(_render_decomposition_markdown(cells, by_lm))
+
+    # --- L0 investigation quality (opensre prose — not paper-comparable) ---
+    lines.extend(_render_l0_investigation_markdown(by_lm))
+
+    # --- opensre-only diagnostics (NOT in the paper, NOT comparable) ---
+    if by_lm:
+        flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+        present = [m for m in _OPENSRE_ONLY_METRICS if _per_cell_metric(flat, m)]
+        if present:
+            lines.append("### opensre-only diagnostics (not in the paper — do not compare)")
+            lines.append("")
+            lines.append(
+                "_These metrics are opensre instrumentation with no published "
+                "counterpart. `partial_*` relaxes the triple match; `object_*` "
+                "scores component localization alone; the `*_rate` metrics are "
+                "heuristic validity probes. Means shown for internal tracking only._"
+            )
+            lines.append("")
+            header = "| LLM | variant | " + " | ".join(present) + " |"
+            sep = "|" + "|".join(["---"] * (len(present) + 2)) + "|"
+            lines.append(header)
+            lines.append(sep)
+            for llm in sorted(by_lm.keys()):
+                for mode in sorted(by_lm[llm].keys()):
+                    mode_cells = by_lm[llm][mode]
+                    row = [f"`{llm}`", mode]
+                    for metric in present:
+                        scen_vals = _scenario_means(mode_cells, metric)
+                        mean, _, _, n = _mean_with_ci(scen_vals)
+                        row.append(f"{mean:.2f}" if n else "—")
+                    lines.append("| " + " | ".join(row) + " |")
+            lines.append("")
 
     # --- Per-stratum × per-LLM detail (Mechanism 4) ---
-    lines.append("## Per-stratum × per-LLM (medians)")
+    lines.append("## Per-stratum × per-LLM (medians — distributional view)")
+    lines.append("")
+    lines.append(
+        "These are **medians** across seeds (a robustness cross-check, not the "
+        "headline). Stratum semantics:\n"
+        "- `all` / `seen-shape` / `unseen-shape` / `held-out` / `optimize`: "
+        "single-shot strata — each seed is one independent draw.\n"
+        "- `consistency-selected`: **best-of-N** — the adapter picks the most "
+        "self-consistent of the repeated runs per scenario. This is an "
+        "*optimistic* selection and is **NOT comparable** to the paper's "
+        "single-shot Table 4 baselines; report it separately and never as the "
+        "headline."
+    )
     lines.append("")
     reported_metrics = report.get("reported_metrics", [])
     per_stratum = report.get("per_stratum", {})
     for stratum in sorted(per_stratum.keys()):
-        lines.append(f"### {stratum}")
+        label = (
+            " — best-of-N, optimistic, not paper-comparable"
+            if stratum == "consistency-selected"
+            else ""
+        )
+        lines.append(f"### {stratum}{label}")
         lines.append("")
         by_mode_llm = per_stratum[stratum]
         if not by_mode_llm:
@@ -400,44 +1131,126 @@ def _render_html(
             parts.append(f"<p>{esc(paragraph.strip())}</p>")
         parts.append("</div>")
 
-    # Headline panel
-    parts.append("<h2>Headline (medians across all cases)</h2>")
-    by_llm = _cells_by_llm(cells)
-    if not by_llm:
+    # Headline panel — paper-comparable mean + scenario-clustered CI
+    parts.append("<h2>Headline — mean per scenario, single-shot (paper-comparable)</h2>")
+    parts.append(
+        '<div class="callout"><p>Point estimates are <strong>means</strong> '
+        "(matching the paper, where A@k is a per-case mean). CIs are 95% "
+        "scenario-clustered bootstrap intervals. The <code>paper</code> row is "
+        "the published <strong>Base</strong> baseline over the full 452-case "
+        "corpus (Wang et al. 2026, Table 4). A head-to-head claim is only valid "
+        "when our run is single-shot and full-corpus; if the CI overlaps the "
+        "paper value, the two are statistically indistinguishable.</p></div>"
+    )
+    by_lm = _cells_by_llm_mode(cells)
+    if not by_lm:
         parts.append("<p><em>no cells executed</em></p>")
     else:
-        headline_metrics = [
-            "a1",
-            "a3",
-            "tcr",
-            "cov",
-            "steps",
-            "iac",
-            "citation_grounding_rate",
-            "entity_existence_rate",
-            "kubectl_actionability_rate",
-        ]
-        parts.append("<table><thead><tr><th>LLM</th><th>n</th>")
-        for m in headline_metrics:
+        parts.append("<table><thead><tr><th>LLM</th><th>variant</th><th>n</th>")
+        for m in _PAPER_COMPARABLE_METRICS:
             parts.append(f"<th>{esc(m)}</th>")
         parts.append("</tr></thead><tbody>")
-        for llm in sorted(by_llm.keys()):
-            llm_cells = by_llm[llm]
-            parts.append(
-                f'<tr><td><code>{esc(llm)}</code></td><td class="metric">{len(llm_cells)}</td>'
-            )
-            for m in headline_metrics:
-                values = _per_cell_metric(llm_cells, m)
-                median, _, _, _ = _summarize(values)
-                parts.append(f'<td class="metric">{median:.2f}</td>')
-            parts.append("</tr>")
+        for llm in sorted(by_lm.keys()):
+            for mode in sorted(by_lm[llm].keys()):
+                mode_cells = by_lm[llm][mode]
+                n_scen = len({c.get("case", {}).get("case_id", "?") for c in mode_cells})
+                parts.append(
+                    f"<tr><td><code>{esc(llm)}</code></td>"
+                    f'<td>{esc(mode)}</td><td class="metric">{n_scen}</td>'
+                )
+                for m in _PAPER_COMPARABLE_METRICS:
+                    scen_vals = _scenario_means(mode_cells, m)
+                    mean, lo, hi, _ = _mean_with_ci(scen_vals)
+                    if m in ("a1", "a3") and len(scen_vals) >= 2:
+                        cell_txt = f"{mean:.2f}<br><small>[{lo:.2f}–{hi:.2f}]</small>"
+                    else:
+                        cell_txt = f"{mean:.2f}"
+                    parts.append(f'<td class="metric">{cell_txt}</td>')
+                parts.append("</tr>")
+            baseline = _match_paper_baseline(llm)
+            if baseline is not None:
+                parts.append(
+                    f"<tr><td><code>{esc(llm)}</code></td>"
+                    '<td><span class="pill">paper-Base</span></td>'
+                    '<td class="metric">452</td>'
+                )
+                for m in _PAPER_COMPARABLE_METRICS:
+                    val = baseline.get(m)
+                    txt = f"{val:.2f}" if isinstance(val, (int, float)) else "—"
+                    parts.append(f'<td class="metric">{txt}</td>')
+                parts.append("</tr>")
+            icl = _match_paper_icl(llm)
+            if icl is not None:
+                parts.append(
+                    f"<tr><td><code>{esc(llm)}</code></td>"
+                    '<td><span class="pill warn">paper-ICL</span></td>'
+                    '<td class="metric">452</td>'
+                )
+                for m in _PAPER_COMPARABLE_METRICS:
+                    val = icl.get(m)
+                    txt = f"{val:.2f}" if isinstance(val, (int, float)) else "—"
+                    parts.append(f'<td class="metric">{txt}</td>')
+                parts.append("</tr>")
         parts.append("</tbody></table>")
+        parts.append(
+            "<p><small><code>opensre+llm</code> is the primary arm; "
+            "<code>llm_alone</code> is the same-model control. "
+            "<code>paper-Base</code> = zero-shot agent (Table 4); "
+            "<code>paper-ICL</code> = 3 retrieved in-context traces, <strong>no "
+            "agent framework</strong> (Table 5) — the cost-equivalent baseline "
+            "opensre must beat. ICL exists only for the three models the paper "
+            "ran it on.</small></p>"
+        )
+        excluded = "; ".join(
+            f"<strong>{esc(m)}</strong> ({esc(why)})" for m, why in _NON_COMPARABLE_METRICS.items()
+        )
+        parts.append(f"<p><small>Excluded from the comparison: {excluded}.</small></p>")
+
+        # Decomposition (Track 2)
+        parts.extend(_render_decomposition_html(cells, by_lm, esc))
+
+        # L0 investigation quality
+        parts.extend(_render_l0_investigation_html(by_lm, esc))
+
+        # opensre-only diagnostics (segregated — not paper-comparable)
+        flat = [c for modes in by_lm.values() for cs in modes.values() for c in cs]
+        present = [m for m in _OPENSRE_ONLY_METRICS if _per_cell_metric(flat, m)]
+        if present:
+            parts.append("<h3>opensre-only diagnostics (not in the paper — do not compare)</h3>")
+            parts.append("<table><thead><tr><th>LLM</th><th>variant</th>")
+            for m in present:
+                parts.append(f"<th>{esc(m)}</th>")
+            parts.append("</tr></thead><tbody>")
+            for llm in sorted(by_lm.keys()):
+                for mode in sorted(by_lm[llm].keys()):
+                    mode_cells = by_lm[llm][mode]
+                    parts.append(f"<tr><td><code>{esc(llm)}</code></td><td>{esc(mode)}</td>")
+                    for m in present:
+                        scen_vals = _scenario_means(mode_cells, m)
+                        mean, _, _, n = _mean_with_ci(scen_vals)
+                        parts.append(f'<td class="metric">{mean:.2f}</td>' if n else "<td>—</td>")
+                    parts.append("</tr>")
+            parts.append("</tbody></table>")
 
     # Per-stratum × per-LLM
-    parts.append("<h2>Per-stratum × per-LLM (medians)</h2>")
+    parts.append("<h2>Per-stratum × per-LLM (medians — distributional view)</h2>")
+    parts.append(
+        '<div class="callout"><p>These are <strong>medians</strong> across '
+        "seeds (a robustness cross-check, not the headline). "
+        "<code>all</code>/<code>seen-shape</code>/<code>unseen-shape</code>/"
+        "<code>held-out</code>/<code>optimize</code> are single-shot strata. "
+        "<code>consistency-selected</code> is <strong>best-of-N</strong> — an "
+        "optimistic selection that is <strong>not comparable</strong> to the "
+        "paper's single-shot baselines.</p></div>"
+    )
     reported_metrics = report.get("reported_metrics", [])
     for stratum in sorted(report.get("per_stratum", {}).keys()):
-        parts.append(f"<h3>{esc(stratum)}</h3>")
+        label = (
+            " — best-of-N, optimistic, not paper-comparable"
+            if stratum == "consistency-selected"
+            else ""
+        )
+        parts.append(f"<h3>{esc(stratum)}{esc(label)}</h3>")
         by_mode_llm = report["per_stratum"][stratum]
         if not by_mode_llm:
             parts.append("<p><em>no data</em></p>")

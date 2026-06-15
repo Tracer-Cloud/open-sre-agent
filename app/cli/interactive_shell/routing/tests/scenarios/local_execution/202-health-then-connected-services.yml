@@ -12,7 +12,7 @@ session:
 available_capabilities:
   slash_commands:
   - /health
-  - /list
+  - /integrations
   cli_commands: []
   synthetic_suites: []
 notes: []
@@ -32,26 +32,26 @@ planned_actions:
   command: /health
   args: []
 - kind: slash
-  content: /list integrations
+  content: /integrations list
   source: llm
   target_surface: slash
-  command: /list
+  command: /integrations
   args:
-  - integrations
+  - list
 executed_actions:
 - kind: slash
   command: /health
   args: []
   content: /health
 - kind: slash
-  command: /list
+  command: /integrations
   args:
-  - integrations
-  content: /list integrations
+  - list
+  content: /integrations list
 response_contract:
   must_contain_any:
   - ran /health
-  - ran /list integrations
+  - ran /integrations list
   must_not_contain: []
 history:
   expected:

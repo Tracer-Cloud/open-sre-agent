@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.hermes.classifier import IncidentClassifier
-from app.hermes.incident import IncidentSeverity, LogLevel, LogRecord
-from app.hermes.rules import (
+from app.integrations.hermes.classifier import IncidentClassifier
+from app.integrations.hermes.incident import IncidentSeverity, LogLevel, LogRecord
+from app.integrations.hermes.rules import (
     PatternRule,
     RepeatRule,
     default_pattern_rules,

@@ -1,0 +1,370 @@
+"""Abstract benchmark adapter base class.
+
+Each benchmark suite (CloudOpsBench, OpenRCA, ToolCallBench) implements
+this interface to bridge its corpus / scoring / agent surface to the
+framework. The framework calls these methods; adapters do the
+benchmark-specific work.
+
+Split out from the original ``adapters.py`` so the type contracts in
+``types.py`` and the registry in ``registry.py`` can be imported without
+pulling in the late-binding TYPE_CHECKING surface this module needs to
+type-check ``investigation_agent_class()``-style hooks against
+``ConnectedInvestigationAgent``.
+
+This module deliberately has zero ``app.*`` imports at module load — the
+framework is independent of opensre internals. The TYPE_CHECKING block
+below is type-checker-only and never executes at runtime.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import BaseModel, ConfigDict
+
+from tests.benchmarks._framework.types import (
+    AlertPayload,
+    BenchmarkCase,
+    CaseFilters,
+    CaseScore,
+    MetricSchema,
+    RunContext,
+    RunResult,
+)
+
+if TYPE_CHECKING:
+    # Type-only import — preserves the framework's "zero ``app.*`` imports"
+    # constraint at runtime while still letting type-checkers validate
+    # that adapter overrides return an investigation-agent subclass.
+    from app.agent.investigation import ConnectedInvestigationAgent
+
+
+# --------------------------------------------------------------------------- #
+# Capability flags                                                            #
+# --------------------------------------------------------------------------- #
+
+
+class AdapterCapabilities(BaseModel):
+    """Boolean feature flags an adapter declares to the framework.
+
+    Replaces hardcoded ``if config.benchmark != "cloudopsbench"`` checks
+    in the framework. Each capability flag describes a framework-level
+    feature the adapter explicitly opts into. The framework then enables
+    or refuses the matching config knob based on the adapter's
+    declaration — no name-based dispatch.
+
+    Default is ``False`` for every capability so a new adapter is locked
+    down to the minimum surface until it opts in deliberately. Adding a
+    new capability extends this model with another default-``False``
+    field; existing adapters keep working without changes.
+
+    Adapters declare capabilities as a class attribute:
+
+        class MyAdapter(BenchmarkAdapter):
+            capabilities = AdapterCapabilities(
+                supports_agent_variant=True,
+            )
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    supports_agent_variant: bool = False
+    """The adapter honors the ``agent_variant`` config field.
+
+    When False, a config with ``agent_variant != "default"`` is refused
+    at validation time so the run does not silently exercise the wrong
+    agent. CloudOpsBench currently honors this via its
+    ``BenchInvestigationAgentTrimmedPrompt`` variant; other adapters
+    have no equivalent and should leave this False until they do.
+    """
+
+    supports_predictor_variant: bool = False
+    """The adapter has a predictor stage and honors ``predictor_variant``.
+
+    When False, a config setting ``predictor_variant != "default"`` is
+    refused. CloudOpsBench has a predictor stage (paper-format triple
+    emission); adapters without one (pure investigation benchmarks,
+    tool-call benchmarks) keep this False.
+    """
+
+
+# --------------------------------------------------------------------------- #
+# Overfit-dimensions schema                                                   #
+# --------------------------------------------------------------------------- #
+
+
+class OverfitDimensions(BaseModel):
+    """Metadata keys that overfit guards use to extract case attributes.
+
+    The framework's overfit module (``_framework/overfit.py``) runs
+    five guards that attribute lift across (a) the corpus's "system"
+    dimension, (b) the corpus's "stratum" / fault-category dimension,
+    and (c) per-case ground-truth objects. Different adapters emit
+    cells with different metadata layouts — CloudOpsBench uses
+    ``metadata["system"]`` / ``metadata["fault_category"]`` /
+    ``metadata["ground_truth"]["fault_object"]``; another adapter may
+    use different key names.
+
+    This model lets each adapter declare its key names without
+    requiring the framework to know about them. The defaults match
+    CloudOpsBench's schema so existing call sites continue to work;
+    other adapters override ``BenchmarkAdapter.overfit_dimensions``
+    to point at their own keys.
+
+    Phase 3 of the framework decoupling: the previous overfit guards
+    hardcoded ``c["case"]["metadata"]["system"]`` etc. inline, which
+    silently coupled the framework to CloudOpsBench's metadata shape.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    system_key: str = "system"
+    """``case.metadata[<key>]`` — the corpus's "system" attribute."""
+
+    stratum_key: str = "fault_category"
+    """``case.metadata[<key>]`` — the corpus's stratum / category attribute."""
+
+    gt_object_key: str = "fault_object"
+    """``case.metadata["ground_truth"][<key>]`` — the GT object name used
+    by Guard C's cluster fingerprinting."""
+
+
+# --------------------------------------------------------------------------- #
+# The adapter interface                                                       #
+# --------------------------------------------------------------------------- #
+
+
+class BenchmarkAdapter(ABC):
+    """One adapter per benchmark suite.
+
+    Implementations:
+      - ``tests/benchmarks/cloudopsbench/adapter.py``  (first)
+      - ``tests/benchmarks/openrca_scenarios/adapter.py``  (proves reusability)
+      - ``tests/benchmarks/toolcall_model_benchmark/adapter.py``  (proves reusability)
+
+    The framework calls these methods; adapters bridge to whatever the
+    specific benchmark needs (HF datasets, replay backends, custom scoring).
+
+    Adapters register themselves in the framework's ``adapter_registry`` so
+    the CLI can dispatch on ``config.benchmark`` without an if/elif chain.
+    See ``register_adapter`` / ``build_adapter`` / ``known_adapters`` in
+    ``tests/benchmarks/_framework/registry.py``.
+    """
+
+    name: str  # e.g. "cloudopsbench"
+    version: str  # adapter version, separate from corpus version
+    capabilities: ClassVar[AdapterCapabilities] = AdapterCapabilities()
+    """Framework features this adapter opts into.
+
+    Default is the all-False instance: a new adapter is locked down to
+    the minimum surface until it explicitly declares each capability.
+    See :class:`AdapterCapabilities` for the available flags."""
+
+    def apply_config_overrides(self, config: Any) -> None:  # noqa: ARG002 — default no-op
+        """Optional: apply adapter-specific config-driven runtime setup.
+
+        Called once by the CLI after the adapter is built and BEFORE the
+        runner instantiates any agent. Adapters use this hook to honor
+        adapter-specific config knobs (e.g. ``min_tool_calls``,
+        ``agent_variant``) by patching their own class attributes / agent
+        factory methods. Default is no-op so adapters that don't expose
+        knobs don't need to implement it.
+
+        Strategy-pattern design: the framework doesn't need to know which
+        config fields any specific adapter honors. Each adapter owns its
+        own knob-handling, keeping framework/adapter coupling minimal.
+        """
+        return None
+
+    def overfit_dimensions(self) -> OverfitDimensions:
+        """Metadata keys the overfit guards should consult for this adapter.
+
+        Default returns ``OverfitDimensions()`` which matches the
+        CloudOpsBench schema (``system``, ``fault_category``,
+        ``ground_truth.fault_object``). Adapters with a different
+        metadata layout override this to point the guards at their own
+        keys.
+
+        Phase 3 of the framework decoupling: previously
+        ``_framework/overfit.py`` indexed into these keys inline,
+        coupling the framework to one adapter's metadata shape. This
+        hook moves the schema declaration to the adapter that owns it.
+        """
+        return OverfitDimensions()
+
+    def extend_provenance(self, provenance: dict[str, Any]) -> dict[str, Any]:
+        """Optional: inject adapter-specific fields into the provenance dict.
+
+        Called by ``_framework/provenance.py::capture_provenance`` after
+        the framework finishes assembling its standard sections
+        (``code``, ``config``, ``pre_registration``, ``models``,
+        ``environment``, ``dataset``, ``run_inputs``). Adapters can:
+          - add a new top-level key (e.g. an adapter-specific run note)
+          - extend an existing section (e.g. add ``min_tool_calls`` to
+            ``run_inputs``)
+          - return the dict unchanged
+
+        Default is identity. The hook exists so the framework's
+        provenance module stays adapter-agnostic — it does NOT import or
+        reach into any adapter's internals to build the artifact. Before
+        Phase 4 the framework imported ``cloudopsbench.bench_agent``
+        directly to read ``min_tool_calls``; that import is gone and
+        CloudOpsBench now overrides this hook instead.
+
+        Implementations should mutate-and-return for performance, or
+        return a fresh dict if a non-destructive transform is needed —
+        the framework respects the return value either way.
+        """
+        return provenance
+
+    @abstractmethod
+    def load_cases(self, filters: CaseFilters) -> Iterator[BenchmarkCase]:
+        """Stream cases matching the filter. Seeded random selection is the
+        adapter's responsibility (integrity Mechanism 6).
+        """
+
+    @abstractmethod
+    def build_alert(self, case: BenchmarkCase) -> AlertPayload:
+        """Convert a case into the alert opensre / LLM consume."""
+
+    @abstractmethod
+    def build_opensre_integrations(self, case: BenchmarkCase) -> dict[str, Any]:
+        """Return the resolved_integrations dict opensre+LLM mode passes to
+        ``run_investigation``. For CloudOpsBench, this wires the replay
+        backend in place of live AWS/K8s/Datadog clients.
+        """
+
+    @abstractmethod
+    def build_baseline_tools(self, case: BenchmarkCase) -> dict[str, Any]:
+        """Return the tool surface for LLM-alone mode. Same replay backend
+        access as opensre+LLM (fairness) but no extract/context/diagnose
+        pipeline — just direct LLM with tool-calling.
+        """
+
+    @abstractmethod
+    def score_case(self, case: BenchmarkCase, run: RunResult, context: RunContext) -> CaseScore:
+        """Compute per-case metrics from the run result + per-cell context.
+
+        ``context.integrations`` is the dict ``build_opensre_integrations``
+        returned for THIS cell — adapters use it to read runtime state
+        accumulated during the run (e.g., a replay backend's action_log).
+
+        Passing context explicitly (vs caching on the adapter) is what
+        makes the adapter thread-safe for parallel runner execution.
+        """
+
+    @abstractmethod
+    def metric_schema(self) -> MetricSchema:
+        """Declare which metrics this adapter emits, for CLI validation +
+        comparable reporting across adapters.
+        """
+
+    def investigation_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: which investigation agent class should the runner use?
+
+        Default ``None`` — let the production pipeline construct its standard
+        :class:`ConnectedInvestigationAgent`. Override when the benchmark
+        needs a stricter termination policy or other agent-level behavior
+        (e.g. CloudOpsBench's minimum-tool-call floor lives in
+        :class:`tests.benchmarks.cloudopsbench.bench_agent.BenchInvestigationAgent`).
+
+        Production code stays clean: the runner just passes whatever the
+        adapter returns to ``run_investigation``. Bench-specific agent logic
+        lives entirely in bench code.
+        """
+        return None
+
+    def baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: which agent class to use for the ``llm_alone`` control arm.
+
+        Default ``None`` — the adapter does not support an in-harness baseline,
+        and the runner will refuse a config with ``modes=["llm_alone"]``.
+
+        Override to return an agent class that represents the matched control
+        for this benchmark's headline claim. The control's job is to isolate
+        whichever lever you're attributing lift to — typically: same tool
+        surface, same scoring, but no bench-specific termination policy.
+
+        The runner picks this method for ``llm_alone`` cells and
+        ``investigation_agent_class`` for ``opensre+llm`` cells, then passes
+        the chosen class to ``run_investigation`` exactly the same way.
+        """
+        return None
+
+    def pure_baseline_agent_class(self) -> type[ConnectedInvestigationAgent] | None:
+        """Optional: agent class for the pure-baseline (``llm_alone_pure``) arm.
+
+        Default ``None`` — the adapter does not ship a prompt-stripped
+        baseline; runner refuses ``modes=["llm_alone_pure"]``.
+
+        Override to return an agent that ALSO overrides ``_build_system_prompt``
+        with a minimal task-specific prompt — no opensre planner / verifier /
+        evidence-budget instructions. The contrast (opensre+llm) − (llm_alone_pure)
+        then isolates the lift from opensre's full structural stack, not just
+        the bench-specific termination policy that ``baseline_agent_class``
+        controls.
+
+        Same tool surface as both other arms; the methodological constant
+        across all three modes is the per-case integrations dict.
+        """
+        return None
+
+    def format_final_answer(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
+        run: RunResult,
+        spec: Any,  # noqa: ARG002 — used by overrides
+    ) -> RunResult:
+        """Optional: enrich ``run.final_diagnosis`` before ``score_case``.
+
+        Default no-op — returns the run unchanged. Override when the
+        benchmark's scorer expects a specific output schema the
+        investigation pipeline doesn't natively produce (e.g.,
+        CloudOpsBench requires paper-format ``top_3_predictions`` JSON
+        and runs a separate LLM call to emit it).
+
+        ``spec`` is the framework's LLMSpec for this cell — typed as
+        ``Any`` here to keep ``adapters.py`` free of llm_dispatch import
+        coupling; the override casts it to its real type.
+
+        Mode-agnostic by design: the runner calls this for every cell
+        regardless of mode, so the same hook serves both ``opensre+llm``
+        (with investigation evidence) and future ``llm_alone`` (without).
+        """
+        return run
+
+    def select_best_run(
+        self,
+        case: BenchmarkCase,  # noqa: ARG002 — used by overrides
+        runs: list[tuple[RunResult, CaseScore]],  # noqa: ARG002 — used by overrides
+    ) -> int | None:
+        """Optional: pick the canonical run from a self-consistency batch.
+
+        Called once per (case, mode, llm) group after every run finishes.
+        ``runs`` is the list of (RunResult, CaseScore) tuples in original
+        run-index order.
+
+        Return:
+          - ``int`` — index of the run whose metrics should be reported as
+            the canonical answer for this scenario. The runner emits an
+            additional ``consistency_selected`` stratum built from those
+            picks alongside the standard ``all`` (median) stratum.
+          - ``None`` — no selection; only the median ``all`` stratum is
+            reported. This is the default for adapters that don't run
+            multi-seed self-consistency.
+
+        Why this hook exists: paper-style A@1 averaging across N seeds
+        drags the median below what the agent can actually produce. The
+        06-05 CloudOpsBench run showed median a1=0.43 (gpt-4o) vs
+        ORACLE bo3=0.83 — a 0.40 consistency gap. A free selector
+        (majority vote on predicted root-cause taxonomy) closes 60% of
+        that gap with zero extra LLM calls.
+
+        The hook is opt-in per adapter so benchmarks without multi-seed
+        protocols are unaffected. The runner still computes the standard
+        median stratum so both views are reported side-by-side for
+        transparency — no silent metric swap.
+        """
+        return None

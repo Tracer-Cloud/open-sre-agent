@@ -11,6 +11,7 @@ from tests.synthetic.hermes_rca.hermes_schemas import (
     HermesScenarioAnswerKeySchema,
     HermesScenarioEvidence,
     HermesScenarioMetadataSchema,
+    validate_hermes_adapter_catalog,
     validate_hermes_alert,
     validate_hermes_answer_key,
     validate_hermes_approval_events,
@@ -120,6 +121,7 @@ def _parse_answer_key(path: Path) -> HermesScenarioAnswerKey:
 def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesScenarioEvidence:
     session_log = None
     provider_traffic = None
+    adapter_catalog = None
     hermes_config = None
     runtime_state = None
     message_history = None
@@ -144,6 +146,11 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
     if "hermes_provider_traffic" in available_evidence:
         provider_traffic = validate_hermes_provider_traffic(
             _read_json(scenario_dir / "hermes_provider_traffic.json")
+        )
+
+    if "hermes_adapter_catalog" in available_evidence:
+        adapter_catalog = validate_hermes_adapter_catalog(
+            _read_json(scenario_dir / "hermes_adapter_catalog.json")
         )
 
     if "hermes_config" in available_evidence:
@@ -218,6 +225,7 @@ def _load_evidence(scenario_dir: Path, available_evidence: list[str]) -> HermesS
     return HermesScenarioEvidence(
         hermes_session_log=session_log,
         hermes_provider_traffic=provider_traffic,
+        hermes_adapter_catalog=adapter_catalog,
         hermes_config=hermes_config,
         hermes_runtime_state=runtime_state,
         hermes_message_history=message_history,

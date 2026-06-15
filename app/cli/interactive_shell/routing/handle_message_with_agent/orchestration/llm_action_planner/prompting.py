@@ -8,13 +8,7 @@ from .constants import _MAX_TEXT_LEN, _SYSTEM_PROMPT_BASE
 
 
 def _system_prompt() -> str:
-    from app.cli.interactive_shell.command_registry.slash_catalog import (
-        build_slash_command_specs,
-        format_slash_catalog_text,
-    )
-
-    catalog = format_slash_catalog_text(build_slash_command_specs(), compact=True)
-    return f"{_SYSTEM_PROMPT_BASE}\n\n## Slash command catalog\n\n{catalog}\n"
+    return _SYSTEM_PROMPT_BASE
 
 
 def _sanitise_text(text: str) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 from collections.abc import Callable
 from itertools import chain
@@ -36,6 +37,7 @@ from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as 
 from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
+from app.cli.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
@@ -52,6 +54,7 @@ _MERGED_SEQUENCE = tuple(
         SESSION_COMMANDS,
         INTEGRATIONS_COMMANDS,
         MODEL_COMMANDS,
+        TOOLS_COMMANDS,
         INVESTIGATION_COMMANDS,
         TASK_COMMANDS,
         WATCH_COMMANDS,
@@ -86,20 +89,81 @@ def dispatch_slash(
     the registry resolves to a known command, or bare ``/`` after an equivalent
     gate for help.
     """
-    stripped = command_line.strip()
-    if stripped == "/":
-        from app.cli.interactive_shell.command_registry.help import _cmd_help
+    env_backup = os.environ.get("OPENSRE_INTERACTIVE")
+    if is_tty is False:
+        os.environ["OPENSRE_INTERACTIVE"] = "0"
 
-        if policy_precleared:
+    try:
+        stripped = command_line.strip()
+        if stripped == "/":
+            from app.cli.interactive_shell.command_registry.help import _cmd_help
+
+            if policy_precleared:
+                session.record("slash", stripped, ok=True)
+                return _cmd_help(session, console, [])
+
+            help_cmd = SLASH_COMMANDS["/help"]
+            gate = evaluate_slash_tier(
+                resolve_slash_execution_tier("/help", [], help_cmd.execution_tier)
+            )
+            if not execution_allowed(
+                gate,
+                session=session,
+                console=console,
+                action_summary=stripped,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+            ):
+                session.record("slash", stripped, ok=False)
+                return True
             session.record("slash", stripped, ok=True)
             return _cmd_help(session, console, [])
 
-        help_cmd = SLASH_COMMANDS["/help"]
-        gate = evaluate_slash_tier(
-            resolve_slash_execution_tier("/help", [], help_cmd.execution_tier)
-        )
+        parts = stripped.split()
+        if not parts:
+            return True
+        name = parts[0].lower()
+        if name in ("/watch", "/unwatch"):
+            head = parts[0]
+            body = stripped[len(head) :].strip()
+            try:
+                # Use POSIX mode on all platforms so quoted values are unwrapped
+                # consistently (e.g., --max-cpu "80" -> 80).
+                args = shlex.split(body, posix=True)
+            except ValueError:
+                args = body.split()
+        else:
+            args = parts[1:]
+        cmd = SLASH_COMMANDS.get(name)
+        if cmd is None:
+            suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
+            session.record("slash", stripped, ok=False)
+            console.print()
+            if suggestion is None:
+                console.print(
+                    f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])"
+                )
+            else:
+                console.print(
+                    f"[{ERROR}]unknown command:[/] {escape(name)}  "
+                    f"Did you mean [bold]{escape(suggestion)}[/bold]? "
+                    "(type [bold]/help[/bold])"
+                )
+            return True
+        if cmd.validate_args is not None:
+            validation_error = cmd.validate_args(args)
+            if validation_error is not None:
+                console.print(validation_error)
+                session.record("slash", stripped, ok=False)
+                return True
+        if policy_precleared:
+            if name not in _DEFER_SLASH_RECORDING:
+                session.record("slash", stripped, ok=True)
+            return cmd.handler(session, console, args)
+        tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
+        policy = evaluate_slash_tier(tier)
         if not execution_allowed(
-            gate,
+            policy,
             session=session,
             console=console,
             action_summary=stripped,
@@ -108,63 +172,15 @@ def dispatch_slash(
         ):
             session.record("slash", stripped, ok=False)
             return True
-        session.record("slash", stripped, ok=True)
-        return _cmd_help(session, console, [])
-
-    parts = stripped.split()
-    if not parts:
-        return True
-    name = parts[0].lower()
-    if name in ("/watch", "/unwatch"):
-        head = parts[0]
-        body = stripped[len(head) :].strip()
-        try:
-            # Use POSIX mode on all platforms so quoted values are unwrapped
-            # consistently (e.g., --max-cpu "80" -> 80).
-            args = shlex.split(body, posix=True)
-        except ValueError:
-            args = body.split()
-    else:
-        args = parts[1:]
-    cmd = SLASH_COMMANDS.get(name)
-    if cmd is None:
-        suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
-        session.record("slash", stripped, ok=False)
-        console.print()
-        if suggestion is None:
-            console.print(f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])")
-        else:
-            console.print(
-                f"[{ERROR}]unknown command:[/] {escape(name)}  "
-                f"Did you mean [bold]{escape(suggestion)}[/bold]? "
-                "(type [bold]/help[/bold])"
-            )
-        return True
-    if cmd.validate_args is not None:
-        validation_error = cmd.validate_args(args)
-        if validation_error is not None:
-            console.print(validation_error)
-            session.record("slash", stripped, ok=False)
-            return True
-    if policy_precleared:
         if name not in _DEFER_SLASH_RECORDING:
             session.record("slash", stripped, ok=True)
         return cmd.handler(session, console, args)
-    tier = resolve_slash_execution_tier(name, args, cmd.execution_tier)
-    policy = evaluate_slash_tier(tier)
-    if not execution_allowed(
-        policy,
-        session=session,
-        console=console,
-        action_summary=stripped,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-    ):
-        session.record("slash", stripped, ok=False)
-        return True
-    if name not in _DEFER_SLASH_RECORDING:
-        session.record("slash", stripped, ok=True)
-    return cmd.handler(session, console, args)
+    finally:
+        if is_tty is False:
+            if env_backup is None:
+                del os.environ["OPENSRE_INTERACTIVE"]
+            else:
+                os.environ["OPENSRE_INTERACTIVE"] = env_backup
 
 
 __all__ = [

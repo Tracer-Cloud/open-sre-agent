@@ -19,7 +19,11 @@ from app.cli.interactive_shell.ui import (
 )
 
 
-def _cmd_exit(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    if session.session_id:
+        console.print()
+        console.print(f"[{DIM}]Resume this session with:[/]")
+        console.print(f"[{DIM}]/resume {session.session_id} [/]")
     console.print(f"[{DIM}]goodbye.[/]")
     return False
 

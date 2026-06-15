@@ -269,6 +269,40 @@ As a best-effort fallback, the probe treats explicit `GEMINI_API_KEY` / `GOOGLE_
 
 Invocations run as `agy -p PROMPT --print-timeout {N}s`. The adapter never passes `--continue` / `--conversation` / `--sandbox` / `--dangerously-skip-permissions`, keeping every opensre call ephemeral.
 
+
+### xAI Grok Build CLI
+
+```bash
+export LLM_PROVIDER=grok-cli
+# Authenticate the Grok Build CLI separately. Either path works:
+grok login                 # OAuth sign-in with a SuperGrok / X Premium+ account
+# ...or, for headless / CI runs, use an API key instead of a browser login:
+export XAI_API_KEY=xai-...  # get one from the xAI console
+# Optional overrides (all blank-by-default):
+export GROK_CLI_MODEL=          # e.g. grok-build; unset → CLI configured default
+export GROK_CLI_BIN=            # explicit path to the `grok` binary
+export GROK_CLI_TIMEOUT_SECONDS=300   # default 300; clamped 30-600
+```
+
+Requires the [xAI Grok Build CLI](https://x.ai/cli) (binary: `grok`). Install with
+`curl -fsSL https://x.ai/cli/install.sh | bash` (macOS/Linux) or
+`irm https://x.ai/cli/install.ps1 | iex` (Windows). If `GROK_CLI_MODEL` is unset, OpenSRE
+omits `-m` and the CLI uses its configured default. The wizard populates the model list live
+from `grok models` at onboarding time so newly released models appear without an OpenSRE update.
+
+Invocations run as `grok -p PROMPT --output-format plain`, so each opensre call is a single
+non-interactive turn. The adapter deliberately omits `--always-approve`: OpenSRE drives its own
+tools, so Grok is used purely as a text responder and never auto-executes shell commands or file edits.
+
+**Auth detection:** auth is probed via `grok models` (~0.5 s, no LLM call), which prints
+"You are logged in" on success. `XAI_API_KEY` is treated as an authenticated fallback for
+headless / CI runs even when the probe result is unclear. `XAI_API_KEY` is forwarded **only**
+to the Grok subprocess (never via the shared CLI env allowlist), so it cannot leak into other
+CLI adapters.
+
+> **Not to be confused with `groq`.** The `grok-cli` provider is xAI's Grok Build CLI. The
+> separate `groq` provider is the Groq HTTP API (a different company); the two are unrelated.
+
 See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
 ## Reasoning effort (interactive shell)
