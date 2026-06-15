@@ -492,6 +492,8 @@ def _setup_mongodb() -> None:
 
 def _setup_redis() -> None:
     host = _p("Host (e.g. localhost or redis.example.net)")
+    if not host:
+        _die("host is required.")
     port_input = _p("Port", default="6379")
     username = _p("Username (leave blank unless using Redis ACLs)")
     password = _p("Password (leave blank if not set)", secret=True)
@@ -508,8 +510,6 @@ def _setup_redis() -> None:
         print("\nAborted.")
         sys.exit(1)
     ssl = ssl_choice == "1"
-    if not host:
-        _die("host is required.")
     try:
         port = int(port_input)
     except (TypeError, ValueError):
