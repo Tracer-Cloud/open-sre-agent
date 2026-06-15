@@ -185,7 +185,7 @@ class VoyageEmbeddingsClient:
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        api_key = resolve_llm_api_key(self._api_key_env) or self._api_key
+        api_key = self._api_key or resolve_llm_api_key(self._api_key_env)
         if not api_key:
             raise RuntimeError(
                 f"Missing {self._api_key_env}. Set it in your environment, .env, "
@@ -261,7 +261,7 @@ def get_embeddings_client() -> EmbeddingsClient | None:
             base_url=f"{host.rstrip('/')}/v1",
             dim=OLLAMA_EMBEDDINGS_DIM,
         )
-    logger.info("No embeddings client is available for embeddings provider %s.", provider)
+    logger.debug("No embeddings client is available for embeddings provider %s.", provider)
     return None
 
 

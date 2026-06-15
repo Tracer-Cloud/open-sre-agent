@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -27,6 +28,10 @@ class _FakeOpenAIEmbeddings:
 class _FakeOpenAIClient:
     def __init__(self, vectors: list[list[float]]) -> None:
         self.embeddings = _FakeOpenAIEmbeddings(vectors)
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class _FakeVoyageResponse:
@@ -61,6 +66,12 @@ def test_noop_embeddings_are_deterministic_and_batched() -> None:
     assert first[0] != first[1]
     assert len(first) == 3
     assert all(len(vector) == client.dim for vector in first)
+
+
+@pytest.mark.parametrize("dim", [0, -1])
+def test_noop_embeddings_reject_non_positive_dim(dim: int) -> None:
+    with pytest.raises(ValueError, match="dim must be greater than zero"):
+        NoOpEmbeddingsClient(dim=dim)
 
 
 def test_factory_returns_none_for_missing_openai_credentials(
@@ -125,6 +136,18 @@ def test_factory_selects_ollama_without_credentials(monkeypatch: pytest.MonkeyPa
     assert client.dim == 768
 
 
+def test_factory_logs_unsupported_provider_at_debug(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.delenv("OPENSRE_EMBEDDINGS_PROVIDER", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    caplog.set_level(logging.INFO, logger="app.services.embeddings_client")
+
+    assert get_embeddings_client() is None
+    assert "No embeddings client is available" not in caplog.text
+
+
 def test_openai_embed_sends_batch_and_tracks_response_dim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -142,9 +165,45 @@ def test_openai_embed_sends_batch_and_tracks_response_dim(
 
     assert vectors == [[0.1, 0.2], [0.3, 0.4]]
     assert client.dim == 2
+    assert fake_client.closed is True
     assert fake_client.embeddings.calls == [
         {"model": "custom-embedding", "input": ["alpha", "beta"]},
     ]
+
+
+def test_embedding_clients_return_empty_batch_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.embeddings_client.resolve_llm_api_key", lambda _env: "")
+
+    openai_client = OpenAIEmbeddingsClient(
+        model="custom-embedding",
+        client_factory=lambda _api_key, _base_url: pytest.fail("client should not be built"),
+    )
+    voyage_client = VoyageEmbeddingsClient(
+        api_key="",
+        model="voyage-test",
+        http_client_factory=lambda: pytest.fail("client should not be built"),
+    )
+
+    assert openai_client.embed([]) == []
+    assert voyage_client.embed([]) == []
+
+
+def test_openai_embed_rejects_mismatched_vector_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = _FakeOpenAIClient([[0.1, 0.2]])
+    monkeypatch.setattr(
+        "app.services.embeddings_client.resolve_llm_api_key", lambda _env: "sk-test"
+    )
+    client = OpenAIEmbeddingsClient(
+        model="custom-embedding",
+        client_factory=lambda _api_key, _base_url: fake_client,
+    )
+
+    with pytest.raises(RuntimeError, match="returned 1 vectors for 2 input texts"):
+        client.embed(["alpha", "beta"])
 
 
 def test_voyage_embed_sends_batch_and_tracks_response_dim(
@@ -171,3 +230,20 @@ def test_voyage_embed_sends_batch_and_tracks_response_dim(
             "json": {"model": "voyage-test", "input": ["alpha", "beta"]},
         }
     ]
+
+
+def test_voyage_embed_prefers_constructor_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_http = _FakeHttpClient([[0.1]])
+    monkeypatch.setattr(
+        "app.services.embeddings_client.resolve_llm_api_key", lambda _env: "env-key"
+    )
+    client = VoyageEmbeddingsClient(
+        api_key="explicit-key",
+        model="voyage-test",
+        http_client_factory=lambda: fake_http,
+    )
+
+    assert client.embed(["alpha"]) == [[0.1]]
+    assert fake_http.calls[0]["headers"] == {"Authorization": "Bearer explicit-key"}
