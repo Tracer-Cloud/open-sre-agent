@@ -337,3 +337,6 @@ class TestResolveIntegrations:
         assert resolved["redis"]["port"] == 6380
         assert resolved["redis"]["db"] == 1
         assert resolved["redis"]["ssl"] is False  # default
+        assert resolved["redis"]["integration_id"] == "123"
+        assert "timeout_seconds" not in resolved["redis"]
+        assert "max_results" not in resolved["redis"]
