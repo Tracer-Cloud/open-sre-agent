@@ -17,6 +17,7 @@ from pydantic import Field, field_validator
 
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+from app.utils.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,10 @@ def redis_config_from_env() -> RedisConfig | None:
     return build_redis_config(
         {
             "host": host,
-            "port": os.getenv("REDIS_PORT", str(DEFAULT_REDIS_PORT)),
+            "port": safe_int(os.getenv("REDIS_PORT", str(DEFAULT_REDIS_PORT)), DEFAULT_REDIS_PORT),
             "username": os.getenv("REDIS_USERNAME", "").strip(),
             "password": os.getenv("REDIS_PASSWORD", "").strip(),
-            "db": os.getenv("REDIS_DATABASE", 0),
+            "db": safe_int(os.getenv("REDIS_DATABASE", "0"), 0),
             "ssl": os.getenv("REDIS_SSL", "false").strip().lower() in ("true", "1", "yes"),
         }
     )
