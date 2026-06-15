@@ -49,10 +49,21 @@ class _FakeHttpClient:
     def __init__(self, vectors: list[list[float]]) -> None:
         self._response = _FakeVoyageResponse(vectors)
         self.calls: list[dict[str, Any]] = []
+        self.closed = False
 
     def post(self, url: str, **kwargs: Any) -> _FakeVoyageResponse:
         self.calls.append({"url": url, **kwargs})
         return self._response
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def _skip_env_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _load_env(*, override: bool) -> None:
+        assert override is False
+
+    monkeypatch.setattr("app.services.embeddings_client.load_env", _load_env)
 
 
 def test_noop_embeddings_are_deterministic_and_batched() -> None:
@@ -77,6 +88,8 @@ def test_noop_embeddings_reject_non_positive_dim(dim: int) -> None:
 def test_factory_returns_none_for_missing_openai_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _skip_env_load(monkeypatch)
+    monkeypatch.delenv("OPENSRE_EMBEDDINGS_PROVIDER", raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("app.services.embeddings_client.resolve_llm_api_key", lambda _env: "")
@@ -85,6 +98,8 @@ def test_factory_returns_none_for_missing_openai_credentials(
 
 
 def test_factory_selects_openai_with_model_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    _skip_env_load(monkeypatch)
+    monkeypatch.delenv("OPENSRE_EMBEDDINGS_PROVIDER", raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENSRE_EMBEDDINGS_MODEL", "text-embedding-test")
     monkeypatch.setattr(
@@ -124,6 +139,8 @@ def test_factory_loads_env_and_selects_voyage_override(
 
 
 def test_factory_selects_ollama_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    _skip_env_load(monkeypatch)
+    monkeypatch.delenv("OPENSRE_EMBEDDINGS_PROVIDER", raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
     monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
@@ -140,6 +157,7 @@ def test_factory_logs_unsupported_provider_at_debug(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    _skip_env_load(monkeypatch)
     monkeypatch.delenv("OPENSRE_EMBEDDINGS_PROVIDER", raising=False)
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     caplog.set_level(logging.INFO, logger="app.services.embeddings_client")
@@ -223,6 +241,7 @@ def test_voyage_embed_sends_batch_and_tracks_response_dim(
 
     assert vectors == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
     assert client.dim == 3
+    assert fake_http.closed is True
     assert fake_http.calls == [
         {
             "url": "https://api.voyageai.com/v1/embeddings",
