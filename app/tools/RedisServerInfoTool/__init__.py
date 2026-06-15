@@ -19,6 +19,17 @@ from app.tools.tool_decorator import tool
     ),
     source="redis",
     surfaces=("investigation", "chat"),
+    use_cases=[
+        "Assess Redis health during an incident: memory pressure, eviction, and client load.",
+        "Check used vs. max memory and the maxmemory-policy when investigating OOM or latency.",
+        "Read keyspace hit/miss ratios to spot cache-effectiveness regressions.",
+    ],
+    outputs={
+        "memory": "Used, peak, and RSS bytes, maxmemory, fragmentation ratio, and eviction policy.",
+        "clients": "Connected, blocked, and tracking client counts.",
+        "stats": "Connection/command counters, ops/sec, keyspace hits/misses, evicted/expired keys.",
+        "keyspace": "Per-database key counts, expires, and average TTL.",
+    },
     is_available=redis_is_available,
     extract_params=redis_extract_params,
 )

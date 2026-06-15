@@ -19,6 +19,14 @@ from app.tools.tool_decorator import tool
     ),
     source="redis",
     surfaces=("investigation", "chat"),
+    use_cases=[
+        "Identify slow Redis commands when latency or timeouts are reported.",
+        "Correlate a latency spike with specific expensive commands and their callers.",
+    ],
+    outputs={
+        "returned_entries": "Number of slow log entries returned (capped at max_results).",
+        "entries": "Slow log records: id, start_time, duration_microseconds, command, and client.",
+    },
     is_available=redis_is_available,
     extract_params=redis_extract_params,
 )

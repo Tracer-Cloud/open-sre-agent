@@ -19,6 +19,16 @@ from app.tools.tool_decorator import tool
     ),
     source="redis",
     surfaces=("investigation", "chat"),
+    use_cases=[
+        "Check replication health when investigating stale reads or a failover event.",
+        "Measure replica offset lag and master link status across connected replicas.",
+    ],
+    outputs={
+        "role": "Node role: master or slave.",
+        "connected_slaves": "Number of replicas connected to a master.",
+        "master": "For replicas: master host/port, link status, and sync progress.",
+        "replicas": "For masters: per-replica address, state, offset, and lag_bytes.",
+    },
     is_available=redis_is_available,
     extract_params=redis_extract_params,
 )
