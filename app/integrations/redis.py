@@ -351,25 +351,33 @@ def scan_keys(
         client = _get_client(config)
         try:
             cursor, matched = 0, 0
-            truncated = False
             samples: list[dict[str, Any]] = []
             while True:
+                sampled_key_names: list[str] = []
                 cursor, batch = client.scan(cursor=cursor, match=match, count=100)
                 for key in batch:
                     matched += 1
-                    if len(samples) < sample_cap:
-                        ttl = client.ttl(key)
+                    if len(samples) + len(sampled_key_names) < sample_cap:
+                        sampled_key_names.append(key)
+                    if matched >= DEFAULT_REDIS_SCAN_LIMIT:
+                        break
+
+                if sampled_key_names:
+                    pipe = client.pipeline(transaction=False)
+                    for key in sampled_key_names:
+                        pipe.ttl(key)
+                        pipe.type(key)
+                    pipe_results = pipe.execute()
+                    for index, key in enumerate(sampled_key_names):
                         samples.append(
                             {
                                 "key": key,
-                                "ttl_seconds": ttl,  # -1 = no expiry, -2 = missing
-                                "type": client.type(key),
+                                "ttl_seconds": pipe_results[2 * index],
+                                "type": pipe_results[2 * index + 1],
                             }
                         )
-                    if matched >= DEFAULT_REDIS_SCAN_LIMIT:
-                        truncated = True
-                        break
-                if cursor == 0 or truncated:
+
+                if cursor == 0 or matched >= DEFAULT_REDIS_SCAN_LIMIT:
                     break
         finally:
             client.close()
@@ -381,7 +389,7 @@ def scan_keys(
         "available": True,
         "pattern": match,
         "matched_keys": matched,
-        "scan_truncated": truncated,
+        "scan_truncated": matched >= DEFAULT_REDIS_SCAN_LIMIT,
         "scan_limit": DEFAULT_REDIS_SCAN_LIMIT,
         "sampled_keys": len(samples),
         "samples": samples,

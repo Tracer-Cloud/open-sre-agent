@@ -263,8 +263,7 @@ class TestRedisScanKeys:
         mock_client = MagicMock()
         # One SCAN round then cursor 0 to terminate.
         mock_client.scan.return_value = (0, ["session:1", "session:2"])
-        mock_client.ttl.side_effect = [60, -1]
-        mock_client.type.side_effect = ["string", "hash"]
+        mock_client.pipeline.return_value.execute.return_value = [60, "string", -1, "hash"]
         mock_get_client.return_value = mock_client
 
         result = scan_keys(RedisConfig(host="cache"), pattern="session:*")
@@ -274,6 +273,23 @@ class TestRedisScanKeys:
         assert result["matched_keys"] == 2
         assert result["scan_truncated"] is False
         assert result["samples"][0] == {"key": "session:1", "ttl_seconds": 60, "type": "string"}
+        assert result["samples"][1] == {"key": "session:2", "ttl_seconds": -1, "type": "hash"}
+        mock_client.pipeline.assert_called_once_with(transaction=False)
+
+    @patch("app.integrations.redis._get_client")
+    def test_scan_respects_sample_cap_within_a_single_page(self, mock_get_client):
+        # A single SCAN page larger than the cap must not oversample: sampling
+        # is capped at config.max_results even when one page exceeds it.
+        mock_client = MagicMock()
+        mock_client.scan.return_value = (0, [f"k{i}" for i in range(60)])
+        mock_client.pipeline.return_value.execute.return_value = [1, "string"] * 60
+        mock_get_client.return_value = mock_client
+
+        result = scan_keys(RedisConfig(host="cache", max_results=50))
+
+        assert result["matched_keys"] == 60  # all matches counted
+        assert result["sampled_keys"] == 50  # but sampling stays capped
+        assert len(result["samples"]) == 50
 
     @patch("app.integrations.redis.report_validation_failure")
     @patch("app.integrations.redis._get_client")
