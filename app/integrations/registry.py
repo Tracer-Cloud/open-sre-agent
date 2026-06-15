@@ -194,8 +194,8 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         aliases=("valkey",),
         verifier=_verify_redis,
         direct_effective=True,
-        setup_order=25,
-        verify_order=37,
+        setup_order=30,
+        verify_order=41,
     ),
     IntegrationSpec(
         service="betterstack",
