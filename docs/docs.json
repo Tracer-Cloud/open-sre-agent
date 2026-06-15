@@ -193,7 +193,9 @@
               "rds",
               "snowflake",
               "supabase",
-              "redis"
+              "redis",
+              "rds",
+              "temporal"
             ]
           }
         ]

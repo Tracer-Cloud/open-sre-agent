@@ -1,0 +1,103 @@
+---
+title: "Temporal"
+description: "Connect Temporal so OpenSRE can inspect workflow executions, event history, and worker health during investigations"
+---
+
+OpenSRE queries Temporal's HTTP Visibility API to retrieve workflow executions, event history, task queue health, and namespace-level metrics — helping diagnose workflow failures, activity retries, and worker outages.
+
+## Prerequisites
+
+- Temporal Cloud account or self-hosted Temporal Server (v1.21+ with HTTP API enabled)
+- API key (Temporal Cloud) or accessible HTTP API URL (self-hosted)
+
+## Setup
+
+### Option 1: Environment variables
+
+```bash
+export TEMPORAL_API_URL="https://your-namespace.tmprl.cloud:7233"
+export TEMPORAL_NAMESPACE="your-namespace"
+export TEMPORAL_API_KEY="your-temporal-api-key"
+```
+
+### Option 2: Persistent store
+
+Add to `~/.opensre/integrations.json`:
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "temporal-prod",
+      "service": "temporal",
+      "status": "active",
+      "credentials": {
+        "base_url": "https://your-namespace.tmprl.cloud:7233",
+        "namespace": "your-namespace",
+        "api_key": "your-temporal-api-key"
+      }
+    }
+  ]
+}
+```
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `base_url` | — | Temporal HTTP API base URL |
+| `namespace` | `default` | Temporal namespace to query |
+| `api_key` | — | API key for Temporal Cloud (omit for unauthenticated self-hosted) |
+
+## Temporal Cloud setup
+
+1. In Temporal Cloud, go to **Settings** → **API Keys**
+2. Create a new API key with read access to your namespace
+3. Your base URL follows the pattern: `https://<namespace>.<account>.tmprl.cloud:7233`
+
+## Self-hosted Temporal Server
+
+For self-hosted Temporal Server with the HTTP API enabled, set `base_url` to your server's HTTP endpoint (no API key required if unauthenticated):
+
+```json
+{
+  "base_url": "http://temporal-frontend:7233",
+  "namespace": "default",
+  "api_key": ""
+}
+```
+
+Ensure the HTTP API is enabled in your Temporal Server configuration (`frontend.httpPort`).
+
+## Investigation tools
+
+When OpenSRE investigates a Temporal-related alert, four diagnostic tools are available:
+
+| Tool | What it does |
+| --- | --- |
+| **Namespace info** | Retrieves namespace state and workflow execution counts grouped by status (Running, Failed, TimedOut) |
+| **Workflows** | Lists recent workflow executions with status, type, task queue, and timing |
+| **Workflow history** | Fetches the event history for a specific execution — shows the sequence of started, failed, and completed events |
+| **Task queue** | Describes a task queue's active pollers and backlog stats (queue depth, add/dispatch rates) |
+
+### Typical investigation flow
+
+1. **Namespace info** — get a high-level picture: how many workflows are running vs failed?
+2. **Workflows** — filter to failed/timed-out executions, identify the affected workflow type and task queue
+3. **Workflow history** — drill into a specific execution to find which activity failed and why
+4. **Task queue** — check if workers are polling and whether the queue has a growing backlog
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **401 Unauthorized** | Check your API key — Temporal Cloud requires a valid key with namespace read access |
+| **Connection refused** | Verify `base_url` is reachable and the HTTP API port is open |
+| **404 Namespace not found** | Confirm the `namespace` value matches exactly (case-sensitive) |
+| **Empty workflow list** | Workflows may have passed retention — check namespace retention settings |
+| **No pollers on task queue** | Workers may be down — check worker deployment health |
+
+## Security best practices
+
+- Use a **read-only API key** — OpenSRE never writes to Temporal.
+- For self-hosted, restrict network access to the HTTP API to trusted IPs.
+- Store credentials in `~/.opensre/integrations.json` or environment variables, not in source code.
