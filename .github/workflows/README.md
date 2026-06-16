@@ -15,7 +15,9 @@ Opt-in squash merge when CI is green. Trigger: add the **`automerge`** label to 
 
 1. Add the `automerge` label on GitHub (or `gh pr edit <n> --add-label automerge`).
 2. [`.github/scripts/automerge_pr.py`](../scripts/automerge_pr.py) runs on label add, new pushes, or check-suite completion.
-3. The PR is squash-merged with branch delete when every reported check is `SUCCESS`, `SKIPPED`, or `NEUTRAL`.
+3. The PR is squash-merged with branch delete when every reported check is green:
+   - GitHub Actions **CheckRun** items (`SUCCESS`, `SKIPPED`, `NEUTRAL`)
+   - Legacy commit **StatusContext** items (`SUCCESS` only)
 
 Push again with the label still on to re-merge after CI. Remove the label to cancel.
 

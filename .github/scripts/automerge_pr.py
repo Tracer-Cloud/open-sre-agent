@@ -10,7 +10,67 @@ import sys
 from typing import Any
 
 AUTOMERGE_LABEL = "automerge"
-ALLOWED_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
+CHECK_RUN_PENDING_STATUSES = frozenset({"IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED"})
+CHECK_RUN_ALLOWED_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
+STATUS_CONTEXT_PENDING_STATES = frozenset({"PENDING", "EXPECTED"})
+STATUS_CONTEXT_ALLOWED_STATES = frozenset({"SUCCESS"})
+
+
+def _check_display_name(check: dict[str, Any]) -> str:
+    return str(check.get("name") or check.get("context") or "unknown")
+
+
+def _check_run_is_green(check: dict[str, Any]) -> tuple[bool, str]:
+    name = _check_display_name(check)
+    status = check.get("status", "")
+    conclusion = check.get("conclusion") or ""
+
+    if status in CHECK_RUN_PENDING_STATUSES:
+        return False, f"check still running: {name}"
+
+    if status != "COMPLETED":
+        return False, f"unexpected check status for {name}: {status or 'missing status'}"
+
+    if conclusion not in CHECK_RUN_ALLOWED_CONCLUSIONS:
+        return False, f"check not green: {name} ({conclusion or 'missing conclusion'})"
+
+    return True, ""
+
+
+def _status_context_is_green(check: dict[str, Any]) -> tuple[bool, str]:
+    name = _check_display_name(check)
+    state = check.get("state") or ""
+
+    if state in STATUS_CONTEXT_PENDING_STATES:
+        return False, f"status still pending: {name}"
+
+    if state not in STATUS_CONTEXT_ALLOWED_STATES:
+        return False, f"status not green: {name} ({state or 'missing state'})"
+
+    return True, ""
+
+
+def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
+    typename = check.get("__typename", "")
+    if typename == "StatusContext":
+        return _status_context_is_green(check)
+    if typename == "CheckRun":
+        return _check_run_is_green(check)
+    if "state" in check and "status" not in check:
+        return _status_context_is_green(check)
+    return _check_run_is_green(check)
+
+
+def _checks_are_green(status_rollup: list[dict[str, Any]]) -> tuple[bool, str]:
+    if not status_rollup:
+        return False, "no status checks reported yet"
+
+    for check in status_rollup:
+        green, reason = _rollup_item_is_green(check)
+        if not green:
+            return False, reason
+
+    return True, "all checks green"
 
 
 def _run_gh(args: list[str]) -> Any:
@@ -21,27 +81,6 @@ def _run_gh(args: list[str]) -> Any:
         text=True,
     )
     return json.loads(result.stdout)
-
-
-def _checks_are_green(status_rollup: list[dict[str, Any]]) -> tuple[bool, str]:
-    if not status_rollup:
-        return False, "no status checks reported yet"
-
-    for check in status_rollup:
-        name = check.get("name", "unknown")
-        status = check.get("status", "")
-        conclusion = check.get("conclusion") or ""
-
-        if status in {"IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED"}:
-            return False, f"check still running: {name}"
-
-        if status != "COMPLETED":
-            return False, f"unexpected check status for {name}: {status}"
-
-        if conclusion not in ALLOWED_CONCLUSIONS:
-            return False, f"check not green: {name} ({conclusion or 'missing conclusion'})"
-
-    return True, "all checks green"
 
 
 def main() -> int:
