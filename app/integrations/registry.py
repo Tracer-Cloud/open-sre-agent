@@ -35,8 +35,10 @@ from app.integrations._verification_adapters import (
     _verify_openobserve,
     _verify_opensearch,
     _verify_opsgenie,
+    _verify_pagerduty,
     _verify_postgresql,
     _verify_rabbitmq,
+    _verify_redis,
     _verify_sentry,
     _verify_signoz,
     _verify_slack_without_test,
@@ -188,6 +190,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=29,
         verify_order=40,
+    ),
+    IntegrationSpec(
+        service="redis",
+        aliases=("valkey",),
+        verifier=_verify_redis,
+        direct_effective=True,
+        setup_order=30,
+        verify_order=41,
     ),
     IntegrationSpec(
         service="betterstack",
@@ -381,6 +391,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=30,
         verify_order=41,
+    ),
+    IntegrationSpec(
+        service="pagerduty",
+        verifier=_verify_pagerduty,
+        direct_effective=True,
+        setup_order=31,
+        verify_order=42,
     ),
 )
 

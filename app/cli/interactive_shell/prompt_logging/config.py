@@ -36,7 +36,7 @@ class PromptLogConfig:
     enabled: bool = True
     local_enabled: bool = True
     posthog_enabled: bool = True
-    redact: bool = False
+    redact: bool = True
     max_chars: int = _DEFAULT_MAX_CHARS
     log_path: Path = _DEFAULT_LOG_PATH
 
@@ -51,8 +51,12 @@ class PromptLogConfig:
         enabled = not _coerce_bool(disabled, default=False)
         local_enabled = not _coerce_bool(local_disabled, default=False)
         posthog_enabled = _coerce_bool(file_conf.get("posthog_enabled"), default=True)
+        # Default on, matching HistoryPolicy.redact — prompt/response content can
+        # carry the same token shapes as typed history and additionally leaves the
+        # machine via the PostHog sink, so it should not be less guarded by default
+        # than command history is. See docs/interactive-shell-privacy.mdx.
         redact = _coerce_bool(
-            redact_env, default=_coerce_bool(file_conf.get("redact"), default=False)
+            redact_env, default=_coerce_bool(file_conf.get("redact"), default=True)
         )
         max_chars = _coerce_int(file_conf.get("max_chars"), default=_DEFAULT_MAX_CHARS)
 

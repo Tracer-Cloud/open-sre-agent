@@ -41,8 +41,10 @@ _verify_openclaw = _adapters._verify_openclaw
 _verify_openobserve = _adapters._verify_openobserve
 _verify_opensearch = _adapters._verify_opensearch
 _verify_opsgenie = _adapters._verify_opsgenie
+_verify_pagerduty = _adapters._verify_pagerduty
 _verify_postgresql = _adapters._verify_postgresql
 _verify_rabbitmq = _adapters._verify_rabbitmq
+_verify_redis = _adapters._verify_redis
 _verify_sentry = _adapters._verify_sentry
 _verify_signoz = _adapters._verify_signoz
 _verify_tempo = _adapters._verify_tempo
@@ -189,8 +191,10 @@ __all__ = [
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",
+    "_verify_pagerduty",
     "_verify_postgresql",
     "_verify_rabbitmq",
+    "_verify_redis",
     "_verify_sentry",
     "_verify_signoz",
     "_verify_tempo",

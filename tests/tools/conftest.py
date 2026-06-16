@@ -114,6 +114,14 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
         "mongodb": {
             "connection_string": "mongodb://localhost:27017",
         },
+        "redis": {
+            "host": "localhost",
+            "port": 6379,
+            "username": "",
+            "password": "",
+            "db": 0,
+            "ssl": False,
+        },
         "postgresql": {
             "host": "localhost",
             "port": 5432,

@@ -121,11 +121,13 @@
               "coralogix",
               "datadog",
               "grafana",
+              "grafana_annotations",
               "hermes",
               "honeycomb",
               "incident_io",
               "openobserve",
               "opsgenie",
+              "pagerduty",
               "sentry",
               "signoz",
               "tempo",
@@ -139,6 +141,7 @@
             "pages": [
               "argocd",
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
               "integrations/github-actions",
@@ -182,7 +185,8 @@
               "rabbitmq",
               "rds",
               "snowflake",
-              "supabase"
+              "supabase",
+              "redis"
             ]
           }
         ]
