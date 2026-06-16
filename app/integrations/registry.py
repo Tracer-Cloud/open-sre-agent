@@ -388,8 +388,8 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="pagerduty",
         verifier=_verify_pagerduty,
         direct_effective=True,
-        setup_order=30,
-        verify_order=41,
+        setup_order=31,
+        verify_order=42,
     ),
 )
 
