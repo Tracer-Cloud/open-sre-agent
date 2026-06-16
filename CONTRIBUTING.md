@@ -47,7 +47,7 @@ If you prefer VS Code, use the devcontainer at [.devcontainer/devcontainer.json]
 5. **Code and test** — Make changes, add tests, ensure all checks pass
 6. **Submit a PR** — Open a pull request (or draft PR) linked to the issue; use the PR template
 7. **Review & iterate** — Respond to feedback, make changes as needed
-8. **Merge** — Maintainer merges once approved
+8. **Merge** — Maintainer merges once approved (or add the `automerge` label to squash-merge when CI is green)
 
 **Detailed steps:** See the "Development Workflow" section below.
 
@@ -183,6 +183,18 @@ We use [Greptile](https://greptile.com) for automated code review. Before a PR c
 Wait 30–60 seconds for the review to appear, then address each comment and re-trigger until you hit 5/5.
 
 > **Automate the loop** — the [greploop skill](https://skills.sh/greptileai/skills/greploop) handles triggering, waiting, fixing, and re-reviewing automatically until 5/5 is reached.
+
+### Auto-merge when CI is green
+
+For branches pushed to `Tracer-Cloud/opensre`, you can skip manually watching CI and clicking merge:
+
+1. Wait until Greptile is **5/5** and the PR is otherwise ready.
+2. Add the **`automerge`** label to the PR.
+3. The [Auto-merge workflow](.github/workflows/automerge.yml) squash-merges once every reported check is green (`SUCCESS`, `SKIPPED`, or `NEUTRAL`).
+
+If you push new commits, leave the label on — the workflow re-runs after CI finishes. Remove the label if you want to stop an automatic merge.
+
+Fork PRs still need a manual maintainer merge (GitHub does not grant Actions write access on fork heads).
 
 ### If Your PR Includes Screenshots or Logs
 
