@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from app.integrations.llm_cli.failure_explain import (
+    classify_cli_failure_category_hint,
     classify_cli_failure_hint,
     explain_cli_failure,
+    is_context_length_overflow,
 )
+
+
+def test_is_context_length_overflow_distinguishes_timeouts() -> None:
+    assert is_context_length_overflow("prompt is too long: 200001 tokens > 200000 maximum")
+    assert not is_context_length_overflow("The request took too long to complete")
+
+
+def test_classify_context_hint_ignores_timeout_too_long() -> None:
+    hint = classify_cli_failure_category_hint("", "The request took too long to complete", 1)
+    assert hint is None
 
 
 def test_classify_quota_hint() -> None:

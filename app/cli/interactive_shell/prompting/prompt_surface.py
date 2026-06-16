@@ -379,7 +379,6 @@ _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
         "/history",
         "/integrations",
         "/investigate",
-        "/list",
         "/mcp",
         "/model",
         "/template",

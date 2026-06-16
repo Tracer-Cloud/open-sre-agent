@@ -11,10 +11,10 @@ Masking is **off by default**. Enable it per investigation via environment varia
 
 ## How it works
 
-1. When masking is enabled, `node_investigate` replaces sensitive identifiers in the `evidence` dict with stable placeholders like `<POD_0>`, `<NAMESPACE_0>`, `<CLUSTER_1>`. The placeholder→original map is stored in the investigation state under `masking_map`.
-2. The diagnosis LLM receives masked evidence, so raw identifiers never hit the model.
-3. After the LLM returns its root-cause analysis, `diagnose_root_cause` unmasks the output so downstream state and display code see real identifiers.
-4. `publish_findings` runs a final unmask pass on the Slack message and blocks before delivery, as defence in depth.
+1. When masking is enabled, the investigation step replaces sensitive identifiers in collected evidence with stable placeholders like `<POD_0>`, `<NAMESPACE_0>`, `<CLUSTER_1>`. The placeholder→original map is stored in investigation state.
+2. The diagnosis model receives masked evidence, so raw identifiers never hit the external LLM.
+3. After the model returns its root-cause analysis, OpenSRE restores real identifiers in downstream state and display output.
+4. Report delivery (for example Slack) runs a final unmask pass before sending, as defence in depth.
 
 The same identifier always maps to the same placeholder within a single investigation, so the LLM's reasoning about `<POD_0>` remains coherent.
 

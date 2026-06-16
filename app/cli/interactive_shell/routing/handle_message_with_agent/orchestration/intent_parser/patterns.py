@@ -28,7 +28,7 @@ ACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"\b(?:connected|configured|local)\b",
             re.IGNORECASE,
         ),
-        "/list integrations",
+        "/integrations list",
     ),
     (
         re.compile(

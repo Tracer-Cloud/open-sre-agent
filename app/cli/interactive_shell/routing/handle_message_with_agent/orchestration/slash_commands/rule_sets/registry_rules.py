@@ -112,7 +112,7 @@ def apply_registry_rule(ctx: ClauseRuleContext) -> bool:
                 ctx.seen_slash.add(subcmd)
                 ctx.trace.append("cli_command_registry")
             continue
-        if command == "/list integrations" and mentioned_services:
+        if command == "/integrations list" and mentioned_services:
             continue
         ctx.mapped.append(slash_action(command, ctx.clause.position + match.start()))
         ctx.seen_slash.add(command)

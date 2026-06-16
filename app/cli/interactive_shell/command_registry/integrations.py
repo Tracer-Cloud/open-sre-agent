@@ -1,4 +1,4 @@
-"""Slash commands for /list, /integrations, and /mcp."""
+"""Slash commands for /integrations and /mcp."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from rich.markup import escape
 from app.cli.interactive_shell.command_registry import repl_data
 from app.cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.config.tool_catalog import build_tool_catalog
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -19,8 +18,6 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     render_integrations_table,
     render_mcp_table,
-    render_models_table,
-    render_tools_table,
     repl_table,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
@@ -36,7 +33,6 @@ from app.cli.interactive_shell.ui.rendering import (
     repl_print,
 )
 
-_ROOT_LIST = "/list"
 _ROOT_INTEGRATIONS = "/integrations"
 _ROOT_MCP = "/mcp"
 
@@ -87,40 +83,6 @@ def _render_integration_show(console: Console, service: str) -> bool:
         table.add_row(escape(key), escape(str(value)))
     print_repl_table(console, table)
     return True
-
-
-def _interactive_list_menu(_session: ReplSession, console: Console) -> bool:
-    while True:
-        sub = repl_choose_one(
-            title="list",
-            breadcrumb=_ROOT_LIST,
-            choices=[
-                ("integrations", "/list integrations"),
-                ("models", "/list models"),
-                ("mcp", "/list mcp"),
-                ("tools", "/list tools"),
-                ("all", "all"),
-                ("done", "done"),
-            ],
-        )
-        if sub is None or sub == "done":
-            return True
-        if sub == "integrations":
-            results = repl_data.load_verified_integrations()
-            render_integrations_table(console, results)
-        elif sub == "mcp":
-            results = repl_data.load_verified_integrations()
-            render_mcp_table(console, results)
-        elif sub == "models":
-            render_models_table(console, repl_data.load_llm_settings())
-        elif sub == "all":
-            results = repl_data.load_verified_integrations()
-            render_integrations_table(console, results)
-            render_mcp_table(console, results)
-            render_models_table(console, repl_data.load_llm_settings())
-        elif sub == "tools":
-            render_tools_table(console, build_tool_catalog())
-        repl_section_break(console)
 
 
 def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -294,50 +256,6 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
             repl_section_break(console)
 
 
-def _cmd_list(session: ReplSession, console: Console, args: list[str]) -> bool:
-    if not args and repl_tty_interactive():
-        return _interactive_list_menu(session, console)
-
-    sub = (args[0].lower() if args else "").strip()
-
-    if sub in ("integrations", "integration", "int"):
-        render_integrations_table(console, repl_data.load_verified_integrations())
-        return True
-
-    if sub in ("mcp", "mcps"):
-        render_mcp_table(console, repl_data.load_verified_integrations())
-        return True
-
-    if sub in ("models", "model", "llm", "llms"):
-        render_models_table(console, repl_data.load_llm_settings())
-        return True
-
-    if sub in ("tools", "tool"):
-        render_tools_table(console, build_tool_catalog())
-        return True
-
-    if sub and sub not in ("", "all"):
-        console.print(
-            f"[{ERROR}]unknown list target:[/] {escape(sub)}  "
-            "(try [bold]/list integrations[/bold], [bold]/list models[/bold], "
-            "[bold]/list mcp[/bold], or [bold]/list tools[/bold])"
-        )
-        return True
-
-    results = repl_data.load_verified_integrations()
-    render_integrations_table(console, results)
-    render_mcp_table(console, results)
-    render_models_table(console, repl_data.load_llm_settings())
-    return True
-
-
-_LIST_FIRST_ARGS: tuple[tuple[str, str], ...] = (
-    ("integrations", "alert-source integrations"),
-    ("models", "active LLM models"),
-    ("mcp", "connected MCP servers"),
-    ("tools", "registered tools (investigation + chat surfaces)"),
-)
-
 _INTEGRATIONS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("list", "list all configured integrations"),
     ("verify", "run health checks on all integrations"),
@@ -351,15 +269,6 @@ _MCP_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 )
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand(
-        "/list",
-        "Browse integrations, MCP servers, models, and tools.",
-        _cmd_list,
-        usage=("/list", "/list integrations", "/list models", "/list mcp", "/list tools"),
-        notes=("In a TTY, bare /list opens an interactive menu.",),
-        first_arg_completions=_LIST_FIRST_ARGS,
-        execution_tier=ExecutionTier.SAFE,
-    ),
     SlashCommand(
         "/integrations",
         "Manage integrations.",

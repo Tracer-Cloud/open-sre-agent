@@ -125,7 +125,7 @@ _ACTION_RULE = (
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '
-    "/model show, /list models, /health, /doctor, /version; "
+    "/model show, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
     "to run any opensre subcommand (agent is blocked). For ordinary "
     "questions, return normal Markdown. Do not return action JSON for vague "
@@ -136,7 +136,6 @@ _ACTION_RULE = (
 _ALLOWED_SLASH_ACTIONS = frozenset(
     {
         "/model show",
-        "/list models",
         "/health",
         "/doctor",
         "/version",

@@ -653,7 +653,6 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
         return _cmd_agents_list(console)
 
     sub = args[0].lower().strip()
-
     if sub == "budget":
         return _cmd_agents_budget(session, console, args[1:])
     if sub == "bus":

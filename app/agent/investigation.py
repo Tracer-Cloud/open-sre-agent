@@ -120,6 +120,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "mysql": ["mysql"],
     "mariadb": ["mariadb"],
     "mongodb": ["mongodb", "mongodb_atlas"],
+    "redis": ["redis"],
     "snowflake": ["snowflake"],
     "clickhouse": ["clickhouse"],
     "dagster": ["dagster"],

@@ -29,6 +29,7 @@ from app.integrations.config_models import (
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
+    RedisIntegrationConfig,
     SlackWebhookConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
@@ -53,6 +54,7 @@ from app.integrations.rds import (
     build_rds_config,
     rds_config_from_env,
 )
+from app.integrations.redis import redis_config_from_env
 from app.integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     SKIP_CLASSIFIED_SERVICES,
@@ -391,6 +393,26 @@ def _classify_service_instance(
             return None, None
         if mongodb_config.connection_string:
             return mongodb_config.model_dump(), "mongodb"
+        return None, None
+
+    if key == "redis":
+        try:
+            redis_config = RedisIntegrationConfig.model_validate(
+                {
+                    "host": credentials.get("host", ""),
+                    "port": credentials.get("port", 6379),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "db": credentials.get("db", 0),
+                    "ssl": credentials.get("ssl", False),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if redis_config.host:
+            return redis_config.model_dump(), "redis"
         return None, None
 
     if key == "postgresql":
@@ -1302,6 +1324,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _active_env_record(
                 "mongodb",
                 mongodb_config.model_dump(exclude={"integration_id"}),
+            )
+        )
+
+    redis_config = redis_config_from_env()
+    if redis_config:
+        integrations.append(
+            _active_env_record(
+                "redis",
+                redis_config.model_dump(exclude={"integration_id"}),
             )
         )
 

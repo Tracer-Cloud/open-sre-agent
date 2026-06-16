@@ -116,7 +116,7 @@ def _map_registry_actions(
                 mapped.append(cli_command_action(args, clause.position + match.start()))
                 seen_slash.add(subcmd)
             continue
-        if command == "/list integrations" and mentioned_services:
+        if command == "/integrations list" and mentioned_services:
             continue
         mapped.append(slash_action(command, clause.position + match.start()))
         seen_slash.add(command)

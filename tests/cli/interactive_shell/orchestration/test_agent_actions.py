@@ -72,7 +72,7 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_health_then_connected_services_plans_two_actions_in_order() -> None:
     message = "check the health of my opensre and then show me all connected services"
 
-    assert agent_actions.plan_cli_actions(message) == ["/health", "/list integrations"]
+    assert agent_actions.plan_cli_actions(message) == ["/health", "/integrations list"]
 
 
 def test_local_llama_connect_is_not_hardcoded_as_cli_action() -> None:
@@ -144,7 +144,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
     )
 
     assert handled is True
-    assert dispatched == ["/health", "/list integrations"]
+    assert dispatched == ["/health", "/integrations list"]
     assert session.history == [
         {
             "type": "cli_agent",
@@ -152,14 +152,14 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
             "ok": True,
         },
         {"type": "slash", "text": "/health", "ok": True},
-        {"type": "slash", "text": "/list integrations", "ok": True},
+        {"type": "slash", "text": "/integrations list", "ok": True},
     ]
     output = buf.getvalue()
     assert output.index("Requested actions") < output.index("$ /health")
     assert output.index("1.") < output.index("$ /health")
     assert output.index("2.") < output.index("$ /health")
     assert "ran /health" in output
-    assert "ran /list integrations" in output
+    assert "ran /integrations list" in output
 
 
 def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
@@ -224,7 +224,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
     )
     output = buf.getvalue()
     assert "ran /health" in output
-    assert "ran /list integrations" not in output
+    assert "ran /integrations list" not in output
     assert "remaining actions cancelled" in output
 
 
@@ -433,7 +433,7 @@ def test_compound_prompt_plans_chat_list_and_cli_command() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "cli_command"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "integrations list"]
+    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "integrations list"]
 
 
 def test_cli_command_requires_explicit_opensre_context() -> None:
@@ -456,7 +456,7 @@ def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/remote"]
+    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "/remote"]
 
 
 def test_nitro_prompt_plans_remote_then_quoted_investigation() -> None:
@@ -481,7 +481,7 @@ def test_services_version_deploy_prompt_plans_all_actions() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations", "/version", "/remote"]
+    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "/version", "/remote"]
 
 
 def test_explicit_shell_command_plans_shell_action() -> None:
@@ -505,7 +505,7 @@ def test_compound_services_and_synthetic_rds_plans_all_actions() -> None:
     )
 
     assert agent_actions.plan_terminal_tasks(message) == ["slash", "synthetic_test"]
-    assert agent_actions.plan_cli_actions(message) == ["/list integrations"]
+    assert agent_actions.plan_cli_actions(message) == ["/integrations list"]
 
 
 def test_synthetic_scenario_id_plans_synthetic_action_kind() -> None:
@@ -634,9 +634,9 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
     )
 
     assert handled is True
-    assert dispatched == ["/list integrations", "/version", "/remote"]
+    assert dispatched == ["/integrations list", "/version", "/remote"]
     output = buf.getvalue()
-    assert output.index("ran /list integrations") < output.index("ran /version")
+    assert output.index("ran /integrations list") < output.index("ran /version")
     assert "EC2 deployment creates AWS" not in output
 
 
@@ -749,7 +749,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     )
 
     assert handled is True
-    assert dispatched == ["/list integrations"]
+    assert dispatched == ["/integrations list"]
     assert len(popen_calls) == 1
     assert popen_calls[0][0] == [
         sys.executable,
@@ -771,7 +771,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
             ),
             "ok": True,
         },
-        {"type": "slash", "text": "/list integrations", "ok": True},
+        {"type": "slash", "text": "/integrations list", "ok": True},
     ]
 
     for _ in range(100):
@@ -789,11 +789,11 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert "task:" in synthetic_entry["text"]
 
     output = buf.getvalue()
-    assert output.index("1.") < output.index("$ /list integrations")
-    assert output.index("2.") < output.index("$ /list integrations")
+    assert output.index("1.") < output.index("$ /integrations list")
+    assert output.index("2.") < output.index("$ /integrations list")
     assert "synthetic test rds_postgres:001-replication-lag" in output
     assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
-    assert output.index("$ /list integrations") < output.index("$ opensre tests synthetic")
+    assert output.index("$ /integrations list") < output.index("$ opensre tests synthetic")
 
 
 def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: object) -> None:

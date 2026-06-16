@@ -10,7 +10,10 @@ from rich.console import Console
 from rich.markup import escape
 
 import app.cli.interactive_shell.command_registry.repl_data as repl_data
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -658,7 +661,12 @@ COMMANDS: list[SlashCommand] = [
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
     SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
-    SlashCommand("/sessions", "List recent REPL sessions.", _cmd_sessions),
+    SlashCommand(
+        "/sessions",
+        "List recent REPL sessions.",
+        _cmd_sessions,
+        usage=("/sessions",),
+    ),
     SlashCommand(
         "/resume",
         "Resume a previous session by restoring its conversation context.",

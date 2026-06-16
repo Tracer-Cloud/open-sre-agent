@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -43,6 +44,29 @@ def _extract_rule_queries(rule: dict) -> list[dict]:
                 }
             )
     return queries
+
+
+def _epoch_ms_to_iso(ms: Any) -> str | None:
+    """Convert a Grafana epoch-millisecond timestamp to an ISO 8601 UTC string."""
+    if ms is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _map_annotation(item: dict[str, Any]) -> dict[str, Any]:
+    """Map a raw /api/annotations item to the tool-facing annotation shape."""
+    tags = item.get("tags")
+    return {
+        "time": _epoch_ms_to_iso(item.get("time")),
+        "time_end": _epoch_ms_to_iso(item.get("timeEnd")),
+        "text": item.get("text", ""),
+        "tags": tags if isinstance(tags, list) else [],
+        # Modern UID only; ignore the legacy numeric dashboardId (0 == not attached).
+        "dashboard_uid": item.get("dashboardUID") or None,
+    }
 
 
 class GrafanaClientBase:
@@ -293,6 +317,42 @@ class GrafanaClientBase:
             return rules
         except Exception as e:
             logger.warning("[grafana] Failed to query alert rules: %s", e)
+            return []
+
+    def query_annotations(
+        self,
+        from_ts: int,
+        to_ts: int,
+        tags: list[str] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Query Grafana annotations in a time window (epoch ms), optional tag filter.
+
+        Mirrors ``query_alert_rules``: a direct ``requests.get`` returning a list.
+        ``/api/annotations`` responds with a JSON array, so ``_make_request`` (which
+        returns a dict) is unsuitable here.
+        """
+        url = f"{self.instance_url}/api/annotations"
+        params: dict[str, Any] = {
+            "from": from_ts,
+            "to": to_ts,
+            "type": "annotation",
+            "limit": limit,
+        }
+        if tags:
+            params["tags"] = tags  # requests repeats the param once per tag
+        try:
+            response = requests.get(
+                url,
+                headers=self._get_auth_headers(),
+                params=params,
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return [_map_annotation(item) for item in data if isinstance(item, dict)]
+        except Exception as e:
+            logger.warning("[grafana] Failed to query annotations: %s", e)
             return []
 
     def _get_auth_headers(self) -> dict[str, str]:

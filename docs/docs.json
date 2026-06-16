@@ -39,8 +39,15 @@
             "group": "First steps",
             "pages": [
               "quickstart",
+              "investigation-overview",
               "deployment",
               "faq"
+            ]
+          },
+          {
+            "group": "Benchmark",
+            "pages": [
+              "cloudopsbench"
             ]
           },
           {
@@ -114,21 +121,26 @@
               "coralogix",
               "datadog",
               "grafana",
+              "grafana_annotations",
               "hermes",
               "honeycomb",
               "incident_io",
+              "openobserve",
               "opsgenie",
               "pagerduty",
               "sentry",
               "signoz",
-              "splunk"
+              "splunk",
+              "victoria_logs"
             ]
           },
           {
             "group": "Cloud, code, and collaboration",
             "expanded": true,
             "pages": [
+              "argocd",
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
               "integrations/github-actions",
@@ -137,6 +149,7 @@
               "helm",
               "jenkins",
               "jira",
+              "integrations/trello",
               "vercel"
             ]
           },
@@ -155,18 +168,24 @@
           {
             "group": "Data and workflow systems",
             "pages": [
+              "airflow",
+              "azure-sql",
               "clickhouse",
               "dagster",
               "kafka",
               "mariadb",
               "mongodb",
+              "mongodb-atlas",
               "mysql",
               "openclaw",
               "opensearch",
               "postgresql",
               "prefect",
               "rabbitmq",
-              "rds"
+              "rds",
+              "snowflake",
+              "supabase",
+              "redis"
             ]
           }
         ]

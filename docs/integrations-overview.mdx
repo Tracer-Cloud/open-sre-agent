@@ -1,75 +1,70 @@
 ---
 title: "Integrations overview"
+description: "Connect observability, cloud, data, and messaging tools for automated RCA"
 ---
 
 OpenSRE investigates alerts by querying the same tools your engineers use. Connect your stack so OpenSRE can pull logs, check recent deploys, map dependencies, and deliver findings where your team already works.
 
-## Before you begin
+## Two setup paths
 
-Make sure you have:
+| Path | Best for | How to configure |
+| --- | --- | --- |
+| **Local CLI** | Self-hosted `opensre` on your laptop or server | `opensre onboard` or `opensre integrations setup`, plus env vars |
+| **Hosted (OpenSRE Cloud)** | Org-wide connectors shared across users | [app.tracer.cloud](https://app.tracer.cloud) web app |
 
-- A OpenSRE account — you can create one at [app.tracer.cloud/sign-up](http://app.tracer.cloud/sign-up)
-- Access credentials for the tools you want to connect
-- Permissions to create API keys
+Most users start with the **local CLI** path. You need credentials for the tools you want to connect and permission to create API keys.
 
-## Enterprise integrations
-
-Enterprise integrations are configured through the OpenSRE web app at [app.tracer.cloud](https://app.tracer.cloud). Once connected, they are available to all users in your organization.
-
-**Observability.** OpenSRE reads your logs, metrics, traces, and alerts to build investigation hypotheses. Connect [Grafana](/grafana) and [Datadog](/datadog).
-
-**Infrastructure.** OpenSRE maps your environment and dependencies across clouds and clusters. Connect [AWS](/aws).
-
-**Communication.** OpenSRE delivers investigation reports where your team already works. Connect [Slack, Discord, or Telegram](/messaging/index).
-
-<Frame>
-  ![Integrations](/images/integrations.png)
-</Frame>
-
-### Configure enterprise integrations
-
-Each integration follows a simple, guided flow. Let's look at Datadog as an example.
-
-1. Name - Helps distinguish between different instances
-2. API Key - in Datadog, create a new API key and copy and paste into OpenSRE.
-3. Application Key - In Datadog, create a new Application Key and copy and paste into OpenSRE.
-
-<Frame>
-  ![Connect Datadog](/images/connect_datadog.png)
-</Frame>
-
-## Local integrations
-
-Local integrations are configured on the machine running OpenSRE — via the CLI setup wizard or environment variables. They give OpenSRE access to your databases, source control, error trackers, and workflow tools.
+## Local CLI setup
 
 ```bash
 opensre integrations setup
 ```
 
-Or set environment variables and OpenSRE picks them up automatically.
+Or set environment variables — OpenSRE picks them up automatically on the next run.
 
-| Category | Integrations |
-| --- | --- |
-| **Observability** | [Better Stack](/betterstack), [Honeycomb](/honeycomb), [Coralogix](/coralogix), [Sentry](/sentry) |
-| **Databases** | [MongoDB](/mongodb), [MariaDB](/mariadb), [ClickHouse](/clickhouse), [Kafka](/kafka) |
-| **Source control** | [GitHub](/github), [GitLab](/gitlab), [Bitbucket](/bitbucket) |
-| **Kubernetes releases** | [Helm](/helm) |
-| **Deployments** | [Vercel](/vercel) |
-| **Orchestration** | [Dagster](/dagster), [Prefect](/prefect) |
-| **Incident management** | [OpsGenie](/opsgenie), [Jira](/jira) |
-| **Reporting** | [Google Docs](/google-docs) |
-| **AI coding assistants** | [OpenClaw](/openclaw) |
-
-### Verify local integrations
-
-After setup, confirm everything is working:
+### Verify
 
 ```bash
 opensre integrations verify
+opensre integrations verify datadog
 ```
 
-To check a specific integration:
+Inside the interactive shell you can also run `/integrations list`, `/integrations verify <name>`, and `/health`.
 
-```bash
-opensre integrations verify mongodb
-```
+## Integration catalog
+
+| Category | Integrations |
+| --- | --- |
+| **Observability and incidents** | [Alertmanager](/alertmanager), [Azure Monitor](/azure-monitor), [Better Stack](/betterstack), [Coralogix](/coralogix), [Datadog](/datadog), [Grafana](/grafana), [Hermes](/hermes), [Honeycomb](/honeycomb), [Incident.io](/incident_io), [OpenObserve](/openobserve), [OpsGenie](/opsgenie), [Sentry](/sentry), [SignOz](/signoz), [Splunk](/splunk), [Victoria Logs](/victoria_logs) |
+| **Cloud and infrastructure** | [AWS](/aws), [Argo CD](/argocd), [Helm](/helm), [Jenkins](/jenkins), [Vercel](/vercel) |
+| **Databases and data platforms** | [Azure SQL](/azure-sql), [ClickHouse](/clickhouse), [Kafka](/kafka), [MariaDB](/mariadb), [MongoDB](/mongodb), [MongoDB Atlas](/mongodb-atlas), [MySQL](/mysql), [OpenSearch](/opensearch), [PostgreSQL](/postgresql), [RabbitMQ](/rabbitmq), [RDS](/rds), [Snowflake](/snowflake), [Supabase](/supabase) |
+| **Source control and collaboration** | [Bitbucket](/bitbucket), [GitHub](/github), [GitHub Actions](/integrations/github-actions), [GitLab](/gitlab), [Google Docs](/google-docs), [Jira](/jira), [Trello](/integrations/trello) |
+| **Workflow orchestration** | [Airflow](/airflow), [Dagster](/dagster), [Prefect](/prefect) |
+| **Messaging** | [Slack](/messaging/slack), [Discord](/messaging/discord), [Telegram](/messaging/telegram), [WhatsApp](/messaging/whatsapp), [Twilio SMS](/messaging/twilio-sms) |
+| **AI coding assistants** | [OpenClaw](/openclaw) |
+
+[Multi-instance integrations](/multi-instance-integrations) let you register multiple clusters, regions, or accounts per provider (for example prod and staging Grafana).
+
+## Hosted (OpenSRE Cloud) setup
+
+Enterprise connectors are configured through the OpenSRE web app at [app.tracer.cloud](https://app.tracer.cloud). Once connected, they are available to all users in your organization.
+
+**Observability.** Connect [Grafana](/grafana) and [Datadog](/datadog) for logs, metrics, traces, and alerts.
+
+**Infrastructure.** Connect [AWS](/aws) to map your environment across clouds and clusters.
+
+**Communication.** Deliver investigation reports via [Slack, Discord, or Telegram](/messaging/index).
+
+<Frame>
+  ![Integrations](/images/integrations.png)
+</Frame>
+
+### Example: Datadog in the web app
+
+1. **Name** — distinguish between instances (for example `prod` vs `staging`)
+2. **API key** — create in Datadog and paste into OpenSRE
+3. **Application key** — create in Datadog and paste into OpenSRE
+
+<Frame>
+  ![Connect Datadog](/images/connect_datadog.png)
+</Frame>

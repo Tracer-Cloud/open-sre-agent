@@ -164,7 +164,7 @@ def test_map_actions_with_unhandled_health_then_connected_services() -> None:
     assert not has_unhandled
     assert [(item.kind, item.content) for item in actions] == [
         ("slash", "/health"),
-        ("slash", "/list integrations"),
+        ("slash", "/integrations list"),
     ]
 
 

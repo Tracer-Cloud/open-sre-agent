@@ -20,6 +20,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
 )
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 
@@ -54,7 +55,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         # Any slash command name suffices as proof the help table rendered.
         assert "/help" in output
-        assert "/list" in output
+        assert "/tools" in output
 
     def test_help_command_detail_shows_usage(self) -> None:
         session = ReplSession()
@@ -99,7 +100,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Slash commands" in output
         assert "/help" in output
-        assert "/list" in output
+        assert "/tools" in output
         assert "unknown command" not in output
 
     def test_trust_toggle(self) -> None:
@@ -255,7 +256,7 @@ class TestDispatchSlash:
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("opensre health")
-        history.store_string("/list integrations")
+        history.store_string("/integrations list")
 
         session = ReplSession()
         session.record("alert", "current session only")
@@ -265,7 +266,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Command history" in output
         assert "opensre health" in output
-        assert "/list integrations" in output
+        assert "/integrations list" in output
         assert "current session only" not in output
 
     def test_investigate_file_read_failure_is_reported(
@@ -318,12 +319,12 @@ class TestDispatchSlash:
         assert isinstance(captured_errors[0], RuntimeError)
 
 
-class TestListCommand:
-    """Coverage for /list integrations / models / mcp and the default summary."""
+class TestSpecificListCommands:
+    """Coverage for /integrations list, /mcp list, /model show, and /tools list."""
 
     _FAKE_INTEGRATIONS = [
         {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
-        # `missing` integrations are omitted from `/list integrations`; keep slack visible here.
+        # `missing` integrations are omitted from `/integrations list`; keep slack visible here.
         {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
         {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
@@ -336,31 +337,25 @@ class TestListCommand:
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
-    def test_list_integrations_excludes_mcp_services(self, monkeypatch: object) -> None:
+    def test_integrations_list_excludes_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list integrations", ReplSession(), console)
+        dispatch_slash("/integrations list", ReplSession(), console)
         output = buf.getvalue()
         assert "datadog" in output
         assert "slack" in output
-        # MCP-classified services are reserved for /list mcp.
+        # MCP-classified services are reserved for /mcp list.
         assert "openclaw" not in output
         assert "github" not in output
 
-    def test_list_mcp_shows_only_mcp_services(self, monkeypatch: object) -> None:
+    def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list mcp", ReplSession(), console)
+        dispatch_slash("/mcp list", ReplSession(), console)
         output = buf.getvalue()
         assert "openclaw" in output
         assert "github" in output
         assert "datadog" not in output
-
-    def test_list_mcps_alias(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list mcps", ReplSession(), console)
-        assert "openclaw" in buf.getvalue()
 
     def _patch_llm(self, monkeypatch: object) -> None:
         """Provide a stable fake LLMSettings so the test doesn't depend on env."""
@@ -372,62 +367,68 @@ class TestListCommand:
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
 
-    def test_list_models_shows_provider_and_models(self, monkeypatch: object) -> None:
+    def test_model_show_displays_provider_and_models(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         output = buf.getvalue()
         assert "provider" in output
         assert "reasoning model" in output
         assert "toolcall model" in output
         assert "anthropic" in output
 
-    def test_list_models_shows_ollama_model(self, monkeypatch: object) -> None:
+    def test_model_show_displays_ollama_model(self, monkeypatch: object) -> None:
         class _FakeLLM:
             provider = "ollama"
             ollama_model = "qwen2.5:7b"
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         output = buf.getvalue()
         assert "ollama" in output
         assert "qwen2.5:7b" in output
         assert "default" not in output
 
-    def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
+    def test_model_show_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: None)
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         assert "LLM settings unavailable" in buf.getvalue()
 
-    def test_list_default_shows_all_three_sections(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        self._patch_llm(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list", ReplSession(), console)
-        output = buf.getvalue()
-        assert "Integrations" in output
-        assert "MCP servers" in output
-        assert "LLM connection" in output
-
-    def test_list_unknown_target_prints_hint(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list bogus", ReplSession(), console)
-        output = buf.getvalue()
-        assert "unknown list target" in output
-        assert "/list integrations" in output
-
-    def test_list_empty_integrations_prints_onboarding_hint(self, monkeypatch: object) -> None:
+    def test_integrations_list_empty_prints_onboarding_hint(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
             "load_verified_integrations",
             list,  # callable returning []
         )
         console, buf = _capture()
-        dispatch_slash("/list integrations", ReplSession(), console)
+        dispatch_slash("/integrations list", ReplSession(), console)
         assert "opensre onboard" in buf.getvalue()
+
+    def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import tools_cmds as tools_cmd_module
+
+        monkeypatch.setattr(
+            tools_cmd_module,
+            "build_tool_catalog",
+            lambda: [
+                ToolCatalogEntry(
+                    name="search_github",
+                    surfaces=("investigation", "chat"),
+                    description="Search GitHub code.",
+                    source_file="app/tools/search_github.py",
+                    input_schema_summary="query: string",
+                )
+            ],
+        )
+
+        console, buf = _capture()
+        dispatch_slash("/tools list", ReplSession(), console)
+        output = buf.getvalue()
+        assert "search_github" in output
+        assert "investigation" in output
+        assert "Search GitHub code." in output
 
 
 # ---------------------------------------------------------------------------
