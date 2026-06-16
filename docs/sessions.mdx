@@ -136,7 +136,7 @@ Sessions are stored as files under `~/.opensre/sessions/`. Each file is plain te
 
 ## Privacy and what is NOT saved
 
-- **Secrets or credentials** — session text is stored as typed; enable prompt log redaction if needed
+- **Secrets or credentials** — known token shapes are redacted from the prompt log by default (set `OPENSRE_PROMPT_LOG_REDACT=0` to store raw text instead)
 - **Full investigation results** — stored separately under `~/.opensre/investigations/`
 - **Token usage** — tracked in `~/.opensre/prompt_log.jsonl` when prompt logging is enabled
 
@@ -146,5 +146,5 @@ See [Interactive Shell Privacy](/interactive-shell-privacy) for redaction contro
 
 ## Related
 
-- [Interactive Shell Privacy](/interactive-shell-privacy) — command history and redaction settings
+- [Interactive Shell Privacy](/interactive-shell-privacy) — command history, prompt/response logging, and redaction settings
 - [Prompt Logging](/configuration/environment-variables) — full prompt/response logging configuration

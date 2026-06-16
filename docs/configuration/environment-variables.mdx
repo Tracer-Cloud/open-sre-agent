@@ -140,14 +140,14 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `OPENSRE_NO_TELEMETRY` | `0` | Disable all telemetry | `utils/sentry_sdk` |
+| `OPENSRE_NO_TELEMETRY` | `0` | Disable all telemetry, including Sentry and PostHog (covers `$ai_generation` prompt/response events) | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_DISABLED` | `0` | Disable Sentry error reporting | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_DSN` | | Override Sentry DSN | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_LOGGING_DISABLED` | `0` | Disable Sentry log integration | `.env.example` |
 | `OPENSRE_DEPLOYMENT_METHOD` | `local` | Deployment method tag for Sentry (`railway`, `ec2`, `vercel`, `local`) | `.env.example` |
 | `OPENSRE_PROMPT_LOG_DISABLED` | `0` | Disable prompt logging entirely | `.env.example` |
 | `OPENSRE_PROMPT_LOG_LOCAL_DISABLED` | `0` | Disable local prompt log file | `.env.example` |
-| `OPENSRE_PROMPT_LOG_REDACT` | `0` | Redact prompts before logging | `.env.example` |
+| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Redact known token shapes from prompts/responses before local or PostHog logging | `.env.example` |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.config/opensre/prompt_log.jsonl` | Path to local prompt log file | `.env.example` |
 | `DO_NOT_TRACK` | `0` | Honor global do-not-track preference | `utils/sentry_sdk` |
 | `SENTRY_TRACES_SAMPLE_RATE` | `1.0` | Trace sampling rate for Sentry | `.env.example` |
