@@ -150,13 +150,18 @@ class ReplSession:
         self.pending_prompt_default = None
         return value or ""
 
-    def record(self, kind: str, text: str, *, ok: bool = True) -> None:
+    def record(self, kind: str, text: str, *, ok: bool = True, response_text: str | None = None,) -> None:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
         """
-        self.history.append({"type": kind, "text": text, "ok": ok})
+        entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
+        if response_text:
+            entry["response_text"] = response_text
+        self.history.append(entry)
+        # delet line below if working
+        # self.history.append({"type": kind, "text": text, "ok": ok})
         SessionStore.append_turn(self, kind, text)
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:

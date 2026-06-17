@@ -40,6 +40,7 @@ class TerminalActionExecutionResult:
     executed_success_count: int
     has_unhandled_clause: bool
     handled: bool
+    response_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,20 @@ def _coerce_action_plan_decision(
         denied=denied,
         policy_trace=(),
     )
+
+
+def _response_text_from_history_entries(entries: list[dict[str, Any]]) -> str:
+    """
+    gets the response text history entries for error analytics
+    """
+    chunks: list[str] = []
+
+    for item in entries:
+        response_text = item.get("response_text")
+        if isinstance(response_text, str) and response_text.strip():
+            chunks.append(response_text.strip())
+
+    return "\n".join(chunks)
 
 
 def _enforce_plan_fail_closed_policy(plan: _ActionPlanningDecision) -> _ActionPlanningDecision:
@@ -372,6 +387,7 @@ def execute_cli_actions_with_metrics(
                 executed_success_count=0,
                 has_unhandled_clause=True,
                 handled=True,
+                response_text=error_text,
             )
     plan = _enforce_plan_fail_closed_policy(plan)
     actions = list(plan.actions)
@@ -391,8 +407,13 @@ def execute_cli_actions_with_metrics(
         }
     )
     if denied:
+        response_text = (
+            "I couldn't safely decide actions for that request. "
+            "Please rephrase or use explicit slash commands."
+        )
+
         _render_plan_denied(console)
-        session.record("cli_agent", message, ok=False)
+        session.record("cli_agent", message, ok=False, response_text=response_text)
         capture_terminal_actions_executed(
             planned_count=0,
             executed_count=0,
@@ -404,6 +425,7 @@ def execute_cli_actions_with_metrics(
             executed_success_count=0,
             has_unhandled_clause=True,
             handled=True,
+            response_text=response_text,
         )
     if not actions:
         return TerminalActionExecutionResult(
@@ -432,6 +454,9 @@ def execute_cli_actions_with_metrics(
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))
+
+    response_text = _response_text_from_history_entries(executed_entries)
+
     capture_terminal_actions_executed(
         planned_count=len(actions),
         executed_count=executed_count,
@@ -443,6 +468,7 @@ def execute_cli_actions_with_metrics(
         executed_success_count=executed_success_count,
         has_unhandled_clause=has_unhandled_clause,
         handled=handled,
+        response_text=response_text,
     )
 
 

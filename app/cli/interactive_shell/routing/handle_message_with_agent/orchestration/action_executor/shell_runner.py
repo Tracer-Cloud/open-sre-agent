@@ -77,6 +77,9 @@ def run_shell_command(
 
     exec_argv = argv if argv is not None else parsed.argv
 
+    response_text: str | None = None
+
+
     try:
         result = _ae_resolve("execute_shell_command", execute_shell_command)(
             command=parsed.command,
@@ -87,17 +90,22 @@ def run_shell_command(
         )
     except Exception as exc:
         report_exception(exc, context="interactive_shell.shell_command.start")
+
+        response_text = f"command failed to start: {str(exc)}"
+
         console.print(f"[{ERROR}]command failed to start:[/] {escape(str(exc))}")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     print_command_output(console, result.stdout)
     print_command_output(console, result.stderr, style=ERROR)
     if result.timed_out:
+        response_text = f"command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds"
+
         console.print(
             f"[{ERROR}]command timed out after {SHELL_COMMAND_TIMEOUT_SECONDS} seconds[/]"
         )
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
     ok = result.exit_code == 0
     had_stdout = bool((result.stdout or "").strip())
@@ -107,8 +115,18 @@ def run_shell_command(
             console.print(f"[{HIGHLIGHT}]✓[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
+        exit_text = f"✗ exit {code}"
         console.print(f"[{ERROR}]✗[/] exit {code}")
-    session.record("shell", command, ok=ok)
+
+        response_parts = []
+        if had_stdout:
+            response_parts.append((result.stdout or "").strip())
+        if had_stderr:
+            response_parts.append((result.stderr or "").strip())
+        response_parts.append(exit_text)
+        response_text = "\n".join(response_parts)
+
+    session.record("shell", command, ok=ok, response_text=response_text)
 
 
 def run_cd_command(command: str, session: ReplSession, console: Console) -> None:
@@ -122,13 +140,17 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
         if _intent_parser.IS_WINDOWS and len(tokens) > 1:
             tokens = [tokens[0], *(_strip_outer_quotes(token) for token in tokens[1:])]
     except ValueError as exc:
+        response_text = f"cd failed: {str(exc)}"
+
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     if len(tokens) > 2:
+        response_text = "cd failed: too many arguments"
+
         console.print(f"[{ERROR}]cd failed:[/] too many arguments")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     target = Path(tokens[1]).expanduser() if len(tokens) == 2 else Path.home()
@@ -136,8 +158,11 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
         os.chdir(target)
     except Exception as exc:
         report_exception(exc, context="interactive_shell.shell_cd")
+
+        response_text = f"cd failed: {str(exc)}"
+
         console.print(f"[{ERROR}]cd failed:[/] {escape(str(exc))}")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     console.print(Text(str(Path.cwd())))
@@ -148,13 +173,17 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
     try:
         tokens = shlex.split(command, posix=not _intent_parser.IS_WINDOWS)
     except ValueError as exc:
+        response_text = f"pwd failed: {str(exc)}"
+
         console.print(f"[{ERROR}]pwd failed:[/] {escape(str(exc))}")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     if len(tokens) != 1:
+        response_text = "pwd failed: too many arguments"
+
         console.print(f"[{ERROR}]pwd failed:[/] too many arguments")
-        session.record("shell", command, ok=False)
+        session.record("shell", command, ok=False,response_text=response_text)
         return
 
     console.print(Text(str(Path.cwd())))

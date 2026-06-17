@@ -207,6 +207,7 @@ def execute_routed_turn(
             else:
                 session.last_assistant_intent = "cli_agent_handled"
             if recorder is not None:
+                recorder.set_response(turn.response_text)
                 recorder.flush()
             return
         # Either the planner produced no actions (fallback) or a handoff-only plan
