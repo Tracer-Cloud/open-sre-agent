@@ -11,6 +11,7 @@ Output utilities shared across nodes.
 from __future__ import annotations
 
 import contextlib
+import io
 import os
 import re
 import sys
@@ -838,8 +839,31 @@ def _build_progress_step_text(
     return t
 
 
+_REPL_ANIM_FRAMES = ("·", "··", "···", "··")
+_REPL_ANIM_INTERVAL = 0.10  # seconds between frame updates (~10 fps)
+# Raw ANSI codes for the hint-line animation (matches SECONDARY / DIM styles)
+_ANIM_SEC = "\x1b[38;5;247m"
+_ANIM_DIM = "\x1b[2m"
+_ANIM_RST = "\x1b[0m"
+
+
+def _stdout_is_tty() -> bool:
+    """True only when stdout is backed by a real terminal file-descriptor."""
+    try:
+        return os.isatty(sys.stdout.fileno())
+    except (AttributeError, io.UnsupportedOperation, OSError):
+        return False
+
+
 class _ReplEventLogDisplay:
-    """Append-only investigation progress for the interactive REPL (no Rich Live)."""
+    """Append-only investigation progress for the interactive REPL (no Rich Live).
+
+    Hint lines (e.g. "analyzing alert") are printed WITHOUT a trailing newline
+    so the animation thread can rewrite them in-place via ``\\r`` (carriage
+    return) + ``\\033[K`` (clear-to-EOL).  ``_anim_active`` tracks whether
+    the cursor is still sitting on the hint line; ``_stop_animation`` flushes
+    a ``\\n`` to advance past it before any new output arrives.
+    """
 
     def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         self._model = model
@@ -850,15 +874,109 @@ class _ReplEventLogDisplay:
         self._lock = threading.Lock()
         self._console = Console(highlight=False)
         self._prompt_suppressed = False
+        self._anim_stop: threading.Event | None = None
+        self._anim_thread: threading.Thread | None = None
+        # True while the cursor is sitting on the hint line (no trailing \n yet).
+        self._anim_active: bool = False
 
     def stop(self) -> None:
+        self._stop_animation()
         _capture_footer_snapshot(self)
 
     def _emit(self, line: Text | Any) -> None:
+        # Stop animation first (joins thread, flushes trailing \n if needed)
+        # so its \r rewrites cannot interleave with what we're about to print.
+        self._stop_animation()
         from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
 
         prepare_repl_output_line()
         self._console.print(line)
+
+    def _stop_animation(self) -> None:
+        """Signal the animation thread to stop and wait for it to exit.
+
+        If the cursor was left on the hint line (no trailing newline), a ``\\n``
+        is flushed first so subsequent output starts on a fresh line.
+        """
+        stop = self._anim_stop
+        if stop is not None:
+            stop.set()
+            self._anim_stop = None
+        t = self._anim_thread
+        if t is not None:
+            t.join(timeout=0.3)
+            self._anim_thread = None
+        if self._anim_active:
+            # Advance the cursor off the hint line before any new print.
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._anim_active = False
+
+    def _start_animation(self, prefix: str) -> None:
+        """Cycle dots on the open hint line via ``\\r`` + overwrite.
+
+        Uses ``\\r`` (carriage return) to return to the start of the current
+        line — the hint was printed with ``end=""`` so the cursor is still on
+        it — then overwrites with the next frame and ``\\033[K`` to clear any
+        trailing chars.  This is immune to terminal-width wrapping problems
+        that cursor-up (``\\033[A``) would have.
+        """
+        if not _stdout_is_tty():
+            return
+        stop = threading.Event()
+        self._anim_stop = stop
+        t0 = self._t0
+
+        def _run() -> None:
+            frame_idx = 0
+            while not stop.wait(_REPL_ANIM_INTERVAL):
+                frame_idx = (frame_idx + 1) % len(_REPL_ANIM_FRAMES)
+                dots = _REPL_ANIM_FRAMES[frame_idx]
+                elapsed = time.monotonic() - t0
+                ts = _elapsed_hms(elapsed)
+                # \r returns to start of the hint line (no newline was printed)
+                # \033[K clears any trailing characters (frame shrinks from ··· to ·)
+                frame_str = (
+                    f"\r"
+                    f"{_ANIM_SEC}{ts}  {_ANIM_RST}"
+                    f"{_ANIM_DIM}      ↳  {_ANIM_RST}"
+                    f"{_ANIM_SEC}{prefix} {dots}{_ANIM_RST}"
+                    f"\033[K"
+                )
+                if not stop.is_set():
+                    sys.stdout.write(frame_str)
+                    sys.stdout.flush()
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        self._anim_thread = thread
+
+    def animate_hint(self, text: str) -> None:
+        """Print a hint line (no trailing newline) and animate dots in-place.
+
+        The hint is printed via ``console.print(..., end="")`` so the cursor
+        stays on the same line; ``_start_animation`` then rewrites it every
+        ``_REPL_ANIM_INTERVAL`` seconds using ``\\r`` + overwrite.
+
+        Any subsequent ``_emit`` call (or ``_stop_animation`` / ``stop``) will
+        signal the thread to stop, join it, and flush ``\\n`` so the next
+        output starts cleanly on the following line.
+        """
+        self._stop_animation()
+        prefix = text.rstrip("· \t")
+        elapsed_total = time.monotonic() - self._t0
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(f"{prefix} ·", style=SECONDARY)
+        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+
+        prepare_repl_output_line()
+        # end="" keeps cursor on this line; \r in animation frames rewrite it.
+        self._console.print(t, end="")
+        sys.stdout.flush()
+        self._anim_active = True
+        self._start_animation(prefix)
 
     def step_start(self, node_name: str) -> None:
         if not self._prompt_suppressed and _prompt_suppress_fn is not None:
@@ -891,6 +1009,7 @@ class _ReplEventLogDisplay:
         pass
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        self._stop_animation()
         with self._lock:
             info = self._active_steps.pop(node_name, {})
             subtext = info.get("subtext")
@@ -1142,8 +1261,11 @@ class ProgressTracker:
         self.print_above_renderable(t)
 
     def print_status_hint(self, text: str) -> None:
-        """Print a dim permanent status sub-line (used for 'analyzing alert...' etc.)."""
+        """Print a status sub-line; animates dots in-place when in REPL mode."""
         if self._silent:
+            return
+        if isinstance(self._display, _ReplEventLogDisplay):
+            self._display.animate_hint(text)
             return
         elapsed_total = time.monotonic() - self._t0
         t = Text()
