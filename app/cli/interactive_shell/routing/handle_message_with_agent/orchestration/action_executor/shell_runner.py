@@ -79,7 +79,6 @@ def run_shell_command(
 
     response_text: str | None = None
 
-
     try:
         result = _ae_resolve("execute_shell_command", execute_shell_command)(
             command=parsed.command,
@@ -183,7 +182,7 @@ def run_pwd_command(command: str, session: ReplSession, console: Console) -> Non
         response_text = "pwd failed: too many arguments"
 
         console.print(f"[{ERROR}]pwd failed:[/] too many arguments")
-        session.record("shell", command, ok=False,response_text=response_text)
+        session.record("shell", command, ok=False, response_text=response_text)
         return
 
     console.print(Text(str(Path.cwd())))

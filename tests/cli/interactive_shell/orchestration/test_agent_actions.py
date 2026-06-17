@@ -1029,7 +1029,12 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
             },
         )
     ]
-    assert session.history[-1] == {"type": "shell", "text": "false", "ok": False, "response_text": "nope\n✗ exit 2"}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "false",
+        "ok": False,
+        "response_text": "nope\n✗ exit 2",
+    }
     output = buf.getvalue()
     assert "nope" in output
     assert "exit 2" in output
@@ -1050,7 +1055,12 @@ def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> Non
     console, buf = _capture()
 
     assert agent_actions.execute_cli_actions("run `true`", session, console) is True
-    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False, "response_text": "command timed out after 120 seconds"}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "true",
+        "ok": False,
+        "response_text": "command timed out after 120 seconds",
+    }
     output = buf.getvalue().lower()
     assert "timed out" in output
     assert "partial out" in output

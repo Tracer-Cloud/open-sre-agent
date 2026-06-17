@@ -144,7 +144,12 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
     assert "cd failed" in buf.getvalue()
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], OSError)
-    assert session.history[-1] == {"type": "shell", "text": "cd /root/blocked", "ok": False, "response_text": "cd failed: permission denied"}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "cd /root/blocked",
+        "ok": False,
+        "response_text": "cd failed: permission denied",
+    }
 
 
 def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -353,7 +358,12 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
     out = buf.getvalue()
     assert "✗" in out
     assert "exit 7" in out
-    assert session.history[-1] == {"type": "shell", "text": "false", "ok": False, "response_text": "✗ exit 7"}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "false",
+        "ok": False,
+        "response_text": "✗ exit 7",
+    }
 
 
 def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -380,7 +390,12 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
     assert "command failed to start" in buf.getvalue()
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], RuntimeError)
-    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False, "response_text": "command failed to start: spawn failed"}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "true",
+        "ok": False,
+        "response_text": "command failed to start: spawn failed",
+    }
 
 
 def test_run_opensre_agents_scan_prints_clean_foreground_output(
