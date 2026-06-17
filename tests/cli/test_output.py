@@ -547,14 +547,15 @@ class TestReplHintAnimation:
     ) -> None:
         """Animation thread writes multiple distinct frames over wall-clock time."""
         monkeypatch.setattr(output, "_stdout_is_tty", lambda: True)
+        monkeypatch.setattr(output, "_REPL_ANIM_INTERVAL", 0.05)  # fast for tests
         fake = self._FakeStdout()
         monkeypatch.setattr(output.sys, "stdout", fake)
 
         display = self._make_display()
         display._start_animation("analyzing results")
 
-        # _REPL_ANIM_INTERVAL = 0.35s; wait long enough for ≥3 frames
-        time.sleep(1.3)
+        # At 0.05s per frame, 0.3s gives ≥4 frames comfortably
+        time.sleep(0.3)
         display._stop_animation()
 
         frame_writes = [w for w in fake.writes if "analyzing results" in w]

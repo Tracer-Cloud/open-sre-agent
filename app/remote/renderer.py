@@ -39,6 +39,7 @@ from app.cli.interactive_shell.ui.theme import (
 from app.cli.support.output import (
     CtrlOToggleWatcher,
     ProgressTracker,
+    _fmt_timing,
     _repl_progress_active,
     get_output_format,
     register_tool_detail_toggle,
@@ -593,7 +594,7 @@ class StreamRenderer:
         event_key = _tool_event_key(data, name)
         start = self._tool_start_times.pop(event_key, None)
         elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
-        elapsed_str = f"{elapsed_ms}ms" if elapsed_ms is not None else ""
+        elapsed_str = _fmt_timing(elapsed_ms) if elapsed_ms is not None else ""
         self._update_tool_summary_subtext()
         self._record_tool_detail(
             display,

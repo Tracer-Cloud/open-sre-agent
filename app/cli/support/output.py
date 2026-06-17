@@ -945,8 +945,8 @@ class _ReplEventLogDisplay:
                     sys.stdout.flush()
 
         thread = threading.Thread(target=_run, daemon=True)
+        self._anim_thread = thread  # assign before start so _stop_animation can always join
         thread.start()
-        self._anim_thread = thread
 
     def animate_hint(self, text: str) -> None:
         """Print a hint line and animate its trailing dots in-place."""
