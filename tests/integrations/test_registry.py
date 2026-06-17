@@ -48,7 +48,13 @@ def test_every_setup_spec_has_handler() -> None:
     # inverse-drift here.
     from app.integrations.cli import _HANDLERS
 
-    assert set(SUPPORTED_SETUP_SERVICES) <= set(_HANDLERS)
+    missing = [svc for svc in SUPPORTED_SETUP_SERVICES if svc not in _HANDLERS]
+    assert not missing, (
+        f"Registry declares setup_order for {missing} but no _HANDLERS entry "
+        "in app/integrations/cli.py. These services are silently dropped from "
+        "_SETUP_SERVICES, so `opensre integrations setup <svc>` will reject them "
+        "with the 'Usage: setup <service>' error."
+    )
 
 
 def test_registry_preserves_aliases_and_special_case_buckets() -> None:

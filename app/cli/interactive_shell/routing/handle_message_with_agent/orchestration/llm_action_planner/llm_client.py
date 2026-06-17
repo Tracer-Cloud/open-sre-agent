@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.cli.interactive_shell.token_accounting import record_invoke_response
+
 from .constants import _OPENAI_STYLE_PROVIDERS, _USER_TEMPLATE
 from .prompting import _system_prompt
 
@@ -50,7 +52,7 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
     try:
         client = get_llm_for_classification().bind_tools(_tool_specs_for_provider(session))
         response = client.invoke(prompt)
-        return response.content.strip()
+        return record_invoke_response(session, prompt=prompt, response=response)
     except Exception as exc:
         logger.debug(
             "llm_action_planner: LLM call failed (%s): %s",

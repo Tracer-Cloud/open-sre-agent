@@ -63,9 +63,9 @@ Severity: {severity}
 _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "grafana": ["grafana"],
     "datadog": ["datadog"],
-    "cloudwatch": ["cloudwatch", "ec2", "rds"],
-    "eks": ["eks", "ec2"],
-    "alertmanager": ["eks", "cloudwatch", "grafana"],
+    "cloudwatch": ["cloudwatch", "ec2", "rds", "cloudtrail"],
+    "eks": ["eks", "ec2", "cloudtrail"],
+    "alertmanager": ["eks", "cloudwatch", "grafana", "cloudtrail"],
     "sentry": ["sentry"],
     "honeycomb": ["honeycomb"],
     "coralogix": ["coralogix"],
@@ -76,8 +76,10 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "mysql": ["mysql"],
     "mariadb": ["mariadb"],
     "mongodb": ["mongodb", "mongodb_atlas"],
+    "redis": ["redis"],
     "snowflake": ["snowflake"],
     "clickhouse": ["clickhouse"],
+    "dagster": ["dagster"],
     "rabbitmq": ["rabbitmq"],
     "supabase": ["supabase"],
     "opensearch": ["opensearch"],
@@ -90,6 +92,7 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "argocd": ["eks"],
     "splunk": ["splunk"],
     "signoz": ["signoz"],
+    "jenkins": ["jenkins"],
 }
 
 # Generic fallback sources — always secondary, never primary.

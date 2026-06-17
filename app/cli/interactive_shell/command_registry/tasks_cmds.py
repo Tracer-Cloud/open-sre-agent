@@ -7,7 +7,10 @@ import re
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import (
@@ -217,7 +220,12 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/history", "Show persisted command history.", _cmd_history),
-    SlashCommand("/tasks", "List recent and in-flight shell tasks.", _cmd_tasks),
+    SlashCommand(
+        "/tasks",
+        "List recent and in-flight shell tasks.",
+        _cmd_tasks,
+        usage=("/tasks",),
+    ),
     SlashCommand(
         "/cancel",
         "Cancel a running task by id.",

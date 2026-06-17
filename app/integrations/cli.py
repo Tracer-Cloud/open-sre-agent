@@ -490,6 +490,49 @@ def _setup_mongodb() -> None:
     )
 
 
+def _setup_redis() -> None:
+    host = _p("Host (e.g. localhost or redis.example.net)")
+    if not host:
+        _die("host is required.")
+    port_input = _p("Port", default="6379")
+    username = _p("Username (leave blank unless using Redis ACLs)")
+    password = _p("Password (leave blank if not set)", secret=True)
+    db_input = _p("Database number", default="0")
+    ssl_choice = questionary.select(
+        "Use TLS?",
+        choices=[
+            questionary.Choice("No", value="0"),
+            questionary.Choice("Yes", value="1"),
+        ],
+        instruction="(use arrow keys)",
+    ).ask()
+    if ssl_choice is None:
+        print("\nAborted.")
+        sys.exit(1)
+    ssl = ssl_choice == "1"
+    try:
+        port = int(port_input)
+    except (TypeError, ValueError):
+        _die(f"port: {port_input} is invalid")
+    try:
+        db = int(db_input)
+    except (TypeError, ValueError):
+        _die(f"db: {db_input} is invalid")
+    upsert_integration(
+        "redis",
+        {
+            "credentials": {
+                "host": host,
+                "port": port,
+                "username": username,
+                "password": password,
+                "db": db,
+                "ssl": ssl,
+            }
+        },
+    )
+
+
 def _register_discord_slash_command(application_id: str, bot_token: str) -> None:
     import httpx
 
@@ -829,6 +872,75 @@ def _setup_signoz() -> None:
     )
 
 
+def _setup_jenkins() -> None:
+    base_url = _p("Jenkins URL (e.g. http://localhost:8080)")
+    username = _p("Jenkins username")
+    api_token = _p("Jenkins API token", secret=True)
+
+    if not (base_url and username and api_token):
+        _die("Jenkins URL, username, and API token are required.")
+
+    upsert_integration(
+        "jenkins",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "username": username,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
+def _setup_tempo() -> None:
+    from app.integrations.tempo import build_tempo_config, validate_tempo_config
+
+    url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
+    if not url:
+        _die("Tempo URL is required.")
+
+    api_key = _p(
+        "Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True
+    )
+    username = _p("Tempo username (optional, for basic auth)")
+    password = _p("Tempo password (optional, for basic auth)", secret=True)
+    org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
+
+    credentials: dict[str, str] = {"url": url}
+    if api_key:
+        credentials["api_key"] = api_key
+    if username:
+        credentials["username"] = username
+    if password:
+        credentials["password"] = password
+    if org_id:
+        credentials["org_id"] = org_id
+
+    result = validate_tempo_config(build_tempo_config(credentials))
+    if not result.ok:
+        _die(f"Tempo validation failed: {result.detail}")
+
+    upsert_integration("tempo", {"credentials": credentials})
+
+
+def _setup_pagerduty() -> None:
+    api_key = _p("PagerDuty API key", secret=True)
+    base_url = _p("API base URL override (optional)")
+    if not api_key:
+        _die("api_key is required.")
+    if not base_url:
+        base_url = "https://api.pagerduty.com"
+    upsert_integration(
+        "pagerduty",
+        {
+            "credentials": {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
@@ -856,8 +968,37 @@ _HANDLERS: dict[str, Any] = {
     "openclaw": _setup_openclaw,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "redis": _setup_redis,
     "signoz": _setup_signoz,
+    "jenkins": _setup_jenkins,
+    "tempo": _setup_tempo,
+    "pagerduty": _setup_pagerduty,
 }
+
+
+def _setup_dagster() -> None:
+    endpoint = _p(
+        "Dagster GraphQL endpoint "
+        "(e.g. http://localhost:3000 or https://<org>.dagster.plus/<deployment>)"
+    )
+    if not endpoint:
+        _die("endpoint is required.")
+    api_token = _p(
+        "Dagster Cloud API token (leave empty for local OSS Dagster with no auth)",
+        secret=True,
+    )
+    upsert_integration(
+        "dagster",
+        {
+            "credentials": {
+                "endpoint": endpoint,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
+_HANDLERS["dagster"] = _setup_dagster
 
 
 def _setup_azure_sql() -> None:

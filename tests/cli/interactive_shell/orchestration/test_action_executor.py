@@ -793,6 +793,69 @@ def test_start_background_cli_task_reports_watcher_failure(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_start_background_cli_task_skips_follow_up_after_session_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+        returncode = 1
+
+        def poll(self) -> int:
+            return 1
+
+    class _DeferredThread:
+        pending: list[object] = []
+
+        def __init__(
+            self,
+            group: object = None,
+            target: object = None,
+            name: object = None,
+            args: tuple[object, ...] = (),
+            kwargs: dict[str, object] | None = None,
+            *,
+            daemon: object = None,
+        ) -> None:
+            del group, name, daemon, args, kwargs
+            if callable(target):
+                _DeferredThread.pending.append(target)
+
+        def start(self) -> None:
+            return
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
+        return _FakeProcess()
+
+    _DeferredThread.pending.clear()
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _DeferredThread,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+    assert task is not None
+    assert len(_DeferredThread.pending) == 1
+    session.clear()
+    _DeferredThread.pending[0]()  # type: ignore[operator]
+    assert session.pending_prompt_default is None
+    _DeferredThread.pending.clear()
+
+
 def test_watch_synthetic_subprocess_reports_daemon_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

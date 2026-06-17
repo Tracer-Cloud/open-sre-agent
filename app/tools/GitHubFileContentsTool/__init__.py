@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.integrations.github_mcp import call_github_mcp_tool
-from app.tools.GitHubSearchCodeTool import (
-    _gh_available,
-    _gh_creds,
-    _normalize_tool_result,
-    _resolve_config,
-)
 from app.tools.tool_decorator import tool
 from app.tools.utils.code_host_unavailable import code_host_unavailable_payload
+from app.tools.utils.github_helpers import (
+    github_creds,
+    github_source_available,
+    normalize_github_tool_result,
+    resolve_github_mcp_config,
+)
 
 
 def _get_github_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -23,13 +23,15 @@ def _get_github_file_contents_extract_params(sources: dict[str, dict]) -> dict[s
         "path": gh["path"],
         "ref": gh.get("ref", ""),
         "sha": gh.get("sha", ""),
-        **_gh_creds(gh),
+        **github_creds(gh),
     }
 
 
 def _get_github_file_contents_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(_gh_available(sources) and gh.get("owner") and gh.get("repo") and gh.get("path"))
+    return bool(
+        github_source_available(sources) and gh.get("owner") and gh.get("repo") and gh.get("path")
+    )
 
 
 @tool(
@@ -74,7 +76,9 @@ def get_github_file_contents(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch a file or directory from GitHub through the MCP server."""
-    config = _resolve_config(github_url, github_mode, github_token, github_command, github_args)
+    config = resolve_github_mcp_config(
+        github_url, github_mode, github_token, github_command, github_args
+    )
     if config is None:
         return code_host_unavailable_payload(
             source="github",
@@ -89,6 +93,6 @@ def get_github_file_contents(
     if sha:
         arguments["sha"] = sha
     result = call_github_mcp_tool(config, "get_file_contents", arguments)
-    payload = _normalize_tool_result(result)
+    payload = normalize_github_tool_result(result)
     payload["file"] = payload.pop("structured_content", None)
     return payload

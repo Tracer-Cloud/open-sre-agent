@@ -24,7 +24,9 @@ from app.integrations.config_models import (
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
+from app.integrations.dagster import build_dagster_config, validate_dagster_config
 from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
 from app.integrations.mongodb import build_mongodb_config, validate_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config, validate_mongodb_atlas_config
@@ -32,9 +34,11 @@ from app.integrations.mysql import build_mysql_config, validate_mysql_config
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
+from app.integrations.redis import build_redis_config, validate_redis_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
 from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
@@ -44,6 +48,7 @@ from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.pagerduty import PagerDutyClient, PagerDutyConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
@@ -523,6 +528,16 @@ _verify_rabbitmq = build_validation_verifier(
     build_config=build_rabbitmq_config,
     validate_config=validate_rabbitmq_config,
 )
+_verify_dagster = build_validation_verifier(
+    "dagster",
+    build_config=build_dagster_config,
+    validate_config=validate_dagster_config,
+)
+_verify_redis = build_validation_verifier(
+    "redis",
+    build_config=build_redis_config,
+    validate_config=validate_redis_config,
+)
 _verify_betterstack = build_validation_verifier(
     "betterstack",
     build_config=build_betterstack_config,
@@ -542,6 +557,11 @@ _verify_signoz = build_validation_verifier(
     "signoz",
     build_config=build_signoz_config,
     validate_config=validate_signoz_config,
+)
+_verify_tempo = build_validation_verifier(
+    "tempo",
+    build_config=build_tempo_config,
+    validate_config=validate_tempo_config,
 )
 
 
@@ -596,6 +616,11 @@ _verify_bitbucket = build_validation_verifier(
     build_config=_build_bitbucket_config,
     validate_config=_validate_bitbucket_config,
 )
+_verify_jenkins = build_validation_verifier(
+    "jenkins",
+    build_config=build_jenkins_config,
+    validate_config=validate_jenkins_config,
+)
 
 _verify_datadog = build_probe_verifier(
     "datadog",
@@ -626,6 +651,11 @@ _verify_opsgenie = build_probe_verifier(
     "opsgenie",
     build_config=OpsGenieConfig.model_validate,
     client_factory=OpsGenieClient,
+)
+_verify_pagerduty = build_probe_verifier(
+    "pagerduty",
+    build_config=PagerDutyConfig.model_validate,
+    client_factory=PagerDutyClient,
 )
 _verify_incident_io = build_probe_verifier(
     "incident_io",
@@ -692,6 +722,7 @@ __all__ = [
     "_verify_honeycomb",
     "_verify_helm",
     "_verify_incident_io",
+    "_verify_jenkins",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",
@@ -701,10 +732,14 @@ __all__ = [
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",
+    "_verify_pagerduty",
     "_verify_postgresql",
+    "_verify_dagster",
     "_verify_rabbitmq",
+    "_verify_redis",
     "_verify_sentry",
     "_verify_signoz",
+    "_verify_tempo",
     "_verify_slack",
     "_verify_slack_without_test",
     "_verify_snowflake",

@@ -28,7 +28,7 @@ def run_sample_alert(
 ) -> None:
     from app.cli.investigation import run_sample_alert_for_session
 
-    plan = plan_investigation_execution(action_type="sample_alert")
+    plan = plan_investigation_execution(action_type="sample_alert", user_initiated=True)
     if not execution_allowed(
         plan.policy,
         session=session,
@@ -73,8 +73,7 @@ def run_sample_alert(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", f"sample:{template_name}")
 
 
@@ -89,7 +88,7 @@ def run_text_investigation(
 ) -> None:
     from app.cli.investigation import run_investigation_for_session
 
-    plan = plan_investigation_execution(action_type="investigation")
+    plan = plan_investigation_execution(action_type="investigation", user_initiated=True)
     if not execution_allowed(
         plan.policy,
         session=session,
@@ -132,6 +131,5 @@ def run_text_investigation(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", alert_text)

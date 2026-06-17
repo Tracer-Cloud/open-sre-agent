@@ -50,13 +50,14 @@ def _raw_help_sections() -> list[HelpSection]:
     from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_CMDS
     from app.cli.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
+    from app.cli.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_CMDS
     from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_CMDS
 
     return [
         _quick_access_section(),
         ("Help", list(COMMANDS)),
         ("Session", list(SESSION_CMDS)),
-        ("Integrations & Models", list(INT_CMDS) + list(MODEL_CMDS)),
+        ("Integrations, Models & Tools", list(INT_CMDS) + list(MODEL_CMDS) + list(TOOLS_CMDS)),
         ("Investigation", list(INV_CMDS)),
         ("Privacy", list(PRIVACY_CMDS)),
         ("Tasks", list(TASK_CMDS) + list(WATCH_CMDS)),

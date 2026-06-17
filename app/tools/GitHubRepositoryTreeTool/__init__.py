@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from app.integrations.github_mcp import call_github_mcp_tool
-from app.tools.GitHubSearchCodeTool import (
-    _gh_available,
-    _gh_creds,
-    _normalize_tool_result,
-    _resolve_config,
-)
 from app.tools.tool_decorator import tool
+from app.tools.utils.github_helpers import (
+    github_creds,
+    github_source_available,
+    normalize_github_tool_result,
+    resolve_github_mcp_config,
+)
 
 
 def _get_github_repository_tree_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -22,13 +22,13 @@ def _get_github_repository_tree_extract_params(sources: dict[str, dict]) -> dict
         "path_filter": gh.get("path", ""),
         "tree_sha": gh.get("sha") or gh.get("ref", ""),
         "recursive": True,
-        **_gh_creds(gh),
+        **github_creds(gh),
     }
 
 
 def _get_github_repository_tree_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(_gh_available(sources) and gh.get("owner") and gh.get("repo"))
+    return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
 @tool(
@@ -73,7 +73,9 @@ def get_github_repository_tree(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Browse a GitHub repository tree through the MCP server."""
-    config = _resolve_config(github_url, github_mode, github_token, github_command, github_args)
+    config = resolve_github_mcp_config(
+        github_url, github_mode, github_token, github_command, github_args
+    )
     if config is None:
         return {
             "source": "github",
@@ -89,6 +91,6 @@ def get_github_repository_tree(
         arguments["tree_sha"] = tree_sha
 
     result = call_github_mcp_tool(config, "get_repository_tree", arguments)
-    payload = _normalize_tool_result(result)
+    payload = normalize_github_tool_result(result)
     payload["tree"] = payload.pop("structured_content", None)
     return payload

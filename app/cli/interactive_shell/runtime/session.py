@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -13,7 +15,6 @@ if TYPE_CHECKING:
     from app.cli.interactive_shell.alert_inbox import IncomingAlert
 
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
-from app.cli.interactive_shell.sessions.store import SessionStore
 from app.llm_reasoning_effort import ReasoningEffortChoice
 
 InterventionKind = Literal["ctrl_c", "correction"]
@@ -21,6 +22,21 @@ InterventionKind = Literal["ctrl_c", "correction"]
 # Prefilled into the next prompt after a background synthetic test exits non-zero,
 # so the user can ask the CLI assistant for a quick RCA explanation.
 SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST = "why did it fail?"
+
+_SCENARIO_FLAG_RE = re.compile(r"--scenario\s+(\S+)")
+_SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
+
+
+def _scenario_id_from_synthetic_label(label: str) -> str:
+    """Extract a scenario id from a synthetic command or ``suite:scenario`` label."""
+    match = _SCENARIO_FLAG_RE.search(label)
+    if match is not None:
+        candidate = match.group(1).strip()
+        return candidate if _SYNTHETIC_SCENARIO_ID_RE.fullmatch(candidate) else ""
+    if ":" in label:
+        candidate = label.rsplit(":", 1)[-1].strip()
+        return candidate if _SYNTHETIC_SCENARIO_ID_RE.fullmatch(candidate) else ""
+    return ""
 
 
 @dataclass
@@ -89,10 +105,24 @@ class ReplSession:
     """Session-scoped reasoning effort preference for REPL-driven LLM calls."""
 
     token_usage: dict[str, int] = field(default_factory=dict)
-    """Accumulated token counts: {"input": N, "output": N}. Populated when available."""
+    """Accumulated token counts.
+
+    Totals: ``input``, ``output``. Breakdown: ``input_measured``,
+    ``output_measured``, ``input_estimated``, ``output_estimated``.
+    """
+
+    llm_call_count: int = 0
+    """Number of LLM calls accumulated into ``token_usage`` (for ``/cost``)."""
 
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
     """Assistant conversation history: alternating (\"user\"|\"assistant\", text)."""
+
+    follow_up_messages: list[tuple[str, str]] = field(default_factory=list)
+    """Follow-up Q&A pairs for the current investigation, separate from cli_agent_messages.
+
+    Scoped to the most recent investigation: reset by apply_investigation_result()
+    so that CLI-agent turns never bleed into follow-up grounding context.
+    """
 
     prompt_history_backend: History | None = None
     """The live ``prompt_toolkit.History`` object backing the input prompt.
@@ -125,6 +155,9 @@ class ReplSession:
     pending_prompt_default: str | None = None
     """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
 
+    prompt_refresh_fn: Callable[[], None] | None = field(default=None, repr=False)
+    """Loop-owned hook to apply pending prefill and redraw the active prompt."""
+
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
@@ -150,7 +183,67 @@ class ReplSession:
         self.pending_prompt_default = None
         return value or ""
 
-    def record(self, kind: str, text: str, *, ok: bool = True, response_text: str | None = None,) -> None:
+    def notify_prompt_changed(self) -> None:
+        """Redraw the active prompt (placeholder state and pending prefill)."""
+        if self.prompt_refresh_fn is not None:
+            self.prompt_refresh_fn()
+
+    def suggest_synthetic_failure_follow_up(self, *, label: str = "") -> None:
+        """Queue RCA prefill after a failed synthetic run and refresh the active prompt."""
+        self.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+        self.notify_prompt_changed()
+        self._bind_last_synthetic_observation(_scenario_id_from_synthetic_label(label))
+        self.notify_prompt_changed()
+
+    def _bind_last_synthetic_observation(self, scenario_id: str) -> None:
+        if not scenario_id:
+            self.last_synthetic_observation_path = None
+            return
+        try:
+            from app.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+        except Exception:
+            self.last_synthetic_observation_path = None
+            return
+        latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
+        for _ in range(8):
+            if latest.is_file():
+                self.last_synthetic_observation_path = str(latest.resolve())
+                return
+            time.sleep(0.06)
+        self.last_synthetic_observation_path = None
+
+    @property
+    def token_usage_has_estimates(self) -> bool:
+        usage = self.token_usage
+        return bool(usage.get("input_estimated") or usage.get("output_estimated"))
+
+    def record_token_usage(
+        self,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        estimated: bool = False,
+    ) -> None:
+        """Accumulate token counts for ``/cost`` (input/output keys)."""
+        if not input_tokens and not output_tokens:
+            return
+        suffix = "estimated" if estimated else "measured"
+        for direction, count in (("input", input_tokens), ("output", output_tokens)):
+            if not count:
+                continue
+            self.token_usage[direction] = self.token_usage.get(direction, 0) + count
+            bucket = f"{direction}_{suffix}"
+            self.token_usage[bucket] = self.token_usage.get(bucket, 0) + count
+        self.llm_call_count += 1
+
+    def record(
+        self,
+        kind: str,
+        text: str,
+        *,
+        ok: bool = True,
+        response_text: str | None = None,
+    ) -> None:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
@@ -159,7 +252,11 @@ class ReplSession:
         entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
         if response_text:
             entry["response_text"] = response_text
+
         self.history.append(entry)
+
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
         SessionStore.append_turn(self, kind, text)
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
@@ -171,6 +268,8 @@ class ReplSession:
         """
         # Record to history with alert text
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
         SessionStore.append_turn(self, "incoming_alert", alert.text)
 
         # Store the full alert object to preserve all metadata
@@ -203,6 +302,19 @@ class ReplSession:
             if value:
                 self.accumulated_context[key] = value
 
+    def apply_investigation_result(self, state: dict[str, Any]) -> None:
+        """Record a completed investigation result and reset follow-up context.
+
+        Replaces the inline ``session.last_state = …`` +
+        ``session.accumulate_from_state(…)`` pattern at every call site so that
+        follow_up_messages is always cleared atomically with the state update.
+        This prevents CLI-agent turns from an earlier interaction from bleeding
+        into the follow-up grounding context of a new investigation.
+        """
+        self.last_state = state
+        self.follow_up_messages.clear()
+        self.accumulate_from_state(state)
+
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset the session to a fresh state (used by /new and /resume)."""
         self.history_generation += 1
@@ -216,7 +328,9 @@ class ReplSession:
         self.available_capabilities.clear()
         self.accumulated_context.clear()
         self.token_usage.clear()
+        self.llm_call_count = 0
         self.cli_agent_messages.clear()
+        self.follow_up_messages.clear()
         self.incoming_alerts.clear()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry

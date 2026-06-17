@@ -33,6 +33,7 @@ RULES: tuple[PathRule, ...] = (
     # Specific sub-packages before their parent
     PathRule("app/integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
     PathRule("app/integrations/opensre/", ("tests/integrations/opensre/",)),
+    PathRule("app/integrations/hermes/", ("tests/hermes/",)),
     PathRule("app/integrations/", ("tests/integrations/",)),
     PathRule("app/agent/", ("tests/agent/", "tests/agents/")),
     PathRule("app/agents/", ("tests/agent/", "tests/agents/")),
@@ -48,7 +49,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
     PathRule("app/delivery/", ("tests/delivery/",)),
     PathRule("app/auth/", ("tests/app/auth/",)),
-    PathRule("app/hermes/", ("tests/hermes/",)),
     PathRule("app/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config

@@ -2,7 +2,38 @@
 
 This file is the **single source of truth** for local CI readiness before any push or PR.
 
-## 1) Mandatory baseline checks (every code change)
+## 0) Docs / process-only shortcut
+
+If your diff is **only** documentation or contributor-process files, you may
+skip the code-quality and test commands below.
+
+Examples of files that qualify:
+
+- `AGENTS.md`
+- `CI.md`
+- `CONTRIBUTING.md`
+- `README.md`
+- `TESTING.md`
+- `TOOL_INTEGRATION_CHECKLIST.md`
+- `docs/**/*.md`
+- `docs/**/*.mdx`
+- `docs/docs.json`
+
+You may use the shortcut only when **all** changed files are non-runtime and
+non-executable. If the diff touches application code, tests, build tooling,
+dependency manifests, CI workflows, scripts, or anything with runtime impact,
+run the normal harness.
+
+For docs/process-only changes, the minimum required local check is:
+
+```bash
+git status --short
+```
+
+If you are unsure whether the shortcut applies, do **not** use it — run the
+standard checks below.
+
+## 1) Mandatory baseline checks (every code change that is not docs/process-only)
 
 Run all of these first:
 

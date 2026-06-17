@@ -34,11 +34,12 @@ if TYPE_CHECKING:
 class GrafanaBackend(Protocol):
     """Minimal observability interface used by the RDS investigation agent.
 
-    Four methods — one per evidence pillar:
+    Four evidence pillars plus change correlation:
         query_timeseries  → Mimir/Prometheus matrix response
         query_logs        → Loki streams response
         query_alert_rules → Grafana Ruler rules response
         query_traces      → Tempo search response
+        query_annotations → /api/annotations array (deploy/config-change markers)
     """
 
     def query_timeseries(self, query: str = "", **kwargs: Any) -> dict[str, Any]:
@@ -55,6 +56,10 @@ class GrafanaBackend(Protocol):
 
     def query_traces(self, **kwargs: Any) -> dict[str, Any]:
         """Return a Tempo-compatible search response."""
+        pass
+
+    def query_annotations(self, **kwargs: Any) -> list[dict[str, Any]]:
+        """Return a Grafana /api/annotations array (a JSON list, not a dict)."""
         pass
 
 
@@ -181,3 +186,7 @@ class FixtureGrafanaBackend:
 
     def query_traces(self, **_: Any) -> dict[str, Any]:
         return format_tempo_search()
+
+    def query_annotations(self, **_: Any) -> list[dict[str, Any]]:
+        # RDS scenario fixtures declare no deploy/config-change annotations.
+        return []

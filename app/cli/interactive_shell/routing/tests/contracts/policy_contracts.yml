@@ -7,7 +7,7 @@ mapper_contracts:
         source: deterministic
         target_surface: slash
       - kind: slash
-        content: /list integrations
+        content: /integrations list
         source: deterministic
         target_surface: slash
     trace:
@@ -20,7 +20,7 @@ mapper_contracts:
       - clause_text: show me all connected services
         clause_position: 40
         rules:
-          - slash_registry:/list integrations
+          - slash_registry:/integrations list
         matched_action_kinds:
           - slash
 

@@ -56,8 +56,8 @@ def status_style(status: str) -> str:
     }.get(status, DIM)
 
 
-# MCP-type services are rendered separately under `/list mcp` so the default
-# `/list integrations` view stays focused on alert-source / data integrations.
+# MCP-type services are rendered separately under `/mcp list` so the default
+# `/integrations list` view stays focused on alert-source / data integrations.
 MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
 _REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
 

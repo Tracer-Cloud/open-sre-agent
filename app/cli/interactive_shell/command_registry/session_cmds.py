@@ -10,8 +10,12 @@ from rich.console import Console
 from rich.markup import escape
 
 import app.cli.interactive_shell.command_registry.repl_data as repl_data
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
 from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.token_accounting import format_token_total
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -135,18 +139,22 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
 
 
 def _cmd_cost(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    table = repl_table(title="Session cost\n", title_style=BOLD_BRAND, show_header=False)
+    title = "Session cost"
+    if session.token_usage_has_estimates:
+        title = "Session cost (includes estimates)"
+    table = repl_table(title=f"{title}\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
-    table.add_row("interactions", str(len(session.history)))
+    table.add_row("history entries", str(len(session.history)))
+    if session.llm_call_count:
+        table.add_row("llm calls", str(session.llm_call_count))
 
     if session.token_usage:
-        inp = session.token_usage.get("input", 0)
-        out = session.token_usage.get("output", 0)
-        table.add_row("input tokens", f"{inp:,}")
-        table.add_row("output tokens", f"{out:,}")
+        for direction in ("input", "output"):
+            label, value = format_token_total(session, direction=direction)
+            table.add_row(label, value)
     else:
-        table.add_row("token usage", f"[{DIM}]not available (not wired yet)[/]")
+        table.add_row("token usage", f"[{DIM}]no LLM usage recorded yet[/]")
 
     print_repl_table(console, table)
     return True
@@ -324,15 +332,13 @@ def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> b
 
         duration_secs = entry.get("duration_secs")
         if is_current:
-            try:
+            with contextlib.suppress(OSError, OverflowError, ValueError):
                 elapsed = int(
                     (
                         datetime.now(UTC) - datetime.fromtimestamp(session.started_at, tz=UTC)
                     ).total_seconds()
                 )
                 duration_secs = elapsed
-            except Exception:
-                pass
 
         total = entry.get("total_turns")
         investigations = entry.get("investigation_turns")
@@ -660,7 +666,12 @@ COMMANDS: list[SlashCommand] = [
         first_arg_completions=_VERBOSE_FIRST_ARGS,
     ),
     SlashCommand("/compact", "Trim old session history to free memory.", _cmd_compact),
-    SlashCommand("/sessions", "List recent REPL sessions.", _cmd_sessions),
+    SlashCommand(
+        "/sessions",
+        "List recent REPL sessions.",
+        _cmd_sessions,
+        usage=("/sessions",),
+    ),
     SlashCommand(
         "/resume",
         "Resume a previous session by restoring its conversation context.",

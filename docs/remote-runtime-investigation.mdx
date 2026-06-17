@@ -9,13 +9,14 @@ description: 'Start an RCA investigation for a deployed service by name'
 
 ## Prerequisites
 
-You must have deployed a service via `opensre deploy` (or registered a named remote) and configured a remote ops provider.
+You must have deployed an OpenSRE service (see [Deployment](/deployment)), registered a named remote, and configured a remote ops provider.
 
-1. **Deploy or register a named remote:**
+1. **Deploy and register a named remote:**
    ```bash
-   opensre deploy ec2        # creates a named remote "ec2"
-   # or register manually:
-   opensre remote health https://my-service.up.railway.app
+   # Deploy via your hosting provider, then register the agent URL:
+   opensre remote --url https://my-service.up.railway.app health
+   # or use the interactive wizard:
+   opensre remote
    ```
 
 2. **Configure the remote ops provider (once):**

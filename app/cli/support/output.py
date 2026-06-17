@@ -11,6 +11,7 @@ Output utilities shared across nodes.
 from __future__ import annotations
 
 import contextlib
+import io
 import os
 import re
 import sys
@@ -424,7 +425,7 @@ def render_event(
 # Live event-log display
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+_SPINNER_FRAMES = ("·  ", "·· ", "···", "·· ")
 _FRAME_SECS = 0.10
 _TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
 
@@ -597,7 +598,7 @@ class _LiveRenderable:
 
                 t = Text()
                 t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
-                t.append(f"{frame}  ", style=SECONDARY)
+                t.append(frame, style=SECONDARY)
                 t.append(badge_label, style=f"bold {badge_color}")
                 t.append("  ·  ", style=DIM)
                 t.append(label, style=f"bold {TEXT}")
@@ -824,7 +825,7 @@ def _build_progress_step_text(
     t = Text()
     t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
     if status == "active":
-        t.append("◐  ", style=SECONDARY)
+        t.append("·  ", style=SECONDARY)
     else:
         t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
     t.append(badge_label, style=f"bold {badge_color}")
@@ -838,8 +839,31 @@ def _build_progress_step_text(
     return t
 
 
+_REPL_ANIM_FRAMES = ("·", "··", "···", "··")
+_REPL_ANIM_INTERVAL = 0.35  # seconds per frame — slow enough to see · → ·· → ··· clearly
+# Raw ANSI codes for the hint-line animation (matches SECONDARY / DIM styles)
+_ANIM_SEC = "\x1b[38;5;247m"
+_ANIM_DIM = "\x1b[2m"
+_ANIM_RST = "\x1b[0m"
+
+
+def _stdout_is_tty() -> bool:
+    """True only when stdout is backed by a real terminal file-descriptor."""
+    try:
+        return os.isatty(sys.stdout.fileno())
+    except (AttributeError, io.UnsupportedOperation, OSError):
+        return False
+
+
 class _ReplEventLogDisplay:
-    """Append-only investigation progress for the interactive REPL (no Rich Live)."""
+    """Append-only investigation progress for the interactive REPL (no Rich Live).
+
+    Hint lines are printed with a normal trailing newline via ``_emit``.  The
+    animation thread uses ``\\033[A`` (cursor-up) to return to that line and
+    rewrite it with cycling dots.  Printing the hint with a newline first means
+    the cursor is never left mid-line, so prompt_toolkit cannot append its own
+    hint text to our line (which caused the corruption in the ``end=""`` approach).
+    """
 
     def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         self._model = model
@@ -850,15 +874,93 @@ class _ReplEventLogDisplay:
         self._lock = threading.Lock()
         self._console = Console(highlight=False)
         self._prompt_suppressed = False
+        self._anim_stop: threading.Event | None = None
+        self._anim_thread: threading.Thread | None = None
 
     def stop(self) -> None:
+        self._stop_animation()
         _capture_footer_snapshot(self)
 
     def _emit(self, line: Text | Any) -> None:
+        # Stop animation first (joins thread, flushes trailing \n if needed)
+        # so its \r rewrites cannot interleave with what we're about to print.
+        self._stop_animation()
         from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
 
         prepare_repl_output_line()
         self._console.print(line)
+
+    def _stop_animation(self) -> None:
+        """Signal the animation thread to stop and wait for it to exit."""
+        stop = self._anim_stop
+        if stop is not None:
+            stop.set()
+            self._anim_stop = None
+        t = self._anim_thread
+        if t is not None:
+            t.join(timeout=0.3)
+            self._anim_thread = None
+
+    def _start_animation(self, prefix: str) -> None:
+        """Cycle dots on the hint line using cursor-up + rewrite.
+
+        The hint was printed with a normal newline (via ``_emit``), so the
+        cursor is one line below it.  Each frame:
+          1. ``\\033[A`` moves the cursor up to the hint line
+          2. ``\\r`` goes to the start of that line
+          3. New content + ``\\033[K`` overwrites and clears any trailing chars
+          4. ``\\n`` restores the cursor to the blank line below
+
+        Printing the hint WITH a newline (not ``end=""``) is essential: it
+        keeps the cursor off the hint line between frames, so prompt_toolkit
+        cannot append its own text there (which was the cause of the
+        ``/ for commands`` corruption with the ``end=""`` approach).
+        """
+        if not _stdout_is_tty():
+            return
+        stop = threading.Event()
+        self._anim_stop = stop
+        t0 = self._t0
+
+        def _run() -> None:
+            frame_idx = 0
+            while not stop.wait(_REPL_ANIM_INTERVAL):
+                frame_idx = (frame_idx + 1) % len(_REPL_ANIM_FRAMES)
+                dots = _REPL_ANIM_FRAMES[frame_idx]
+                elapsed = time.monotonic() - t0
+                ts = _elapsed_hms(elapsed)
+                # \033[A = cursor up 1 (to hint line)
+                # \r     = carriage return (BOL)
+                # \033[K = clear to EOL
+                # \n     = restore cursor to the blank line below
+                frame_str = (
+                    f"\033[A\r"
+                    f"{_ANIM_SEC}{ts}  {_ANIM_RST}"
+                    f"{_ANIM_DIM}      ↳  {_ANIM_RST}"
+                    f"{_ANIM_SEC}{prefix} {dots}{_ANIM_RST}"
+                    f"\033[K\n"
+                )
+                if not stop.is_set():
+                    sys.stdout.write(frame_str)
+                    sys.stdout.flush()
+
+        thread = threading.Thread(target=_run, daemon=True)
+        self._anim_thread = thread  # assign before start so _stop_animation can always join
+        thread.start()
+
+    def animate_hint(self, text: str) -> None:
+        """Print a hint line and animate its trailing dots in-place."""
+        self._stop_animation()
+        prefix = text.rstrip("· \t")
+        elapsed_total = time.monotonic() - self._t0
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(f"{prefix} ·", style=SECONDARY)
+        # Print WITH newline — cursor moves to blank line below the hint.
+        # The animation thread uses \033[A to go up and rewrite the hint line.
+        self._emit(t)
+        self._start_animation(prefix)
 
     def step_start(self, node_name: str) -> None:
         if not self._prompt_suppressed and _prompt_suppress_fn is not None:
@@ -891,6 +993,7 @@ class _ReplEventLogDisplay:
         pass
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        self._stop_animation()
         with self._lock:
             info = self._active_steps.pop(node_name, {})
             subtext = info.get("subtext")
@@ -1092,7 +1195,12 @@ class ProgressTracker:
         self._tool_start_times[key] = time.monotonic()
         self._tool_inputs[key] = tool_input
         self._record_tool_summary(tool_name)
-        self._update_tool_summary_subtext()
+        # Show "calling X..." briefly in the spinner; aggregate shown on end.
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        current = f"{source} · {label}" if label else source
+        self.update_subtext("investigation_agent", f"calling {current}...", duration=15.0)
+        self.update_subtext("investigate", f"calling {current}...", duration=15.0)
         self._sync_tool_detail_view()
 
     def record_tool_end(
@@ -1108,7 +1216,8 @@ class ProgressTracker:
             return
         key = event_key or tool_name
         start = self._tool_start_times.pop(key, None)
-        elapsed = f"{int((time.monotonic() - start) * 1000)}ms" if start is not None else ""
+        elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+        elapsed = _fmt_timing(elapsed_ms) if elapsed_ms is not None else ""
         stored_input = self._tool_inputs.pop(key, None)
         self._update_tool_summary_subtext()
         self._record_tool_detail(
@@ -1117,6 +1226,37 @@ class ProgressTracker:
             output,
             elapsed=elapsed,
         )
+        if elapsed_ms is not None:
+            self.print_tool_call_line(tool_name, elapsed_ms)
+
+    def print_tool_call_line(self, tool_name: str, elapsed_ms: int) -> None:
+        """Print a permanent indented completion line for a finished tool call."""
+        if self._silent:
+            return
+        elapsed_total = time.monotonic() - self._t0
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        call_display = f"{source} · {label}" if label else source
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(call_display, style=BRAND)
+        t.append(f"  {_fmt_timing(elapsed_ms)}", style=SECONDARY)
+        self.print_above_renderable(t)
+
+    def print_status_hint(self, text: str) -> None:
+        """Print a status sub-line; animates dots in-place when in REPL mode."""
+        if self._silent:
+            return
+        if isinstance(self._display, _ReplEventLogDisplay):
+            self._display.animate_hint(text)
+            return
+        elapsed_total = time.monotonic() - self._t0
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(text, style=SECONDARY)
+        self.print_above_renderable(t)
 
     def toggle_tool_details(self) -> None:
         """Toggle the live view between compact progress and tool details."""

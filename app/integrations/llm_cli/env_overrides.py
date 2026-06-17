@@ -41,6 +41,17 @@ ANTHROPIC_CLI_ENV_KEYS: Final[tuple[str, ...]] = (
 
 CURSOR_CLI_ENV_KEYS: Final[tuple[str, ...]] = ("CURSOR_API_KEY",)
 
+# xAI Grok Build CLI credential envs. ``XAI_API_KEY`` is a secret and MUST NOT
+# flow through the global ``_SAFE_SUBPROCESS_ENV_PREFIXES`` allowlist (a blanket
+# ``XAI_`` prefix would forward the key into every other CLI subprocess). The
+# Grok adapter forwards these *exclusively* via ``CLIInvocation.env`` so they
+# only reach the Grok subprocess. ``XAI_BASE_URL`` supports enterprise / custom
+# endpoints.
+XAI_CLI_ENV_KEYS: Final[tuple[str, ...]] = (
+    "XAI_API_KEY",
+    "XAI_BASE_URL",
+)
+
 # Non-credential Copilot CLI config envs forwarded only via the Copilot
 # adapter's ``CLIInvocation.env``. They are deliberately NOT in
 # ``_SAFE_SUBPROCESS_ENV_PREFIXES``: scoping them to the Copilot subprocess

@@ -32,6 +32,7 @@ from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 )
+from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -125,7 +126,7 @@ _ACTION_RULE = (
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '
-    "/model show, /list models, /health, /doctor, /version; "
+    "/model show, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
     "to run any opensre subcommand (agent is blocked). For ordinary "
     "questions, return normal Markdown. Do not return action JSON for vague "
@@ -136,7 +137,6 @@ _ACTION_RULE = (
 _ALLOWED_SLASH_ACTIONS = frozenset(
     {
         "/model show",
-        "/list models",
         "/health",
         "/doctor",
         "/version",
@@ -465,16 +465,17 @@ def answer_cli_agent(
     console: Console,
     *,
     confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
     For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
     also pulls relevant ``docs/`` pages into the grounding context.
 
-    ``confirm_fn`` is forwarded to :func:`_execute_action_plan` so the
-    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
-    through its active prompt_toolkit input instead of the stdlib
-    ``input()`` (which deadlocks against the running ``prompt_async``).
+    ``confirm_fn`` and ``is_tty`` are forwarded to :func:`_execute_action_plan`
+    so the interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    through its active prompt_toolkit input, while scripted seeded input fails
+    closed instead of blocking on stdin.
     """
     if _is_command_selection_prompt(message):
         deterministic_response = _command_selection_response()
@@ -560,15 +561,22 @@ def answer_cli_agent(
         console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return None
 
-    run_info = LlmRunInfo(
-        model=_resolve_model_name(client),
-        provider=_resolve_provider_name(client),
-        latency_ms=int((time.monotonic() - started) * 1000),
+    run_info = build_llm_run_info(
+        session=session,
+        prompt=prompt,
         response_text=text_str,
+        started=started,
+        client=client,
     )
 
     actions = _parse_action_plan(text_str)
-    if _execute_action_plan(actions, session, console, confirm_fn=confirm_fn):
+    if _execute_action_plan(
+        actions,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    ):
         _record_cli_agent_turn(session, message, text_str)
         return run_info
 
@@ -584,27 +592,6 @@ def answer_cli_agent(
             console.print(Markdown(text_str, code_theme="ansi_dark"))
         console.print()
     return run_info
-
-
-def _resolve_model_name(client: object) -> str | None:
-    value = getattr(client, "_model", None)
-    return value if isinstance(value, str) and value else None
-
-
-def _resolve_provider_name(client: object) -> str | None:
-    provider_label = getattr(client, "_provider_label", None)
-    if isinstance(provider_label, str) and provider_label:
-        return provider_label.strip().lower().replace(" ", "_")
-    name = type(client).__name__.lower()
-    if "openai" in name:
-        return "openai"
-    if "bedrock" in name:
-        return "bedrock"
-    if "cli" in name:
-        return "cli"
-    if "anthropic" in name or "llmclient" in name:
-        return "anthropic"
-    return None
 
 
 __all__ = ["answer_cli_agent"]

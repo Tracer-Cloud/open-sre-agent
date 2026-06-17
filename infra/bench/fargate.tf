@@ -81,6 +81,17 @@ resource "aws_ecs_task_definition" "bench" {
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.task.arn
 
+  # Keep old revisions on every Terraform-driven replacement (e.g. image_tag
+  # change in benchmark-promote-image.yml). Two reasons:
+  #   1. Old revisions are free + rollback targets — `aws ecs run-task
+  #      --task-definition opensre-bench:<N>` still works on INACTIVE revisions
+  #      and lets us re-run a previously-promoted image immediately.
+  #   2. Skipping Deregister removes the need for the promote workflow's role
+  #      to hold ecs:DeregisterTaskDefinition, which previously caused
+  #      AccessDenied races with the parallel inline-policy modify in the
+  #      same apply.
+  skip_destroy = true
+
   container_definitions = jsonencode([
     {
       name      = "bench"
@@ -90,6 +101,9 @@ resource "aws_ecs_task_definition" "bench" {
       environment = [
         { name = "AWS_REGION", value = var.region },
         { name = "BENCH_RESULTS_BUCKET", value = aws_s3_bucket.results.bucket },
+        # entrypoint.sh reads these two and runs `aws s3 sync` before the CLI
+        { name = "BENCH_CORPUS_S3_BUCKET", value = var.corpus_bucket_name },
+        { name = "BENCH_CORPUS_HF_REVISION", value = var.corpus_hf_revision },
         { name = "DEEPSEEK_BASE_URL", value = "https://api.deepseek.com" },
       ]
 

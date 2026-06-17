@@ -22,6 +22,7 @@ _verify_betterstack = _adapters._verify_betterstack
 _verify_bitbucket = _adapters._verify_bitbucket
 _verify_clickhouse = _adapters._verify_clickhouse
 _verify_coralogix = _adapters._verify_coralogix
+_verify_dagster = _adapters._verify_dagster
 _verify_datadog = _adapters._verify_datadog
 _verify_discord = _adapters._verify_discord
 _verify_github = _adapters._verify_github
@@ -30,6 +31,7 @@ _verify_grafana = _adapters._verify_grafana
 _verify_helm = _adapters._verify_helm
 _verify_honeycomb = _adapters._verify_honeycomb
 _verify_incident_io = _adapters._verify_incident_io
+_verify_jenkins = _adapters._verify_jenkins
 _verify_kafka = _adapters._verify_kafka
 _verify_mariadb = _adapters._verify_mariadb
 _verify_mongodb = _adapters._verify_mongodb
@@ -39,10 +41,13 @@ _verify_openclaw = _adapters._verify_openclaw
 _verify_openobserve = _adapters._verify_openobserve
 _verify_opensearch = _adapters._verify_opensearch
 _verify_opsgenie = _adapters._verify_opsgenie
+_verify_pagerduty = _adapters._verify_pagerduty
 _verify_postgresql = _adapters._verify_postgresql
 _verify_rabbitmq = _adapters._verify_rabbitmq
+_verify_redis = _adapters._verify_redis
 _verify_sentry = _adapters._verify_sentry
 _verify_signoz = _adapters._verify_signoz
+_verify_tempo = _adapters._verify_tempo
 _verify_slack = _adapters._verify_slack
 _verify_snowflake = _adapters._verify_snowflake
 _verify_splunk = _adapters._verify_splunk
@@ -167,6 +172,7 @@ __all__ = [
     "_verify_bitbucket",
     "_verify_clickhouse",
     "_verify_coralogix",
+    "_verify_dagster",
     "_verify_datadog",
     "_verify_discord",
     "_verify_github",
@@ -175,6 +181,7 @@ __all__ = [
     "_verify_helm",
     "_verify_honeycomb",
     "_verify_incident_io",
+    "_verify_jenkins",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",
@@ -184,10 +191,13 @@ __all__ = [
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",
+    "_verify_pagerduty",
     "_verify_postgresql",
     "_verify_rabbitmq",
+    "_verify_redis",
     "_verify_sentry",
     "_verify_signoz",
+    "_verify_tempo",
     "_verify_slack",
     "_verify_snowflake",
     "_verify_splunk",

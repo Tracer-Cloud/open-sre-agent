@@ -311,9 +311,22 @@ def plan_slash_execution(
 
 
 def evaluate_investigation_launch(
-    *, action_type: Literal["investigation", "sample_alert"]
+    *,
+    action_type: Literal["investigation", "sample_alert"],
+    user_initiated: bool = False,
 ) -> ExecutionPolicyResult:
-    """Policy for starting an RCA / investigation pipeline from the REPL."""
+    """Policy for starting an RCA / investigation pipeline from the REPL.
+
+    When ``user_initiated`` is True the user explicitly submitted the alert text
+    or asked the assistant to investigate — their submission is the confirmation,
+    so the verdict is ``allow`` rather than ``ask``.
+    """
+    if user_initiated:
+        return ExecutionPolicyResult(
+            verdict="allow",
+            action_type=action_type,
+            reason=None,
+        )
     return ExecutionPolicyResult(
         verdict="ask",
         action_type=action_type,
@@ -322,9 +335,11 @@ def evaluate_investigation_launch(
 
 
 def plan_investigation_execution(
-    *, action_type: Literal["investigation", "sample_alert"]
+    *,
+    action_type: Literal["investigation", "sample_alert"],
+    user_initiated: bool = False,
 ) -> ActionExecutionPlan:
-    policy = evaluate_investigation_launch(action_type=action_type)
+    policy = evaluate_investigation_launch(action_type=action_type, user_initiated=user_initiated)
     return ActionExecutionPlan(
         action_type=action_type,
         classification="investigation_launch",

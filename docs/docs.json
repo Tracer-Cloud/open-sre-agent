@@ -39,8 +39,22 @@
             "group": "First steps",
             "pages": [
               "quickstart",
+              "investigation-overview",
+              "interactive-shell-commands",
               "deployment",
               "faq"
+            ]
+          },
+          {
+            "group": "Benchmark",
+            "pages": [
+              "cloudopsbench"
+            ]
+          },
+          {
+            "group": "Community",
+            "pages": [
+              "bi-weekly-giveaway"
             ]
           },
           {
@@ -108,26 +122,36 @@
               "coralogix",
               "datadog",
               "grafana",
+              "grafana_annotations",
               "hermes",
               "honeycomb",
               "incident_io",
+              "openobserve",
               "opsgenie",
+              "pagerduty",
               "sentry",
               "signoz",
-              "splunk"
+              "tempo",
+              "splunk",
+              "victoria_logs"
             ]
           },
           {
             "group": "Cloud, code, and collaboration",
             "expanded": true,
             "pages": [
+              "argocd",
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
+              "integrations/github-actions",
               "gitlab",
               "google-docs",
               "helm",
+              "jenkins",
               "jira",
+              "integrations/trello",
               "vercel"
             ]
           },
@@ -146,17 +170,24 @@
           {
             "group": "Data and workflow systems",
             "pages": [
+              "airflow",
+              "azure-sql",
               "clickhouse",
+              "dagster",
               "kafka",
               "mariadb",
               "mongodb",
+              "mongodb-atlas",
               "mysql",
               "openclaw",
               "opensearch",
               "postgresql",
               "prefect",
               "rabbitmq",
-              "rds"
+              "rds",
+              "snowflake",
+              "supabase",
+              "redis"
             ]
           }
         ]

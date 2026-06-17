@@ -1,8 +1,8 @@
 """``opensre hermes`` command group: live-tail Hermes logs and dispatch to Telegram.
 
 The ``opensre hermes watch`` command wires the existing detection
-backbone (:class:`~app.hermes.HermesAgent`) to the
-:class:`~app.hermes.TelegramSink` and blocks until ``SIGINT`` /
+backbone (:class:`~app.integrations.hermes.HermesAgent`) to the
+:class:`~app.integrations.hermes.TelegramSink` and blocks until ``SIGINT`` /
 ``SIGTERM``. Credentials are loaded via
 :func:`~app.watch_dog.alarms.load_credentials_from_env`, so the
 ``TELEGRAM_BOT_TOKEN`` env var must be set; ``--chat-id`` overrides the
@@ -23,11 +23,11 @@ from typing import Any
 
 import click
 
-from app.hermes.agent import DEFAULT_LOG_PATH, HermesAgent
-from app.hermes.correlating_sink import CorrelatingSink
-from app.hermes.correlator import IncidentCorrelator, RouteDestination
-from app.hermes.investigation import run_incident_investigation
-from app.hermes.sinks import TelegramSink
+from app.integrations.hermes.agent import DEFAULT_LOG_PATH, HermesAgent
+from app.integrations.hermes.correlating_sink import CorrelatingSink
+from app.integrations.hermes.correlator import IncidentCorrelator, RouteDestination
+from app.integrations.hermes.investigation import run_incident_investigation
+from app.integrations.hermes.sinks import TelegramSink
 from app.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 
 

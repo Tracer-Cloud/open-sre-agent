@@ -832,3 +832,19 @@ def test_claude_prefix_forwarded_to_subprocess() -> None:
 
     assert env["CLAUDE_CODE_MODEL"] == "claude-opus-4-7"
     assert env["CLAUDE_CODE_BIN"] == "/usr/bin/claude"
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    import pytest
+
+    adapter = ClaudeCodeAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    import pytest
+
+    adapter = ClaudeCodeAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

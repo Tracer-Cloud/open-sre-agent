@@ -15,7 +15,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
     string_property,
 )
 
-_MAX_COMPACT_DESC_CHARS = 180
+_MAX_COMPACT_DESC_CHARS = 120
 
 
 @dataclass(frozen=True)
@@ -125,7 +125,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks if OpenSRE is healthy, working, or connected",
         anti_examples=(
             "User asks what integrations OpenSRE supports in general (docs → assistant_handoff)",
-            "User asks to list connected integrations (use /list integrations)",
+            "User asks to list connected integrations (use /integrations list)",
         ),
     ),
     "/help": _mcp(
@@ -147,7 +147,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to show details for a configured integration",
         anti_examples=(
             "User asks which integrations OpenSRE supports without configuring (assistant_handoff)",
-            "User asks to list connected integrations (prefer /list integrations)",
+            "User asks to list connected integrations (prefer /integrations list)",
         ),
     ),
     "/investigate": _mcp(
@@ -162,14 +162,6 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/last": _mcp(
         "Reprint the most recent investigation report from this session.",
         "User asks to show the last investigation result or report again",
-    ),
-    "/list": _mcp(
-        "Browse connected integrations, MCP servers, active LLM models, or registered tools.",
-        "User asks to show or list connected/configured integrations or services",
-        "User asks to list MCP servers (/list mcp)",
-        anti_examples=(
-            "User asks what integrations OpenSRE supports in general (assistant_handoff)",
-        ),
     ),
     "/mcp": _mcp(
         "Manage connected MCP servers. Subcommands: list, connect, disconnect.",
@@ -258,6 +250,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/template": _mcp(
         "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, splunk).",
         "User asks for an alert template or example payload format",
+    ),
+    "/tools": _mcp(
+        "List registered investigation/chat tools wired into this OpenSRE build.",
+        "User asks what tools the REPL can use",
+        "User asks to list investigation or chat tools",
     ),
     "/tests": _mcp(
         "Browse and run inventoried tests from the terminal. Subcommands: list, run, synthetic.",
@@ -383,7 +380,7 @@ def format_slash_catalog_text(
         if compact and len(desc) > _MAX_COMPACT_DESC_CHARS:
             desc = desc[: _MAX_COMPACT_DESC_CHARS - 1].rstrip() + "…"
         lines.append(f"- **{spec.name}** — {desc}")
-        if spec.use_cases:
+        if spec.use_cases and not compact:
             lines.append(f"  - use when: {spec.use_cases[0]}")
         if spec.anti_examples and not compact:
             lines.append(f"  - not for: {spec.anti_examples[0]}")
@@ -399,7 +396,10 @@ def slash_invoke_tool_description(specs: list[SlashCommandSpec] | None = None) -
         "Pick the command whose use-case best matches the user request, then supply "
         "positional args in the args array."
     )
-    body = format_slash_catalog_text(entries, compact=True)
+    # Keep planner payload intentionally tiny for live LLM runs with strict
+    # prompt budgets. The full rich catalog remains available via
+    # format_slash_catalog_text(..., compact=False).
+    body = "\n".join(f"- `{spec.name}`" for spec in entries)
     return f"{header}\n\n{body}"
 
 
@@ -410,8 +410,8 @@ def slash_invoke_input_schema(
     command_names = tuple(spec.name for spec in entries)
     args_description = (
         "Positional arguments after the command name. Valid values depend on the "
-        "chosen command — see the tool description catalog. Examples: "
-        '["integrations"] for /list, ["verify", "datadog"] for /integrations.'
+        "chosen command — see the slash_invoke tool description. Examples: "
+        '["list"] for /tools, ["verify", "datadog"] for /integrations.'
     )
     return object_schema(
         properties={

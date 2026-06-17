@@ -39,6 +39,7 @@ from app.cli.interactive_shell.ui.theme import (
 from app.cli.support.output import (
     CtrlOToggleWatcher,
     ProgressTracker,
+    _fmt_timing,
     _repl_progress_active,
     get_output_format,
     register_tool_detail_toggle,
@@ -546,6 +547,9 @@ class StreamRenderer:
                 self._active_node = canonical
                 self._mark_node_seen(canonical)
                 self._tracker.start(canonical)
+                if canonical == "investigation_agent":
+                    # Prime the Live spinner subtext; hint line printed on first llm_start.
+                    self._tracker.update_subtext(canonical, "analyzing alert ·", duration=300.0)
             return
 
         if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
@@ -562,6 +566,10 @@ class StreamRenderer:
             self._handle_tool_end(event)
             return
 
+        if kind == "on_llm_start":
+            self._handle_llm_start(event)
+            return
+
         if canonical == self._active_node:
             text = reasoning_text(kind, event.data, canonical)
             if text:
@@ -574,7 +582,10 @@ class StreamRenderer:
         self._tool_start_times[event_key] = time.monotonic()
         self._tool_inputs[event_key] = _tool_input(data)
         self._record_tool_summary(name)
-        self._update_tool_summary_subtext()
+        # Show "calling X..." briefly in spinner; aggregate summary shown on end.
+        if self._active_node:
+            current = resolve_tool_display_name(name)
+            self._tracker.update_subtext(self._active_node, f"calling {current}...", duration=15.0)
 
     def _handle_tool_end(self, event: StreamEvent) -> None:
         data = event.data
@@ -582,14 +593,26 @@ class StreamRenderer:
         display = resolve_tool_display_name(name)
         event_key = _tool_event_key(data, name)
         start = self._tool_start_times.pop(event_key, None)
-        elapsed = f"  {int((time.monotonic() - start) * 1000)}ms" if start is not None else ""
+        elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+        elapsed_str = _fmt_timing(elapsed_ms) if elapsed_ms is not None else ""
         self._update_tool_summary_subtext()
         self._record_tool_detail(
             display,
             self._tool_inputs.pop(event_key, None),
             _tool_output(data),
-            elapsed=elapsed.strip(),
+            elapsed=elapsed_str,
         )
+        if elapsed_ms is not None:
+            self._tracker.print_tool_call_line(name, elapsed_ms)
+
+    def _handle_llm_start(self, event: StreamEvent) -> None:
+        if self._active_node != "investigation_agent":
+            return
+        iteration = event.data.get("iteration", 0)
+        dots = "·" * ((iteration % 3) + 1)
+        hint = f"analyzing alert {dots}" if iteration == 0 else f"analyzing results {dots}"
+        self._tracker.update_subtext(self._active_node, hint, duration=300.0)
+        self._tracker.print_status_hint(hint)
 
     def _record_tool_summary(self, tool_name: str) -> None:
         source = _tool_source_label(tool_name)

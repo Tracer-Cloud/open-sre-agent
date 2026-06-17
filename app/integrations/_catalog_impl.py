@@ -28,6 +28,8 @@ from app.integrations.config_models import (
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     OpsGenieIntegrationConfig,
+    PagerDutyIntegrationConfig,
+    RedisIntegrationConfig,
     SlackWebhookConfig,
     SplunkIntegrationConfig,
     TelegramBotConfig,
@@ -35,9 +37,11 @@ from app.integrations.config_models import (
     VictoriaLogsIntegrationConfig,
     WhatsAppConfig,
 )
+from app.integrations.dagster import build_dagster_config
 from app.integrations.effective_models import EffectiveIntegrations
 from app.integrations.github_mcp import build_github_mcp_config
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
+from app.integrations.jenkins import build_jenkins_config, jenkins_config_from_env
 from app.integrations.mariadb import build_mariadb_config
 from app.integrations.mongodb import build_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config
@@ -50,6 +54,7 @@ from app.integrations.rds import (
     build_rds_config,
     rds_config_from_env,
 )
+from app.integrations.redis import redis_config_from_env
 from app.integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     SKIP_CLASSIFIED_SERVICES,
@@ -60,6 +65,7 @@ from app.integrations.sentry import build_sentry_config
 from app.integrations.signoz import build_signoz_config, signoz_config_from_env
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
+from app.integrations.tempo import build_tempo_config, tempo_config_from_env
 from app.llm_credentials import resolve_env_credential
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
@@ -356,6 +362,23 @@ def _classify_service_instance(
             return None, None
         return gitlab_config.model_dump(), "gitlab"
 
+    if key == "jenkins":
+        try:
+            jenkins_config = build_jenkins_config(
+                {
+                    "base_url": credentials.get("base_url", ""),
+                    "username": credentials.get("username", ""),
+                    "api_token": credentials.get("api_token", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if jenkins_config.is_configured:
+            return jenkins_config.model_dump(), "jenkins"
+        return None, None
+
     if key == "mongodb":
         try:
             mongodb_config = build_mongodb_config(
@@ -371,6 +394,26 @@ def _classify_service_instance(
             return None, None
         if mongodb_config.connection_string:
             return mongodb_config.model_dump(), "mongodb"
+        return None, None
+
+    if key == "redis":
+        try:
+            redis_config = RedisIntegrationConfig.model_validate(
+                {
+                    "host": credentials.get("host", ""),
+                    "port": credentials.get("port", 6379),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "db": credentials.get("db", 0),
+                    "ssl": credentials.get("ssl", False),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if redis_config.host:
+            return redis_config.model_dump(), "redis"
         return None, None
 
     if key == "postgresql":
@@ -474,6 +517,22 @@ def _classify_service_instance(
             return None, None
         if opsgenie_config.api_key:
             return opsgenie_config.model_dump(), "opsgenie"
+        return None, None
+
+    if key == "pagerduty":
+        try:
+            pd_raw: dict[str, Any] = {
+                "api_key": credentials.get("api_key", ""),
+                "integration_id": record_id,
+            }
+            if credentials.get("base_url"):
+                pd_raw["base_url"] = credentials["base_url"]
+            pagerduty_config = PagerDutyIntegrationConfig.model_validate(pd_raw)
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if pagerduty_config.api_key:
+            return pagerduty_config.model_dump(), "pagerduty"
         return None, None
 
     if key == "incident_io":
@@ -616,6 +675,25 @@ def _classify_service_instance(
                 "ssl_mode": mysql_config.ssl_mode,
                 "integration_id": record_id,
             }, "mysql"
+        return None, None
+
+    if key == "dagster":
+        try:
+            dagster_config = build_dagster_config(
+                {
+                    "endpoint": credentials.get("endpoint", ""),
+                    "api_token": credentials.get("api_token", ""),
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if dagster_config.endpoint:
+            return {
+                "endpoint": dagster_config.endpoint,
+                "api_token": dagster_config.api_token,
+                "integration_id": record_id,
+            }, "dagster"
         return None, None
 
     if key == "rabbitmq":
@@ -950,6 +1028,24 @@ def _classify_service_instance(
             return signoz_config.model_dump(), "signoz"
         return None, None
 
+    if key == "tempo":
+        try:
+            tempo_config = build_tempo_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "api_key": credentials.get("api_key", ""),
+                    "username": credentials.get("username", ""),
+                    "password": credentials.get("password", ""),
+                    "org_id": credentials.get("org_id", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception:
+            return None, None
+        if tempo_config.is_configured:
+            return tempo_config.model_dump(), "tempo"
+        return None, None
+
     # Fallback for unknown services: pass through credentials + record id.
     return {"credentials": credentials, "integration_id": record_id}, key
 
@@ -1250,6 +1346,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
+    redis_config = redis_config_from_env()
+    if redis_config:
+        integrations.append(
+            _active_env_record(
+                "redis",
+                redis_config.model_dump(exclude={"integration_id"}),
+            )
+        )
+
     postgresql_host = os.getenv("POSTGRESQL_HOST", "").strip()
     postgresql_database = os.getenv("POSTGRESQL_DATABASE", "").strip()
     if postgresql_host and postgresql_database:
@@ -1369,6 +1474,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "opsgenie",
                     opsgenie_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    pagerduty_api_key = os.getenv("PAGERDUTY_API_KEY", "").strip()
+    if pagerduty_api_key:
+        try:
+            _envs: dict[str, Any] = {"api_key": pagerduty_api_key}
+            base_url = os.getenv("PAGERDUTY_BASE_URL", "").strip()
+            if base_url:
+                _envs["base_url"] = base_url
+            pagerduty_config = PagerDutyIntegrationConfig.model_validate(_envs)
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="pagerduty")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "pagerduty",
+                    pagerduty_config.model_dump(exclude={"integration_id"}),
                 )
             )
 
@@ -1577,6 +1700,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="mariadb")
+
+    dagster_endpoint = os.getenv("DAGSTER_ENDPOINT", "").strip()
+    if dagster_endpoint:
+        try:
+            dagster_config = build_dagster_config(
+                {
+                    "endpoint": dagster_endpoint,
+                    "api_token": os.getenv("DAGSTER_API_TOKEN", "").strip(),
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "dagster",
+                    dagster_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="dagster")
 
     rabbitmq_host = os.getenv("RABBITMQ_HOST", "").strip()
     rabbitmq_username = os.getenv("RABBITMQ_USERNAME", "").strip()
@@ -1870,6 +2011,30 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load SigNoz config from env", exc_info=True)
+
+    try:
+        jenkins_config = jenkins_config_from_env()
+        if jenkins_config is not None and jenkins_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "jenkins",
+                    jenkins_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception:
+        logger.debug("Failed to load Jenkins config from env", exc_info=True)
+
+    try:
+        tempo_config = tempo_config_from_env()
+        if tempo_config is not None and tempo_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "tempo",
+                    tempo_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception:
+        logger.debug("Failed to load Tempo config from env", exc_info=True)
 
     return integrations
 

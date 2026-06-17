@@ -90,7 +90,7 @@ def build_runtime_alert_payload(
             f"No remote named '{name}' is configured.",
             suggestion=(
                 f"Configured remotes: {available}. "
-                f"Deploy with 'opensre deploy' or add one with 'opensre remote'."
+                "Register one with 'opensre remote --url <url> health' or run 'opensre remote'."
             ),
         )
 

@@ -27,6 +27,7 @@ DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
     "eu": "https://api.eu.opsgenie.com",
 }
 DEFAULT_INCIDENT_IO_BASE_URL = "https://api.incident.io"
+DEFAULT_PAGERDUTY_BASE_URL = "https://api.pagerduty.com"
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +206,25 @@ class OpsGenieIntegrationConfig(StrictConfigModel):
     def headers(self) -> dict[str, str]:
         return {
             "Authorization": f"GenieKey {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
+class PagerDutyIntegrationConfig(StrictConfigModel):
+    """PagerDuty config"""
+
+    api_key: str
+    base_url: str = DEFAULT_PAGERDUTY_BASE_URL
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(
+        normalize_url(DEFAULT_PAGERDUTY_BASE_URL)
+    )
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Token token={self.api_key}",
             "Content-Type": "application/json",
         }
 
@@ -518,6 +538,22 @@ class MongoDBIntegrationConfig(StrictConfigModel):
     _normalize_auth_source = field_validator("auth_source", mode="before")(
         normalize_with_default("admin")
     )
+
+
+class RedisIntegrationConfig(StrictConfigModel):
+    """Normalized Redis credentials used by resolution and verification flows."""
+
+    host: str
+    port: int = 6379
+    username: str = ""
+    password: str = ""
+    db: int = 0
+    ssl: bool = False
+    integration_id: str = ""
+
+    _normalize_host = field_validator("host", mode="before")(normalize_str())
+    _normalize_username = field_validator("username", mode="before")(normalize_str())
+    _normalize_password = field_validator("password", mode="before")(normalize_str())
 
 
 class MongoDBAtlasIntegrationConfig(StrictConfigModel):

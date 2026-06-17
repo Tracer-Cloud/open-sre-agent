@@ -807,16 +807,12 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
 # wrapper from #1476, or (b) have no observed swallow pattern. Keep alphabetised.
 _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
     {
-        "CheckNodeServiceStatus",
-        "CheckServiceConnectivity",
-        "DescribeResource",
-        "GetAlerts",
-        "GetAppYAML",
-        "GetClusterConfiguration",
-        "GetErrorLogs",
-        "GetRecentLogs",
-        "GetResources",
-        "GetServiceDependencies",
+        # CloudOpsBench replay tools (CheckNodeServiceStatus, GetResources, ...)
+        # were removed from this list when the bench tool module moved out of
+        # app/tools/ into tests/benchmarks/cloudopsbench/tools/k8s/. They live
+        # there as an external registry package and are only loaded when the
+        # bench is actively imported, so they don't appear in the production
+        # registry that this test enumerates.
         "alertmanager_alerts",
         "alertmanager_silences",
         "argocd_application_diff",
@@ -839,6 +835,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_bitbucket_file_contents",
         "get_clickhouse_query_activity",
         "get_clickhouse_system_health",
+        "get_dagster_run_logs",
         "get_eks_deployment_status",
         "get_elb_target_health",
         "get_error_logs",
@@ -848,6 +845,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_github_file_contents",
         "get_github_repository_tree",
         "get_gitlab_file",
+        "get_hermes_adapter_catalog",
         "get_hermes_approval_events",
         "get_hermes_audit_trail",
         "get_hermes_config",
@@ -867,6 +865,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_hermes_session_topology",
         "get_hermes_workflow_run",
         "get_host_metrics",
+        "get_jenkins_build_log",
+        "get_jenkins_pipeline_stages",
         "get_kafka_consumer_group_lag",
         "get_kafka_topic_health",
         "get_lambda_configuration",
@@ -904,6 +904,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_rabbitmq_node_health",
         "get_rabbitmq_queue_backlog",
         "get_recent_airflow_failures",
+        "get_redis_replication",
+        "get_redis_server_info",
+        "get_redis_slowlog",
         "get_s3_object",
         "get_sentry_issue_details",
         "get_sre_guidance",
@@ -924,14 +927,30 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "jira_issue_detail",
         "jira_search_issues",
         "list_bitbucket_commits",
+        "list_dagster_assets",
+        "list_dagster_runs",
+        "list_dagster_schedule_ticks",
+        "list_dagster_sensor_ticks",
         "list_github_commits",
         "list_gitlab_commits",
         "list_gitlab_mrs",
         "list_gitlab_pipelines",
+        "get_github_actions_step_log",
+        "list_github_actions_active_runs",
+        "list_github_actions_run_jobs",
+        "list_github_actions_workflow_runs",
+        "list_jenkins_builds",
+        "list_jenkins_jobs",
+        "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
+        "pagerduty_incident_detail",
+        "pagerduty_incidents",
+        "pagerduty_oncall",
+        "pagerduty_services",
         "prefect_flow_runs",
         "prefect_worker_health",
         "query_betterstack_logs",
@@ -943,6 +962,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_datadog_monitors",
         "query_elasticsearch_logs",
         "query_grafana_alert_rules",
+        "query_grafana_annotations",
         "query_grafana_logs",
         "query_grafana_metrics",
         "query_grafana_service_names",
@@ -953,7 +973,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_metrics",
         "query_signoz_traces",
         "query_splunk_logs",
+        "query_tempo",
         "run_diagnostic_code",
+        "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",
         "search_sentry_issues",
@@ -975,7 +997,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from app.tools.registry import get_registered_tool_map
 
-    registered = set(get_registered_tool_map().keys())
+    # Limit the audit to PRODUCTION tools (those defined in ``app.tools.*``).
+    # External packages registered via ``register_external_tool_package``
+    # (e.g. bench-only tools that live under ``tests/benchmarks/``) have
+    # their own classification expectations and aren't part of this
+    # production-telemetry contract. Filtering by ``origin_module`` keeps
+    # this test stable regardless of test order — whether the bench package
+    # has been imported earlier in the session is no longer relevant.
+    registered = {
+        name
+        for name, tool in get_registered_tool_map().items()
+        if tool.origin_module.startswith("app.tools.")
+    }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 
     unclassified = registered - classified

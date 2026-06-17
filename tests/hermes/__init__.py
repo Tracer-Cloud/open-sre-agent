@@ -1,1 +1,1 @@
-"""Unit tests for the :mod:`app.hermes` package."""
+"""Unit tests for the :mod:`app.integrations.hermes` package."""

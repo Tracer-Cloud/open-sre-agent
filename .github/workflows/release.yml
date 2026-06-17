@@ -472,7 +472,6 @@ jobs:
           DISCORD_RELEASE_LOGO_URL: ${{ secrets.DISCORD_RELEASE_LOGO_URL }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag_name }}
           RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
-          REPO_STARS: ${{ github.event.repository.stargazers_count }}
         shell: bash
         run: |
           set -euo pipefail

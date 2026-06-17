@@ -1,5 +1,10 @@
 # Running a benchmark
 
+## Where the corpus lives
+
+- **Hugging Face (upstream):** [tracer-cloud/cloud-ops-bench-dataset](https://huggingface.co/datasets/tracer-cloud/cloud-ops-bench-dataset)
+- **AWS S3 mirror:** `s3://cloud-ops-bench-dataset/<hf-revision-sha>/` — the same corpus, revision-pinned, used by the Fargate bench task at startup (faster than HF, no rate limits, no `HF_TOKEN` needed at runtime). Populated by `make mirror-cloudopsbench-s3`.
+
 ```bash
 # One-time setup
 make install
@@ -8,7 +13,7 @@ echo "ANTHROPIC_API_KEY=sk-..." >> .env   # plus OPENAI_API_KEY, DEEPSEEK_API_KE
 
 # Smoke run on 5 scenarios (dev mode skips integrity gates, still calls real LLMs)
 uv run python -m tests.benchmarks._framework.cli run \
-    tests/benchmarks/configs/example.yml --dev
+    tests/benchmarks/cloudopsbench/configs/cloudopsbench_smoke.yml --dev
 
 # Artifacts land in .bench-results/example/<run-id>/:
 #   report.json        ← machine-readable
@@ -35,9 +40,12 @@ guide.
 
 ## Running from GitHub CI
 
-Trigger from **Actions → "Benchmark run (manual)" → Run workflow**. Fill in
-the config path and the dev_mode toggle. Artifacts upload as
-`bench-results-<run-id>.zip` (30-day retention).
+Trigger from **Actions → "Benchmark — run on Fargate" → Run workflow**. Fill in
+the config path and the dev_mode toggle. The workflow launches an ECS task and
+exits in under a minute — the actual bench runs on Fargate. Watch live logs
+with `aws logs tail /ecs/opensre-bench --follow`, or via the AWS Console under
+ECS → Clusters → opensre-bench → Tasks. Results land in the bench results S3
+bucket under `runs/<date>-<sha>/` when the task finishes.
 
 One-time setup before the first CI run: add repo secrets `ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `DEEPSEEK_API_KEY` (only the ones your config needs).

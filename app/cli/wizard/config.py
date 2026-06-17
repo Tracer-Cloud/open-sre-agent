@@ -406,6 +406,25 @@ def _copilot_adapter_factory() -> LLMCLIAdapter:
     return CopilotAdapter()
 
 
+def _grok_cli_adapter_factory() -> LLMCLIAdapter:
+    from app.integrations.llm_cli.grok_cli import GrokCLIAdapter
+
+    return GrokCLIAdapter()
+
+
+_GROK_CLI_DEFAULT_MODEL_OPTION = ModelOption(
+    value="",
+    label="CLI default (no -m; use Grok Build configured model)",
+)
+
+# Static fallback used when ``grok models`` is unavailable at wizard time.
+GROK_CLI_MODELS = (
+    _GROK_CLI_DEFAULT_MODEL_OPTION,
+    ModelOption(value="grok-build", label="grok-build"),
+    ModelOption(value="grok-composer-2.5-fast", label="grok-composer-2.5-fast"),
+)
+
+
 KIMI_MODELS = (
     ModelOption(
         value="",
@@ -644,6 +663,19 @@ SUPPORTED_PROVIDERS = (
         credential_kind="cli",
         credential_secret=False,
         adapter_factory=_copilot_adapter_factory,
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="grok-cli",
+        label="xAI Grok Build CLI",
+        group="Local CLI providers",
+        api_key_env="",
+        model_env="GROK_CLI_MODEL",
+        default_model="",
+        models=GROK_CLI_MODELS,
+        credential_kind="cli",
+        credential_secret=False,
+        adapter_factory=_grok_cli_adapter_factory,
         allow_custom_models=True,
     ),
     ProviderOption(
