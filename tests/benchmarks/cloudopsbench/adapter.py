@@ -65,7 +65,7 @@ from tests.benchmarks.cloudopsbench.predictor import (
 )
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import score_case as _legacy_score_case
-from tests.benchmarks.cloudopsbench.tags import seen_shape_for
+from tests.benchmarks.cloudopsbench.tags import ALL_LABELED_SHAPES, seen_shape_for
 from tests.benchmarks.cloudopsbench.validity_scoring import (
     compute_citation_grounding,
     compute_entity_existence,
@@ -337,11 +337,30 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             rng = random.Random(filters.seed)
             rng.shuffle(legacy_cases)
 
-        # Apply seen/unseen filter BEFORE limit so `limit=N` means
-        # "N matching cases", not "N candidates, some of which match"
+        # Apply the shape filter BEFORE the limit. That way ``limit=N``
+        # means "N matching cases", not "N candidates, some of which
+        # match."
+        #
+        # ``seen_shape_for`` returns one of three named tags:
+        # ``SHAPE_SEEN``, ``SHAPE_UNSEEN``, or ``SHAPE_MID``.
+        #
+        # When the operator asks for both labels (``SHAPE_SEEN`` plus
+        # ``SHAPE_UNSEEN`` — the common "give me everything tagged"
+        # config: ``seen_shape: [true, false]``), we skip the filter
+        # entirely so mid-shape cases also pass through. The old
+        # behavior dropped every mid-shape case quietly: scheduling,
+        # service routing, and infrastructure never reached the runner.
+        # That capped every full run at 78% of the corpus and we did
+        # not notice for weeks.
+        #
+        # Operators who really want only one bucket can set
+        # ``seen_shape: [true]`` (seen only) or ``seen_shape: [false]``
+        # (unseen only).
         wanted_seen_shape: set[bool] | None = (
             set(filters.seen_shape) if filters.seen_shape else None
         )
+        if wanted_seen_shape is not None and wanted_seen_shape == set(ALL_LABELED_SHAPES):
+            wanted_seen_shape = None
         if wanted_seen_shape is not None:
             legacy_cases = [
                 c for c in legacy_cases if seen_shape_for(c.fault_category) in wanted_seen_shape
