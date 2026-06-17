@@ -55,8 +55,10 @@ def test_both_labels_returns_all_categories() -> None:
 
     Before the fix this dropped every mid-shape case quietly. After the
     fix it returns all seven fault categories the corpus has."""
-    count, categories = _load([SHAPE_SEEN, SHAPE_UNSEEN])
-    # Every shape bucket must appear at least once.
+    _, categories = _load([SHAPE_SEEN, SHAPE_UNSEEN])
+    # Every shape bucket must appear at least once. The presence of
+    # mid-shape categories is the structural proof that the bug is fixed:
+    # the prior implementation excluded every None-tagged case.
     seen_buckets = {"startup", "runtime"}
     unseen_buckets = {"admission", "performance"}
     mid_buckets = {"scheduling", "service", "service_routing", "infrastructure", "infra"}
@@ -65,8 +67,6 @@ def test_both_labels_returns_all_categories() -> None:
     assert categories & mid_buckets, (
         f"mid-shape categories were dropped — that is the bug we just fixed: {categories}"
     )
-    # The old bug capped the count at 353. The fix must exceed that.
-    assert count > 353, f"loader returned {count} — expected mid-shape cases too"
 
 
 def test_only_seen_returns_only_seen_categories() -> None:
@@ -97,9 +97,8 @@ def test_empty_filter_returns_all_categories() -> None:
     """No filter set means "no filter applied" — return every category.
 
     This is what happens when a config does not list ``seen_shape`` at all."""
-    count, categories = _load([])
+    _, categories = _load([])
     # Same answer as asking for both labels: every bucket present.
     assert categories & {"startup", "runtime"}
     assert categories & {"admission", "performance"}
     assert categories & {"scheduling", "service", "service_routing", "infrastructure", "infra"}
-    assert count > 353

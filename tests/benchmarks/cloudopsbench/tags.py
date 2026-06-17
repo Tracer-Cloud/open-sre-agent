@@ -26,6 +26,8 @@ unseen-shape vs seen-shape becomes the empirical anti-overfit gate
 
 from __future__ import annotations
 
+from typing import Literal
+
 # --------------------------------------------------------------------------- #
 # Shape tag constants                                                         #
 # --------------------------------------------------------------------------- #
@@ -49,7 +51,7 @@ SHAPE_UNSEEN: bool = False
 """Hard categories: admission, performance. Where opensre's lift
 concentrates."""
 
-SHAPE_MID: None = None
+SHAPE_MID: Literal[None] = None
 """Mid categories: scheduling, service routing, infrastructure.
 Excluded from the seen-vs-unseen contrast but counted in the ``all``
 aggregate."""

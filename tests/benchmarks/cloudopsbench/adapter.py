@@ -352,7 +352,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         wanted_seen_shape: set[bool] | None = (
             set(filters.seen_shape) if filters.seen_shape else None
         )
-        if wanted_seen_shape is not None and wanted_seen_shape == set(ALL_LABELED_SHAPES):
+        if wanted_seen_shape is not None and wanted_seen_shape == ALL_LABELED_SHAPES:
             wanted_seen_shape = None
         if wanted_seen_shape is not None:
             legacy_cases = [
