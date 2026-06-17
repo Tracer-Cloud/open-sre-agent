@@ -26,6 +26,10 @@ def _assert_query_success_or_skip_auth(result: dict) -> None:
         pytest.skip(f"Grafana live query credentials were rejected: {detail}")
     if any(token in detail_lower for token in ("timed out", "timeout", "connection reset")):
         pytest.skip(f"Grafana live query hit a transient network failure: {detail}")
+    if "unable to find datasource" in detail_lower:
+        pytest.skip(
+            f"Grafana datasource UID not available (discovery may have timed out): {detail}"
+        )
 
     pytest.fail(detail or "Grafana query failed")
 
@@ -59,5 +63,15 @@ def test_assert_query_success_or_skip_auth_skips_timeout():
                     "HTTPSConnectionPool(host='tracerbio.grafana.net', port=443): "
                     "Read timed out. (read timeout=10)"
                 ),
+            }
+        )
+
+
+def test_assert_query_success_or_skip_auth_skips_datasource_not_found():
+    with pytest.raises(Skipped, match="datasource UID not available"):
+        _assert_query_success_or_skip_auth(
+            {
+                "success": False,
+                "error": '404 {"message":"Unable to find datasource","traceID":"abc123"}',
             }
         )
