@@ -337,25 +337,18 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
             rng = random.Random(filters.seed)
             rng.shuffle(legacy_cases)
 
-        # Apply the shape filter BEFORE the limit. That way ``limit=N``
-        # means "N matching cases", not "N candidates, some of which
-        # match."
+        # Shape filter runs BEFORE the limit so ``limit=N`` means
+        # "N matching cases", not "N candidates, some of which match."
         #
-        # ``seen_shape_for`` returns one of three named tags:
-        # ``SHAPE_SEEN``, ``SHAPE_UNSEEN``, or ``SHAPE_MID``.
+        # ``seen_shape_for`` is tri-valued: SHAPE_SEEN / SHAPE_UNSEEN /
+        # SHAPE_MID. A naive ``tag in {SHAPE_SEEN, SHAPE_UNSEEN}`` check
+        # drops every SHAPE_MID case (scheduling, service, infra — 22%
+        # of the corpus). The ``ALL_LABELED_SHAPES`` short-circuit
+        # treats ``[SHAPE_SEEN, SHAPE_UNSEEN]`` (the standard "give me
+        # everything" config) as "no filter" so SHAPE_MID also passes.
         #
-        # When the operator asks for both labels (``SHAPE_SEEN`` plus
-        # ``SHAPE_UNSEEN`` — the common "give me everything tagged"
-        # config: ``seen_shape: [true, false]``), we skip the filter
-        # entirely so mid-shape cases also pass through. The old
-        # behavior dropped every mid-shape case quietly: scheduling,
-        # service routing, and infrastructure never reached the runner.
-        # That capped every full run at 78% of the corpus and we did
-        # not notice for weeks.
-        #
-        # Operators who really want only one bucket can set
-        # ``seen_shape: [true]`` (seen only) or ``seen_shape: [false]``
-        # (unseen only).
+        # Single-bucket filters (``[SHAPE_SEEN]`` only or ``[SHAPE_UNSEEN]``
+        # only) still narrow the result as expected.
         wanted_seen_shape: set[bool] | None = (
             set(filters.seen_shape) if filters.seen_shape else None
         )

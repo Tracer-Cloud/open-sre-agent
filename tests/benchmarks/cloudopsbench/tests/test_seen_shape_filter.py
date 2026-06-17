@@ -1,22 +1,15 @@
-"""Tests for the shape filter on the CloudOpsBench case loader.
+"""Tests for the shape filter on ``CloudOpsBenchAdapter.load_cases``.
 
-What these tests cover:
+Pin the contract for the four ways operators set ``filters.seen_shape``:
 
-The case loader takes a list called ``seen_shape``. Each entry in that
-list says "I want cases of this shape." There are three shapes: seen,
-unseen, and mid. The full corpus has all three.
+  [SHAPE_SEEN, SHAPE_UNSEEN]  -> all cases (mid-shape included)
+  [SHAPE_SEEN]                -> only startup + runtime
+  [SHAPE_UNSEEN]              -> only admission + performance
+  []                          -> all cases (no filter)
 
-Before the fix, asking for ``[seen, unseen]`` quietly threw away every
-mid-shape case. The benchmark dropped 99 of 452 cases — three whole
-fault categories (scheduling, service routing, infrastructure) — and
-nothing told you. The run looked clean and the report said "78% of the
-corpus" without mentioning the dropped categories.
-
-These tests pin the four ways someone can use the filter:
-  1. Both labels (seen + unseen)  -> all cases, including mid (the fix)
-  2. Only seen                    -> only startup + runtime
-  3. Only unseen                  -> only admission + performance
-  4. Empty list                   -> all cases (no filter)
+The first case is the regression guard. A previous implementation
+checked ``tag in {True, False}``, which excluded ``None``-tagged
+(SHAPE_MID) cases and silently dropped 99/452 of the corpus.
 """
 
 from __future__ import annotations

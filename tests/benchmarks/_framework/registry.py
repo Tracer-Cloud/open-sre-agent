@@ -1,29 +1,21 @@
 """Benchmark adapter registry.
 
-Each adapter declares its name and a zero-arg factory. The framework
-dispatches on ``config.benchmark`` via this registry rather than an
-if/elif chain.
+Maps ``config.benchmark`` → adapter factory so the framework can build
+adapters without an if/elif chain on the benchmark name.
 
-Adding a new benchmark adapter:
-  (1) Create ``tests/benchmarks/<name>/adapter.py``.
-  (2) At module load time the adapter file calls
-      ``register_adapter(NAME, FactoryClass)``.
+Adding a new adapter:
+  1. Create ``tests/benchmarks/<name>/adapter.py``.
+  2. At module load, the file calls ``register_adapter(NAME, FactoryClass)``.
 
-That's it. Phase 5 of the framework decoupling removed the previous
-hardcoded ``_KNOWN_ADAPTER_MODULES`` tuple in favour of filesystem
-auto-discovery: the bootstrap walks ``tests/benchmarks/*/adapter.py``
-and imports each, so the registry knows about every adapter without
-manual list-maintenance. The discovery rule is deliberately strict —
-a subdirectory of ``tests/benchmarks/`` is recognised as an adapter
-ONLY if it contains an ``adapter.py`` file, so helper packages like
-``_framework/`` and stub directories without an adapter file
-(e.g. ``interactive_shell/``) are skipped automatically.
+Discovery is automatic. Bootstrap walks ``tests/benchmarks/*/adapter.py``
+on first registry use. Directories with names starting with ``_`` or
+``.``, or without an ``adapter.py``, are skipped (``_framework/`` and
+``interactive_shell/`` are the current examples).
 
-Lazy registration is the right policy: each adapter module pulls in its
-own transitive dependencies (HF dataset loaders, replay backends, etc.)
-that the framework should NOT need at import time. Callers do NOT have to
-remember to bootstrap — ``build_adapter`` and ``known_adapters`` do it
-on first use via the ``_bootstrapped`` sentinel.
+Bootstrap is lazy because adapter modules pull in heavy transitive
+deps (HF dataset loaders, replay backends). Importing them at framework
+load time is wrong — only do it when a caller actually needs an
+adapter.
 """
 
 from __future__ import annotations
@@ -40,38 +32,22 @@ AdapterFactory = Callable[[], BenchmarkAdapter]
 
 _ADAPTER_FACTORIES: dict[str, AdapterFactory] = {}
 
-# Has ``ensure_known_adapters_registered`` been called this process? Kept
-# separate from ``bool(_ADAPTER_FACTORIES)`` because tests (and any future
-# code path) can pre-register mock adapters; the canonical bootstrap must
-# still run regardless of what's already in the dict.
-#
-# Stored as a single-key dict (not a bare ``bool``) so the flag can be
-# mutated from within a function without the ``global`` keyword — module
-# scope name *rebinding* needs ``global``, but in-place mutation of a
-# mutable object reached via its existing name does not. Same registry
-# mutation pattern as ``_ADAPTER_FACTORIES`` itself.
+# Bootstrap-once flag. Kept separate from ``bool(_ADAPTER_FACTORIES)``
+# because tests can pre-register mocks; the canonical bootstrap must
+# still run independent of dict contents. Stored in a dict (not a bare
+# bool) so we can mutate it without ``global`` rebinding.
 _REGISTRY_STATE: dict[str, bool] = {"bootstrapped": False}
 
 
 def _discover_adapter_modules() -> tuple[str, ...]:
-    """Find every ``tests/benchmarks/<name>/adapter.py`` on disk.
+    """Walk ``tests/benchmarks/`` and return adapter module paths.
 
-    Returns the importable module paths (``tests.benchmarks.<name>.adapter``)
-    in sorted order so the bootstrap is deterministic.
+    Rules:
+      - Immediate subdirectories only.
+      - Skip names starting with ``_`` or ``.``.
+      - Require an ``adapter.py`` inside the subdirectory.
 
-    Discovery rules:
-      - Iterate immediate subdirectories of ``tests/benchmarks/``.
-      - Skip directories whose name starts with ``_`` (e.g. ``_framework``)
-        or ``.`` (hidden dirs). Adapter packages are user-facing and never
-        start with a leading underscore.
-      - Require an ``adapter.py`` file inside the subdirectory. Stub
-        directories without an adapter (e.g. ``interactive_shell/``)
-        are skipped automatically — they may be reused for non-adapter
-        utilities without polluting the registry.
-
-    Phase 5 of the framework decoupling replaced a hardcoded module
-    list with this walk. Adding a new adapter under
-    ``tests/benchmarks/`` now requires zero framework changes.
+    Output is sorted for deterministic bootstrap order.
     """
     benchmarks_dir = Path(__file__).resolve().parent.parent
     discovered: list[str] = []
@@ -124,24 +100,16 @@ def build_adapter(name: str) -> BenchmarkAdapter:
 
 
 def capabilities_for(name: str) -> AdapterCapabilities:
-    """Return the registered adapter's declared capability flags.
+    """Return the adapter's capability flags without instantiating it.
 
-    Used by config validation (and any future framework-level
-    capability gating) to avoid hardcoded ``if benchmark == "cloudopsbench"``
-    branches.
-
-    Capabilities live as a class attribute on the adapter
-    (``ClassVar[AdapterCapabilities]``), so when the registered factory
-    IS the adapter class — the common pattern, e.g.
-    ``register_adapter("cloudopsbench", CloudOpsBenchAdapter)`` — we
-    read the attribute off the class directly. No instantiation, no
-    adapter-specific side effects (HF dataset load, replay backend
-    setup). The fallback covers the less common closure-factory pattern.
+    When the registered factory is the adapter class itself (the common
+    case: ``register_adapter("cloudopsbench", CloudOpsBenchAdapter)``),
+    we read ``capabilities`` directly off the class — no ``__init__``
+    runs, no side effects. Falls back to instantiating closure
+    factories.
 
     Raises ``KeyError`` with the same "known adapters" hint as
-    ``build_adapter`` when ``name`` is not registered. A typo in
-    ``config.benchmark`` surfaces with a useful message rather than
-    silently bypassing capability checks.
+    ``build_adapter`` for unregistered names.
     """
     ensure_known_adapters_registered()
     if name not in _ADAPTER_FACTORIES:
@@ -169,20 +137,18 @@ def known_adapters() -> list[str]:
 
 
 def ensure_known_adapters_registered() -> None:
-    """Bootstrap: import every adapter module so each module-level
+    """Import every discovered adapter module so its
     ``register_adapter()`` call runs.
 
-    Idempotent via the ``_REGISTRY_STATE["bootstrapped"]`` sentinel. The
-    sentinel is set BEFORE the import loop so a partial failure (one
-    adapter ImportErrors, another succeeds) doesn't trigger a retry on
-    the next call — bootstrap happens exactly once per process. Operators
-    who fix a broken adapter module restart the process.
+    Idempotent: runs once per process (guarded by
+    ``_REGISTRY_STATE["bootstrapped"]``). The flag is set BEFORE the
+    import loop so a single failing adapter doesn't trigger retries on
+    subsequent calls. Fix the adapter and restart the process.
 
-    ImportError is logged then suppressed so a single missing optional
-    dependency doesn't crash the framework, while typos / refactor breakage
-    still surface as a visible warning — silent suppression would leave the
-    registry empty and force every downstream "unknown adapter" diagnosis
-    to start from scratch.
+    ImportError is logged-and-suppressed so one missing optional dep
+    doesn't crash the framework. The warning surfaces typos and
+    refactor breakage; silent suppression would leave the registry
+    empty and obscure the root cause.
     """
     if _REGISTRY_STATE["bootstrapped"]:
         return

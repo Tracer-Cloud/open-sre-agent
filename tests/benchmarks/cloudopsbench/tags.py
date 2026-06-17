@@ -30,45 +30,35 @@ from __future__ import annotations
 # Shape tag constants                                                         #
 # --------------------------------------------------------------------------- #
 #
-# We sort every fault category into one of three buckets that say how
-# hard the category is for the LLM alone:
+# Each fault category gets one of three tags based on LLM-alone
+# baseline difficulty:
 #
-#   SHAPE_SEEN   -> easy categories (startup, runtime)
-#   SHAPE_UNSEEN -> hard categories (admission, performance)
-#   SHAPE_MID    -> middle categories (scheduling, service routing,
-#                                      infrastructure)
+#   SHAPE_SEEN   (True)  — easy categories: startup, runtime
+#   SHAPE_UNSEEN (False) — hard categories: admission, performance
+#   SHAPE_MID    (None)  — mid categories: scheduling, service, infra
 #
-# We give these buckets named constants instead of using ``True``,
-# ``False``, and ``None`` directly in the code. The reason: in June 2026
-# the case loader had a filter that asked "is the tag True or False?"
-# A reader could easily think that covers everything tagged. It does
-# not. Cases tagged ``None`` (mid-shape) silently fell out. Three whole
-# fault categories never reached the runner. Spelling each tag out
-# makes the three-way nature of the tag impossible to miss.
-#
-# We keep the underlying values as ``bool | None`` so the cell files
-# already saved to S3 (3,177 per full corpus run) still read correctly.
-# These constants are clearer names for the same values, not a new
-# type.
+# Underlying values stay ``bool | None`` so existing cell artifacts on
+# S3 still parse. The constants exist to make the three-way nature
+# visible at call sites; bare ``True``/``False`` in a filter expression
+# reads as "all tagged" but actually drops every ``None``-tagged case.
 
 SHAPE_SEEN: bool = True
-"""Easy categories the LLM already handles well: startup, runtime."""
+"""Easy categories: startup, runtime."""
 
 SHAPE_UNSEEN: bool = False
-"""Hard categories where the LLM struggles most: admission, performance.
-This is where opensre adds the most value."""
+"""Hard categories: admission, performance. Where opensre's lift
+concentrates."""
 
 SHAPE_MID: None = None
-"""Middle categories: scheduling, service routing, infrastructure.
-Show up in the ``all`` aggregate but not in the seen-vs-unseen
-comparison."""
+"""Mid categories: scheduling, service routing, infrastructure.
+Excluded from the seen-vs-unseen contrast but counted in the ``all``
+aggregate."""
 
-# The case loader uses this set to spot when an operator says "I want
-# both labels" (the most common intent: give me everything tagged).
-# When the filter matches this set, the loader skips the filter
-# entirely so mid-shape cases also pass through. Without this rule the
-# filter dropped every mid-shape case and capped the corpus at 78%.
 ALL_LABELED_SHAPES: frozenset[bool] = frozenset({SHAPE_SEEN, SHAPE_UNSEEN})
+"""Filter sentinel: when ``filters.seen_shape`` matches this set, the
+adapter treats it as "no shape filter" so ``SHAPE_MID`` cases also pass
+through. Otherwise ``[SHAPE_SEEN, SHAPE_UNSEEN]`` would silently drop
+~22% of the corpus (the three mid-shape categories)."""
 
 
 # --------------------------------------------------------------------------- #
