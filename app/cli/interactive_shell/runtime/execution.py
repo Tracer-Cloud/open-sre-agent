@@ -74,7 +74,7 @@ def run_new_alert(
     from app.cli.interactive_shell.runtime.tasks import TaskKind
     from app.cli.investigation import run_investigation_for_session
 
-    policy = evaluate_investigation_launch(action_type="investigation")
+    policy = evaluate_investigation_launch(action_type="investigation", user_initiated=True)
     if not execution_allowed(
         policy,
         session=session,

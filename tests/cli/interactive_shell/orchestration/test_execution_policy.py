@@ -73,6 +73,18 @@ def test_investigation_launch_is_ask() -> None:
     assert r.action_type == "investigation"
 
 
+def test_investigation_launch_user_initiated_is_allow() -> None:
+    r = evaluate_investigation_launch(action_type="investigation", user_initiated=True)
+    assert r.verdict == "allow"
+    assert r.action_type == "investigation"
+
+
+def test_sample_alert_user_initiated_is_allow() -> None:
+    r = evaluate_investigation_launch(action_type="sample_alert", user_initiated=True)
+    assert r.verdict == "allow"
+    assert r.action_type == "sample_alert"
+
+
 def test_synthetic_is_ask() -> None:
     r = evaluate_synthetic_test_launch()
     assert r.verdict == "ask"
