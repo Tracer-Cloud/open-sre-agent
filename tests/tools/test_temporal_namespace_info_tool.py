@@ -48,10 +48,12 @@ def test_run_happy_path(monkeypatch) -> None:
         "name": "default",
         "state": "NAMESPACE_STATE_REGISTERED",
         "workflow_count": "58",
+        # The client flattens + base64-decodes the raw groupValues into
+        # [{"status", "count"}] before returning (see TemporalClient).
         "groups": [
-            {"groupValues": [{"data": "Running"}], "count": "45"},
-            {"groupValues": [{"data": "Failed"}], "count": "8"},
-            {"groupValues": [{"data": "TimedOut"}], "count": "5"},
+            {"status": "Running", "count": "45"},
+            {"status": "Failed", "count": "8"},
+            {"status": "TimedOut", "count": "5"},
         ],
     }
 
@@ -65,7 +67,11 @@ def test_run_happy_path(monkeypatch) -> None:
     assert result["name"] == "default"
     assert result["state"] == "NAMESPACE_STATE_REGISTERED"
     assert result["workflow_count"] == "58"
-    assert len(result["groups"]) == 3
+    assert result["groups"] == [
+        {"status": "Running", "count": "45"},
+        {"status": "Failed", "count": "8"},
+        {"status": "TimedOut", "count": "5"},
+    ]
 
 
 def test_run_returns_error_on_failure(monkeypatch) -> None:

@@ -1,6 +1,14 @@
+import base64
+import json
 from typing import Any
 
 from app.services.temporal.client import TemporalClient, TemporalConfig
+
+
+def _encode_status_payload(status: str) -> str:
+    """Encode a status name the way Temporal's HTTP API does: the value is a
+    JSON-encoded string, base64-encoded (e.g. "Failed" -> "IkZhaWxlZCI=")."""
+    return base64.b64encode(json.dumps(status).encode()).decode()
 
 
 class _FakeResponse:
@@ -85,6 +93,28 @@ def test_list_workflow_executions_success(monkeypatch):
     assert executions[0]["status"] == "WORKFLOW_EXECUTION_STATUS_FAILED"
 
 
+def test_list_workflow_executions_omits_next_page_token(monkeypatch):
+    """The live HTTP API omits nextPageToken when there are no more pages.
+    The client must not KeyError — it should default to an empty token."""
+    fake_payload = {
+        "executions": [
+            {
+                "execution": {"workflowId": "wf-1", "runId": "run-1"},
+                "type": {"name": "MyWorkflowType"},
+                "status": "WORKFLOW_EXECUTION_STATUS_FAILED",
+            }
+        ],
+        # nextPageToken intentionally absent — matches a real single-page response.
+    }
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", lambda _url, **_k: _FakeResponse(fake_payload))
+
+    response = temporal.list_workflow_executions()
+    assert response["success"] is True
+    assert response["total"] == 1
+    assert response["next_page_token"] == ""
+
+
 def test_list_workflow_executions_failure(monkeypatch):
     temporal = _client()
 
@@ -157,6 +187,27 @@ def test_get_workflow_history_success(monkeypatch):
     assert response["archived"] is False
 
 
+def test_get_workflow_history_omits_archived_and_token(monkeypatch):
+    """A single-page, non-archived history omits both nextPageToken and
+    archived on the wire. The client must default them instead of KeyError-ing."""
+    fake_payload = {
+        "history": {
+            "events": [
+                {"eventId": "1", "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED"},
+            ]
+        },
+        # nextPageToken and archived intentionally absent.
+    }
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", lambda _url, **_k: _FakeResponse(fake_payload))
+
+    response = temporal.get_workflow_history("wf-1", "run-1")
+    assert response["success"] is True
+    assert response["total"] == 1
+    assert response["next_page_token"] == ""
+    assert response["archived"] is False
+
+
 def test_get_workflow_history_failure(monkeypatch):
     temporal = _client()
 
@@ -223,6 +274,22 @@ def test_describe_task_queue_success(monkeypatch):
     assert captured[0]["params"]["taskQueueType"] == "TASK_QUEUE_TYPE_WORKFLOW"
 
 
+def test_describe_task_queue_omits_pollers(monkeypatch):
+    """When no worker is polling, the live API omits the pollers array entirely.
+    The client must default to [] (total 0) rather than KeyError."""
+    fake_payload = {
+        "stats": {"approximateBacklogAge": "0s"},
+        # pollers intentionally absent — no active workers right now.
+    }
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", lambda _url, **_k: _FakeResponse(fake_payload))
+
+    response = temporal.describe_task_queue("idle-queue")
+    assert response["success"] is True
+    assert response["pollers"] == []
+    assert response["total"] == 0
+
+
 def test_describe_task_queue_failure(monkeypatch):
     temporal = _client()
 
@@ -260,12 +327,13 @@ def test_get_namespace_info_success(monkeypatch):
         "config": {},
         "isGlobalNamespace": False,
     }
+    # The real HTTP API base64-encodes each status name as a Temporal Payload.
     count_payload = {
         "count": "58",
         "groups": [
-            {"groupValues": [{"data": "Running"}], "count": "45"},
-            {"groupValues": [{"data": "Failed"}], "count": "8"},
-            {"groupValues": [{"data": "TimedOut"}], "count": "5"},
+            {"groupValues": [{"data": _encode_status_payload("Running")}], "count": "45"},
+            {"groupValues": [{"data": _encode_status_payload("Failed")}], "count": "8"},
+            {"groupValues": [{"data": _encode_status_payload("TimedOut")}], "count": "5"},
         ],
     }
 
@@ -288,11 +356,16 @@ def test_get_namespace_info_success(monkeypatch):
     assert captured[1]["url"] == "/api/v1/namespaces/default/workflow-count"
     assert captured[1]["params"]["query"] == "GROUP BY ExecutionStatus"
 
-    # Verify response shape
+    # Verify response shape: groups are decoded from base64 and flattened to
+    # [{"status", "count"}] — the LLM never sees raw Payload encoding.
     assert response["name"] == "default"
     assert response["state"] == "NAMESPACE_STATE_REGISTERED"
     assert response["workflow_count"] == "58"
-    assert len(response["groups"]) == 3
+    assert response["groups"] == [
+        {"status": "Running", "count": "45"},
+        {"status": "Failed", "count": "8"},
+        {"status": "TimedOut", "count": "5"},
+    ]
 
 
 def test_get_namespace_info_failure(monkeypatch):

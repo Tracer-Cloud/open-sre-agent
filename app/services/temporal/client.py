@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 import logging
 from typing import Any
 
@@ -48,11 +51,12 @@ class TemporalClient:
             r.raise_for_status()
             data = r.json()
 
+            executions = data.get("executions", [])
             return {
                 "success": True,
-                "executions": data["executions"],
-                "next_page_token": data["nextPageToken"],
-                "total": len(data["executions"]),
+                "executions": executions,
+                "next_page_token": data.get("nextPageToken", ""),
+                "total": len(executions),
             }
         except httpx.HTTPStatusError as exc:
             capture_service_error(
@@ -99,13 +103,13 @@ class TemporalClient:
             )
             r.raise_for_status()
             data = r.json()
-            history = data["history"]
+            events = (data.get("history") or {}).get("events", [])
             return {
                 "success": True,
-                "events": history["events"],
-                "next_page_token": data["nextPageToken"],
-                "archived": data["archived"],
-                "total": len(history["events"]),
+                "events": events,
+                "next_page_token": data.get("nextPageToken", ""),
+                "archived": data.get("archived", False),
+                "total": len(events),
             }
         except httpx.HTTPStatusError as exc:
             capture_service_error(
@@ -142,7 +146,8 @@ class TemporalClient:
         identify which queues to inspect.
         """
         params: dict[str, str | int | bool] = {
-            "reportStats": True, "taskQueueType": "TASK_QUEUE_TYPE_WORKFLOW",
+            "reportStats": True,
+            "taskQueueType": "TASK_QUEUE_TYPE_WORKFLOW",
         }
         try:
             r = self._client.get(
@@ -152,11 +157,12 @@ class TemporalClient:
             r.raise_for_status()
             data = r.json()
 
+            pollers = data.get("pollers", [])
             return {
                 "success": True,
-                "pollers": data["pollers"],
+                "pollers": pollers,
                 "stats": data.get("stats", {}),
-                "total": len(data["pollers"]),
+                "total": len(pollers),
             }
         except httpx.HTTPStatusError as exc:
             capture_service_error(
@@ -206,7 +212,7 @@ class TemporalClient:
                 "name": namespace_info.get("name", ""),
                 "state": namespace_info.get("state", ""),
                 "workflow_count": count_data.get("count", "0"),
-                "groups": count_data.get("groups", []),
+                "groups": self._flatten_status_groups(count_data.get("groups", [])),
             }
         except httpx.HTTPStatusError as exc:
             capture_service_error(
@@ -227,6 +233,42 @@ class TemporalClient:
                 method="get_namespace_info",
             )
             return {"success": False, "error": str(exc)}
+
+    def _flatten_status_groups(self, groups: list[dict[str, Any]]) -> list[dict[str, str]]:
+        """Flatten CountWorkflowExecutions GROUP BY results into [{status, count}].
+
+        The raw response nests each bucket as
+        ``{"groupValues": [{"data": "<base64 Payload>"}], "count": "1"}``.
+        The status name is a base64-encoded Temporal Payload, so we decode it
+        and drop the metadata/encoding noise the LLM does not need.
+        """
+        flattened: list[dict[str, str]] = []
+        for group in groups:
+            values = group.get("groupValues") or []
+            decoded = [str(self._decode_payload_data(v.get("data", ""))) for v in values]
+            flattened.append(
+                {
+                    "status": ", ".join(decoded),
+                    "count": str(group.get("count", "0")),
+                }
+            )
+        return flattened
+
+    @staticmethod
+    def _decode_payload_data(data: str) -> Any:
+        """Decode a Temporal HTTP API Payload ``data`` field.
+
+        The JSON/HTTP API base64-encodes every Payload value (e.g. the status
+        name ``"Failed"`` arrives as ``"IkZhaWxlZCI="``). Decode the base64 then
+        JSON-parse it. Fall back to the raw string if it is not a standard
+        base64/JSON payload, so a format change never crashes the caller.
+        """
+        if not data:
+            return data
+        try:
+            return json.loads(base64.b64decode(data))
+        except (binascii.Error, ValueError, UnicodeDecodeError):
+            return data
 
     def probe_access(self) -> ProbeResult:
         if not self.is_configured:
@@ -257,7 +299,7 @@ class TemporalClient:
             return ProbeResult.failed(f"Failed to connect to Temporal: {str(exc)}.")
 
     def close(self) -> None:
-            self._client.close()
+        self._client.close()
 
     def __enter__(self) -> TemporalClient:
         return self
