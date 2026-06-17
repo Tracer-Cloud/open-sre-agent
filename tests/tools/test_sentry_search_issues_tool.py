@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
+
+import pytest
 
 from app.integrations.sentry import _MAX_SENTRY_QUERY_LEN, _sanitize_sentry_query
 from app.tools.SentrySearchIssuesTool import search_sentry_issues
@@ -59,6 +62,24 @@ def test_run_empty_issues() -> None:
         result = search_sentry_issues(organization_slug="my-org", sentry_token="tok_test")
     assert result["available"] is True
     assert result["issues"] == []
+
+
+@pytest.mark.integration
+def test_live_env_config_searches_sentry_windows_issues() -> None:
+    if not os.getenv("SENTRY_ORG_SLUG") or not os.getenv("SENTRY_AUTH_TOKEN"):
+        pytest.skip("SENTRY_ORG_SLUG and SENTRY_AUTH_TOKEN are required for live Sentry search")
+
+    result = search_sentry_issues(
+        organization_slug="",
+        sentry_token="",
+        query="windows",
+        limit=5,
+    )
+
+    assert result["available"] is True
+    assert result["source"] == "sentry"
+    assert result["query"] == "windows"
+    assert isinstance(result["issues"], list)
 
 
 # --- _sanitize_sentry_query tests ---
