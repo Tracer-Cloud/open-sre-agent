@@ -551,20 +551,21 @@ class TestReplHintAnimation:
         monkeypatch.setattr(output.sys, "stdout", fake)
 
         display = self._make_display()
-        display._anim_active = True
         display._start_animation("analyzing results")
 
-        # Wait long enough for ≥4 frames at _REPL_ANIM_INTERVAL = 0.10s
-        time.sleep(0.6)
+        # _REPL_ANIM_INTERVAL = 0.35s; wait long enough for ≥3 frames
+        time.sleep(1.3)
         display._stop_animation()
 
         frame_writes = [w for w in fake.writes if "analyzing results" in w]
-        assert len(frame_writes) >= 4, (
-            f"expected ≥4 animation frames, got {len(frame_writes)}: {frame_writes}"
+        assert len(frame_writes) >= 3, (
+            f"expected ≥3 animation frames, got {len(frame_writes)}: {frame_writes}"
         )
         for w in frame_writes:
-            assert w.startswith("\r"), "each frame must begin with \\r to rewrite the current line"
+            # Frames use cursor-up + carriage-return, not bare \r
+            assert "\033[A\r" in w, "each frame must use cursor-up + \\r"
             assert "\033[K" in w, "each frame must clear trailing chars with \\033[K"
+            assert w.endswith("\n"), "each frame must end with \\n to restore cursor position"
         # Dots must cycle — collect the unique dot suffixes seen
         import re as _re
 
@@ -576,13 +577,12 @@ class TestReplHintAnimation:
     def test_stop_animation_joins_thread_and_resets_state(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """_stop_animation signals the thread, joins it, clears state, and flushes \\n."""
+        """_stop_animation signals the thread and joins it, leaving clean state."""
         monkeypatch.setattr(output, "_stdout_is_tty", lambda: True)
         fake = self._FakeStdout()
         monkeypatch.setattr(output.sys, "stdout", fake)
 
         display = self._make_display()
-        display._anim_active = True
         display._start_animation("analyzing")
 
         assert display._anim_thread is not None
@@ -592,9 +592,6 @@ class TestReplHintAnimation:
 
         assert display._anim_thread is None
         assert display._anim_stop is None
-        assert display._anim_active is False
-        # A trailing \n must have been flushed to advance the cursor off the hint line
-        assert any("\n" in w for w in fake.writes), "expected trailing \\n after animation"
 
     def test_exception_during_synthesis_stops_animation_via_finally(
         self, monkeypatch: pytest.MonkeyPatch
@@ -605,7 +602,6 @@ class TestReplHintAnimation:
         monkeypatch.setattr(output.sys, "stdout", fake)
 
         display = self._make_display()
-        display._anim_active = True
         display._start_animation("analyzing results")
         assert display._anim_thread is not None
 
@@ -616,7 +612,6 @@ class TestReplHintAnimation:
                 display._stop_animation()
 
         assert display._anim_thread is None
-        assert display._anim_active is False
 
 
 def test_active_tool_detail_toggle_uses_newest_registered_callback() -> None:

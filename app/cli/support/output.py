@@ -840,7 +840,7 @@ def _build_progress_step_text(
 
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
-_REPL_ANIM_INTERVAL = 0.10  # seconds between frame updates (~10 fps)
+_REPL_ANIM_INTERVAL = 0.35  # seconds per frame — slow enough to see · → ·· → ··· clearly
 # Raw ANSI codes for the hint-line animation (matches SECONDARY / DIM styles)
 _ANIM_SEC = "\x1b[38;5;247m"
 _ANIM_DIM = "\x1b[2m"
@@ -858,11 +858,11 @@ def _stdout_is_tty() -> bool:
 class _ReplEventLogDisplay:
     """Append-only investigation progress for the interactive REPL (no Rich Live).
 
-    Hint lines (e.g. "analyzing alert") are printed WITHOUT a trailing newline
-    so the animation thread can rewrite them in-place via ``\\r`` (carriage
-    return) + ``\\033[K`` (clear-to-EOL).  ``_anim_active`` tracks whether
-    the cursor is still sitting on the hint line; ``_stop_animation`` flushes
-    a ``\\n`` to advance past it before any new output arrives.
+    Hint lines are printed with a normal trailing newline via ``_emit``.  The
+    animation thread uses ``\\033[A`` (cursor-up) to return to that line and
+    rewrite it with cycling dots.  Printing the hint with a newline first means
+    the cursor is never left mid-line, so prompt_toolkit cannot append its own
+    hint text to our line (which caused the corruption in the ``end=""`` approach).
     """
 
     def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
@@ -876,8 +876,6 @@ class _ReplEventLogDisplay:
         self._prompt_suppressed = False
         self._anim_stop: threading.Event | None = None
         self._anim_thread: threading.Thread | None = None
-        # True while the cursor is sitting on the hint line (no trailing \n yet).
-        self._anim_active: bool = False
 
     def stop(self) -> None:
         self._stop_animation()
@@ -893,11 +891,7 @@ class _ReplEventLogDisplay:
         self._console.print(line)
 
     def _stop_animation(self) -> None:
-        """Signal the animation thread to stop and wait for it to exit.
-
-        If the cursor was left on the hint line (no trailing newline), a ``\\n``
-        is flushed first so subsequent output starts on a fresh line.
-        """
+        """Signal the animation thread to stop and wait for it to exit."""
         stop = self._anim_stop
         if stop is not None:
             stop.set()
@@ -906,20 +900,21 @@ class _ReplEventLogDisplay:
         if t is not None:
             t.join(timeout=0.3)
             self._anim_thread = None
-        if self._anim_active:
-            # Advance the cursor off the hint line before any new print.
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            self._anim_active = False
 
     def _start_animation(self, prefix: str) -> None:
-        """Cycle dots on the open hint line via ``\\r`` + overwrite.
+        """Cycle dots on the hint line using cursor-up + rewrite.
 
-        Uses ``\\r`` (carriage return) to return to the start of the current
-        line — the hint was printed with ``end=""`` so the cursor is still on
-        it — then overwrites with the next frame and ``\\033[K`` to clear any
-        trailing chars.  This is immune to terminal-width wrapping problems
-        that cursor-up (``\\033[A``) would have.
+        The hint was printed with a normal newline (via ``_emit``), so the
+        cursor is one line below it.  Each frame:
+          1. ``\\033[A`` moves the cursor up to the hint line
+          2. ``\\r`` goes to the start of that line
+          3. New content + ``\\033[K`` overwrites and clears any trailing chars
+          4. ``\\n`` restores the cursor to the blank line below
+
+        Printing the hint WITH a newline (not ``end=""``) is essential: it
+        keeps the cursor off the hint line between frames, so prompt_toolkit
+        cannot append its own text there (which was the cause of the
+        ``/ for commands`` corruption with the ``end=""`` approach).
         """
         if not _stdout_is_tty():
             return
@@ -934,14 +929,16 @@ class _ReplEventLogDisplay:
                 dots = _REPL_ANIM_FRAMES[frame_idx]
                 elapsed = time.monotonic() - t0
                 ts = _elapsed_hms(elapsed)
-                # \r returns to start of the hint line (no newline was printed)
-                # \033[K clears any trailing characters (frame shrinks from ··· to ·)
+                # \033[A = cursor up 1 (to hint line)
+                # \r     = carriage return (BOL)
+                # \033[K = clear to EOL
+                # \n     = restore cursor to the blank line below
                 frame_str = (
-                    f"\r"
+                    f"\033[A\r"
                     f"{_ANIM_SEC}{ts}  {_ANIM_RST}"
                     f"{_ANIM_DIM}      ↳  {_ANIM_RST}"
                     f"{_ANIM_SEC}{prefix} {dots}{_ANIM_RST}"
-                    f"\033[K"
+                    f"\033[K\n"
                 )
                 if not stop.is_set():
                     sys.stdout.write(frame_str)
@@ -952,16 +949,7 @@ class _ReplEventLogDisplay:
         self._anim_thread = thread
 
     def animate_hint(self, text: str) -> None:
-        """Print a hint line (no trailing newline) and animate dots in-place.
-
-        The hint is printed via ``console.print(..., end="")`` so the cursor
-        stays on the same line; ``_start_animation`` then rewrites it every
-        ``_REPL_ANIM_INTERVAL`` seconds using ``\\r`` + overwrite.
-
-        Any subsequent ``_emit`` call (or ``_stop_animation`` / ``stop``) will
-        signal the thread to stop, join it, and flush ``\\n`` so the next
-        output starts cleanly on the following line.
-        """
+        """Print a hint line and animate its trailing dots in-place."""
         self._stop_animation()
         prefix = text.rstrip("· \t")
         elapsed_total = time.monotonic() - self._t0
@@ -969,13 +957,9 @@ class _ReplEventLogDisplay:
         t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
         t.append("      ↳  ", style=DIM)
         t.append(f"{prefix} ·", style=SECONDARY)
-        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
-
-        prepare_repl_output_line()
-        # end="" keeps cursor on this line; \r in animation frames rewrite it.
-        self._console.print(t, end="")
-        sys.stdout.flush()
-        self._anim_active = True
+        # Print WITH newline — cursor moves to blank line below the hint.
+        # The animation thread uses \033[A to go up and rewrite the hint line.
+        self._emit(t)
         self._start_animation(prefix)
 
     def step_start(self, node_name: str) -> None:
