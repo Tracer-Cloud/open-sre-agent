@@ -73,8 +73,7 @@ def run_sample_alert(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", f"sample:{template_name}")
 
 
@@ -132,6 +131,5 @@ def run_text_investigation(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", alert_text)

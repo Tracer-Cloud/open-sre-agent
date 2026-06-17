@@ -25,24 +25,24 @@ _MAX_FOLLOW_UP_TURNS = 12
 
 
 def _format_followup_history(session: ReplSession) -> str:
-    """Render prior follow-up Q&A pairs stored in cli_agent_messages."""
-    if not session.cli_agent_messages:
+    """Render prior follow-up Q&A pairs for the current investigation."""
+    if not session.follow_up_messages:
         return ""
     lines: list[str] = []
     cap = _MAX_FOLLOW_UP_TURNS * 2
-    for role, content in session.cli_agent_messages[-cap:]:
+    for role, content in session.follow_up_messages[-cap:]:
         label = "User" if role == "user" else "Assistant"
         lines.append(f"{label}: {content}")
     return "\n".join(lines)
 
 
 def _record_follow_up_turn(session: ReplSession, question: str, answer: str) -> None:
-    """Append a follow-up Q&A pair to cli_agent_messages with the same cap as cli_agent."""
-    session.cli_agent_messages.append(("user", question))
-    session.cli_agent_messages.append(("assistant", answer))
+    """Append a follow-up Q&A pair to follow_up_messages (scoped to current investigation)."""
+    session.follow_up_messages.append(("user", question))
+    session.follow_up_messages.append(("assistant", answer))
     cap = _MAX_FOLLOW_UP_TURNS * 2
-    if len(session.cli_agent_messages) > cap:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+    if len(session.follow_up_messages) > cap:
+        session.follow_up_messages[:] = session.follow_up_messages[-cap:]
 
 
 def _summarize_evidence(evidence: Any) -> list[str]:

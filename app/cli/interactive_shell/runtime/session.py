@@ -117,6 +117,13 @@ class ReplSession:
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
     """Assistant conversation history: alternating (\"user\"|\"assistant\", text)."""
 
+    follow_up_messages: list[tuple[str, str]] = field(default_factory=list)
+    """Follow-up Q&A pairs for the current investigation, separate from cli_agent_messages.
+
+    Scoped to the most recent investigation: reset by apply_investigation_result()
+    so that CLI-agent turns never bleed into follow-up grounding context.
+    """
+
     prompt_history_backend: History | None = None
     """The live ``prompt_toolkit.History`` object backing the input prompt.
 
@@ -283,6 +290,19 @@ class ReplSession:
             if value:
                 self.accumulated_context[key] = value
 
+    def apply_investigation_result(self, state: dict[str, Any]) -> None:
+        """Record a completed investigation result and reset follow-up context.
+
+        Replaces the inline ``session.last_state = …`` +
+        ``session.accumulate_from_state(…)`` pattern at every call site so that
+        follow_up_messages is always cleared atomically with the state update.
+        This prevents CLI-agent turns from an earlier interaction from bleeding
+        into the follow-up grounding context of a new investigation.
+        """
+        self.last_state = state
+        self.follow_up_messages.clear()
+        self.accumulate_from_state(state)
+
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset the session to a fresh state (used by /new and /resume)."""
         self.history_generation += 1
@@ -298,6 +318,7 @@ class ReplSession:
         self.token_usage.clear()
         self.llm_call_count = 0
         self.cli_agent_messages.clear()
+        self.follow_up_messages.clear()
         self.incoming_alerts.clear()
         # Keep persisted cross-session task history on disk intact.
         # /new is session-scoped, so swap in a fresh in-memory registry

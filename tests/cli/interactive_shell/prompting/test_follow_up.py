@@ -210,7 +210,7 @@ class TestFollowUpMultiTurn:
         session.last_state = {"alert_name": "Spike", "root_cause": "cache miss"}
         return session
 
-    def test_first_follow_up_records_to_cli_agent_messages(self, monkeypatch: object) -> None:
+    def test_first_follow_up_records_to_follow_up_messages(self, monkeypatch: object) -> None:
         captured: list[str] = []
         monkeypatch.setattr(  # type: ignore[attr-defined]
             "app.services.llm_client.get_llm_for_reasoning",
@@ -222,9 +222,11 @@ class TestFollowUpMultiTurn:
 
         answer_follow_up("why did it fail?", session, console)
 
-        assert len(session.cli_agent_messages) == 2
-        assert session.cli_agent_messages[0] == ("user", "why did it fail?")
-        assert session.cli_agent_messages[1] == ("assistant", "It was a cache miss.")
+        assert len(session.follow_up_messages) == 2
+        assert session.follow_up_messages[0] == ("user", "why did it fail?")
+        assert session.follow_up_messages[1] == ("assistant", "It was a cache miss.")
+        # cli_agent_messages must remain untouched
+        assert len(session.cli_agent_messages) == 0
 
     def test_second_follow_up_sees_first_answer_in_prompt(self, monkeypatch: object) -> None:
         captured: list[str] = []
@@ -267,15 +269,49 @@ class TestFollowUpMultiTurn:
 
         answer_follow_up("why?", session, console)
 
-        assert len(session.cli_agent_messages) == 0
+        assert len(session.follow_up_messages) == 0
 
     def test_record_follow_up_turn_caps_at_max(self) -> None:
         session = ReplSession()
         for i in range(14):
             _record_follow_up_turn(session, f"q{i}", f"a{i}")
         # Cap is 12 pairs = 24 entries; 14 pairs = 28 entries → trimmed to 24
-        assert len(session.cli_agent_messages) == 24
+        assert len(session.follow_up_messages) == 24
         # Oldest two pairs (q0, q1) are gone; newest survive
-        roles_and_contents = session.cli_agent_messages
+        roles_and_contents = session.follow_up_messages
         assert roles_and_contents[0] == ("user", "q2")
         assert roles_and_contents[-1] == ("assistant", "a13")
+
+    def test_cli_agent_turns_do_not_bleed_into_follow_up_history(self, monkeypatch: object) -> None:
+        """Regression: follow_up_messages must be isolated from cli_agent_messages.
+
+        A cli_agent exchange before/after a follow-up must never appear in the
+        follow-up grounding prompt, as it is unrelated to the investigation.
+        """
+        captured: list[str] = []
+
+        class _SpyClient:
+            def invoke_stream(self, prompt: str) -> Iterator[str]:
+                captured.append(prompt)
+                yield "Follow-up answer"
+
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.services.llm_client.get_llm_for_reasoning",
+            _SpyClient,
+        )
+        session = self._session_with_state()
+        # Simulate prior cli_agent turns (e.g. "tell me about opensre")
+        session.cli_agent_messages.append(("user", "tell me about opensre"))
+        session.cli_agent_messages.append(("assistant", "OpenSRE is an SRE tool."))
+
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+        answer_follow_up("why did it fail?", session, console)
+
+        assert captured, "LLM was not called"
+        prompt = captured[0]
+        # The cli_agent exchange must NOT appear in the follow-up prompt
+        assert "tell me about opensre" not in prompt
+        assert "OpenSRE is an SRE tool" not in prompt
+        # The follow-up question itself must be present
+        assert "why did it fail?" in prompt
