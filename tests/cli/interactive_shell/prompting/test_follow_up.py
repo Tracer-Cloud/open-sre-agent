@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from rich.console import Console
 
 from app.cli.interactive_shell.prompting.follow_up import (
+    _record_follow_up_turn,
     _summarize_evidence,
     _summarize_last_state,
     answer_follow_up,
@@ -191,3 +192,94 @@ class TestAnswerFollowUpGroundingContract:
         assert "ev-999" in final_prompt
         assert "Query execution exceeded 10000ms" in final_prompt
         assert "Why is there a lock?" in final_prompt
+
+
+class TestFollowUpMultiTurn:
+    """Verifies that follow-up answers are stored and included in subsequent prompts."""
+
+    def _make_spy_client(self, captured_prompts: list[str], response: str = "Answer") -> object:
+        class _SpyClient:
+            def invoke_stream(self, prompt: str) -> Iterator[str]:
+                captured_prompts.append(prompt)
+                yield response
+
+        return _SpyClient()
+
+    def _session_with_state(self) -> ReplSession:
+        session = ReplSession()
+        session.last_state = {"alert_name": "Spike", "root_cause": "cache miss"}
+        return session
+
+    def test_first_follow_up_records_to_cli_agent_messages(
+        self, monkeypatch: object
+    ) -> None:
+        captured: list[str] = []
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.services.llm_client.get_llm_for_reasoning",
+            lambda: self._make_spy_client(captured, "It was a cache miss."),
+        )
+        session = self._session_with_state()
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+
+        answer_follow_up("why did it fail?", session, console)
+
+        assert len(session.cli_agent_messages) == 2
+        assert session.cli_agent_messages[0] == ("user", "why did it fail?")
+        assert session.cli_agent_messages[1] == ("assistant", "It was a cache miss.")
+
+    def test_second_follow_up_sees_first_answer_in_prompt(
+        self, monkeypatch: object
+    ) -> None:
+        captured: list[str] = []
+        call_count = 0
+
+        class _SequentialClient:
+            def invoke_stream(self, prompt: str) -> Iterator[str]:
+                nonlocal call_count
+                call_count += 1
+                captured.append(prompt)
+                yield f"Answer {call_count}"
+
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.services.llm_client.get_llm_for_reasoning",
+            _SequentialClient,
+        )
+        session = self._session_with_state()
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+
+        answer_follow_up("why did it fail?", session, console)
+        answer_follow_up("how do we fix it?", session, console)
+
+        assert call_count == 2
+        second_prompt = captured[1]
+        # First Q&A pair must appear in the second prompt
+        assert "why did it fail?" in second_prompt
+        assert "Answer 1" in second_prompt
+        assert "how do we fix it?" in second_prompt
+        assert "Prior follow-up conversation" in second_prompt
+
+    def test_empty_response_not_recorded(self, monkeypatch: object) -> None:
+        monkeypatch.setattr(  # type: ignore[attr-defined]
+            "app.services.llm_client.get_llm_for_reasoning",
+            lambda: self._make_spy_client([], ""),
+        )
+        session = self._session_with_state()
+        buf = io.StringIO()
+        console = Console(file=buf, force_terminal=False, width=200)
+
+        answer_follow_up("why?", session, console)
+
+        assert len(session.cli_agent_messages) == 0
+
+    def test_record_follow_up_turn_caps_at_max(self) -> None:
+        session = ReplSession()
+        for i in range(14):
+            _record_follow_up_turn(session, f"q{i}", f"a{i}")
+        # Cap is 12 pairs = 24 entries; 14 pairs = 28 entries → trimmed to 24
+        assert len(session.cli_agent_messages) == 24
+        # Oldest two pairs (q0, q1) are gone; newest survive
+        roles_and_contents = session.cli_agent_messages
+        assert roles_and_contents[0] == ("user", "q2")
+        assert roles_and_contents[-1] == ("assistant", "a13")

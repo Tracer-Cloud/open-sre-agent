@@ -20,6 +20,30 @@ _logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from app.cli.interactive_shell.runtime.session import ReplSession
 
+# Keep at most this many Q&A pairs in follow-up history (matches cli_agent cap).
+_MAX_FOLLOW_UP_TURNS = 12
+
+
+def _format_followup_history(session: ReplSession) -> str:
+    """Render prior follow-up Q&A pairs stored in cli_agent_messages."""
+    if not session.cli_agent_messages:
+        return ""
+    lines: list[str] = []
+    cap = _MAX_FOLLOW_UP_TURNS * 2
+    for role, content in session.cli_agent_messages[-cap:]:
+        label = "User" if role == "user" else "Assistant"
+        lines.append(f"{label}: {content}")
+    return "\n".join(lines)
+
+
+def _record_follow_up_turn(session: ReplSession, question: str, answer: str) -> None:
+    """Append a follow-up Q&A pair to cli_agent_messages with the same cap as cli_agent."""
+    session.cli_agent_messages.append(("user", question))
+    session.cli_agent_messages.append(("assistant", answer))
+    cap = _MAX_FOLLOW_UP_TURNS * 2
+    if len(session.cli_agent_messages) > cap:
+        session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+
 
 def _summarize_evidence(evidence: Any) -> list[str]:
     """Render a short evidence preview for the follow-up prompt.
@@ -98,12 +122,15 @@ def answer_follow_up(
         return None
 
     context = _summarize_last_state(session.last_state)
+    history = _format_followup_history(session)
+    history_block = f"--- Prior follow-up conversation ---\n{history}\n\n" if history else ""
     prompt = (
-        "You are an SRE assistant answering a follow-up question about a prior "
-        "incident investigation that you just completed. Use only the provided "
-        "investigation context. If the context does not contain the answer, say so "
-        "plainly. Keep the answer concise and concrete.\n\n"
+        "You are an SRE assistant answering follow-up questions about a prior "
+        "incident investigation. Use only the provided investigation context. "
+        "If the context does not contain the answer, say so plainly. "
+        "Keep answers concise and concrete.\n\n"
         f"--- Prior investigation ---\n{context}\n\n"
+        f"{history_block}"
         f"--- Follow-up question ---\n{question}"
     )
 
@@ -122,6 +149,10 @@ def answer_follow_up(
         report_exception(exc, context="interactive_shell.follow_up.stream")
         console.print(f"[{ERROR}]follow-up failed:[/] {escape(str(exc))}")
         return None
+
+    if response_text:
+        _record_follow_up_turn(session, question, response_text)
+
     return build_llm_run_info(
         session=session,
         prompt=prompt,
