@@ -210,9 +210,7 @@ class TestFollowUpMultiTurn:
         session.last_state = {"alert_name": "Spike", "root_cause": "cache miss"}
         return session
 
-    def test_first_follow_up_records_to_cli_agent_messages(
-        self, monkeypatch: object
-    ) -> None:
+    def test_first_follow_up_records_to_cli_agent_messages(self, monkeypatch: object) -> None:
         captured: list[str] = []
         monkeypatch.setattr(  # type: ignore[attr-defined]
             "app.services.llm_client.get_llm_for_reasoning",
@@ -228,9 +226,7 @@ class TestFollowUpMultiTurn:
         assert session.cli_agent_messages[0] == ("user", "why did it fail?")
         assert session.cli_agent_messages[1] == ("assistant", "It was a cache miss.")
 
-    def test_second_follow_up_sees_first_answer_in_prompt(
-        self, monkeypatch: object
-    ) -> None:
+    def test_second_follow_up_sees_first_answer_in_prompt(self, monkeypatch: object) -> None:
         captured: list[str] = []
         call_count = 0
 
