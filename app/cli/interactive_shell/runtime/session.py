@@ -160,8 +160,6 @@ class ReplSession:
         if response_text:
             entry["response_text"] = response_text
         self.history.append(entry)
-        # delet line below if working
-        # self.history.append({"type": kind, "text": text, "ok": ok})
         SessionStore.append_turn(self, kind, text)
 
     def record_incoming_alert(self, alert: IncomingAlert) -> None:
