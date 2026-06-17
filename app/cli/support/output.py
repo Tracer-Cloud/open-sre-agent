@@ -424,7 +424,7 @@ def render_event(
 # Live event-log display
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+_SPINNER_FRAMES = ("·  ", "·· ", "···", "·· ")
 _FRAME_SECS = 0.10
 _TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
 
@@ -597,7 +597,7 @@ class _LiveRenderable:
 
                 t = Text()
                 t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
-                t.append(f"{frame}  ", style=SECONDARY)
+                t.append(frame, style=SECONDARY)
                 t.append(badge_label, style=f"bold {badge_color}")
                 t.append("  ·  ", style=DIM)
                 t.append(label, style=f"bold {TEXT}")
@@ -824,7 +824,7 @@ def _build_progress_step_text(
     t = Text()
     t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
     if status == "active":
-        t.append("◐  ", style=SECONDARY)
+        t.append("·  ", style=SECONDARY)
     else:
         t.append("✗  " if err else "✓  ", style=f"bold {ERROR if err else HIGHLIGHT}")
     t.append(badge_label, style=f"bold {badge_color}")
@@ -1092,7 +1092,12 @@ class ProgressTracker:
         self._tool_start_times[key] = time.monotonic()
         self._tool_inputs[key] = tool_input
         self._record_tool_summary(tool_name)
-        self._update_tool_summary_subtext()
+        # Show "calling X..." briefly in the spinner; aggregate shown on end.
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        current = f"{source} · {label}" if label else source
+        self.update_subtext("investigation_agent", f"calling {current}...", duration=15.0)
+        self.update_subtext("investigate", f"calling {current}...", duration=15.0)
         self._sync_tool_detail_view()
 
     def record_tool_end(
@@ -1108,7 +1113,8 @@ class ProgressTracker:
             return
         key = event_key or tool_name
         start = self._tool_start_times.pop(key, None)
-        elapsed = f"{int((time.monotonic() - start) * 1000)}ms" if start is not None else ""
+        elapsed_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+        elapsed = _fmt_timing(elapsed_ms) if elapsed_ms is not None else ""
         stored_input = self._tool_inputs.pop(key, None)
         self._update_tool_summary_subtext()
         self._record_tool_detail(
@@ -1117,6 +1123,34 @@ class ProgressTracker:
             output,
             elapsed=elapsed,
         )
+        if elapsed_ms is not None:
+            self.print_tool_call_line(tool_name, elapsed_ms)
+
+    def print_tool_call_line(self, tool_name: str, elapsed_ms: int) -> None:
+        """Print a permanent indented completion line for a finished tool call."""
+        if self._silent:
+            return
+        elapsed_total = time.monotonic() - self._t0
+        source = _tool_source_label(tool_name)
+        label = _tool_short_label(tool_name, source)
+        call_display = f"{source} · {label}" if label else source
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(call_display, style=BRAND)
+        t.append(f"  {_fmt_timing(elapsed_ms)}", style=SECONDARY)
+        self.print_above_renderable(t)
+
+    def print_status_hint(self, text: str) -> None:
+        """Print a dim permanent status sub-line (used for 'analyzing alert...' etc.)."""
+        if self._silent:
+            return
+        elapsed_total = time.monotonic() - self._t0
+        t = Text()
+        t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
+        t.append("      ↳  ", style=DIM)
+        t.append(text, style=SECONDARY)
+        self.print_above_renderable(t)
 
     def toggle_tool_details(self) -> None:
         """Toggle the live view between compact progress and tool details."""

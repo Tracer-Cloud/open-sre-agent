@@ -201,6 +201,10 @@ async def astream_investigation(
             _put(_make_tool_event("on_tool_start", data.get("name", "tool"), data))
         elif event_kind == "tool_end":
             _put(_make_tool_event("on_tool_end", data.get("name", "tool"), data))
+        elif event_kind == "llm_start":
+            # Forward LLM iterations so the renderer can print "analyzing…" hints
+            # during the silent gap between tool batches and during synthesis.
+            _put(_make_tool_event("on_llm_start", "investigation_agent", data))
         elif event_kind == "agent_end":
             _put(
                 _make_node_event(

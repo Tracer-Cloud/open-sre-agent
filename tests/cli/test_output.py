@@ -380,6 +380,9 @@ def test_rich_tracker_tool_details_toggle_replaces_live_view(
         def step_subtext(self, *_args: Any, **_kwargs: Any) -> None:
             return None
 
+        def print_above_renderable(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
         def set_tool_details(
             self,
             *,
