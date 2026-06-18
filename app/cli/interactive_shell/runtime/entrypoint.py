@@ -10,7 +10,6 @@ import sys
 
 from rich.console import Console
 
-from app.agents.sweep import run_startup_sweep
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.config import ReplConfig
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
@@ -20,6 +19,7 @@ from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskRegistry
 from app.cli.interactive_shell.sessions.store import SessionStore
 from app.cli.interactive_shell.ui import DIM, render_banner
+from app.fleet_monitoring.sweep import run_startup_sweep
 
 log = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""End-to-end integration tests for the ``/agents`` token wiring (#2023).
+"""End-to-end integration tests for the ``/fleet`` token wiring (#2023).
 
 These tests drive the *real* pipeline — provider resolver, real
 :class:`ClaudeCodeJsonlSource` / :class:`CodexRolloutSource`, real
@@ -7,7 +7,7 @@ These tests drive the *real* pipeline — provider resolver, real
 ``_format_tokens_per_min`` / ``_format_usd_per_hour`` — against a
 fixture on disk.
 
-The only stubs are :func:`app.agents.probe.cwd_for_pid` and
+The only stubs are :func:`app.fleet_monitoring.probe.cwd_for_pid` and
 :func:`started_at_for_pid` (no real PIDs in a unit test) and the
 ``AgentRegistry`` lookup (no real ``~/.opensre/agents.jsonl``).
 Everything else exercises production code.
@@ -23,13 +23,13 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from app.agents import sampler as sampler_mod
-from app.agents.probe import ProcessSnapshot
-from app.agents.registry import AgentRecord
-from app.agents.token_rate import TOKEN_RATE_TRACKER
-from app.agents.token_sources import claude_code as claude_source_mod
-from app.agents.token_sources import codex as codex_source_mod
 from app.cli.interactive_shell.ui.agents_view import _build_agents_table
+from app.fleet_monitoring import sampler as sampler_mod
+from app.fleet_monitoring.probe import ProcessSnapshot
+from app.fleet_monitoring.registry import AgentRecord
+from app.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
+from app.fleet_monitoring.token_sources import claude_code as claude_source_mod
+from app.fleet_monitoring.token_sources import codex as codex_source_mod
 
 
 @pytest.fixture(autouse=True)
@@ -76,14 +76,14 @@ def test_claude_code_end_to_end_renders_real_tokens_and_cost(
 
     # Stub psutil-fenced helpers — no real PID lookups in unit tests.
     monkeypatch.setattr(
-        "app.agents.token_sources.claude_code.cwd_for_pid",
+        "app.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
         lambda _pid: fake_cwd,
     )
     # After the Greptile-driven fix, the claude source requires
     # fd-level evidence to attribute a JSONL to a PID (no more
     # silent fallback to newest-by-mtime — mirrors codex).
     monkeypatch.setattr(
-        "app.agents.token_sources.claude_code.open_files_for_pid",
+        "app.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
         lambda _pid: (session,),
     )
 
@@ -92,7 +92,7 @@ def test_claude_code_end_to_end_renders_real_tokens_and_cost(
     # never enters this test's resolution path.
     isolated_source = claude_source_mod.ClaudeCodeJsonlSource(projects_root=projects_root)
     monkeypatch.setattr(
-        "app.agents.sampler.get_token_source",
+        "app.fleet_monitoring.sampler.get_token_source",
         lambda provider: isolated_source if provider == "claude-code" else None,
     )
 
@@ -111,7 +111,7 @@ def test_claude_code_end_to_end_renders_real_tokens_and_cost(
         def get(self, pid: int) -> AgentRecord | None:
             return record if pid == 8421 else None
 
-    monkeypatch.setattr("app.agents.sampler.AgentRegistry", _Registry)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.AgentRegistry", _Registry)
 
     # Stub probe so the snapshot path is also alive (uptime/cpu%).
     fake_snapshot = ProcessSnapshot(
@@ -123,7 +123,7 @@ def test_claude_code_end_to_end_renders_real_tokens_and_cost(
         status="running",
         started_at=datetime(2026, 5, 14, 10, 0, 0, tzinfo=UTC),
     )
-    monkeypatch.setattr("app.agents.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     # First sampler tick: cold-start the source (seeks to EOF) and
     # populate registry caches. No tokens yet — historical content
@@ -171,14 +171,14 @@ def test_claude_code_end_to_end_shows_dash_when_source_resolves_nothing(
     bogus number.
     """
     monkeypatch.setattr(
-        "app.agents.token_sources.claude_code.cwd_for_pid",
+        "app.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
         lambda _pid: None,
     )
     isolated_source = claude_source_mod.ClaudeCodeJsonlSource(
         projects_root=tmp_path / "claude_projects",
     )
     monkeypatch.setattr(
-        "app.agents.sampler.get_token_source",
+        "app.fleet_monitoring.sampler.get_token_source",
         lambda provider: isolated_source if provider == "claude-code" else None,
     )
 
@@ -196,8 +196,8 @@ def test_claude_code_end_to_end_shows_dash_when_source_resolves_nothing(
         def get(self, pid: int) -> AgentRecord | None:
             return record if pid == 8421 else None
 
-    monkeypatch.setattr("app.agents.sampler.AgentRegistry", _Registry)
-    monkeypatch.setattr("app.agents.sampler.probe", lambda _pid: None)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.AgentRegistry", _Registry)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.probe", lambda _pid: None)
 
     sampler_mod._TickCache.registry_snapshot[record.pid] = record
     sampler_mod._sample_tokens(record)
@@ -247,18 +247,18 @@ def test_codex_end_to_end_renders_real_tokens_and_cost(
     _os.utime(rollout, (started_at_epoch + 1, started_at_epoch + 1))
 
     monkeypatch.setattr(
-        "app.agents.token_sources.codex.started_at_for_pid",
+        "app.fleet_monitoring.token_sources.codex.started_at_for_pid",
         lambda _pid: started_at_epoch,
     )
     # Source now requires fd-level confirmation that the PID owns
     # the rollout (production: each codex holds its rollout fd open).
     monkeypatch.setattr(
-        "app.agents.token_sources.codex.open_files_for_pid",
+        "app.fleet_monitoring.token_sources.codex.open_files_for_pid",
         lambda _pid: (rollout,),
     )
     isolated_source = codex_source_mod.CodexRolloutSource(codex_home=codex_home)
     monkeypatch.setattr(
-        "app.agents.sampler.get_token_source",
+        "app.fleet_monitoring.sampler.get_token_source",
         lambda provider: isolated_source if provider == "codex" else None,
     )
 
@@ -276,7 +276,7 @@ def test_codex_end_to_end_renders_real_tokens_and_cost(
         def get(self, pid: int) -> AgentRecord | None:
             return record if pid == 9999 else None
 
-    monkeypatch.setattr("app.agents.sampler.AgentRegistry", _Registry)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.AgentRegistry", _Registry)
 
     fake_snapshot = ProcessSnapshot(
         pid=9999,
@@ -287,7 +287,7 @@ def test_codex_end_to_end_renders_real_tokens_and_cost(
         status="running",
         started_at=started_dt,
     )
-    monkeypatch.setattr("app.agents.sampler.probe", lambda _pid: fake_snapshot)
+    monkeypatch.setattr("app.fleet_monitoring.sampler.probe", lambda _pid: fake_snapshot)
 
     sampler_mod._TickCache.registry_snapshot[record.pid] = record
     sampler_mod._TickCache.agents_config = None

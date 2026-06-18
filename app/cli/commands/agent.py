@@ -8,26 +8,26 @@ import click
 from rich.console import Console
 from rich.markup import escape
 
-from app.agents.discovery import (
+from app.cli.interactive_shell.ui.rendering import repl_table
+from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from app.fleet_monitoring.discovery import (
     classify_command_provider,
     discover_agent_processes,
     display_command,
     process_command,
     registered_and_discovered_agents,
 )
-from app.agents.registry import AgentRecord, AgentRegistry
-from app.cli.interactive_shell.ui.rendering import repl_table
-from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
-@click.group(name="agents")
-def agents() -> None:
+@click.group(name="fleet")
+def fleet() -> None:
     """Manage the local AI agent fleet (Claude Code, Cursor, Aider, ...)."""
 
 
 def _pid_exists(pid: int) -> bool:
     try:
-        from app.agents.probe import pid_exists
+        from app.fleet_monitoring.probe import pid_exists
     except ModuleNotFoundError as exc:
         if exc.name != "psutil":
             raise
@@ -37,7 +37,7 @@ def _pid_exists(pid: int) -> bool:
     return pid_exists(pid)
 
 
-@agents.command(name="list")
+@fleet.command(name="list")
 def list_agents() -> None:
     """List registered and auto-discovered local agents."""
     from app.cli.interactive_shell.ui.agents_view import render_agents_table
@@ -46,7 +46,7 @@ def list_agents() -> None:
     render_agents_table(console, registered_and_discovered_agents(AgentRegistry()))
 
 
-@agents.command(name="register")
+@fleet.command(name="register")
 @click.argument("pid", type=int)
 @click.argument("name", required=False)
 @click.option("--command", "command_override", help="Command string to store for this agent.")
@@ -68,7 +68,7 @@ def register_agent(pid: int, name: str | None, command_override: str | None) -> 
     click.echo(f"registered {agent_name} (pid {pid})")
 
 
-@agents.command(name="forget")
+@fleet.command(name="forget")
 @click.argument("pid", type=int)
 def forget_agent(pid: int) -> None:
     """Stop tracking a local agent process."""
@@ -79,7 +79,7 @@ def forget_agent(pid: int) -> None:
     click.echo(f"forgot {removed.name} (pid {pid})")
 
 
-@agents.command(name="scan")
+@fleet.command(name="scan")
 @click.option("--register", "should_register", is_flag=True, help="Register all discovered agents.")
 @click.option("--all", "include_all", is_flag=True, help="Include noisy helper processes.")
 def scan_agents(should_register: bool, include_all: bool) -> None:
@@ -88,7 +88,7 @@ def scan_agents(should_register: bool, include_all: bool) -> None:
     candidates = discover_agent_processes(include_all=include_all)
     if not candidates:
         console.print(f"[{DIM}]no running AI-agent sessions detected[/]")
-        console.print(f"[{DIM}]use [bold]opensre agents scan --all[/bold] to inspect helpers[/]")
+        console.print(f"[{DIM}]use [bold]opensre fleet scan --all[/bold] to inspect helpers[/]")
         return
 
     table = repl_table(title="agent scan", title_style=BOLD_BRAND)
@@ -112,16 +112,16 @@ def scan_agents(should_register: bool, include_all: bool) -> None:
     elif include_all:
         console.print(
             f"[{DIM}]showing helper processes; use "
-            "[bold]opensre agents scan[/bold] for likely agent sessions only[/]"
+            "[bold]opensre fleet scan[/bold] for likely agent sessions only[/]"
         )
     else:
         console.print(
-            f"[{DIM}]Next: run [bold]opensre agents scan --register[/bold] "
+            f"[{DIM}]Next: run [bold]opensre fleet scan --register[/bold] "
             f"to track {len(candidates)} process(es)[/]"
         )
 
 
-@agents.command(name="watch")
+@fleet.command(name="watch")
 @click.argument("pid", type=int)
 @click.option("--interval", default=1.0, show_default=True, help="Polling interval in seconds.")
 @click.option("--timeout", type=float, default=None, help="Stop watching after this many seconds.")

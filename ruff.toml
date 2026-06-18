@@ -63,5 +63,5 @@ ignore = [
 # self._fd is opened in __init__ and must remain open for the lifetime of the
 # background reader thread (_reader_loop). A with-block would close the fd when
 # __init__ exits — before the thread reads anything. The fd is closed in close().
-"app/agents/tail.py" = ["SIM115"]
+"app/fleet_monitoring/tail.py" = ["SIM115"]
 

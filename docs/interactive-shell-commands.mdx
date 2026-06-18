@@ -111,7 +111,7 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 
 | Command | What it does |
 | --- | --- |
-| `/agents` | View and manage the local AI agent fleet |
+| `/fleet` | View and manage the local AI agent fleet |
 | `/alerts` | Alert listener inbox status |
 
 ### CLI parity
@@ -787,23 +787,23 @@ Prefer `/watch` inside the REPL — it registers tasks for `/watches` and `/task
 
 ## Agents and alerts
 
-Fleet coordination is documented further on [Agents](/agents). Register discovered agents with `opensre agents scan --register` before `/agents trace` targets them.
+Fleet coordination is documented further on [Agents](/fleet). Register discovered agents with `opensre fleet scan --register` before `/fleet trace` targets them.
 
-### `/agents`
+### `/fleet`
 
 ```text
-/agents
-/agents budget
-/agents budget cursor-agent 5.00
-/agents bus
-/agents claim feature-x my-agent
-/agents release feature-x
-/agents conflicts
-/agents kill 12345
-/agents kill 12345 --force
-/agents trace 12345
-/agents wait 12345 --on 67890
-/agents graph
+/fleet
+/fleet budget
+/fleet budget cursor-agent 5.00
+/fleet bus
+/fleet claim feature-x my-agent
+/fleet release feature-x
+/fleet conflicts
+/fleet kill 12345
+/fleet kill 12345 --force
+/fleet trace 12345
+/fleet wait 12345 --on 67890
+/fleet graph
 ```
 
 | Subcommand | Behavior |
@@ -1013,7 +1013,7 @@ Clean shutdown with `/resume` hint. Prefer over killing the terminal so session 
 | --- | --- | --- |
 | Exempt | `/help`, `/exit`, `/trust` | Never prompts |
 | Safe | `/status`, `/health`, `/investigate`, `/integrations list` | Read-only or standard risk |
-| Elevated | `/save`, `/watch`, `/cancel`, `/integrations remove`, `/agents kill`, `/uninstall` | Prompt `[y/N]` unless trust on |
+| Elevated | `/save`, `/watch`, `/cancel`, `/integrations remove`, `/fleet kill`, `/uninstall` | Prompt `[y/N]` unless trust on |
 
 Non-TTY: elevated commands **fail closed** (error message, no side effect).
 
@@ -1146,7 +1146,7 @@ Continue chatting, then optionally:
 - [Interactive Shell Privacy](/interactive-shell-privacy) — redaction, env vars, threat model
 - [Investigation overview](/investigation-overview) — RCA workflow, plain-language routing, CLI investigate
 - [LLM providers](/llm-providers) — `/model` and `/effort`
-- [Agents](/agents) — fleet dashboard, bus, trace, budgets
+- [Agents](/fleet) — fleet dashboard, bus, trace, budgets
 - [Cron](/cron) — `/cron` scheduled deliveries
 - [Hermes](/hermes) — `/hermes watch`
 - [Remote runtime investigation](/remote-runtime-investigation) — `/remote`

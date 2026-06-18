@@ -1,4 +1,4 @@
-"""Smoke tests for the ``opensre agents`` command group."""
+"""Smoke tests for the ``opensre fleet`` command group."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from app.agents.discovery import DiscoveredAgent
-from app.agents.registry import AgentRecord, AgentRegistry
 from app.cli.__main__ import cli
 from app.cli.commands import agent as agent_cmd_mod
+from app.fleet_monitoring.discovery import DiscoveredAgent
+from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @pytest.fixture
@@ -26,15 +26,15 @@ def isolated_registry_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
 
 
 def test_agents_help_lists_all_subcommands() -> None:
-    """``opensre agents --help`` must surface every subcommand."""
+    """``opensre fleet --help`` must surface every subcommand."""
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "--help"])
+    result = runner.invoke(cli, ["fleet", "--help"])
 
     assert result.exit_code == 0, result.output
     for subcommand in ("list", "register", "forget", "scan", "watch"):
         assert subcommand in result.output, f"missing {subcommand!r} in help: {result.output}"
-    assert "--all" in runner.invoke(cli, ["agents", "scan", "--help"]).output
+    assert "--all" in runner.invoke(cli, ["fleet", "scan", "--help"]).output
 
 
 def test_agents_list_renders_discovered_agents(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,7 +52,7 @@ def test_agents_list_renders_discovered_agents(monkeypatch: pytest.MonkeyPatch) 
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "list"])
+    result = runner.invoke(cli, ["fleet", "list"])
 
     assert result.exit_code == 0, result.output
     assert "cursor-claude-code" in result.output
@@ -64,11 +64,11 @@ def test_agents_register_list_and_forget(isolated_registry_path: Path) -> None:
 
     register = runner.invoke(
         cli,
-        ["agents", "register", "1234", "claude-code", "--command", "claude"],
+        ["fleet", "register", "1234", "claude-code", "--command", "claude"],
     )
-    listed = runner.invoke(cli, ["agents", "list"])
-    forgotten = runner.invoke(cli, ["agents", "forget", "1234"])
-    listed_again = runner.invoke(cli, ["agents", "list"])
+    listed = runner.invoke(cli, ["fleet", "list"])
+    forgotten = runner.invoke(cli, ["fleet", "forget", "1234"])
+    listed_again = runner.invoke(cli, ["fleet", "list"])
 
     assert register.exit_code == 0, register.output
     assert "registered claude-code" in register.output
@@ -91,7 +91,7 @@ def test_agents_register_persists_provider_for_node_launched_codex(
     result = runner.invoke(
         cli,
         [
-            "agents",
+            "fleet",
             "register",
             "9001",
             "my-bot",
@@ -114,7 +114,7 @@ def test_agents_register_persists_provider_none_for_unknown_command(
 
     result = runner.invoke(
         cli,
-        ["agents", "register", "9002", "my-bot", "--command", "python -m worker"],
+        ["fleet", "register", "9002", "my-bot", "--command", "python -m worker"],
     )
 
     assert result.exit_code == 0, result.output
@@ -132,7 +132,7 @@ def test_agents_scan_can_register_discovered_processes(
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "scan", "--register"])
+    result = runner.invoke(cli, ["fleet", "scan", "--register"])
 
     assert result.exit_code == 0, result.output
     assert "agent scan" in result.output
@@ -160,12 +160,12 @@ def test_agents_scan_truncates_long_commands(monkeypatch: pytest.MonkeyPatch) ->
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "scan"])
+    result = runner.invoke(cli, ["fleet", "scan"])
 
     assert result.exit_code == 0, result.output
     assert "--flag --flag" in result.output
     assert "..." in result.output or "…" in result.output
-    assert "Next: run opensre agents scan --register to track 1 process(es)" in result.output
+    assert "Next: run opensre fleet scan --register to track 1 process(es)" in result.output
 
 
 def test_agents_scan_all_passes_include_all(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,7 +178,7 @@ def test_agents_scan_all_passes_include_all(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(agent_cmd_mod, "discover_agent_processes", _discover)
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "scan", "--all"])
+    result = runner.invoke(cli, ["fleet", "scan", "--all"])
 
     assert result.exit_code == 0, result.output
     assert received == [True]
@@ -189,18 +189,18 @@ def test_agents_scan_empty_state_mentions_all_mode(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(agent_cmd_mod, "discover_agent_processes", lambda **_kwargs: [])
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "scan"])
+    result = runner.invoke(cli, ["fleet", "scan"])
 
     assert result.exit_code == 0, result.output
     assert "no running AI-agent sessions detected" in result.output
-    assert "opensre agents scan --all" in result.output
+    assert "opensre fleet scan --all" in result.output
 
 
 def test_agents_watch_reports_already_exited(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent_cmd_mod, "_pid_exists", lambda _pid: False)
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["agents", "watch", "9876"])
+    result = runner.invoke(cli, ["fleet", "watch", "9876"])
 
     assert result.exit_code == 0, result.output
     assert "pid 9876 is not running" in result.output
@@ -214,4 +214,4 @@ def test_agents_group_registered_in_root_cli() -> None:
     result = runner.invoke(cli, ["--help"])
 
     assert result.exit_code == 0, result.output
-    assert "agents" in result.output
+    assert "fleet" in result.output

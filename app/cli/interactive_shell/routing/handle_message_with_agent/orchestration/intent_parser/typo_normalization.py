@@ -44,6 +44,7 @@ _INTENT_CANONICAL_TOKENS: tuple[str, ...] = (
     "exit",
     "fire",
     "find",
+    "fleet",
     "forget",
     "gemini",
     "gemini-cli",

@@ -1,4 +1,4 @@
-"""Pure rendering tests for the ``/agents`` dashboard table (issue #1488).
+"""Pure rendering tests for the ``/fleet`` dashboard table (issue #1488).
 
 These cover ``render_agents_table`` in isolation — no slash-command
 dispatch, no real registry I/O. The integration tests in
@@ -16,12 +16,12 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from app.agents import config as config_mod
-from app.agents.probe import ProcessSnapshot
-from app.agents.registry import AgentRecord
-from app.agents.token_rate import TOKEN_RATE_TRACKER
 from app.cli.interactive_shell.ui import agents_view as agents_view_mod
 from app.cli.interactive_shell.ui.agents_view import _build_agents_table
+from app.fleet_monitoring import config as config_mod
+from app.fleet_monitoring.probe import ProcessSnapshot
+from app.fleet_monitoring.registry import AgentRecord
+from app.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
 
 
 @pytest.fixture(autouse=True)
@@ -43,9 +43,9 @@ def _clear_sampler_module_state() -> None:
 
     Three globals can leak across test files:
 
-    - :data:`app.agents.sampler._latest` (probe snapshots dict)
-    - :data:`app.agents.token_rate.TOKEN_RATE_TRACKER` (per-PID deque)
-    - :data:`app.agents.sampler._TickCache.registry_snapshot` and
+    - :data:`app.fleet_monitoring.sampler._latest` (probe snapshots dict)
+    - :data:`app.fleet_monitoring.token_rate.TOKEN_RATE_TRACKER` (per-PID deque)
+    - :data:`app.fleet_monitoring.sampler._TickCache.registry_snapshot` and
       :data:`_TickCache.agents_config` (tick caches added in #2023 to
       avoid re-reading the disk on every render)
 
@@ -53,7 +53,7 @@ def _clear_sampler_module_state() -> None:
     so placeholder assertions are stable under ``pytest-xdist`` and
     in arbitrary alphabetical order.
     """
-    from app.agents import sampler as sampler_mod
+    from app.fleet_monitoring import sampler as sampler_mod
 
     sampler_mod._latest.clear()
     sampler_mod._TickCache.registry_snapshot = {}

@@ -6,8 +6,8 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from app.agents.probe import probe
 from app.cli.interactive_shell.runtime.tasks import TaskRecord, TaskStatus
+from app.fleet_monitoring.probe import probe
 from app.watch_dog.alarms import AlarmDispatcher
 
 
@@ -27,7 +27,7 @@ def run_watchdog(
 
     Updates ``task`` progress each tick; dispatches Telegram on threshold breach.
     ``interval_seconds`` is both the inter-sample delay and the CPU percent window
-    passed to :func:`~app.agents.probe.probe` (floored for stability).
+    passed to :func:`~app.fleet_monitoring.probe.probe` (floored for stability).
     With ``once`` and no threshold flags, completes after the first successful sample.
     """
     sample_interval = max(float(interval_seconds), 0.1)

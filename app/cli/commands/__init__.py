@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from app.cli.commands.agent import agents
+from app.cli.commands.agent import fleet
 from app.cli.commands.config import config_command
 from app.cli.commands.cron import cron_command
 from app.cli.commands.debug import debug_command
@@ -34,7 +34,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     tests,
     integrations,
     guardrails,
-    agents,
+    fleet,
     messaging,
     hermes_command,
     cron_command,

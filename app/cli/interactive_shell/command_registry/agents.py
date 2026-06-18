@@ -1,6 +1,6 @@
-"""Slash command: ``/agents`` (registered local AI agent fleet view).
+"""Slash command: ``/fleet`` (registered local AI agent fleet view).
 
-Bare ``/agents`` renders the registered-agents dashboard; subcommands
+Bare ``/fleet`` renders the registered-agents dashboard; subcommands
 cover ``budget``, ``bus``, ``claim``, ``conflicts``, ``kill``, ``release``,
 and ``trace`` (with more surfaces planned for monitor-local-agents).
 """
@@ -23,23 +23,6 @@ from rich.markup import escape
 from rich.text import Text
 from rich.tree import Tree
 
-from app.agents.bus import BusMessage, subscribe
-from app.agents.config import (
-    agents_config_path,
-    load_agents_config,
-    set_agent_budget,
-)
-from app.agents.conflicts import (
-    DEFAULT_WINDOW_SECONDS,
-    WriteEvent,
-    detect_conflicts,
-    render_conflicts,
-)
-from app.agents.coordination import BranchClaims
-from app.agents.discovery import registered_and_discovered_agents
-from app.agents.lifecycle import TerminateResult, terminate
-from app.agents.registry import AgentRegistry
-from app.agents.tail import AttachSession, AttachUnsupported, attach
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.command_registry.types import SlashCommand
@@ -54,6 +37,23 @@ from app.cli.interactive_shell.ui import (
     render_agents_table,
     repl_table,
 )
+from app.fleet_monitoring.bus import BusMessage, subscribe
+from app.fleet_monitoring.config import (
+    agents_config_path,
+    load_agents_config,
+    set_agent_budget,
+)
+from app.fleet_monitoring.conflicts import (
+    DEFAULT_WINDOW_SECONDS,
+    WriteEvent,
+    detect_conflicts,
+    render_conflicts,
+)
+from app.fleet_monitoring.coordination import BranchClaims
+from app.fleet_monitoring.discovery import registered_and_discovered_agents
+from app.fleet_monitoring.lifecycle import TerminateResult, terminate
+from app.fleet_monitoring.registry import AgentRegistry
+from app.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),
@@ -64,7 +64,7 @@ _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("release", "release a branch claim"),
     ("trace", "live tail of an agent's stdout by pid"),
     ("graph", "render the wait-on dependency graph as a tree"),
-    ("wait", "mark <pid> as waiting on another pid: /agent wait <pid> --on <other-pid>"),
+    ("wait", "mark <pid> as waiting on another pid: /fleet wait <pid> --on <other-pid>"),
 )
 
 _TRACE_REFRESH_PER_SECOND = 10
@@ -133,7 +133,7 @@ def _print_config_error(console: Console, exc: ValidationError) -> None:
 def _cmd_agents_list(console: Console) -> bool:
     """Render registered plus read-only discovered agents as a Rich table.
 
-    Bare ``/agents`` resolves here. Explicit registry rows keep winning
+    Bare ``/fleet`` resolves here. Explicit registry rows keep winning
     on PID collisions; process discovery fills in Cursor, Claude Code,
     Codex, Aider, and Gemini CLI sessions that the user never registered.
     """
@@ -161,7 +161,7 @@ def _cmd_agents_bus(console: Console) -> bool:
     publishing process exited), or socket error.
     """
     console.print(
-        f"[{DIM}]tailing /agents bus — Ctrl-C to exit[/]",
+        f"[{DIM}]tailing /fleet bus — Ctrl-C to exit[/]",
     )
     try:
         for msg in subscribe():
@@ -182,7 +182,7 @@ def _cmd_agents_bus(console: Console) -> bool:
 def _cmd_agents_conflicts(console: Console) -> bool:
     # Real write-event collection comes from #1500 (filesystem blast-radius
     # watcher), out of scope for this PR. Until that lands, the event source
-    # is empty and `/agents conflicts` reports "no conflicts detected".
+    # is empty and `/fleet conflicts` reports "no conflicts detected".
     events: list[WriteEvent] = []
     conflicts = detect_conflicts(
         events,
@@ -194,9 +194,9 @@ def _cmd_agents_conflicts(console: Console) -> bool:
 
 
 def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -> bool:
-    """Handle /agents claim <branch> <agent-name>."""
+    """Handle /fleet claim <branch> <agent-name>."""
     if len(args) < 2:
-        console.print(f"[{ERROR}]Usage:[/] /agents claim <branch> <agent-name>")
+        console.print(f"[{ERROR}]Usage:[/] /fleet claim <branch> <agent-name>")
         session.mark_latest(ok=False, kind="slash")
         return False
 
@@ -214,7 +214,7 @@ def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -
     if pid is None:
         console.print(
             f"[{ERROR}]Agent '{escape(agent_name)}' not found in registry. "
-            "Use /agents to see registered agents."
+            "Use /fleet to see registered agents."
         )
         session.mark_latest(ok=False, kind="slash")
         return False
@@ -228,7 +228,7 @@ def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -
         console.print(
             f"[{ERROR}]Cannot claim:[/] {escape(branch)} is already held by "
             f"{escape(existing.agent_name)} (pid {existing.pid}). "
-            "Use /agents release first."
+            "Use /fleet release first."
         )
         session.mark_latest(ok=False, kind="slash")
         return False
@@ -240,9 +240,9 @@ def _cmd_agents_claim(session: ReplSession, console: Console, args: list[str]) -
 
 
 def _cmd_agents_release(session: ReplSession, console: Console, args: list[str]) -> bool:
-    """Handle /agents release <branch>."""
+    """Handle /fleet release <branch>."""
     if len(args) < 1:
-        console.print(f"[{ERROR}]Usage:[/] /agents release <branch>")
+        console.print(f"[{ERROR}]Usage:[/] /fleet release <branch>")
         session.mark_latest(ok=False, kind="slash")
         return False
 
@@ -281,7 +281,7 @@ def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) 
         if not config.agents:
             console.print(
                 f"[{DIM}]no per-agent budgets configured.[/]  "
-                "use [bold]/agents budget <agent> <usd>[/bold] to set one."
+                "use [bold]/fleet budget <agent> <usd>[/bold] to set one."
             )
             return True
         table = repl_table(title="agent budgets", title_style=BOLD_BRAND)
@@ -301,7 +301,7 @@ def _cmd_agents_budget(session: ReplSession, console: Console, args: list[str]) 
         return True
 
     if len(args) != 2:
-        console.print(f"[{ERROR}]usage:[/] /agents budget [<agent> <usd>]")
+        console.print(f"[{ERROR}]usage:[/] /fleet budget [<agent> <usd>]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -347,7 +347,7 @@ def _cmd_agents_kill(
     *,
     confirm_fn: _ConfirmFn | None = None,
 ) -> bool:
-    """Handle ``/agents kill <pid> [--force]``.
+    """Handle ``/fleet kill <pid> [--force]``.
 
     Sends SIGTERM, waits up to 5 s, then escalates to SIGKILL.
     Asks for confirmation unless ``--force`` is present.
@@ -357,7 +357,7 @@ def _cmd_agents_kill(
     positional = [a for a in args if a != "--force"]
 
     if not positional:
-        console.print(f"[{ERROR}]usage:[/] /agents kill <pid> [--force]")
+        console.print(f"[{ERROR}]usage:[/] /fleet kill <pid> [--force]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -412,7 +412,7 @@ def _cmd_agents_kill(
         )
         session.mark_latest(ok=False, kind="slash")
 
-    # Remove from the agent registry so `/agents` no longer shows the dead PID.
+    # Remove from the agent registry so `/fleet` no longer shows the dead PID.
     # Only forget when the process actually exited — otherwise it stays visible
     # for further monitoring or another kill attempt.
     if record is not None and result.exited:
@@ -501,7 +501,7 @@ def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -
     we never enter the ``Live`` block on a target we cannot tail.
     """
     if len(args) != 1:
-        console.print(f"[{ERROR}]usage:[/] /agents trace <pid>")
+        console.print(f"[{ERROR}]usage:[/] /fleet trace <pid>")
         session.mark_latest(ok=False, kind="slash")
         return True
     try:
@@ -527,12 +527,12 @@ def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -
 
 
 def _cmd_agents_wait(session: ReplSession, console: Console, args: list[str]) -> bool:
-    """Handle ``/agents wait <pid> --on <other-pid>``.
+    """Handle ``/fleet wait <pid> --on <other-pid>``.
 
     Parse the two pids out of ``args``, registers the dependency in the agent registry.
     """
     if len(args) != 3 or args[1] != "--on":
-        console.print(f"[{ERROR}]usage:[/] /agents wait <pid> --on <other-pid>")
+        console.print(f"[{ERROR}]usage:[/] /fleet wait <pid> --on <other-pid>")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -680,11 +680,11 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "
-        "(try [bold]/agents[/bold], [bold]/agents budget[/bold], "
-        "[bold]/agents bus[/bold], [bold]/agents claim[/bold], "
-        "[bold]/agents conflicts[/bold], [bold]/agents kill[/bold], "
-        "[bold]/agents release[/bold], [bold]/agents trace[/bold], "
-        "[bold]/agents wait[/bold] or [bold]/agents graph[/bold])"
+        "(try [bold]/fleet[/bold], [bold]/fleet budget[/bold], "
+        "[bold]/fleet bus[/bold], [bold]/fleet claim[/bold], "
+        "[bold]/fleet conflicts[/bold], [bold]/fleet kill[/bold], "
+        "[bold]/fleet release[/bold], [bold]/fleet trace[/bold], "
+        "[bold]/fleet wait[/bold] or [bold]/fleet graph[/bold])"
     )
     session.mark_latest(ok=False, kind="slash")
     return True
@@ -692,20 +692,20 @@ def _cmd_agents(session: ReplSession, console: Console, args: list[str]) -> bool
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
-        "/agents",
+        "/fleet",
         "Show and manage registered local AI agents.",
         _cmd_agents,
         usage=(
-            "/agents",
-            "/agents budget",
-            "/agents bus",
-            "/agents claim",
-            "/agents conflicts",
-            "/agents kill",
-            "/agents release",
-            "/agents trace",
-            "/agents wait",
-            "/agents graph",
+            "/fleet",
+            "/fleet budget",
+            "/fleet bus",
+            "/fleet claim",
+            "/fleet conflicts",
+            "/fleet kill",
+            "/fleet release",
+            "/fleet trace",
+            "/fleet wait",
+            "/fleet graph",
         ),
         first_arg_completions=_AGENTS_FIRST_ARGS,
     ),

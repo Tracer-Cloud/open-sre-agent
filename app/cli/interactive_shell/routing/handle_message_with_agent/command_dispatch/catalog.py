@@ -19,7 +19,7 @@ _ALIASES_BY_TARGET: dict[str, tuple[str, ...]] = {
     "list": ("list",),
     "integrations": ("integrations", "integration", "int"),
     "mcp": ("mcp",),
-    "agents": ("agents",),
+    "fleet": ("fleet",),
     "doctor": ("doctor",),
     "welcome": ("welcome", "agent", "hi", "hey", "menu"),
 }

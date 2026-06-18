@@ -1,4 +1,4 @@
-"""Rich-table rendering for the ``/agents`` slash-command dashboard.
+"""Rich-table rendering for the ``/fleet`` slash-command dashboard.
 
 Columns: ``agent``, ``pid``, ``uptime``, ``cpu%``, ``tokens/min``,
 ``$/hr``, ``status``. Every metric cell falls back to ``-`` when its
@@ -6,9 +6,9 @@ sampler accessor returns ``None``. ``0`` versus ``-`` is meaningful
 in ``tokens/min``: ``0`` is observed-but-idle, ``-`` is unobservable
 (no meter for this provider, or the JSONL is unreadable, or the
 sampler task is not running — e.g. non-interactive
-``opensre agents list``).
+``opensre fleet list``).
 
-This module lives outside ``app/agents/`` so collectors don't pull
+This module lives outside ``app/fleet_monitoring/`` so collectors don't pull
 in Rich.
 """
 
@@ -21,11 +21,11 @@ from rich.console import Console, JustifyMethod
 from rich.markup import escape
 from rich.table import Table
 
-from app.agents.registry import AgentRecord
-from app.agents.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
-from app.agents.status import Status, compute_status
 from app.cli.interactive_shell.ui.rendering import print_repl_table, repl_table
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND
+from app.fleet_monitoring.registry import AgentRecord
+from app.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
+from app.fleet_monitoring.status import Status, compute_status
 
 _UNFILLED = "-"
 
@@ -81,7 +81,7 @@ def _format_usd_per_hour(value: float | None) -> str:
 
 
 def _format_status(status: Status, msg: str = "") -> str:
-    """Return a Rich-markup-colorized status cell for the /agents table."""
+    """Return a Rich-markup-colorized status cell for the /fleet table."""
     color = _STATUS_COLORS.get(status, "default")
     label = f"{status.value} ({msg})" if msg else status.value
     return f"[{color}]{label}[/{color}]"

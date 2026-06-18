@@ -144,7 +144,7 @@ def _classify_opensre_command(tokens: list[str]) -> str:
         return OpensreCommandClass.READ_ONLY.value
     if first_token in _INVESTIGATION_OPENSRE_SUBCOMMANDS:
         return OpensreCommandClass.INVESTIGATION.value
-    if first_token == "agents":
+    if first_token == "fleet":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
         if subcommand in {"list"}:
             return OpensreCommandClass.READ_ONLY.value
@@ -154,9 +154,9 @@ def _classify_opensre_command(tokens: list[str]) -> str:
 
 
 def _opensre_confirmation_reason(tokens: list[str]) -> str:
-    if tokens[:2] == ["agents", "scan"] and "--register" in tokens[2:]:
+    if tokens[:2] == ["fleet", "scan"] and "--register" in tokens[2:]:
         return "register discovered local AI-agent processes"
-    if tokens and tokens[0] == "agents":
+    if tokens and tokens[0] == "fleet":
         return "this updates the local AI-agent registry"
     return "this opensre subcommand may change local config or infrastructure"
 
@@ -176,7 +176,7 @@ def _build_opensre_execution_plan(tokens: list[str]) -> OpensreExecutionPlan:
     execution_mode = OpensreExecutionMode.BACKGROUND
     if first_token in _READ_ONLY_OPENSRE_SUBCOMMANDS:
         execution_mode = OpensreExecutionMode.FOREGROUND
-    elif first_token == "agents":
+    elif first_token == "fleet":
         subcommand = tokens[1].lower() if len(tokens) > 1 else "list"
         if subcommand == "watch":
             execution_mode = OpensreExecutionMode.FOREGROUND_STREAMING

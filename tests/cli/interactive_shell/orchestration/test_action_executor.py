@@ -417,7 +417,7 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        assert command[-2:] == ["agents", "scan"]
+        assert command[-2:] == ["fleet", "scan"]
         assert kwargs["capture_output"] is True
         return subprocess.CompletedProcess(
             args=command,
@@ -435,15 +435,15 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
-    assert run_opensre_cli_command("agents scan", session, console) is True
+    assert run_opensre_cli_command("fleet scan", session, console) is True
 
     out = buf.getvalue()
-    assert "$ opensre agents scan" in out
+    assert "$ opensre fleet scan" in out
     assert "agent scan" in out
     assert "777 claude-code-777 claude code" in out
     assert "started." not in out
     assert "stdout │" not in out
-    assert session.history[-1] == {"type": "cli_command", "text": "opensre agents scan", "ok": True}
+    assert session.history[-1] == {"type": "cli_command", "text": "opensre fleet scan", "ok": True}
 
 
 def test_run_opensre_agents_scan_register_explains_confirmation(
@@ -468,7 +468,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
 
     assert (
         run_opensre_cli_command(
-            "agents scan --register",
+            "fleet scan --register",
             session,
             console,
             confirm_fn=lambda _prompt: "y",
@@ -483,7 +483,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
     assert "stdout │" not in out
     assert session.history[-1] == {
         "type": "cli_command",
-        "text": "opensre agents scan --register",
+        "text": "opensre fleet scan --register",
         "ok": True,
     }
 
@@ -500,7 +500,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
             return 0
 
     def _fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
-        assert command[-3:] == ["agents", "watch", "1234"]
+        assert command[-3:] == ["fleet", "watch", "1234"]
         popen_kwargs.append(kwargs)
         return _FakeProcess()
 
@@ -515,7 +515,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
 
     assert (
         run_opensre_cli_command(
-            "agents watch 1234",
+            "fleet watch 1234",
             session,
             console,
             confirm_fn=lambda _prompt: "y",
@@ -525,7 +525,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
     )
 
     out = buf.getvalue()
-    assert "$ opensre agents watch 1234" in out
+    assert "$ opensre fleet watch 1234" in out
     assert "watching pid 1234" in out
     assert "pid 1234 exited" in out
     assert "started" not in out
@@ -534,7 +534,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
     assert session.task_registry.list_recent() == []
     assert session.history[-1] == {
         "type": "cli_command",
-        "text": "opensre agents watch 1234",
+        "text": "opensre fleet watch 1234",
         "ok": True,
     }
 
@@ -1381,7 +1381,7 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
         # Other subcommands — must NOT match.
         (["health"], False),
         (["version"], False),
-        (["agents", "list"], False),
+        (["fleet", "list"], False),
         # Edge: empty.
         ([], False),
     ],

@@ -102,7 +102,7 @@
               "masking",
               "interactive-shell-privacy",
               "sessions",
-              "agents",
+              "fleet",
               "cron",
               "multi-instance-integrations"
             ]

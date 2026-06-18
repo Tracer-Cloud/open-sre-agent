@@ -20,7 +20,6 @@ from rich.console import Console
 from rich.file_proxy import FileProxy
 from rich.markup import escape
 
-from app.agents.sampler import start_sampler
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
@@ -45,6 +44,7 @@ from app.cli.interactive_shell.ui import ERROR, WARNING
 from app.cli.support.exception_reporting import report_exception
 from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 from app.cli.support.repl_progress import repl_safe_progress_scope
+from app.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)
 

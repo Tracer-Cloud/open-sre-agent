@@ -1,6 +1,6 @@
 """Streaming redaction wrapper around :class:`GuardrailEngine`.
 
-Used by the local-agents fleet view (``/agents trace <pid>``) to redact
+Used by the local-agents fleet view (``/fleet trace <pid>``) to redact
 secrets from agent stdout before it reaches the user's terminal scrollback.
 
 The shipped engine assumes a single complete string (LLM input or output),

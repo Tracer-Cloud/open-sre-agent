@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
-from app.agents.probe import pid_exists
 from app.cli.interactive_shell.command_registry.types import (
     ExecutionTier,
     SlashCommand,
@@ -27,6 +26,7 @@ from app.cli.interactive_shell.ui import (
 )
 from app.cli.interactive_shell.ui.time_format import format_repl_timestamp
 from app.cli.support.errors import OpenSREError
+from app.fleet_monitoring.probe import pid_exists
 from app.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 from app.watch_dog.monitor import start_watchdog_daemon_thread
 

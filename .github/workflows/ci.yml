@@ -100,7 +100,7 @@ jobs:
               tests/cli
               tests/remote
               tests/agent
-              tests/agents
+              tests/fleet_monitoring
               tests/app
               tests/analytics
               tests/nodes

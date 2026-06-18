@@ -56,12 +56,6 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User types ? or asks for command help via the shortcut alias",
         anti_examples=("User asks a docs/how-to question about OpenSRE features",),
     ),
-    "/agents": _mcp(
-        "Show and manage the local AI agent fleet (Claude Code, Cursor, Aider, etc.). "
-        "Subcommands include budget, bus, claim, conflicts, kill, release, trace, wait, graph.",
-        "User asks to list, scan, or manage local coding agents",
-        anti_examples=("User asks about remote/hosted agents only",),
-    ),
     "/alerts": _mcp(
         "Show status of the local alert listener inbox: queue depth, dropped count, "
         "and the most recent ingested alerts.",
@@ -114,6 +108,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/exit": _mcp(
         "Exit the interactive shell and return to the parent terminal.",
         "User asks to exit, quit, or leave the REPL",
+    ),
+    "/fleet": _mcp(
+        "Show and manage the local AI agent fleet (Claude Code, Cursor, Aider, etc.). "
+        "Subcommands include budget, bus, claim, conflicts, kill, release, trace, wait, graph.",
+        "User asks to list, scan, or manage local coding agents",
+        anti_examples=("User asks about remote/hosted agents only",),
     ),
     "/guardrails": _mcp(
         "Manage sensitive-information guardrail rules. Subcommands: audit, init, rules, test.",
