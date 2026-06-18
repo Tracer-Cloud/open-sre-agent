@@ -16,6 +16,7 @@ from app.cli.interactive_shell.ui.choice_menu import (
 from app.cli.interactive_shell.ui.rendering import (
     MCP_INTEGRATION_SERVICES,
     ColumnDef,
+    print_alert_summary,
     print_command_output,
     print_planned_actions,
     print_repl_json,
@@ -95,6 +96,7 @@ __all__ = [
     "WARNING",
     "_build_agents_table",
     "print_valid_choice_list",
+    "print_alert_summary",
     "print_command_output",
     "print_planned_actions",
     "print_repl_json",

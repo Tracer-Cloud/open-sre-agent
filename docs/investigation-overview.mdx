@@ -37,6 +37,8 @@ Examples:
 | "run the sample alert investigation" | `/investigate` with a built-in template |
 | "connect to my remote EC2 instance and send it hello world" | `/remote` subcommands, then a remote investigation |
 
+When you run a built-in sample alert, the shell prints a short summary of the alert (name, pipeline, severity, and a one-line description) before the investigation starts, so you can see exactly what incident is being read.
+
 List-style questions route to **per-domain** commands (there is no global `/list`):
 
 | Intent | Command |

@@ -685,6 +685,11 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     output = buf.getvalue()
     assert "sample alert" in output
     assert "generic" in output
+    # The alert summary is rendered before the investigation runs so the
+    # operator can see what incident is being read.
+    assert "High error rate in payments ETL" in output
+    assert "payments_etl" in output
+    assert "critical" in output
 
 
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(

@@ -17,6 +17,26 @@ from app.cli.support.errors import OpenSREError
 from app.cli.support.exception_reporting import report_exception
 
 
+def _print_sample_alert_summary(template_name: str, console: Console) -> None:
+    """Show a compact summary of the sample alert before the investigation runs.
+
+    The announcement only prints the template name, so without this the
+    operator has no view of the incident being investigated. Failures here are
+    purely cosmetic, so an unknown/invalid template never blocks the run.
+    """
+    from app.cli.interactive_shell.ui import print_alert_summary
+    from app.cli.investigation.alert_templates import (
+        build_alert_template,
+        summarize_alert_template,
+    )
+
+    try:
+        pairs = summarize_alert_template(build_alert_template(template_name))
+    except Exception:
+        return
+    print_alert_summary(console, pairs)
+
+
 def run_sample_alert(
     template_name: str,
     session: ReplSession,
@@ -42,6 +62,7 @@ def run_sample_alert(
         return
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
+    _print_sample_alert_summary(template_name, console)
     task = session.task_registry.create(
         TaskKind.INVESTIGATION, command=f"sample alert:{template_name}"
     )

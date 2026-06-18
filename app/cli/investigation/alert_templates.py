@@ -2,7 +2,48 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
+
+
+def summarize_alert_template(alert: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Return ordered ``(label, value)`` pairs summarizing a sample alert payload.
+
+    The interactive shell announces a sample-alert run with only the template
+    name (``sample alert: generic``), which gives no insight into the incident
+    that is about to be investigated. This produces a compact, human-readable
+    summary so the operator can see what alert is being read before any tools
+    run. Only present fields are included, and the extraction tolerates the
+    differing key shapes across templates (``alert_name``/``title``,
+    ``pipeline_name``/``service_name``/``application_name``,
+    ``message``/``commonAnnotations.summary``/``text``).
+    """
+    annotations = alert.get("commonAnnotations") or alert.get("common_annotations") or {}
+    if not isinstance(annotations, Mapping):
+        annotations = {}
+
+    def _first(*candidates: object) -> str:
+        for candidate in candidates:
+            text = str(candidate or "").strip()
+            if text:
+                return text
+        return ""
+
+    candidate_pairs = (
+        ("Alert", _first(alert.get("alert_name"), alert.get("title"))),
+        (
+            "Pipeline",
+            _first(
+                alert.get("pipeline_name"),
+                alert.get("service_name"),
+                alert.get("application_name"),
+            ),
+        ),
+        ("Severity", _first(alert.get("severity"))),
+        ("Source", _first(alert.get("alert_source"))),
+        ("Summary", _first(alert.get("message"), annotations.get("summary"), alert.get("text"))),
+    )
+    return [(label, value) for label, value in candidate_pairs if value]
 
 
 def build_alert_template(template_name: str) -> dict[str, Any]:

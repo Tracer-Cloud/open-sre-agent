@@ -343,6 +343,20 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
     repl_print(console, Text(text) if style is None else Text(text, style=style))
 
 
+def print_alert_summary(console: Console, pairs: list[tuple[str, str]]) -> None:
+    """Print a compact label/value summary of an alert payload.
+
+    Used to surface what alert is being read before an investigation runs
+    (e.g. for the built-in sample alert). Labels are dim and padded so values
+    align in a clean column, matching the rest of the REPL's quiet styling.
+    """
+    if not pairs:
+        return
+    label_width = max(len(label) for label, _ in pairs)
+    for label, value in pairs:
+        console.print(f"  [{DIM}]{escape(label.ljust(label_width))}[/]  {escape(value)}")
+
+
 def print_planned_actions(console: Console, actions: list[PlannedAction]) -> None:
     console.print(f"[{DIM}]Requested actions:[/]")
     for index, action in enumerate(actions, start=1):
@@ -365,6 +379,7 @@ __all__ = [
     "ColumnDef",
     "MCP_INTEGRATION_SERVICES",
     "_repl_table_width",
+    "print_alert_summary",
     "print_command_output",
     "print_planned_actions",
     "print_repl_json",
