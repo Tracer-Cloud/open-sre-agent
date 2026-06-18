@@ -6,12 +6,18 @@ import pytest
 from rich.console import Console
 
 from app.cli import first_launch_github as flg
+from app.cli.interactive_shell.ui.theme import DEVICE_CODE_ANSI
 from app.integrations import github_login as github_login_mod
 from app.integrations.github_login import GitHubLoginResult
+from app.integrations.github_mcp_oauth import GitHubDeviceCode
 
 
 def _console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+
+def _terminal_console(output: io.StringIO) -> Console:
+    return Console(file=output, force_terminal=True, color_system="truecolor", highlight=False)
 
 
 def _force_required(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,6 +79,24 @@ def test_gate_skipped_when_github_already_configured(monkeypatch: pytest.MonkeyP
 def test_eligible_os(monkeypatch: pytest.MonkeyPatch, system: str, expected: bool) -> None:
     monkeypatch.setattr(flg.platform, "system", lambda: system)
     assert flg._eligible_os() is expected
+
+
+def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    output = io.StringIO()
+    code = GitHubDeviceCode(
+        device_code="dev-123",
+        user_code="WXYZ-1234",
+        verification_uri="https://github.com/login/device",
+        expires_in=900,
+        interval=5,
+    )
+
+    flg._show_device_code(_terminal_console(output), code)
+
+    rendered = output.getvalue()
+    assert f"{DEVICE_CODE_ANSI}WXYZ-1234" in rendered
 
 
 def test_orchestrator_success_writes_marker_and_propagates(

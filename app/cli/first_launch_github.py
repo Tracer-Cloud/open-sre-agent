@@ -16,10 +16,12 @@ import os
 import platform
 
 from rich.console import Console
+from rich.markup import escape
 
 from app.analytics.cli import capture_github_login_completed, identify_github_username
 from app.analytics.source import is_test_run
 from app.cli.interactive_shell.ui import repl_tty_interactive
+from app.cli.interactive_shell.ui.theme import DEVICE_CODE
 from app.constants import GITHUB_FIRST_LAUNCH_MARKER
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
@@ -103,10 +105,11 @@ def _show_device_code(console: Console, code: object) -> None:
 
     if not isinstance(code, GitHubDeviceCode):
         return
+    user_code = escape(code.user_code)
     console.print()
     console.print(f"  1. Your browser will open [underline]{code.verification_uri}[/underline]")
     console.print("     (if it doesn't open automatically, visit that URL yourself).")
-    console.print(f"  2. Enter this one-time code when GitHub asks: [bold]{code.user_code}[/bold]")
+    console.print(f"  2. Enter this one-time code when GitHub asks: [{DEVICE_CODE}]{user_code}[/]")
     console.print("  3. Approve the request for OpenSRE.")
     console.print()
     console.print("  [dim]Waiting for you to approve in the browser… (Ctrl-C to cancel)[/dim]")

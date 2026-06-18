@@ -294,7 +294,10 @@ async def run_interactive(
         if state.is_awaiting_confirmation():
             confirm_text = state.confirm_prompt_text
             return ANSI(f"{confirm_text}\n{base}")
-        prefix = spinner.inline_spinner_ansi() or spinner.idle_hint_ansi()
+        prefix = _prompt_surface.resolve_prompt_prefix_ansi(
+            inline_spinner=spinner.inline_spinner_ansi(),
+            idle_hint=spinner.idle_hint_ansi(),
+        )
         return ANSI(f"{prefix}\n{base}")
 
     async def _spinner_ticker() -> None:

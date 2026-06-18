@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.cli.interactive_shell.ui.banner import (
     render_banner,
@@ -38,6 +38,8 @@ from app.cli.interactive_shell.ui.theme import (
     ANSI_RESET,
     BG,
     BOLD_BRAND,
+    DEVICE_CODE,
+    DEVICE_CODE_ANSI,
     DIM,
     DIM_COUNTER_ANSI,
     ERROR,
@@ -49,6 +51,17 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+
+if TYPE_CHECKING:
+    # ``_build_agents_table`` and ``render_agents_table`` are PEP 562 lazy module
+    # attributes resolved by ``__getattr__`` below (loaded from ``agents_view`` only
+    # on first access so collectors don't pull in Rich). Declaring them here makes
+    # them visible to static analyzers that can't follow ``__getattr__`` (CodeQL
+    # ``py/undefined-export``, ruff F822) without eagerly importing the module.
+    from app.cli.interactive_shell.ui.agents_view import (
+        _build_agents_table,
+        render_agents_table,
+    )
 
 
 def __getattr__(name: str) -> Any:
@@ -65,6 +78,8 @@ __all__ = [
     "BG",
     "BOLD_BRAND",
     "ColumnDef",
+    "DEVICE_CODE",
+    "DEVICE_CODE_ANSI",
     "DIM",
     "DIM_COUNTER_ANSI",
     "ERROR",

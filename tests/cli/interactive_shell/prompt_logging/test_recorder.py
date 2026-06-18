@@ -24,6 +24,48 @@ def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: 
     assert PromptRecorder.start(session=session, text="hello", route_kind="cli_help") is not None
 
 
+def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = ReplSession()
+    recorder = PromptRecorder.for_background_task(
+        session=session, command="opensre investigate --service api", task_id="ab247135"
+    )
+    assert recorder is not None
+    recorder.set_response("command failed (exit 1)\nboom")
+    recorder.flush()
+    assert captured
+    assert captured[0]["cli_route_kind"] == "background_task"
+    assert captured[0]["$ai_trace_id"] == "ab247135"
+    assert captured[0]["$ai_input"][0]["content"] == "opensre investigate --service api"
+    assert captured[0]["$ai_output_choices"][0]["content"] == "command failed (exit 1)\nboom"
+
+
+def test_prompt_recorder_for_background_task_disabled_returns_none(monkeypatch) -> None:
+    cfg = PromptLogConfig(enabled=False)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    session = ReplSession()
+    assert PromptRecorder.for_background_task(session=session, command="x", task_id="t") is None
+
+
 def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -> None:
     log_path = tmp_path / "prompt_log.jsonl"
     cfg = PromptLogConfig(

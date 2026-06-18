@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_DIM, ANSI_RESET
+from app.cli.interactive_shell.ui.theme import (
+    ANSI_BOLD,
+    ANSI_DIM,
+    ANSI_RESET,
+    DEVICE_CODE_ANSI,
+)
 
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
@@ -376,7 +381,9 @@ def _github_browser_authorize() -> str | None:
         print()
         print(f"  1. Your browser will open {code.verification_uri}")
         print("     (if it doesn't open automatically, visit that URL yourself).")
-        print(f"  2. Enter this one-time code when GitHub asks: {_B}{code.user_code}{_R}")
+        print(
+            f"  2. Enter this one-time code when GitHub asks: {DEVICE_CODE_ANSI}{code.user_code}{_R}"
+        )
         print("  3. Approve the request for OpenSRE.")
         print()
         print(f"  {_DIM}Waiting for you to approve in the browser… (Ctrl-C to cancel){_R}")

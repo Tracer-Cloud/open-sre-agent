@@ -11,11 +11,13 @@ from urllib.parse import urlparse
 
 import questionary
 from rich.console import Console
+from rich.markup import escape
 from rich.rule import Rule
 from rich.text import Text
 
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
+    DEVICE_CODE,
     DIM,
     ERROR,
     GLYPH_ERROR,
@@ -1050,10 +1052,13 @@ def _github_wizard_browser_authorize() -> str | None:
     )
 
     def _show(code: GitHubDeviceCode) -> None:
+        user_code = escape(code.user_code)
         _console.print()
         _console.print(f"  1. Your browser will open [bold]{code.verification_uri}[/]")
         _console.print(f"     [{SECONDARY}](if it doesn't open, visit that URL yourself).[/]")
-        _console.print(f"  2. Enter this one-time code when GitHub asks: [bold]{code.user_code}[/]")
+        _console.print(
+            f"  2. Enter this one-time code when GitHub asks: [{DEVICE_CODE}]{user_code}[/]"
+        )
         _console.print("  3. Approve the request for OpenSRE.")
         _console.print()
         _console.print(f"  [{SECONDARY}]Waiting for you to approve in the browser…[/]")

@@ -606,11 +606,14 @@ class TestReplHintAnimation:
         display._start_animation("analyzing results")
         assert display._anim_thread is not None
 
-        with pytest.raises(RuntimeError, match="synthesis failed"):
+        def _synthesis_then_stop() -> None:
             try:
                 raise RuntimeError("synthesis failed")
             finally:
                 display._stop_animation()
+
+        with pytest.raises(RuntimeError, match="synthesis failed"):
+            _synthesis_then_stop()
 
         assert display._anim_thread is None
 

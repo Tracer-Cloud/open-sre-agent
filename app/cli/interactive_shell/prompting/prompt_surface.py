@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.application.current import get_app
+from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
@@ -50,11 +50,7 @@ def _prompt_rule_line(width: int) -> str:
 
 
 def _prompt_rule_ansi() -> str:
-    try:
-        width = get_app().output.get_size().columns
-    except Exception:
-        width = 80
-    return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(width)}{ANSI_RESET}"
+    return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(_terminal_columns())}{ANSI_RESET}"
 
 
 def _prompt_counter_text(session: ReplSession) -> str:
@@ -150,20 +146,122 @@ class ReplInputLexer(Lexer):
         return get_line
 
 
-def _short_meta(text: str, max_len: int = 54) -> str:
-    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+_DEFAULT_TERMINAL_COLUMNS = 80
+_COMPLETION_META_PADDING = 6
+_COMPLETION_META_MIN_WIDTH = 24
+_COMPLETION_PREVIEW_SEP = " — "
+
+
+def _terminal_columns() -> int:
+    app = get_app_or_none()
+    if app is None:
+        return _DEFAULT_TERMINAL_COLUMNS
+    try:
+        return app.output.get_size().columns
+    except Exception:
+        return _DEFAULT_TERMINAL_COLUMNS
+
+
+def _clip_text(text: str, max_len: int) -> str:
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1] + "…"
+
+
+def _completion_meta_width(command_name: str, cols: int) -> int:
+    return max(_COMPLETION_META_MIN_WIDTH, cols - len(command_name) - _COMPLETION_META_PADDING)
+
+
+def _short_meta(
+    text: str,
+    *,
+    command_name: str = "",
+    max_len: int | None = None,
+    cols: int | None = None,
+) -> str:
+    if max_len is None:
+        if command_name:
+            max_len = _completion_meta_width(command_name, cols or _terminal_columns())
+        else:
+            max_len = 54
+    return _clip_text(text, max_len)
+
+
+def _slash_command_name(completion: Completion) -> str | None:
+    for candidate in (completion.text, completion.display_text or ""):
+        if candidate.startswith("/"):
+            return candidate
+    return None
+
+
+def _resolve_completion_preview(
+    completion: Completion,
+    *,
+    buffer_text: str,
+) -> tuple[str, str] | None:
+    cmd_name = _slash_command_name(completion)
+    if cmd_name is not None:
+        entry = SLASH_COMMANDS.get(cmd_name)
+        if entry is not None:
+            return cmd_name, entry.description
+
+    meta = completion.display_meta_text
+    if not meta:
+        return None
+
+    display = completion.display_text or completion.text
+    if cmd_name is not None:
+        label = display
+    else:
+        parts = buffer_text.split()
+        label = f"{parts[0]} {display}" if parts and parts[0].startswith("/") else display
+    return label, meta
+
+
+def completion_preview_hint_ansi() -> str:
+    """Full description for the highlighted completion menu item."""
+    app = get_app_or_none()
+    if app is None:
+        return ""
+    buffer = app.current_buffer
+    complete_state = buffer.complete_state
+    if complete_state is None or not complete_state.completions:
+        return ""
+
+    completion = complete_state.current_completion or complete_state.completions[0]
+    preview = _resolve_completion_preview(completion, buffer_text=buffer.text)
+    if preview is None:
+        return ""
+
+    label, description = preview
+    try:
+        cols = app.output.get_size().columns
+    except Exception:
+        cols = _DEFAULT_TERMINAL_COLUMNS
+    line = _clip_text(f"{label}{_COMPLETION_PREVIEW_SEP}{description}", cols)
+    return f"{ANSI_DIM}{line}{ANSI_RESET}"
+
+
+def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
+    """Choose the prompt's top context line: spinner, completion preview, or idle hint."""
+    if inline_spinner:
+        return inline_spinner
+    preview = completion_preview_hint_ansi()
+    return preview or idle_hint
 
 
 # Precomputed at import time so bare-`/` completions never rebuild it per keystroke.
 _QUICK_ACCESS_SET: frozenset[str] = frozenset(QUICK_ACCESS_COMMANDS)
 
 
-def _slash_completion(cmd: SlashCommand, start_position: int) -> Completion:
+def _slash_completion(cmd: SlashCommand, start_position: int, *, cols: int) -> Completion:
     return Completion(
         cmd.name,
         start_position=start_position,
         display=cmd.name,
-        display_meta=_short_meta(cmd.description),
+        display_meta=_short_meta(cmd.description, command_name=cmd.name, cols=cols),
     )
 
 
@@ -197,19 +295,20 @@ class ShellCompleter(Completer):
         trailing_space = text != text.rstrip(" ")
         if len(parts) == 1 and not trailing_space:
             needle = parts[0].lower()
+            cols = _terminal_columns()
             if needle == "/":
                 # Bare `/`: show most important commands first, then the rest.
                 for name in QUICK_ACCESS_COMMANDS:
                     cmd = SLASH_COMMANDS.get(name)
                     if cmd is not None:
-                        yield _slash_completion(cmd, -1)
+                        yield _slash_completion(cmd, -1, cols=cols)
                 for cmd in SLASH_COMMANDS.values():
                     if cmd.name not in _QUICK_ACCESS_SET:
-                        yield _slash_completion(cmd, -1)
+                        yield _slash_completion(cmd, -1, cols=cols)
             else:
                 for cmd in SLASH_COMMANDS.values():
                     if cmd.name.lower().startswith(needle):
-                        yield _slash_completion(cmd, -len(parts[0]))
+                        yield _slash_completion(cmd, -len(parts[0]), cols=cols)
             return
 
         if len(parts) <= 2:
@@ -451,7 +550,9 @@ __all__ = [
     "_install_prompt_frame",
     "ReplInputLexer",
     "ShellCompleter",
+    "completion_preview_hint_ansi",
     "render_submitted_prompt",
     "resolve_prompt_placeholder",
+    "resolve_prompt_prefix_ansi",
     "wire_prompt_refresh",
 ]

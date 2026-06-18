@@ -7,6 +7,8 @@ Start the interactive shell with `opensre` (TTY required). Type a slash command 
 
 Run `/help` anytime for the live command list grouped by category. In a TTY, bare `/help` opens an interactive picker; selecting a command runs it directly.
 
+When you type `/` and browse completions with the arrow keys, the full description of the highlighted command appears in the hint line above the prompt.
+
 <Info>
   Commands marked **elevated** may prompt for confirmation unless [trust mode](#trust-mode-and-confirmations) is on. Non-TTY sessions fail closed on elevated actions.
 </Info>
@@ -28,7 +30,7 @@ Run `/help` anytime for the live command list grouped by category. In a TTY, bar
 
 | Key | Effect |
 | --- | --- |
-| **Up/Down** | Recall persisted command history (when enabled) |
+| **Up/Down** | Recall persisted command history (when enabled); during `/` completion browse, preview the highlighted command description in the hint line above the prompt |
 | **Ctrl+C** once | Cancel in-flight streaming work or interrupt the current prompt |
 | **Ctrl+C** twice within 2s | Exit the REPL (prints `/resume` hint) |
 | **Ctrl+D** | Exit when the prompt is empty (same resume hint as `/exit`) |

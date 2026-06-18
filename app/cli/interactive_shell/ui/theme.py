@@ -46,6 +46,9 @@ BOLD_TEXT = f"bold {TEXT}"
 BOLD_WARNING = f"bold {WARNING}"
 BOLD_ERROR = f"bold {ERROR}"
 
+# GitHub/device-flow one-time codes should be easy to spot and transcribe.
+DEVICE_CODE = BOLD_HIGHLIGHT
+
 # Distinct accent for incoming alerts (visually distinct from BOLD_BRAND used for assistant)
 INCOMING_ALERT_ACCENT = BOLD_WARNING
 
@@ -79,6 +82,7 @@ BRAND_ANSI = _fg(_BRAND_RGB)
 TEXT_ANSI = _fg(_TEXT_RGB)
 DIM_ANSI = _fg(_DIM_RGB)
 BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
+DEVICE_CODE_ANSI = f"\x1b[1;38;2;{_HIGHLIGHT_RGB[0]};{_HIGHLIGHT_RGB[1]};{_HIGHLIGHT_RGB[2]}m"
 
 ANSI_RESET = "\x1b[0m"
 ANSI_BOLD = "\x1b[1m"

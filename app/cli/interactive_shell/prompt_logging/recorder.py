@@ -16,7 +16,7 @@ from app.cli.interactive_shell.prompt_logging.sinks.posthog_ai import capture_ai
 from app.version import get_version
 
 _SUPPORTED_ROUTE_KINDS = frozenset(
-    {"handle_message_with_agent", "cli_help", "follow_up", "new_alert"}
+    {"handle_message_with_agent", "cli_help", "follow_up", "new_alert", "background_task"}
 )
 
 # Maps PromptRecorder route_kind → session turn kind stored in turn_detail records.
@@ -25,6 +25,7 @@ _ROUTE_TO_SESSION_KIND: dict[str, str] = {
     "cli_help": "chat",
     "follow_up": "follow_up",
     "new_alert": "alert",
+    "background_task": "cli_command",
 }
 
 
@@ -88,6 +89,35 @@ class PromptRecorder:
             session_id=_session_id(session),
             turn_id=str(uuid.uuid4()),
             prompt=_sanitize_text(text, config=config),
+        )
+
+    @classmethod
+    def for_background_task(
+        cls,
+        *,
+        session: Any,
+        command: str,
+        task_id: str,
+    ) -> PromptRecorder | None:
+        """Create a recorder for an async background task.
+
+        Background CLI tasks (e.g. ``opensre investigate``) finish long after
+        the originating turn has flushed, so their stdout/stderr/exit outcome is
+        not available to the turn-level recorder. This recorder is created at
+        task launch — so its latency clock spans the full task duration — and is
+        flushed by the task watcher once the outcome (including any error text)
+        is known. ``turn_id`` is set to ``task_id`` so the prompt-log event
+        correlates with the task surfaced by ``/tasks``.
+        """
+        config = PromptLogConfig.load()
+        if not config.enabled:
+            return None
+        return cls(
+            config=config,
+            route_kind="background_task",
+            session_id=_session_id(session),
+            turn_id=task_id or str(uuid.uuid4()),
+            prompt=_sanitize_text(command, config=config),
         )
 
     def set_response(self, text: str, run: LlmRunInfo | None = None) -> None:
