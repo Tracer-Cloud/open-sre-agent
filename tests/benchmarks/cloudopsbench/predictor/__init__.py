@@ -29,7 +29,7 @@ modules above is re-exported here.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _FENCED_JSON,
@@ -65,6 +65,17 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _ROOT_CAUSES,
     _TAXONOMY_CATEGORIES,
 )
+
+if TYPE_CHECKING:
+    # ``align_predictions_to_investigation`` and ``apply_investigation_handoff`` are
+    # PEP 562 lazy module attributes resolved by ``__getattr__`` below (see the
+    # docstring there). Declaring them here makes them visible to static analyzers
+    # that can't follow ``__getattr__`` (CodeQL ``py/undefined-export``, ruff F822)
+    # without eagerly importing ``investigation_handoff`` and its scoring deps.
+    from tests.benchmarks.cloudopsbench.predictor.investigation_handoff import (
+        align_predictions_to_investigation,
+        apply_investigation_handoff,
+    )
 
 __all__ = [
     # vocabulary
