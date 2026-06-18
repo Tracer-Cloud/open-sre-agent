@@ -234,17 +234,24 @@ def rabbitmq_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 def _summarize_queue(queue: dict[str, Any]) -> dict[str, Any]:
     stats = queue.get("message_stats") or {}
+    # The Management API returns these count fields as an explicit JSON ``null``
+    # (not just absent) for queues without live stats — e.g. a queue whose home
+    # node is down, or right after a broker restart before the stats DB is
+    # populated. ``dict.get(key, 0)`` only substitutes the default when the key
+    # is missing, so ``null`` would flow through as ``None`` and crash the
+    # backlog sort below (``None + None``). Coerce with ``or 0``, mirroring the
+    # ``message_stats or {}`` guard above.
     return {
         "name": queue.get("name", ""),
         "vhost": queue.get("vhost", ""),
         "state": queue.get("state", "unknown"),
-        "messages_ready": queue.get("messages_ready", 0),
-        "messages_unacknowledged": queue.get("messages_unacknowledged", 0),
-        "messages_total": queue.get("messages", 0),
-        "messages_persistent": queue.get("messages_persistent", 0),
-        "consumers": queue.get("consumers", 0),
+        "messages_ready": queue.get("messages_ready") or 0,
+        "messages_unacknowledged": queue.get("messages_unacknowledged") or 0,
+        "messages_total": queue.get("messages") or 0,
+        "messages_persistent": queue.get("messages_persistent") or 0,
+        "consumers": queue.get("consumers") or 0,
         "consumer_utilisation": queue.get("consumer_utilisation"),
-        "memory_bytes": queue.get("memory", 0),
+        "memory_bytes": queue.get("memory") or 0,
         "publish_rate": (stats.get("publish_details") or {}).get("rate", 0.0),
         "deliver_rate": (stats.get("deliver_get_details") or {}).get("rate", 0.0),
         "ack_rate": (stats.get("ack_details") or {}).get("rate", 0.0),
