@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.PostHogMCPTool import call_posthog_tool, list_posthog_tools
+import pytest
+
+from app.tools.PostHogMCPTool import _resolve_config, call_posthog_tool, list_posthog_tools
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -171,6 +173,44 @@ def test_call_tool_surfaces_mcp_error() -> None:
         )
     assert result["available"] is False
     assert "permission denied" in str(result["error"])
+
+
+@pytest.mark.parametrize("guessed_mode", ["default", "mcp", "http", "bogus", ""])
+def test_resolve_config_recovers_from_guessed_mode(guessed_mode: str) -> None:
+    """The planner often guesses an invalid transport; fall back to HTTP."""
+    config = _resolve_config(
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode=guessed_mode,
+        posthog_token="phx_secret",
+    )
+    assert config is not None
+    assert config.mode == "streamable-http"
+    assert config.url == "https://mcp.posthog.com/mcp"
+
+
+def test_resolve_config_stdio_without_command_falls_back_to_http() -> None:
+    """A 'stdio' request with only a URL must not build a broken stdio config."""
+    config = _resolve_config(
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode="stdio",
+        posthog_token="phx_secret",
+        posthog_command="",
+    )
+    assert config is not None
+    assert config.mode == "streamable-http"
+
+
+def test_resolve_config_keeps_explicit_stdio_with_command() -> None:
+    config = _resolve_config(
+        posthog_url="",
+        posthog_mode="stdio",
+        posthog_token="",
+        posthog_command="npx",
+        posthog_args=["-y", "@posthog/mcp-server"],
+    )
+    assert config is not None
+    assert config.mode == "stdio"
+    assert config.command == "npx"
 
 
 def test_list_tools_returns_discovered_tools() -> None:

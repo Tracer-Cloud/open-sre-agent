@@ -47,6 +47,11 @@ class TestPostHogMCPConfig:
         config = PostHogMCPConfig(mode="mcp")
         assert config.mode == "streamable-http"
 
+    @pytest.mark.parametrize("alias", ["default", "http", "https", "streamable_http"])
+    def test_mode_generic_aliases_map_to_streamable_http(self, alias: str) -> None:
+        config = PostHogMCPConfig(mode=alias)
+        assert config.mode == "streamable-http"
+
     def test_bearer_prefix_stripped_from_token(self) -> None:
         config = PostHogMCPConfig(auth_token="Bearer phx_secret")
         assert config.auth_token == "phx_secret"

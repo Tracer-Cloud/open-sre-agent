@@ -72,6 +72,9 @@ def _unavailable_response(
     return payload
 
 
+_KNOWN_POSTHOG_MCP_MODES = frozenset({"stdio", "sse", "streamable-http"})
+
+
 def _resolve_config(
     posthog_url: str | None,
     posthog_mode: str | None,
@@ -81,17 +84,31 @@ def _resolve_config(
 ) -> PostHogMCPConfig | None:
     env_config = posthog_mcp_config_from_env()
     if any((posthog_url, posthog_mode, posthog_token, posthog_command, posthog_args)):
+        url = posthog_url or (env_config.url if env_config else "")
+        command = posthog_command or (env_config.command if env_config else "")
+
+        # The planner fills these connection params from a loose schema and often
+        # guesses an invalid transport (e.g. "default") or asks for "stdio"
+        # without a command. Drop anything we can't honor so we fall back to
+        # inferring the transport from the configured command/url rather than
+        # building a config that fails PostHogMCPConfig validation.
+        requested_mode = (posthog_mode or "").strip().lower()
+        if requested_mode not in _KNOWN_POSTHOG_MCP_MODES:
+            requested_mode = ""
+        if requested_mode == "stdio" and not command:
+            requested_mode = ""
+
         inferred_mode = (
-            posthog_mode
-            or ("stdio" if posthog_command else "")
-            or ("streamable-http" if posthog_url else "")
+            requested_mode
+            or ("stdio" if command else "")
+            or ("streamable-http" if url else "")
             or (env_config.mode if env_config else "")
         )
         raw_config: PostHogMCPParams = {
-            "url": posthog_url or (env_config.url if env_config else ""),
+            "url": url,
             "mode": inferred_mode,
             "auth_token": posthog_token or (env_config.auth_token if env_config else ""),
-            "command": posthog_command or (env_config.command if env_config else ""),
+            "command": command,
             "args": posthog_args or (list(env_config.args) if env_config else []),
             "headers": env_config.headers if env_config else {},
             "organization_id": env_config.organization_id if env_config else "",
