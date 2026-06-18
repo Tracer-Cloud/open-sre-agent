@@ -15,7 +15,6 @@ from typing import Any
 from rich.console import Console
 
 import app.cli.interactive_shell.runtime.execution as execution
-from app.cli.interactive_shell.runtime.execution import _answer_cli_agent_with_tools
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 
@@ -40,7 +39,7 @@ def test_gather_string_threads_offscreen_observation(monkeypatch: Any) -> None:
         execution, "gather_tool_evidence", lambda *_a, **_k: "Tool: x\nArguments: {}\nResult: y"
     )
 
-    _answer_cli_agent_with_tools("question", ReplSession(), _console())
+    execution._answer_cli_agent_with_tools("question", ReplSession(), _console())
 
     assert len(calls) == 1
     assert calls[0]["tool_observation"] == "Tool: x\nArguments: {}\nResult: y"
@@ -51,7 +50,7 @@ def test_gather_none_passes_through_without_observation(monkeypatch: Any) -> Non
     calls = _record_answer(monkeypatch)
     monkeypatch.setattr(execution, "gather_tool_evidence", lambda *_a, **_k: None)
 
-    _answer_cli_agent_with_tools("question", ReplSession(), _console())
+    execution._answer_cli_agent_with_tools("question", ReplSession(), _console())
 
     assert len(calls) == 1
     assert calls[0]["tool_observation"] is None
@@ -66,7 +65,7 @@ def test_existing_observation_skips_gather(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(execution, "gather_tool_evidence", _should_not_run)
 
-    _answer_cli_agent_with_tools(
+    execution._answer_cli_agent_with_tools(
         "question", ReplSession(), _console(), tool_observation="already gathered"
     )
 
