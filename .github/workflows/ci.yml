@@ -204,6 +204,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      - name: Diagnostic - LLM provider resolution
+        run: >-
+          uv run python -c "import os;
+          print('LLM_PROVIDER env =', repr(os.getenv('LLM_PROVIDER')));
+          print('OPENAI_API_KEY len =', len(os.getenv('OPENAI_API_KEY') or ''));
+          print('ANTHROPIC_API_KEY len =', len(os.getenv('ANTHROPIC_API_KEY') or ''));
+          from app.config import resolve_llm_settings;
+          print('resolved provider =', resolve_llm_settings().provider)"
+
       - name: Run tests
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
