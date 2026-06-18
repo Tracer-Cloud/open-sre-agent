@@ -17,7 +17,31 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
+# Sentry's issues endpoint caps the page size at 100; asking for more is
+# silently truncated to 100. We default to the full page so a search returns
+# the whole recent issue set instead of a tiny slice (a low limit was why
+# queries appeared to "only find one issue").
+DEFAULT_SENTRY_ISSUE_LIMIT = 100
+_MAX_SENTRY_PAGE_SIZE = 100
 _MAX_SENTRY_QUERY_LEN = 200
+# Window used by the verification probe to report a recent issue count.
+_SENTRY_VERIFY_STATS_PERIOD = "7d"
+_SENTRY_VERIFY_WINDOW_LABEL = "last 7 days"
+
+
+def _resolve_stats_period(explicit: str | None = None) -> str:
+    """Resolve the issues lookback window, overridable via ``SENTRY_STATS_PERIOD``."""
+    period = (explicit or os.getenv("SENTRY_STATS_PERIOD", "") or "").strip()
+    return period or DEFAULT_SENTRY_STATS_PERIOD
+
+
+def _clamp_issue_limit(limit: int | None) -> int:
+    """Clamp a requested issue limit into Sentry's valid 1..100 page range."""
+    try:
+        value = DEFAULT_SENTRY_ISSUE_LIMIT if limit is None else int(limit)
+    except (TypeError, ValueError):
+        value = DEFAULT_SENTRY_ISSUE_LIMIT
+    return max(1, min(value, _MAX_SENTRY_PAGE_SIZE))
 
 
 class SentryConfig(StrictConfigModel):
@@ -110,10 +134,11 @@ def _build_issue_list_params(
     config: SentryConfig,
     limit: int,
     query: str,
+    stats_period: str | None = None,
 ) -> list[tuple[str, str | int | float | bool | None]]:
     params: list[tuple[str, str | int | float | bool | None]] = [
-        ("limit", str(limit)),
-        ("statsPeriod", DEFAULT_SENTRY_STATS_PERIOD),
+        ("limit", str(_clamp_issue_limit(limit))),
+        ("statsPeriod", _resolve_stats_period(stats_period)),
         ("query", _sanitize_sentry_query(query)),
     ]
     if config.project_slug:
@@ -149,13 +174,23 @@ def validate_sentry_config(config: SentryConfig) -> SentryValidationResult:
         return SentryValidationResult(ok=False, detail="Sentry auth token is required.")
 
     try:
-        issues = list_sentry_issues(config=config, limit=1)
+        # Fetch a full page over the verify window so the detail reports a
+        # meaningful recent issue count instead of a probe artifact. The count
+        # is capped at the Sentry page size, shown as "N+" when it saturates.
+        issues = list_sentry_issues(
+            config=config,
+            limit=DEFAULT_SENTRY_ISSUE_LIMIT,
+            stats_period=_SENTRY_VERIFY_STATS_PERIOD,
+        )
         issue_count = len(issues)
+        count_label = (
+            f"{issue_count}+" if issue_count >= _MAX_SENTRY_PAGE_SIZE else str(issue_count)
+        )
         return SentryValidationResult(
             ok=True,
             detail=(
                 f"Sentry validated for org {config.organization_slug}; "
-                f"issues API responded successfully with {issue_count} issue(s)."
+                f"{count_label} issue(s) in the {_SENTRY_VERIFY_WINDOW_LABEL}."
             ),
             issue_count=issue_count,
         )
@@ -176,15 +211,20 @@ def list_sentry_issues(
     *,
     config: SentryConfig,
     query: str = "",
-    limit: int = 20,
+    limit: int = DEFAULT_SENTRY_ISSUE_LIMIT,
+    stats_period: str | None = None,
 ) -> list[dict[str, Any]]:
-    """List Sentry issues for an organization."""
+    """List Sentry issues for an organization.
+
+    ``limit`` is clamped to Sentry's 1..100 page range; ``stats_period``
+    (e.g. ``24h``, ``14d``) defaults to ``SENTRY_STATS_PERIOD`` then ``24h``.
+    """
 
     payload = _request_json(
         config,
         "GET",
         f"/api/0/organizations/{config.organization_slug}/issues/",
-        params=_build_issue_list_params(config, limit, query),
+        params=_build_issue_list_params(config, limit, query, stats_period),
     )
     return payload if isinstance(payload, list) else []
 

@@ -8,6 +8,10 @@ from app.integrations.github_mcp import (
     validate_github_mcp_config,
 )
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
+from app.integrations.posthog_mcp import (
+    build_posthog_mcp_config,
+    validate_posthog_mcp_config,
+)
 
 from .shared import IntegrationHealthResult
 
@@ -69,3 +73,36 @@ def validate_openclaw_integration(
         return IntegrationHealthResult(ok=result.ok, detail=result.detail)
     except Exception as err:
         return IntegrationHealthResult(ok=False, detail=f"OpenClaw validation failed: {err}")
+
+
+def validate_posthog_mcp_integration(
+    *,
+    url: str = "",
+    mode: str,
+    auth_token: str = "",
+    command: str = "",
+    args: list[str] | None = None,
+    organization_id: str = "",
+    project_id: str = "",
+    features: list[str] | None = None,
+    read_only: bool = True,
+) -> IntegrationHealthResult:
+    """Validate PostHog MCP connectivity by listing available tools."""
+    try:
+        config = build_posthog_mcp_config(
+            {
+                "url": url,
+                "mode": mode,
+                "auth_token": auth_token,
+                "command": command,
+                "args": args or [],
+                "organization_id": organization_id,
+                "project_id": project_id,
+                "features": features or [],
+                "read_only": read_only,
+            }
+        )
+        result = validate_posthog_mcp_config(config)
+        return IntegrationHealthResult(ok=result.ok, detail=result.detail)
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"PostHog MCP validation failed: {err}")

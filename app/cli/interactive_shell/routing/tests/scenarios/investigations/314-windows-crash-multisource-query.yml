@@ -1,0 +1,62 @@
+id: 314-windows-crash-multisource-query
+title: Windows crash epic asks the agent to query Sentry, GitHub issues, and PostHog
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: >-
+    Hey OpenSRE figure out why our OpenSRE agent is crashing on Windows machines
+    by querying (a) sentry, (b) github issues, (c) posthog
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations:
+  - sentry
+  - github
+  - posthog
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- "Multi-source investigation epic with Sentry, GitHub, and PostHog all configured.\
+  \ The agent must engage with the request and commit to checking the named\
+  \ sources for the Windows crashes rather than deflecting with a generic 'paste\
+  \ an alert and run opensre investigate' reply."
+- "The agent must not shell out or auto-start an RCA run; this is the\
+  \ conversational/tool-gathering surface, so it answers directly and references\
+  \ all three configured sources."
+route:
+  expected_kind: handle_message_with_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_all:
+  - Sentry
+  - GitHub
+  - PostHog
+  must_contain_any:
+  - Windows
+  - crash
+  must_not_contain:
+  - $ /
+  # The agent must commit to checking the connected sources, not deflect the
+  # user back to pasting an alert / running a separate investigation command.
+  - opensre investigate
+  - paste the alert
+  - paste one of
+  forbidden_actions:
+  - shell
+  - investigation
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 5

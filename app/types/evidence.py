@@ -38,6 +38,7 @@ EvidenceSource = Literal[
     "jenkins",
     "bitbucket",
     "openclaw",
+    "posthog_mcp",
     "mysql",
     "rabbitmq",
     "betterstack",

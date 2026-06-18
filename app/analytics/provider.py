@@ -684,6 +684,28 @@ class Analytics:
             event=event.value,
             properties=_BASE_PROPERTIES | _coerce_properties(event.value, properties),
         )
+        self._enqueue(envelope)
+
+    def identify(self, set_properties: Properties) -> None:
+        """Attach person properties to the anonymous distinct id via a ``$identify`` event.
+
+        Overrides the project-wide ``$process_person_profile: False`` default for this
+        single event so PostHog creates/updates the person profile. No-ops when telemetry
+        is disabled, exactly like :meth:`capture`.
+        """
+        if self._disabled or self._shutdown:
+            return
+        coerced = _coerce_properties("$identify", set_properties)
+        if not coerced:
+            return
+        properties: Properties = {
+            **_BASE_PROPERTIES,
+            "$process_person_profile": True,
+            "$set": coerced,
+        }
+        self._enqueue(_Envelope(event="$identify", properties=properties))
+
+    def _enqueue(self, envelope: _Envelope) -> None:
         pending_registered = False
         try:
             self._ensure_worker()
@@ -695,12 +717,12 @@ class Analytics:
         except queue.Full:
             self._mark_done()
             error = _QueueOverflow(f"queue overflow at size={_QUEUE_SIZE}")
-            _log_failure("queue_full", error, event=event.value)
+            _log_failure("queue_full", error, event=envelope.event)
             _capture_sentry_failure(error)
         except Exception as exc:
             if pending_registered:
                 self._mark_done()
-            _log_failure("capture", exc, event=event.value)
+            _log_failure("capture", exc, event=envelope.event)
             _capture_sentry_failure(exc)
 
     def shutdown(self, *, flush: bool = True, timeout: float = _SHUTDOWN_WAIT) -> None:

@@ -1,0 +1,302 @@
+"""PostHog MCP-backed tools.
+
+Exposes the hosted PostHog MCP server (product analytics, feature flags, error
+tracking, experiments, HogQL queries, surveys, docs search, and more) to the
+investigation and chat surfaces. The tool surface is intentionally generic — a
+discovery tool plus a named-call tool — so it keeps working when PostHog adds
+or renames individual MCP-side tools.
+"""
+
+from __future__ import annotations
+
+from app.integrations.posthog_mcp import (
+    PostHogMCPConfig,
+    PostHogMCPToolCallResult,
+    build_posthog_mcp_config,
+    describe_posthog_mcp_error,
+    posthog_mcp_config_from_env,
+    posthog_mcp_runtime_unavailable_reason,
+)
+from app.integrations.posthog_mcp import (
+    call_posthog_mcp_tool as invoke_posthog_mcp_tool,
+)
+from app.integrations.posthog_mcp import (
+    list_posthog_mcp_tools as list_posthog_mcp_server_tools,
+)
+from app.tools._telemetry import report_run_error
+from app.tools.tool_decorator import tool
+
+PostHogMCPParams = dict[str, object]
+PostHogMCPResponse = dict[str, object]
+
+_COMPONENT = "app.tools.PostHogMCPTool"
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _first_string(source: dict[str, object], *keys: str) -> str | None:
+    for key in keys:
+        value = str(source.get(key, "")).strip()
+        if value:
+            return value
+    return None
+
+
+def _first_list(source: dict[str, object], *keys: str) -> list[str]:
+    for key in keys:
+        values = _string_list(source.get(key, []))
+        if values:
+            return values
+    return []
+
+
+def _unavailable_response(
+    error: str,
+    *,
+    tool_name: str | None = None,
+    arguments: PostHogMCPParams | None = None,
+) -> PostHogMCPResponse:
+    payload: PostHogMCPResponse = {
+        "source": "posthog_mcp",
+        "available": False,
+        "error": error,
+    }
+    if tool_name:
+        payload["tool"] = tool_name
+    if arguments is not None:
+        payload["arguments"] = arguments
+    return payload
+
+
+def _resolve_config(
+    posthog_url: str | None,
+    posthog_mode: str | None,
+    posthog_token: str | None,
+    posthog_command: str | None = None,
+    posthog_args: list[str] | None = None,
+) -> PostHogMCPConfig | None:
+    env_config = posthog_mcp_config_from_env()
+    if any((posthog_url, posthog_mode, posthog_token, posthog_command, posthog_args)):
+        inferred_mode = (
+            posthog_mode
+            or ("stdio" if posthog_command else "")
+            or ("streamable-http" if posthog_url else "")
+            or (env_config.mode if env_config else "")
+        )
+        raw_config: PostHogMCPParams = {
+            "url": posthog_url or (env_config.url if env_config else ""),
+            "mode": inferred_mode,
+            "auth_token": posthog_token or (env_config.auth_token if env_config else ""),
+            "command": posthog_command or (env_config.command if env_config else ""),
+            "args": posthog_args or (list(env_config.args) if env_config else []),
+            "headers": env_config.headers if env_config else {},
+            "organization_id": env_config.organization_id if env_config else "",
+            "project_id": env_config.project_id if env_config else "",
+            "features": list(env_config.features) if env_config else [],
+            "read_only": env_config.read_only if env_config else True,
+        }
+        return build_posthog_mcp_config(raw_config)
+    return env_config
+
+
+def _posthog_mcp_available(sources: dict[str, dict]) -> bool:
+    return bool(sources.get("posthog_mcp", {}).get("connection_verified"))
+
+
+def _posthog_mcp_extract_params(sources: dict[str, dict]) -> PostHogMCPParams:
+    posthog = sources.get("posthog_mcp", {})
+    if not posthog:
+        return {}
+    return {
+        "posthog_url": _first_string(posthog, "posthog_url", "url"),
+        "posthog_mode": _first_string(posthog, "posthog_mode", "mode"),
+        "posthog_token": _first_string(posthog, "posthog_token", "auth_token"),
+        "posthog_command": _first_string(posthog, "posthog_command", "command"),
+        "posthog_args": _first_list(posthog, "posthog_args", "args"),
+    }
+
+
+def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPResponse:
+    if result.get("is_error"):
+        return _unavailable_response(
+            str(result.get("text") or "PostHog MCP tool call failed."),
+            tool_name=str(result.get("tool", "")).strip() or None,
+            arguments=result.get("arguments", {}),
+        )
+    return {
+        "source": "posthog_mcp",
+        "available": True,
+        "tool": result.get("tool"),
+        "arguments": result.get("arguments", {}),
+        "text": result.get("text", ""),
+        "structured_content": result.get("structured_content"),
+        "content": result.get("content", []),
+    }
+
+
+@tool(
+    name="list_posthog_tools",
+    source="posthog_mcp",
+    description="List the tools exposed by the configured PostHog MCP server.",
+    use_cases=[
+        "Discovering which PostHog MCP tools are available before calling one",
+        "Confirming whether analytics, feature-flag, or error-tracking tools are exposed",
+    ],
+    surfaces=("investigation", "chat"),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "posthog_url": {"type": "string"},
+            "posthog_mode": {"type": "string"},
+            "posthog_token": {"type": "string"},
+            "posthog_command": {"type": "string"},
+            "posthog_args": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": [],
+    },
+    is_available=_posthog_mcp_available,
+    extract_params=_posthog_mcp_extract_params,
+)
+def list_posthog_tools(
+    posthog_url: str | None = None,
+    posthog_mode: str | None = None,
+    posthog_token: str | None = None,
+    posthog_command: str | None = None,
+    posthog_args: list[str] | None = None,
+    **_kwargs: object,
+) -> PostHogMCPResponse:
+    """List tools available from the configured PostHog MCP server."""
+    config = _resolve_config(
+        posthog_url,
+        posthog_mode,
+        posthog_token,
+        posthog_command,
+        posthog_args,
+    )
+    if config is None:
+        payload = _unavailable_response("PostHog MCP integration is not configured.")
+        payload["tools"] = []
+        return payload
+
+    runtime_error = posthog_mcp_runtime_unavailable_reason(config)
+    if runtime_error is not None:
+        payload = _unavailable_response(runtime_error)
+        payload["tools"] = []
+        return payload
+
+    try:
+        tools = list_posthog_mcp_server_tools(config)
+    except Exception as err:
+        report_run_error(
+            err,
+            tool_name="list_posthog_tools",
+            source="posthog_mcp",
+            component=_COMPONENT,
+            method="list_posthog_mcp_server_tools",
+            extras={"transport": config.mode},
+        )
+        payload = _unavailable_response(describe_posthog_mcp_error(err, config))
+        payload["tools"] = []
+        return payload
+
+    return {
+        "source": "posthog_mcp",
+        "available": True,
+        "transport": config.mode,
+        "endpoint": config.command if config.mode == "stdio" else config.url,
+        "tools": tools,
+    }
+
+
+@tool(
+    name="call_posthog_tool",
+    source="posthog_mcp",
+    description=(
+        "Call a named tool exposed by the configured PostHog MCP server "
+        "(e.g. run a HogQL query, list feature flags, inspect an error)."
+    ),
+    use_cases=[
+        "Running a HogQL/SQL query against the customer's PostHog project",
+        "Listing or inspecting feature flags, experiments, or error-tracking issues",
+        "Searching PostHog docs or fetching insight/dashboard data during an investigation",
+    ],
+    requires=["tool_name"],
+    surfaces=("investigation", "chat"),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "tool_name": {"type": "string"},
+            "arguments": {"type": "object"},
+            "posthog_url": {"type": "string"},
+            "posthog_mode": {"type": "string"},
+            "posthog_token": {"type": "string"},
+            "posthog_command": {"type": "string"},
+            "posthog_args": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["tool_name"],
+    },
+    is_available=_posthog_mcp_available,
+    extract_params=_posthog_mcp_extract_params,
+)
+def call_posthog_tool(
+    tool_name: str | None = None,
+    arguments: PostHogMCPParams | None = None,
+    posthog_url: str | None = None,
+    posthog_mode: str | None = None,
+    posthog_token: str | None = None,
+    posthog_command: str | None = None,
+    posthog_args: list[str] | None = None,
+    **_kwargs: object,
+) -> PostHogMCPResponse:
+    """Call a specific PostHog MCP tool by name."""
+    normalized_tool_name = (tool_name or "").strip()
+    if not normalized_tool_name:
+        return _unavailable_response(
+            "tool_name is required to call a PostHog MCP tool.",
+            arguments=arguments or {},
+        )
+
+    config = _resolve_config(
+        posthog_url,
+        posthog_mode,
+        posthog_token,
+        posthog_command,
+        posthog_args,
+    )
+    if config is None:
+        return _unavailable_response(
+            "PostHog MCP integration is not configured.",
+            tool_name=normalized_tool_name,
+            arguments=arguments or {},
+        )
+
+    runtime_error = posthog_mcp_runtime_unavailable_reason(config)
+    if runtime_error is not None:
+        return _unavailable_response(
+            runtime_error,
+            tool_name=normalized_tool_name,
+            arguments=arguments or {},
+        )
+
+    try:
+        result = invoke_posthog_mcp_tool(config, normalized_tool_name, arguments or {})
+    except Exception as err:
+        report_run_error(
+            err,
+            tool_name="call_posthog_tool",
+            source="posthog_mcp",
+            component=_COMPONENT,
+            method="invoke_posthog_mcp_tool",
+            extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
+        )
+        return _unavailable_response(
+            describe_posthog_mcp_error(err, config),
+            tool_name=normalized_tool_name,
+            arguments=arguments or {},
+        )
+
+    return _normalize_tool_result(result)

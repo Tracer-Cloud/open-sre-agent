@@ -104,6 +104,19 @@ _ACTION_RULE = (
     "clarification or mention `/model set ollama` as an option instead."
 )
 
+_SOURCE_SCOPED_INVESTIGATION_RULE = (
+    "Source-scoped investigation requests: when the user asks you to find or "
+    "figure out the cause of a problem AND explicitly names which connected "
+    "sources to query (for example 'figure out why it's crashing on Windows by "
+    "querying Sentry, GitHub issues, and PostHog'), do NOT just tell them to "
+    "paste an alert or run `opensre investigate`. Acknowledge EACH named source "
+    "by name, and for each one report what you checked or found from the gathered "
+    "tool results below — or state plainly that it returned nothing, is not "
+    "reachable, or needs a repo/project scope. You may still ask for a tighter "
+    "scope (service, version, error message, time window) to refine the search, "
+    "but lead by engaging the named sources rather than deflecting."
+)
+
 _SETUP_GUIDANCE_RULE = (
     "Configuring or connecting an integration: when the user asks to configure, "
     "connect, set up, add, or enable a specific integration they already named "
@@ -235,6 +248,7 @@ def _build_system_prompt(
         "with no pasted alert, restate the user's question in your reply and "
         "ask for the target system, service, or alert context.\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
+        f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
@@ -507,23 +521,40 @@ def _record_cli_agent_turn(session: ReplSession, message: str, assistant_text: s
         session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
 
 
-def _build_observation_block(tool_observation: str | None) -> str:
-    """Wrap a discovery command's output so the assistant summarizes it directly.
+def _build_observation_block(tool_observation: str | None, *, on_screen: bool = True) -> str:
+    """Wrap freshly-gathered tool output so the assistant summarizes it directly.
 
-    Used by the observe→answer loop: after the planner runs a read-only command
-    (e.g. ``/integrations``) to answer a question, its output is fed back here so
-    the user gets a concise answer instead of only a raw table.
+    Used by the observe→answer loop in two cases:
+
+    * ``on_screen=True`` — the planner ran a read-only discovery command (e.g.
+      ``/integrations``) whose raw output is already printed; keep the summary
+      short since the user can see the table.
+    * ``on_screen=False`` — a tool-gathering pass fetched live integration data
+      (logs, GitHub issues, metrics, …) that is NOT printed in full; the answer
+      should report the relevant findings from the data below.
     """
     if not tool_observation or not tool_observation.strip():
         return ""
+    if on_screen:
+        framing = (
+            "A read-only discovery command was just run to answer the user's question; "
+            "its output is below. Summarize it to answer the user's question directly "
+            "and concisely (for example, whether a specific integration is configured), "
+            "citing the relevant status. The output is already on screen, so keep it "
+            "short."
+        )
+    else:
+        framing = (
+            "Live data was just gathered from the connected integrations to answer the "
+            "user's question; the tool results are below and are NOT otherwise shown to "
+            "the user. Answer the user's question directly using these results, citing "
+            "the concrete findings (e.g. relevant issues, log lines, or metrics). If the "
+            "data does not contain the answer, say so plainly."
+        )
     return (
-        "A read-only discovery command was just run to answer the user's question; "
-        "its output is below. Summarize it to answer the user's question directly "
-        "and concisely (for example, whether a specific integration is configured), "
-        "citing the relevant status. The output is already on screen, so keep it "
-        "short. Do NOT request, plan, or emit any further actions — just answer in "
+        f"{framing} Do NOT request, plan, or emit any further actions — just answer in "
         "plain Markdown.\n\n"
-        f"--- command_output ---\n{tool_observation}\n\n"
+        f"--- tool_results ---\n{tool_observation}\n\n"
     )
 
 
@@ -535,6 +566,7 @@ def answer_cli_agent(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     tool_observation: str | None = None,
+    tool_observation_on_screen: bool = True,
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
@@ -595,7 +627,9 @@ def answer_cli_agent(
                 "that you lack context — the run completed and this file was written.\n\n"
                 f"--- observation_json ---\n{obs_text}\n\n"
             )
-    observation_block = _build_observation_block(tool_observation)
+    observation_block = _build_observation_block(
+        tool_observation, on_screen=tool_observation_on_screen
+    )
     prompt = f"{system}\n{integration_guard}{observation_block}{synthetic_block}{user_block}"
 
     try:

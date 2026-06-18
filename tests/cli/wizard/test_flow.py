@@ -594,6 +594,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
             "claude-opus-4-7",
             "github",
             flow.DEFAULT_GITHUB_MCP_MODE,
+            "token",
             "auto",
             "any",
             "summary",

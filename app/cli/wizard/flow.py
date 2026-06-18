@@ -52,6 +52,8 @@ DEFAULT_OPENCLAW_MCP_URL = "http://127.0.0.1:18789/"
 DEFAULT_OPENCLAW_MCP_MODE = "stdio"
 DEFAULT_OPENCLAW_MCP_COMMAND = "openclaw"
 DEFAULT_OPENCLAW_MCP_ARGS = ("mcp", "serve")
+DEFAULT_POSTHOG_MCP_URL = "https://mcp.posthog.com/mcp"
+DEFAULT_POSTHOG_MCP_MODE = "streamable-http"
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
 WIZARD_TOTAL_STEPS = 4
@@ -215,6 +217,12 @@ def validate_telegram_bot(**kwargs):
 
 def validate_openclaw_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_openclaw_integration as _validate
+
+    return _validate(**kwargs)
+
+
+def validate_posthog_mcp_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_posthog_mcp_integration as _validate
 
     return _validate(**kwargs)
 
@@ -1025,6 +1033,76 @@ def _configure_aws() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _github_wizard_browser_authorize() -> str | None:
+    """Run GitHub device-flow browser authorization inside the wizard."""
+    from app.integrations.github_mcp_oauth import (
+        GitHubDeviceCode,
+        GitHubDeviceFlowError,
+        authorize_github_via_device_flow,
+    )
+
+    def _show(code: GitHubDeviceCode) -> None:
+        _console.print()
+        _console.print(f"  1. Your browser will open [bold]{code.verification_uri}[/]")
+        _console.print(f"     [{SECONDARY}](if it doesn't open, visit that URL yourself).[/]")
+        _console.print(f"  2. Enter this one-time code when GitHub asks: [bold]{code.user_code}[/]")
+        _console.print("  3. Approve the request for OpenSRE.")
+        _console.print()
+        _console.print(f"  [{SECONDARY}]Waiting for you to approve in the browser…[/]")
+
+    _console.print()
+    _console.print("Sign in to GitHub in your browser (device authorization):")
+    _console.print(f"[{SECONDARY}]Requesting a one-time code from GitHub…[/]")
+    try:
+        token = authorize_github_via_device_flow(on_prompt=_show)
+    except GitHubDeviceFlowError as err:
+        _console.print(f"Browser authorization unavailable: {err}")
+        return None
+    except Exception as err:  # network/transport issues
+        _console.print(f"Browser authorization failed: {err}")
+        return None
+    _console.print("[bold]Authorized.[/] Saved a GitHub token from the browser sign-in.")
+    return token.access_token
+
+
+def _github_wizard_auth_token(mode: str, credentials: Mapping[str, object]) -> str:
+    """Resolve a GitHub MCP auth token, offering browser sign-in for remote modes."""
+    existing = _string_value(credentials.get("auth_token"))
+    if mode == "stdio":
+        return _prompt_value(
+            "GitHub PAT / auth token (optional if the server already authenticates upstream)",
+            default=existing,
+            secret=True,
+            allow_empty=True,
+        )
+
+    method = _choose(
+        "How do you want to connect OpenSRE to GitHub?",
+        [
+            Choice(
+                value="browser",
+                label="Sign in with GitHub in your browser (opens a page, enter a one-time code)",
+            ),
+            Choice(value="token", label="Paste a personal access token (PAT)"),
+            Choice(value="none", label="Skip — the MCP server authenticates upstream"),
+        ],
+        default="browser",
+    )
+    if method == "none":
+        return ""
+    if method == "browser":
+        token = _github_wizard_browser_authorize()
+        if token:
+            return token
+        _console.print("Falling back to manual token entry.")
+    return _prompt_value(
+        "GitHub PAT / auth token",
+        default=existing,
+        secret=True,
+        allow_empty=True,
+    )
+
+
 def _configure_github_mcp() -> tuple[str, str]:
     _, credentials = _integration_defaults("github")
     default_mode = _string_value(credentials.get("mode"), DEFAULT_GITHUB_MCP_MODE)
@@ -1072,12 +1150,7 @@ def _configure_github_mcp() -> tuple[str, str]:
                 ),
             )
         )
-        auth_token = _prompt_value(
-            "GitHub PAT / auth token (optional if the server already authenticates upstream)",
-            default=_string_value(credentials.get("auth_token")),
-            secret=True,
-            allow_empty=True,
-        )
+        auth_token = _github_wizard_auth_token(mode, credentials)
 
         repo_view = _choose(
             "Which repository view should we use to verify access?",
@@ -1266,6 +1339,108 @@ def _configure_openclaw() -> tuple[str, str]:
                 f"[{SECONDARY}]Accurate RCA:[/] [bold]also configure Grafana/Datadog and GitHub[/]"
             )
             return "OpenClaw", str(env_path)
+        default_mode = mode
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
+def _configure_posthog_mcp() -> tuple[str, str]:
+    _, credentials = _integration_defaults("posthog_mcp")
+    default_mode = _string_value(credentials.get("mode"), DEFAULT_POSTHOG_MCP_MODE)
+
+    while True:
+        mode = _choose(
+            "Choose the PostHog MCP transport:",
+            [
+                Choice(value="streamable-http", label="Streamable HTTP (recommended)"),
+                Choice(value="sse", label="SSE"),
+                Choice(value="stdio", label="stdio (local server)"),
+            ],
+            default=default_mode,
+        )
+
+        url = ""
+        command = ""
+        args: list[str] = []
+        if mode == "stdio":
+            command = _prompt_value(
+                "PostHog MCP command",
+                default=_string_value(credentials.get("command"), "npx"),
+            )
+            args_raw = _prompt_value(
+                "PostHog MCP args",
+                default=_joined_values(
+                    credentials.get("args"),
+                    separator=" ",
+                    fallback="-y @posthog/mcp-server@latest",
+                ),
+                allow_empty=True,
+            )
+            args = [part for part in args_raw.split() if part]
+        else:
+            url = _prompt_value(
+                "PostHog MCP URL",
+                default=_string_value(credentials.get("url"), DEFAULT_POSTHOG_MCP_URL),
+            )
+
+        auth_token = _prompt_value(
+            "PostHog personal API key (MCP Server preset)",
+            default=_string_value(credentials.get("auth_token")),
+            secret=True,
+        )
+        project_id = _prompt_value(
+            "PostHog project ID (optional)",
+            default=_string_value(credentials.get("project_id")),
+            allow_empty=True,
+        )
+
+        credentials = {
+            **credentials,
+            "url": url,
+            "mode": mode,
+            "auth_token": auth_token,
+            "command": command,
+            "args": args,
+            "project_id": project_id,
+            "read_only": True,
+        }
+
+        with _console.status("Validating PostHog MCP...", spinner="dots"):
+            result = validate_posthog_mcp_integration(
+                url=url,
+                mode=mode,
+                auth_token=auth_token,
+                command=command,
+                args=args,
+                project_id=project_id,
+                read_only=True,
+            )
+        _render_integration_result("PostHog MCP", result)
+        if result.ok:
+            credentials_dict = {
+                "url": url,
+                "mode": mode,
+                "auth_token": auth_token,
+                "command": command,
+                "args": args,
+                "project_id": project_id,
+                "read_only": True,
+            }
+            upsert_integration("posthog_mcp", {"credentials": credentials_dict})
+            sync_env_secret("POSTHOG_MCP_AUTH_TOKEN", auth_token)
+            env_path = sync_env_values(
+                {
+                    "POSTHOG_MCP_URL": url,
+                    "POSTHOG_MCP_MODE": mode,
+                    "POSTHOG_MCP_COMMAND": command,
+                    "POSTHOG_MCP_ARGS": " ".join(args),
+                    "POSTHOG_MCP_PROJECT_ID": project_id,
+                }
+            )
+            _console.print(f"[{HIGHLIGHT}]PostHog MCP · ready[/]")
+            _console.print(
+                f"[{SECONDARY}]Verify:[/] [bold]uv run opensre integrations verify posthog_mcp[/]"
+            )
+            return "PostHog MCP", str(env_path)
         default_mode = mode
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -2127,6 +2302,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             label="OpenClaw (recommended)",
             hint="Connect OpenSRE to OpenClaw for editor-driven RCA, setup checks, and write-back",
         ),
+        Choice(
+            value="posthog_mcp",
+            label="PostHog (MCP)",
+            hint="Query PostHog analytics, feature flags, error tracking, and HogQL via MCP",
+        ),
         Choice(value="splunk", label="Splunk", hint="Query logs from Splunk"),
         Choice(
             value="opensearch",
@@ -2177,6 +2357,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "incident_io": _configure_incident_io,
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
+        "posthog_mcp": _configure_posthog_mcp,
         "opensearch": _configure_opensearch,
         "splunk": _configure_splunk,
         "tempo": _configure_tempo,
@@ -2205,6 +2386,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "incident_io": "incident.io",
         "notion": "notion",
         "openclaw": "openclaw",
+        "posthog_mcp": "posthog mcp",
         "opensearch": "opensearch",
         "tempo": "grafana tempo",
     }

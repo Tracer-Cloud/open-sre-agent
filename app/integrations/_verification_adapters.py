@@ -33,6 +33,10 @@ from app.integrations.mongodb_atlas import build_mongodb_atlas_config, validate_
 from app.integrations.mysql import build_mysql_config, validate_mysql_config
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
+from app.integrations.posthog_mcp import (
+    build_posthog_mcp_config,
+    validate_posthog_mcp_config,
+)
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
 from app.integrations.redis import build_redis_config, validate_redis_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
@@ -488,11 +492,24 @@ def _verify_opensearch(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
-_verify_github = build_validation_verifier(
-    "github",
-    build_config=build_github_mcp_config,
-    validate_config=validate_github_mcp_config,
-)
+def _verify_github(source: str, config: dict[str, Any]) -> dict[str, str]:
+    """Verify GitHub MCP, reporting credential-less records as ``missing``.
+
+    A stale store entry with no auth token cannot reach the hosted Copilot
+    endpoint; surface it as not-configured rather than a confusing 401 failure.
+    """
+    normalized_config = build_github_mcp_config(config)
+    validation_result = validate_github_mcp_config(normalized_config)
+    if not validation_result.ok and validation_result.failure_category == "not_configured":
+        return result("github", source, "missing", validation_result.detail)
+    return result(
+        "github",
+        source,
+        "passed" if validation_result.ok else "failed",
+        validation_result.detail,
+    )
+
+
 _verify_sentry = build_validation_verifier(
     "sentry",
     build_config=build_sentry_config,
@@ -552,6 +569,11 @@ _verify_openclaw = build_validation_verifier(
     "openclaw",
     build_config=build_openclaw_config,
     validate_config=validate_openclaw_config,
+)
+_verify_posthog_mcp = build_validation_verifier(
+    "posthog_mcp",
+    build_config=build_posthog_mcp_config,
+    validate_config=validate_posthog_mcp_config,
 )
 _verify_signoz = build_validation_verifier(
     "signoz",
@@ -729,6 +751,7 @@ __all__ = [
     "_verify_mongodb_atlas",
     "_verify_mysql",
     "_verify_openclaw",
+    "_verify_posthog_mcp",
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",

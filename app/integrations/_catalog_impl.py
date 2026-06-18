@@ -48,6 +48,7 @@ from app.integrations.mongodb_atlas import build_mongodb_atlas_config
 from app.integrations.mysql import build_mysql_config
 from app.integrations.openclaw import build_openclaw_config
 from app.integrations.postgresql import build_postgresql_config
+from app.integrations.posthog_mcp import DEFAULT_POSTHOG_MCP_URL, build_posthog_mcp_config
 from app.integrations.rabbitmq import build_rabbitmq_config
 from app.integrations.rds import (
     DEFAULT_RDS_REGION,
@@ -648,6 +649,31 @@ def _classify_service_instance(
             config_dict = openclaw_config.model_dump()
             config_dict["connection_verified"] = True
             return config_dict, "openclaw"
+        return None, None
+
+    if key == "posthog_mcp":
+        try:
+            posthog_mcp_config = build_posthog_mcp_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "mode": credentials.get("mode", "streamable-http"),
+                    "command": credentials.get("command", ""),
+                    "args": credentials.get("args", []),
+                    "auth_token": credentials.get("auth_token", ""),
+                    "organization_id": credentials.get("organization_id", ""),
+                    "project_id": credentials.get("project_id", ""),
+                    "features": credentials.get("features", []),
+                    "read_only": credentials.get("read_only", True),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if posthog_mcp_config.is_configured:
+            config_dict = posthog_mcp_config.model_dump()
+            config_dict["connection_verified"] = True
+            return config_dict, "posthog_mcp"
         return None, None
 
     if key == "mysql":
@@ -1677,6 +1703,46 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="openclaw")
+
+    posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
+    posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
+    posthog_mcp_command = os.getenv("POSTHOG_MCP_COMMAND", "").strip()
+    posthog_mcp_token = resolve_env_credential("POSTHOG_MCP_AUTH_TOKEN")
+    posthog_mcp_url = os.getenv("POSTHOG_MCP_URL", "").strip()
+    if posthog_mcp_mode != "stdio" and posthog_mcp_token and not posthog_mcp_url:
+        posthog_mcp_url = DEFAULT_POSTHOG_MCP_URL
+    if (posthog_mcp_mode == "stdio" and posthog_mcp_command) or (
+        posthog_mcp_mode != "stdio" and posthog_mcp_url and posthog_mcp_token
+    ):
+        read_only_env = os.getenv("POSTHOG_MCP_READ_ONLY", "").strip().lower()
+        read_only = read_only_env not in ("false", "0", "no") if read_only_env else True
+        try:
+            posthog_mcp_config = build_posthog_mcp_config(
+                {
+                    "url": posthog_mcp_url,
+                    "mode": posthog_mcp_mode,
+                    "command": posthog_mcp_command,
+                    "args": [
+                        part for part in os.getenv("POSTHOG_MCP_ARGS", "").strip().split() if part
+                    ],
+                    "auth_token": posthog_mcp_token,
+                    "organization_id": os.getenv("POSTHOG_MCP_ORGANIZATION_ID", "").strip(),
+                    "project_id": os.getenv("POSTHOG_MCP_PROJECT_ID", "").strip(),
+                    "features": os.getenv("POSTHOG_MCP_FEATURES", "").strip(),
+                    "read_only": read_only,
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "posthog_mcp",
+                    {
+                        **posthog_mcp_config.model_dump(exclude={"integration_id"}),
+                        "connection_verified": True,
+                    },
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="posthog_mcp")
 
     mariadb_host = os.getenv("MARIADB_HOST", "").strip()
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()

@@ -41,6 +41,7 @@
               "quickstart",
               "investigation-overview",
               "interactive-shell-commands",
+              "interactive-shell-assistant",
               "deployment",
               "faq"
             ]
@@ -129,6 +130,7 @@
               "openobserve",
               "opsgenie",
               "pagerduty",
+              "posthog-mcp",
               "sentry",
               "signoz",
               "tempo",

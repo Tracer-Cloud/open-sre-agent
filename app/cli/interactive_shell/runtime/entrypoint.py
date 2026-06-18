@@ -23,19 +23,15 @@ log = logging.getLogger(__name__)
 
 
 def _hydrate_configured_integrations(session: ReplSession) -> None:
-    """Record env-configured integrations on the session so the agent has the facts.
+    """Record configured integrations (env + local store) on the session.
 
     Without this the agent can't answer "is X installed?" and the integration
-    guards stay dead (``configured_integrations_known`` never flips). Best-effort:
-    any failure leaves the session in its default "unknown" state.
+    guards stay dead (``configured_integrations_known`` never flips). Delegates
+    to :meth:`ReplSession.hydrate_configured_integrations` so boot-time
+    hydration and post-mutation refresh resolve the same env + store set.
+    Best-effort: any failure leaves the session in its default "unknown" state.
     """
-    try:
-        from app.integrations.catalog import configured_integration_services
-
-        session.configured_integrations = tuple(configured_integration_services())
-        session.configured_integrations_known = True
-    except Exception:
-        log.debug("could not hydrate configured integrations at REPL boot", exc_info=True)
+    session.hydrate_configured_integrations()
 
 
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
@@ -86,6 +82,28 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         SessionStore.flush(session)
 
 
+def _maybe_require_github_login(console: Console) -> bool:
+    """Enforce the first-launch GitHub login gate.
+
+    Returns True when the REPL should start (gate not required, or login
+    succeeded) and False when the user quit at the mandatory gate. Any unexpected
+    error in the gate machinery is swallowed so it never hard-blocks startup
+    beyond the intended mandatory login.
+    """
+    try:
+        from app.cli.first_launch_github import (
+            require_github_login_on_first_launch,
+            should_require_github_login,
+        )
+
+        if not should_require_github_login():
+            return True
+        return require_github_login_on_first_launch(console)
+    except Exception:
+        log.warning("First-launch GitHub login gate failed; continuing.", exc_info=True)
+        return True
+
+
 def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:
     cfg = config or ReplConfig.load()
     if not cfg.enabled:
@@ -103,6 +121,8 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
             legacy_windows=False,
         )
         render_banner(real_console)
+        if not _maybe_require_github_login(real_console):
+            return 0
 
     try:
         return asyncio.run(repl_main(initial_input=initial_input, _config=cfg))

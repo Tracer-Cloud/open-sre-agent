@@ -91,6 +91,13 @@ class ReplSession:
     """Session-scoped configured integration names for planning-time capability checks."""
     configured_integrations_known: bool = False
     """Whether configured_integrations reflects known state (vs default unknown)."""
+    resolved_integrations_cache: dict[str, Any] | None = None
+    """Lazily-resolved integration configs (env/store) shared across turns.
+
+    Populated on first use by the tool-gathering pass so the conversational
+    assistant can call the same registered tools the investigation uses without
+    re-resolving (and re-rendering progress) every turn. Cleared by
+    ``refresh_integration_state`` when integrations change."""
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
@@ -338,6 +345,39 @@ class ReplSession:
             if value:
                 self.accumulated_context[key] = value
 
+    def hydrate_configured_integrations(self) -> None:
+        """Resolve configured integrations (env + local store) onto the session.
+
+        Run at REPL boot and again whenever an integration is added or removed
+        so capability checks and the tool-gathering pass reflect the current
+        store state instead of a stale boot-time snapshot. Resolution covers
+        both environment variables and the local ``~/.opensre`` store, so an
+        integration configured via ``/integrations setup`` (which writes to the
+        store) is seen here. Best-effort: any failure leaves the previously
+        known state untouched.
+        """
+        try:
+            from app.integrations.verify import resolve_effective_integrations
+
+            self.configured_integrations = tuple(sorted(resolve_effective_integrations()))
+            self.configured_integrations_known = True
+        except Exception:
+            # Best-effort: keep whatever state we already had (default unknown).
+            pass
+
+    def refresh_integration_state(self) -> None:
+        """Re-resolve integration state after the local store changes.
+
+        Drops the cached resolution (``resolved_integrations_cache``) and
+        re-hydrates ``configured_integrations`` from the current env + store
+        set. Call after a ``/integrations setup|remove`` or
+        ``/mcp connect|disconnect`` mutates the local store so the same REPL
+        session immediately reflects the change instead of answering from the
+        boot-time snapshot.
+        """
+        self.resolved_integrations_cache = None
+        self.hydrate_configured_integrations()
+
     def apply_investigation_result(self, state: dict[str, Any]) -> None:
         """Record a completed investigation result and reset follow-up context.
 
@@ -361,6 +401,7 @@ class ReplSession:
         self.last_assistant_intent = None
         self.configured_integrations = ()
         self.configured_integrations_known = False
+        self.resolved_integrations_cache = None
         self.available_capabilities.clear()
         self.accumulated_context.clear()
         self.token_usage.clear()

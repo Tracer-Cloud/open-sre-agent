@@ -347,12 +347,17 @@
       text: "the checkout service is returning 502 errors for 30% of requests"
       ok: true
 
+# A bare incident description (no explicit "investigate") is an assistant_handoff,
+# consistent with new_alert_checkout_502_rate. The planner LLM is the sole tool
+# selector and the system prompt routes incident descriptions to the assistant
+# unless the user explicitly asks to investigate; there is no regex override that
+# upgrades cpu/spiking pastes to an investigation.
 - id: new_alert_orders_cpu_99
   input: "CPU is spiking to 99% on the orders-api pods"
   expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
-    - kind: "investigation"
-      content: "CPU is spiking to 99% on the orders-api pods"
+    - kind: "assistant_handoff"
+      content: "incident_description:orders_cpu_99"
   expected_executed_actions: []
   expected_terminal_response_contains:
     - "orders"

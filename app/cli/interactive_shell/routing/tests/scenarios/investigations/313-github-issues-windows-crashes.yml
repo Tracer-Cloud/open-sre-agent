@@ -1,0 +1,46 @@
+id: 313-github-issues-windows-crashes
+title: Assistant checks GitHub issues for Windows crashes
+intent_class: investigation
+risk_level: low
+input:
+  prompt: can you check the github issues for the windows crashes?
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- "Covers the assistant gathering live data from a connected integration when\
+  \ answering a free-form question. With no GitHub integration configured the\
+  \ assistant answers from text only and must not shell out or start an RCA run."
+route:
+  expected_kind: handle_message_with_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: false
+  has_unhandled_clause: true
+  fail_closed: true
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - GitHub
+  - issues
+  - Windows
+  - crash
+  must_not_contain:
+  - $ /
+  forbidden_actions:
+  - shell
+  - investigation
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 1

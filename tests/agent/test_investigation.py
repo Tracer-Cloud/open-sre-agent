@@ -10,6 +10,8 @@ import pytest
 from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
+)
+from app.agent.tool_loop import (
     _build_synthetic_assistant_tool_call_msg,
     _context_budget_ceiling_for_model,
     _enforce_context_budget,
@@ -268,7 +270,7 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("app.agent.investigation.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("app.agent.tool_loop.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
@@ -764,7 +766,7 @@ def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> No
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
     """List content with several text slots is shrunk proportionally so the whole
     message lands near the budget instead of zeroing the first slot only."""
-    from app.agent.investigation import _truncate_content
+    from app.agent.tool_loop import _truncate_content
 
     content = [
         {"type": "text", "text": "a" * 100_000},

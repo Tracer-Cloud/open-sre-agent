@@ -85,6 +85,19 @@ If all answers are weak, keep the logic inline.
 - Regex fallback has been intentionally removed from routing. Do **not**
   re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
   unless there is an explicit product decision to restore them.
+- **The LLM action planner is the sole tool selector for non-command turns.**
+  There is no regex/keyword intent inference and no deterministic
+  natural-language → action mapping in `orchestration/`. The former
+  `slash_commands/deterministic_action_mapper.py`, `intent_parser` regex
+  patterns/extractors, and the regex planner postprocessing overrides were
+  removed. Do **not** reintroduce them: change tool selection by editing the
+  planner system prompt (`llm_action_planner/constants.py`) and the per-tool
+  descriptions in `orchestration/tools/*`, never by adding pattern matching.
+  Tool-call argument *validation* (shape/availability checks in
+  `llm_action_planner/normalization.py` and `parsing.py`) is allowed; intent
+  *classification* by regex is not.
+- When the planner LLM is unavailable or the prompt overflows, fail closed to
+  `assistant_handoff` — do not guess an action deterministically.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 

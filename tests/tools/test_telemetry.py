@@ -586,6 +586,74 @@ def _openclaw_call_tool_case() -> ToolFailureCase:
     )
 
 
+def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
+    """Shared patches for PostHog MCP cases — bypass the config/runtime guards."""
+    from app.tools import PostHogMCPTool as mod
+
+    mp.setattr(
+        mod,
+        "posthog_mcp_config_from_env",
+        MagicMock(
+            return_value=SimpleNamespace(
+                mode="streamable-http",
+                command="",
+                url="https://mcp.posthog.com/mcp",
+                auth_token="phx_secret",
+                args=(),
+                headers={},
+                organization_id="",
+                project_id="",
+                features=(),
+                read_only=True,
+            )
+        ),
+    )
+    mp.setattr(mod, "posthog_mcp_runtime_unavailable_reason", MagicMock(return_value=None))
+    mp.setattr(mod, "describe_posthog_mcp_error", MagicMock(return_value="mocked error"))
+
+
+def _posthog_mcp_list_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import PostHogMCPTool as mod
+
+        _patch_posthog_mcp_runtime(mp)
+        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.PostHogMCPTool import list_posthog_tools
+
+        return list_posthog_tools()
+
+    return ToolFailureCase(
+        "posthog_mcp_list_tools",
+        patch,
+        invoke,
+        "list_posthog_tools",
+        "posthog_mcp",
+    )
+
+
+def _posthog_mcp_call_tool_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import PostHogMCPTool as mod
+
+        _patch_posthog_mcp_runtime(mp)
+        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.PostHogMCPTool import call_posthog_tool
+
+        return call_posthog_tool(tool_name="query-run", arguments={})
+
+    return ToolFailureCase(
+        "posthog_mcp_call_tool",
+        patch,
+        invoke,
+        "call_posthog_tool",
+        "posthog_mcp",
+    )
+
+
 _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _azure_case(),
     _openobserve_case(),
@@ -607,6 +675,8 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _openclaw_search_case(),
     _openclaw_get_conversation_case(),
     _openclaw_call_tool_case(),
+    _posthog_mcp_list_case(),
+    _posthog_mcp_call_tool_case(),
 ]
 
 
@@ -798,6 +868,9 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_openclaw_conversation",
         "send_openclaw_message",
         "call_openclaw_tool",
+        # PostHog MCP — both swallow sites in PostHogMCPTool/__init__.py.
+        "list_posthog_tools",
+        "call_posthog_tool",
     }
 )
 
@@ -978,6 +1051,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",
+        "search_github_issues",
         "search_sentry_issues",
         "twilio_notify",
         "vercel_deployment_logs",

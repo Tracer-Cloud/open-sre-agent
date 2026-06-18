@@ -8,17 +8,26 @@ OpenSRE connects to GitHub via the GitHub MCP server to search code, browse rece
 ## Prerequisites
 
 - GitHub account with repository access
-- Personal access token or GitHub Copilot MCP access
+- One of: browser sign-in (recommended), a personal access token, or GitHub Copilot MCP access
 
 ## Setup
 
-### Option 1: Interactive CLI
+### Option 1: Interactive CLI (browser sign-in)
 
 ```bash
 opensre integrations setup
 ```
 
-Select **GitHub** when prompted.
+Select **GitHub** when prompted, then choose **Authorize in browser**. OpenSRE
+opens GitHub's device authorization page and prints a one-time code — approve it
+in your browser and the token is captured automatically. No personal access
+token is required.
+
+This uses GitHub's OAuth device flow, which has no client secret. The public
+OAuth App client id ships with OpenSRE; override it with
+`OPENSRE_GITHUB_OAUTH_CLIENT_ID` if you register your own app.
+
+If you prefer, the same prompt lets you **paste a token (PAT)** instead.
 
 ### Option 2: Environment variables
 
@@ -31,12 +40,13 @@ GITHUB_MCP_TOOLSETS=repos,issues,pull_requests,actions  # default
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `GITHUB_MCP_AUTH_TOKEN` | — | **Required.** GitHub personal access token |
+| `GITHUB_MCP_AUTH_TOKEN` | — | GitHub personal access token. Required unless you authorize in the browser (Option 1) |
 | `GITHUB_MCP_URL` | `https://api.githubcopilot.com/mcp/` | GitHub MCP server URL |
 | `GITHUB_MCP_MODE` | `streamable-http` | Transport mode: `streamable-http`, `sse`, or `stdio` |
 | `GITHUB_MCP_TOOLSETS` | `repos,issues,pull_requests,actions` | Comma-separated toolsets to enable |
 | `GITHUB_MCP_COMMAND` | — | Command to run (required for `stdio` mode only) |
 | `GITHUB_MCP_ARGS` | — | Space-separated args for `stdio` mode |
+| `OPENSRE_GITHUB_OAUTH_CLIENT_ID` | _(built-in)_ | OAuth App client id for browser sign-in (device flow). Override to use your own app |
 
 ### Option 3: Persistent store
 
@@ -99,6 +109,7 @@ Detail: GitHub MCP validated for your-username; discovered 18 tools including re
 | **Authentication failed** | Check that the token has `repo` scope and is not expired |
 | **Required tools missing** | Ensure toolsets include `repos` — it provides `get_file_contents`, `list_commits`, etc. |
 | **Connection refused** | Verify `GITHUB_MCP_URL` is reachable and the MCP server is running |
+| **Browser sign-in unavailable** | Set `OPENSRE_GITHUB_OAUTH_CLIENT_ID` to a device-flow-enabled OAuth App, or fall back to pasting a PAT |
 
 ## Security best practices
 

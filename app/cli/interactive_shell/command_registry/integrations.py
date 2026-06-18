@@ -158,10 +158,14 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         return True
 
     if sub == "setup":
-        return run_cli_command(console, ["integrations", "setup", *args[1:]])
+        result = run_cli_command(console, ["integrations", "setup", *args[1:]])
+        session.refresh_integration_state()
+        return result
 
     if sub == "remove":
-        return run_cli_command(console, ["integrations", "remove", *args[1:]])
+        result = run_cli_command(console, ["integrations", "remove", *args[1:]])
+        session.refresh_integration_state()
+        return result
 
     if sub == "show":
         if len(args) < 2:
@@ -251,10 +255,14 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
         return True
 
     if sub == "connect":
-        return run_cli_command(console, ["integrations", "setup", *args[1:]])
+        result = run_cli_command(console, ["integrations", "setup", *args[1:]])
+        session.refresh_integration_state()
+        return result
 
     if sub == "disconnect":
-        return run_cli_command(console, ["integrations", "remove", *args[1:]])
+        result = run_cli_command(console, ["integrations", "remove", *args[1:]])
+        session.refresh_integration_state()
+        return result
 
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "

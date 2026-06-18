@@ -106,6 +106,71 @@ def test_validate_github_mcp_config_success_includes_repo_samples(
     assert "org/one" in report
 
 
+def test_is_github_copilot_host_detects_hosted_endpoint() -> None:
+    assert github_mcp_module._is_github_copilot_host("https://api.githubcopilot.com/mcp/")
+    assert github_mcp_module._is_github_copilot_host("https://api.githubcopilot.com:443/mcp")
+    assert not github_mcp_module._is_github_copilot_host("https://mcp.internal.example.com/mcp")
+    assert not github_mcp_module._is_github_copilot_host("")
+
+
+def test_validate_github_mcp_config_credential_less_hosted_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale store entry with empty credentials must short-circuit to
+    not_configured without hitting the network or emitting a 401 failure."""
+
+    def _must_not_connect(_config: Any) -> list[dict[str, Any]]:
+        raise AssertionError("network must not be probed for credential-less config")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
+
+    cfg = github_mcp_module.build_github_mcp_config({})
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is False
+    assert result.failure_category == "not_configured"
+    assert "without an auth token" in result.detail
+
+
+def test_validate_github_mcp_config_custom_url_without_token_still_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Self-hosted MCP servers may not require a token, so a custom URL without
+    a token must NOT be short-circuited — it should still attempt the probe."""
+
+    probed: dict[str, bool] = {"called": False}
+
+    def _fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        probed["called"] = True
+        return []
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _fake_list_tools)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {"url": "https://mcp.internal.example.com/mcp", "mode": "streamable-http"}
+    )
+    github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert probed["called"] is True
+
+
+def test_verify_github_reports_credential_less_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.integrations._verification_adapters import _verify_github
+
+    def _must_not_connect(_config: Any) -> list[dict[str, Any]]:
+        raise AssertionError("network must not be probed for credential-less config")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
+
+    verdict = _verify_github("local store", {})
+
+    assert verdict["service"] == "github"
+    assert verdict["status"] == "missing"
+    assert "without an auth token" in verdict["detail"]
+
+
 def test_validate_github_mcp_config_fails_when_repo_list_returns_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -176,6 +241,7 @@ def test_validate_github_mcp_config_fails_when_no_repo_list_tool(
         {
             "url": "https://api.githubcopilot.com/mcp/",
             "mode": "streamable-http",
+            "auth_token": "ghp_test",
         }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg)
@@ -241,6 +307,7 @@ def test_validate_github_mcp_config_reports_actual_attempts_for_starred_view(
         {
             "url": "https://api.githubcopilot.com/mcp/",
             "mode": "streamable-http",
+            "auth_token": "ghp_test",
         }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg, repo_view="starred")
@@ -251,6 +318,34 @@ def test_validate_github_mcp_config_reports_actual_attempts_for_starred_view(
     assert "list_repositories" not in result.detail
     assert "list_user_repositories" not in result.detail
     assert "search_repositories" not in result.detail
+
+
+def test_auto_probe_prefers_user_search_over_starred() -> None:
+    """`auto` must not surface starred repos — prefer the user's own repos via search."""
+    tools = [
+        {
+            "name": "list_starred_repositories",
+            "input_schema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "search_repositories",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    ]
+
+    plan = github_mcp_module._plan_repo_access_probe(tools, "octocat", view="auto")
+    assert plan is not None
+    name, args = plan
+    assert name == "search_repositories"
+    assert args == {"query": "user:octocat"}
+
+    attempts = github_mcp_module._repo_probe_attempts(tools, "octocat", view="auto")
+    assert "list_starred_repositories" not in attempts
+    assert attempts[-1] == "search_repositories"
 
 
 def test_validate_github_mcp_config_uses_search_repositories_when_no_list_tool(
@@ -310,6 +405,7 @@ def test_validate_github_mcp_config_uses_search_repositories_when_no_list_tool(
         {
             "url": "https://api.githubcopilot.com/mcp/",
             "mode": "streamable-http",
+            "auth_token": "ghp_test",
         }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg)
@@ -359,6 +455,7 @@ def test_validate_github_mcp_config_succeeds_from_get_me_profile_without_list_to
         {
             "url": "https://api.githubcopilot.com/mcp/",
             "mode": "streamable-http",
+            "auth_token": "ghp_test",
         }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg)
@@ -397,7 +494,11 @@ def test_validate_github_mcp_config_fails_when_get_me_tool_is_missing(
     )
 
     cfg = github_mcp_module.build_github_mcp_config(
-        {"url": "https://api.githubcopilot.com/mcp/", "mode": "streamable-http"}
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg)
 
@@ -433,7 +534,11 @@ def test_validate_github_mcp_config_handles_truthy_non_dict_get_me_structured_co
     monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
-        {"url": "https://api.githubcopilot.com/mcp/", "mode": "streamable-http"}
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
     )
     result = github_mcp_module.validate_github_mcp_config(cfg)
 

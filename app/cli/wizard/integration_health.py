@@ -33,6 +33,7 @@ from app.cli.wizard.integration_validators.http_probe_validators import (
 from app.cli.wizard.integration_validators.mcp_validators import (
     validate_github_mcp_integration,
     validate_openclaw_integration,
+    validate_posthog_mcp_integration,
 )
 from app.cli.wizard.integration_validators.shared import IntegrationHealthResult
 
@@ -56,6 +57,7 @@ __all__ = [
     "validate_notion_integration",
     "validate_openclaw_integration",
     "validate_opensearch_integration",
+    "validate_posthog_mcp_integration",
     "validate_opsgenie_integration",
     "validate_pagerduty_integration",
     "validate_sentry_integration",

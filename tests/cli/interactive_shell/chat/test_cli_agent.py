@@ -248,7 +248,7 @@ class TestObservationSummaryBlock:
 
     def test_block_wraps_command_output_with_summarize_instruction(self) -> None:
         block = _build_observation_block("- sentry: missing (Not configured.)")
-        assert "command_output" in block
+        assert "tool_results" in block
         assert "- sentry: missing (Not configured.)" in block
         assert "summarize" in block.lower()
         # The summary turn must not kick off more actions.
@@ -268,7 +268,7 @@ class TestObservationSummaryBlock:
         answer_cli_agent("is sentry installed?", session, console, tool_observation=observation)
 
         assert client.last_prompt is not None
-        assert "command_output" in client.last_prompt
+        assert "tool_results" in client.last_prompt
         assert "sentry: missing" in client.last_prompt
 
 

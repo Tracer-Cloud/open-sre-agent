@@ -4,6 +4,23 @@ These helpers decide whether a turn is a literal slash command, a bare command
 alias (including single-edit typos), or an ``opensre investigate`` quick-start,
 and return the normalized slash command text to dispatch. They never call the
 LLM; the agent uses them to short-circuit straight to slash dispatch.
+
+==============================================================================
+HARD RULE (NON-NEGOTIABLE): THIS LAYER ONLY RECOGNIZES LITERAL CLI COMMANDS.
+==============================================================================
+This fast path exists for ONE purpose: dispatching explicit, literal CLI/slash
+commands and their bare command aliases. That is ALL it may ever do.
+
+DO NOT add ANYTHING that infers user *intent* from natural language. NEVER EVER
+add regex (or keyword/substring/fuzzy/NLU matching) that maps free-form text to
+an action — e.g. detecting "investigate a sample alert", "show my integrations",
+or any phrasing-based behavior. All intent decisions belong to the LLM action
+planner, NOT here. Intent regex in this layer is exactly the bug class that sent
+sample-alert requests to the wrong place; it will not be reintroduced.
+
+If you add anything to this layer other than literal CLI command detection,
+YOU WILL BE FIRED. No exceptions. When in doubt, return ``None`` and let the
+LLM planner decide.
 """
 
 from __future__ import annotations

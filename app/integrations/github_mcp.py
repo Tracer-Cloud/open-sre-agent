@@ -44,11 +44,14 @@ REQUIRED_SOURCE_INVESTIGATION_TOOLS = (
     "search_code",
 )
 
-# Prefer tools that list repos with no args; hosted Copilot MCP often omits list_repositories.
+# "auto" probe order: prefer the user's own / accessible repositories with no args.
+# Hosted Copilot MCP often omits list_repositories and requires args on the others,
+# so auto falls through to a ``search_repositories user:<login>`` query (the user's own
+# repos). Starred repositories are intentionally excluded here — they are irrelevant for
+# SRE investigations and only surfaced when ``repo_view="starred"`` is chosen explicitly.
 _REPO_PROBE_NO_ARG_TOOLS: tuple[str, ...] = (
     "list_repositories",
     "list_user_repositories",
-    "list_starred_repositories",
 )
 
 # Default cap on repos captured from one MCP list/search call (display + verify).
@@ -60,6 +63,25 @@ _GITHUB_MCP_DISPLAY_LEVELS = frozenset({"summary", "standard", "full"})
 GitHubMcpDisplayDetailLevel = Literal["summary", "standard", "full"]
 GitHubMcpRepoView = Literal["auto", "user", "accessible", "starred", "search_user"]
 GitHubMcpRepoVisibilityFilter = Literal["any", "public", "private"]
+
+
+def _is_github_copilot_host(url: str) -> bool:
+    """True when ``url`` points at GitHub's hosted Copilot MCP host.
+
+    The hosted endpoint (``api.githubcopilot.com``) always requires
+    authentication, so a config that targets it without a token cannot
+    succeed — we treat that as "not configured" rather than probing it and
+    surfacing a confusing ``401``.
+    """
+
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    host = urlparse(raw).netloc.lower()
+    if "@" in host:
+        host = host.split("@", 1)[-1]
+    host = host.split(":", 1)[0]
+    return host == "api.githubcopilot.com"
 
 
 def _is_github_copilot_generic_mcp_root(url: str) -> bool:
@@ -213,6 +235,7 @@ _FAILURE_TYPE_LABELS: dict[str, str] = {
     "authentication": "authentication (token missing, invalid, or rejected by GitHub)",
     "insufficient_tools": "toolset (required MCP tools are not exposed; widen toolsets or server config)",
     "repository_access": "repository access (repo listing failed or token lacks repo API access)",
+    "not_configured": "not configured (no auth token for the hosted GitHub Copilot MCP endpoint)",
 }
 
 
@@ -917,6 +940,23 @@ def validate_github_mcp_config(
 ) -> GitHubMCPValidationResult:
     """Validate connectivity, authentication, and repo-access readiness."""
 
+    # A record that targets the hosted Copilot endpoint with no token (e.g. a
+    # stale store entry from an abandoned setup) cannot authenticate. Report it
+    # as "not configured" instead of probing the public endpoint and surfacing
+    # a confusing 401 (and without emitting a Sentry validation-failed event).
+    if config.mode != "stdio" and not config.auth_token and _is_github_copilot_host(config.url):
+        return GitHubMCPValidationResult(
+            ok=False,
+            detail=(
+                "GitHub MCP is configured without an auth token, so the hosted "
+                "GitHub Copilot MCP endpoint cannot be reached (it requires "
+                "authentication). Run `opensre integrations setup` to add a token, "
+                "set GITHUB_MCP_AUTH_TOKEN, or remove it with "
+                "`opensre integrations remove github`."
+            ),
+            failure_category="not_configured",
+        )
+
     try:
         tools = list_github_mcp_tools(config)
         tool_names = tuple(sorted(tool["name"] for tool in tools))
@@ -1080,3 +1120,21 @@ def build_github_code_search_query(owner: str, repo: str, query: str) -> str:
     if repo_qualifier in query:
         return query
     return f"{query} {repo_qualifier}".strip()
+
+
+def build_github_issue_search_query(owner: str, repo: str, query: str, state: str = "open") -> str:
+    """Build a repo-scoped GitHub issue search query."""
+
+    query = query.strip()
+    parts: list[str] = []
+    repo_qualifier = f"repo:{owner}/{repo}"
+    if repo_qualifier not in query:
+        parts.append(repo_qualifier)
+    if "is:issue" not in query:
+        parts.append("is:issue")
+    normalized_state = state.strip().lower()
+    if normalized_state in {"open", "closed"} and f"is:{normalized_state}" not in query:
+        parts.append(f"is:{normalized_state}")
+    if query:
+        parts.append(query)
+    return " ".join(parts).strip()

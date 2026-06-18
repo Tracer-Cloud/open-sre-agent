@@ -24,10 +24,6 @@ from rich.console import Console
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper import (
-    map_cli_actions,
-    map_terminal_tasks,
-)
 from app.cli.interactive_shell.runtime import ReplSession
 
 from .terminal_actions.execution import (
@@ -97,23 +93,9 @@ def execute_cli_actions_with_metrics(
     )
 
 
-def plan_cli_actions(message: str) -> list[str]:
-    """Backward-compatible alias for ``map_cli_actions``."""
-    return map_cli_actions(message)
-
-
-def plan_terminal_tasks(message: str) -> list[str]:
-    """Backward-compatible alias for ``map_terminal_tasks``."""
-    return map_terminal_tasks(message)
-
-
 __all__ = [
     "ActionExecutionDeps",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
     "execute_cli_actions_with_metrics",
-    "map_cli_actions",
-    "map_terminal_tasks",
-    "plan_cli_actions",
-    "plan_terminal_tasks",
 ]

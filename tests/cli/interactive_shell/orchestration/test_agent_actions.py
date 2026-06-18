@@ -1,4 +1,11 @@
-"""Tests for deterministic actions in the interactive terminal assistant."""
+"""Tests for terminal action execution in the interactive terminal assistant.
+
+The regex-based natural-language intent inference and deterministic action
+mapping have been removed; the LLM action planner is now the sole tool selector
+for non-command turns. These tests validate action *execution* mechanics, so the
+autouse fixture injects a deterministic fake planner that maps the exact
+natural-language phrases used here to explicit ``PlannedAction`` plans.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +22,6 @@ from rich.console import Console
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as action_executor
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as agent_actions
-import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.slash_commands.deterministic_action_mapper as action_planner_module
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.implementation_tool as implementation_tool
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.llm_provider_tool as llm_provider_tool
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools.slash_tool as slash_tool
@@ -23,7 +29,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration i
     intent_parser as intent_parser_module,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    ActionKind,
     PlannedAction,
+    default_target_surface,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -35,88 +43,154 @@ def _capture() -> tuple[Console, io.StringIO]:
     return Console(file=buf, force_terminal=False, highlight=False), buf
 
 
+def _action(
+    kind: ActionKind,
+    content: str,
+    position: int = 0,
+    *,
+    args: dict[str, object] | None = None,
+) -> PlannedAction:
+    """Build a ``PlannedAction`` as the LLM planner would emit it."""
+    return PlannedAction(
+        kind=kind,
+        content=content,
+        position=position,
+        source="llm",
+        target_surface=default_target_surface(kind),
+        args=dict(args) if args else {},
+    )
+
+
 _NITRO_PROMPT = (
     "I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to send\n"
     'it an investigation. Can you please deploy the instance and send it "hello world"?'
 )
 
-# Same intent as _NITRO_PROMPT but using "connect" instead of "deploy".
-# Regression: "connect" was not a trigger verb for the /remote pattern, so the
-# planner only saw the quoted investigation and silently dropped the remote step.
-_NITRO_CONNECT_PROMPT = (
-    "I want to connect to OpenSRE that I have running on a remote EC2 Nitro instance, "
-    "and then I want to send it an investigation. Can you please connect the instance "
-    'and send it "hello world"'
-)
+
+# Deterministic phrase -> (planned actions, has_unhandled_clause) mapping used by the
+# fake LLM planner. Reconstructed from each execution test's own assertions and the
+# documented phrase mappings of the (now-removed) deterministic mapper.
+#
+# Semantics enforced by terminal_actions.planning.plan_actions:
+#   - ([], False)            -> fall through to chat (handled is False, no history).
+#   - ([...], False)         -> execute the listed actions.
+#   - ([...], True)          -> fail-closed denial ("couldn't safely decide actions").
+_FAKE_PLANS: dict[str, tuple[list[PlannedAction], bool]] = {
+    "check the health of my opensre and then show me all connected services": (
+        [_action("slash", "/health"), _action("slash", "/integrations list")],
+        False,
+    ),
+    "switch from the current ollama model to setting the model to anthropic": (
+        [_action("llm_provider", "anthropic")],
+        False,
+    ),
+    "please implement /history search": (
+        [_action("implementation", "/history search")],
+        False,
+    ),
+    (
+        "tell me about what the discord integration can do and then tell me what "
+        "datadog services I have connections to"
+    ): (
+        [_action("slash", "/integrations show datadog")],
+        True,
+    ),
+    (
+        "tell me how you are doing AND show me all the services we are connected to "
+        "AND then deploy OpenSRE to EC2"
+    ): (
+        [_action("slash", "/integrations list"), _action("slash", "/remote")],
+        True,
+    ),
+    _NITRO_PROMPT: (
+        [_action("slash", "/remote"), _action("investigation", "hello world")],
+        False,
+    ),
+    (
+        "tell me which services are connected AND then tell me the current CLI version "
+        "AND then deploy to EC2 within 90 seconds"
+    ): (
+        [
+            _action("slash", "/integrations list"),
+            _action("slash", "/version"),
+            _action("slash", "/remote"),
+        ],
+        False,
+    ),
+    "okay launch a simple alert": (
+        [_action("sample_alert", "generic")],
+        False,
+    ),
+    "show me which services are connected and after that run a synthetic test RDS database": (
+        [
+            _action("slash", "/integrations list"),
+            _action("synthetic_test", "rds_postgres:001-replication-lag"),
+        ],
+        False,
+    ),
+    "run synthetic test 005-failover": (
+        [_action("synthetic_test", "rds_postgres:005-failover")],
+        False,
+    ),
+    "kill the syntehtic_test because it is runnign way too long": (
+        [_action("task_cancel", "synthetic_test")],
+        False,
+    ),
+    "show me connected services and sing a song": (
+        [_action("slash", "/integrations list")],
+        True,
+    ),
+    # Shell phrases — the planner emits the exact command body for the shell tool.
+    "run `pwd`": ([_action("shell", "pwd")], False),
+    r"run `cd C:\Users\Alice`": ([_action("shell", r"cd C:\Users\Alice")], False),
+    r"run `CD C:\Users\Alice`": ([_action("shell", r"CD C:\Users\Alice")], False),
+    r"run `cd C:\`": ([_action("shell", "cd C:\\")], False),
+    r'run `cd "C:\Users\Alice"`': ([_action("shell", r'cd "C:\Users\Alice"')], False),
+    "execute false": ([_action("shell", "false")], False),
+    "run `true`": ([_action("shell", "true")], False),
+    "run `!echo hello`": ([_action("shell", "!echo hello")], False),
+    "run `!cd /tmp`": ([_action("shell", "!cd /tmp")], False),
+    "run `!pwd`": ([_action("shell", "!pwd")], False),
+    "run `sudo rm -rf /tmp/demo`": ([_action("shell", "sudo rm -rf /tmp/demo")], False),
+    "run `ls | wc -l`": ([_action("shell", "ls | wc -l")], False),
+    'run cat "/tmp/file with spaces.txt"': (
+        [_action("shell", 'cat "/tmp/file with spaces.txt"')],
+        False,
+    ),
+    'run `cat "/tmp/file with spaces.txt"`': (
+        [_action("shell", 'cat "/tmp/file with spaces.txt"')],
+        False,
+    ),
+    'run `cat "unterminated`': (
+        [_action("shell", 'cat "unterminated')],
+        False,
+    ),
+}
 
 
 @pytest.fixture(autouse=True)
 def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep legacy deterministic behavior for broad action-execution tests.
+    """Install a deterministic fake LLM planner for execution-mechanics tests.
 
-    The runtime now uses LLM-first planning. Most tests in this file validate
-    action execution mechanics, not LLM planner quality, so they use a stable
-    deterministic bridge by default. LLM-specific deny-path tests override this.
+    The regex/deterministic mapper has been removed; the LLM action planner is
+    now the sole tool selector for non-command turns. Most tests in this file
+    validate action *execution* mechanics, not planner quality, so they use a
+    stable fake planner that looks up explicit ``PlannedAction`` plans by the
+    exact message string. Unknown phrases fall through with ``([], False)``.
+
+    Per-test ``monkeypatch.setattr(agent_actions, "plan_actions_with_llm", ...)``
+    overrides run after this autouse fixture, so those tests still win.
     """
 
-    def _deterministic_planner(
+    def _fake_planner(
         message: str,
         *,
         session: ReplSession | None = None,  # noqa: ARG001
     ) -> tuple[list[PlannedAction], bool]:
-        return action_planner_module.map_actions_with_unhandled(message)
+        actions, has_unhandled = _FAKE_PLANS.get(message, ([], False))
+        return list(actions), has_unhandled
 
-    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _deterministic_planner)
-
-
-def test_health_then_connected_services_plans_two_actions_in_order() -> None:
-    message = "check the health of my opensre and then show me all connected services"
-
-    assert agent_actions.plan_cli_actions(message) == ["/health", "/integrations list"]
-
-
-def test_local_llama_connect_is_not_hardcoded_as_cli_action() -> None:
-    assert agent_actions.plan_cli_actions("please connect to local llama") == []
-
-
-def test_provider_switch_plans_provider_action() -> None:
-    message = "switch from the current ollama model to setting the model to anthropic"
-
-    assert agent_actions.plan_terminal_tasks(message) == ["llm_provider"]
-    assert agent_actions.plan_cli_actions(message) == []
-
-
-def test_implementation_request_plans_implementation_action() -> None:
-    assert agent_actions.plan_terminal_tasks("please implement /history search") == [
-        "implementation"
-    ]
-    assert agent_actions.plan_cli_actions("please implement /history search") == []
-
-
-def test_generic_synthetic_test_request_plans_synthetic_action() -> None:
-    assert agent_actions.plan_terminal_tasks("Can you run a synthetic test?") == ["synthetic_test"]
-
-
-def test_typoed_synthetic_test_request_plans_synthetic_action() -> None:
-    message = "can you rnu a syntehtic tset 002-connection-exhaustion"
-    assert agent_actions.plan_terminal_tasks(message) == ["synthetic_test"]
-    assert agent_actions.plan_cli_actions(message) == []
-
-
-def test_kill_synthetic_test_request_plans_cancel_action() -> None:
-    message = "kill the syntehtic_test because it is runnign way too long"
-
-    assert agent_actions.plan_terminal_tasks(message) == ["task_cancel"]
-    assert agent_actions.plan_cli_actions(message) == []
-
-
-def test_integration_prompt_plans_datadog_lookup_only() -> None:
-    message = (
-        "tell me about what the discord integration can do and then tell me what "
-        "datadog services I have connections to"
-    )
-
-    assert agent_actions.plan_cli_actions(message) == ["/integrations show datadog"]
+    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _fake_planner)
 
 
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
@@ -424,95 +498,6 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
     ]
     output = buf.getvalue()
     assert "couldn't safely decide actions" in output.lower()
-
-
-def test_compound_prompt_plans_chat_list_and_cli_command() -> None:
-    message = (
-        "tell me how you are doing AND show me all the services we are connected to "
-        "AND then run opensre integrations list"
-    )
-
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "cli_command"]
-    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "integrations list"]
-
-
-def test_cli_command_requires_explicit_opensre_context() -> None:
-    message = "the tool uses -- deploy as an argument separator"
-
-    assert agent_actions.plan_terminal_tasks(message) == []
-    assert agent_actions.plan_cli_actions(message) == []
-
-
-def test_cli_command_preserves_flags_after_explicit_opensre_prefix() -> None:
-    assert agent_actions.plan_cli_actions("please run opensre integrations verify --dry-run") == [
-        "integrations verify --dry-run"
-    ]
-
-
-def test_compound_prompt_plans_chat_list_and_slash_deploy_paraphrase() -> None:
-    message = (
-        "tell me how you are doing AND show me all the services we are connected to "
-        "AND then deploy OpenSRE to EC2"
-    )
-
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "/remote"]
-
-
-def test_nitro_prompt_plans_remote_then_quoted_investigation() -> None:
-    assert agent_actions.plan_terminal_tasks(_NITRO_PROMPT) == ["slash", "investigation"]
-    assert agent_actions.plan_cli_actions(_NITRO_PROMPT) == ["/remote"]
-
-
-def test_nitro_connect_prompt_plans_remote_then_quoted_investigation() -> None:
-    """'connect' variant of the Nitro prompt must plan /remote before the investigation.
-
-    Regression: "connect" was not a trigger verb for the /remote pattern, so the
-    planner only planned the quoted investigation and silently dropped the remote step.
-    """
-    assert agent_actions.plan_terminal_tasks(_NITRO_CONNECT_PROMPT) == ["slash", "investigation"]
-    assert agent_actions.plan_cli_actions(_NITRO_CONNECT_PROMPT) == ["/remote"]
-
-
-def test_services_version_deploy_prompt_plans_all_actions() -> None:
-    message = (
-        "tell me which services are connected AND then tell me the current CLI version "
-        "AND then deploy to EC2 within 90 seconds"
-    )
-
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "slash", "slash"]
-    assert agent_actions.plan_cli_actions(message) == ["/integrations list", "/version", "/remote"]
-
-
-def test_explicit_shell_command_plans_shell_action() -> None:
-    assert agent_actions.plan_terminal_tasks("run `whoami`") == ["shell"]
-    assert agent_actions.plan_terminal_tasks("run the command `whoami`") == ["shell"]
-    assert agent_actions.plan_cli_actions("run `whoami`") == []
-
-
-def test_direct_shell_command_plans_shell_action() -> None:
-    assert agent_actions.plan_terminal_tasks("whoami") == ["shell"]
-
-
-def test_sample_alert_launch_plans_sample_alert_action() -> None:
-    assert agent_actions.plan_terminal_tasks("okay launch a simple alert") == ["sample_alert"]
-    assert agent_actions.plan_cli_actions("okay launch a simple alert") == []
-
-
-def test_compound_services_and_synthetic_rds_plans_all_actions() -> None:
-    message = (
-        "show me which services are connected and after that run a synthetic test RDS database"
-    )
-
-    assert agent_actions.plan_terminal_tasks(message) == ["slash", "synthetic_test"]
-    assert agent_actions.plan_cli_actions(message) == ["/integrations list"]
-
-
-def test_synthetic_scenario_id_plans_synthetic_action_kind() -> None:
-    assert agent_actions.plan_terminal_tasks("run synthetic test 005-failover") == [
-        "synthetic_test"
-    ]
-    assert agent_actions.plan_cli_actions("run synthetic test 005-failover") == []
 
 
 def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> None:
@@ -1178,18 +1163,6 @@ def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
     assert "shell operators" in output
 
 
-def test_compound_prompt_plans_chat_list_and_blocked_deploy() -> None:
-    message = "show versions AND show services AND opensre agent"
-    planned = agent_actions.plan_cli_actions(message)
-    assert "agent" in planned
-    session = ReplSession()
-    console, buf = _capture()
-    result = agent_actions.execute_cli_actions("opensre agent", session, console)
-    assert result is True
-    output = buf.getvalue()
-    assert "blocked" in output.lower()
-
-
 def test_execute_cli_actions_handles_path_with_spaces_run_phrase() -> None:
     session = ReplSession()
     console, buf = _capture()
@@ -1296,7 +1269,7 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
         agent_actions,
         "plan_actions_with_llm",
         lambda _message, *, session=None: (  # noqa: ARG005
-            [action_planner_module.slash_action("/health", 0)],
+            [_action("slash", "/health")],
             True,
         ),
     )

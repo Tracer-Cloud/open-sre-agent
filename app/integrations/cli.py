@@ -16,13 +16,18 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_RESET
+from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_DIM, ANSI_RESET
 
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
+from app.integrations.posthog_mcp import (
+    DEFAULT_POSTHOG_MCP_URL,
+    build_posthog_mcp_config,
+    validate_posthog_mcp_config,
+)
 from app.integrations.registry import SUPPORTED_SETUP_SERVICES
 from app.integrations.store import (
     STORE_PATH,
@@ -40,6 +45,7 @@ from app.integrations.verify import (
 
 _B = ANSI_BOLD
 _R = ANSI_RESET
+_DIM = ANSI_DIM
 
 
 def _json_echo(data: Any) -> None:
@@ -349,20 +355,92 @@ def _setup_incident_io() -> None:
     )
 
 
-def _setup_github() -> None:
+def _github_browser_authorize() -> str | None:
+    """Run GitHub device-flow browser authorization.
+
+    Returns the access token, or ``None`` when the flow is unavailable so the
+    caller can fall back to manual token entry.
+    """
+    from app.integrations.github_mcp_oauth import (
+        GitHubDeviceCode,
+        GitHubDeviceFlowError,
+        authorize_github_via_device_flow,
+    )
+
+    def _show(code: GitHubDeviceCode) -> None:
+        print()
+        print(f"  1. Your browser will open {code.verification_uri}")
+        print("     (if it doesn't open automatically, visit that URL yourself).")
+        print(f"  2. Enter this one-time code when GitHub asks: {_B}{code.user_code}{_R}")
+        print("  3. Approve the request for OpenSRE.")
+        print()
+        print(f"  {_DIM}Waiting for you to approve in the browser… (Ctrl-C to cancel){_R}")
+
+    print()
+    print("  Sign in to GitHub in your browser (device authorization):")
+    print(f"  {_DIM}Requesting a one-time code from GitHub…{_R}")
+    try:
+        token = authorize_github_via_device_flow(on_prompt=_show)
+    except GitHubDeviceFlowError as err:
+        print(f"  Browser authorization unavailable: {err}", file=sys.stderr)
+        return None
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.")
+        sys.exit(1)
+    except Exception as err:  # network/transport issues
+        print(f"  Browser authorization failed: {err}", file=sys.stderr)
+        return None
+    print(f"  {_B}Authorized.{_R} Saved a GitHub token from the browser sign-in.")
+    return token.access_token
+
+
+def _setup_github_auth_token(mode: str) -> str:
+    """Resolve a GitHub MCP auth token, offering browser sign-in for remote modes."""
+    if mode == "stdio":
+        return _p(
+            "GitHub PAT / auth token (optional if the server authenticates upstream)",
+            secret=True,
+        )
+
+    auth_method = questionary.select(
+        "  How do you want to connect OpenSRE to GitHub?",
+        choices=[
+            questionary.Choice(
+                "Sign in with GitHub in your browser (opens a page, enter a one-time code)",
+                value="browser",
+            ),
+            questionary.Choice("Paste a personal access token (PAT)", value="token"),
+            questionary.Choice("Skip — the MCP server authenticates upstream", value="none"),
+        ],
+        default="browser",
+    ).ask()
+    if auth_method is None:
+        print("\nAborted.")
+        sys.exit(1)
+    if auth_method == "none":
+        return ""
+    if auth_method == "browser":
+        token = _github_browser_authorize()
+        if token:
+            return token
+        print("  Falling back to manual token entry.")
+    return _p("GitHub PAT / auth token", secret=True)
+
+
+def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
+    """Prompt the advanced GitHub MCP knobs and return (repo_view, repo_visibility).
+
+    Mutates ``credentials`` in place with mode/url/command/args/auth_token/toolsets.
+    """
     from app.integrations.github_mcp import (
-        GitHubMcpRepoView,
-        GitHubMcpRepoVisibilityFilter,
-        build_github_mcp_config,
-        format_github_mcp_validation_cli_report,
-        print_github_mcp_validation_report,
-        validate_github_mcp_config,
+        DEFAULT_GITHUB_MCP_TOOLSETS,
+        DEFAULT_GITHUB_MCP_URL,
     )
 
     print("  1) SSE  2) Streamable HTTP  3) stdio")
     choice = _p("Choice", default="2")
     mode = {"1": "sse", "2": "streamable-http", "3": "stdio"}.get(choice, "streamable-http")
-    credentials: dict[str, Any] = {"mode": mode}
+    credentials["mode"] = mode
     if mode == "stdio":
         command = _p("Command", default="github-mcp-server")
         args = _p("Args", default="stdio --toolsets repos,issues,pull_requests,actions")
@@ -371,15 +449,12 @@ def _setup_github() -> None:
         credentials["command"] = command
         credentials["args"] = [part for part in args.split() if part]
     else:
-        url = _p("MCP URL", default="https://api.githubcopilot.com/mcp/")
+        url = _p("MCP URL", default=DEFAULT_GITHUB_MCP_URL)
         if not url:
             _die("url is required for remote MCP modes.")
         credentials["url"] = url
-    credentials["auth_token"] = _p(
-        "GitHub PAT / auth token (optional if the server authenticates upstream)",
-        secret=True,
-    )
-    toolsets = _p("Toolsets", default="repos,issues,pull_requests,actions,search")
+    credentials["auth_token"] = _setup_github_auth_token(mode)
+    toolsets = _p("Toolsets", default=",".join(DEFAULT_GITHUB_MCP_TOOLSETS))
     credentials["toolsets"] = [part.strip() for part in toolsets.split(",") if part.strip()]
 
     repo_view = questionary.select(
@@ -408,6 +483,49 @@ def _setup_github() -> None:
     if repo_visibility is None:
         print("\nAborted.")
         sys.exit(1)
+    return repo_view, repo_visibility
+
+
+def _setup_github() -> str | None:
+    """Configure + validate + save the GitHub MCP integration.
+
+    Returns the authenticated GitHub login on success (``None`` if the validated
+    result carried no login), so callers like the first-launch gate can propagate
+    the username. Exits the process on validation failure.
+    """
+    from app.integrations.github_mcp import (
+        DEFAULT_GITHUB_MCP_MODE,
+        DEFAULT_GITHUB_MCP_TOOLSETS,
+        DEFAULT_GITHUB_MCP_URL,
+        GitHubMcpDisplayDetailLevel,
+        GitHubMcpRepoView,
+        GitHubMcpRepoVisibilityFilter,
+        build_github_mcp_config,
+        format_github_mcp_validation_cli_report,
+        print_github_mcp_validation_report,
+        validate_github_mcp_config,
+    )
+
+    print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
+    advanced = questionary.confirm(
+        "  Customize advanced settings (transport, server URL, toolsets, repo scope)?",
+        default=False,
+    ).ask()
+    if advanced is None:
+        print("\nAborted.")
+        sys.exit(1)
+
+    credentials: dict[str, Any] = {}
+    repo_view: str = "auto"
+    repo_visibility: str = "any"
+
+    if advanced:
+        repo_view, repo_visibility = _github_advanced_setup(credentials)
+    else:
+        credentials["mode"] = DEFAULT_GITHUB_MCP_MODE
+        credentials["url"] = DEFAULT_GITHUB_MCP_URL
+        credentials["auth_token"] = _setup_github_auth_token(DEFAULT_GITHUB_MCP_MODE)
+        credentials["toolsets"] = list(DEFAULT_GITHUB_MCP_TOOLSETS)
 
     print("\n  Validating GitHub MCP integration...")
     mcp_config = build_github_mcp_config(credentials)
@@ -417,7 +535,13 @@ def _setup_github() -> None:
         repo_visibility=cast(GitHubMcpRepoVisibilityFilter, repo_visibility),
     )
     if result.ok:
-        level = _prompt_github_repo_report_level()
+        # The simple path stays concise: identity + tool availability, no repo dump.
+        # Only the advanced path offers the verbose repo listing.
+        level = (
+            _prompt_github_repo_report_level()
+            if advanced
+            else cast(GitHubMcpDisplayDetailLevel, "summary")
+        )
         print()
         print_github_mcp_validation_report(result, detail_level=level)
     else:
@@ -426,6 +550,7 @@ def _setup_github() -> None:
         sys.exit(1)
 
     upsert_integration("github", {"credentials": credentials})
+    return result.authenticated_user
 
 
 def _setup_gitlab() -> None:
@@ -692,6 +817,45 @@ def _setup_openclaw() -> None:
     print("    - opensre integrations verify openclaw")
     print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
     print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
+
+
+def _setup_posthog_mcp() -> None:
+    print("  1) Streamable HTTP (recommended)  2) SSE  3) stdio (local server)")
+    choice = _p("Choice", default="1")
+    mode = {"1": "streamable-http", "2": "sse", "3": "stdio"}.get(choice, "streamable-http")
+
+    credentials: dict[str, Any] = {"mode": mode, "read_only": True}
+    if mode == "stdio":
+        command = _p("PostHog MCP command", default="npx")
+        args = _p("PostHog MCP args", default="-y @posthog/mcp-server@latest")
+        if not command:
+            _die("command is required for stdio mode.")
+        credentials["command"] = command
+        credentials["args"] = [part for part in args.split() if part]
+        credentials["url"] = ""
+    else:
+        url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
+        if not url:
+            _die("url is required for remote MCP modes.")
+        credentials["url"] = url
+        credentials["command"] = ""
+        credentials["args"] = []
+
+    credentials["auth_token"] = _p("PostHog personal API key (MCP Server preset)", secret=True)
+    if mode != "stdio" and not credentials["auth_token"]:
+        _die("a personal API key is required for the hosted PostHog MCP server.")
+    credentials["project_id"] = _p("PostHog project ID (optional)", default="")
+
+    print("\n  Validating PostHog MCP...")
+    config = build_posthog_mcp_config(credentials)
+    result = validate_posthog_mcp_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("posthog_mcp", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify posthog_mcp")
 
 
 def _setup_postgresql() -> None:
@@ -966,6 +1130,7 @@ _HANDLERS: dict[str, Any] = {
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
     "openclaw": _setup_openclaw,
+    "posthog_mcp": _setup_posthog_mcp,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
     "redis": _setup_redis,

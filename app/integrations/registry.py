@@ -37,6 +37,7 @@ from app.integrations._verification_adapters import (
     _verify_opsgenie,
     _verify_pagerduty,
     _verify_postgresql,
+    _verify_posthog_mcp,
     _verify_rabbitmq,
     _verify_redis,
     _verify_sentry,
@@ -268,6 +269,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=12,
         verify_order=39,
+    ),
+    IntegrationSpec(
+        service="posthog_mcp",
+        aliases=("posthog mcp", "posthog-mcp"),
+        verifier=_verify_posthog_mcp,
+        direct_effective=True,
+        setup_order=33,
+        verify_order=44,
     ),
     IntegrationSpec(
         service="mysql",

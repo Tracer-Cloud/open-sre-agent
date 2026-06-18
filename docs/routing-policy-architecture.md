@@ -1,51 +1,57 @@
 # Routing Policy Architecture (ADR)
 
 ## Status
-Accepted — May 21, 2026.
+Superseded — Jun 18, 2026. The declarative-rule-pack deterministic mapper and
+the regex-based planner postprocessing overrides described in the original
+decision have been removed. See "Decision (current): LLM is the sole tool
+selector" below. The original decision is retained for historical context.
 
 ## Context
-The interactive-shell routing policy had grown through layered heuristics in single modules. Rule precedence was implicit in code order, postprocessing mixed normalization with fail-closed policy checks, and backward-compat tuple handling leaked into orchestration paths.
+The interactive-shell routing policy had grown through layered heuristics in
+single modules: a regex/keyword deterministic mapper inferred tools from
+free-form text, and planner postprocessing rewrote the model's chosen actions
+with more regex. These heuristics competed with the LLM and caused
+misclassifications (e.g. "investigate a sample test alert?" being treated as an
+informational question instead of running the sample alert), and they were a
+recurring source of precedence drift.
 
-## Decision
-1. Deterministic mapping is split into declarative rule packs with one explicit precedence table.
-2. Rule matching windows are named typed strategies instead of inline numeric slices.
-3. Planner postprocessing runs as pure transforms over a typed `PlannerState`.
-4. Fail-closed policy transforms and normalization transforms are registered separately and executed in one ordered list.
-5. Legacy planner-result tuple compatibility is collapsed behind a single adapter (`planner_result_adapter.py`).
-6. Routing contracts include policy-trace artifacts to detect silent precedence drift.
+## Decision (current): LLM is the sole tool selector
+1. There is no regex/keyword intent inference in routing. Non-command turns are
+   planned entirely by the LLM action planner via native tool-calling.
+2. Tool selection is driven by the planner system prompt
+   (`.../llm_action_planner/constants.py`) and the per-tool descriptions in the
+   tool catalog (`.../orchestration/tools/*`). Keep both precise — they are the
+   only selection signal.
+3. The planner does not post-hoc rewrite the model's actions. Parsed tool calls
+   are validated for argument shape and tool availability
+   (`.../llm_action_planner/normalization.py`, `parsing.py`) and otherwise used
+   as-is. `finalize_planner_result_with_trace` is a thin pass-through.
+4. When the planner LLM is unavailable or the prompt overflows the context
+   window, the turn fails closed to an `assistant_handoff` (conversational
+   reply) rather than guessing an action.
+5. The only deterministic, non-LLM path that remains is *literal* command
+   dispatch — `/slash` commands, bare command aliases (typo-tolerant), and
+   `opensre investigate` quick-starts — in
+   `command_dispatch/detection.py`. That layer must never infer intent from
+   natural language (see the hard rule in its module docstring).
 
-## Precedence Model
-Deterministic mapper precedence is declared in `RULE_PRECEDENCE` in:
+## What this means for changes
+- To change how a phrasing maps to a tool, edit the planner system prompt and/or
+  the relevant tool description — never add a regex.
+- To add a new tool, add it to the tool catalog with a clear, self-describing
+  `description` and `input_schema`; the planner selects it from that text.
+- Live routing scenarios under
+  `app/cli/interactive_shell/routing/tests/scenarios/` are the regression
+  surface for planner behavior. Deterministic scenarios (`intent_class:
+  deterministic`) assert literal command dispatch only.
 
-`app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/mapper_runner.py`
-
-Current order:
-1. `synthetic_suite`
-2. `registry_commands`
-3. `integration_details`
-4. `fallback_provider_switch`
-5. `fallback_sample_alert`
-6. `fallback_investigation`
-7. `fallback_implementation`
-8. `fallback_task_cancel`
-9. `fallback_shell`
-
-## Extension Guide
-When adding a new routing rule or transform:
-1. Add rule/transform implementation in the appropriate module (`rule_sets/*` or `postprocessing.py`).
-2. Add one explicit entry to the precedence/transform list.
-3. Add/adjust contract fixtures in:
-   - `app/cli/interactive_shell/routing/tests/contracts/policy_contracts.yml`
-4. Add invariants or behavior tests for ordering, dedupe, and fail-closed behavior.
-5. Ensure complexity guardrails continue to pass.
-
-## New Rule Checklist
-- [ ] Rule has a clear typed contract (input/output and side effects).
-- [ ] Rule is registered in the explicit precedence table.
-- [ ] Policy trace fixture updated with expected rule hit(s).
-- [ ] Golden mapping/postprocessing contracts updated.
-- [ ] Invariant tests cover order and fail-closed behavior.
-- [ ] Complexity guardrail test still passes.
+## Original decision (historical, superseded)
+1. Deterministic mapping was split into declarative rule packs with one explicit precedence table.
+2. Rule matching windows were named typed strategies instead of inline numeric slices.
+3. Planner postprocessing ran as pure transforms over a typed `PlannerState`.
+4. Fail-closed policy transforms and normalization transforms were registered separately and executed in one ordered list.
+5. Legacy planner-result tuple compatibility was collapsed behind a single adapter.
+6. Routing contracts included policy-trace artifacts to detect silent precedence drift.
 
 ## Integration awareness and LLM-driven read-only discovery
 
@@ -70,10 +76,9 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    decides. Safety is provided by the existing execution-tier policy in
    `execution_policy.py` (`resolve_slash_execution_tier`): `/integrations`
    (list/show) is `SAFE` and auto-runs, while `/integrations verify` is
-   `ELEVATED` and prompts for confirmation. No new fail-closed rule was added,
-   and the dead `_fail_closed_unconfigured_integration_detail` policy was left
-   unchanged (it now activates naturally once `configured_integrations_known`
-   is True).
+   `ELEVATED` and prompts for confirmation. No fail-closed regex rule is
+   involved; the planner decides whether to emit a discovery action and the
+   execution tier governs safety.
 
 ### Observe→answer summary loop
 

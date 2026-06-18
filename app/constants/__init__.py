@@ -28,6 +28,7 @@ OPENSRE_HOME_DIR: Path = Path.home() / ".opensre"
 LEGACY_TRACER_HOME_DIR: Path = Path.home() / ".tracer"
 INTEGRATIONS_STORE_PATH: Path = OPENSRE_HOME_DIR / "integrations.json"
 LEGACY_INTEGRATIONS_STORE_PATH: Path = LEGACY_TRACER_HOME_DIR / "integrations.json"
+GITHUB_FIRST_LAUNCH_MARKER: Path = OPENSRE_HOME_DIR / "github_login_done"
 OPENSRE_TMP_DIR: Path = Path(tempfile.gettempdir()) / "opensre"
 
 
@@ -47,6 +48,7 @@ __all__ = [
     "DEFAULT_POSTHOG_BOUNCE_WINDOW",
     "DEFAULT_POSTHOG_TIMEOUT_SECONDS",
     "DEFAULT_POSTHOG_URL",
+    "GITHUB_FIRST_LAUNCH_MARKER",
     "INTEGRATIONS_STORE_PATH",
     "LEGACY_INTEGRATIONS_STORE_PATH",
     "LEGACY_TRACER_HOME_DIR",

@@ -12,7 +12,8 @@ from app.analytics.events import Event
 from app.analytics.provider import JsonValue, get_analytics
 from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
-from app.cli.interactive_shell.prompt_logging import PromptRecorder
+from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
+from app.cli.interactive_shell.prompt_logging import LlmRunInfo, PromptRecorder
 from app.cli.interactive_shell.routing.handle_message_with_agent.pipeline import (
     handle_message_with_agent,
 )
@@ -22,6 +23,49 @@ from app.cli.interactive_shell.runtime.session import ReplSession
 answer_cli_agent = _cli_agent.answer_cli_agent
 execute_cli_actions_with_metrics = _agent_actions.execute_cli_actions_with_metrics
 dispatch_slash = _commands.dispatch_slash
+
+
+def _answer_cli_agent_with_tools(
+    text: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    tool_observation: str | None = None,
+) -> LlmRunInfo | None:
+    """Answer a turn, first gathering live evidence from registered tools.
+
+    On the main fallback path (no existing ``tool_observation``), this runs a
+    bounded tool-calling loop over the same tools the investigation uses. If it
+    collects any evidence, that evidence is handed to ``answer_cli_agent`` as an
+    off-screen observation so the assistant answers from real integration data.
+    The summarize path (which already carries a ``tool_observation``) is passed
+    through unchanged.
+
+    ``answer_cli_agent`` is read from the module namespace so existing test seams
+    that patch ``runtime.execution.answer_cli_agent`` keep working.
+    """
+    if tool_observation is None:
+        gathered = gather_tool_evidence(text, session, console, is_tty=is_tty)
+        if gathered:
+            return answer_cli_agent(
+                text,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                tool_observation=gathered,
+                tool_observation_on_screen=False,
+            )
+    return answer_cli_agent(
+        text,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        tool_observation=tool_observation,
+    )
 
 
 def execute_routed_turn(
@@ -53,7 +97,7 @@ def execute_routed_turn(
         is_tty=is_tty,
         on_exit=on_exit,
         execute_actions=execute_cli_actions_with_metrics,
-        answer_agent=answer_cli_agent,
+        answer_agent=_answer_cli_agent_with_tools,
         dispatch_command=dispatch_slash,
     )
 

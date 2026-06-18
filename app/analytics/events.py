@@ -13,6 +13,12 @@ class Event(StrEnum):
     USER_ID_LOAD_FAILED = "user_id_load_failed"
     SENTRY_INIT_SKIPPED = "sentry_init_skipped"
 
+    # PostHog person identity (sets $set person properties on the anonymous id)
+    IDENTIFY = "$identify"
+
+    # GitHub first-launch login
+    GITHUB_LOGIN_COMPLETED = "github_login_completed"
+
     # Onboarding
     ONBOARD_STARTED = "onboard_started"
     ONBOARD_COMPLETED = "onboard_completed"
