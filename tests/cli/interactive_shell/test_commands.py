@@ -324,7 +324,6 @@ class TestSpecificListCommands:
 
     _FAKE_INTEGRATIONS = [
         {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
-        # `missing` integrations are omitted from `/integrations list`; keep slack visible here.
         {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
         {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
@@ -337,16 +336,15 @@ class TestSpecificListCommands:
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
-    def test_integrations_list_excludes_mcp_services(self, monkeypatch: object) -> None:
+    def test_integrations_list_includes_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations list", ReplSession(), console)
         output = buf.getvalue()
         assert "datadog" in output
         assert "slack" in output
-        # MCP-classified services are reserved for /mcp list.
-        assert "openclaw" not in output
-        assert "github" not in output
+        assert "openclaw" in output
+        assert "github" in output
 
     def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
@@ -450,12 +448,13 @@ class TestIntegrationsCommand:
             lambda: list(self._FAKE),
         )
 
-    def test_list_shows_non_mcp_services(self, monkeypatch: object) -> None:
+    def test_list_shows_all_services_including_github(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations list", ReplSession(), console)
-        assert "datadog" in buf.getvalue()
-        assert "github" not in buf.getvalue()
+        output = buf.getvalue()
+        assert "datadog" in output
+        assert "github" in output
 
     def test_list_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)

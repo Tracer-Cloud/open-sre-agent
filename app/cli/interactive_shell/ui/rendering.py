@@ -56,8 +56,7 @@ def status_style(status: str) -> str:
     }.get(status, DIM)
 
 
-# MCP-type services are rendered separately under `/mcp list` so the default
-# `/integrations list` view stays focused on alert-source / data integrations.
+# MCP-type services are also rendered under `/mcp list` for focused MCP actions.
 MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})
 _REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
 
@@ -282,7 +281,7 @@ def _integration_row(r: dict[str, str]) -> tuple[str | Text, ...]:
 
 
 def render_integrations_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = [r for r in results if r.get("service") not in MCP_INTEGRATION_SERVICES]
+    rows = sorted(results, key=lambda r: r.get("service", ""))
     if not rows:
         repl_print(
             console, f"[{DIM}]no integrations configured.  try `opensre onboard` to add one.[/]"
@@ -292,7 +291,10 @@ def render_integrations_table(console: Console, results: list[dict[str, str]]) -
 
 
 def render_mcp_table(console: Console, results: list[dict[str, str]]) -> None:
-    rows = [r for r in results if r.get("service") in MCP_INTEGRATION_SERVICES]
+    rows = sorted(
+        (r for r in results if r.get("service") in MCP_INTEGRATION_SERVICES),
+        key=lambda r: r.get("service", ""),
+    )
     if not rows:
         repl_print(console, f"[{DIM}]no MCP servers configured.[/]")
         return

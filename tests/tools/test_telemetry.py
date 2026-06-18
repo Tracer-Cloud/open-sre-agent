@@ -941,6 +941,9 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         # PostHog MCP — both swallow sites in PostHogMCPTool/__init__.py.
         "list_posthog_tools",
         "call_posthog_tool",
+        # Sentry MCP — both swallow sites in SentryMCPTool/__init__.py.
+        "list_sentry_tools",
+        "call_sentry_tool",
     }
 )
 
