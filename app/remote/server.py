@@ -407,9 +407,24 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
             detail = f"{detail} Suggestion: {exc.suggestion}"
         raise HTTPException(status_code=503, detail=detail) from exc
     except Exception as exc:
-        capture_exception(exc)
-        logger.exception("Investigation failed")
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+        try:
+            reraise_cli_runtime_error(exc)
+        except OpenSREError as mapped:
+            logger.warning(
+                "Investigation failed due to CLI runtime error: %s",
+                mapped,
+            )
+            detail = str(mapped)
+            if mapped.suggestion:
+                detail = f"{detail} Suggestion: {mapped.suggestion}"
+            raise HTTPException(status_code=503, detail=detail) from mapped
+        except BaseException:
+            capture_exception(exc)
+            logger.exception("Investigation failed")
+            raise HTTPException(
+                status_code=500,
+                detail=f"{type(exc).__name__}: {exc}",
+            ) from exc
 
     inv_id = _make_id(alert_name)
     _save_investigation(

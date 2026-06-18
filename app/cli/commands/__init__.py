@@ -10,6 +10,7 @@ from app.cli.commands.cron import cron_command
 from app.cli.commands.debug import debug_command
 from app.cli.commands.doctor import doctor_command
 from app.cli.commands.general import (
+    gateway_commands,
     health_command,
     investigate_command,
     uninstall_command,
@@ -27,6 +28,7 @@ from app.cli.commands.watchdog import watchdog_command
 
 _COMMANDS: tuple[click.Command, ...] = (
     investigate_command,
+    gateway_commands,
     onboard,
     config_command,
     remote,
