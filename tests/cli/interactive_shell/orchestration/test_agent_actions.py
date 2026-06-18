@@ -1149,21 +1149,22 @@ def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object
     assert "explicit shell passthrough enabled" not in captured
 
 
-def test_execute_cli_actions_declines_mutating_shell_when_user_rejects_prompt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy.DEFAULT_CONFIRM_FN",
-        lambda _p: "n",
-    )
+def test_execute_cli_actions_denies_restricted_shell_command() -> None:
+    """Default-allow still enforces the restricted ``deny`` floor (e.g. ``sudo``).
+
+    Under default-allow, mutating commands like ``rm`` run without a
+    confirmation prompt, but restricted commands must still be blocked outright
+    and recorded as ``ok=False``.
+    """
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `rm -rf /tmp/demo`", session, console) is True
-    assert session.history[-1] == {"type": "shell", "text": "rm -rf /tmp/demo", "ok": False}
+    assert (
+        agent_actions.execute_cli_actions("run `sudo rm -rf /tmp/demo`", session, console) is True
+    )
+    assert session.history[-1] == {"type": "shell", "text": "sudo rm -rf /tmp/demo", "ok": False}
     output = buf.getvalue()
-    assert "cancelled" in output.lower()
-    assert "mutating commands are blocked" in output.lower() or "confirm" in output.lower()
+    assert "blocked" in output.lower()
 
 
 def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
