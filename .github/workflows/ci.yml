@@ -91,6 +91,11 @@ jobs:
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime
+            # Live planner/routing contracts (tests/cli/.../test_llm_action_planner.py)
+            # are validated on openai, matching routing-live-post-merge.yml. The
+            # default anthropic tool-call model (haiku) cannot reliably perform
+            # compound action routing, so pin this shard to openai.
+            llm_provider: openai
             pytest_paths: >-
               tests/cli
               tests/remote
@@ -165,6 +170,8 @@ jobs:
     timeout-minutes: 30
 
     env:
+      # Per-shard LLM provider for live_llm contracts; defaults to anthropic.
+      LLM_PROVIDER: ${{ matrix.llm_provider || 'anthropic' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
