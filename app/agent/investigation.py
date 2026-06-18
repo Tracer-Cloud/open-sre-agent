@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -65,6 +66,60 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
     "jenkins": ["jenkins"],
     "tempo": ["tempo"],
 }
+
+# Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
+# that we tolerate before forcing the agent to conclude. Re-running a tool with
+# identical arguments returns the same data, so a model that loops on duplicates
+# makes no progress yet still burns the whole MAX_INVESTIGATION_LOOPS budget. The
+# failure mode is made worse by context trimming (app/agent/tool_loop.py), which
+# drops the oldest tool exchanges to fit the window and can erase the very
+# history that would otherwise remind the model it already has the result.
+_MAX_STAGNANT_ITERATIONS = 2
+
+# Injected as a user turn once the agent starts repeating itself, steering it to
+# stop gathering and write the diagnosis from what it already has.
+_STAGNATION_NUDGE = (
+    "You are repeating tool calls you already made, so they return no new "
+    "information and the investigation is not progressing. Stop calling tools and "
+    "write your final diagnosis from the evidence already gathered: root cause, "
+    "root cause category, supporting evidence, validated and non-validated claims, "
+    "remediation steps, and a validity score. If the evidence is insufficient to "
+    "determine a root cause, say so explicitly and use a low validity score."
+)
+
+
+def _tool_call_signature(tool_call: ToolCall) -> str:
+    """Stable identity for a tool call: ``name`` + canonicalised arguments.
+
+    Two calls to the same tool with the same arguments (regardless of key order)
+    produce the same signature. Used to detect when the model re-requests a query
+    it has already run so the runtime can refuse to re-execute it.
+    """
+    try:
+        args = json.dumps(tool_call.input, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        args = repr(tool_call.input)
+    return f"{tool_call.name}::{args}"
+
+
+def _duplicate_call_result(tool_call: ToolCall) -> dict[str, Any]:
+    """Synthetic result returned in place of re-running an already-seen call.
+
+    Keeps the provider tool_use/tool_result contract valid (every requested call
+    still gets a result) while telling the model, in the result itself, that the
+    repeat was skipped and what to do instead.
+    """
+    return {
+        "suppressed_duplicate": True,
+        "tool": tool_call.name,
+        "note": (
+            f"Skipped: '{tool_call.name}' was already called earlier in this "
+            "investigation with identical arguments, so re-running it would return "
+            "the same data. Do not call it again. Either call a DIFFERENT tool (or "
+            "the same tool with DIFFERENT arguments) to gather new evidence, or "
+            "write your final diagnosis."
+        ),
+    }
 
 
 class ConnectedInvestigationAgent:
@@ -183,6 +238,10 @@ class ConnectedInvestigationAgent:
         evidence: dict[str, Any] = {}
         evidence_entries: list[EvidenceEntry] = []
         executed_hypotheses: list[dict[str, Any]] = []
+        # Tool-call signatures already executed. Tracked in Python (not in the
+        # message history) so it survives context trimming and reliably catches
+        # repeats even after the conversation is trimmed to fit the window.
+        seen_signatures: set[str] = set()
 
         _emit(
             "agent_start",
@@ -200,6 +259,7 @@ class ConnectedInvestigationAgent:
         if seed_calls:
             logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
             for tc in seed_calls:
+                seen_signatures.add(_tool_call_signature(tc))
                 _record_tool_start(tc)
             executed_hypotheses.append(
                 {
@@ -235,14 +295,20 @@ class ConnectedInvestigationAgent:
         # ceiling overflows smaller-window models (e.g. gpt-4o at 128k) because
         # trimming "down to" an Anthropic-sized ceiling still exceeds their cap.
         context_ceiling = _context_budget_ceiling_for_model(getattr(llm, "_model", None))
+        # Consecutive iterations that produced no fresh (non-duplicate) tool call.
+        stagnant_iterations = 0
+        # Once set, the next invoke offers no tools so the model is forced to emit
+        # a textual diagnosis instead of looping on repeats.
+        force_conclusion = False
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
+            active_tool_schemas: list[dict[str, Any]] = [] if force_conclusion else tool_schemas
             _enforce_context_budget(
-                messages, system=system, tools=tool_schemas, ceiling=context_ceiling
+                messages, system=system, tools=active_tool_schemas, ceiling=context_ceiling
             )
             try:
-                response = llm.invoke(messages, system=system, tools=tool_schemas)
+                response = llm.invoke(messages, system=system, tools=active_tool_schemas)
 
             except Exception as err:
                 failure = classify_llm_invoke_failure(err)
@@ -287,23 +353,41 @@ class ConnectedInvestigationAgent:
                 messages.append({"role": "user", "content": nudge})
                 continue
 
-            # Emit tool_start for each pending call before executing
-            for tc in response.tool_calls:
+            # Split requested calls into fresh ones (not seen before) and repeats.
+            # Repeats are NOT re-executed — they get a synthetic "already ran this"
+            # result so the provider's tool_use/tool_result contract stays valid
+            # while steering the model off the loop.
+            duplicate_flags = [
+                _tool_call_signature(tc) in seen_signatures for tc in response.tool_calls
+            ]
+            fresh_calls = [
+                tc for tc, is_dup in zip(response.tool_calls, duplicate_flags) if not is_dup
+            ]
+            for tc in fresh_calls:
+                seen_signatures.add(_tool_call_signature(tc))
                 _record_tool_start(tc)
+
             executed_hypotheses.append(
                 {
                     "hypothesis": f"Agent iteration {iteration}",
-                    "actions": [tc.name for tc in response.tool_calls],
+                    "actions": [tc.name for tc in fresh_calls],
                     "loop_iteration": iteration,
                 }
             )
 
-            results = _run_parallel(response.tool_calls, tools, resolved)
+            fresh_results = iter(_run_parallel(fresh_calls, tools, resolved) if fresh_calls else [])
+            results = [
+                _duplicate_call_result(tc) if is_dup else next(fresh_results)
+                for tc, is_dup in zip(response.tool_calls, duplicate_flags)
+            ]
 
             tool_result_messages = _build_tool_result_messages(llm, response.tool_calls, results)
             messages.extend(tool_result_messages)
 
-            for tc, output in zip(response.tool_calls, results):
+            for tc, output, is_dup in zip(response.tool_calls, results, duplicate_flags):
+                if is_dup:
+                    debug_print(f"[{tc.name}] → duplicate call suppressed")
+                    continue
                 _merge_tool_evidence(evidence, tc.name, output, tc.input)
                 evidence_entries.append(
                     EvidenceEntry(
@@ -317,6 +401,22 @@ class ConnectedInvestigationAgent:
                 )
                 _record_tool_end(tc, output)
                 debug_print(f"[{tc.name}] → {_summarise(output)}")
+
+            # Stagnation breaker: an iteration with no fresh calls gathered no new
+            # evidence. Tolerate a couple (the nudge often unsticks the model) then
+            # force a tool-free conclusion rather than spinning to the loop cap.
+            if fresh_calls:
+                stagnant_iterations = 0
+            else:
+                stagnant_iterations += 1
+                messages.append({"role": "user", "content": _STAGNATION_NUDGE})
+                if stagnant_iterations >= _MAX_STAGNANT_ITERATIONS:
+                    logger.warning(
+                        "[agent] %d consecutive duplicate-only iterations — forcing "
+                        "tool-free conclusion before MAX_INVESTIGATION_LOOPS",
+                        stagnant_iterations,
+                    )
+                    force_conclusion = True
         else:
             logger.warning(
                 "[agent] hit MAX_INVESTIGATION_LOOPS=%d without finishing",
