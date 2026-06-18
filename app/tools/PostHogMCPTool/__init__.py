@@ -158,6 +158,17 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
         },
         "required": [],
     },
+    # Connection/transport settings are injected from the verified integration
+    # config via extract_params and hidden from the model's tool schema. Exposing
+    # them let the LLM supply hallucinated values (e.g. mode="mcp" or a base URL
+    # without the /mcp path) that overrode the verified config and broke calls.
+    injected_params=(
+        "posthog_url",
+        "posthog_mode",
+        "posthog_token",
+        "posthog_command",
+        "posthog_args",
+    ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
 )
@@ -239,6 +250,17 @@ def list_posthog_tools(
         },
         "required": ["tool_name"],
     },
+    # Only the MCP tool selection (tool_name) and its arguments are model-supplied.
+    # Connection/transport settings are injected from the verified integration
+    # config; see the note on list_posthog_tools for why they are hidden from the
+    # model.
+    injected_params=(
+        "posthog_url",
+        "posthog_mode",
+        "posthog_token",
+        "posthog_command",
+        "posthog_args",
+    ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
 )

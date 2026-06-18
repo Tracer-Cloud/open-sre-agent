@@ -18,6 +18,54 @@ class TestPostHogCallToolContract(BaseToolContract):
         return call_posthog_tool.__opensre_registered_tool__
 
 
+_CONNECTION_PARAMS = frozenset(
+    {
+        "posthog_url",
+        "posthog_mode",
+        "posthog_token",
+        "posthog_command",
+        "posthog_args",
+    }
+)
+
+
+def test_connection_params_are_injected_not_model_supplied() -> None:
+    """Regression: the LLM must not be able to supply connection/transport
+    settings. Hallucinated values (e.g. mode="mcp" or a base URL without the
+    ``/mcp`` path) previously overrode the verified config and broke calls, so
+    these fields are injected from the verified integration and hidden from the
+    model's tool schema.
+    """
+    for tool_fn in (list_posthog_tools, call_posthog_tool):
+        rt = tool_fn.__opensre_registered_tool__
+        assert set(rt.injected_params) >= _CONNECTION_PARAMS, (
+            f"{rt.name} must inject connection params, not expose them to the model."
+        )
+        public_props = set(rt.public_input_schema.get("properties", {}))
+        assert public_props.isdisjoint(_CONNECTION_PARAMS), (
+            f"{rt.name} leaks connection params {public_props & _CONNECTION_PARAMS} "
+            "into the model-facing schema."
+        )
+
+
+def test_call_tool_public_schema_exposes_only_tool_selection() -> None:
+    rt = call_posthog_tool.__opensre_registered_tool__
+    public_props = set(rt.public_input_schema.get("properties", {}))
+    assert public_props == {"tool_name", "arguments"}
+    assert rt.public_input_schema.get("required") == ["tool_name"]
+
+
+def test_list_tool_public_schema_takes_no_model_args() -> None:
+    rt = list_posthog_tools.__opensre_registered_tool__
+    assert set(rt.public_input_schema.get("properties", {})) == set()
+
+
+def test_validate_public_input_rejects_model_supplied_connection_params() -> None:
+    rt = call_posthog_tool.__opensre_registered_tool__
+    # tool_name only is the valid model-facing shape.
+    assert rt.validate_public_input({"tool_name": "query-run"}) is None
+
+
 def test_tools_available_when_connection_verified() -> None:
     sources = mock_agent_state(
         {
