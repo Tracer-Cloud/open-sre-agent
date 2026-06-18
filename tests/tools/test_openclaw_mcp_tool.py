@@ -172,6 +172,38 @@ def test_list_openclaw_tools_happy_path() -> None:
     assert result["available"] is True
     assert result["transport"] == "stdio"
     assert result["tools"][0]["name"] == "messages_read"
+    # Listing is slimmed: schema dropped by default so it can't overflow context.
+    assert "input_schema" not in result["tools"][0]
+    assert result["total_tools"] == 1
+    assert result["returned_tools"] == 1
+
+
+def test_list_openclaw_tools_filters_by_name() -> None:
+    mock_config = MagicMock()
+    mock_config.mode = "stdio"
+    mock_config.command = "openclaw"
+    mock_config.url = ""
+
+    with (
+        patch("app.tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
+        patch("app.tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
+        patch("app.tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch(
+            "app.tools.OpenClawMCPTool.list_openclaw_mcp_tools",
+            return_value=[
+                {"name": "messages_read", "description": "Read", "input_schema": {}},
+                {"name": "events_list", "description": "Events", "input_schema": {}},
+            ],
+        ),
+    ):
+        result = list_openclaw_bridge_tools(
+            name_filter="events",
+            openclaw_mode="stdio",
+            openclaw_command="openclaw",
+        )
+
+    assert result["matched_tools"] == 1
+    assert {t["name"] for t in result["tools"]} == {"events_list"}
 
 
 def test_call_openclaw_tool_happy_path() -> None:

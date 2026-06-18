@@ -25,6 +25,7 @@ from app.integrations.posthog_mcp import (
 )
 from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
+from app.tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]
@@ -158,15 +159,37 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
 @tool(
     name="list_posthog_tools",
     source="posthog_mcp",
-    description="List the tools exposed by the configured PostHog MCP server.",
+    description=(
+        "List the tools exposed by the configured PostHog MCP server. The server "
+        "exposes 240+ tools, so this returns a compact, bounded listing (names + "
+        "short descriptions, no schemas). Pass name_filter (e.g. 'events query sql') "
+        "to narrow the list, and include_schema=true on a narrowed list to fetch the "
+        "input schema of the specific tool you intend to call. To query events, call "
+        "call_posthog_tool with tool_name='execute-sql' and a HogQL query."
+    ),
     use_cases=[
         "Discovering which PostHog MCP tools are available before calling one",
-        "Confirming whether analytics, feature-flag, or error-tracking tools are exposed",
+        "Finding the right tool for a task by passing a name_filter (e.g. 'events query sql')",
+        "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
     surfaces=("investigation", "chat"),
     input_schema={
         "type": "object",
         "properties": {
+            "name_filter": {
+                "type": "string",
+                "description": (
+                    "Optional space- or comma-separated terms; tools whose name or "
+                    "description contains any term are returned (e.g. 'events query sql')."
+                ),
+            },
+            "include_schema": {
+                "type": "boolean",
+                "description": (
+                    "Include each tool's full input_schema. Only honored when the "
+                    "(filtered) result set is small; narrow with name_filter first."
+                ),
+            },
             "posthog_url": {"type": "string"},
             "posthog_mode": {"type": "string"},
             "posthog_token": {"type": "string"},
@@ -190,6 +213,8 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
     extract_params=_posthog_mcp_extract_params,
 )
 def list_posthog_tools(
+    name_filter: str | None = None,
+    include_schema: bool = False,
     posthog_url: str | None = None,
     posthog_mode: str | None = None,
     posthog_token: str | None = None,
@@ -197,7 +222,12 @@ def list_posthog_tools(
     posthog_args: list[str] | None = None,
     **_kwargs: object,
 ) -> PostHogMCPResponse:
-    """List tools available from the configured PostHog MCP server."""
+    """List tools available from the configured PostHog MCP server.
+
+    Returns a compact, bounded view by default so the listing never overflows the
+    agent's context budget (the live server's full schema dump is ~580k estimated
+    tokens, multiples of any model's context window).
+    """
     config = _resolve_config(
         posthog_url,
         posthog_mode,
@@ -231,12 +261,17 @@ def list_posthog_tools(
         payload["tools"] = []
         return payload
 
+    listing = build_mcp_tool_listing(
+        [dict(descriptor) for descriptor in tools],
+        name_filter=(name_filter or "").strip() or None,
+        include_schema=bool(include_schema),
+    )
     return {
         "source": "posthog_mcp",
         "available": True,
         "transport": config.mode,
         "endpoint": config.command if config.mode == "stdio" else config.url,
-        "tools": tools,
+        **listing,
     }
 
 

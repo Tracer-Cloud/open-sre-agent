@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import types
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +11,10 @@ import pytest
 from app.agent.investigation import (
     ConnectedInvestigationAgent,
     _availability_view,
+    _duplicate_call_result,
+    _tool_call_signature,
 )
+from app.agent.result import InvestigationResult
 from app.agent.tool_loop import (
     _build_synthetic_assistant_tool_call_msg,
     _context_budget_ceiling_for_model,
@@ -761,6 +765,164 @@ def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> No
     _enforce_context_budget(messages, tools=tools, ceiling=ceiling)
 
     assert messages == [{"role": "user", "content": "tiny"}]
+
+
+# --------------------------------------------------------------------------- #
+# Duplicate-call guard + stagnation breaker. The 2026-06-18 report showed a    #
+# generic alert spinning to MAX_INVESTIGATION_LOOPS while re-running           #
+# list_posthog_tools x15 / get_sre_guidance x14 — identical calls that return  #
+# no new evidence. Context trimming erases the history that would remind the   #
+# model it already ran them, so the dedup ledger is tracked in Python instead. #
+# --------------------------------------------------------------------------- #
+
+
+def test_tool_call_signature_is_argument_order_independent() -> None:
+    a = ToolCall(id="1", name="query", input={"service": "x", "window": "1h"})
+    b = ToolCall(id="2", name="query", input={"window": "1h", "service": "x"})
+    c = ToolCall(id="3", name="query", input={"service": "y", "window": "1h"})
+
+    assert _tool_call_signature(a) == _tool_call_signature(b)
+    assert _tool_call_signature(a) != _tool_call_signature(c)
+
+
+def test_duplicate_call_result_marks_suppression() -> None:
+    result = _duplicate_call_result(ToolCall(id="1", name="list_posthog_tools", input={}))
+    assert result["suppressed_duplicate"] is True
+    assert result["tool"] == "list_posthog_tools"
+    assert "already" in result["note"].lower()
+
+
+def _fake_tool(name: str, *, source: str = "posthog_mcp") -> MagicMock:
+    tool = MagicMock()
+    tool.name = name
+    tool.source = source
+    tool.validate_public_input.return_value = None
+    tool.extract_params.return_value = {}
+    tool.run.return_value = {"ok": True, "tool": name}
+    return tool
+
+
+def _tool_call_response(tool_calls: list[ToolCall]) -> MagicMock:
+    response = MagicMock()
+    response.tool_calls = tool_calls
+    response.has_tool_calls = True
+    response.content = ""
+    response.raw_content = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.name, "arguments": json.dumps(tc.input)},
+            }
+            for tc in tool_calls
+        ],
+    }
+    return response
+
+
+def _text_response(text: str) -> MagicMock:
+    response = MagicMock()
+    response.tool_calls = []
+    response.has_tool_calls = False
+    response.content = text
+    response.raw_content = {"role": "assistant", "content": text}
+    return response
+
+
+def _run_agent_with_scripted_llm(
+    *,
+    invoke: Any,
+    tools: list[MagicMock],
+) -> tuple[dict[str, Any], MagicMock]:
+    mock_llm = MagicMock()
+    mock_llm._model = "gpt-4o"
+    mock_llm.tool_schemas.return_value = [{"name": t.name} for t in tools]
+    mock_llm.invoke.side_effect = invoke
+    mock_llm.build_tool_result_message.side_effect = lambda _calls, results: {
+        "role": "user",
+        "content": json.dumps(results, default=str),
+    }
+
+    state = {
+        "alert_name": "Test alert",
+        "pipeline_name": "test-pipeline",
+        "severity": "critical",
+        "resolved_integrations": {},
+    }
+
+    with (
+        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.investigation.get_tracker", return_value=MagicMock()),
+        patch("app.agent.investigation._get_available_tools", return_value=tools),
+        patch(
+            "app.agent.investigation.parse_diagnosis",
+            return_value=InvestigationResult(root_cause="done", root_cause_category="unknown"),
+        ),
+    ):
+        result = ConnectedInvestigationAgent().run(state)
+    return result, mock_llm
+
+
+def test_run_suppresses_duplicate_tool_calls() -> None:
+    """A tool re-requested with identical arguments is NOT executed again."""
+    tool = _fake_tool("list_posthog_tools")
+    responses = [
+        _tool_call_response([ToolCall(id="c1", name="list_posthog_tools", input={})]),
+        # identical call — must be suppressed, not re-run
+        _tool_call_response([ToolCall(id="c2", name="list_posthog_tools", input={})]),
+        _text_response("Final diagnosis."),
+    ]
+
+    result, mock_llm = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])
+
+    # Executed exactly once despite being requested twice.
+    assert tool.run.call_count == 1
+    # The duplicate got a synthetic suppression result fed back to the model.
+    assert any(
+        isinstance(m.get("content"), str) and "suppressed_duplicate" in m["content"]
+        for m in result["agent_messages"]
+    )
+    assert mock_llm.invoke.call_count == 3
+
+
+def test_run_does_not_suppress_calls_with_different_args() -> None:
+    """Same tool, different arguments is legitimate and must still execute."""
+    tool = _fake_tool("query_logs")
+    responses = [
+        _tool_call_response([ToolCall(id="c1", name="query_logs", input={"svc": "a"})]),
+        _tool_call_response([ToolCall(id="c2", name="query_logs", input={"svc": "b"})]),
+        _text_response("Final diagnosis."),
+    ]
+
+    tool_run = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
+    assert tool.run.call_count == 2
+    assert tool_run["root_cause"] == "done"
+
+
+def test_run_forces_conclusion_when_stuck_repeating() -> None:
+    """A model that loops on the same call is forced to conclude well before
+    MAX_INVESTIGATION_LOOPS=20. When the runtime offers no tools (the forced
+    conclusion turn), the model must produce its diagnosis."""
+    tool = _fake_tool("get_sre_guidance", source="knowledge")
+
+    def invoke(messages: Any, system: Any, tools: Any) -> MagicMock:  # noqa: ARG001
+        # No tools offered → forced conclusion turn → return text.
+        if not tools:
+            return _text_response("Final diagnosis: insufficient evidence.")
+        # Stubborn model: always re-requests the same call.
+        return _tool_call_response([ToolCall(id="c", name="get_sre_guidance", input={})])
+
+    result, mock_llm = _run_agent_with_scripted_llm(invoke=invoke, tools=[tool])
+
+    # Ran the real tool exactly once (first, fresh); every repeat was suppressed.
+    assert tool.run.call_count == 1
+    # Converged far below the 20-iteration cap instead of spinning.
+    assert mock_llm.invoke.call_count < 6
+    # The final forced turn was invoked with NO tools.
+    assert mock_llm.invoke.call_args_list[-1].kwargs["tools"] == []
+    assert result["root_cause"] == "done"
 
 
 def test_truncate_content_distributes_across_multiple_blocks() -> None:

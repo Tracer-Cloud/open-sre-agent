@@ -11,6 +11,7 @@ session:
   configured_integrations:
   - datadog
   - sentry
+  resolved_integrations: {}
 available_capabilities:
   slash_commands:
   - /integrations

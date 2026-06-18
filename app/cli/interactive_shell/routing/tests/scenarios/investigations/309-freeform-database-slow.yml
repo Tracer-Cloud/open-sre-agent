@@ -8,7 +8,20 @@ input:
 session:
   has_prior_state: false
   remote_connected: false
-  configured_integrations: []
+  configured_integrations:
+  - datadog
+  # Pin a fixture-owned Datadog config so the planner sees >=1 connected
+  # integration and DISPATCHES an investigation for this diagnostic question
+  # (the connected-integration gate). Tokens are fake; no real investigation
+  # runs because the oracle stubs the dispatch boundary (REGISTRY.dispatch), so
+  # the call is recorded without remote I/O.
+  resolved_integrations:
+    datadog:
+      connection_verified: true
+      api_key: fixture-api-key
+      app_key: fixture-app-key
+      site: datadoghq.com
+      base_url: https://api.datadoghq.com
 available_capabilities:
   slash_commands: []
   cli_commands: []
@@ -18,38 +31,30 @@ route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  executes_terminal_action: false
+  executes_terminal_action: true
 planned_actions:
-- kind: assistant_handoff
-  content: diagnostic_question:database_slow
+# Diagnostic question ("why is the database slow?") with Datadog connected, so
+# the planner dispatches an investigation with synthesized alert_text. The
+# alert_text varies per run, so content is omitted: the planning test asserts an
+# investigation with non-empty alert_text rather than an exact string.
+- kind: investigation
   source: llm
-executed_actions: []
+  target_surface: investigation
+executed_actions:
+- kind: investigation
 response_contract:
-  # The intended behavior for a vague ops question (no pasted alert) is to ask
-  # for the target system/service or alert context (see the cli_agent system
-  # prompt). Accept any phrasing that does that rather than one literal string,
-  # so the contract tracks behavior instead of exact wording.
   must_contain_any:
-  - why is the database slow
-  - vague operational question
-  - specific system
-  - don't have any alert or context yet
-  - which database
-  - what database
-  - which environment
-  - paste
-  - more context
-  - which service
-  - what service
-  - service name
-  - what context
-  - paste the alert
-  - opensre investigate
+  - investigat
+  - rca
+  - database
+  - slow
   must_not_contain:
   - $ /
 history:
   expected:
   - type: cli_agent
+    ok: true
+  - type: alert
     ok: true
 tier: full
 runs: 3

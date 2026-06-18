@@ -25,6 +25,10 @@ Your task: investigate the alert below and produce a clear, evidence-backed root
 - If all evidence points to healthy service, say so clearly (root_cause_category = healthy).
 - Be specific: include error messages, timestamps, service names, namespaces, run IDs.
 - **Only call tools listed under "Available tools".** Do not fabricate tool calls for integrations not listed.
+- **Never call the same tool with the same arguments twice.** You already have that result — re-running it returns nothing new and wastes the investigation. Re-running is only useful with *different* arguments (e.g. a different service, time window, or query).
+- **Discovery or listing tools (those that just enumerate other tools or resources) are useful at most once.** Call such a tool a single time, then act on what it returned — do not keep re-listing.
+- **Prefer tools relevant to the alert.** Do not fan out to integrations unrelated to the alert's service or symptoms just because they are available.
+- **If your recent tool calls stopped producing new evidence, stop investigating and write your diagnosis** with whatever you have, rather than repeating calls.
 
 ## What to produce at the end
 

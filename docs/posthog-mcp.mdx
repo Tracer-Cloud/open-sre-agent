@@ -11,10 +11,17 @@ This is distinct from the PostHog bounce-rate integration, which is a narrow RES
 
 | Tool | What it does |
 | --- | --- |
-| `list_posthog_tools` | List the tools the connected PostHog MCP server exposes |
+| `list_posthog_tools` | List the tools the connected PostHog MCP server exposes (compact, filterable) |
 | `call_posthog_tool` | Call a named PostHog MCP tool (e.g. run a HogQL query, list feature flags, inspect an error) |
 
 The agent typically calls `list_posthog_tools` first to discover what is available for your project, then `call_posthog_tool` with the chosen tool name and arguments.
+
+The hosted PostHog MCP server exposes 240+ tools, each with a full input schema. Returning all of them at once is far larger than any model's context window, so `list_posthog_tools` returns a **compact, bounded listing** — tool names plus short descriptions, without schemas. To work with it efficiently:
+
+- Pass `name_filter` (space- or comma-separated terms, e.g. `"events query sql"`) to narrow the list to relevant tools.
+- Pass `include_schema=true` on a narrowed list to fetch the full input schema for the specific tool you intend to call.
+
+To query events for a person or across a project, call `call_posthog_tool` with `tool_name="execute-sql"` and a HogQL query (e.g. `SELECT event, count() FROM events WHERE ... GROUP BY event`). There is no `search_events` tool.
 
 ## Prerequisites
 

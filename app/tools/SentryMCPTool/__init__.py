@@ -25,6 +25,7 @@ from app.integrations.sentry_mcp import (
 )
 from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
+from app.tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 SentryMCPParams = dict[str, object]
 SentryMCPResponse = dict[str, object]
@@ -141,15 +142,36 @@ def _normalize_tool_result(result: SentryMCPToolCallResult) -> SentryMCPResponse
 @tool(
     name="list_sentry_tools",
     source="sentry_mcp",
-    description="List the tools exposed by the configured Sentry MCP server.",
+    description=(
+        "List the tools exposed by the configured Sentry MCP server. Returns a "
+        "compact, bounded listing (names + short descriptions, no schemas) so it "
+        "never overflows the agent's context budget. Pass name_filter (e.g. "
+        "'issue event trace') to narrow the list, and include_schema=true on a "
+        "narrowed list to fetch the input schema of the tool you intend to call."
+    ),
     use_cases=[
         "Discovering which Sentry MCP tools are available before calling one",
-        "Confirming whether issue, event, trace, or Seer tools are exposed",
+        "Finding the right tool for a task by passing a name_filter (e.g. 'issue event trace')",
+        "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
     surfaces=("investigation", "chat"),
     input_schema={
         "type": "object",
         "properties": {
+            "name_filter": {
+                "type": "string",
+                "description": (
+                    "Optional space- or comma-separated terms; tools whose name or "
+                    "description contains any term are returned (e.g. 'issue event trace')."
+                ),
+            },
+            "include_schema": {
+                "type": "boolean",
+                "description": (
+                    "Include each tool's full input_schema. Only honored when the "
+                    "(filtered) result set is small; narrow with name_filter first."
+                ),
+            },
             "sentry_url": {"type": "string"},
             "sentry_mode": {"type": "string"},
             "sentry_token": {"type": "string"},
@@ -162,6 +184,8 @@ def _normalize_tool_result(result: SentryMCPToolCallResult) -> SentryMCPResponse
     extract_params=_sentry_mcp_extract_params,
 )
 def list_sentry_tools(
+    name_filter: str | None = None,
+    include_schema: bool = False,
     sentry_url: str | None = None,
     sentry_mode: str | None = None,
     sentry_token: str | None = None,
@@ -169,7 +193,11 @@ def list_sentry_tools(
     sentry_args: list[str] | None = None,
     **_kwargs: object,
 ) -> SentryMCPResponse:
-    """List tools available from the configured Sentry MCP server."""
+    """List tools available from the configured Sentry MCP server.
+
+    Returns a compact, bounded view by default so the listing never overflows the
+    agent's context budget.
+    """
     config = _resolve_config(
         sentry_url,
         sentry_mode,
@@ -203,12 +231,18 @@ def list_sentry_tools(
         payload["tools"] = []
         return payload
 
+    listing = build_mcp_tool_listing(
+        [dict(descriptor) for descriptor in tools],
+        name_filter=(name_filter or "").strip() or None,
+        include_schema=bool(include_schema),
+        filter_example="issue event trace",
+    )
     return {
         "source": "sentry_mcp",
         "available": True,
         "transport": config.mode,
         "endpoint": config.command if config.mode == "stdio" else config.url,
-        "tools": tools,
+        **listing,
     }
 
 
