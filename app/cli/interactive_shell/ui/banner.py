@@ -23,7 +23,7 @@ Rendered output legend (colour roles)
 # [SECONDARY]  "opensre" product name label · cwd · tip / note body
 # [DIM]        subtitle description · rule lines · box chrome · dividers
 # [TEXT]       provider/model values · greeting
-# [WARNING]    read-only or trust-mode notice
+# [WARNING]    read-only or trust-mode notice · incomplete-integration marker
 """
 
 from __future__ import annotations
@@ -300,16 +300,21 @@ _SERVICE_DISPLAY_NAMES: dict[str, str] = {
 }
 
 
-def _load_configured_integrations() -> list[str]:
-    """Return display names for integrations currently configured via env vars. Never raises."""
+def _load_integration_health() -> list[tuple[str, str]]:
+    """Return ``(display_name, status)`` for each configured integration.
+
+    ``status`` is ``"ok"`` or ``"incomplete"`` (e.g. a hosted MCP record saved
+    without an API token). Offline and best-effort: never raises and never makes
+    network calls, so the banner reflects health without slowing startup.
+    """
     try:
         from app.integrations.catalog import (  # lazy — avoids circular deps
-            configured_integration_services,
+            configured_integration_health,
         )
 
         return [
-            _SERVICE_DISPLAY_NAMES.get(service, service.title())
-            for service in configured_integration_services()
+            (_SERVICE_DISPLAY_NAMES.get(service, service.title()), status)
+            for service, status in configured_integration_health()
         ]
     except Exception:
         return []
@@ -329,21 +334,28 @@ def _build_ambient_right_column(session: object = None) -> Text:
     """Right column for returning users: live integration status and alert listener state."""
     parts: list[Text] = []
 
-    # Integrations
+    # Integrations — annotate by offline health so the banner never implies a
+    # half-configured integration (e.g. a hosted MCP record with no API token)
+    # is connected. A "⚠" + dim name marks an integration missing credentials.
     parts.append(Text("Integrations", style=f"bold {BRAND}"))
-    names = _load_configured_integrations()
-    if names:
+    entries = _load_integration_health()
+    if entries:
         _MAX_SHOWN = 6
-        shown = names[:_MAX_SHOWN]
-        overflow = len(names) - len(shown)
+        shown = entries[:_MAX_SHOWN]
+        overflow = len(entries) - len(shown)
         name_line = Text(overflow="fold")
-        for idx, name in enumerate(shown):
+        for idx, (name, status) in enumerate(shown):
             if idx:
                 name_line.append("  ·  ", style=DIM)
-            name_line.append(name, style=SECONDARY)
+            if status == "incomplete":
+                name_line.append(f"{name} ⚠", style=DIM)
+            else:
+                name_line.append(name, style=SECONDARY)
         if overflow:
             name_line.append(f"  +{overflow}", style=DIM)
         parts.append(name_line)
+        if any(status == "incomplete" for _name, status in entries):
+            parts.append(Text("⚠ incomplete — run /integrations verify", style=WARNING))
     else:
         parts.append(Text("run /onboard to connect tools", style=DIM))
 
@@ -390,7 +402,30 @@ _LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _github_username() -> str:
+    """Return the saved GitHub login for the configured GitHub integration, or "".
+
+    Best-effort and never raises: the welcome greeting must render even when the
+    integration store is unreadable or GitHub is not configured.
+    """
+    try:
+        from app.integrations.store import get_integration
+
+        record = get_integration("github")
+        if not record:
+            return ""
+        credentials = record.get("credentials") or {}
+        return str(credentials.get("username") or "").strip()
+    except Exception:
+        return ""
+
+
 def _get_username() -> str:
+    # Prefer the authenticated GitHub handle once it is known, so the greeting
+    # reflects the user's GitHub identity rather than the local system account.
+    github = _github_username()
+    if github:
+        return github
     try:
         return getpass.getuser()
     except Exception:

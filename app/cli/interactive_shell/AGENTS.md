@@ -110,6 +110,18 @@ owning area rather than adding more logic to the caller.
   - **How to check:** after adding a command, run it in the REPL and type a few
     characters in the next prompt. If no `^[[…R` garbage appears, the registration
     is correct.
+  - **Agent-planned (LLM) interactive commands:** `_EXCLUSIVE_STDIN_MENU_COMMANDS`
+    only reserves stdin for *deterministically-typed* commands
+    (`deterministic_command_text` returns the slash). When free text like
+    "remove github" is resolved by the action planner into an inline-picker
+    command (`/integrations remove`, `/integrations setup`, `/mcp connect`,
+    `/mcp disconnect`, or a bare `/integrations` / `/mcp` menu), the loop has not
+    reserved stdin, so `slash_tool.py` must NOT run the picker inline. It defers
+    via `session.queue_auto_command(...)`, which re-submits the command as a
+    deterministic turn the loop then runs with exclusive stdin. New raw-stdin
+    picker/wizard commands the planner can emit must be added to
+    `_INTERACTIVE_PICKER_MENUS` / `_INTERACTIVE_PICKER_SUBCOMMANDS` in
+    `orchestration/tools/slash_tool.py`.
 
 ## Routing and action execution
 

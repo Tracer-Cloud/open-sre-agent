@@ -147,3 +147,11 @@ postprocessing
 prefills
 stdin
 validator
+docstring
+misclassifications
+pid
+# GitHub / Sentry MCP integration docs terms
+OAuth
+args
+Streamable
+toolsets

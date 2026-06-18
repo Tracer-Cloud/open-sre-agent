@@ -130,6 +130,7 @@ _SETUP_GUIDANCE_RULE = (
     "needs. This applies to any integration; never hardcode advice to one vendor."
 )
 
+
 # `run_interactive` is not a narrow feature allowlist. It is the bridge from an
 # agent-planned action back into the OpenSRE interactive shell. Any command that
 # is registered in the slash-command registry is already an OpenSRE command and
@@ -158,6 +159,7 @@ def _registered_interactive_command(command: str) -> bool:
     from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 
     return name in SLASH_COMMANDS
+
 
 _ALLOWED_SLASH_ACTIONS = frozenset(
     {

@@ -1,9 +1,12 @@
-id: 313-github-issues-windows-crashes
-title: Assistant checks GitHub issues for Windows crashes
-intent_class: investigation
-risk_level: low
+id: 312-sentry-windows-posthog-repeat-users
+title: PostHog Windows retention issue asks Sentry for likely cause
+intent_class: complex_shell_prompts
+risk_level: medium
 input:
-  prompt: can you check the github issues for the windows crashes?
+  prompt: >-
+    From Posthog we can see that the OpenSRE application is not working well for
+    Windows users. We do not have many repeat users. Can you check our Sentry
+    what the issue is on windows?
   surface: interactive_cli
 session:
   has_prior_state: false
@@ -14,9 +17,9 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes:
-- "Covers the assistant gathering live data from a connected integration when\
-  \ answering a free-form question. With no GitHub integration configured the\
-  \ assistant answers from text only and must not shell out or start an RCA run."
+- "Covers the default assistant behavior for a product-analytics-to-error-tracking\
+  \ diagnostic question. The agent should answer directly and avoid shelling out\
+  \ or starting an RCA run without a configured Sentry context."
 route:
   expected_kind: handle_message_with_agent
   expected_signals: []
@@ -29,10 +32,10 @@ planned_actions: []
 executed_actions: []
 response_contract:
   must_contain_any:
-  - GitHub
-  - issues
+  - Sentry
   - Windows
-  - crash
+  - repeat users
+  - PostHog
   must_not_contain:
   - $ /
   forbidden_actions:

@@ -1,6 +1,6 @@
 id: 314-windows-crash-multisource-query
 title: Windows crash epic asks the agent to query Sentry, GitHub issues, and PostHog
-intent_class: investigation
+intent_class: complex_shell_prompts
 risk_level: medium
 input:
   prompt: >-

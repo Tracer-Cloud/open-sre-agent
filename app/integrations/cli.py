@@ -33,7 +33,7 @@ from app.integrations.posthog_mcp import (
     build_posthog_mcp_config,
     validate_posthog_mcp_config,
 )
-from app.integrations.registry import SUPPORTED_SETUP_SERVICES
+from app.integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
 from app.integrations.sentry_mcp import (
     DEFAULT_SENTRY_MCP_URL,
     build_sentry_mcp_config,
@@ -561,6 +561,11 @@ def _setup_github() -> str | None:
             print(f"  {line}")
         sys.exit(1)
 
+    if result.authenticated_user:
+        # Persist the resolved GitHub login as a non-secret credential field so
+        # surfaces like the welcome banner can greet the user by their GitHub
+        # handle instead of the local system username.
+        credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
     return result.authenticated_user
 
@@ -1275,6 +1280,8 @@ def cmd_setup(service: str | None) -> str:
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
+    if service:
+        service = resolve_management_service(service)
     if not service or service not in _SETUP_SERVICES:
         _die(f"Usage: setup <service>. Supported: {SUPPORTED}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
@@ -1308,6 +1315,7 @@ def cmd_show(service: str | None) -> None:
     if not service:
         _die("Usage: show <service>")
         return
+    service = resolve_management_service(service)
     record = get_integration(service)
     if not record:
         _die(f"No active integration for '{service}'.")
@@ -1321,6 +1329,7 @@ def cmd_remove(service: str | None) -> None:
     if not service:
         _die("Usage: remove <service>")
         return
+    service = resolve_management_service(service)
     if not is_yes():
         try:
             confirmed = questionary.confirm(f"  Remove '{service}'?", default=False).ask()
@@ -1338,6 +1347,8 @@ def cmd_remove(service: str | None) -> None:
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
     from app.cli.support.context import is_json_output
 
+    if service:
+        service = resolve_management_service(service)
     if service and service not in SUPPORTED_VERIFY_SERVICES:
         _die(f"Usage: verify [service]. Supported: {SUPPORTED_VERIFY}")
 

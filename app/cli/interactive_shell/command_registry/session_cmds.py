@@ -107,6 +107,11 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
 
 
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    # The cli/docs grounding sources self-register on import, which may not have
+    # happened yet if /status runs before the first grounding turn. Import them
+    # so their cache rows always appear.
+    import app.cli.interactive_shell.references.cli_reference  # noqa: F401
+    import app.cli.interactive_shell.references.docs_reference  # noqa: F401
     from app.cli.interactive_shell.references.grounding_diagnostics import iter_grounding_sources
 
     table = repl_table(title="Session status\n", title_style=BOLD_BRAND, show_header=False)

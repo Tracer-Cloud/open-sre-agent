@@ -22,7 +22,6 @@ from app.analytics.cli import capture_github_login_completed, identify_github_us
 from app.analytics.source import is_test_run
 from app.cli.interactive_shell.ui import repl_tty_interactive
 from app.cli.interactive_shell.ui.theme import DEVICE_CODE
-from app.constants import GITHUB_FIRST_LAUNCH_MARKER
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _ELIGIBLE_OS = frozenset({"Darwin", "Windows"})
@@ -35,23 +34,6 @@ def _skip_requested() -> bool:
 
 def _eligible_os() -> bool:
     return platform.system() in _ELIGIBLE_OS
-
-
-def _marker_exists() -> bool:
-    try:
-        return GITHUB_FIRST_LAUNCH_MARKER.exists()
-    except OSError:
-        return False
-
-
-def _write_marker() -> None:
-    try:
-        GITHUB_FIRST_LAUNCH_MARKER.parent.mkdir(parents=True, exist_ok=True)
-        GITHUB_FIRST_LAUNCH_MARKER.touch(exist_ok=True)
-    except OSError:
-        # A missing marker only means we re-evaluate the (cheap) gate next launch;
-        # never let a write failure block the user from entering the REPL.
-        pass
 
 
 def _github_already_configured() -> bool:
@@ -76,8 +58,11 @@ def should_require_github_login() -> bool:
         return False
     if not repl_tty_interactive():
         return False
-    if _marker_exists():
-        return False
+    # GitHub being configured is the authoritative bypass. We intentionally do
+    # NOT consult a first-launch "completion" marker here: a stale marker must
+    # never let the REPL start once the GitHub integration has been removed
+    # (e.g. via ``/integrations remove github``). Re-checking the store is cheap,
+    # so the gate always re-runs when GitHub is not currently configured.
     return not _github_already_configured()
 
 
@@ -153,7 +138,9 @@ def _attempt_login(console: Console) -> str:
         return "failed"
 
     if result.ok:
-        _write_marker()
+        # Persisting the GitHub integration (done inside
+        # ``authenticate_and_configure_github``) is what suppresses the gate on
+        # subsequent launches — there is no separate completion marker to write.
         _propagate_username(result.username)
         who = f"@{result.username}" if result.username else "your GitHub account"
         console.print(f"[bold]Connected.[/bold] Signed in as {who}.")

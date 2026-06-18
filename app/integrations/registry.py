@@ -471,3 +471,29 @@ def service_key(service_name: str) -> str:
     """Normalize an incoming service label to its canonical registry key."""
     lowered = service_name.strip().lower()
     return SERVICE_KEY_MAP.get(lowered, lowered)
+
+
+# Aliases that apply only to the integration-management commands (setup, verify,
+# show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`,
+# which must keep `posthog` distinct from `posthog_mcp` for classification: the
+# bare `posthog` integration is env-configured analytics with no interactive
+# setup/verify flow of its own, so when a user (or the action planner) asks to
+# *manage* "posthog" the only real target is the PostHog MCP integration.
+MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {
+    "posthog": "posthog_mcp",
+}
+
+
+def resolve_management_service(service_name: str) -> str:
+    """Resolve a service token for the integration-management CLI commands.
+
+    Layers management-only aliases on top of the global `service_key`
+    normalization so commands like ``integrations setup posthog`` resolve to the
+    canonical ``posthog_mcp`` flow instead of failing the ``click.Choice`` enum
+    check before the handler ever runs.
+    """
+    lowered = service_name.strip().lower()
+    aliased = MANAGEMENT_SERVICE_ALIASES.get(lowered)
+    if aliased is not None:
+        return aliased
+    return service_key(lowered)

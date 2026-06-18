@@ -103,7 +103,12 @@ Example mapping for compound slash commands:
 For operational REPL requests, prefer slash_invoke and choose the best-matching
 command from the slash_invoke tool description (available command names are listed there).
 Other tools:
-- llm_set_provider — switch provider when target is an exact provider name
+- llm_set_provider — switch provider ONLY when the user names an EXACT provider
+  target (e.g. "switch to anthropic", "use openai", "set provider to ollama").
+  A vague local-model request that does NOT name an exact provider — e.g.
+  "connect to local llama", "use a local model", "run locally" — is NOT a
+  provider switch: emit assistant_handoff so the assistant can clarify and
+  suggest "/model set ollama". Do NOT guess "ollama" from "local llama".
 - alert_sample — run a sample alert (template="generic")
 - investigation_start — investigate pasted alert text or free-form alert body
 - synthetic_run — run synthetic benchmark scenario by id

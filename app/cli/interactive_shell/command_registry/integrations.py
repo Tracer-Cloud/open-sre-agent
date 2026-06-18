@@ -88,9 +88,10 @@ def _configured_service_choices() -> list[tuple[str, str]]:
 def _handle_remove(session: ReplSession, console: Console, service: str | None) -> bool:
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
     from app.analytics.cli import capture_integration_removed
+    from app.integrations.registry import resolve_management_service
     from app.integrations.store import remove_integration
 
-    svc = service
+    svc = resolve_management_service(service) if service else service
     if not svc:
         if not repl_tty_interactive():
             repl_print(console, f"[{DIM}]usage:[/] /integrations remove <service>")
@@ -158,7 +159,9 @@ def _mcp_service_choices() -> list[tuple[str, str]]:
 
 def _render_integration_show(session: ReplSession, console: Console, service: str) -> bool:
     """Verify and print one integration. Returns False when the service is unknown."""
-    normalized = service.strip().lower()
+    from app.integrations.registry import resolve_management_service
+
+    normalized = resolve_management_service(service)
     configured = set(repl_data.configured_integration_names())
     if normalized not in configured:
         repl_print(console, f"[{ERROR}]service not found:[/] {escape(normalized)}")

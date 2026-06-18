@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import platform
 import sys
 
 from rich.console import Console
@@ -82,13 +84,39 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         SessionStore.flush(session)
 
 
+def _github_login_explicitly_bypassed() -> bool:
+    """Cheap, dependency-free check for contexts where the GitHub gate is intentionally skipped.
+
+    Used only as the *error* fallback for the first-launch gate. It must not import
+    the gate module (that import may be exactly what failed), so it re-derives the
+    documented bypasses directly:
+
+    * ``OPENSRE_SKIP_GITHUB_LOGIN`` — the user-facing escape hatch.
+    * Non-eligible operating systems — the gate only runs on macOS/Windows.
+    * Non-interactive stdin — scripted / CI runs have no prompt to drive.
+    """
+    if os.getenv("OPENSRE_SKIP_GITHUB_LOGIN", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    if platform.system() not in {"Darwin", "Windows"}:
+        return True
+    try:
+        return not sys.stdin.isatty()
+    except Exception:
+        return True
+
+
 def _maybe_require_github_login(console: Console) -> bool:
     """Enforce the first-launch GitHub login gate.
 
     Returns True when the REPL should start (gate not required, or login
-    succeeded) and False when the user quit at the mandatory gate. Any unexpected
-    error in the gate machinery is swallowed so it never hard-blocks startup
-    beyond the intended mandatory login.
+    succeeded) and False when startup must not proceed (user quit at the gate, or
+    the gate could not run in a context where GitHub sign-in is mandatory).
+
+    On an unexpected error we deliberately do NOT fail open into the REPL: that
+    would let a gate bug silently skip the mandatory sign-in. Instead we only
+    allow startup when an explicit, documented bypass applies (skip env var,
+    ineligible OS, or non-TTY); otherwise we block and point the user at the
+    escape hatch so a real outage can never permanently lock them out.
     """
     try:
         from app.cli.first_launch_github import (
@@ -100,8 +128,15 @@ def _maybe_require_github_login(console: Console) -> bool:
             return True
         return require_github_login_on_first_launch(console)
     except Exception:
-        log.warning("First-launch GitHub login gate failed; continuing.", exc_info=True)
-        return True
+        log.warning("First-launch GitHub login gate failed.", exc_info=True)
+        if _github_login_explicitly_bypassed():
+            return True
+        console.print(
+            "GitHub sign-in is required to use OpenSRE, but the sign-in step could not run. "
+            "Set [bold]OPENSRE_SKIP_GITHUB_LOGIN=1[/bold] to bypass this, then relaunch "
+            "[bold]opensre[/bold]."
+        )
+        return False
 
 
 def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:

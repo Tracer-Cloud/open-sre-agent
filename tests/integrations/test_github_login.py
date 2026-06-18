@@ -39,6 +39,9 @@ def test_authenticate_and_configure_github_happy_path(monkeypatch: pytest.Monkey
     assert credentials["auth_token"] == "gho_token"
     assert credentials["url"] == github_login.DEFAULT_GITHUB_MCP_URL
     assert credentials["mode"] == github_login.DEFAULT_GITHUB_MCP_MODE
+    # The resolved GitHub login is persisted as a non-secret field so the
+    # welcome banner can greet the user by their GitHub handle.
+    assert credentials["username"] == "octocat"
 
 
 def test_authenticate_and_configure_github_validation_failure_does_not_save(

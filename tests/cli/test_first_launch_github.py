@@ -26,7 +26,6 @@ def _force_required(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(flg, "_eligible_os", lambda: True)
     monkeypatch.setattr(flg, "is_test_run", lambda: False)
     monkeypatch.setattr(flg, "repl_tty_interactive", lambda: True)
-    monkeypatch.setattr(flg, "_marker_exists", lambda: False)
     monkeypatch.setattr(flg, "_github_already_configured", lambda: False)
 
 
@@ -60,16 +59,19 @@ def test_gate_skipped_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     assert flg.should_require_github_login() is False
 
 
-def test_gate_skipped_when_marker_present(monkeypatch: pytest.MonkeyPatch) -> None:
-    _force_required(monkeypatch)
-    monkeypatch.setattr(flg, "_marker_exists", lambda: True)
-    assert flg.should_require_github_login() is False
-
-
 def test_gate_skipped_when_github_already_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     _force_required(monkeypatch)
     monkeypatch.setattr(flg, "_github_already_configured", lambda: True)
     assert flg.should_require_github_login() is False
+
+
+def test_gate_required_when_github_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: GitHub config is authoritative. A prior completed login (no
+    longer recorded via any standalone marker) must not let the REPL start once
+    the GitHub integration has been removed."""
+    _force_required(monkeypatch)
+    monkeypatch.setattr(flg, "_github_already_configured", lambda: False)
+    assert flg.should_require_github_login() is True
 
 
 @pytest.mark.parametrize(
@@ -99,11 +101,7 @@ def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch
     assert f"{DEVICE_CODE_ANSI}WXYZ-1234" in rendered
 
 
-def test_orchestrator_success_writes_marker_and_propagates(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    marker = tmp_path / "github_login_done"
-    monkeypatch.setattr(flg, "GITHUB_FIRST_LAUNCH_MARKER", marker)
+def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         github_login_mod,
         "authenticate_and_configure_github",
@@ -117,15 +115,11 @@ def test_orchestrator_success_writes_marker_and_propagates(
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is True
-    assert marker.exists()
     assert identified == ["octocat"]
     assert completed == ["octocat"]
 
 
-def test_orchestrator_quit_does_not_write_marker(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    marker = tmp_path / "github_login_done"
-    monkeypatch.setattr(flg, "GITHUB_FIRST_LAUNCH_MARKER", marker)
-
+def test_orchestrator_quit_does_not_proceed(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise_cancel(**_kwargs: object) -> GitHubLoginResult:
         raise KeyboardInterrupt
 
@@ -134,14 +128,9 @@ def test_orchestrator_quit_does_not_write_marker(monkeypatch: pytest.MonkeyPatch
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is False
-    assert not marker.exists()
 
 
-def test_orchestrator_failure_then_decline_retry_quits(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    marker = tmp_path / "github_login_done"
-    monkeypatch.setattr(flg, "GITHUB_FIRST_LAUNCH_MARKER", marker)
+def test_orchestrator_failure_then_decline_retry_quits(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         github_login_mod,
         "authenticate_and_configure_github",
@@ -152,12 +141,9 @@ def test_orchestrator_failure_then_decline_retry_quits(
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is False
-    assert not marker.exists()
 
 
-def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    marker = tmp_path / "github_login_done"
-    monkeypatch.setattr(flg, "GITHUB_FIRST_LAUNCH_MARKER", marker)
+def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"n": 0}
 
     def _login(**_kwargs: object) -> GitHubLoginResult:
@@ -175,4 +161,3 @@ def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch, tmp
 
     assert proceed is True
     assert calls["n"] == 2
-    assert marker.exists()

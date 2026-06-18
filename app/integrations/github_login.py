@@ -59,5 +59,10 @@ def authenticate_and_configure_github(
             username=result.authenticated_user,
             detail=result.detail,
         )
+    if result.authenticated_user:
+        # Persist the resolved GitHub login as a non-secret credential field so
+        # surfaces like the welcome banner can greet the user by their GitHub
+        # handle instead of the local system username.
+        credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
     return GitHubLoginResult(ok=True, username=result.authenticated_user, detail=result.detail)

@@ -532,13 +532,29 @@ class TestIntegrationsCommand:
         dispatch_slash("/integrations setup", ReplSession(), Console())
         assert captured == [["integrations", "setup"]]
 
-    def test_remove_delegates_to_cli(self, monkeypatch: object) -> None:
+    def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import app.analytics.cli as analytics_cli
+        import app.integrations.store as store
         from app.cli.interactive_shell.command_registry import integrations as m
 
-        captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
         dispatch_slash("/integrations remove slack", ReplSession(), Console())
-        assert captured == [["integrations", "remove", "slack"]]
+        assert removed == ["slack"]
+
+    def test_remove_cancelled_does_not_touch_store(self, monkeypatch: object) -> None:
+        import app.integrations.store as store
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "no")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        assert removed == []
 
 
 class TestMcpCommand:
@@ -574,13 +590,18 @@ class TestMcpCommand:
         dispatch_slash("/mcp connect", ReplSession(), Console())
         assert captured == [["integrations", "setup"]]
 
-    def test_disconnect_delegates_to_cli(self, monkeypatch: object) -> None:
+    def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import app.analytics.cli as analytics_cli
+        import app.integrations.store as store
         from app.cli.interactive_shell.command_registry import integrations as m
 
-        captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
         dispatch_slash("/mcp disconnect github", ReplSession(), Console())
-        assert captured == [["integrations", "remove", "github"]]
+        assert removed == ["github"]
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)

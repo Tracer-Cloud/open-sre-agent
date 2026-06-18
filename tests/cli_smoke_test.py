@@ -80,9 +80,14 @@ class PtyAction:
     expect: str | tuple[str, ...]
     send: bytes
     timeout: float = 10.0
-    #: If > 0, send this many ``j`` keypresses one at a time (prompt_toolkit may
-    #: coalesce a single burst), then send ``send`` (usually ``\\r``).
+    #: If > 0, send this many ``stagger_key`` keypresses one at a time
+    #: (prompt_toolkit may coalesce a single burst), then send ``send``
+    #: (usually ``\\r``).
     stagger_j: int = 0
+    #: The single-keypress navigation byte sent ``stagger_j`` times. Defaults to
+    #: ``j`` (vim-down). Use ``k`` (vim-up) to reach the last option in one step,
+    #: since questionary select menus wrap around.
+    stagger_key: bytes = b"j"
 
 
 @dataclass
@@ -355,7 +360,7 @@ def _run_cli_pty(
             _wait_for_output(process, master_fd, buffer, action.expect, timeout=action.timeout)
             if action.stagger_j:
                 for _ in range(action.stagger_j):
-                    os.write(master_fd, b"j")
+                    os.write(master_fd, action.stagger_key)
                     time.sleep(0.05)
             os.write(master_fd, action.send)
 
@@ -606,10 +611,9 @@ def test_tests_inventory_commands_smoke(cli_sandbox: CliSandbox) -> None:
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
 def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
-    # One `j` per keypress (burst writes are not separate keys). The select list wraps;
-    # from the first option, len(choices)-1 steps reach "Skip for now" without wrapping past it.
-    # 28 integrations + "Skip for now" = 29 choices; "Skip for now" is the last
-    # option at index 28, so 28 j's reach it from the first option.
+    # The select list wraps, and "Skip for now" is always the last option. A single
+    # vim-up (`k`) keypress from the first option wraps to it, so this stays correct
+    # regardless of how many integrations the picker lists.
     result = _run_cli_pty(
         cli_sandbox,
         "onboard",
@@ -621,7 +625,8 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
-                stagger_j=28,
+                stagger_j=1,
+                stagger_key=b"k",
             ),
         ],
         timeout=30.0,
@@ -715,7 +720,8 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 PtyAction(
                     expect="Choose an integration to configure",
                     send=b"\r",
-                    stagger_j=28,
+                    stagger_j=1,
+                    stagger_key=b"k",
                 ),
             ],
             timeout=pty_timeout,
