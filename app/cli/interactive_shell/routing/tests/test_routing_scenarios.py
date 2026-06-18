@@ -12,6 +12,9 @@ from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.feature_flags import (
+    investigation_loop_enabled,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
@@ -57,6 +60,29 @@ _LIVE_CASES = iter_scenarios_for_shard(
 
 def _slash_content(command: str, args: list[str]) -> str:
     return " ".join([command, *args]) if args else command
+
+
+def _expects_investigation(case: ScenarioCase) -> bool:
+    """True when a scenario expects the planner to dispatch a natural-language
+    investigation (``investigation_start``).
+
+    The investigation loop can be disabled in the interactive shell via
+    ``feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED``. When it is off the
+    planner is not offered ``investigation_start``, so these scenarios no longer
+    apply and are skipped rather than asserted against the old behavior. Sample
+    alerts and synthetic runs are unaffected.
+    """
+    actions = (*case.answer.planned_actions, *case.answer.executed_actions)
+    return any(str(action.get("kind", "")).strip() == "investigation" for action in actions)
+
+
+def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
+    if not investigation_loop_enabled() and _expects_investigation(case):
+        pytest.skip(
+            "Natural-language investigation loop is disabled in the interactive shell "
+            "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
+            "this investigation scenario does not apply. Re-enable the flag to run it."
+        )
 
 
 def _build_actual_action(action: PlannedAction) -> ExpectedAction:
@@ -184,6 +210,7 @@ def test_help_route_decision_has_structured_shape() -> None:
 @pytest.mark.integration
 @pytest.mark.live_llm
 def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
+    _skip_if_investigation_disabled(live_planning_case)
     session = fresh_session(
         with_prior_state=live_planning_case.scenario.session.has_prior_state,
         configured_integrations=live_planning_case.scenario.session.configured_integrations,
@@ -247,6 +274,7 @@ def test_live_turn_execution_oracle(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
+    _skip_if_investigation_disabled(live_oracle_case)
     runs = max(1, live_oracle_case.answer.runs)
     run_results: list[OracleRunResult] = []
     passed_count = 0

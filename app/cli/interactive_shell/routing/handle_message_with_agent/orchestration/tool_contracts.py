@@ -38,7 +38,13 @@ class ToolEntry:
     input_schema: dict[str, Any]
     execution_tier: ExecutionTier
     execute: ToolExecutor
+    # ``is_available`` gates BOTH planner offering and runtime dispatch.
+    # ``is_planner_selectable`` additionally hides a tool from the planner's
+    # tool specs WITHOUT blocking direct/programmatic dispatch, so a feature can
+    # be removed from natural-language selection while staying reachable for
+    # explicit, tested code paths.
     is_available: ToolAvailability = _tool_is_available
+    is_planner_selectable: ToolAvailability = _tool_is_available
 
 
 def string_property(

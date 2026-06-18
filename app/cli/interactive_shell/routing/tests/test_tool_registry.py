@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (
+    feature_flags,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     ToolContext,
 )
@@ -140,3 +144,39 @@ def test_registry_dispatch_blocks_unavailable_tool() -> None:
         ctx=ctx,
     )
     assert ok is False
+
+
+def test_investigation_hidden_from_planner_when_loop_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With the natural-language investigation loop disabled (the default), the
+    planner must not be offered ``investigation_start`` -- so diagnostic prompts
+    fall through to the assistant instead of triggering the RCA pipeline."""
+    monkeypatch.setattr(feature_flags, "INTERACTIVE_SHELL_INVESTIGATION_ENABLED", False)
+    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    assert "investigation_start" not in names
+    # Unrelated tools stay offered.
+    assert "alert_sample" in names
+    assert "assistant_handoff" in names
+
+
+def test_investigation_offered_to_planner_when_loop_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(feature_flags, "INTERACTIVE_SHELL_INVESTIGATION_ENABLED", True)
+    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    assert "investigation_start" in names
+
+
+def test_investigation_dispatch_not_gated_by_planner_selectability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hiding the tool from the planner must NOT block direct/programmatic
+    dispatch: ``is_available`` stays True while ``is_planner_selectable`` is the
+    only thing the disable flag flips."""
+    monkeypatch.setattr(feature_flags, "INTERACTIVE_SHELL_INVESTIGATION_ENABLED", False)
+    entry = REGISTRY.get("investigation_start")
+    assert entry is not None
+    session = ReplSession()
+    assert entry.is_available(session) is True
+    assert entry.is_planner_selectable(session) is False

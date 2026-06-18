@@ -10,12 +10,25 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_tier import (
     ExecutionTier,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.feature_flags import (
+    investigation_loop_enabled,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     ToolContext,
     ToolEntry,
     object_schema,
     string_property,
 )
+from app.cli.interactive_shell.runtime.session import ReplSession
+
+
+def _investigation_planner_selectable(_session: ReplSession) -> bool:
+    """Hide ``investigation_start`` from the planner when the loop is disabled.
+
+    Direct dispatch (e.g. explicit/programmatic ``investigation`` actions) stays
+    available; only natural-language planner selection is gated here.
+    """
+    return investigation_loop_enabled()
 
 
 def execute_investigation_action(args: dict[str, Any], ctx: ToolContext) -> bool:
@@ -47,6 +60,7 @@ TOOL_ENTRY = ToolEntry(
     ),
     execution_tier=ExecutionTier.ELEVATED,
     execute=execute_investigation_action,
+    is_planner_selectable=_investigation_planner_selectable,
 )
 
 
