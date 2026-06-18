@@ -69,6 +69,23 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   * "none" or "unknown" → emit assistant_handoff instead; with no connected data
     source a root-cause run would be empty, so let the assistant answer and
     suggest connecting an integration.
+- DATA-RETRIEVAL / ANALYTICS LOOKUP is NOT an investigation. A request to fetch,
+  list, show, query, count, search, or look up specific records — events,
+  metrics, logs, sessions, traces, persons/users, issues, feature flags,
+  dashboards, insights — for a named entity, user, filter, or time window is a
+  plain data query. Emit assistant_handoff: the assistant gathers the data live
+  via the same integration tools and answers. This holds EVEN WHEN the request
+  names an observability source (PostHog, Datadog, Sentry, Grafana, etc.) and
+  EVEN WHEN integrations are connected. The investigation rule applies ONLY when
+  the request asks for the CAUSE of a failure, crash, error, outage, or incident;
+  a lookup with no failure being diagnosed is never investigation_start.
+  Examples that are HANDOFFS (data lookups), NOT investigations:
+  * "events for the person whose github_username is davincios in posthog"
+  * "show me the latest sessions for user X"
+  * "how many $pageview events did we get yesterday?"
+  * "list the open sentry issues for checkout"
+  Contrast: "why is checkout crashing — check sentry and posthog" names a
+  FAILURE to root-cause, so it IS investigation_start (per the rule above).
 - NEITHER an instruction NOR a diagnostic question → assistant_handoff. A message
   that is JUST an alert or incident — a pasted alert payload (JSON, YAML, or
   key-value blob) on its own, or a bare incident statement such as "CPU is
