@@ -122,9 +122,15 @@ If all answers are weak, keep the logic inline.
 - Routing tests are part of the default CI/CD flow; do **not** move them to
   optional-only jobs.
 - Keep deterministic routing contracts (`test_routing_scenarios.py::test_deterministic_routing` and
-  `test_routing_fixture_integrity.py`) in the default PR CI flow.
-- Run live-LLM routing suites (`test_routing_scenarios.py` live tests)
-  in the post-merge sharded workflow.
+  `test_routing_fixture_integrity.py`) in the default PR CI flow. These run as
+  the no-LLM `routing-checks` job in `.github/workflows/routing-live.yml`
+  (`pytest app/cli/interactive_shell/routing/tests/ -m "not live_llm"`), which
+  needs no secrets and therefore also gates fork PRs.
+- Run the live-LLM routing suites (`test_routing_scenarios.py` live tests) on
+  **both** same-repo pull requests and post-merge `main` pushes, sharded across
+  **8** shards (`ROUTING_SHARD_TOTAL=8`, matrix `shard_index: 0..7`) via the
+  `routing-live` job in `.github/workflows/routing-live.yml`. Fork PRs skip the
+  live job (no secrets); the `routing-checks` job still gates them.
 - Execute routing suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
   in both local and CI environments.
 - Local developer goal: the live-LLM routing contract suite should be runnable

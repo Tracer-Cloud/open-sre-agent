@@ -92,7 +92,7 @@ jobs:
           - os: ubuntu-latest
             shard: cli-runtime
             # Live planner/routing contracts (tests/cli/.../test_llm_action_planner.py)
-            # are validated on openai, matching routing-live-post-merge.yml. The
+            # are validated on openai, matching routing-live.yml. The
             # default anthropic tool-call model (haiku) cannot reliably perform
             # compound action routing, so pin this shard to openai.
             llm_provider: openai

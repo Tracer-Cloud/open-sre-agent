@@ -121,6 +121,8 @@ You may run `make check` as a final pass, but it is heavier (`test-full`) than t
 
 Routing live tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
 
+In CI, [`.github/workflows/routing-live.yml`](.github/workflows/routing-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `routing-checks` gate (deterministic routing + fixture integrity, `-m "not live_llm"`) and the sharded `routing-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
+
 ## 7) CI-only tests
 
 Some paths require live infrastructure and are excluded from `make test-cov`:
