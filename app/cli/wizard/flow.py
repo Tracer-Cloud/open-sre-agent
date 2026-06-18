@@ -1118,16 +1118,10 @@ def _github_wizard_auth_token(mode: str, credentials: Mapping[str, object]) -> s
 
 def _configure_github_mcp() -> tuple[str, str]:
     _, credentials = _integration_defaults("github")
-    default_mode = _string_value(credentials.get("mode"), DEFAULT_GITHUB_MCP_MODE)
-    mode = _choose(
-        "Choose the GitHub MCP transport:",
-        [
-            Choice(value="sse", label="SSE"),
-            Choice(value="streamable-http", label="Streamable HTTP"),
-            Choice(value="stdio", label="stdio"),
-        ],
-        default=default_mode,
-    )
+    # Transport is fixed to Streamable HTTP — the only mode anyone selects in practice,
+    # and SSE/stdio are deprecated for the hosted GitHub MCP server. The transport
+    # prompt was removed on purpose — do NOT reintroduce a transport selection here.
+    mode = DEFAULT_GITHUB_MCP_MODE
 
     while True:
         url = ""
@@ -1249,22 +1243,11 @@ def _configure_openclaw() -> tuple[str, str]:
         stored_command == "openclaw-mcp"
         and not _joined_values(stored_args, separator=" ", fallback="")
     )
-    default_mode = (
-        DEFAULT_OPENCLAW_MCP_MODE
-        if use_stdio_defaults
-        else _string_value(credentials.get("mode"), DEFAULT_OPENCLAW_MCP_MODE)
-    )
-
     while True:
-        mode = _choose(
-            "Choose the OpenClaw bridge transport:",
-            [
-                Choice(value="stdio", label="stdio (recommended)"),
-                Choice(value="streamable-http", label="Streamable HTTP"),
-                Choice(value="sse", label="SSE"),
-            ],
-            default=default_mode,
-        )
+        # Transport is fixed to stdio (the local OpenClaw bridge). In practice it is
+        # the only mode anyone selects, so the transport prompt was removed on purpose
+        # — do NOT reintroduce a transport selection or a remote branch here.
+        mode = DEFAULT_OPENCLAW_MCP_MODE
 
         url = ""
         command = ""
@@ -1352,24 +1335,17 @@ def _configure_openclaw() -> tuple[str, str]:
                 f"[{SECONDARY}]Accurate RCA:[/] [bold]also configure Grafana/Datadog and GitHub[/]"
             )
             return "OpenClaw", str(env_path)
-        default_mode = mode
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_posthog_mcp() -> tuple[str, str]:
     _, credentials = _integration_defaults("posthog_mcp")
-    default_mode = _string_value(credentials.get("mode"), DEFAULT_POSTHOG_MCP_MODE)
 
     while True:
-        mode = _choose(
-            "Choose the PostHog MCP transport:",
-            [
-                Choice(value="streamable-http", label="Streamable HTTP (recommended)"),
-                Choice(value="sse", label="SSE"),
-                Choice(value="stdio", label="stdio (local server)"),
-            ],
-            default=default_mode,
-        )
+        # Transport is fixed to Streamable HTTP (the hosted PostHog MCP server). In
+        # practice it is the only mode anyone selects, so the transport prompt was
+        # removed on purpose — do NOT reintroduce a transport selection here.
+        mode = DEFAULT_POSTHOG_MCP_MODE
 
         url = ""
         command = ""
@@ -1454,24 +1430,17 @@ def _configure_posthog_mcp() -> tuple[str, str]:
                 f"[{SECONDARY}]Verify:[/] [bold]uv run opensre integrations verify posthog_mcp[/]"
             )
             return "PostHog MCP", str(env_path)
-        default_mode = mode
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
 def _configure_sentry_mcp() -> tuple[str, str]:
     _, credentials = _integration_defaults("sentry_mcp")
-    default_mode = _string_value(credentials.get("mode"), DEFAULT_SENTRY_MCP_MODE)
 
     while True:
-        mode = _choose(
-            "Choose the Sentry MCP transport:",
-            [
-                Choice(value="streamable-http", label="Streamable HTTP (recommended)"),
-                Choice(value="sse", label="SSE"),
-                Choice(value="stdio", label="stdio (local server)"),
-            ],
-            default=default_mode,
-        )
+        # Transport is fixed to Streamable HTTP (the hosted Sentry MCP server). In
+        # practice it is the only mode anyone selects, so the transport prompt was
+        # removed on purpose — do NOT reintroduce a transport selection here.
+        mode = DEFAULT_SENTRY_MCP_MODE
 
         url = ""
         command = ""
@@ -1549,7 +1518,6 @@ def _configure_sentry_mcp() -> tuple[str, str]:
                 f"[{SECONDARY}]Verify:[/] [bold]uv run opensre integrations verify sentry_mcp[/]"
             )
             return "Sentry MCP", str(env_path)
-        default_mode = mode
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 

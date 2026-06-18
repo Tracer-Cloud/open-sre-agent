@@ -30,7 +30,7 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
 ) -> None:
     """_setup_github validates before saving and prints identity + detail on success."""
 
-    answers = iter(["2", "https://api.githubcopilot.com/mcp/", "repos,issues"])
+    answers = iter(["https://api.githubcopilot.com/mcp/", "repos,issues"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
@@ -153,7 +153,7 @@ def test_setup_github_exits_without_save_on_validation_failure(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    answers = iter(["2", "https://api.githubcopilot.com/mcp/", "repos"])
+    answers = iter(["https://api.githubcopilot.com/mcp/", "repos"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
@@ -191,7 +191,7 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
 ) -> None:
     """cmd_setup must not print success/saved after a failed GitHub validation."""
 
-    answers = iter(["2", "https://api.githubcopilot.com/mcp/", "repos"])
+    answers = iter(["https://api.githubcopilot.com/mcp/", "repos"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
@@ -227,7 +227,7 @@ def test_cmd_setup_github_prints_saved_after_success(
 ) -> None:
     """Full cmd_setup('github') prints validation, Saved line, and does not duplicate handlers."""
 
-    answers = iter(["2", "https://api.githubcopilot.com/mcp/", "repos"])
+    answers = iter(["https://api.githubcopilot.com/mcp/", "repos"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
