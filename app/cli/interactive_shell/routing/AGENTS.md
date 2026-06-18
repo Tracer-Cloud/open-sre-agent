@@ -107,9 +107,13 @@ If all answers are weak, keep the logic inline.
   convention, and `render_plan_denied` were removed for this reason. Do **not**
   reintroduce a planning-stage denial; if write/mutating actions are ever added,
   gate them with an execution-stage confirmation (see
-  `orchestration/execution_policy.py`), not a planner denial. The `fail_closed`
-  / `has_unhandled_clause` fields in scenario fixtures are deprecated descriptive
-  metadata only — the oracle does not assert on them.
+  `orchestration/execution_policy.py`), not a planner denial. The legacy
+  `fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fixture
+  fields were removed (the oracle never asserted on them); the policy block now
+  carries a single `executes_terminal_action` boolean. See the `Answer` and
+  `AnswerPolicy` docstrings in `tests/scenario_loader.py` for the two execution
+  paths a turn can take (planner→dispatch vs conversational tool-gathering) and
+  which fixture fields cover which.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 

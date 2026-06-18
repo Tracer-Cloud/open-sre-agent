@@ -227,7 +227,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     passed = True
     if decision.route_kind.value != answer.route.expected_kind:
         passed = False
-    if answer.policy.should_execute:
+    if answer.policy.executes_terminal_action:
         if not executed_match:
             passed = False
     else:

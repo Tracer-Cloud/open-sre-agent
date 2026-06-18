@@ -43,6 +43,10 @@ class TestPostHogMCPConfig:
         config = PostHogMCPConfig(url="https://mcp.posthog.com/mcp/")
         assert config.url == "https://mcp.posthog.com/mcp"
 
+    def test_mode_mcp_alias_maps_to_streamable_http(self) -> None:
+        config = PostHogMCPConfig(mode="mcp")
+        assert config.mode == "streamable-http"
+
     def test_bearer_prefix_stripped_from_token(self) -> None:
         config = PostHogMCPConfig(auth_token="Bearer phx_secret")
         assert config.auth_token == "phx_secret"

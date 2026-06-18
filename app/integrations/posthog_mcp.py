@@ -107,7 +107,11 @@ class PostHogMCPConfig(StrictConfigModel):
     @classmethod
     def _normalize_mode(cls, value: object) -> str:
         normalized = str(value or DEFAULT_POSTHOG_MCP_MODE).strip().lower()
-        return normalized or DEFAULT_POSTHOG_MCP_MODE
+        normalized = normalized or DEFAULT_POSTHOG_MCP_MODE
+        # "mcp" is a generic alias — map it to the default HTTP transport.
+        if normalized == "mcp":
+            return DEFAULT_POSTHOG_MCP_MODE
+        return normalized
 
     @field_validator("auth_token", mode="before")
     @classmethod

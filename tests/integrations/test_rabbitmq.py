@@ -323,6 +323,52 @@ class TestGetQueueBacklog:
         assert result["queues"][0]["name"] == "huge-q"
         assert result["queues"][1]["name"] == "small-q"
 
+    def test_null_message_counts_do_not_crash_sort(self, patched_client: Any) -> None:
+        """A queue on a down node reports null counts; backlog must still work.
+
+        The Management API returns ``messages_ready`` / ``messages_unacknowledged``
+        as an explicit JSON ``null`` for queues without live stats (e.g. a queue
+        whose home node is down). Those must be treated as 0, not crash the
+        ``None + None`` backlog sort and turn the whole tool into ``available: False``.
+        """
+        patched_client(
+            {
+                "/api/queues//": [
+                    {
+                        "name": "down-q",
+                        "vhost": "/",
+                        "state": "down",
+                        "messages_ready": None,
+                        "messages_unacknowledged": None,
+                        "messages": None,
+                        "consumers": None,
+                        "memory": None,
+                    },
+                    {
+                        "name": "ok-q",
+                        "vhost": "/",
+                        "state": "running",
+                        "messages_ready": 5,
+                        "messages_unacknowledged": 2,
+                        "messages": 7,
+                        "consumers": 1,
+                    },
+                ]
+            }
+        )
+        result = get_queue_backlog(CONFIGURED)
+        assert result["available"] is True
+        assert result["total_queues"] == 2
+        # ok-q (backlog 7) ranks above the null-count down-q (treated as 0).
+        assert result["queues"][0]["name"] == "ok-q"
+        down_q = result["queues"][1]
+        assert down_q["name"] == "down-q"
+        assert down_q["messages_ready"] == 0
+        assert down_q["messages_unacknowledged"] == 0
+        assert down_q["messages_total"] == 0
+        assert down_q["consumers"] == 0
+        assert down_q["memory_bytes"] == 0
+
     def test_error_path_returns_available_false(self, patched_client: Any) -> None:
         patched_client({"/api/queues//": httpx.Response(500, text="fail")})
         result = get_queue_backlog(CONFIGURED)
