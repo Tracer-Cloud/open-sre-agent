@@ -125,9 +125,11 @@ def test_call_tool_surfaces_mcp_error() -> None:
     assert "permission denied" in str(result["error"])
 
 
-def test_list_tools_returns_discovered_tools() -> None:
+def test_list_tools_returns_compact_summaries_without_schema() -> None:
+    """Listing drops input_schema by default so the payload can't overflow the
+    agent's context budget (mirrors list_posthog_tools)."""
     fake_tools = [
-        {"name": "get_issue_details", "description": "Issue", "input_schema": {}},
+        {"name": "get_issue_details", "description": "Issue", "input_schema": {"a": 1}},
     ]
     with patch(
         "app.tools.SentryMCPTool.list_sentry_mcp_server_tools",
@@ -139,5 +141,28 @@ def test_list_tools_returns_discovered_tools() -> None:
             sentry_token="sntrytok_secret",
         )
     assert result["available"] is True
-    assert result["tools"] == fake_tools
     assert result["transport"] == "streamable-http"
+    assert result["total_tools"] == 1
+    assert result["returned_tools"] == 1
+    assert result["tools"] == [{"name": "get_issue_details", "description": "Issue"}]
+    assert "input_schema" not in result["tools"][0]
+
+
+def test_list_tools_filters_and_includes_schema_for_narrow_results() -> None:
+    fake_tools = [
+        {"name": "get_issue_details", "description": "Issue", "input_schema": {"q": "s"}},
+        {"name": "search_events", "description": "Events", "input_schema": {"t": "s"}},
+    ]
+    with patch(
+        "app.tools.SentryMCPTool.list_sentry_mcp_server_tools",
+        return_value=fake_tools,
+    ):
+        result = list_sentry_tools(
+            name_filter="issue",
+            include_schema=True,
+            sentry_url="https://mcp.sentry.dev/mcp",
+            sentry_token="sntrytok_secret",
+        )
+    assert result["matched_tools"] == 1
+    assert result["tools"][0]["name"] == "get_issue_details"
+    assert result["tools"][0]["input_schema"] == {"q": "s"}

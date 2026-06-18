@@ -9,8 +9,6 @@ or renames individual MCP-side tools.
 
 from __future__ import annotations
 
-import re
-
 from app.integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
@@ -27,115 +25,12 @@ from app.integrations.posthog_mcp import (
 )
 from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
+from app.tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]
 
 _COMPONENT = "app.tools.PostHogMCPTool"
-
-# The hosted PostHog MCP server exposes 240+ tools, each carrying a full JSON
-# input schema. Returning every tool with its schema produces a payload that is
-# multiple times larger than any model's context window (~580k estimated tokens
-# observed against the live server), so the agent's context-budget enforcer
-# trims the result away before the model ever sees a single tool name. The
-# model then loops re-calling this tool and guesses tool names that don't exist.
-# To stay well under the budget we return a compact, bounded listing by default
-# (names + truncated descriptions, no schemas) and let the caller narrow with a
-# filter or pull the full schema for a small, specific set of tools.
-_MAX_DESCRIPTION_CHARS = 160
-_MAX_TOOLS_RETURNED = 80
-_MAX_SCHEMAS_RETURNED = 15
-
-
-def _truncate_description(description: str) -> str:
-    cleaned = " ".join(description.split())
-    if len(cleaned) <= _MAX_DESCRIPTION_CHARS:
-        return cleaned
-    return cleaned[: _MAX_DESCRIPTION_CHARS - 1].rstrip() + "\u2026"
-
-
-def _filter_tools(
-    tools: list[dict[str, object]],
-    name_filter: str,
-) -> list[dict[str, object]]:
-    """Keep tools whose name or description matches any whitespace/comma term."""
-    terms = [term for term in re.split(r"[,\s]+", name_filter.lower()) if term]
-    if not terms:
-        return tools
-    matched: list[dict[str, object]] = []
-    for descriptor in tools:
-        haystack = f"{descriptor.get('name', '')} {descriptor.get('description', '')}".lower()
-        if any(term in haystack for term in terms):
-            matched.append(descriptor)
-    return matched
-
-
-def _summarize_tool(
-    descriptor: dict[str, object],
-    *,
-    include_schema: bool,
-) -> dict[str, object]:
-    summary: dict[str, object] = {
-        "name": str(descriptor.get("name", "")).strip(),
-        "description": _truncate_description(str(descriptor.get("description", "") or "")),
-    }
-    schema = descriptor.get("input_schema")
-    if include_schema and schema is not None:
-        summary["input_schema"] = schema
-    return summary
-
-
-def _build_tool_listing(
-    tools: list[dict[str, object]],
-    *,
-    name_filter: str | None,
-    include_schema: bool,
-) -> dict[str, object]:
-    """Render a bounded, model-safe view of the discovered MCP tools."""
-    total = len(tools)
-    filtered = _filter_tools(tools, name_filter) if name_filter else list(tools)
-    returned = filtered[:_MAX_TOOLS_RETURNED]
-    # Only attach full schemas when the result set is small enough that doing so
-    # keeps the payload bounded. Otherwise schemas would reintroduce the very
-    # context blow-up this listing exists to prevent.
-    attach_schema = include_schema and len(returned) <= _MAX_SCHEMAS_RETURNED
-
-    summaries = [
-        _summarize_tool(descriptor, include_schema=attach_schema) for descriptor in returned
-    ]
-    notes: list[str] = []
-    if len(filtered) > len(returned):
-        notes.append(
-            f"Showing {len(returned)} of {len(filtered)} matching tools; "
-            "pass name_filter to narrow the list."
-        )
-    elif total > len(returned):
-        notes.append(
-            f"Showing {len(returned)} of {total} tools; pass name_filter "
-            "(e.g. 'events query sql') to narrow the list."
-        )
-    if include_schema and not attach_schema:
-        notes.append(
-            "input_schema omitted because too many tools matched; narrow to "
-            f"{_MAX_SCHEMAS_RETURNED} or fewer tools with name_filter to include schemas."
-        )
-    if not include_schema:
-        notes.append(
-            "Schemas omitted to save context; call again with include_schema=true and a "
-            "name_filter once you know which tool you need."
-        )
-
-    listing: dict[str, object] = {
-        "total_tools": total,
-        "matched_tools": len(filtered),
-        "returned_tools": len(summaries),
-        "tools": summaries,
-    }
-    if name_filter:
-        listing["name_filter"] = name_filter
-    if notes:
-        listing["notes"] = " ".join(notes)
-    return listing
 
 
 def _string_list(value: object) -> list[str]:
@@ -366,7 +261,7 @@ def list_posthog_tools(
         payload["tools"] = []
         return payload
 
-    listing = _build_tool_listing(
+    listing = build_mcp_tool_listing(
         [dict(descriptor) for descriptor in tools],
         name_filter=(name_filter or "").strip() or None,
         include_schema=bool(include_schema),
