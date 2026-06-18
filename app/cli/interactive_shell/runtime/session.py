@@ -155,11 +155,28 @@ class ReplSession:
     pending_prompt_default: str | None = None
     """When set, the next interactive prompt is pre-filled with this string (then cleared)."""
 
+    pending_prompt_autosubmit: bool = False
+    """When True alongside ``pending_prompt_default``, the prefilled prompt is
+    submitted automatically instead of waiting for the user to press Enter.
+
+    Used to auto-launch an interactive command the agent decided to run (e.g.
+    ``/integrations setup sentry``) so it flows through the normal
+    exclusive-stdin dispatch path — the only place an interactive child process
+    gets clean stdin."""
+
     prompt_refresh_fn: Callable[[], None] | None = field(default=None, repr=False)
     """Loop-owned hook to apply pending prefill and redraw the active prompt."""
 
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
+
+    last_command_observation: str | None = None
+    """Compact textual result of a read-only discovery command run this turn.
+
+    Set by read-only discovery slash commands (e.g. ``/integrations``) so the
+    agent can summarize what the command found into a direct answer. Reset at
+    the start of every agent turn; only consumed when the planner (not the user)
+    chose to run the discovery command."""
 
     incoming_alerts: list[IncomingAlert] = field(default_factory=list)
     """Queued incoming alerts from the HTTP listener, capped at 256 entries.
@@ -182,6 +199,25 @@ class ReplSession:
         value = self.pending_prompt_default
         self.pending_prompt_default = None
         return value or ""
+
+    def take_pending_autosubmit(self) -> bool:
+        """Return whether the pending prefill should auto-submit, and clear the flag."""
+        value = self.pending_prompt_autosubmit
+        self.pending_prompt_autosubmit = False
+        return value
+
+    def queue_auto_command(self, command: str) -> None:
+        """Queue a command to run automatically on the next prompt iteration.
+
+        Prefills the input with ``command`` and marks it for auto-submit, then
+        refreshes the active prompt so the loop submits it without waiting for
+        Enter. Lets the agent launch an interactive command (setup/connect)
+        through the normal exclusive-stdin dispatch path rather than spawning it
+        mid-turn, where it would fight the live prompt for stdin.
+        """
+        self.pending_prompt_default = command
+        self.pending_prompt_autosubmit = True
+        self.notify_prompt_changed()
 
     def notify_prompt_changed(self) -> None:
         """Redraw the active prompt (placeholder state and pending prefill)."""
@@ -350,6 +386,7 @@ class ReplSession:
         self.ctrl_c_intervention_count = 0
         self.correction_intervention_count = 0
         self.pending_prompt_default = None
+        self.pending_prompt_autosubmit = False
         self.last_synthetic_observation_path = None
         # trust_mode and reasoning_effort are intentionally preserved across /new
         if rotate_identity:

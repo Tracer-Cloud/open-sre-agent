@@ -29,6 +29,22 @@ def test_system_prompt_does_not_reference_removed_slash_catalog() -> None:
     assert "slash_invoke tool description" in prompt
 
 
+def test_system_prompt_permits_read_only_discovery_for_factual_questions() -> None:
+    """The planner must be free to run a read-only command to answer "is X installed?".
+
+    Without this the planner deflects every factual question to assistant_handoff
+    and never discovers the answer itself (see the integration-awareness change).
+    """
+    prompt = _system_prompt().lower()
+    # The model is told it MAY emit a read-only discovery action and should not
+    # tell the user to go run the command themselves.
+    assert "read-only" in prompt
+    assert "/integrations" in prompt
+    assert "is sentry installed" in prompt
+    # The informational/handoff rule is now conditional, not unconditional.
+    assert "no read-only discovery command would answer it" in prompt
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [

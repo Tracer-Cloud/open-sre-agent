@@ -338,13 +338,19 @@ async def run_interactive(
                 _drain_stale_cpr_bytes()
                 try:
                     prefilled = session.take_pending_prompt_default()
-                    text = await pt_session.prompt_async(
-                        message=_message_with_spinner,
-                        bottom_toolbar=spinner.toolbar_ansi,
-                        refresh_interval=PROMPT_REFRESH_INTERVAL_S,
-                        placeholder=lambda: _prompt_surface.resolve_prompt_placeholder(session),
-                        default=prefilled,
-                    )
+                    if prefilled and session.take_pending_autosubmit():
+                        # An agent-queued command (e.g. /integrations setup) was
+                        # set before this prompt opened; auto-submit it without
+                        # waiting for input so it dispatches with exclusive stdin.
+                        text = prefilled
+                    else:
+                        text = await pt_session.prompt_async(
+                            message=_message_with_spinner,
+                            bottom_toolbar=spinner.toolbar_ansi,
+                            refresh_interval=PROMPT_REFRESH_INTERVAL_S,
+                            placeholder=lambda: _prompt_surface.resolve_prompt_placeholder(session),
+                            default=prefilled,
+                        )
                 except EOFError:
                     if state.is_dispatch_running():
                         state.cancel_current_dispatch()

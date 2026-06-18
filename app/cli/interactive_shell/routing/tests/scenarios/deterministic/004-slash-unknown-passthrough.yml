@@ -17,9 +17,7 @@ available_capabilities:
 notes: []
 
 route:
-  expected_kind: slash
-  expected_signals:
-  - slash_prefix
+  expected_kind: handle_message_with_agent
   expected_command_text: /definitely-not-a-command
 policy:
   should_execute: true

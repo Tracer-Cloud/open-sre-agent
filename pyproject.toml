@@ -28,8 +28,8 @@ dependencies = [
     "fastapi>=0.135.3",
     "uvicorn[standard]>=0.30.0",
     # Authentication
-    "PyJWT>=2.8.0",
-    "cryptography>=42.0.0",
+    "PyJWT>=2.13.0",
+    "cryptography>=48.0.1",
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",

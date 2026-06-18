@@ -8,7 +8,9 @@ input:
 session:
   has_prior_state: false
   remote_connected: false
-  configured_integrations: []
+  configured_integrations:
+  - datadog
+  - sentry
 available_capabilities:
   slash_commands:
   - /integrations
@@ -16,7 +18,7 @@ available_capabilities:
   synthetic_suites: []
 notes: []
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:
@@ -25,19 +27,23 @@ policy:
   fail_closed: false
 planned_actions:
 - kind: slash
+  content: /integrations list
   source: llm
   target_surface: slash
   command: /integrations
-  args: &id001
+  args:
   - list
-  content: /integrations list
 executed_actions:
 - kind: slash
   command: /integrations
-  args: *id001
+  args:
+  - list
   content: /integrations list
 response_contract:
   must_contain_any:
+  - connected services
+  - integrations
+  - services
   - ran /integrations list
   must_not_contain: []
 history:

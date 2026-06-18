@@ -72,7 +72,11 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         lambda payload: captured.append(payload),
     )
     session = ReplSession()
-    recorder = PromptRecorder.start(session=session, text="hello", route_kind="cli_agent")
+    recorder = PromptRecorder.start(
+        session=session,
+        text="hello",
+        route_kind="handle_message_with_agent",
+    )
     assert recorder is not None
     recorder.set_response("world", LlmRunInfo(model="gpt-test", provider="openai", latency_ms=50))
     recorder.flush()

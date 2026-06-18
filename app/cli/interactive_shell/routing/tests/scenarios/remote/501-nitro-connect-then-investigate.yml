@@ -17,7 +17,7 @@ available_capabilities:
 notes: []
 
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:

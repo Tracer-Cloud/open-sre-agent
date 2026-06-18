@@ -21,7 +21,7 @@ notes:
   \ diagnostic question. The agent should answer directly and avoid shelling out\
   \ or starting an RCA run without a configured Sentry context."
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:

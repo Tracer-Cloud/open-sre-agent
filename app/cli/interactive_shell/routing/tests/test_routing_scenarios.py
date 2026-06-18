@@ -9,13 +9,16 @@ from typing import NotRequired, TypedDict, cast
 import pytest
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
-from app.cli.interactive_shell.routing.router import classify_input, route_input
+from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
@@ -144,11 +147,13 @@ def test_deterministic_routing(deterministic_case: ScenarioCase) -> None:
     prompt = deterministic_case.scenario.input.prompt
     answer = deterministic_case.answer
 
+    # Routing is single-branch: every turn is handed to the agent.
     decision = route_input(prompt, session)
-    assert classify_input(prompt, session) == answer.route.expected_kind
-    assert decision.route_kind.value == answer.route.expected_kind
-    assert decision.matched_signals == tuple(answer.route.expected_signals)
-    assert decision.command_text == answer.route.expected_command_text
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+
+    # Deterministic command dispatch is the agent's pre-LLM fast path; it must
+    # reproduce the normalized slash command the scenario expects.
+    assert deterministic_command_text(prompt) == answer.route.expected_command_text
 
 
 def test_help_route_decision_has_structured_shape() -> None:
@@ -156,12 +161,13 @@ def test_help_route_decision_has_structured_shape() -> None:
     decision = route_input("/help", session)
 
     assert decision.to_event_payload() == {
-        "route_kind": "slash",
+        "route_kind": "handle_message_with_agent",
         "confidence": 1.0,
-        "matched_signals": "slash_prefix",
+        "matched_signals": "",
         "fallback_reason": "",
     }
-    assert decision.command_text == "/help"
+    # The agent fast path dispatches the literal slash command deterministically.
+    assert deterministic_command_text("/help") == "/help"
 
 
 @pytest.mark.integration

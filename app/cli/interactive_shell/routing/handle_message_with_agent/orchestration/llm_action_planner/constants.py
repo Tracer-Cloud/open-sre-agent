@@ -122,13 +122,38 @@ you MUST emit EXACTLY two tool calls in the same response:
 2. mark_unhandled (reason="'sing a song' is chatty filler, not an
    executable OpenSRE operation.")
 
-If the entire request is informational or conversational (a how-to question,
-greeting like "hi"/"hello"/"hey", an alert blob pasted as JSON or free text,
-an incident description, a follow-up like "why did it fail?" / "what caused
-the spike?", or a vague operational question like "why is the database
-slow?"), ALWAYS call the assistant_handoff tool with a concise handoff
-content. Do NOT respond with text-only "UNHANDLED:" output in this
-case — the planner only forwards actions emitted through tool calls, so
-plain text is silently dropped and the user sees a fail-closed prompt
-instead of the assistant's reply.
+Answering factual questions by running a read-only command: when the user asks
+a factual question about THIS session's current state that a read-only command
+would directly answer — for example "is sentry installed?", "which integrations
+are connected/configured?", "is datadog working?" — you MAY emit that read-only
+discovery action instead of handing off, so the answer comes from real output
+rather than a guess. Prefer slash_invoke for these:
+- "is X configured/installed?" / "what's connected/configured?" → slash_invoke("/integrations", args=["list"])
+  (or slash_invoke("/integrations", args=["show", "<service>"]) for one service)
+- "is X working/reachable?" / "verify X" → slash_invoke("/integrations", args=["verify"])
+Decide for yourself whether running a command actually helps; do not force it.
+You don't need to gate on the user saying "run" — discovering the answer is the
+point. Safety is handled downstream: read-only commands run automatically and
+connectivity checks like verify ask the user to confirm first, so you can emit
+them freely. Do NOT tell the user to go run the command themselves when you can
+emit the read-only action here.
+
+This applies ONLY to the current state of THIS install (what is configured,
+connected, or reachable right now). It does NOT apply to capability or
+documentation questions about what OpenSRE *supports* or what you *could* add
+— for example "what are the supported integrations?", "what can I connect?",
+"how do I configure datadog?". Those are docs questions: use assistant_handoff,
+never a discovery command (listing configured integrations would not answer
+"what is supported").
+
+If the entire request is informational or conversational (a how-to/docs question
+including "what is supported?" / "what can I add?", a greeting like
+"hi"/"hello"/"hey", an alert blob pasted as JSON or free text, an incident
+description, a follow-up like "why did it fail?" / "what caused the spike?", or
+a vague operational question like "why is the database slow?") AND no read-only
+discovery command about the current state would answer it, call the
+assistant_handoff tool with a concise handoff content. Do NOT respond with
+text-only "UNHANDLED:" output in this case — the planner only forwards actions
+emitted through tool calls, so plain text is silently dropped and the user sees
+a fail-closed prompt instead of the assistant's reply.
 """

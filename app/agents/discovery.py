@@ -10,7 +10,6 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.agents.probe import process_has_open_codex_rollout
 from app.agents.provider_ids import provider_from_classified_name
 from app.agents.registry import AgentRecord, AgentRegistry
 
@@ -57,6 +56,18 @@ _CLAUDE_DESKTOP_PATH_HINTS: tuple[str, ...] = (
     "\\program files\\claude\\",
     "\\appdata\\local\\programs\\claude\\",
 )
+
+
+def process_has_open_codex_rollout(pid: int) -> bool:
+    """Return whether ``pid`` owns a Codex rollout file when psutil is available."""
+    try:
+        from app.agents.probe import process_has_open_codex_rollout as probe_rollout_owner
+    except ModuleNotFoundError as exc:
+        if exc.name != "psutil":
+            raise
+        logger.debug("psutil is unavailable; skipping Codex rollout-owner probe")
+        return False
+    return probe_rollout_owner(pid)
 # macOS hints target the main bundle binary at
 # `<App>.app/Contents/MacOS/<App>` only, not the whole bundle. This keeps
 # Electron helper processes living under `<App>.app/Contents/Frameworks/`

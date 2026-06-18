@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
+from typing import Any
 from app.cli.interactive_shell.ui.banner import (
     render_banner,
     render_ready_box,
@@ -48,6 +48,15 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+
+
+def __getattr__(name: str) -> Any:
+    if name in {"_build_agents_table", "render_agents_table"}:
+        from app.cli.interactive_shell.ui import agents_view
+
+        return getattr(agents_view, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "ANSI_DIM",

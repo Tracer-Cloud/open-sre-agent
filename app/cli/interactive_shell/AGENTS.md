@@ -79,8 +79,22 @@ owning area rather than adding more logic to the caller.
   trigger confirmations or side effects.
 - Route command execution through the central dispatch and execution-policy
   helpers. Do not bypass `execution_policy.py` for new commands.
-- Preserve non-TTY behavior: commands that require confirmation must fail closed
-  when stdin is not interactive unless trust mode explicitly allows them.
+- **Default-allow execution policy (current behavior):** the REPL is
+  default-allow. `execution_policy.py` resolves every action to `allow` with **no
+  confirmation prompt** — all slash/`opensre` commands (any tier, including
+  `ELEVATED`), investigations, synthetic tests, code-agent launches, LLM runtime
+  switches, and inferred shell commands (including `!` passthrough and mutating
+  commands such as `rm`/`mv`/`docker`) run immediately, in any context (TTY or
+  not, trust mode or not). The only hard `deny` floor that remains is
+  `restricted` shell commands (`sudo`, `systemctl`, `kill`, `dd`, …) and shell
+  input that cannot be safely parsed (operators `| && ; > <`, command
+  substitution). Keep assigning accurate `ExecutionTier` values anyway: the tier
+  still feeds analytics, help text, and any future opt-in stricter policy, and
+  `trust_mode` plus the `ask` confirmation UX are retained for that purpose.
+- Non-TTY behavior under default-allow: actions no longer fail closed on
+  non-interactive stdin (there is nothing to confirm). The fail-closed path only
+  applies if a verdict is explicitly `ask`, which the default policy does not
+  emit.
 - **CPR / exclusive-stdin registration (required for table-outputting commands):**
   Under `patch_stdout(raw=True)`, the REPL runs dispatch concurrently with the
   next `prompt_async()`. When a command emits Rich table output, prompt_toolkit

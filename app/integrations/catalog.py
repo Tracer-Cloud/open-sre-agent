@@ -49,8 +49,28 @@ def resolve_effective_integrations(
     )
 
 
+def configured_integration_services() -> list[str]:
+    """Return lowercase service keys for integrations configured via env vars.
+
+    Single source of truth shared by the welcome banner and the REPL session so
+    they never disagree about which integrations are connected. Never raises;
+    returns an empty list on any failure so callers can treat it as best-effort.
+    """
+    try:
+        records = load_env_integrations()
+    except Exception:
+        return []
+    services: list[str] = []
+    for record in records:
+        service = str(record.get("service", "")).strip().lower()
+        if service:
+            services.append(service)
+    return list(dict.fromkeys(services))  # deduplicate, preserve order
+
+
 __all__ = [
     "classify_integrations",
+    "configured_integration_services",
     "load_env_integrations",
     "load_integrations",
     "merge_integrations_by_service",

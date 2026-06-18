@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.cli.interactive_shell.prompting.prompt_surface import (
     _DEFAULT_PLACEHOLDER_TEXT,
     resolve_prompt_placeholder,
+    wire_prompt_refresh,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind
@@ -12,6 +13,52 @@ from app.cli.interactive_shell.runtime.tasks import TaskKind
 
 def _placeholder_text(session: ReplSession) -> str:
     return resolve_prompt_placeholder(session).value
+
+
+class _FakeBuffer:
+    def __init__(self) -> None:
+        self.text = ""
+        self.submitted = False
+
+    def validate_and_handle(self) -> None:
+        self.submitted = True
+
+
+class _FakeApp:
+    is_running = True
+
+    def __init__(self) -> None:
+        self.current_buffer = _FakeBuffer()
+
+    def invalidate(self) -> None:
+        pass
+
+
+class _FakeLoop:
+    def call_soon_threadsafe(self, fn, *args) -> None:  # type: ignore[no-untyped-def]
+        fn(*args)
+
+
+class TestPromptRefreshAutoSubmit:
+    def test_queue_auto_command_fills_and_submits_prompt(self) -> None:
+        """An agent-queued interactive command should be both prefilled and
+        auto-submitted so it dispatches through the exclusive-stdin path."""
+        session = ReplSession()
+        app = _FakeApp()
+        wire_prompt_refresh(session, app, _FakeLoop())
+        session.queue_auto_command("/integrations setup sentry")
+        assert app.current_buffer.text == "/integrations setup sentry"
+        assert app.current_buffer.submitted is True
+
+    def test_plain_prefill_does_not_auto_submit(self) -> None:
+        """A prefill without the auto-submit flag must wait for the user (Enter)."""
+        session = ReplSession()
+        app = _FakeApp()
+        wire_prompt_refresh(session, app, _FakeLoop())
+        session.pending_prompt_default = "why did it fail?"
+        session.notify_prompt_changed()
+        assert app.current_buffer.text == "why did it fail?"
+        assert app.current_buffer.submitted is False
 
 
 class TestResolvePromptPlaceholder:

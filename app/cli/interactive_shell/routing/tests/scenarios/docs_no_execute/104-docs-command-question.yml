@@ -15,7 +15,7 @@ available_capabilities:
   synthetic_suites: []
 notes: []
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:
@@ -35,6 +35,9 @@ response_contract:
   - which command
   - specify
   - command
+  - opensre investigate
+  - interactive shell
+  - common ones
   must_not_contain:
   - $ /
 history:

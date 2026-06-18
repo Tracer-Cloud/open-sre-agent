@@ -15,7 +15,7 @@ available_capabilities:
   synthetic_suites: []
 notes: []
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:
@@ -28,6 +28,10 @@ planned_actions:
   source: llm
 executed_actions: []
 response_contract:
+  # The intended behavior for a vague ops question (no pasted alert) is to ask
+  # for the target system/service or alert context (see the cli_agent system
+  # prompt). Accept any phrasing that does that rather than one literal string,
+  # so the contract tracks behavior instead of exact wording.
   must_contain_any:
   - why is the database slow
   - vague operational question
@@ -38,6 +42,12 @@ response_contract:
   - which environment
   - paste
   - more context
+  - which service
+  - what service
+  - service name
+  - what context
+  - paste the alert
+  - opensre investigate
   must_not_contain:
   - $ /
 history:
@@ -45,4 +55,4 @@ history:
   - type: cli_agent
     ok: true
 tier: full
-runs: 1
+runs: 3

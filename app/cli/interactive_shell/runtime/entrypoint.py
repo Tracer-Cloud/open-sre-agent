@@ -22,9 +22,26 @@ from app.cli.interactive_shell.ui import DIM, render_banner
 log = logging.getLogger(__name__)
 
 
+def _hydrate_configured_integrations(session: ReplSession) -> None:
+    """Record env-configured integrations on the session so the agent has the facts.
+
+    Without this the agent can't answer "is X installed?" and the integration
+    guards stay dead (``configured_integrations_known`` never flips). Best-effort:
+    any failure leaves the session in its default "unknown" state.
+    """
+    try:
+        from app.integrations.catalog import configured_integration_services
+
+        session.configured_integrations = tuple(configured_integration_services())
+        session.configured_integrations_known = True
+    except Exception:
+        log.debug("could not hydrate configured integrations at REPL boot", exc_info=True)
+
+
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
     cfg = _config or ReplConfig.load()
     session = ReplSession()
+    _hydrate_configured_integrations(session)
     session.task_registry = TaskRegistry.persistent()
     pt_session = _prompt_surface._build_prompt_session()
     session.prompt_history_backend = pt_session.history

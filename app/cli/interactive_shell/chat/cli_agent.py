@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -50,18 +49,6 @@ _MAX_CLI_AGENT_TURNS = 12
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
 
-_COMMAND_SELECTION_EXACT_PROMPTS = frozenset(
-    {
-        "what command do i use",
-        "which command do i use",
-        "what command should i use",
-        "which command should i use",
-        "which command",
-    }
-)
-
-_TRAILING_PUNCTUATION_RE = re.compile(r"[\s?.!]+$")
-
 
 def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
     """True when the user is likely asking about a failed synthetic benchmark."""
@@ -91,27 +78,6 @@ def _load_synthetic_observation_text(
     return raw
 
 
-def _normalize_short_prompt(message: str) -> str:
-    lowered = " ".join(message.strip().casefold().split())
-    return _TRAILING_PUNCTUATION_RE.sub("", lowered)
-
-
-def _is_command_selection_prompt(message: str) -> bool:
-    normalized = _normalize_short_prompt(message)
-    if normalized in _COMMAND_SELECTION_EXACT_PROMPTS:
-        return True
-    return normalized.startswith("which command ") and "use" in normalized
-
-
-def _command_selection_response() -> str:
-    return (
-        "If you're asking which command to use, start with `opensre investigate` "
-        "for incidents and paste alert text, JSON, or a concrete incident "
-        "description into this interactive shell.\n\n"
-        "If you want a full command list, run `opensre --help`."
-    )
-
-
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
 
@@ -128,10 +94,37 @@ _ACTION_RULE = (
     '`{"action":"slash","command":"/model show"}` where command is one of '
     "/model show, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
-    "to run any opensre subcommand (agent is blocked). For ordinary "
+    "to run any opensre subcommand (agent is blocked); "
+    '`{"action":"run_interactive","command":"/integrations setup <service>"}` '
+    "to launch an interactive setup/connect wizard the user asked for (only "
+    "`/integrations setup <service>` or `/mcp connect <server>` are allowed). "
+    "For ordinary "
     "questions, return normal Markdown. Do not return action JSON for vague "
     "local model requests such as `connect to local llama`; answer with a brief "
     "clarification or mention `/model set ollama` as an option instead."
+)
+
+_SETUP_GUIDANCE_RULE = (
+    "Configuring or connecting an integration: when the user asks to configure, "
+    "connect, set up, add, or enable a specific integration they already named "
+    "(for example 'can you configure sentry?' or 'connect datadog'), do NOT just "
+    "tell them the command to type and do NOT talk about 'changing runtime state'. "
+    "Launch it for them by returning an action plan: "
+    '`{"action":"run_interactive","command":"/integrations setup <service>"}` '
+    "using the service they named (for an MCP server use "
+    '`{"action":"run_interactive","command":"/mcp connect <server>"}`). The '
+    "interactive wizard then prompts them for the credentials that integration "
+    "needs. This applies to any integration; never hardcode advice to one vendor."
+)
+
+# Interactive commands the assistant may auto-launch via a run_interactive action.
+# These spawn a child process that needs exclusive stdin, so they are queued to
+# run through the REPL's normal exclusive-stdin dispatch rather than inline.
+_INTERACTIVE_LAUNCH_PREFIXES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("/integrations", "setup"),
+        ("/mcp", "connect"),
+    }
 )
 
 _ALLOWED_SLASH_ACTIONS = frozenset(
@@ -162,12 +155,41 @@ def _format_history_for_prompt(session: ReplSession) -> str:
     return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
+def _build_environment_block(session: ReplSession) -> str:
+    """Render configured-integration facts so the assistant can answer directly.
+
+    Returns an empty string when the configured set is unknown, so we never
+    assert facts we don't have. When known, the model is told the exact set and
+    that anything absent is not configured — enough to answer "is X installed?"
+    without deflecting to ``/integrations``.
+    """
+    if not session.configured_integrations_known:
+        return ""
+    if session.configured_integrations:
+        connected = ", ".join(session.configured_integrations)
+        body = (
+            f"Configured integrations in this session: {connected}. "
+            "Any integration not in that list is NOT configured. When the user asks "
+            "whether a specific integration is installed/configured/connected, answer "
+            "directly and definitively from this list instead of telling them to run "
+            "a command."
+        )
+    else:
+        body = (
+            "No integrations are configured in this session. If the user asks whether "
+            "a specific integration is installed/configured, answer that none are "
+            "configured rather than deflecting."
+        )
+    return f"--- Environment (configured integrations) ---\n{body}\n\n"
+
+
 def _build_system_prompt(
     reference: str,
     history: str,
     agents_md: str = "",
     investigation_flow: str = "",
     prior_investigation: str = "",
+    environment: str = "",
 ) -> str:
     """Build the system prompt for one assistant turn.
 
@@ -191,11 +213,12 @@ def _build_system_prompt(
     )
     return (
         "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
-        "usage, the interactive shell, and onboarding. A deterministic pre-pass "
-        "runs first: it executes eligible local commands as argv (no shell) "
-        "under a read-only allowlist; users must prefix with ! for full-shell "
-        "semantics (pipes, redirects, mutating commands). Do not tell users the "
-        "interactive shell cannot execute commands. You do NOT run incident "
+        "usage, the interactive shell, and onboarding. Explicit slash commands "
+        "and command aliases execute before this assistant as argv, without "
+        "shell semantics; ordinary free text should be answered conversationally. "
+        "Users must prefix with ! for full-shell semantics (pipes, redirects, "
+        "mutating commands). Do not tell users the interactive shell cannot "
+        "execute commands. You do NOT run incident "
         "investigations yourself "
         "(those use the separate investigation pipeline), but you are grounded on "
         "that pipeline's architecture below and can answer questions about its "
@@ -211,7 +234,9 @@ def _build_system_prompt(
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
         "ask for the target system, service, or alert context.\n\n"
+        f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
+        f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
@@ -317,6 +342,8 @@ def _execute_action_plan(
         elif kind == "run_cli_command":
             args = str(action.get("args", "")).strip()
             label = f"opensre {args}" if args else "opensre"
+        elif kind == "run_interactive":
+            label = str(action.get("command", "")).strip() or "interactive command"
         else:
             label = f"unsupported action: {kind or '?'}"
         console.print(f"[{DIM}]{index}.[/] [{BOLD_BRAND}]{escape(label)}[/]")
@@ -446,6 +473,27 @@ def _execute_action_plan(
             )
             continue
 
+        if kind == "run_interactive":
+            command = str(action.get("command", "")).strip()
+            parts = command.split()
+            head = tuple(part.lower() for part in parts[:2])
+            if head not in _INTERACTIVE_LAUNCH_PREFIXES:
+                console.print(f"[{ERROR}]unsupported interactive command:[/] {escape(command)}")
+                continue
+            from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
+
+            if not repl_tty_interactive():
+                # No interactive prompt to auto-submit into (scripted/non-TTY);
+                # fall back to telling the user the command to run.
+                console.print(
+                    f"Run [bold]{escape(command)}[/bold] to start the interactive setup; "
+                    "it prompts for the required credentials."
+                )
+                continue
+            console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(command)}[/]…")
+            session.queue_auto_command(command)
+            continue
+
         console.print(f"[{ERROR}]unsupported action:[/] {escape(kind or '?')}")
     console.print()
     return True
@@ -459,6 +507,26 @@ def _record_cli_agent_turn(session: ReplSession, message: str, assistant_text: s
         session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
 
 
+def _build_observation_block(tool_observation: str | None) -> str:
+    """Wrap a discovery command's output so the assistant summarizes it directly.
+
+    Used by the observe→answer loop: after the planner runs a read-only command
+    (e.g. ``/integrations``) to answer a question, its output is fed back here so
+    the user gets a concise answer instead of only a raw table.
+    """
+    if not tool_observation or not tool_observation.strip():
+        return ""
+    return (
+        "A read-only discovery command was just run to answer the user's question; "
+        "its output is below. Summarize it to answer the user's question directly "
+        "and concisely (for example, whether a specific integration is configured), "
+        "citing the relevant status. The output is already on screen, so keep it "
+        "short. Do NOT request, plan, or emit any further actions — just answer in "
+        "plain Markdown.\n\n"
+        f"--- command_output ---\n{tool_observation}\n\n"
+    )
+
+
 def answer_cli_agent(
     message: str,
     session: ReplSession,
@@ -466,6 +534,7 @@ def answer_cli_agent(
     *,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
+    tool_observation: str | None = None,
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
@@ -476,22 +545,10 @@ def answer_cli_agent(
     so the interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
     through its active prompt_toolkit input, while scripted seeded input fails
     closed instead of blocking on stdin.
-    """
-    if _is_command_selection_prompt(message):
-        deterministic_response = _command_selection_response()
-        stream_to_console(
-            console,
-            label=STREAM_LABEL_ASSISTANT,
-            chunks=iter((deterministic_response,)),
-        )
-        _record_cli_agent_turn(session, message, deterministic_response)
-        return LlmRunInfo(
-            model="deterministic_command_selection",
-            provider="local",
-            latency_ms=0,
-            response_text=deterministic_response,
-        )
 
+    ``tool_observation`` carries the output of a read-only discovery command the
+    planner just ran, so this turn summarizes that result into a direct answer.
+    """
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
@@ -510,9 +567,11 @@ def answer_cli_agent(
     integration_guard = ""
     if session.configured_integrations_known and not session.configured_integrations:
         integration_guard = (
-            "No integrations are configured in this session. Do not emit run_cli_command "
-            "or slash actions for integration setup/show/verify/remove; answer with guidance "
-            "only.\n\n"
+            "No integrations are configured in this session. You may still help the user "
+            "configure one: when they ask to set up, connect, or add an integration, emit a "
+            "run_interactive action for `/integrations setup <service>` (or `/mcp connect "
+            "<server>`). Do NOT emit run_cli_command or slash actions to show/verify/remove "
+            "integrations that are not configured; for those, answer with guidance only.\n\n"
         )
     system = _build_system_prompt(
         reference,
@@ -520,6 +579,7 @@ def answer_cli_agent(
         agents_md=agents_md,
         investigation_flow=investigation_flow,
         prior_investigation=prior_investigation,
+        environment=_build_environment_block(session),
     )
     user_block = f"--- User message ---\n{message}"
     synthetic_block = ""
@@ -535,7 +595,8 @@ def answer_cli_agent(
                 "that you lack context — the run completed and this file was written.\n\n"
                 f"--- observation_json ---\n{obs_text}\n\n"
             )
-    prompt = f"{system}\n{integration_guard}{synthetic_block}{user_block}"
+    observation_block = _build_observation_block(tool_observation)
+    prompt = f"{system}\n{integration_guard}{observation_block}{synthetic_block}{user_block}"
 
     try:
         client = get_llm_for_reasoning()

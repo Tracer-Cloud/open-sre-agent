@@ -1,12 +1,11 @@
-"""Shared routing types for the interactive-shell router and LLM classifier phase.
+"""Shared routing types for the interactive-shell router.
 
-Extracted from the router module to keep routing and classifier modules
-decoupled and free of import cycles.
+Extracted from the router module to keep the router entrypoint minimal and free
+of import cycles.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
@@ -17,11 +16,7 @@ class RoutingSession(Protocol):
 
 
 class RouteKind(StrEnum):
-    SLASH = "slash"
-    CLI_HELP = "cli_help"
-    CLI_AGENT = "cli_agent"
-    NEW_ALERT = "new_alert"
-    FOLLOW_UP = "follow_up"
+    HANDLE_MESSAGE_WITH_AGENT = "handle_message_with_agent"
 
 
 @dataclass(frozen=True)
@@ -44,17 +39,8 @@ class RouteDecision:
         }
 
 
-@dataclass(frozen=True)
-class RouteRule:
-    name: str
-    route_kind: RouteKind
-    confidence: float
-    matcher: Callable[[str, RoutingSession], bool]
-
-
 __all__ = [
     "RouteDecision",
     "RouteKind",
-    "RouteRule",
     "RoutingSession",
 ]

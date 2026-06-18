@@ -361,7 +361,7 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     history_raw = _require_mapping(data.get("history", {}), label=f"{answer_path} history")
 
     expected_kind = str(route_raw.get("expected_kind", "")).strip()
-    if expected_kind not in {"slash", "cli_agent"}:
+    if expected_kind != "handle_message_with_agent":
         msg = f"{answer_path}: invalid route.expected_kind {expected_kind!r}."
         raise ValueError(msg)
 

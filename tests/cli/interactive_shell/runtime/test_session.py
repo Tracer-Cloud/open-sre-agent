@@ -43,6 +43,29 @@ class TestReplSession:
         session.clear()
         assert session.pending_prompt_default is None
 
+    def test_queue_auto_command_sets_pending_and_notifies(self) -> None:
+        session = ReplSession()
+        calls: list[bool] = []
+        session.prompt_refresh_fn = lambda: calls.append(True)
+        session.queue_auto_command("/integrations setup sentry")
+        assert session.pending_prompt_default == "/integrations setup sentry"
+        assert session.pending_prompt_autosubmit is True
+        assert calls == [True]
+
+    def test_take_pending_autosubmit_returns_and_clears(self) -> None:
+        session = ReplSession()
+        session.pending_prompt_autosubmit = True
+        assert session.take_pending_autosubmit() is True
+        assert session.pending_prompt_autosubmit is False
+        assert session.take_pending_autosubmit() is False
+
+    def test_clear_resets_pending_autosubmit(self) -> None:
+        session = ReplSession()
+        session.queue_auto_command("/integrations setup sentry")
+        session.clear()
+        assert session.pending_prompt_autosubmit is False
+        assert session.pending_prompt_default is None
+
     def test_scenario_id_from_synthetic_label(self) -> None:
         assert (
             _scenario_id_from_synthetic_label(

@@ -10,13 +10,16 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
-from app.cli.interactive_shell.routing.router import RouteKind, route_input
+from app.cli.interactive_shell.routing.router import route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
@@ -110,9 +113,9 @@ def _compact_action(action: PlannedAction) -> ExpectedAction:
 
 
 def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
-    decision = route_input(case["input"], ReplSession())
-    if decision.route_kind == RouteKind.SLASH:
-        return [{"kind": "slash", "content": decision.command_text or case["input"].strip()}]
+    command_text = deterministic_command_text(case["input"])
+    if command_text is not None:
+        return [{"kind": "slash", "content": command_text}]
 
     llm_plan = plan_actions_with_llm(case["input"])
     if llm_plan is None:

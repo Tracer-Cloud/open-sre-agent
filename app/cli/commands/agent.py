@@ -15,9 +15,7 @@ from app.agents.discovery import (
     process_command,
     registered_and_discovered_agents,
 )
-from app.agents.probe import pid_exists
 from app.agents.registry import AgentRecord, AgentRegistry
-from app.cli.interactive_shell.ui.agents_view import render_agents_table
 from app.cli.interactive_shell.ui.rendering import repl_table
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
 
@@ -27,9 +25,23 @@ def agents() -> None:
     """Manage the local AI agent fleet (Claude Code, Cursor, Aider, ...)."""
 
 
+def _pid_exists(pid: int) -> bool:
+    try:
+        from app.agents.probe import pid_exists
+    except ModuleNotFoundError as exc:
+        if exc.name != "psutil":
+            raise
+        raise click.ClickException(
+            "agent process watching requires psutil; run `uv sync` or reinstall OpenSRE"
+        ) from exc
+    return pid_exists(pid)
+
+
 @agents.command(name="list")
 def list_agents() -> None:
     """List registered and auto-discovered local agents."""
+    from app.cli.interactive_shell.ui.agents_view import render_agents_table
+
     console = Console()
     render_agents_table(console, registered_and_discovered_agents(AgentRegistry()))
 
@@ -123,12 +135,12 @@ def watch_agent(pid: int, interval: float, timeout: float | None) -> None:
         raise click.BadParameter("must be positive", param_hint="--timeout")
 
     started = time.monotonic()
-    if not pid_exists(pid):
+    if not _pid_exists(pid):
         click.echo(f"pid {pid} is not running")
         return
 
     click.echo(f"watching pid {pid}; press Ctrl+C to stop")
-    while pid_exists(pid):
+    while _pid_exists(pid):
         if timeout is not None and time.monotonic() - started >= timeout:
             raise click.ClickException(f"pid {pid} is still running after {timeout:g}s")
         time.sleep(interval)

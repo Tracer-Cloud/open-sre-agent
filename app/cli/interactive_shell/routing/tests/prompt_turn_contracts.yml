@@ -1,6 +1,6 @@
 - id: slash_help_prefix
   input: "/help"
-  expected_route_kind: "slash"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "slash"
       content: "/help"
@@ -16,7 +16,7 @@
 
 - id: bare_help_alias
   input: "help"
-  expected_route_kind: "slash"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "slash"
       content: "/help"
@@ -32,7 +32,7 @@
 
 - id: typoed_help_alias
   input: "hlep"
-  expected_route_kind: "slash"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "slash"
       content: "/help"
@@ -48,7 +48,7 @@
 
 - id: docs_run_investigation
   input: "how do I run an investigation?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:run_investigation"
@@ -63,7 +63,7 @@
 
 - id: docs_datadog_setup
   input: "how do I configure datadog?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:datadog_setup"
@@ -77,7 +77,7 @@
 
 - id: docs_supported_integrations
   input: "what are the supported integrations?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:supported_integrations"
@@ -91,7 +91,7 @@
 
 - id: docs_railway_deploy
   input: "how to deploy OpenSRE on Railway?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:railway_deploy"
@@ -105,7 +105,7 @@
 
 - id: docs_command_question
   input: "what command do I use?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:command_selection"
@@ -119,7 +119,7 @@
 
 - id: cli_agent_run_sample_alert
   input: "run a sample alert"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "sample_alert"
       content: "generic"
@@ -138,7 +138,7 @@
 
 - id: cli_agent_try_sample_alert
   input: "try a sample alert"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "sample_alert"
       content: "generic"
@@ -157,7 +157,7 @@
 
 - id: cli_agent_synthetic_connection_exhaustion
   input: "run synthetic test 002-connection-exhaustion"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "synthetic_test"
       content: "rds_postgres:002-connection-exhaustion"
@@ -176,7 +176,7 @@
 
 - id: cli_agent_synthetic_storage_full
   input: "run synthetic test 003-storage-full"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "synthetic_test"
       content: "rds_postgres:003-storage-full"
@@ -195,7 +195,7 @@
 
 - id: cli_agent_synthetic_bare_numeric_id
   input: "run synthetic test 005 now"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "synthetic_test"
       content: "rds_postgres:005-failover"
@@ -214,7 +214,7 @@
 
 - id: cli_agent_synthetic_cpu_saturation
   input: "launch synthetic test 004-cpu-saturation-bad-query"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "synthetic_test"
       content: "rds_postgres:004-cpu-saturation-bad-query"
@@ -233,7 +233,7 @@
 
 - id: cli_agent_show_connected_services
   input: "show me connected services"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "slash"
       content: "/integrations list"
@@ -252,7 +252,7 @@
 
 - id: cli_agent_health_then_connected_services
   input: "check the health of my opensre and then show me all connected services"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "slash"
       content: "/health"
@@ -279,7 +279,7 @@
 
 - id: cli_agent_connect_local_llama
   input: "please connect to local llama"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "provider:local_llama_connect"
@@ -293,7 +293,7 @@
 
 - id: cli_agent_low_signal_greeting
   input: "hello"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "chat:greeting"
@@ -307,7 +307,7 @@
 
 - id: cli_agent_freeform_operational
   input: "why is the database slow?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "diagnostic_question:database_slow"
@@ -321,7 +321,7 @@
 
 - id: cli_agent_alert_json_blob
   input: '{"alertname": "HighCPU", "severity": "critical"}'
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "alert_payload:json_blob"
@@ -335,7 +335,7 @@
 
 - id: new_alert_checkout_502_rate
   input: "the checkout service is returning 502 errors for 30% of requests"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "incident_description:checkout_502_rate"
@@ -349,7 +349,7 @@
 
 - id: new_alert_orders_cpu_99
   input: "CPU is spiking to 99% on the orders-api pods"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "investigation"
       content: "CPU is spiking to 99% on the orders-api pods"
@@ -363,7 +363,7 @@
 
 - id: follow_up_why_failed_with_state
   input: "why did it fail?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
@@ -378,7 +378,7 @@
 
 - id: follow_up_spike_cause_with_state
   input: "what caused the spike?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
@@ -393,7 +393,7 @@
 
 - id: follow_up_what_happened_with_state
   input: "what happened?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
@@ -408,7 +408,7 @@
 
 - id: follow_up_last_investigation_wording_with_state
   input: "No, during the last investigation"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   with_prior_state: true
   expected_planned_actions:
     - kind: "assistant_handoff"
@@ -423,7 +423,7 @@
 
 - id: cli_help_latency_measurement
   input: "how do I measure latency with opensre?"
-  expected_route_kind: "cli_agent"
+  expected_route_kind: "handle_message_with_agent"
   expected_planned_actions:
     - kind: "assistant_handoff"
       content: "docs:latency_measurement"

@@ -1,4 +1,4 @@
-"""Alias catalog for deterministic CLI command resolution."""
+"""Alias catalog for deterministic CLI command detection."""
 
 from __future__ import annotations
 

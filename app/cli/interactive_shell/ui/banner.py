@@ -303,15 +303,14 @@ _SERVICE_DISPLAY_NAMES: dict[str, str] = {
 def _load_configured_integrations() -> list[str]:
     """Return display names for integrations currently configured via env vars. Never raises."""
     try:
-        from app.integrations.catalog import load_env_integrations  # lazy — avoids circular deps
+        from app.integrations.catalog import (  # lazy — avoids circular deps
+            configured_integration_services,
+        )
 
-        records = load_env_integrations()
-        names: list[str] = []
-        for record in records:
-            service = str(record.get("service", "")).strip().lower()
-            if service:
-                names.append(_SERVICE_DISPLAY_NAMES.get(service, service.title()))
-        return list(dict.fromkeys(names))  # deduplicate, preserve order
+        return [
+            _SERVICE_DISPLAY_NAMES.get(service, service.title())
+            for service in configured_integration_services()
+        ]
     except Exception:
         return []
 

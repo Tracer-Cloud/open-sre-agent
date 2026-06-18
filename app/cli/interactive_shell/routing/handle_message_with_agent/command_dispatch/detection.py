@@ -1,18 +1,24 @@
-"""Bare-alias matching and slash-dispatch normalization helpers."""
+"""Deterministic command detection for the interactive-shell agent fast path.
+
+These helpers decide whether a turn is a literal slash command, a bare command
+alias (including single-edit typos), or an ``opensre investigate`` quick-start,
+and return the normalized slash command text to dispatch. They never call the
+LLM; the agent uses them to short-circuit straight to slash dispatch.
+"""
 
 from __future__ import annotations
 
 import re
 import shlex
 
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
-    is_single_edit_typo,
-    normalize_intent_text,
-)
-from app.cli.interactive_shell.routing.resolve_cli_command.catalog import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.catalog import (
     BARE_COMMAND_ALIAS_MAP,
     BARE_COMMAND_ALIASES,
     BARE_COMMAND_ALIASES_WITH_ARGS,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser import (
+    is_single_edit_typo,
+    normalize_intent_text,
 )
 
 _OPENSRE_WRAPPED_SLASH_RE = re.compile(r"^/opensre(?:\s+(?P<inner>.+))?$", re.IGNORECASE)
@@ -35,7 +41,7 @@ def _unwrap_opensre_wrapped_slash(text: str) -> str:
 
 
 def opensre_investigate_slash_text(text: str) -> str | None:
-    """Map ``opensre investigate -i <file>`` to ``/investigate <file>`` for deterministic routing."""
+    """Map ``opensre investigate -i <file>`` to ``/investigate <file>`` for deterministic dispatch."""
     stripped = text.strip()
     match = _OPENSRE_INVESTIGATE_RE.match(stripped)
     if match is not None:
@@ -90,7 +96,24 @@ def slash_dispatch_text(text: str) -> str:
     return f"/{stripped}"
 
 
+def deterministic_command_text(text: str) -> str | None:
+    """Return normalized slash command text for deterministic command input, else ``None``.
+
+    Handles ``opensre investigate`` quick-start, literal ``/slash`` input, and
+    bare command aliases (including single-edit typos). Returns ``None`` for any
+    input that should fall through to the LLM-backed agent.
+    """
+    investigate_slash = opensre_investigate_slash_text(text)
+    if investigate_slash is not None:
+        return investigate_slash
+    stripped = text.strip()
+    if stripped.startswith("/") or is_bare_command_alias(text):
+        return slash_dispatch_text(text)
+    return None
+
+
 __all__ = [
+    "deterministic_command_text",
     "is_bare_command_alias",
     "opensre_investigate_slash_text",
     "slash_dispatch_text",

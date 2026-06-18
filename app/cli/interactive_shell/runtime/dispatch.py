@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import threading
 from collections.abc import Callable
-from dataclasses import replace
 
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
@@ -13,6 +12,9 @@ from rich.console import Console
 
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from app.cli.interactive_shell.routing import router as _router
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
+)
 from app.cli.interactive_shell.runtime.execution import execute_routed_turn
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
@@ -20,7 +22,6 @@ from app.cli.interactive_shell.ui import render_banner
 from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
 render_submitted_prompt = _prompt_surface.render_submitted_prompt
-resolve_cli_command = _router.resolve_cli_command
 
 _INTERVENTION_CORRECTION_RE = re.compile(
     r"("
@@ -104,11 +105,11 @@ def looks_like_correction(text: str) -> bool:
     return _INTERVENTION_CORRECTION_RE.match(stripped[:80]) is not None
 
 
-def dispatch_should_show_spinner(text: str, session: ReplSession) -> bool:
-    return resolve_cli_command(text.strip(), session) is None
+def dispatch_should_show_spinner(text: str, _session: ReplSession) -> bool:
+    return deterministic_command_text(text.strip()) is None
 
 
-def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
+def dispatch_needs_exclusive_stdin(text: str, _session: ReplSession) -> bool:
     if not repl_tty_interactive():
         return False
 
@@ -116,10 +117,9 @@ def dispatch_needs_exclusive_stdin(text: str, session: ReplSession) -> bool:
     if not t:
         return False
 
-    command_decision = resolve_cli_command(t, session)
-    if command_decision is None:
+    dispatch_text = deterministic_command_text(t)
+    if dispatch_text is None:
         return False
-    dispatch_text = command_decision.command_text or t
 
     parts = dispatch_text.split()
     if not parts:
@@ -146,14 +146,6 @@ def dispatch_one_turn(
     is_tty: bool | None = None,
 ) -> None:
     decision = _router.route_input(text, session)
-    kind = decision.route_kind.value
-    if kind in ("follow_up", "new_alert") and looks_like_correction(text):
-        session.record_intervention("correction")
-    if kind == "slash" and not getattr(decision, "command_text", None):
-        command_decision = resolve_cli_command(text.strip(), session)
-        normalized_command = command_decision.command_text if command_decision else text.strip()
-        if hasattr(decision, "__dataclass_fields__"):
-            decision = replace(decision, command_text=normalized_command)
     execute_routed_turn(
         text,
         session,

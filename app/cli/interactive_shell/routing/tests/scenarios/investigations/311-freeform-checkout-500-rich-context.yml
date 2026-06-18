@@ -26,7 +26,7 @@ notes:
 - "Complements 307-new-alert-checkout-502 (single-line) by covering the structured\
   \ multi-line format users naturally paste from incident dashboards."
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:

@@ -17,9 +17,7 @@ available_capabilities:
 notes: []
 
 route:
-  expected_kind: slash
-  expected_signals:
-  - bare_command_alias
+  expected_kind: handle_message_with_agent
   expected_command_text: /welcome
 policy:
   should_execute: true

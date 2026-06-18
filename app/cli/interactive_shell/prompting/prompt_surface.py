@@ -23,7 +23,9 @@ from app.cli.interactive_shell.command_registry.help import QUICK_ACCESS_COMMAND
 from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.routing.resolve_cli_command.catalog import BARE_COMMAND_ALIASES
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.catalog import (
+    BARE_COMMAND_ALIASES,
+)
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     ANSI_DIM,
@@ -362,9 +364,30 @@ def wire_prompt_refresh(
     def refresh_active_prompt() -> None:
         def _apply() -> None:
             pending = session.pending_prompt_default
-            if pending and pt_app.is_running and not pt_app.current_buffer.text:
+            buffer = pt_app.current_buffer
+            # Never clobber text the user is actively typing.
+            if not pending or buffer.text:
+                invalidate_prompt()
+                return
+            if session.pending_prompt_autosubmit:
+                # Auto-submit an agent-queued interactive command so it dispatches
+                # through the normal exclusive-stdin path (the only place an
+                # interactive child process gets clean stdin). Note: pt_app.is_running
+                # under-reports while prompt_async awaits during a dispatch, so we do
+                # not gate on it; validate_and_handle works regardless. If the app is
+                # genuinely not accepting input, leave the prefill in place so the
+                # next prompt iteration picks it up via the before-prompt path.
                 session.pending_prompt_default = None
-                pt_app.current_buffer.text = pending
+                session.take_pending_autosubmit()
+                buffer.text = pending
+                try:
+                    buffer.validate_and_handle()
+                except Exception:  # noqa: BLE001
+                    session.pending_prompt_default = pending
+                    session.pending_prompt_autosubmit = True
+            elif pt_app.is_running:
+                session.pending_prompt_default = None
+                buffer.text = pending
             invalidate_prompt()
 
         loop.call_soon_threadsafe(_apply)

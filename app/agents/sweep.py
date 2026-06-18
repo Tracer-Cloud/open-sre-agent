@@ -26,7 +26,6 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.agents.probe import pid_exists
 from app.agents.registry import AgentRecord, AgentRegistry
 from app.constants import OPENSRE_HOME_DIR
 
@@ -34,6 +33,18 @@ logger = logging.getLogger(__name__)
 
 #: Default location of the per-PID lockfile directory.
 DEFAULT_LOCK_DIR: Path = OPENSRE_HOME_DIR / "agents"
+
+
+def pid_exists(pid: int) -> bool:
+    """Return PID liveness, defaulting to live when psutil is unavailable."""
+    try:
+        from app.agents.probe import pid_exists as probe_pid_exists
+    except ModuleNotFoundError as exc:
+        if exc.name != "psutil":
+            raise
+        logger.debug("psutil is unavailable; skipping stale agent sweep")
+        return True
+    return probe_pid_exists(pid)
 
 
 @dataclass(frozen=True)

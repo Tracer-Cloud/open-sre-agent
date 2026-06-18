@@ -84,6 +84,31 @@ class TestReportValidationFailure:
         mock_log.error.assert_called_once()
         mock_log.warning.assert_not_called()
 
+    def test_default_suppresses_terminal_traceback(self) -> None:
+        """Validator failures must not dump a stack trace into the REPL by default."""
+        mock_log = _mock_logger()
+        with patch("app.utils.errors.capture_exception"):
+            report_validation_failure(
+                RuntimeError("boom"),
+                logger=mock_log,
+                integration="github_mcp",
+                method="validate_github_mcp_config",
+            )
+        assert mock_log.warning.call_args.kwargs["exc_info"] is False
+
+    def test_traceback_included_when_explicitly_requested(self) -> None:
+        mock_log = _mock_logger()
+        exc = RuntimeError("boom")
+        with patch("app.utils.errors.capture_exception"):
+            report_validation_failure(
+                exc,
+                logger=mock_log,
+                integration="github_mcp",
+                method="validate_github_mcp_config",
+                include_traceback=True,
+            )
+        assert mock_log.warning.call_args.kwargs["exc_info"] is exc
+
     def test_captures_to_sentry_exactly_once(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("once")

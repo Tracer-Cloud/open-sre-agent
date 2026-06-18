@@ -3,7 +3,7 @@ title: Pasted alert JSON payload
 intent_class: investigation
 risk_level: medium
 input:
-  prompt: '{"alertname": "HighCPU", "severity": "critical"}'
+  prompt: 'investigate this alert: {"alertname": "HighCPU", "severity": "critical"}'
   surface: interactive_cli
 session:
   has_prior_state: false
@@ -15,18 +15,20 @@ available_capabilities:
   synthetic_suites: []
 notes: []
 route:
-  expected_kind: cli_agent
+  expected_kind: handle_message_with_agent
   expected_signals: []
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
 planned_actions:
-- kind: assistant_handoff
-  content: alert_payload:json_blob
+- kind: investigation
+  content: '{"alertname": "HighCPU", "severity": "critical"}'
   source: llm
-executed_actions: []
+  target_surface: investigation
+executed_actions:
+- kind: investigation
 response_contract:
   must_contain_any:
   - alert payload
@@ -39,6 +41,8 @@ response_contract:
 history:
   expected:
   - type: cli_agent
+    ok: true
+  - type: alert
     ok: true
 tier: full
 runs: 3

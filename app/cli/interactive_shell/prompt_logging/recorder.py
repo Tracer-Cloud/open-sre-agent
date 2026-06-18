@@ -15,11 +15,13 @@ from app.cli.interactive_shell.prompt_logging.sinks.local_jsonl import append_pr
 from app.cli.interactive_shell.prompt_logging.sinks.posthog_ai import capture_ai_generation
 from app.version import get_version
 
-_SUPPORTED_ROUTE_KINDS = frozenset({"cli_agent", "cli_help", "follow_up", "new_alert"})
+_SUPPORTED_ROUTE_KINDS = frozenset(
+    {"handle_message_with_agent", "cli_help", "follow_up", "new_alert"}
+)
 
 # Maps PromptRecorder route_kind → session turn kind stored in turn_detail records.
 _ROUTE_TO_SESSION_KIND: dict[str, str] = {
-    "cli_agent": "chat",
+    "handle_message_with_agent": "chat",
     "cli_help": "chat",
     "follow_up": "follow_up",
     "new_alert": "alert",
