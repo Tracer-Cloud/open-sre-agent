@@ -4,8 +4,10 @@ Clerk JWT configuration for both development and production environments.
 These are public endpoints and issuer URLs, not secrets.
 """
 
+import logging
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
 from difflib import get_close_matches
 from enum import Enum
 from typing import Literal
@@ -15,6 +17,8 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from app.llm_credentials import resolve_llm_api_key
 from app.strict_config import StrictConfigModel
 from app.utils.config import load_env
+
+logger = logging.getLogger(__name__)
 
 
 class LLMModelConfig(StrictConfigModel):
@@ -501,6 +505,125 @@ def _is_only_missing_llm_api_key_validation(exc: ValidationError) -> bool:
     return "LLM provider" in msg and "requires" in msg and "API_KEY" in msg and "to be set" in msg
 
 
+@dataclass(frozen=True)
+class LLMResolution:
+    """Outcome of resolving usable LLM settings, with fallback diagnostics.
+
+    :func:`resolve_llm_settings` can silently switch away from the configured
+    provider when that provider is missing credentials. This record makes the
+    decision observable: callers can see whether a fallback happened, which
+    provider is actually being used, and why the configured one was skipped.
+    Without it, a missing ``OPENAI_API_KEY`` surfaces only as a confusing
+    "Anthropic credit balance too low" error even though the user configured
+    OpenAI.
+    """
+
+    settings: LLMSettings
+    configured_provider: str
+    resolved_provider: str
+    attempted_providers: tuple[str, ...]
+    missing_key_env: str | None
+
+    @property
+    def fell_back(self) -> bool:
+        """True when the active provider differs from the configured one."""
+        return self.resolved_provider != self.configured_provider
+
+    def summary(self) -> str:
+        """One-line, user-facing description of the active provider decision."""
+        if not self.fell_back:
+            return f"Using configured LLM provider '{self.resolved_provider}'."
+        reason = (
+            f"{self.missing_key_env} is not set" if self.missing_key_env else "it is unavailable"
+        )
+        hint = (
+            f" Set {self.missing_key_env} or change LLM_PROVIDER to use it."
+            if self.missing_key_env
+            else ""
+        )
+        return (
+            f"Configured LLM provider '{self.configured_provider}' is unusable "
+            f"({reason}); falling back to '{self.resolved_provider}'.{hint}"
+        )
+
+
+# Deduplicates fallback warnings so the operational breadcrumb is logged once
+# per distinct fallback condition instead of on every client creation.
+_LLM_FALLBACK_WARNING_CACHE: set[tuple[str, str, str | None]] = set()
+
+
+def reset_llm_fallback_warning_cache() -> None:
+    """Clear the fallback-warning dedup cache (test/diagnostic helper)."""
+    _LLM_FALLBACK_WARNING_CACHE.clear()
+
+
+def _warn_on_llm_fallback(resolution: LLMResolution) -> None:
+    if not resolution.fell_back:
+        return
+    signature = (
+        resolution.configured_provider,
+        resolution.resolved_provider,
+        resolution.missing_key_env,
+    )
+    if signature in _LLM_FALLBACK_WARNING_CACHE:
+        return
+    _LLM_FALLBACK_WARNING_CACHE.add(signature)
+    logger.warning("%s", resolution.summary())
+
+
+def resolve_llm_settings_verbose(
+    fallback_providers: Sequence[str] = DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+) -> LLMResolution:
+    """Resolve usable LLM settings and report any provider fallback.
+
+    Behaves exactly like :func:`resolve_llm_settings` but returns an
+    :class:`LLMResolution` describing whether the configured provider was used
+    or a fallback was chosen (and why). Emits a deduplicated warning when a
+    fallback occurs so operators can see, in logs, that calls are going to a
+    different provider than the one they configured.
+    """
+    load_env(override=False)
+    configured_provider = get_configured_llm_provider()
+    attempted = _candidate_llm_providers(configured_provider, fallback_providers)
+    configured_missing_key_error: ValidationError | None = None
+
+    for provider in attempted:
+        try:
+            settings = LLMSettings.model_validate(_llm_settings_env_payload(provider))
+        except ValidationError as exc:
+            if not _is_only_missing_llm_api_key_validation(exc):
+                raise
+            if provider == configured_provider:
+                configured_missing_key_error = exc
+            continue
+        resolution = LLMResolution(
+            settings=settings,
+            configured_provider=configured_provider,
+            resolved_provider=settings.provider,
+            attempted_providers=attempted,
+            missing_key_env=(
+                get_llm_provider_api_key_env(configured_provider)
+                if settings.provider != configured_provider
+                else None
+            ),
+        )
+        _warn_on_llm_fallback(resolution)
+        return resolution
+
+    if configured_missing_key_error is not None:
+        raise configured_missing_key_error
+    # Defensive parity with the strict path: no candidate validated for a
+    # non-key reason. Re-raise the strict error semantics.
+    settings = LLMSettings.from_env()
+    return LLMResolution(
+        settings=settings,
+        configured_provider=configured_provider,
+        resolved_provider=settings.provider,
+        attempted_providers=attempted,
+        missing_key_env=None,
+    )
+
+
 def resolve_llm_settings(
     fallback_providers: Sequence[str] = DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
 ) -> LLMSettings:
@@ -509,24 +632,73 @@ def resolve_llm_settings(
     ``LLMSettings.from_env`` remains strict: it validates the configured provider
     exactly. This resolver is for runtime and live-test paths that can safely use
     another hosted provider when the configured/default provider lacks credentials
-    but an equivalent provider, such as OpenAI, is configured.
+    but an equivalent provider, such as OpenAI, is configured. Use
+    :func:`resolve_llm_settings_verbose` when you need to know whether a fallback
+    occurred.
     """
-    load_env(override=False)
-    configured_provider = get_configured_llm_provider()
-    configured_missing_key_error: ValidationError | None = None
+    return resolve_llm_settings_verbose(fallback_providers).settings
 
-    for provider in _candidate_llm_providers(configured_provider, fallback_providers):
-        try:
-            return LLMSettings.model_validate(_llm_settings_env_payload(provider))
-        except ValidationError as exc:
-            if not _is_only_missing_llm_api_key_validation(exc):
-                raise
-            if provider == configured_provider:
-                configured_missing_key_error = exc
 
-    if configured_missing_key_error is not None:
-        raise configured_missing_key_error
-    return LLMSettings.from_env()
+def describe_llm_resolution(
+    fallback_providers: Sequence[str] = DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+) -> str:
+    """Return a human-readable LLM provider resolution report for diagnostics.
+
+    Safe to call even when no provider has usable credentials: instead of
+    raising it reports the missing-credentials condition. Intended for
+    ``/status``, doctor commands, and CI diagnostics so operators no longer need
+    ad-hoc inline probes to see which provider is actually in use.
+    """
+    configured = get_configured_llm_provider()
+    try:
+        resolution = resolve_llm_settings_verbose(fallback_providers)
+    except ValidationError as exc:
+        env_var = get_llm_provider_api_key_env(configured)
+        detail = exc.errors()[0].get("msg", str(exc)) if exc.errors() else str(exc)
+        lines = [
+            f"configured provider : {configured}",
+            "resolved provider   : <none — no usable provider credentials>",
+        ]
+        if env_var:
+            lines.append(f"required key        : {env_var}")
+        lines.append(f"detail              : {detail}")
+        return "\n".join(lines)
+
+    lines = [
+        f"configured provider : {resolution.configured_provider}",
+        f"resolved provider   : {resolution.resolved_provider}",
+        f"fell back           : {'yes' if resolution.fell_back else 'no'}",
+        f"providers attempted : {', '.join(resolution.attempted_providers)}",
+    ]
+    if resolution.fell_back and resolution.missing_key_env:
+        lines.append(f"missing key         : {resolution.missing_key_env}")
+    return "\n".join(lines)
+
+
+def llm_provider_error_context(
+    fallback_providers: Sequence[str] = DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+) -> str:
+    """Return a short bracketed provider context for prefixing error messages.
+
+    Never raises — diagnostics must not mask the original error. Returns an
+    empty string when resolution itself fails so callers can fall back to the
+    raw provider error untouched.
+    """
+    try:
+        resolution = resolve_llm_settings_verbose(fallback_providers)
+    except Exception:
+        return ""
+    if resolution.fell_back:
+        reason = (
+            f"{resolution.missing_key_env} not set"
+            if resolution.missing_key_env
+            else "configured provider unavailable"
+        )
+        return (
+            f"[LLM provider: {resolution.resolved_provider} — fell back from "
+            f"configured '{resolution.configured_provider}' ({reason})]"
+        )
+    return f"[LLM provider: {resolution.resolved_provider}]"
 
 
 def has_credentials_for_active_llm_provider() -> bool:

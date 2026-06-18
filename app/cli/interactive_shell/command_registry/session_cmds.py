@@ -106,6 +106,29 @@ def _cmd_trust(session: ReplSession, console: Console, args: list[str]) -> bool:
     return True
 
 
+def _status_provider_display() -> str:
+    """Render the active LLM provider, flagging a fallback away from configured.
+
+    Showing the *resolved* provider (not just ``LLM_PROVIDER``) prevents the
+    trap where ``/status`` reports the configured provider while calls silently
+    go to a fallback because the configured provider's key is missing.
+    """
+    from app.config import get_configured_llm_provider, resolve_llm_settings_verbose
+
+    try:
+        resolution = resolve_llm_settings_verbose()
+    except Exception:
+        return get_configured_llm_provider()
+
+    if not resolution.fell_back:
+        return resolution.resolved_provider
+
+    note = f"fallback from '{resolution.configured_provider}'"
+    if resolution.missing_key_env:
+        note += f": {resolution.missing_key_env} not set"
+    return f"{resolution.resolved_provider} [{WARNING}]({note})[/]"
+
+
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
     # The cli/docs grounding sources self-register on import, which may not have
     # happened yet if /status runs before the first grounding turn. Import them
@@ -132,7 +155,7 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_row("last investigation", "yes" if session.last_state else "none")
     table.add_row("trust mode", "on" if session.trust_mode else "off")
     table.add_row("reasoning effort", display_reasoning_effort(session.reasoning_effort))
-    table.add_row("provider", os.getenv("LLM_PROVIDER", "anthropic"))
+    table.add_row("provider", _status_provider_display())
     for source in iter_grounding_sources():
         stats = source.stats_fn()
         table.add_row(f"grounding {source.name} cache", source.format_fn(stats))

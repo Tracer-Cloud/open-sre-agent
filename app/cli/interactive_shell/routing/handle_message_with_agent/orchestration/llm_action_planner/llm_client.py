@@ -69,5 +69,12 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
         from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
             PlannerLLMError,
         )
+        from app.config import llm_provider_error_context
 
-        raise PlannerLLMError(str(exc)) from exc
+        # Prefix the raw provider error with which provider actually served the
+        # request (and whether it was a fallback). This turns a confusing
+        # "Anthropic credit balance too low" into an actionable message when the
+        # user configured OpenAI but its key was missing.
+        context = llm_provider_error_context()
+        message = f"{context} {exc}".strip() if context else str(exc)
+        raise PlannerLLMError(message) from exc

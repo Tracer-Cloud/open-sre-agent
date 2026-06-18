@@ -324,6 +324,34 @@ export OPENSRE_REASONING_EFFORT=high   # low | medium | high | xhigh
 
 Session `/effort` overrides this for interactive runs. Implementation: [`app/llm_reasoning_effort.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/llm_reasoning_effort.py).
 
+## Provider fallback and diagnostics
+
+If the provider you set in `LLM_PROVIDER` is missing its API key, OpenSRE does **not** fail outright — it falls back to the next configured provider (by default it tries `openai`, then `anthropic`) so a partially configured machine still works. The trade-off is that calls can quietly go to a different provider than you intended, and you would otherwise only find out via a confusing error naming the *fallback* provider (for example "Anthropic credit balance too low" when you actually configured OpenAI).
+
+To make this visible:
+
+- **A warning is logged** the first time a fallback happens, naming the configured provider, the missing key, and the provider actually used:
+
+  ```
+  Configured LLM provider 'openai' is unusable (OPENAI_API_KEY is not set);
+  falling back to 'anthropic'. Set OPENAI_API_KEY or change LLM_PROVIDER to use it.
+  ```
+
+- **`/status`** (in the interactive shell) shows the **resolved** provider and flags a fallback inline, instead of just echoing `LLM_PROVIDER`:
+
+  ```
+  provider   anthropic (fallback from 'openai': OPENAI_API_KEY not set)
+  ```
+
+- **Provider errors in the interactive shell** are prefixed with which provider served the request and whether it was a fallback, so the message is actionable:
+
+  ```
+  [LLM provider: anthropic — fell back from configured 'openai' (OPENAI_API_KEY not set)]
+  Anthropic request rejected (HTTP 400): Your credit balance is too low ...
+  ```
+
+To remove a fallback, either set the missing key for your configured provider or change `LLM_PROVIDER` to a provider you have credentials for.
+
 ## Switching providers at runtime
 
 OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `app.services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
