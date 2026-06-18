@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
@@ -139,23 +140,33 @@ def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
     return case["expected_actions"]
 
 
+# Provider-availability outages (billing, quota, rate limits, overload) are
+# infrastructure conditions, not contract regressions: live planner cases skip
+# rather than fail when the configured/fallback provider cannot serve a request.
+_TRANSIENT_PROVIDER_TOKENS = (
+    "usage limit",
+    "rate limit",
+    "quota",
+    "billing",
+    "credit balance",
+    "temporarily unavailable",
+    "service unavailable",
+    "overloaded",
+)
+
+
+def _is_transient_provider_text(text: str) -> bool:
+    lowered = text.lower()
+    return any(token in lowered for token in _TRANSIENT_PROVIDER_TOKENS)
+
+
 def _is_transient_llm_provider_failure(records: list[logging.LogRecord]) -> bool:
     text = "\n".join(
         record.getMessage()
         for record in records
         if record.name.endswith("orchestration.llm_action_planner.llm_client")
-    ).lower()
-    return any(
-        token in text
-        for token in (
-            "usage limit",
-            "rate limit",
-            "quota",
-            "billing",
-            "temporarily unavailable",
-            "service unavailable",
-        )
     )
+    return _is_transient_provider_text(text)
 
 
 def _normalize_for_assertion(actions: list[ExpectedAction]) -> list[ExpectedAction]:
@@ -190,7 +201,14 @@ def test_live_llm_planner_matches_prompt_contract(
     last_actual: list[ExpectedAction] | None = None
     for _attempt in range(_LIVE_PLAN_MAX_ATTEMPTS):
         caplog.clear()
-        actual = _normalize_for_assertion(_actions_for_case(case))
+        try:
+            actual = _normalize_for_assertion(_actions_for_case(case))
+        except PlannerLLMError as exc:
+            # The planner raises on provider errors (billing/quota/overload); a
+            # provider outage is an infra condition, not a contract regression.
+            if _is_transient_provider_text(str(exc)):
+                pytest.skip(f"Skipping live LLM planner case; provider unavailable: {exc}")
+            raise
         if not actual and _is_transient_llm_provider_failure(caplog.records):
             pytest.skip("Skipping live LLM planner case due to transient provider/billing limits.")
         if not actual:
