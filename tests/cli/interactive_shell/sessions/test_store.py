@@ -8,8 +8,10 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.sessions.store import SessionStore
+from app.cli.interactive_shell.sessions.store import SessionStore, _sessions_dir
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,18 @@ def _read_lines(path: Path) -> list[dict]:
 
 def _patch_dir(tmp_path: Path):
     return patch("app.cli.interactive_shell.sessions.store._sessions_dir", return_value=tmp_path)
+
+
+@pytest.fixture
+def tmp_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Redirect OpenSRE's home to a real temp dir so SessionStore reads/writes real files.
+
+    No mocking: ``_sessions_dir()`` resolves the real ``OPENSRE_HOME_DIR`` constant
+    on every call, so pointing it at a temp directory exercises the genuine
+    filesystem path end to end.
+    """
+    monkeypatch.setattr("app.constants.OPENSRE_HOME_DIR", tmp_path)
+    return tmp_path
 
 
 # ── open_session ──────────────────────────────────────────────────────────────
@@ -140,6 +154,67 @@ def test_append_turn_detail_noop_when_file_missing(tmp_path: Path) -> None:
     with _patch_dir(tmp_path):
         SessionStore.append_turn_detail("nonexistent-id", "chat", "hi")
     assert not list(tmp_path.glob("*.jsonl"))
+
+
+# ── append_tool_call ──────────────────────────────────────────────────────────
+
+
+def test_append_tool_call_writes_record(tmp_home: Path) -> None:
+    session = _make_session()
+    SessionStore.open_session(session)
+    SessionStore.append_tool_call(
+        session.session_id,
+        tool="call_posthog_tool",
+        arguments={"tool": "execute-sql", "args": {"query": "select 1"}},
+        result='{"rows": []}',
+        ok=True,
+        source="posthog_mcp",
+    )
+
+    records = _read_lines(_sessions_dir() / f"{session.session_id}.jsonl")
+    call = next(r for r in records if r["type"] == "tool_call")
+    assert call["tool"] == "call_posthog_tool"
+    assert call["arguments"] == {"tool": "execute-sql", "args": {"query": "select 1"}}
+    assert call["result"] == '{"rows": []}'
+    assert call["ok"] is True
+    assert call["source"] == "posthog_mcp"
+    assert "ts" in call
+
+
+def test_append_tool_call_omits_source_when_none(tmp_home: Path) -> None:
+    session = _make_session()
+    SessionStore.open_session(session)
+    SessionStore.append_tool_call(
+        session.session_id,
+        tool="list_posthog_tools",
+        arguments={},
+        result="error: boom",
+        ok=False,
+    )
+
+    records = _read_lines(_sessions_dir() / f"{session.session_id}.jsonl")
+    call = next(r for r in records if r["type"] == "tool_call")
+    assert call["ok"] is False
+    assert "source" not in call
+
+
+def test_append_tool_call_noop_when_file_missing(tmp_home: Path) -> None:
+    SessionStore.append_tool_call("nonexistent-id", tool="t", arguments={}, result="r", ok=True)
+    assert not list(_sessions_dir().glob("*.jsonl"))
+
+
+def test_append_tool_call_reopens_finalized_session(tmp_home: Path) -> None:
+    session = _make_session()
+    SessionStore.open_session(session)
+    SessionStore.append_turn(session, "cli_agent", "events for davincios in posthog")
+    SessionStore.flush(session)
+    # A late tool-call write (e.g. background gather) must reopen the file.
+    SessionStore.append_tool_call(
+        session.session_id, tool="call_posthog_tool", arguments={}, result="{}", ok=True
+    )
+
+    records = _read_lines(_sessions_dir() / f"{session.session_id}.jsonl")
+    assert any(r["type"] == "tool_call" for r in records)
 
 
 # ── flush ─────────────────────────────────────────────────────────────────────

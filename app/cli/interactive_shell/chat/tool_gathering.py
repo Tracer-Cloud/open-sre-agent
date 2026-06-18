@@ -21,6 +21,7 @@ Design notes:
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -70,6 +71,37 @@ def _format_observation(executed: list[tuple[Any, Any]]) -> str:
             f"Tool: {tc.name}\nArguments: {args}\nResult: {_truncate(body, _MAX_PER_TOOL_CHARS)}"
         )
     return _truncate("\n\n".join(blocks), _MAX_OBSERVATION_CHARS)
+
+
+def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -> None:
+    """Record each gathered tool-call result into the session log.
+
+    Closes the observability gap where a turn's actual integration/API evidence
+    was never persisted (only the final prose answer was). Arguments and results
+    are redacted and bounded before writing; failures are swallowed so logging
+    never breaks the turn.
+    """
+    from app.cli.interactive_shell.sessions.store import SessionStore
+    from app.utils.tool_trace import redact_sensitive
+
+    for tc, output in executed:
+        with contextlib.suppress(Exception):
+            ok = not (isinstance(output, dict) and "error" in output)
+            body = (
+                output
+                if isinstance(output, str)
+                else json.dumps(redact_sensitive(output), default=str)
+            )
+            arguments = (
+                redact_sensitive(tc.input) if isinstance(tc.input, dict) else {"value": tc.input}
+            )
+            SessionStore.append_tool_call(
+                session.session_id,
+                tool=str(tc.name),
+                arguments=arguments,
+                result=_truncate(body, _MAX_PER_TOOL_CHARS),
+                ok=ok,
+            )
 
 
 def _build_gather_system_prompt(session: ReplSession) -> str:
@@ -152,6 +184,7 @@ def gather_tool_evidence(
 
     if not result.executed:
         return None
+    _persist_tool_calls(session, result.executed)
     return _format_observation(result.executed)
 
 
