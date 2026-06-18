@@ -208,7 +208,7 @@ jobs:
         env:
           COVERAGE_FILE: .coverage.${{ matrix.shard }}
         run: >-
-          uv run python -m pytest -n auto -v
+          uv run python -m pytest -n auto -v -rs
           ${{ matrix.pytest_paths }}
           --cov=app
           --cov-report=
