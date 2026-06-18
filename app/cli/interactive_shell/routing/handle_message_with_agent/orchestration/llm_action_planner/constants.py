@@ -44,25 +44,43 @@ question.
 If this appears as one clause in a compound request, still emit alert_sample
 for that clause in sequence.
 
-Alert payloads and incident descriptions vs. explicit investigations — decide
-carefully, this is a common error. The deciding factor is whether the user gave
-an explicit instruction to act, NOT whether alert/JSON content is present:
-- EXPLICIT investigate instruction → investigation_start. If the user tells you
-  to investigate, analyze, diagnose, root-cause, or RCA something — even when
-  the message also contains a pasted alert payload — emit investigation_start
-  with the alert text/payload as alert_text. Examples: 'investigate "<text>"',
-  'investigate this alert: {"alertname": "HighCPU"}', "RCA this", "why did the
-  orders job fail?". The presence of a JSON/alert blob does NOT downgrade an
-  explicit investigate instruction to a handoff.
-- NO explicit instruction → assistant_handoff. A message that is JUST an alert
-  or incident with no instruction — a pasted alert payload (JSON, YAML, or
-  key-value blob) on its own, or a bare incident description such as "CPU is
-  spiking to 99% on orders-api" or "checkout is returning 502s" — is NOT an
-  instruction to act. Emit assistant_handoff, even when it reads urgent or
-  "critical". Do NOT start an investigation for it.
-- When unsure whether a BARE alert/incident (no explicit instruction) should be
-  investigated or handed off, choose assistant_handoff. The user can always
-  follow up with an explicit "investigate this".
+Alert payloads, incident descriptions, and diagnostic questions vs. explicit
+investigations — decide carefully, this is a common error. A CONNECTED
+INTEGRATIONS line is provided below this prompt listing the integrations
+connected right now (or "none" / "unknown"). Apply these rules in order:
+- EXPLICIT investigate instruction → investigation_start, ALWAYS (regardless of
+  which integrations are connected). If the user tells you to investigate,
+  analyze, diagnose, root-cause, or RCA something — even when the message also
+  contains a pasted alert payload — emit investigation_start with the alert
+  text/payload as alert_text. Examples: 'investigate "<text>"', 'investigate
+  this alert: {"alertname": "HighCPU"}', "RCA this", "diagnose the orders
+  outage". The presence of a JSON/alert blob does NOT downgrade an explicit
+  investigate instruction to a handoff.
+- DIAGNOSTIC QUESTION asking you to FIND, EXPLAIN, or TRACK DOWN the cause of a
+  failure, crash, error, outage, or incident — WITHOUT an explicit investigate
+  verb — is an investigation request WHEN there is data to investigate with.
+  This includes "figure out why X is crashing", "why is X failing/broken?",
+  "what's causing the 502s?", "why did the orders job fail?", and questions that
+  name sources to look at ("check sentry, github, and posthog to find why the
+  agent crashes on Windows"). Gate it on the CONNECTED INTEGRATIONS line:
+  * At least ONE integration connected → emit investigation_start with alert_text
+    synthesized from the request (state the failure plus any named sources). Do
+    NOT hand off — run the investigation.
+  * "none" or "unknown" → emit assistant_handoff instead; with no connected data
+    source a root-cause run would be empty, so let the assistant answer and
+    suggest connecting an integration.
+- NEITHER an instruction NOR a diagnostic question → assistant_handoff. A message
+  that is JUST an alert or incident — a pasted alert payload (JSON, YAML, or
+  key-value blob) on its own, or a bare incident statement such as "CPU is
+  spiking to 99% on orders-api" or "checkout is returning 502s" — states a fact
+  but does not ask you to find a cause. Emit assistant_handoff, even when it
+  reads urgent or "critical". Do NOT start an investigation for it.
+- A diagnostic question that is a FOLLOW-UP about a result you already produced
+  (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
+  after a completed investigation — is answered from that prior context: emit
+  assistant_handoff, do NOT start a new investigation.
+- When unsure, choose assistant_handoff. The user can always follow up with an
+  explicit "investigate this".
 
 Quoted directives are actionable, never chatty. When an action verb (investigate,
 run, analyze, diagnose, RCA, root-cause, start) takes quotation-marked text as its
@@ -168,18 +186,17 @@ never a discovery command (listing configured integrations would not answer
 
 If the entire request is informational or conversational — a how-to/docs question
 (including "what is supported?" / "what can I add?"), a greeting like
-"hi"/"hello"/"hey", an alert blob pasted as JSON or free text, an incident
-description, a follow-up like "why did it fail?" / "what caused the spike?", or
-a vague operational question like "why is the database slow?" — ALWAYS call the
-assistant_handoff tool with a concise handoff content. The ONLY exception is a
-factual question about the current state that a read-only discovery command would
-answer (handled in the discovery rule above): emit that discovery action instead.
-A pasted alert blob or incident description is NOT a discovery question — hand it
-off; do not start an investigation unless the user explicitly asks to investigate
-it. When you hand the whole request off this way, emit ONLY the assistant_handoff
-call. An informational, diagnostic, troubleshooting, or investigation question
-(including "figure out why X" or "query sentry/github/posthog to find the cause")
-is FULLY handled by that single handoff. The planner only forwards actions emitted
-through tool calls, so always emit assistant_handoff rather than relying on
-plain-text output.
+"hi"/"hello"/"hey", or a pasted alert blob / bare incident statement with no
+instruction and no diagnostic question — ALWAYS call the assistant_handoff tool
+with a concise handoff content. Two exceptions take precedence over this handoff:
+1. A factual question about the current state that a read-only discovery command
+   would answer (the discovery rule above): emit that discovery action.
+2. A diagnostic question asking to find or explain the cause of a failure / crash
+   / error / incident (the investigation rule above): when at least one
+   integration is connected, emit investigation_start; hand off only when no
+   integration is connected. A pasted alert blob or bare incident statement is
+   NOT such a question — hand it off.
+When you do hand the whole request off, emit ONLY the assistant_handoff call. The
+planner only forwards actions emitted through tool calls, so always emit a tool
+call rather than relying on plain-text output.
 """

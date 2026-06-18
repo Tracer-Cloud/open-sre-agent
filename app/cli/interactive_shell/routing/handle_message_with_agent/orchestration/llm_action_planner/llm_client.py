@@ -8,7 +8,7 @@ from typing import Any
 from app.cli.interactive_shell.token_accounting import record_invoke_response
 
 from .constants import _OPENAI_STYLE_PROVIDERS, _USER_TEMPLATE
-from .prompting import _recent_conversation_block, _system_prompt
+from .prompting import _connected_integrations_block, _recent_conversation_block, _system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
     prompt = (
         _system_prompt()
         + "\n\n"
+        + _connected_integrations_block(session)
         + _recent_conversation_block(session)
         + _USER_TEMPLATE.format(text=sanitised_text)
     )

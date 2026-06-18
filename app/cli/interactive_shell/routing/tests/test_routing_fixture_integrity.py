@@ -156,6 +156,30 @@ def test_executes_terminal_action_invariants() -> None:
     assert not violations, "policy invariant violations:\n" + "\n".join(violations)
 
 
+def test_gathered_tools_contract_names_are_registered() -> None:
+    from app.tools.registry import clear_tool_registry_cache, get_registered_tools
+
+    clear_tool_registry_cache()
+    registered = {tool.name for tool in get_registered_tools()}
+
+    missing: list[str] = []
+    for case in load_all_scenarios():
+        contract = case.answer.gathered_tools_contract
+        if contract is None:
+            continue
+        names = (
+            *contract.must_call_any,
+            *contract.must_call_all,
+            *contract.must_not_call,
+        )
+        for name in names:
+            if name not in registered:
+                missing.append(f"{case.scenario.id}: gathered_tools_contract names {name!r}")
+    assert not missing, "gathered_tools_contract references unregistered tool names:\n" + "\n".join(
+        missing
+    )
+
+
 def test_routing_test_modules_do_not_use_mock_patterns() -> None:
     violations: list[str] = []
     for test_path in (ROUTING_SCENARIOS_TEST, ORACLE_RUNTIME):

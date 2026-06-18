@@ -14,6 +14,25 @@ def _system_prompt() -> str:
     return _SYSTEM_PROMPT_BASE
 
 
+def _connected_integrations_block(session: Any | None) -> str:
+    """Render which integrations are connected for THIS turn.
+
+    The planner gates *implicit* diagnostic questions (no explicit "investigate"
+    verb) on this line: it may dispatch an investigation only when at least one
+    integration is connected; with "none" or "unknown" it hands off instead.
+    Explicit investigate instructions are NOT gated and dispatch regardless.
+    """
+    known = bool(getattr(session, "configured_integrations_known", False))
+    configured = tuple(getattr(session, "configured_integrations", ()) or ())
+    if known and configured:
+        listing = ", ".join(sorted(str(name) for name in configured))
+    elif known:
+        listing = "none"
+    else:
+        listing = "unknown"
+    return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n\n"
+
+
 def _recent_conversation_block(session: Any | None) -> str:
     """Render the shared recent-conversation context for the planner prompt.
 

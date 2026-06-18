@@ -19,7 +19,10 @@ from app.cli.interactive_shell.routing.tests._oracle_normalize import (
     normalize_response_text,
     oracle_action_matches,
 )
-from app.cli.interactive_shell.routing.tests.scenario_loader import ScenarioCase
+from app.cli.interactive_shell.routing.tests.scenario_loader import (
+    GatheredToolsContract,
+    ScenarioCase,
+)
 from app.cli.interactive_shell.runtime.execution import execute_routed_turn
 from app.cli.interactive_shell.runtime.session import ReplSession
 
@@ -35,6 +38,7 @@ def fresh_session(
     with_prior_state: bool,
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
+    resolved_integrations_override: dict[str, Any] | None = None,
 ) -> ReplSession:
     session = ReplSession()
     if with_prior_state:
@@ -42,6 +46,12 @@ def fresh_session(
     session.configured_integrations = configured_integrations
     session.configured_integrations_known = True
     session.available_capabilities = available_capabilities or {}
+    # When a scenario pins resolved_integrations, seed the gather-loop cache so
+    # the conversational data-gathering pass sees a deterministic, fixture-owned
+    # integration set instead of resolving the developer's real ~/.opensre store.
+    # An explicit empty mapping ({}) deliberately forces a no-integration world.
+    if resolved_integrations_override is not None:
+        session.resolved_integrations_cache = resolved_integrations_override
     return session
 
 
@@ -94,6 +104,28 @@ def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]
             return False
         remaining.pop(match_index)
     return True
+
+
+def _gathered_contract_failures(
+    contract: GatheredToolsContract | None,
+    gathered_tool_calls: list[str],
+) -> list[str]:
+    """Return the names of any violated gathered-tools contract dimensions.
+
+    A tool counts as "called" when it fired during the gather loop, regardless
+    of whether the call succeeded or returned an error.
+    """
+    if contract is None:
+        return []
+    failures: list[str] = []
+    called = set(gathered_tool_calls)
+    if contract.must_call_any and not (called & set(contract.must_call_any)):
+        failures.append("must_call_any")
+    if any(name not in called for name in contract.must_call_all):
+        failures.append("must_call_all")
+    if any(name in called for name in contract.must_not_call):
+        failures.append("must_not_call")
+    return failures
 
 
 def patch_execution_boundary(
@@ -179,9 +211,26 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             "cli_commands": case.scenario.available_capabilities.cli_commands,
             "synthetic_suites": case.scenario.available_capabilities.synthetic_suites,
         },
+        resolved_integrations_override=case.scenario.session.resolved_integrations,
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)
+
+    # Record which registered tools fire during the conversational
+    # gather_tool_evidence pass. gather_tool_evidence imports
+    # run_tool_calling_loop lazily from app.agent.tool_loop, so patch the name on
+    # that source module (the local import re-binds from there at call time).
+    import app.agent.tool_loop as _tool_loop_mod
+
+    gathered_tool_calls: list[str] = []
+    _original_tool_loop = _tool_loop_mod.run_tool_calling_loop
+
+    def _recording_tool_loop(*args: Any, **kwargs: Any) -> Any:
+        result = _original_tool_loop(*args, **kwargs)
+        gathered_tool_calls.extend(tc.name for tc, _ in result.executed)
+        return result
+
+    monkeypatch.setattr(_tool_loop_mod, "run_tool_calling_loop", _recording_tool_loop)
 
     console_buffer = io.StringIO()
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)
@@ -224,6 +273,10 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         action["kind"] for action in executed if action.get("kind") in forbidden_action_kinds
     ]
 
+    gathered_contract_failures = _gathered_contract_failures(
+        answer.gathered_tools_contract, gathered_tool_calls
+    )
+
     passed = True
     if decision.route_kind.value != answer.route.expected_kind:
         passed = False
@@ -250,6 +303,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         passed = False
     if not history_match:
         passed = False
+    if gathered_contract_failures:
+        passed = False
 
     return OracleRunResult(
         passed=passed,
@@ -265,6 +320,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             "response_contract": answer.response_contract,
             "forbidden_tokens_matched": forbidden_tokens,
             "forbidden_executed_kinds": forbidden_executed,
+            "gathered_tool_calls": gathered_tool_calls,
+            "gathered_contract_failures": gathered_contract_failures,
             "last_assistant_intent": session.last_assistant_intent,
         },
     )

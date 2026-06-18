@@ -47,6 +47,29 @@ def test_system_prompt_permits_read_only_discovery_for_factual_questions() -> No
     assert "may emit that read-only discovery action" in prompt
 
 
+def test_system_prompt_gates_diagnostic_dispatch_on_connected_integrations() -> None:
+    """Investigation-intent diagnostic questions dispatch only when integrations are
+    connected; explicit investigate instructions dispatch regardless.
+
+    This encodes the Option A behavior change: the planner must read the
+    CONNECTED INTEGRATIONS line and dispatch investigation_start for diagnostic
+    questions only when at least one integration is connected.
+    """
+    import re
+
+    prompt = re.sub(r"\s+", " ", _system_prompt().lower())
+    # The gate line the planner reads.
+    assert "connected integrations" in prompt
+    # Diagnostic questions are an investigation request gated on integrations.
+    assert "diagnostic question" in prompt
+    assert "investigation_start" in prompt
+    # Explicit investigate instructions are NOT gated.
+    assert "regardless of" in prompt
+    # The figure-out / query-sources phrasing is now a dispatch candidate, not a
+    # hardcoded handoff.
+    assert "figure out why x is crashing" in prompt
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [

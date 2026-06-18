@@ -1,5 +1,5 @@
 id: 314-windows-crash-multisource-query
-title: Windows crash epic asks the agent to query Sentry, GitHub issues, and PostHog
+title: Windows crash epic dispatches an investigation across Sentry, GitHub, and PostHog
 intent_class: complex_shell_prompts
 risk_level: medium
 input:
@@ -13,47 +13,69 @@ session:
   configured_integrations:
   - sentry
   - github
-  - posthog
+  - posthog_mcp
+  # Pin fixture-owned integration configs so the planner sees >=1 connected
+  # integration and dispatches an investigation (the Option A gate). Tokens are
+  # fake; no real investigation runs because the oracle stubs the dispatch
+  # boundary (REGISTRY.dispatch), so the call is recorded without remote I/O.
+  resolved_integrations:
+    sentry:
+      connection_verified: true
+      organization_slug: fixture-org
+      project_slug: fixture-project
+      auth_token: fixture-token
+      base_url: https://sentry.io
+    github:
+      connection_verified: true
+      owner: tracer-cloud
+      repo: opensre
+      mode: streamable-http
+      url: https://api.githubcopilot.com/mcp/
+      auth_token: fixture-token
+    posthog_mcp:
+      connection_verified: true
+      mode: streamable-http
+      url: https://mcp.posthog.com/mcp
+      auth_token: fixture-token
 available_capabilities:
   slash_commands: []
   cli_commands: []
   synthetic_suites: []
 notes:
-- "Multi-source investigation epic with Sentry, GitHub, and PostHog all configured.\
-  \ The agent must engage with the request and commit to checking the named\
-  \ sources for the Windows crashes rather than deflecting with a generic 'paste\
-  \ an alert and run opensre investigate' reply."
-- "The agent must not shell out or auto-start an RCA run; this is the\
-  \ conversational/tool-gathering surface, so it answers directly and references\
-  \ all three configured sources."
+- "Multi-source investigation request with Sentry, GitHub, and PostHog connected.\
+  \ Because at least one integration is connected, the planner DISPATCHES an\
+  \ investigation (investigation_start) with synthesized alert_text instead of\
+  \ handing off. This is the dispatch counterpart to 313 (no integrations ->\
+  \ handoff)."
+- "The investigation alert_text is synthesized from the prompt and varies per\
+  \ run, so planned_actions leaves content empty: the planning test asserts an\
+  \ investigation with non-empty alert_text rather than an exact string."
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  executes_terminal_action: false
-planned_actions: []
-executed_actions: []
+  executes_terminal_action: true
+planned_actions:
+- kind: investigation
+  source: llm
+  target_surface: investigation
+executed_actions:
+- kind: investigation
 response_contract:
-  must_contain_all:
-  - Sentry
-  - GitHub
-  - PostHog
   must_contain_any:
+  - investigat
+  - rca
   - Windows
   - crash
   must_not_contain:
   - $ /
-  # The agent must commit to checking the connected sources, not deflect the
-  # user back to pasting an alert / running a separate investigation command.
-  - opensre investigate
-  - paste the alert
-  - paste one of
   forbidden_actions:
   - shell
-  - investigation
 history:
   expected:
   - type: cli_agent
+    ok: true
+  - type: alert
     ok: true
 tier: full
 runs: 5
