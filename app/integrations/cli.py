@@ -449,22 +449,16 @@ def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
         DEFAULT_GITHUB_MCP_URL,
     )
 
-    print("  1) SSE  2) Streamable HTTP  3) stdio")
-    choice = _p("Choice", default="2")
-    mode = {"1": "sse", "2": "streamable-http", "3": "stdio"}.get(choice, "streamable-http")
+    # Transport is fixed to Streamable HTTP. In practice it is the only mode anyone
+    # selects, and SSE/stdio are deprecated for the hosted GitHub MCP server. The
+    # transport prompt was removed on purpose — do NOT reintroduce a transport
+    # selection or a stdio branch here.
+    mode = "streamable-http"
     credentials["mode"] = mode
-    if mode == "stdio":
-        command = _p("Command", default="github-mcp-server")
-        args = _p("Args", default="stdio --toolsets repos,issues,pull_requests,actions")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-    else:
-        url = _p("MCP URL", default=DEFAULT_GITHUB_MCP_URL)
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
+    url = _p("MCP URL", default=DEFAULT_GITHUB_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
     credentials["auth_token"] = _setup_github_auth_token(mode)
     toolsets = _p("Toolsets", default=",".join(DEFAULT_GITHUB_MCP_TOOLSETS))
     credentials["toolsets"] = [part.strip() for part in toolsets.split(",") if part.strip()]
@@ -799,28 +793,19 @@ def _setup_twilio() -> None:
 
 
 def _setup_openclaw() -> None:
-    print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
-    choice = _p("Choice", default="1")
-    mode = {"1": "stdio", "2": "streamable-http", "3": "sse"}.get(choice, "stdio")
-
+    # Transport is fixed to stdio (the local OpenClaw bridge). In practice it is the
+    # only mode anyone selects, so the transport prompt was removed on purpose — do
+    # NOT reintroduce a transport selection or a remote streamable-http/SSE branch.
+    mode = "stdio"
     credentials: dict[str, Any] = {"mode": mode}
-    if mode == "stdio":
-        command = _p("OpenClaw bridge command", default="openclaw")
-        args = _p("OpenClaw bridge args", default="mcp serve")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-        credentials["url"] = ""
-        credentials["auth_token"] = ""
-    else:
-        url = _p("OpenClaw bridge URL")
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
-        credentials["command"] = ""
-        credentials["args"] = []
-        credentials["auth_token"] = _p("OpenClaw auth token (optional)", secret=True)
+    command = _p("OpenClaw bridge command", default="openclaw")
+    args = _p("OpenClaw bridge args", default="mcp serve")
+    if not command:
+        _die("command is required for stdio mode.")
+    credentials["command"] = command
+    credentials["args"] = [part for part in args.split() if part]
+    credentials["url"] = ""
+    credentials["auth_token"] = ""
 
     print("\n  Validating OpenClaw bridge...")
     config = build_openclaw_config(credentials)
@@ -837,29 +822,20 @@ def _setup_openclaw() -> None:
 
 
 def _setup_posthog_mcp() -> None:
-    print("  1) Streamable HTTP (recommended)  2) SSE  3) stdio (local server)")
-    choice = _p("Choice", default="1")
-    mode = {"1": "streamable-http", "2": "sse", "3": "stdio"}.get(choice, "streamable-http")
-
+    # Transport is fixed to Streamable HTTP (the hosted PostHog MCP server). In
+    # practice it is the only mode anyone selects, so the transport prompt was removed
+    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
+    mode = "streamable-http"
     credentials: dict[str, Any] = {"mode": mode, "read_only": True}
-    if mode == "stdio":
-        command = _p("PostHog MCP command", default="npx")
-        args = _p("PostHog MCP args", default="-y @posthog/mcp-server@latest")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-        credentials["url"] = ""
-    else:
-        url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
-        credentials["command"] = ""
-        credentials["args"] = []
+    url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["command"] = ""
+    credentials["args"] = []
 
     credentials["auth_token"] = _p("PostHog personal API key (MCP Server preset)", secret=True)
-    if mode != "stdio" and not credentials["auth_token"]:
+    if not credentials["auth_token"]:
         _die("a personal API key is required for the hosted PostHog MCP server.")
     credentials["project_id"] = _p("PostHog project ID (optional)", default="")
 
@@ -876,29 +852,20 @@ def _setup_posthog_mcp() -> None:
 
 
 def _setup_sentry_mcp() -> None:
-    print("  1) Streamable HTTP (recommended)  2) SSE  3) stdio (local server)")
-    choice = _p("Choice", default="1")
-    mode = {"1": "streamable-http", "2": "sse", "3": "stdio"}.get(choice, "streamable-http")
-
+    # Transport is fixed to Streamable HTTP (the hosted Sentry MCP server). In
+    # practice it is the only mode anyone selects, so the transport prompt was removed
+    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
+    mode = "streamable-http"
     credentials: dict[str, Any] = {"mode": mode}
-    if mode == "stdio":
-        command = _p("Sentry MCP command", default="npx")
-        args = _p("Sentry MCP args", default="@sentry/mcp-server@latest")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-        credentials["url"] = ""
-    else:
-        url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
-        credentials["command"] = ""
-        credentials["args"] = []
+    url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["command"] = ""
+    credentials["args"] = []
 
     credentials["auth_token"] = _p("Sentry user auth token", secret=True)
-    if mode != "stdio" and not credentials["auth_token"]:
+    if not credentials["auth_token"]:
         _die("a user auth token is required for the hosted Sentry MCP server.")
     credentials["host"] = _p("Self-hosted Sentry host (optional)", default="")
 

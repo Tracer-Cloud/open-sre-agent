@@ -31,7 +31,7 @@ The agent typically calls `list_sentry_tools` first to discover what is availabl
 opensre integrations setup
 ```
 
-Select **Sentry (MCP)** when prompted, then paste your user auth token. Keep the default Streamable HTTP transport and URL unless you run self-hosted Sentry.
+Select **Sentry (MCP)** when prompted, then paste your user auth token. The setup uses the hosted Streamable HTTP transport; keep the default URL unless you run self-hosted Sentry. To run a local server instead, set `SENTRY_MCP_MODE=stdio` via environment variables (see below).
 
 ### Option 2: Environment variables
 

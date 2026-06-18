@@ -33,7 +33,7 @@ OpenSRE defaults to **read-only** access (`x-posthog-read-only: true`) so invest
 opensre integrations setup
 ```
 
-Select **PostHog (MCP)** when prompted, then paste your personal API key. Keep the default Streamable HTTP transport and URL unless you have a reason to change them.
+Select **PostHog (MCP)** when prompted, then paste your personal API key. The setup uses the hosted Streamable HTTP transport; keep the default URL unless you have a reason to change it. To run a local server instead, set `POSTHOG_MCP_MODE=stdio` via environment variables (see below).
 
 To skip the menu, name the service directly. The canonical name is `posthog_mcp`, and `posthog` is accepted as a convenience alias:
 

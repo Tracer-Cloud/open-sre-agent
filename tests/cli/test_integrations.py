@@ -112,7 +112,7 @@ def test_setup_vercel_saves_credentials(monkeypatch) -> None:
 
 
 def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
-    answers = iter(["1", "openclaw", "mcp serve"])
+    answers = iter(["openclaw", "mcp serve"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
