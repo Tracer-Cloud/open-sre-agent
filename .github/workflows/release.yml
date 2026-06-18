@@ -242,9 +242,19 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          # Capture the exit status explicitly so a crashing binary still prints
+          # its stdout/stderr (under `set -e` the failed substitution aborted the
+          # step before the output was ever shown, hiding the real error).
+          set +e
           VERSION_OUTPUT="$(./dist/${{ matrix.binary_name }} --version 2>&1)"
+          VERSION_STATUS=$?
+          set -e
           printf '%s\n' "$VERSION_OUTPUT"
+          if [ "$VERSION_STATUS" -ne 0 ]; then
+            printf '::error::%s --version exited with status %s\n' "${{ matrix.binary_name }}" "$VERSION_STATUS" >&2
+            exit "$VERSION_STATUS"
+          fi
           if [ "$RELEASE_CHANNEL" = "release" ]; then
             VERSION="${TAG_NAME#v}"
             case "$VERSION_OUTPUT" in
