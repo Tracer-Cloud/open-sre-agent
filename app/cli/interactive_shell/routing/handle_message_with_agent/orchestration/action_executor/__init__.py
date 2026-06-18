@@ -77,6 +77,7 @@ from .task_streaming import (
     _start_task_output_streams,
     _subprocess_env_with_aligned_width,
     read_diag,
+    read_task_output,
     terminate_child_process,
 )
 
@@ -118,6 +119,7 @@ __all__ = [
     "os",
     "print_interactive_wizard_handoff",
     "read_diag",
+    "read_task_output",
     "run_claude_code_implementation",
     "run_cd_command",
     "run_opensre_cli_command",

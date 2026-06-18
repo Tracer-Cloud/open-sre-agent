@@ -19,6 +19,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
     _pump_task_pty,
     _pump_task_stream,
     read_diag,
+    read_task_output,
     run_cd_command,
     run_claude_code_implementation,
     run_opensre_cli_command,
@@ -72,6 +73,24 @@ def test_read_diag_respects_byte_cap() -> None:
         buf.write(b"z" * 5_000)
         text = read_diag(buf)
     assert len(text) == 2_000
+
+
+def test_read_task_output_handles_none_buffer() -> None:
+    assert read_task_output(None, limit=100) == ""
+
+
+def test_read_task_output_strips_ansi_and_caps() -> None:
+    with tempfile.SpooledTemporaryFile() as buf:  # type: ignore[type-arg]
+        buf.write(b"\x1b[31merror\x1b[0m line\n")
+        text = read_task_output(buf, limit=1_000)
+    assert text == "error line"
+
+
+def test_read_task_output_returns_empty_for_closed_buffer() -> None:
+    with tempfile.SpooledTemporaryFile() as buf:  # type: ignore[type-arg]
+        buf.write(b"data")
+    # Buffer is closed once the ``with`` block exits.
+    assert read_task_output(buf, limit=100) == ""
 
 
 def test_run_pwd_command_prints_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -647,6 +666,117 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
     assert popen_kwargs[0]["stderr"] is subprocess.PIPE
     assert popen_kwargs[0]["text"] is True
     assert "pipe progress" in buf.getvalue()
+
+
+def test_start_background_cli_task_logs_failure_outcome_to_posthog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A background CLI task that fails asynchronously must still send its real
+    stderr/exit outcome to the prompt-log/PostHog sink. This is the regression
+    for ``opensre investigate`` errors arriving after the turn recorder flushed.
+    """
+    captured: list[dict[str, object]] = []
+
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda properties: captured.append(properties),
+    )
+
+    class _FakeProcess:
+        returncode = 1
+        stdout = io.StringIO("")
+        stderr = io.StringIO("No remote named 'myportfolio' is configured.\n")
+
+        def poll(self) -> int:
+            return 1
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        lambda _command, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre investigate --service myportfolio",
+        argv_list=["python", "-m", "app.cli", "investigate", "--service", "myportfolio"],
+        session=session,
+        console=console,
+        kind=TaskKind.CLI_COMMAND,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.FAILED
+    assert len(captured) == 1
+    props = captured[0]
+    assert props["cli_route_kind"] == "background_task"
+    assert props["$ai_trace_id"] == task.task_id
+    ai_input = props["$ai_input"]
+    assert isinstance(ai_input, list)
+    assert ai_input[0]["content"] == "opensre investigate --service myportfolio"
+    choices = props["$ai_output_choices"]
+    assert isinstance(choices, list)
+    content = choices[0]["content"]
+    assert "command failed (exit 1)" in content
+    assert "No remote named 'myportfolio' is configured." in content
+
+
+def test_start_background_cli_task_logs_success_outcome_to_posthog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful background task logs its stdout outcome, not an empty reply."""
+    captured: list[dict[str, object]] = []
+
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda properties: captured.append(properties),
+    )
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("investigation complete: root cause identified\n")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        lambda _command, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre investigate --service checkout",
+        argv_list=["python", "-m", "app.cli", "investigate", "--service", "checkout"],
+        session=session,
+        console=console,
+        kind=TaskKind.CLI_COMMAND,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.COMPLETED
+    assert len(captured) == 1
+    content = captured[0]["$ai_output_choices"][0]["content"]
+    assert "command completed (exit 0)" in content
+    assert "investigation complete: root cause identified" in content
 
 
 def test_task_output_stream_reports_unexpected_failure(

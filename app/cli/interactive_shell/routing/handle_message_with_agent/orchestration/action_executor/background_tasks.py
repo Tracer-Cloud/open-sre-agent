@@ -13,6 +13,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.prompt_logging import PromptRecorder
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
 from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 from app.cli.support.exception_reporting import report_exception
@@ -29,8 +30,31 @@ from .task_streaming import (
     _start_task_output_streams,
     _subprocess_env_with_aligned_width,
     read_diag,
+    read_task_output,
     terminate_child_process,
 )
+
+
+def _compose_task_log_response(
+    *,
+    headline: str,
+    stdout_buf: tempfile.SpooledTemporaryFile[bytes] | None,  # type: ignore[type-arg]
+    stderr_buf: tempfile.SpooledTemporaryFile[bytes],  # type: ignore[type-arg]
+) -> str:
+    """Build the prompt-log response text for a finished background task.
+
+    Combines a status headline with the captured stdout and stderr so the
+    flushed ``background_task`` event carries the real command output (the
+    error text the user sees in the terminal), not an empty assistant reply.
+    """
+    parts = [headline]
+    stdout_text = read_task_output(stdout_buf, limit=_MAX_COMMAND_OUTPUT_CHARS)
+    stderr_text = read_task_output(stderr_buf, limit=_MAX_COMMAND_OUTPUT_CHARS)
+    if stdout_text:
+        parts.append(stdout_text)
+    if stderr_text:
+        parts.append(stderr_text)
+    return "\n".join(parts)
 
 
 def start_background_cli_task(
@@ -47,6 +71,12 @@ def start_background_cli_task(
     console.print(f"[bold]$ {display_command}[/bold]")
     task = session.task_registry.create(kind, command=display_command)
     task.mark_running()
+    # Created at launch so the flushed prompt-log latency spans the full task
+    # duration; the watcher sets the response and flushes once the outcome
+    # (including any error text) is known. See for_background_task() docstring.
+    recorder = PromptRecorder.for_background_task(
+        session=session, command=display_command, task_id=task.task_id
+    )
     stderr_buf: tempfile.SpooledTemporaryFile[bytes] = tempfile.SpooledTemporaryFile(  # type: ignore[type-arg]
         max_size=_SYNTHETIC_DIAG_CHARS * 2
     )
@@ -91,10 +121,20 @@ def start_background_cli_task(
             for fd in pty_fds:
                 with contextlib.suppress(OSError):
                     os.close(fd)
+        task.mark_failed(str(exc))
+        if recorder is not None:
+            with contextlib.suppress(Exception):
+                recorder.set_response(
+                    _compose_task_log_response(
+                        headline=f"command failed to start: {exc}",
+                        stdout_buf=stdout_buf,
+                        stderr_buf=stderr_buf,
+                    )
+                )
+                recorder.flush()
         if stdout_buf is not None:
             stdout_buf.close()
         stderr_buf.close()
-        task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.background_cli_task.start")
         console.print(f"[{ERROR}]failed to start:[/] {escape(str(exc))}")
         return None
@@ -128,6 +168,7 @@ def start_background_cli_task(
         terminated_by_watcher = False
         timed_out = False
         suggest_follow_up = False
+        outcome_headline = "command completed (exit 0)"
         while proc.poll() is None:
             if time.monotonic() - started_at > timeout_seconds:
                 timed_out = True
@@ -143,10 +184,12 @@ def start_background_cli_task(
 
         try:
             if timed_out:
+                outcome_headline = f"command timed out after {timeout_seconds} seconds"
                 task.mark_failed(f"timed out after {timeout_seconds}s")
                 suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
                 return
             if terminated_by_watcher and task.cancel_requested.is_set():
+                outcome_headline = "command cancelled"
                 task.mark_cancelled()
                 return
 
@@ -157,16 +200,30 @@ def start_background_cli_task(
             else:
                 diag = _ae_resolve("read_diag", read_diag)(stderr_buf)
                 error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
+                outcome_headline = f"command failed (exit {code})"
                 task.mark_failed(error_msg)
                 console.print(f"[{ERROR}]command failed (exit {code}):[/]")
                 suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
         except Exception as exc:  # noqa: BLE001
+            outcome_headline = f"command error: {exc}"
             task.mark_failed(str(exc))
             report_exception(exc, context="interactive_shell.background_cli_task.watch")
             console.print(f"[{ERROR}]error:[/] {escape(str(exc))}")
             suggest_follow_up = kind is TaskKind.SYNTHETIC_TEST
         finally:
             _join_task_output_streams(output_threads)
+            # Flush the prompt-log/PostHog event with the real outcome (stdout,
+            # stderr, exit/timeout/cancel) before the capture buffers are closed.
+            if recorder is not None:
+                with contextlib.suppress(Exception):
+                    recorder.set_response(
+                        _compose_task_log_response(
+                            headline=outcome_headline,
+                            stdout_buf=stdout_buf,
+                            stderr_buf=stderr_buf,
+                        )
+                    )
+                    recorder.flush()
             if stdout_buf is not None:
                 stdout_buf.close()
             stderr_buf.close()
