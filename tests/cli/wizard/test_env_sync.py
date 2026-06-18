@@ -19,15 +19,6 @@ from tests.shared.keyring_backend import MemoryKeyring
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 
 
-@pytest.fixture(autouse=True)
-def _isolate_os_environ() -> None:
-    """Restore os.environ after each test that mutates process env."""
-    saved = dict(os.environ)
-    yield
-    os.environ.clear()
-    os.environ.update(saved)
-
-
 @pytest.mark.parametrize(
     "key",
     [
