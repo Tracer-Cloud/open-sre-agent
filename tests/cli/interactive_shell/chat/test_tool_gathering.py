@@ -14,10 +14,11 @@ from typing import Any
 
 from rich.console import Console
 
-from app.agent.tool_loop import ToolLoopResult
+import app.agent.investigation as investigation
+import app.agent.tool_loop as tool_loop
+import app.services.agent_llm_client as agent_llm_client
 from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
 from app.cli.interactive_shell.runtime.session import ReplSession
-from app.services.agent_llm_client import ToolCall
 
 
 def _console() -> Console:
@@ -33,8 +34,6 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     session = ReplSession()
     session.resolved_integrations_cache = {}
 
-    import app.agent.investigation as investigation
-
     monkeypatch.setattr(investigation, "_get_available_tools", lambda _resolved: [])
 
     assert gather_tool_evidence("any question", session, _console()) is None
@@ -44,26 +43,24 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     session = ReplSession()
     session.resolved_integrations_cache = {}
 
-    import app.agent.investigation as investigation
-    import app.agent.tool_loop as tool_loop
-    import app.services.agent_llm_client as agent_llm_client
-
     monkeypatch.setattr(
         investigation,
         "_get_available_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", lambda: object())
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
     executed = [
         (
-            ToolCall(id="t1", name="search_github_issues", input={"owner": "o", "repo": "r"}),
+            agent_llm_client.ToolCall(
+                id="t1", name="search_github_issues", input={"owner": "o", "repo": "r"}
+            ),
             {"issues": ["#1", "#2"]},
         )
     ]
 
-    def _fake_loop(**_kwargs: Any) -> ToolLoopResult:
-        return ToolLoopResult(messages=[], final_text="", executed=executed)
+    def _fake_loop(**_kwargs: Any) -> tool_loop.ToolLoopResult:
+        return tool_loop.ToolLoopResult(messages=[], final_text="", executed=executed)
 
     monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
 
@@ -79,19 +76,15 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     session = ReplSession()
     session.resolved_integrations_cache = {}
 
-    import app.agent.investigation as investigation
-    import app.agent.tool_loop as tool_loop
-    import app.services.agent_llm_client as agent_llm_client
-
     monkeypatch.setattr(
         investigation,
         "_get_available_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
-    monkeypatch.setattr(agent_llm_client, "get_agent_llm", lambda: object())
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**_kwargs: Any) -> ToolLoopResult:
-        return ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
+    def _fake_loop(**_kwargs: Any) -> tool_loop.ToolLoopResult:
+        return tool_loop.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
 
     monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
 
@@ -101,9 +94,6 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
 def test_exception_path_returns_none(monkeypatch: Any) -> None:
     session = ReplSession()
     session.resolved_integrations_cache = {}
-
-    import app.agent.investigation as investigation
-    import app.services.agent_llm_client as agent_llm_client
 
     monkeypatch.setattr(
         investigation,
