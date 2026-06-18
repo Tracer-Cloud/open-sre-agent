@@ -63,6 +63,7 @@ from app.integrations.registry import (
     service_key,
 )
 from app.integrations.sentry import build_sentry_config
+from app.integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_config
 from app.integrations.signoz import build_signoz_config, signoz_config_from_env
 from app.integrations.store import _STRUCTURAL_RECORD_FIELDS, load_integrations
 from app.integrations.supabase import build_supabase_config
@@ -674,6 +675,31 @@ def _classify_service_instance(
             config_dict = posthog_mcp_config.model_dump()
             config_dict["connection_verified"] = True
             return config_dict, "posthog_mcp"
+        return None, None
+
+    if key == "sentry_mcp":
+        try:
+            sentry_mcp_config = build_sentry_mcp_config(
+                {
+                    "url": credentials.get("url", ""),
+                    "mode": credentials.get("mode", "streamable-http"),
+                    "command": credentials.get("command", ""),
+                    "args": credentials.get("args", []),
+                    "auth_token": credentials.get("auth_token", ""),
+                    "host": credentials.get("host", ""),
+                    "organization_slug": credentials.get("organization_slug", ""),
+                    "project_slug": credentials.get("project_slug", ""),
+                    "skills": credentials.get("skills", []),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if sentry_mcp_config.is_configured:
+            config_dict = sentry_mcp_config.model_dump()
+            config_dict["connection_verified"] = True
+            return config_dict, "sentry_mcp"
         return None, None
 
     if key == "mysql":
@@ -1743,6 +1769,44 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="posthog_mcp")
+
+    sentry_mcp_mode = os.getenv("SENTRY_MCP_MODE", "streamable-http").strip().lower()
+    sentry_mcp_mode = sentry_mcp_mode or "streamable-http"
+    sentry_mcp_command = os.getenv("SENTRY_MCP_COMMAND", "").strip()
+    sentry_mcp_token = resolve_env_credential("SENTRY_MCP_AUTH_TOKEN")
+    sentry_mcp_url = os.getenv("SENTRY_MCP_URL", "").strip()
+    if sentry_mcp_mode != "stdio" and sentry_mcp_token and not sentry_mcp_url:
+        sentry_mcp_url = DEFAULT_SENTRY_MCP_URL
+    if (sentry_mcp_mode == "stdio" and sentry_mcp_command) or (
+        sentry_mcp_mode != "stdio" and sentry_mcp_url and sentry_mcp_token
+    ):
+        try:
+            sentry_mcp_config = build_sentry_mcp_config(
+                {
+                    "url": sentry_mcp_url,
+                    "mode": sentry_mcp_mode,
+                    "command": sentry_mcp_command,
+                    "args": [
+                        part for part in os.getenv("SENTRY_MCP_ARGS", "").strip().split() if part
+                    ],
+                    "auth_token": sentry_mcp_token,
+                    "host": os.getenv("SENTRY_MCP_HOST", "").strip(),
+                    "organization_slug": os.getenv("SENTRY_MCP_ORGANIZATION_SLUG", "").strip(),
+                    "project_slug": os.getenv("SENTRY_MCP_PROJECT_SLUG", "").strip(),
+                    "skills": os.getenv("SENTRY_MCP_SKILLS", "").strip(),
+                }
+            )
+            integrations.append(
+                _active_env_record(
+                    "sentry_mcp",
+                    {
+                        **sentry_mcp_config.model_dump(exclude={"integration_id"}),
+                        "connection_verified": True,
+                    },
+                )
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="sentry_mcp")
 
     mariadb_host = os.getenv("MARIADB_HOST", "").strip()
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()

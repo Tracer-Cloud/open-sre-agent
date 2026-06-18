@@ -21,7 +21,7 @@ from app.cli.interactive_shell.routing.types import RouteDecision
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 answer_cli_agent = _cli_agent.answer_cli_agent
-execute_cli_actions_with_metrics = _agent_actions.execute_cli_actions_with_metrics
+execute_cli_actions = _agent_actions.execute_cli_actions
 dispatch_slash = _commands.dispatch_slash
 
 
@@ -96,7 +96,7 @@ def execute_routed_turn(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         on_exit=on_exit,
-        execute_actions=execute_cli_actions_with_metrics,
+        execute_actions=execute_cli_actions,
         answer_agent=_answer_cli_agent_with_tools,
         dispatch_command=dispatch_slash,
     )

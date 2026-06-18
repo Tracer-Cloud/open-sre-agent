@@ -31,9 +31,12 @@ class ActionExecutionDeps:
 
 @dataclass(frozen=True)
 class ActionPlanningDecision:
+    # v0.1: there is no planning-stage fail-closed denial. All terminal actions
+    # are read-only, so an unmatched/ambiguous clause never blocks the turn — it
+    # falls through to the matched actions or to the conversational assistant.
+    # ``denied`` was removed for this reason (see app/cli/interactive_shell/AGENTS.md).
     actions: tuple[PlannedAction, ...]
     has_unhandled_clause: bool
-    denied: bool
     policy_trace: tuple[str, ...]
 
 

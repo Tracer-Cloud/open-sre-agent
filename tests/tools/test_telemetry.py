@@ -654,6 +654,74 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
     )
 
 
+def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
+    """Shared patches for Sentry MCP cases — bypass the config/runtime guards."""
+    from app.tools import SentryMCPTool as mod
+
+    mp.setattr(
+        mod,
+        "sentry_mcp_config_from_env",
+        MagicMock(
+            return_value=SimpleNamespace(
+                mode="streamable-http",
+                command="",
+                url="https://mcp.sentry.dev/mcp",
+                auth_token="sntrytok_secret",
+                args=(),
+                headers={},
+                host="",
+                organization_slug="",
+                project_slug="",
+                skills=(),
+            )
+        ),
+    )
+    mp.setattr(mod, "sentry_mcp_runtime_unavailable_reason", MagicMock(return_value=None))
+    mp.setattr(mod, "describe_sentry_mcp_error", MagicMock(return_value="mocked error"))
+
+
+def _sentry_mcp_list_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import SentryMCPTool as mod
+
+        _patch_sentry_mcp_runtime(mp)
+        mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.SentryMCPTool import list_sentry_tools
+
+        return list_sentry_tools()
+
+    return ToolFailureCase(
+        "sentry_mcp_list_tools",
+        patch,
+        invoke,
+        "list_sentry_tools",
+        "sentry_mcp",
+    )
+
+
+def _sentry_mcp_call_tool_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import SentryMCPTool as mod
+
+        _patch_sentry_mcp_runtime(mp)
+        mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.SentryMCPTool import call_sentry_tool
+
+        return call_sentry_tool(tool_name="get_issue_details", arguments={})
+
+    return ToolFailureCase(
+        "sentry_mcp_call_tool",
+        patch,
+        invoke,
+        "call_sentry_tool",
+        "sentry_mcp",
+    )
+
+
 _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _azure_case(),
     _openobserve_case(),
@@ -677,6 +745,8 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _openclaw_call_tool_case(),
     _posthog_mcp_list_case(),
     _posthog_mcp_call_tool_case(),
+    _sentry_mcp_list_case(),
+    _sentry_mcp_call_tool_case(),
 ]
 
 

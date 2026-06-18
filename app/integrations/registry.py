@@ -41,6 +41,7 @@ from app.integrations._verification_adapters import (
     _verify_rabbitmq,
     _verify_redis,
     _verify_sentry,
+    _verify_sentry_mcp,
     _verify_signoz,
     _verify_slack_without_test,
     _verify_snowflake,
@@ -277,6 +278,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=33,
         verify_order=44,
+    ),
+    IntegrationSpec(
+        service="sentry_mcp",
+        aliases=("sentry mcp", "sentry-mcp"),
+        verifier=_verify_sentry_mcp,
+        direct_effective=True,
+        setup_order=34,
+        verify_order=45,
     ),
     IntegrationSpec(
         service="mysql",

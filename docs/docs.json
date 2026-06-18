@@ -132,6 +132,7 @@
               "pagerduty",
               "posthog-mcp",
               "sentry",
+              "sentry-mcp",
               "signoz",
               "tempo",
               "splunk",

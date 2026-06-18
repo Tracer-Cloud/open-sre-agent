@@ -1,0 +1,52 @@
+id: 315-quoted-directive-investigation
+title: Quoted directive routes to investigation, not a chatty handoff
+intent_class: investigation
+risk_level: medium
+input:
+  prompt: investigate "checkout is returning 502s for EU customers"
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations: []
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- "Regression for quoted directives. An explicit action verb (investigate) whose\
+  \ object is quotation-marked text must treat the quoted text as the investigation\
+  \ payload and emit investigation_start. Quoted content must never be downgraded to\
+  \ a chatty statement or rhetorical question and handed off to the assistant."
+route:
+  expected_kind: handle_message_with_agent
+  expected_signals: []
+  expected_command_text: null
+policy:
+  should_execute: true
+  has_unhandled_clause: false
+  fail_closed: false
+planned_actions:
+- kind: investigation
+  content: checkout is returning 502s for EU customers
+  source: llm
+  target_surface: investigation
+executed_actions:
+- kind: investigation
+response_contract:
+  must_contain_any:
+  - investigate
+  - investigation
+  - rca
+  - checkout
+  - "502"
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: alert
+    ok: true
+tier: full
+runs: 3

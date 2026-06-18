@@ -50,21 +50,37 @@ def resolve_effective_integrations(
 
 
 def configured_integration_services() -> list[str]:
-    """Return lowercase service keys for integrations configured via env vars.
+    """Return lowercase service keys for integrations configured via env or the local store.
 
     Single source of truth shared by the welcome banner and the REPL session so
-    they never disagree about which integrations are connected. Never raises;
-    returns an empty list on any failure so callers can treat it as best-effort.
+    they never disagree about which integrations are connected. Covers both
+    environment-variable configuration and integrations saved to ``~/.opensre``
+    (e.g. via ``opensre integrations setup ...`` or the first-launch GitHub
+    login). Never raises; returns an empty list on any failure so callers can
+    treat it as best-effort.
     """
-    try:
-        records = load_env_integrations()
-    except Exception:
-        return []
     services: list[str] = []
-    for record in records:
+
+    try:
+        env_records = load_env_integrations()
+    except Exception:
+        env_records = []
+    for record in env_records:
         service = str(record.get("service", "")).strip().lower()
         if service:
             services.append(service)
+
+    try:
+        store_records = load_integrations()
+    except Exception:
+        store_records = []
+    for record in store_records:
+        if str(record.get("status", "active")).strip().lower() != "active":
+            continue
+        service = str(record.get("service", "")).strip().lower()
+        if service:
+            services.append(service)
+
     return list(dict.fromkeys(services))  # deduplicate, preserve order
 
 

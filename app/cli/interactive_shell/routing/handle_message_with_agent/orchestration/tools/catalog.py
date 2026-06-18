@@ -12,7 +12,6 @@ from . import (
     implementation_tool,
     investigation_tool,
     llm_provider_tool,
-    mark_unhandled_tool,
     sample_alert_tool,
     shell_tool,
     slash_tool,
@@ -32,7 +31,6 @@ ACTION_TOOL_CATALOG: tuple[ToolEntry, ...] = (
     implementation_tool.TOOL_ENTRY,
     llm_provider_tool.TOOL_ENTRY,
     assistant_handoff_tool.TOOL_ENTRY,
-    mark_unhandled_tool.TOOL_ENTRY,
 )
 
 

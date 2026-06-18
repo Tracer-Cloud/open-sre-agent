@@ -120,11 +120,12 @@ def _actions_for_case(case: PlannerLiveCase) -> list[ExpectedAction]:
     llm_plan = plan_actions_with_llm(case["input"])
     if llm_plan is None:
         return []
-    actions, has_unhandled = llm_plan
+    actions, _has_unhandled = llm_plan
     if actions:
         return [_compact_action(action) for action in actions]
 
-    assert has_unhandled is True
+    # No executable actions: v0.1 has no fail-closed denial, so an empty plan is a
+    # handoff. The case must therefore expect only assistant_handoff actions.
     assert case["expected_actions"] == [
         action for action in case["expected_actions"] if action["kind"] == "assistant_handoff"
     ]

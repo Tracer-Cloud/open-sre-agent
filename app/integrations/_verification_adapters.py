@@ -40,6 +40,10 @@ from app.integrations.posthog_mcp import (
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
 from app.integrations.redis import build_redis_config, validate_redis_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.sentry_mcp import (
+    build_sentry_mcp_config,
+    validate_sentry_mcp_config,
+)
 from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
 from app.integrations.tempo import build_tempo_config, validate_tempo_config
@@ -575,6 +579,11 @@ _verify_posthog_mcp = build_validation_verifier(
     build_config=build_posthog_mcp_config,
     validate_config=validate_posthog_mcp_config,
 )
+_verify_sentry_mcp = build_validation_verifier(
+    "sentry_mcp",
+    build_config=build_sentry_mcp_config,
+    validate_config=validate_sentry_mcp_config,
+)
 _verify_signoz = build_validation_verifier(
     "signoz",
     build_config=build_signoz_config,
@@ -761,6 +770,7 @@ __all__ = [
     "_verify_rabbitmq",
     "_verify_redis",
     "_verify_sentry",
+    "_verify_sentry_mcp",
     "_verify_signoz",
     "_verify_tempo",
     "_verify_slack",

@@ -26,8 +26,10 @@ def test_parse_tool_plan_drops_unavailable_tool_calls() -> None:
     parsed = _parse_tool_plan(raw, session=session)
     assert parsed is not None
     actions, has_unhandled = parsed
+    # Unavailable tool calls are silently dropped; v0.1 never marks the turn
+    # unhandled (no planning-stage fail-closed). The clause falls through to chat.
     assert actions == []
-    assert has_unhandled is True
+    assert has_unhandled is False
 
 
 def test_parse_tool_plan_keeps_available_tool_calls() -> None:

@@ -5,6 +5,22 @@ description: "Connect GitHub so OpenSRE can correlate recent commits and code ch
 
 OpenSRE connects to GitHub via the GitHub MCP server to search code, browse recent commits, inspect files, and trace changes correlated with alerts — helping identify which deployment or code change triggered an incident.
 
+## First launch (macOS & Windows)
+
+The first time you launch the interactive shell on macOS or Windows, OpenSRE asks
+you to sign in to GitHub in your browser before the prompt appears. This runs the
+same browser device-flow sign-in as Option 1 below, then connects GitHub
+automatically. Sign in once and OpenSRE remembers it for future launches.
+
+You can bypass this step — for example if GitHub sign-in is unavailable:
+
+```bash
+OPENSRE_SKIP_GITHUB_LOGIN=1 opensre
+```
+
+The first-launch prompt never runs on Linux or in CI/automation, and is skipped
+when GitHub is already configured.
+
 ## Prerequisites
 
 - GitHub account with repository access
@@ -110,6 +126,7 @@ Detail: GitHub MCP validated for your-username; discovered 18 tools including re
 | **Required tools missing** | Ensure toolsets include `repos` — it provides `get_file_contents`, `list_commits`, etc. |
 | **Connection refused** | Verify `GITHUB_MCP_URL` is reachable and the MCP server is running |
 | **Browser sign-in unavailable** | Set `OPENSRE_GITHUB_OAUTH_CLIENT_ID` to a device-flow-enabled OAuth App, or fall back to pasting a PAT |
+| **First-launch sign-in is blocking me** | Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the first-launch GitHub prompt |
 
 ## Security best practices
 

@@ -112,6 +112,26 @@ def test_dispatch_needs_exclusive_stdin_for_integration_setup(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
 
 
+def test_dispatch_needs_exclusive_stdin_for_integration_remove(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``remove``/``disconnect`` drive a native inline picker that reads raw
+    stdin; the REPL must block the next prompt so keystrokes and CPR responses
+    do not leak into the prompt buffer."""
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations remove", session) is True
+    assert (
+        loop_dispatch.dispatch_needs_exclusive_stdin("/integrations remove github", session) is True
+    )
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations remove github", session) is (
+        True
+    )
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp disconnect", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp disconnect github", session) is True
+
+
 def test_dispatch_needs_exclusive_stdin_for_onboard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -158,7 +178,7 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions(
     action_calls: list[str] = []
     llm_calls: list[str] = []
 
-    def _fake_execute_cli_actions_with_metrics(
+    def _fake_execute_cli_actions(
         text: str,
         _session: ReplSession,
         _console: Console,
@@ -186,8 +206,8 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions(
 
     monkeypatch.setattr(
         loop_execution,
-        "execute_cli_actions_with_metrics",
-        _fake_execute_cli_actions_with_metrics,
+        "execute_cli_actions",
+        _fake_execute_cli_actions,
     )
     monkeypatch.setattr(loop_execution, "answer_cli_agent", _fake_answer_cli_agent)
 

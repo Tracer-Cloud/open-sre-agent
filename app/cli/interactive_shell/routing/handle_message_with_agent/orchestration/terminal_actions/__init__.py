@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .execution import execute_cli_actions, execute_cli_actions_with_metrics
+from .execution import execute_cli_actions
 from .models import ActionExecutionDeps, ActionPlanningDecision, TerminalActionExecutionResult
 
 __all__ = [
@@ -10,5 +10,4 @@ __all__ = [
     "ActionPlanningDecision",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
-    "execute_cli_actions_with_metrics",
 ]

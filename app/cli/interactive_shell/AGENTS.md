@@ -113,6 +113,18 @@ owning area rather than adding more logic to the caller.
 
 ## Routing and action execution
 
+- **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
+  action planner never denies a turn. Because every terminal action is read-only,
+  an unmatched/ambiguous/chatty clause is not a safety risk — the planner executes
+  the clauses it can map and lets the rest fall through to the conversational
+  assistant. We removed the `denied` decision path, the `mark_unhandled` planner
+  tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
+  message because they caused frequent false denials (e.g. a conversational
+  question that embedded a quoted, list-style directive) with no safety upside.
+  Details and rationale live in `routing/AGENTS.md` ("Important routing decisions
+  (locked)"). If mutating actions are ever introduced, gate them with the
+  execution-stage confirmation policy (`orchestration/execution_policy.py`), not a
+  planner-stage denial.
 - Keep deterministic parsing in `orchestration/`; use LLM classification only where the
   deterministic rules cannot reasonably decide.
 - Route uncertainty to a safe surface: help/chat or a clarification, not direct

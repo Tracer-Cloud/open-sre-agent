@@ -8,7 +8,7 @@ approved actions through the tool registry.
 The implementation lives in the ``terminal_actions`` package:
 
 - ``planning`` decides whether there is an executable plan.
-- ``execution`` owns the public execution flows and metrics.
+- ``execution`` owns the public execution flow and per-turn metrics.
 - ``dispatch`` converts planned actions into tool calls.
 - ``feedback`` owns user-visible denial/error output.
 
@@ -28,9 +28,6 @@ from app.cli.interactive_shell.runtime import ReplSession
 
 from .terminal_actions.execution import (
     execute_cli_actions as _execute_cli_actions_impl,
-)
-from .terminal_actions.execution import (
-    execute_cli_actions_with_metrics as _execute_cli_actions_with_metrics_impl,
 )
 from .terminal_actions.models import (
     ActionExecutionDeps,
@@ -61,28 +58,8 @@ def execute_cli_actions(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     deps: ActionExecutionDeps | None = None,
-) -> bool:
-    return _execute_cli_actions_impl(
-        message,
-        session,
-        console,
-        plan_actions_fn=_plan_actions,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        deps=deps,
-    )
-
-
-def execute_cli_actions_with_metrics(
-    message: str,
-    session: ReplSession,
-    console: Console,
-    *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-    deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
-    return _execute_cli_actions_with_metrics_impl(
+    return _execute_cli_actions_impl(
         message,
         session,
         console,
@@ -97,5 +74,4 @@ __all__ = [
     "ActionExecutionDeps",
     "TerminalActionExecutionResult",
     "execute_cli_actions",
-    "execute_cli_actions_with_metrics",
 ]

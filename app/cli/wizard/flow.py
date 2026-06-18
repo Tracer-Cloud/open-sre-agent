@@ -54,6 +54,8 @@ DEFAULT_OPENCLAW_MCP_COMMAND = "openclaw"
 DEFAULT_OPENCLAW_MCP_ARGS = ("mcp", "serve")
 DEFAULT_POSTHOG_MCP_URL = "https://mcp.posthog.com/mcp"
 DEFAULT_POSTHOG_MCP_MODE = "streamable-http"
+DEFAULT_SENTRY_MCP_URL = "https://mcp.sentry.dev/mcp"
+DEFAULT_SENTRY_MCP_MODE = "streamable-http"
 DEFAULT_SENTRY_URL = "https://sentry.io"
 DEFAULT_GITLAB_BASE_URL = "https://gitlab.com/api/v4"
 WIZARD_TOTAL_STEPS = 4
@@ -223,6 +225,12 @@ def validate_openclaw_integration(**kwargs):
 
 def validate_posthog_mcp_integration(**kwargs):
     from app.cli.wizard.integration_health import validate_posthog_mcp_integration as _validate
+
+    return _validate(**kwargs)
+
+
+def validate_sentry_mcp_integration(**kwargs):
+    from app.cli.wizard.integration_health import validate_sentry_mcp_integration as _validate
 
     return _validate(**kwargs)
 
@@ -1445,6 +1453,101 @@ def _configure_posthog_mcp() -> tuple[str, str]:
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
 
+def _configure_sentry_mcp() -> tuple[str, str]:
+    _, credentials = _integration_defaults("sentry_mcp")
+    default_mode = _string_value(credentials.get("mode"), DEFAULT_SENTRY_MCP_MODE)
+
+    while True:
+        mode = _choose(
+            "Choose the Sentry MCP transport:",
+            [
+                Choice(value="streamable-http", label="Streamable HTTP (recommended)"),
+                Choice(value="sse", label="SSE"),
+                Choice(value="stdio", label="stdio (local server)"),
+            ],
+            default=default_mode,
+        )
+
+        url = ""
+        command = ""
+        args: list[str] = []
+        if mode == "stdio":
+            command = _prompt_value(
+                "Sentry MCP command",
+                default=_string_value(credentials.get("command"), "npx"),
+            )
+            args_raw = _prompt_value(
+                "Sentry MCP args",
+                default=_joined_values(
+                    credentials.get("args"),
+                    separator=" ",
+                    fallback="@sentry/mcp-server@latest",
+                ),
+                allow_empty=True,
+            )
+            args = [part for part in args_raw.split() if part]
+        else:
+            url = _prompt_value(
+                "Sentry MCP URL",
+                default=_string_value(credentials.get("url"), DEFAULT_SENTRY_MCP_URL),
+            )
+
+        auth_token = _prompt_value(
+            "Sentry user auth token",
+            default=_string_value(credentials.get("auth_token")),
+            secret=True,
+        )
+        if mode != "stdio" and not auth_token:
+            _console.print(
+                f"[{SECONDARY}]A user auth token is required for the hosted Sentry MCP server.[/]"
+            )
+            continue
+
+        host = _prompt_value(
+            "Self-hosted Sentry host (optional)",
+            default=_string_value(credentials.get("host")),
+            allow_empty=True,
+        )
+
+        with _console.status("Validating Sentry MCP...", spinner="dots"):
+            result = validate_sentry_mcp_integration(
+                url=url,
+                mode=mode,
+                auth_token=auth_token,
+                command=command,
+                args=args,
+                host=host,
+            )
+        _render_integration_result("Sentry MCP", result)
+        if result.ok:
+            credentials_dict = {
+                "url": url,
+                "mode": mode,
+                "auth_token": auth_token,
+                "command": command,
+                "args": args,
+                "host": host,
+            }
+            upsert_integration("sentry_mcp", {"credentials": credentials_dict})
+            sync_env_secret("SENTRY_MCP_AUTH_TOKEN", auth_token)
+            env_path = sync_env_values(
+                {
+                    "SENTRY_MCP_URL": url,
+                    "SENTRY_MCP_MODE": mode,
+                    "SENTRY_MCP_COMMAND": command,
+                    "SENTRY_MCP_ARGS": " ".join(args),
+                    "SENTRY_MCP_HOST": host,
+                }
+            )
+            _console.print(f"[{HIGHLIGHT}]Sentry MCP · ready[/]")
+            _console.print(
+                f"[{SECONDARY}]Verify:[/] [bold]uv run opensre integrations verify sentry_mcp[/]"
+            )
+            return "Sentry MCP", str(env_path)
+        default_mode = mode
+        _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
+
+
 def _configure_gitlab() -> tuple[str, str]:
     _, credentials = _integration_defaults("gitlab")
 
@@ -2307,6 +2410,11 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
             label="PostHog (MCP)",
             hint="Query PostHog analytics, feature flags, error tracking, and HogQL via MCP",
         ),
+        Choice(
+            value="sentry_mcp",
+            label="Sentry (MCP)",
+            hint="Query Sentry issues, events, traces, and Seer root-cause analysis via MCP",
+        ),
         Choice(value="splunk", label="Splunk", hint="Query logs from Splunk"),
         Choice(
             value="opensearch",
@@ -2358,6 +2466,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "notion": _configure_notion,
         "openclaw": _configure_openclaw,
         "posthog_mcp": _configure_posthog_mcp,
+        "sentry_mcp": _configure_sentry_mcp,
         "opensearch": _configure_opensearch,
         "splunk": _configure_splunk,
         "tempo": _configure_tempo,
@@ -2387,6 +2496,7 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
         "notion": "notion",
         "openclaw": "openclaw",
         "posthog_mcp": "posthog mcp",
+        "sentry_mcp": "sentry mcp",
         "opensearch": "opensearch",
         "tempo": "grafana tempo",
     }

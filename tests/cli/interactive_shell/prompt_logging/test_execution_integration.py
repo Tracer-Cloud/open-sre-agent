@@ -36,7 +36,7 @@ def test_execute_routed_turn_cli_agent_empty_response_prints_deterministic_fallb
     monkeypatch.setattr(execution.PromptRecorder, "start", lambda **_kwargs: recorder)
     monkeypatch.setattr(
         execution,
-        "execute_cli_actions_with_metrics",
+        "execute_cli_actions",
         lambda *_args, **_kwargs: TerminalActionExecutionResult(
             planned_count=0,
             executed_count=0,

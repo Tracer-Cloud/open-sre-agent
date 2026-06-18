@@ -78,7 +78,12 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
 _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     {
         ("/integrations", "setup"),
+        # ``remove`` drives a native inline arrow-key picker (raw os.read on
+        # stdin). Without exclusive stdin the concurrent prompt_async() steals
+        # keystrokes and CPR responses leak into the next prompt buffer.
+        ("/integrations", "remove"),
         ("/mcp", "connect"),
+        ("/mcp", "disconnect"),
     }
 )
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(

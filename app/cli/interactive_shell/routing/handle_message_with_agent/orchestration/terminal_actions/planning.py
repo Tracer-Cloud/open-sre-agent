@@ -26,35 +26,32 @@ def coerce_action_plan_decision(
     | tuple[list[PlannedAction], bool]
     | tuple[list[PlannedAction], bool, bool],
 ) -> ActionPlanningDecision:
-    """Back-compat adapter for tests that monkeypatch planning to tuple output."""
+    """Back-compat adapter for tests that monkeypatch planning to tuple output.
+
+    The legacy 3-tuple form ``(actions, has_unhandled, denied)`` is still accepted,
+    but the trailing ``denied`` flag is ignored: v0.1 has no planning-stage denial.
+    """
     if isinstance(raw, ActionPlanningDecision):
         return raw
-    if len(raw) == 2:
-        actions, has_unhandled_clause = raw
-        denied = False
-    else:
-        actions, has_unhandled_clause, denied = raw
+    actions = raw[0]
+    has_unhandled_clause = bool(raw[1]) if len(raw) > 1 else False
     return ActionPlanningDecision(
         actions=tuple(actions),
         has_unhandled_clause=has_unhandled_clause,
-        denied=denied,
         policy_trace=(),
     )
 
 
-def enforce_plan_fail_closed_policy(plan: ActionPlanningDecision) -> ActionPlanningDecision:
-    if plan.denied:
-        return plan
-    actions = list(plan.actions)
-    if not actions:
-        return plan
-    if all(action.kind == "assistant_handoff" for action in actions):
-        if plan.has_unhandled_clause:
-            return ActionPlanningDecision((), True, True, plan.policy_trace)
-        return ActionPlanningDecision((), False, False, plan.policy_trace)
-    if plan.has_unhandled_clause:
-        return ActionPlanningDecision((), True, True, plan.policy_trace)
-    return ActionPlanningDecision(tuple(actions), False, False, plan.policy_trace)
+def normalize_terminal_plan(plan: ActionPlanningDecision) -> ActionPlanningDecision:
+    """Reduce a plan to its executable terminal actions.
+
+    v0.1 removes the planning-stage fail-closed safeguard entirely: because every
+    terminal action is read-only, an unmatched or ambiguous clause never warrants
+    blocking the turn. We simply drop ``assistant_handoff`` markers (the assistant
+    answers conversationally when no terminal action remains) and never deny.
+    """
+    executable = tuple(action for action in plan.actions if action.kind != "assistant_handoff")
+    return ActionPlanningDecision(executable, False, plan.policy_trace)
 
 
 def plan_actions(
@@ -78,37 +75,31 @@ def plan_actions(
             return ActionPlanningDecision(
                 actions=(shell_action(f"!{cmd}", 0),),
                 has_unhandled_clause=False,
-                denied=False,
                 policy_trace=("deterministic_bang_shell",),
             )
 
     if planner is default_planner:
         llm_plan_result = plan_actions_with_llm_result(message, session=session)
         if llm_plan_result is None:
-            return ActionPlanningDecision((), True, True, ("planner_unavailable",))
+            # Planner unavailable: hand off to the conversational assistant rather
+            # than denying the turn (v0.1 has no planning-stage fail-closed).
+            return ActionPlanningDecision((), False, ("planner_unavailable",))
         actions = list(llm_plan_result.actions)
-        has_unhandled_clause = llm_plan_result.has_unhandled_clause
         policy_trace = llm_plan_result.policy_trace
     else:
         # Preserve existing monkeypatch seam used by unit tests and debug harnesses.
         llm_plan_legacy = planner(message, session=session)
         if llm_plan_legacy is None:
-            return ActionPlanningDecision((), True, True, ("planner_unavailable",))
-        actions, has_unhandled_clause = llm_plan_legacy
+            return ActionPlanningDecision((), False, ("planner_unavailable",))
+        actions, _has_unhandled_clause = llm_plan_legacy
         policy_trace = ()
-    if not actions:
-        return ActionPlanningDecision((), has_unhandled_clause, False, policy_trace)
-    if all(action.kind == "assistant_handoff" for action in actions):
-        if has_unhandled_clause:
-            return ActionPlanningDecision((), True, True, policy_trace)
-        return ActionPlanningDecision((), False, False, policy_trace)
-    if has_unhandled_clause:
-        return ActionPlanningDecision((), True, True, policy_trace)
-    return ActionPlanningDecision(tuple(actions), False, False, policy_trace)
+
+    executable = [action for action in actions if action.kind != "assistant_handoff"]
+    return ActionPlanningDecision(tuple(executable), False, policy_trace)
 
 
 __all__ = [
     "coerce_action_plan_decision",
-    "enforce_plan_fail_closed_policy",
+    "normalize_terminal_plan",
     "plan_actions",
 ]

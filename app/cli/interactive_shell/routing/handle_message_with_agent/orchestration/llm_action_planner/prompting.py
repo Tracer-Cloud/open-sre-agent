@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import re
+from typing import Any
+
+from app.cli.interactive_shell.prompting.conversation_history import format_recent_conversation
 
 from .constants import _MAX_TEXT_LEN, _SYSTEM_PROMPT_BASE
 
 
 def _system_prompt() -> str:
     return _SYSTEM_PROMPT_BASE
+
+
+def _recent_conversation_block(session: Any | None) -> str:
+    """Render the shared recent-conversation context for the planner prompt.
+
+    Uses the same source of truth as the conversational assistant so the planner
+    can resolve follow-up references (e.g. "do both") against the assistant's
+    previous reply. The final USER MESSAGE — not this block — is what to act on.
+    """
+    history = format_recent_conversation(session)
+    return (
+        "RECENT CONVERSATION (context only, oldest first; use it ONLY to resolve "
+        "follow-up references in the USER MESSAGE below — do NOT re-run turns that "
+        f"already completed):\n{history}\n\n"
+    )
 
 
 def _sanitise_text(text: str) -> str:

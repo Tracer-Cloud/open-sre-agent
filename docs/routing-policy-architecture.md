@@ -132,3 +132,34 @@ command flows through the normal exclusive-stdin dispatch path of the REPL
 place an interactive child process gets clean stdin. In a non-TTY/scripted
 context (no prompt to submit into) the action degrades to telling the user the
 command to run.
+
+### Removal of the planning-stage fail-closed safeguard (v0.1)
+
+Addendum — Jun 18, 2026.
+
+The second-phase action planner no longer denies a turn. Previously, any clause
+the planner could not map to an executable tool — flagged via the `mark_unhandled`
+tool, an `UNHANDLED:` text marker, or an unavailable tool call — collapsed the
+whole turn into a hard denial that printed *"I couldn't safely decide actions for
+that request."* In practice this fired on legitimate input (most often a
+conversational question that embedded a quoted, list-style directive such as
+*figure out why X is crashing by querying (a) sentry, (b) github, (c) posthog*),
+producing a dead end with no safety benefit.
+
+Every terminal action in v0.1 is **read-only**, so an unmatched, ambiguous, or
+chatty clause is not a safety risk. The planner now:
+
+- runs every clause it *can* map to an executable action, and
+- lets everything else fall through to the conversational assistant (or simply
+  drops a chatty clause in a compound request).
+
+Removed as part of this change: the `denied` field on `ActionPlanningDecision`,
+`enforce_plan_fail_closed_policy` (replaced by `normalize_terminal_plan`, which
+only strips `assistant_handoff` markers), `render_plan_denied`, the
+`mark_unhandled` planner tool, and the `UNHANDLED:` convention. The
+`fail_closed` / `has_unhandled_clause` fields that remain in routing scenario
+fixtures are deprecated descriptive metadata; the oracle does not assert on them.
+
+If write/mutating actions are introduced later, gate them with the
+execution-stage confirmation policy (`orchestration/execution_policy.py`), **not**
+a planner-stage denial.

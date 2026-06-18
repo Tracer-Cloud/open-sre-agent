@@ -474,35 +474,6 @@ def capture_github_login_completed(username: str) -> None:
     _capture(Event.GITHUB_LOGIN_COMPLETED, {"github_username": username})
 
 
-def set_github_username(github_username: str) -> None:
-    """Attach the GitHub login to the PostHog person profile via ``$identify``/``$set``.
-
-    ``$process_person_profile`` is forced ``True`` here to override the global
-    ``False`` in ``_BASE_PROPERTIES`` so this one call creates/updates the person.
-    No-op when the username is empty or telemetry is disabled (handled upstream).
-    """
-    username = github_username.strip()
-    if not username:
-        return
-    _capture(
-        Event.IDENTIFY,
-        {"$set": {"github_username": username}, "$process_person_profile": True},
-    )
-
-
-def capture_github_login_completed(github_username: str) -> None:
-    username = github_username.strip()
-    if not username:
-        return
-    _capture(Event.GITHUB_LOGIN_COMPLETED, {"github_username": username})
-
-
-def propagate_github_username(github_username: str) -> None:
-    """Set the GitHub username as a PostHog person property and emit the login event."""
-    set_github_username(github_username)
-    capture_github_login_completed(github_username)
-
-
 def capture_tests_picker_opened() -> None:
     _capture(Event.TESTS_PICKER_OPENED)
 

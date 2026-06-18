@@ -85,6 +85,68 @@ def _configured_service_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in repl_data.configured_integration_names()]
 
 
+def _handle_remove(session: ReplSession, console: Console, service: str | None) -> bool:
+    """Remove an integration with a native inline-picker confirmation (no subprocess)."""
+    from app.analytics.cli import capture_integration_removed
+    from app.integrations.store import remove_integration
+
+    svc = service
+    if not svc:
+        if not repl_tty_interactive():
+            repl_print(console, f"[{DIM}]usage:[/] /integrations remove <service>")
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        choices = _configured_service_choices()
+        if not choices:
+            repl_print(console, f"[{DIM}]no integrations in store to remove.[/]")
+            return True
+        svc = repl_choose_one(
+            title="select integration to remove",
+            breadcrumb=f"{_ROOT_INTEGRATIONS}{CRUMB_SEP}remove",
+            choices=choices,
+        )
+        if not svc:
+            return True
+
+    if repl_tty_interactive():
+        confirmed = repl_choose_one(
+            title=f"remove '{escape(svc)}'?",
+            breadcrumb=f"{_ROOT_INTEGRATIONS}{CRUMB_SEP}remove{CRUMB_SEP}{escape(svc)}",
+            choices=[
+                ("no", "No, cancel"),
+                ("yes", f"Yes, remove '{svc}'"),
+            ],
+        )
+        prepare_repl_output_line()
+        if confirmed != "yes":
+            repl_print(console, f"[{DIM}]cancelled.[/]")
+            session.refresh_integration_state()
+            return True
+    else:
+        import sys
+
+        try:
+            import questionary
+
+            confirmed_bool = questionary.confirm(f"  Remove '{svc}'?", default=False).ask()
+        except (EOFError, KeyboardInterrupt):
+            session.refresh_integration_state()
+            return True
+        if not confirmed_bool:
+            print("  Cancelled.", file=sys.stderr)
+            session.refresh_integration_state()
+            return True
+
+    if remove_integration(svc):
+        repl_print(console, f"[{HIGHLIGHT}]removed '{escape(svc)}'.[/]")
+        capture_integration_removed(svc)
+    else:
+        repl_print(console, f"[{ERROR}]no integration found for:[/] {escape(svc)}")
+        session.mark_latest(ok=False, kind="slash")
+    session.refresh_integration_state()
+    return True
+
+
 def _mcp_service_choices() -> list[tuple[str, str]]:
     names = [
         name
@@ -163,9 +225,7 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         return result
 
     if sub == "remove":
-        result = run_cli_command(console, ["integrations", "remove", *args[1:]])
-        session.refresh_integration_state()
-        return result
+        return _handle_remove(session, console, args[1] if len(args) > 1 else None)
 
     if sub == "show":
         if len(args) < 2:
@@ -227,19 +287,8 @@ def _interactive_integrations_menu(session: ReplSession, console: Console) -> bo
                 if svc and _render_integration_show(session, console, svc):
                     show_section_break = True
         elif sub == "remove":
-            choices = _configured_service_choices()
-            if not choices:
-                repl_print(console, f"[{DIM}]no integrations in store to remove.[/]")
-                show_section_break = True
-            else:
-                svc = repl_choose_one(
-                    title="service",
-                    breadcrumb=f"{root}{CRUMB_SEP}remove",
-                    choices=choices,
-                )
-                if svc:
-                    _cmd_integrations(session, console, ["remove", svc])
-                    show_section_break = True
+            _handle_remove(session, console, None)
+            show_section_break = True
         if show_section_break:
             repl_section_break(console)
 
@@ -260,9 +309,7 @@ def _cmd_mcp(session: ReplSession, console: Console, args: list[str]) -> bool:
         return result
 
     if sub == "disconnect":
-        result = run_cli_command(console, ["integrations", "remove", *args[1:]])
-        session.refresh_integration_state()
-        return result
+        return _handle_remove(session, console, args[1] if len(args) > 1 else None)
 
     console.print(
         f"[{ERROR}]unknown subcommand:[/] {escape(sub)}  "

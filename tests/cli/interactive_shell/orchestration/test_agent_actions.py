@@ -71,10 +71,12 @@ _NITRO_PROMPT = (
 # fake LLM planner. Reconstructed from each execution test's own assertions and the
 # documented phrase mappings of the (now-removed) deterministic mapper.
 #
-# Semantics enforced by terminal_actions.planning.plan_actions:
-#   - ([], False)            -> fall through to chat (handled is False, no history).
-#   - ([...], False)         -> execute the listed actions.
-#   - ([...], True)          -> fail-closed denial ("couldn't safely decide actions").
+# Semantics enforced by terminal_actions.planning.plan_actions (v0.1 has NO
+# planning-stage fail-closed denial — every terminal action is read-only):
+#   - ([], *)                -> fall through to chat (handled is False, no history).
+#   - ([...], *)             -> execute the listed (non-handoff) actions; the
+#                               has_unhandled flag is ignored, so an unmapped clause
+#                               never blocks the matched actions from running.
 _FAKE_PLANS: dict[str, tuple[list[PlannedAction], bool]] = {
     "check the health of my opensre and then show me all connected services": (
         [_action("slash", "/health"), _action("slash", "/integrations list")],
@@ -217,7 +219,7 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert dispatched == ["/health", "/integrations list"]
     assert session.history == [
         {
@@ -290,7 +292,7 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
         console,  # type: ignore[arg-type]
     )
 
-    assert handled is True
+    assert handled.handled is True
     # Only the first action ran; the second was skipped because the
     # cancel event was set between iterations.
     assert dispatched == ["/health"], (
@@ -322,7 +324,7 @@ def test_execute_cli_actions_falls_through_for_local_llama_request(monkeypatch: 
     console, _ = _capture()
     handled = agent_actions.execute_cli_actions("please connect to local llama", session, console)
 
-    assert handled is False
+    assert handled.handled is False
     assert dispatched == []
     assert session.history == []
 
@@ -346,7 +348,7 @@ def test_execute_cli_actions_switches_llm_provider(monkeypatch: object) -> None:
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert switches == ["anthropic"]
     assert session.history == [
         {
@@ -378,7 +380,7 @@ def test_execute_cli_actions_records_llm_provider_failure(monkeypatch: object) -
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": False}
 
 
@@ -413,7 +415,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
     console, buf = _capture()
     handled = agent_actions.execute_cli_actions("switch model to gpt 5.5", session, console)
 
-    assert handled is True
+    assert handled.handled is True
     assert reasoning_models == ["gpt-5.5"]
     assert session.history[-1] == {"type": "slash", "text": "/model set gpt-5.5", "ok": True}
     assert "$ /model set gpt-5.5" in buf.getvalue()
@@ -444,7 +446,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
         "please implement /history search", session, console
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert calls == ["/history search"]
     assert session.history == [
         {"type": "cli_agent", "text": "please implement /history search", "ok": True},
@@ -484,8 +486,10 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
         console,
     )
 
-    assert handled is True
-    assert dispatched == []
+    # v0.1 has no planning-stage denial: the matched clause runs and the
+    # unmappable "tell me about discord" clause is simply dropped.
+    assert handled.handled is True
+    assert dispatched == ["/integrations show datadog"]
     assert session.history == [
         {
             "type": "cli_agent",
@@ -493,11 +497,13 @@ def test_execute_cli_actions_answers_discord_then_dispatches_datadog(
                 "tell me about what the discord integration can do and then tell me what "
                 "datadog services I have connections to"
             ),
-            "ok": False,
-        }
+            "ok": True,
+        },
+        {"type": "slash", "text": "/integrations show datadog", "ok": True},
     ]
     output = buf.getvalue()
-    assert "couldn't safely decide actions" in output.lower()
+    assert "ran /integrations show datadog" in output
+    assert "couldn't safely decide actions" not in output.lower()
 
 
 def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> None:
@@ -527,8 +533,10 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
         console,
     )
 
-    assert handled is True
-    assert dispatched == []
+    # The two executable clauses run; the chatty "tell me how you are doing"
+    # clause is dropped without failing the turn closed.
+    assert handled.handled is True
+    assert dispatched == ["/integrations list", "/remote"]
     assert session.history == [
         {
             "type": "cli_agent",
@@ -536,11 +544,15 @@ def test_compound_prompt_executes_all_supported_tasks(monkeypatch: object) -> No
                 "tell me how you are doing AND show me all the services we are connected to "
                 "AND then deploy OpenSRE to EC2"
             ),
-            "ok": False,
-        }
+            "ok": True,
+        },
+        {"type": "slash", "text": "/integrations list", "ok": True},
+        {"type": "slash", "text": "/remote", "ok": True},
     ]
     output = buf.getvalue()
-    assert "couldn't safely decide actions" in output.lower()
+    assert "ran /integrations list" in output
+    assert "ran /remote" in output
+    assert "couldn't safely decide actions" not in output.lower()
 
 
 def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) -> None:
@@ -581,7 +593,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
     console, buf = _capture()
     handled = agent_actions.execute_cli_actions(_NITRO_PROMPT, session, console)
 
-    assert handled is True
+    assert handled.handled is True
     assert dispatched == ["/remote"]
     assert investigation_payloads == ["hello world"]
     output = buf.getvalue()
@@ -618,7 +630,7 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert dispatched == ["/integrations list", "/version", "/remote"]
     output = buf.getvalue()
     assert output.index("ran /integrations list") < output.index("ran /version")
@@ -653,7 +665,10 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("okay launch a simple alert", session, console) is True
+    assert (
+        agent_actions.execute_cli_actions("okay launch a simple alert", session, console).handled
+        is True
+    )
     assert calls == ["generic"]
     assert session.last_state == {
         "root_cause": "sample failure",
@@ -691,7 +706,10 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
 
     session = ReplSession()
     console, _ = _capture()
-    assert agent_actions.execute_cli_actions("okay launch a simple alert", session, console) is True
+    assert (
+        agent_actions.execute_cli_actions("okay launch a simple alert", session, console).handled
+        is True
+    )
     inv_tasks = [
         t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
     ]
@@ -733,7 +751,7 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert dispatched == ["/integrations list"]
     assert len(popen_calls) == 1
     assert popen_calls[0][0] == [
@@ -797,7 +815,7 @@ def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: obje
     console, buf = _capture()
     handled = agent_actions.execute_cli_actions("run synthetic test 005-failover", session, console)
 
-    assert handled is True
+    assert handled.handled is True
     assert popen_calls[0][0][-2:] == ["--scenario", "005-failover"]
     assert "$ opensre tests synthetic --scenario 005-failover" in buf.getvalue()
 
@@ -818,7 +836,7 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
         console,
     )
 
-    assert handled is True
+    assert handled.handled is True
     assert task.cancel_requested.is_set()
     proc.terminate.assert_called_once()
     assert session.history == [
@@ -835,7 +853,7 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     assert "stop requested" in output
 
 
-def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:
+def test_partial_match_executes_matched_clause_and_drops_unhandled(monkeypatch: object) -> None:
     dispatched: list[str] = []
 
     def _fake_dispatch(
@@ -854,19 +872,22 @@ def test_partial_match_reports_unhandled_clause(monkeypatch: object) -> None:
     session = ReplSession()
     console, buf = _capture()
 
+    # "sing a song" is chatty filler; v0.1 drops it and still runs the matched
+    # "/integrations list" clause instead of failing the whole turn closed.
     assert agent_actions.execute_cli_actions(
         "show me connected services and sing a song", session, console
-    )
-    assert dispatched == []
+    ).handled
+    assert dispatched == ["/integrations list"]
     output = buf.getvalue()
-    assert "couldn't safely decide actions" in output.lower()
+    assert "ran /integrations list" in output
+    assert "couldn't safely decide actions" not in output.lower()
 
 
 def test_execute_cli_actions_falls_through_for_chat() -> None:
     session = ReplSession()
     console, _ = _capture()
 
-    assert agent_actions.execute_cli_actions("hey", session, console) is False
+    assert agent_actions.execute_cli_actions("hey", session, console).handled is False
     assert session.history == []
 
 
@@ -883,7 +904,7 @@ def test_execute_cli_actions_runs_shell_command(monkeypatch: object) -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `pwd`", session, console) is True
+    assert agent_actions.execute_cli_actions("run `pwd`", session, console).handled is True
     assert session.history == [
         {"type": "cli_agent", "text": "run `pwd`", "ok": True},
         {"type": "shell", "text": "pwd", "ok": True},
@@ -906,7 +927,7 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     console, _ = _capture()
 
     message = r"run `cd C:\Users\Alice`"
-    assert agent_actions.execute_cli_actions(message, session, console) is True
+    assert agent_actions.execute_cli_actions(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
         {"type": "cli_agent", "text": message, "ok": True},
@@ -931,7 +952,7 @@ def test_execute_cli_actions_cd_routes_case_insensitively(monkeypatch: object) -
     console, _ = _capture()
 
     message = r"run `CD C:\Users\Alice`"
-    assert agent_actions.execute_cli_actions(message, session, console) is True
+    assert agent_actions.execute_cli_actions(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
         {"type": "cli_agent", "text": message, "ok": True},
@@ -952,7 +973,7 @@ def test_execute_cli_actions_cd_handles_trailing_backslash_on_windows(monkeypatc
     console, _ = _capture()
 
     message = r"run `cd C:\`"
-    assert agent_actions.execute_cli_actions(message, session, console) is True
+    assert agent_actions.execute_cli_actions(message, session, console).handled is True
     assert changed_directories == [Path("C:\\")]
     assert session.history == [
         {"type": "cli_agent", "text": message, "ok": True},
@@ -973,7 +994,7 @@ def test_execute_cli_actions_cd_strips_quotes_on_windows(monkeypatch: object) ->
     console, _ = _capture()
 
     message = r'run `cd "C:\Users\Alice"`'
-    assert agent_actions.execute_cli_actions(message, session, console) is True
+    assert agent_actions.execute_cli_actions(message, session, console).handled is True
     assert changed_directories == [Path(r"C:\Users\Alice")]
     assert session.history == [
         {"type": "cli_agent", "text": message, "ok": True},
@@ -999,7 +1020,7 @@ def test_execute_cli_actions_records_shell_failure(monkeypatch: object) -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("execute false", session, console) is True
+    assert agent_actions.execute_cli_actions("execute false", session, console).handled is True
     assert calls == [
         (
             ["false"],
@@ -1039,7 +1060,7 @@ def test_execute_cli_actions_shell_command_times_out(monkeypatch: object) -> Non
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `true`", session, console) is True
+    assert agent_actions.execute_cli_actions("run `true`", session, console).handled is True
     assert session.history[-1] == {
         "type": "shell",
         "text": "true",
@@ -1069,7 +1090,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `!echo hello`", session, console) is True
+    assert agent_actions.execute_cli_actions("run `!echo hello`", session, console).handled is True
     assert calls == [
         (
             "echo hello",
@@ -1107,7 +1128,7 @@ def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object)
     console, buf = _capture()
 
     message = "run `!cd /tmp`"
-    assert agent_actions.execute_cli_actions(message, session, console) is True
+    assert agent_actions.execute_cli_actions(message, session, console).handled is True
     assert dirs == [Path("/tmp")]
     assert session.history[-1] == {"type": "shell", "text": "cd /tmp", "ok": True}
     captured = buf.getvalue()
@@ -1127,7 +1148,7 @@ def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `!pwd`", session, console) is True
+    assert agent_actions.execute_cli_actions("run `!pwd`", session, console).handled is True
     assert session.history[-1] == {"type": "shell", "text": "pwd", "ok": True}
     captured = buf.getvalue()
     assert "/shown" in captured
@@ -1145,7 +1166,8 @@ def test_execute_cli_actions_denies_restricted_shell_command() -> None:
     console, buf = _capture()
 
     assert (
-        agent_actions.execute_cli_actions("run `sudo rm -rf /tmp/demo`", session, console) is True
+        agent_actions.execute_cli_actions("run `sudo rm -rf /tmp/demo`", session, console).handled
+        is True
     )
     assert session.history[-1] == {"type": "shell", "text": "sudo rm -rf /tmp/demo", "ok": False}
     output = buf.getvalue()
@@ -1156,7 +1178,7 @@ def test_execute_cli_actions_blocks_ambiguous_shell_operators() -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions("run `ls | wc -l`", session, console) is True
+    assert agent_actions.execute_cli_actions("run `ls | wc -l`", session, console).handled is True
     assert session.history[-1] == {"type": "shell", "text": "ls | wc -l", "ok": False}
     output = buf.getvalue()
     assert "action blocked" in output.lower()
@@ -1169,7 +1191,7 @@ def test_execute_cli_actions_handles_path_with_spaces_run_phrase() -> None:
     result = agent_actions.execute_cli_actions(
         'run cat "/tmp/file with spaces.txt"', session, console
     )
-    assert result is True
+    assert result.handled is True
     assert session.history[-1]["type"] == "shell"
     output = buf.getvalue()
     assert "/tmp/file with spaces.txt" in output
@@ -1193,7 +1215,9 @@ def test_execute_cli_actions_backtick_shell_preserves_space_path_token(monkeypat
     console, _ = _capture()
 
     assert (
-        agent_actions.execute_cli_actions('run `cat "/tmp/file with spaces.txt"`', session, console)
+        agent_actions.execute_cli_actions(
+            'run `cat "/tmp/file with spaces.txt"`', session, console
+        ).handled
         is True
     )
     # On Windows, shlex with posix=False preserves quotes for tokens with spaces.
@@ -1207,14 +1231,17 @@ def test_execute_cli_actions_rejects_malformed_shell_input() -> None:
     session = ReplSession()
     console, buf = _capture()
 
-    assert agent_actions.execute_cli_actions('run `cat "unterminated`', session, console) is True
+    assert (
+        agent_actions.execute_cli_actions('run `cat "unterminated`', session, console).handled
+        is True
+    )
     assert session.history[-1] == {"type": "shell", "text": 'cat "unterminated', "ok": False}
     output = buf.getvalue()
     assert "action blocked" in output.lower()
     assert "could not parse command" in output
 
 
-def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatch: object) -> None:
+def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) -> None:
     captured_planned: list[tuple[int, bool]] = []
     captured_executed: list[tuple[int, int, int]] = []
 
@@ -1233,7 +1260,7 @@ def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatc
 
     session = ReplSession()
     console, _ = _capture()
-    result = agent_actions.execute_cli_actions_with_metrics("run `pwd`", session, console)
+    result = agent_actions.execute_cli_actions("run `pwd`", session, console)
 
     assert result.handled is True
     assert result.planned_count == 1
@@ -1243,7 +1270,7 @@ def test_execute_cli_actions_with_metrics_counts_planned_and_executed(monkeypatc
     assert captured_executed == [(1, 1, 1)]
 
 
-def test_execute_cli_actions_denies_when_llm_plan_is_unavailable(
+def test_execute_cli_actions_falls_through_when_llm_plan_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1256,13 +1283,15 @@ def test_execute_cli_actions_denies_when_llm_plan_is_unavailable(
     console, buf = _capture()
     handled = agent_actions.execute_cli_actions("check health", session, console)
 
-    assert handled is True
-    assert session.history == [{"type": "cli_agent", "text": "check health", "ok": False}]
+    # Planner unavailable now hands off to the conversational assistant rather
+    # than denying the turn (no planning-stage fail-closed in v0.1).
+    assert handled.handled is False
+    assert session.history == []
     output = buf.getvalue()
-    assert "couldn't safely decide actions" in output.lower()
+    assert "couldn't safely decide actions" not in output.lower()
 
 
-def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_clause(
+def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -1273,6 +1302,18 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
             True,
         ),
     )
+
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        session.record("slash", command, ok=True)
+        console.print(f"ran {command}")
+        return True
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
 
     captured_planned: list[tuple[int, bool]] = []
     captured_executed: list[tuple[int, int, int]] = []
@@ -1291,15 +1332,16 @@ def test_execute_cli_actions_with_metrics_denies_when_llm_plan_has_unhandled_cla
 
     session = ReplSession()
     console, _ = _capture()
-    result = agent_actions.execute_cli_actions_with_metrics("check health", session, console)
+    result = agent_actions.execute_cli_actions("check health", session, console)
 
+    # The unhandled flag no longer denies the turn: the matched /health runs.
     assert result.handled is True
-    assert result.planned_count == 0
-    assert result.executed_count == 0
-    assert result.executed_success_count == 0
-    assert result.has_unhandled_clause is True
-    assert captured_planned == [(0, True)]
-    assert captured_executed == [(0, 0, 0)]
+    assert result.planned_count == 1
+    assert result.executed_count == 1
+    assert result.executed_success_count == 1
+    assert result.has_unhandled_clause is False
+    assert captured_planned == [(1, False)]
+    assert captured_executed == [(1, 1, 1)]
 
 
 def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
@@ -1332,7 +1374,7 @@ def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
     # Multiline !cmd with internal whitespace — the exact shape the user types.
     handled = agent_actions.execute_cli_actions("!curl\n      wttr.in/London", session, console)
 
-    assert handled is True
+    assert handled.handled is True
     assert llm_called == [], "LLM planner must not have been invoked for !cmd input"
     assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
     # The executor strips `!` and runs with shell=True.
@@ -1358,13 +1400,13 @@ def test_execute_cli_actions_bang_prefix_single_line_routes_to_shell(
 
     handled = agent_actions.execute_cli_actions("!echo hello world", session, console)
 
-    assert handled is True
+    assert handled.handled is True
     assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
     assert calls[0][0] == "echo hello world"
     assert calls[0][1]["shell"] is True
 
 
-def test_execute_cli_actions_with_metrics_handoff_only_plan_falls_through_silently(
+def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A pure assistant_handoff LLM plan must not print a 'Requested actions' header.
@@ -1391,9 +1433,7 @@ def test_execute_cli_actions_with_metrics_handoff_only_plan_falls_through_silent
 
     session = ReplSession()
     console, buf = _capture()
-    result = agent_actions.execute_cli_actions_with_metrics(
-        "what is our current model?", session, console
-    )
+    result = agent_actions.execute_cli_actions("what is our current model?", session, console)
 
     # Must fall through (not handled) so the caller invokes the LLM for the real reply.
     assert result.handled is False

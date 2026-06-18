@@ -12,6 +12,10 @@ from rich.markdown import Markdown
 from rich.markup import escape
 
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
+from app.cli.interactive_shell.prompting.conversation_history import (
+    MAX_CONVERSATION_MESSAGES,
+    format_recent_conversation,
+)
 from app.cli.interactive_shell.prompting.follow_up import _summarize_last_state
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
@@ -43,9 +47,6 @@ from app.cli.interactive_shell.ui import (
 )
 from app.cli.support.exception_reporting import report_exception
 from app.integrations.llm_cli.errors import CLITimeoutError
-
-# Cap stored (user, assistant) pairs; list holds 2 entries per turn.
-_MAX_CLI_AGENT_TURNS = 12
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
 
@@ -156,16 +157,6 @@ def _opensre_integration_command_blocked(payload: str, session: ReplSession) -> 
         return False
     lowered = payload.strip().lower()
     return lowered.startswith("integrations") or "integration" in lowered
-
-
-def _format_history_for_prompt(session: ReplSession) -> str:
-    """Render recent CLI agent turns for multi-turn context."""
-    lines: list[str] = []
-    cap = _MAX_CLI_AGENT_TURNS * 2
-    for role, content in session.cli_agent_messages[-cap:]:
-        label = "User" if role == "user" else "Assistant"
-        lines.append(f"{label}: {content}")
-    return "\n".join(lines) if lines else "(no prior messages in this CLI thread)"
 
 
 def _build_environment_block(session: ReplSession) -> str:
@@ -516,9 +507,8 @@ def _execute_action_plan(
 def _record_cli_agent_turn(session: ReplSession, message: str, assistant_text: str) -> None:
     session.cli_agent_messages.append(("user", message))
     session.cli_agent_messages.append(("assistant", assistant_text))
-    cap = _MAX_CLI_AGENT_TURNS * 2
-    if len(session.cli_agent_messages) > cap:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-cap:]
+    if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
+        session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
 
 
 def _build_observation_block(tool_observation: str | None, *, on_screen: bool = True) -> str:
@@ -549,7 +539,11 @@ def _build_observation_block(tool_observation: str | None, *, on_screen: bool = 
             "user's question; the tool results are below and are NOT otherwise shown to "
             "the user. Answer the user's question directly using these results, citing "
             "the concrete findings (e.g. relevant issues, log lines, or metrics). If the "
-            "data does not contain the answer, say so plainly."
+            "data does not contain the answer, say so plainly. You have ALREADY queried "
+            "the connected sources, so do NOT tell the user to paste an alert or to run "
+            "`opensre investigate`; instead report what each source returned and, if you "
+            "need more signal, ask for the specific detail (error string, service, "
+            "version, or time window) that would let you narrow it down here."
         )
     return (
         f"{framing} Do NOT request, plan, or emit any further actions — just answer in "
@@ -592,7 +586,7 @@ def answer_cli_agent(
     agents_md = build_agents_md_reference_text()
     investigation_flow = build_investigation_flow_reference_text()
     log_grounding_cache_diagnostics("cli_agent_grounding")
-    history = _format_history_for_prompt(session)
+    history = format_recent_conversation(session)
     prior_investigation = (
         _summarize_last_state(session.last_state) if session.last_state is not None else ""
     )

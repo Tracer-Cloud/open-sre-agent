@@ -32,8 +32,36 @@ def test_extract_params_maps_fields() -> None:
     assert params["sentry_token"] == "sntryu_test"
 
 
+def test_extract_params_maps_resolved_config_dump_shape() -> None:
+    """Regression: the resolved ``sentry`` source dict is a ``SentryConfig`` dump,
+    so its keys are ``auth_token`` / ``base_url`` — NOT ``sentry_token`` /
+    ``sentry_url``. Hard-indexing ``sentry['sentry_token']`` raised a KeyError
+    that aborted every Sentry query in the gather/investigation loop."""
+    from app.integrations.sentry import SentryConfig
+    from app.tools.SentrySearchIssuesTool import _search_issues_extract_params
+
+    sources = {
+        "sentry": SentryConfig(
+            base_url="https://sentry.example.com",
+            organization_slug="acme",
+            auth_token="sntryu_resolved",
+        ).model_dump()
+        | {"connection_verified": True}
+    }
+
+    params = _search_issues_extract_params(sources)
+
+    assert params["organization_slug"] == "acme"
+    assert params["sentry_token"] == "sntryu_resolved"
+    assert params["sentry_url"] == "https://sentry.example.com"
+
+
 def test_run_returns_unavailable_when_no_config() -> None:
-    result = search_sentry_issues(organization_slug="", sentry_token="")
+    # Stub env resolution so the test is hermetic: without this, a local .env
+    # carrying real SENTRY_* creds makes _resolve_config fall back to them and
+    # the tool reports available=True.
+    with patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None):
+        result = search_sentry_issues(organization_slug="", sentry_token="")
     assert result["available"] is False
     assert result["issues"] == []
 

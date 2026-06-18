@@ -96,8 +96,20 @@ If all answers are weak, keep the logic inline.
   Tool-call argument *validation* (shape/availability checks in
   `llm_action_planner/normalization.py` and `parsing.py`) is allowed; intent
   *classification* by regex is not.
-- When the planner LLM is unavailable or the prompt overflows, fail closed to
-  `assistant_handoff` — do not guess an action deterministically.
+- When the planner LLM is unavailable or the prompt overflows, hand off to the
+  conversational `assistant` — do not guess an action deterministically and do
+  **not** deny the turn.
+- **No planning-stage fail-closed safeguard (v0.1).** There is no "I couldn't
+  safely decide actions" denial. Every terminal action is read-only, so an
+  unmatched, ambiguous, or chatty clause never blocks a turn: the planner runs
+  the clauses it can map and the rest fall through to the assistant. The former
+  `denied` decision, the `mark_unhandled` planner tool, the `UNHANDLED:` text
+  convention, and `render_plan_denied` were removed for this reason. Do **not**
+  reintroduce a planning-stage denial; if write/mutating actions are ever added,
+  gate them with an execution-stage confirmation (see
+  `orchestration/execution_policy.py`), not a planner denial. The `fail_closed`
+  / `has_unhandled_clause` fields in scenario fixtures are deprecated descriptive
+  metadata only — the oracle does not assert on them.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 

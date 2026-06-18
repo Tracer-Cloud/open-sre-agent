@@ -76,9 +76,7 @@ def should_require_github_login() -> bool:
         return False
     if _marker_exists():
         return False
-    if _github_already_configured():
-        return False
-    return True
+    return not _github_already_configured()
 
 
 def _propagate_username(username: str) -> None:
@@ -96,8 +94,7 @@ def _print_intro(console: Console) -> None:
         "incidents against your source. Sign in once with your browser."
     )
     console.print(
-        f"[dim](Set {_SKIP_ENV_VAR}=1 to skip this — e.g. if GitHub sign-in is "
-        "unavailable.)[/dim]"
+        f"[dim](Set {_SKIP_ENV_VAR}=1 to skip this — e.g. if GitHub sign-in is unavailable.)[/dim]"
     )
 
 
@@ -123,7 +120,7 @@ def _print_quit_guidance(console: Console) -> None:
     )
 
 
-def _ask_retry(console: Console) -> bool:
+def _ask_retry(_console: Console) -> bool:
     import questionary
 
     try:

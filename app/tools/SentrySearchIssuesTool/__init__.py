@@ -40,10 +40,15 @@ def _sentry_available(sources: dict[str, dict]) -> bool:
 
 
 def _sentry_creds(sentry: dict[str, Any]) -> dict[str, Any]:
+    # The resolved ``sentry`` source dict is a ``SentryConfig`` dump, so the
+    # credential keys are ``auth_token`` / ``base_url`` — NOT ``sentry_token`` /
+    # ``sentry_url`` (the tool's public param names). Map both with safe lookups
+    # so a config that uses either shape works and a missing key can never raise
+    # a KeyError that aborts the whole gather/investigation loop.
     return {
-        "organization_slug": sentry["organization_slug"],
-        "sentry_token": sentry["sentry_token"],
-        "sentry_url": sentry.get("sentry_url", "https://sentry.io"),
+        "organization_slug": sentry.get("organization_slug", ""),
+        "sentry_token": sentry.get("sentry_token") or sentry.get("auth_token", ""),
+        "sentry_url": sentry.get("sentry_url") or sentry.get("base_url") or "https://sentry.io",
         "project_slug": sentry.get("project_slug", ""),
     }
 
