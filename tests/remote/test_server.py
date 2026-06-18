@@ -183,6 +183,35 @@ def test_investigate_captures_unexpected_exception(monkeypatch: pytest.MonkeyPat
     assert captured_errors == [expected_error]
 
 
+def test_investigate_maps_runtime_failure_to_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_error = RuntimeError("prompt too long")
+
+    def fake_execute_investigation(**_kwargs: Any) -> tuple[dict[str, Any], str, str, str]:
+        raise expected_error
+
+    def fake_reraise(_exc: BaseException) -> None:
+        from app.cli.support.errors import OpenSREError
+
+        raise OpenSREError(
+            "LLM invocation failed.",
+            suggestion="Shorten prompt and retry.",
+        )
+
+    monkeypatch.setattr(remote_server, "_execute_investigation", fake_execute_investigation)
+    monkeypatch.setattr(remote_server, "reraise_cli_runtime_error", fake_reraise)
+    capture_mock = MagicMock()
+    monkeypatch.setattr(remote_server, "capture_exception", capture_mock)
+
+    with pytest.raises(HTTPException) as exc_info:
+        investigate(InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"}))
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "LLM invocation failed. Suggestion: Shorten prompt and retry."
+    capture_mock.assert_not_called()
+
+
 def test_execute_investigation_tracks_remote_http_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

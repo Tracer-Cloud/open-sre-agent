@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import TypedDict
 
@@ -26,7 +27,7 @@ from app.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
-    resolve_llm_settings,
+    resolve_llm_settings_verbose,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -93,8 +94,13 @@ def _load_live_cases() -> list[PlannerLiveCase]:
 
 @pytest.fixture(autouse=True)
 def _require_default_llm_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Capture the explicit pin (if any) BEFORE resolution so we can tell apart
+    # "intentionally testing the default-resolution chain" from "CI pinned a
+    # provider but its key is missing/broken".
+    explicit_pin = os.environ.get("LLM_PROVIDER", "").strip().lower()
+
     try:
-        settings = resolve_llm_settings()
+        resolution = resolve_llm_settings_verbose()
     except ValidationError as exc:
         provider = get_configured_llm_provider()
         env_var = get_llm_provider_api_key_env(provider)
@@ -110,9 +116,24 @@ def _require_default_llm_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
             f"Skipping live LLM planner tests; missing usable LLM configuration:{hint}. {msg}"
         )
 
+    # Anti-masking guard: when a provider is explicitly pinned (e.g. CI sets
+    # LLM_PROVIDER=openai) but resolution falls back to a different provider, the
+    # pinned provider's credentials are missing/broken. Silently validating the
+    # contract on the fallback provider — then skipping on *its* billing error —
+    # is exactly how the OPENAI_API_KEY leak hid 24 unrun cases. Fail loudly with
+    # an actionable message instead.
+    if explicit_pin and resolution.fell_back:
+        pytest.fail(
+            f"LLM_PROVIDER={explicit_pin!r} is pinned but provider resolution fell back to "
+            f"{resolution.resolved_provider!r}. The pinned provider is unusable "
+            f"({resolution.missing_key_env or 'credentials missing'}); live planner contracts "
+            "would silently validate the wrong provider. Fix the pinned provider's credentials "
+            "or unset LLM_PROVIDER to opt into default resolution."
+        )
+
     from app.services.llm_client import reset_llm_singletons
 
-    monkeypatch.setenv("LLM_PROVIDER", settings.provider)
+    monkeypatch.setenv("LLM_PROVIDER", resolution.resolved_provider)
     reset_llm_singletons()
 
 

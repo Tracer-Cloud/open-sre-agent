@@ -387,6 +387,15 @@ def deep_health_check() -> dict[str, Any]:
     }
 
 
+def _opensre_error_to_http(exc: OpenSREError) -> HTTPException:
+    """Convert an ``OpenSREError`` to a 503 HTTPException with actionable detail."""
+    logger.warning("Investigation failed due to CLI runtime error: %s", exc)
+    detail = str(exc)
+    if exc.suggestion:
+        detail = f"{detail} Suggestion: {exc.suggestion}"
+    return HTTPException(status_code=503, detail=detail)
+
+
 @app.post("/investigate", response_model=InvestigateResponse)
 def investigate(req: InvestigateRequest) -> InvestigateResponse:
     """Run an investigation and persist the result as a ``.md`` file."""
@@ -401,15 +410,18 @@ def investigate(req: InvestigateRequest) -> InvestigateResponse:
     except VercelResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OpenSREError as exc:
-        logger.warning("Investigation failed due to CLI runtime error: %s", exc)
-        detail = str(exc)
-        if exc.suggestion:
-            detail = f"{detail} Suggestion: {exc.suggestion}"
-        raise HTTPException(status_code=503, detail=detail) from exc
+        raise _opensre_error_to_http(exc) from exc
     except Exception as exc:
-        capture_exception(exc)
-        logger.exception("Investigation failed")
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+        try:
+            reraise_cli_runtime_error(exc)
+        except OpenSREError as mapped:
+            raise _opensre_error_to_http(mapped) from mapped
+        except Exception as inner_exc:
+            capture_exception(inner_exc)
+            logger.exception("Investigation failed")
+            raise HTTPException(
+                status_code=500, detail=f"{type(inner_exc).__name__}: {inner_exc}"
+            ) from inner_exc
 
     inv_id = _make_id(alert_name)
     _save_investigation(

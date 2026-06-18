@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from pydantic import ValidationError
 
-from app.config import LLMSettings, has_credentials_for_active_llm_provider, resolve_llm_settings
+from app.config import (
+    LLMSettings,
+    describe_llm_resolution,
+    has_credentials_for_active_llm_provider,
+    llm_provider_error_context,
+    reset_llm_fallback_warning_cache,
+    resolve_llm_settings,
+    resolve_llm_settings_verbose,
+)
 
 
 def test_llm_settings_reject_provider_typos_with_suggestion() -> None:
@@ -253,3 +263,115 @@ def test_has_credentials_for_active_llm_provider_re_raises_invalid_provider(monk
 
     with pytest.raises(ValidationError, match="Unsupported LLM provider"):
         has_credentials_for_active_llm_provider()
+
+
+def _only_key(present_env: str):
+    """Return a resolve_llm_api_key stub where only *present_env* has a value."""
+    return lambda env_var: "sk-present" if env_var == present_env else ""
+
+
+def test_resolve_llm_settings_verbose_reports_no_fallback_when_configured_key_present(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("OPENAI_API_KEY"))
+
+    resolution = resolve_llm_settings_verbose()
+
+    assert resolution.resolved_provider == "openai"
+    assert resolution.configured_provider == "openai"
+    assert resolution.fell_back is False
+    assert resolution.missing_key_env is None
+
+
+def test_resolve_llm_settings_verbose_reports_fallback_and_missing_key(monkeypatch) -> None:
+    # Configured openai, but only the anthropic key is present: this is exactly
+    # the incident where a stripped OPENAI_API_KEY silently routed to anthropic.
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("ANTHROPIC_API_KEY"))
+
+    resolution = resolve_llm_settings_verbose()
+
+    assert resolution.configured_provider == "openai"
+    assert resolution.resolved_provider == "anthropic"
+    assert resolution.fell_back is True
+    assert resolution.missing_key_env == "OPENAI_API_KEY"
+    assert "openai" in resolution.summary()
+    assert "OPENAI_API_KEY" in resolution.summary()
+
+
+def test_resolve_llm_settings_verbose_warns_once_on_fallback(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("ANTHROPIC_API_KEY"))
+    reset_llm_fallback_warning_cache()
+
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        resolve_llm_settings_verbose()
+        resolve_llm_settings_verbose()
+
+    fallback_warnings = [
+        record
+        for record in caplog.records
+        if record.name == "app.config" and "falling back to 'anthropic'" in record.getMessage()
+    ]
+    assert len(fallback_warnings) == 1
+
+
+def test_resolve_llm_settings_verbose_does_not_warn_without_fallback(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("OPENAI_API_KEY"))
+    reset_llm_fallback_warning_cache()
+
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        resolve_llm_settings_verbose()
+
+    assert not [r for r in caplog.records if "falling back" in r.getMessage()]
+
+
+def test_describe_llm_resolution_reports_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("ANTHROPIC_API_KEY"))
+
+    report = describe_llm_resolution()
+
+    assert "configured provider : openai" in report
+    assert "resolved provider   : anthropic" in report
+    assert "fell back           : yes" in report
+    assert "missing key         : OPENAI_API_KEY" in report
+
+
+def test_describe_llm_resolution_reports_no_usable_credentials(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    report = describe_llm_resolution()
+
+    assert "no usable provider credentials" in report
+    assert "OPENAI_API_KEY" in report
+
+
+def test_llm_provider_error_context_includes_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("ANTHROPIC_API_KEY"))
+
+    context = llm_provider_error_context()
+
+    assert context.startswith("[LLM provider: anthropic")
+    assert "fell back from configured 'openai'" in context
+    assert "OPENAI_API_KEY not set" in context
+
+
+def test_llm_provider_error_context_no_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", _only_key("OPENAI_API_KEY"))
+
+    assert llm_provider_error_context() == "[LLM provider: openai]"
+
+
+def test_llm_provider_error_context_never_raises(monkeypatch) -> None:
+    # No usable credentials anywhere: the helper must degrade to an empty string
+    # so the caller surfaces the raw provider error untouched.
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+
+    assert llm_provider_error_context() == ""

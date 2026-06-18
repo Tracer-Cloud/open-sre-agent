@@ -374,6 +374,11 @@ jobs:
     name: test-thorough (${{ matrix.name }})
 
     env:
+      # Thorough e2e suites make live LLM calls; run them on openai because the
+      # default anthropic account is credit-exhausted. Requires a valid, funded
+      # OPENAI_API_KEY secret.
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
       TRACER_API_URL: ${{ secrets.TRACER_API_URL }}

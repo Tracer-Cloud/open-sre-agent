@@ -20,12 +20,9 @@ notes:
   \ a chatty statement or rhetorical question and handed off to the assistant."
 route:
   expected_kind: handle_message_with_agent
-  expected_signals: []
   expected_command_text: null
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: investigation
   content: checkout is returning 502s for EU customers

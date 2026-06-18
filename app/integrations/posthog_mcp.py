@@ -107,7 +107,14 @@ class PostHogMCPConfig(StrictConfigModel):
     @classmethod
     def _normalize_mode(cls, value: object) -> str:
         normalized = str(value or DEFAULT_POSTHOG_MCP_MODE).strip().lower()
-        return normalized or DEFAULT_POSTHOG_MCP_MODE
+        normalized = normalized or DEFAULT_POSTHOG_MCP_MODE
+        # Generic aliases that callers (env, store, or the planner) may emit
+        # all map to the default hosted HTTP transport rather than tripping the
+        # Literal validation. "default" is what the planner tends to guess when
+        # it has no explicit transport to pass.
+        if normalized in {"mcp", "default", "http", "https", "streamable_http"}:
+            return DEFAULT_POSTHOG_MCP_MODE
+        return normalized
 
     @field_validator("auth_token", mode="before")
     @classmethod

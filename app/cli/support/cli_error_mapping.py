@@ -31,6 +31,14 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
                 "CLI tool is not installed or not found.",
                 suggestion=str(exc),
             ) from exc
+        if (
+            "prompt too long" in msg
+            and "auth status could not be verified before invocation" in msg
+        ):
+            raise OpenSREError(
+                "LLM invocation failed.",
+                suggestion=str(exc),
+            ) from exc
         if "anthropic" in msg and "model" in msg and "was not found" in msg:
             raise OpenSREError(
                 str(exc),

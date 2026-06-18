@@ -44,6 +44,48 @@ ANTHROPIC_API_KEY=...
 
 The complete list of provider keys and optional model overrides is documented in `.env.example`.
 
+## Run local gateway
+
+Use the built-in gateway command when you want a local HTTP server for investigations.
+
+| Command | What it does |
+| --- | --- |
+| `uv run opensre gateway` | Starts the local gateway on `127.0.0.1:2024`. |
+| `uv run opensre gateway --host 0.0.0.0 --port 8080` | Binds the gateway to a custom host/port. |
+| `uv run opensre gateway --api-key local-dev-key` | Enables API key auth for non-exempt routes. |
+| `uv run opensre gateway --investigations-dir ./investigations` | Writes investigation reports to a custom directory. |
+
+Quick local checks:
+
+```bash
+curl http://127.0.0.1:2024/ok
+curl http://127.0.0.1:2024/version
+```
+
+Example investigation request:
+
+```bash
+curl -X POST http://127.0.0.1:2024/investigate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_alert": {
+      "alert_name": "etl-daily-orders-failure",
+      "pipeline_name": "etl_daily_orders",
+      "severity": "critical",
+      "message": "Orders pipeline failed with timeout."
+    }
+  }'
+```
+
+When `--api-key` is set, include it for protected endpoints:
+
+```bash
+curl -X POST http://127.0.0.1:2024/investigate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: local-dev-key" \
+  -d '{"raw_alert":{"alert_name":"test"}}'
+```
+
 ## Railway deployment
 
 Railway is still supported as a hosted runtime option.

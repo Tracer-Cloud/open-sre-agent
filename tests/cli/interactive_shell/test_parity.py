@@ -5,7 +5,8 @@ from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 
 # Commands that are intentionally excluded from the REPL (e.g. they don't make sense in session).
 # 'agent' is excluded because the REPL itself is the agent entry point.
-EXCLUDED_COMMANDS = {"agent"}
+# 'gateway' is excluded because it starts a standalone local HTTP server process.
+EXCLUDED_COMMANDS = {"agent", "gateway"}
 
 
 def test_cli_slash_command_parity():

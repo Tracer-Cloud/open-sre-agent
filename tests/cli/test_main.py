@@ -197,7 +197,8 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     exit_code = main(["--definitely-wrong-option"])
 
     assert exit_code == 2
-    assert "No such option '--definitely-wrong-option'" in capsys.readouterr().err
+    stderr = capsys.readouterr().err
+    assert "--definitely-wrong-option" in stderr and "No such option" in stderr
     assert captured == []
     assert captured_errors == []
 

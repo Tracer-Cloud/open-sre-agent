@@ -103,15 +103,26 @@ def _assert_planned_actions_match(
     assert len(actual_actions) == len(expected_actions)
     for index, expected in enumerate(expected_actions):
         actual = actual_actions[index]
-        if str(expected.get("kind", "")) != "assistant_handoff":
-            assert _action_match_view(actual) == _action_match_view(expected)
+        expected_kind = str(expected.get("kind", ""))
+        if expected_kind == "assistant_handoff":
+            assert actual.get("kind") == "assistant_handoff"
+            expected_source = str(expected.get("source", "")).strip()
+            if expected_source:
+                assert actual.get("source") == expected_source
+            content = str(actual.get("content", "")).strip()
+            assert content, f"assistant_handoff action {index} must include text content."
             continue
-        assert actual.get("kind") == "assistant_handoff"
-        expected_source = str(expected.get("source", "")).strip()
-        if expected_source:
-            assert actual.get("source") == expected_source
-        content = str(actual.get("content", "")).strip()
-        assert content, f"assistant_handoff action {index} must include text content."
+        # A synthesized investigation (no pasted/quoted payload) carries freeform
+        # alert_text that varies per live run. When the fixture leaves content
+        # empty, assert kind + non-empty alert_text rather than exact equality;
+        # fixtures that pin a verbatim payload (e.g. a pasted alert) keep the
+        # strict match below.
+        if expected_kind == "investigation" and not str(expected.get("content", "")).strip():
+            assert actual.get("kind") == "investigation"
+            content = str(actual.get("content", "")).strip()
+            assert content, f"investigation action {index} must include synthesized alert_text."
+            continue
+        assert _action_match_view(actual) == _action_match_view(expected)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.PostHogMCPTool import call_posthog_tool, list_posthog_tools
+import pytest
+
+from app.tools.PostHogMCPTool import _resolve_config, call_posthog_tool, list_posthog_tools
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -16,6 +18,54 @@ class TestPostHogListToolContract(BaseToolContract):
 class TestPostHogCallToolContract(BaseToolContract):
     def get_tool_under_test(self):
         return call_posthog_tool.__opensre_registered_tool__
+
+
+_CONNECTION_PARAMS = frozenset(
+    {
+        "posthog_url",
+        "posthog_mode",
+        "posthog_token",
+        "posthog_command",
+        "posthog_args",
+    }
+)
+
+
+def test_connection_params_are_injected_not_model_supplied() -> None:
+    """Regression: the LLM must not be able to supply connection/transport
+    settings. Hallucinated values (e.g. mode="mcp" or a base URL without the
+    ``/mcp`` path) previously overrode the verified config and broke calls, so
+    these fields are injected from the verified integration and hidden from the
+    model's tool schema.
+    """
+    for tool_fn in (list_posthog_tools, call_posthog_tool):
+        rt = tool_fn.__opensre_registered_tool__
+        assert set(rt.injected_params) >= _CONNECTION_PARAMS, (
+            f"{rt.name} must inject connection params, not expose them to the model."
+        )
+        public_props = set(rt.public_input_schema.get("properties", {}))
+        assert public_props.isdisjoint(_CONNECTION_PARAMS), (
+            f"{rt.name} leaks connection params {public_props & _CONNECTION_PARAMS} "
+            "into the model-facing schema."
+        )
+
+
+def test_call_tool_public_schema_exposes_only_tool_selection() -> None:
+    rt = call_posthog_tool.__opensre_registered_tool__
+    public_props = set(rt.public_input_schema.get("properties", {}))
+    assert public_props == {"tool_name", "arguments"}
+    assert rt.public_input_schema.get("required") == ["tool_name"]
+
+
+def test_list_tool_public_schema_takes_no_model_args() -> None:
+    rt = list_posthog_tools.__opensre_registered_tool__
+    assert set(rt.public_input_schema.get("properties", {})) == set()
+
+
+def test_validate_public_input_rejects_model_supplied_connection_params() -> None:
+    rt = call_posthog_tool.__opensre_registered_tool__
+    # tool_name only is the valid model-facing shape.
+    assert rt.validate_public_input({"tool_name": "query-run"}) is None
 
 
 def test_tools_available_when_connection_verified() -> None:
@@ -123,6 +173,44 @@ def test_call_tool_surfaces_mcp_error() -> None:
         )
     assert result["available"] is False
     assert "permission denied" in str(result["error"])
+
+
+@pytest.mark.parametrize("guessed_mode", ["default", "mcp", "http", "bogus", ""])
+def test_resolve_config_recovers_from_guessed_mode(guessed_mode: str) -> None:
+    """The planner often guesses an invalid transport; fall back to HTTP."""
+    config = _resolve_config(
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode=guessed_mode,
+        posthog_token="phx_secret",
+    )
+    assert config is not None
+    assert config.mode == "streamable-http"
+    assert config.url == "https://mcp.posthog.com/mcp"
+
+
+def test_resolve_config_stdio_without_command_falls_back_to_http() -> None:
+    """A 'stdio' request with only a URL must not build a broken stdio config."""
+    config = _resolve_config(
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode="stdio",
+        posthog_token="phx_secret",
+        posthog_command="",
+    )
+    assert config is not None
+    assert config.mode == "streamable-http"
+
+
+def test_resolve_config_keeps_explicit_stdio_with_command() -> None:
+    config = _resolve_config(
+        posthog_url="",
+        posthog_mode="stdio",
+        posthog_token="",
+        posthog_command="npx",
+        posthog_args=["-y", "@posthog/mcp-server"],
+    )
+    assert config is not None
+    assert config.mode == "stdio"
+    assert config.command == "npx"
 
 
 def test_list_tools_returns_discovered_tools() -> None:

@@ -56,6 +56,22 @@ def test_cli_not_found_still_maps_correctly() -> None:
     assert "CLI tool is not installed" in str(exc_info.value)
 
 
+def test_runtime_prompt_too_long_with_unclear_auth_maps_to_opensre_error() -> None:
+    exc = RuntimeError(
+        "cursor agent exited with code 1. prompt too long — shorten the input or reduce "
+        "accumulated context (/context to inspect)\n\nAuth status could not be verified "
+        "before invocation. Run: agent login."
+    )
+    with pytest.raises(OpenSREError) as exc_info:
+        reraise_cli_runtime_error(exc)
+
+    err = exc_info.value
+    assert str(err) == "LLM invocation failed."
+    assert err.suggestion is not None
+    assert "prompt too long" in err.suggestion
+    assert "Auth status could not be verified before invocation" in err.suggestion
+
+
 def test_cli_timeout_maps_to_opensre_error() -> None:
     exc = CLITimeoutError("gemini-cli CLI timed out after 300s.")
     with pytest.raises(OpenSREError) as exc_info:

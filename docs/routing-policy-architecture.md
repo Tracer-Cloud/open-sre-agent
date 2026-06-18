@@ -157,8 +157,11 @@ Removed as part of this change: the `denied` field on `ActionPlanningDecision`,
 `enforce_plan_fail_closed_policy` (replaced by `normalize_terminal_plan`, which
 only strips `assistant_handoff` markers), `render_plan_denied`, the
 `mark_unhandled` planner tool, and the `UNHANDLED:` convention. The
-`fail_closed` / `has_unhandled_clause` fields that remain in routing scenario
-fixtures are deprecated descriptive metadata; the oracle does not assert on them.
+`fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fields were
+also removed from routing scenario fixtures, since the oracle never asserted on
+them; the fixture `policy` block now carries a single `executes_terminal_action`
+boolean (true only when a planned terminal action is expected to run through the
+dispatch gate).
 
 If write/mutating actions are introduced later, gate them with the
 execution-stage confirmation policy (`orchestration/execution_policy.py`), **not**
