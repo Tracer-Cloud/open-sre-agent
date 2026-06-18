@@ -9,6 +9,9 @@ session:
   has_prior_state: false
   remote_connected: false
   configured_integrations: []
+  # Pin an empty resolved store so this scenario is isolated from the developer's
+  # local ~/.opensre integrations.
+  resolved_integrations: {}
 available_capabilities:
   slash_commands: []
   cli_commands: []

@@ -9,6 +9,9 @@ session:
   has_prior_state: false
   remote_connected: false
   configured_integrations: []
+  # Pin an empty resolved store so the vague provider request hands off and the
+  # gather loop has no tools regardless of the developer's local ~/.opensre integrations.
+  resolved_integrations: {}
 available_capabilities:
   slash_commands: []
   cli_commands: []
@@ -30,6 +33,12 @@ response_contract:
   - local-model connection tool
   must_not_contain:
   - $ /
+gathered_tools_contract:
+  # No integrations are resolved, so no remote-integration tool may fire.
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
 history:
   expected:
   - type: cli_agent

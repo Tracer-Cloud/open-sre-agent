@@ -9,6 +9,9 @@ session:
   has_prior_state: false
   remote_connected: false
   configured_integrations: []
+  # Pin an empty resolved store for environment isolation so the planned/executed
+  # action sequence does not depend on the developer's local ~/.opensre integrations.
+  resolved_integrations: {}
 available_capabilities:
   slash_commands:
   - /remote

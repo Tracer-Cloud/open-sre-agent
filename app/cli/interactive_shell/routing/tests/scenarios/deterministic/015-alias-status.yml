@@ -9,6 +9,7 @@ session:
   has_prior_state: false
   remote_connected: false
   configured_integrations: []
+  resolved_integrations: {}
 available_capabilities:
   slash_commands:
   - /status

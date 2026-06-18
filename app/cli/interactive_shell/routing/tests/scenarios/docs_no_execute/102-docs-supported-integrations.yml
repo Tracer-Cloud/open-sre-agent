@@ -9,6 +9,7 @@ session:
   has_prior_state: false
   remote_connected: false
   configured_integrations: []
+  resolved_integrations: {}
 available_capabilities:
   slash_commands: []
   cli_commands: []
@@ -29,6 +30,11 @@ response_contract:
   - integrations
   must_not_contain:
   - $ /
+gathered_tools_contract:
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
