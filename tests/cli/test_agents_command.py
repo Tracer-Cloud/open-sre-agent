@@ -197,7 +197,7 @@ def test_agents_scan_empty_state_mentions_all_mode(monkeypatch: pytest.MonkeyPat
 
 
 def test_agents_watch_reports_already_exited(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(agent_cmd_mod, "pid_exists", lambda _pid: False)
+    monkeypatch.setattr(agent_cmd_mod, "_pid_exists", lambda _pid: False)
     runner = CliRunner()
 
     result = runner.invoke(cli, ["agents", "watch", "9876"])

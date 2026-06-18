@@ -41,6 +41,10 @@ ignore = [
 # Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
 # F401 is enforced so unused imports surface in lint (and CI) like in app/.
 "tests/**/*.py" = ["ARG001", "E402"]
+# Routing tests are colocated under app/ (see test_routing_fixture_integrity.py)
+# but are still tests: fake callables match real signatures and leave some
+# keyword params unused, exactly like the tests/ tree above.
+"app/cli/interactive_shell/routing/tests/**/*.py" = ["ARG001", "E402"]
 
 # Pydantic models have fields that appear unused but are accessed dynamically
 "app/ingest.py" = ["ARG002"]

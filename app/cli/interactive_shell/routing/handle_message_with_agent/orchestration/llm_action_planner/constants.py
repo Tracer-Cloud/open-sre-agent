@@ -146,14 +146,17 @@ documentation questions about what OpenSRE *supports* or what you *could* add
 never a discovery command (listing configured integrations would not answer
 "what is supported").
 
-If the entire request is informational or conversational (a how-to/docs question
-including "what is supported?" / "what can I add?", a greeting like
+If the entire request is informational or conversational — a how-to/docs question
+(including "what is supported?" / "what can I add?"), a greeting like
 "hi"/"hello"/"hey", an alert blob pasted as JSON or free text, an incident
 description, a follow-up like "why did it fail?" / "what caused the spike?", or
-a vague operational question like "why is the database slow?") AND no read-only
-discovery command about the current state would answer it, call the
-assistant_handoff tool with a concise handoff content. Do NOT respond with
-text-only "UNHANDLED:" output in this case — the planner only forwards actions
-emitted through tool calls, so plain text is silently dropped and the user sees
-a fail-closed prompt instead of the assistant's reply.
+a vague operational question like "why is the database slow?" — ALWAYS call the
+assistant_handoff tool with a concise handoff content. The ONLY exception is a
+factual question about the current state that a read-only discovery command would
+answer (handled in the discovery rule above): emit that discovery action instead.
+A pasted alert blob or incident description is NOT a discovery question — hand it
+off; do not start an investigation unless the user explicitly asks to investigate
+it. Do NOT respond with text-only "UNHANDLED:" output in this case — the planner
+only forwards actions emitted through tool calls, so plain text is silently
+dropped and the user sees a fail-closed prompt instead of the assistant's reply.
 """

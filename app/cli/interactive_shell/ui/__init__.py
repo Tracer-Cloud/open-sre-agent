@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from app.cli.interactive_shell.ui.banner import (
     render_banner,
     render_ready_box,

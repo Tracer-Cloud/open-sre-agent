@@ -68,6 +68,8 @@ def process_has_open_codex_rollout(pid: int) -> bool:
         logger.debug("psutil is unavailable; skipping Codex rollout-owner probe")
         return False
     return probe_rollout_owner(pid)
+
+
 # macOS hints target the main bundle binary at
 # `<App>.app/Contents/MacOS/<App>` only, not the whole bundle. This keeps
 # Electron helper processes living under `<App>.app/Contents/Frameworks/`

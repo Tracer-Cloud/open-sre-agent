@@ -9,10 +9,10 @@ with only a raw table.
 from __future__ import annotations
 
 import io
-from types import SimpleNamespace
 
 from rich.console import Console
 
+from app.cli.interactive_shell.prompt_logging.recorder import LlmRunInfo
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
@@ -60,9 +60,9 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         confirm_fn=None,
         is_tty=None,
         tool_observation: str | None = None,
-    ) -> SimpleNamespace:
+    ) -> LlmRunInfo:
         observed.append(tool_observation)
-        return SimpleNamespace(response_text="No — Sentry is not configured.")
+        return LlmRunInfo(response_text="No — Sentry is not configured.")
 
     session = ReplSession()
     handle_message_with_agent(
@@ -164,7 +164,7 @@ def test_failed_discovery_is_not_summarized() -> None:
 
 def test_observation_is_reset_each_turn() -> None:
     """A stale observation from a prior turn must not trigger a later summary."""
-    answer_calls: list[str | None] = []
+    answer_calls: list[object] = []
 
     def fake_execute(
         text: str,
