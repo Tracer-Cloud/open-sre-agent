@@ -176,6 +176,43 @@ class SessionStore:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     @staticmethod
+    def append_tool_call(
+        session_id: str,
+        *,
+        tool: str,
+        arguments: dict[str, Any],
+        result: str,
+        ok: bool,
+        source: str | None = None,
+    ) -> None:
+        """Append one integration/API tool-call result to the session file.
+
+        Written by the conversational data-gathering loop after each tool runs,
+        so a session file carries the actual evidence each turn fetched (tool
+        name, arguments, and a bounded result snippet) rather than only the
+        final prose answer. Callers MUST pass already-redacted, already-truncated
+        values: this writer stays a dumb sink and pulls in no agent/tool imports.
+        No-ops silently if the session file does not exist.
+        """
+        with contextlib.suppress(Exception):
+            path = _session_path(session_id)
+            if not path.exists():
+                return
+            SessionStore._ensure_session_open(session_id)
+            record: dict[str, Any] = {
+                "type": "tool_call",
+                "ts": datetime.now(UTC).isoformat(),
+                "tool": tool,
+                "arguments": arguments,
+                "ok": ok,
+                "result": result,
+            }
+            if source is not None:
+                record["source"] = source
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+    @staticmethod
     def flush(session: SessionPersistenceSource) -> None:
         """Write conversation_snapshot + session_end and close the session file.
 

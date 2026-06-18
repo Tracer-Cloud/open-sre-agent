@@ -1,0 +1,65 @@
+id: 315-posthog-events-person-lookup-handoff
+title: PostHog person data lookup hands off and gathers data (not an investigation)
+intent_class: complex_shell_prompts
+risk_level: low
+input:
+  prompt: >-
+    events for the person whose github_username is davincios in posthog mcp
+  surface: interactive_cli
+session:
+  has_prior_state: false
+  remote_connected: false
+  configured_integrations:
+  - posthog_mcp
+  # PostHog is connected so the gather loop has a real tool to call. This is the
+  # crux of the regression: even WITH an observability source connected, a plain
+  # data-retrieval query ("events for person X") is NOT an incident
+  # root-cause, so the planner must HAND OFF (no investigation_start) and let the
+  # conversational gather loop query PostHog. Token is fake; the oracle records
+  # the tool call without real remote I/O.
+  resolved_integrations:
+    posthog_mcp:
+      connection_verified: true
+      mode: streamable-http
+      url: https://mcp.posthog.com/mcp
+      auth_token: fixture-token
+available_capabilities:
+  slash_commands: []
+  cli_commands: []
+  synthetic_suites: []
+notes:
+- "Data-retrieval / analytics lookup, NOT an investigation. The prompt asks to\
+  \ fetch events for a named person in PostHog -- it names no failure, crash,\
+  \ error, outage, or incident to root-cause. The planner must NOT emit\
+  \ investigation_start (regression guard): it hands off and the conversational\
+  \ gather loop queries PostHog to ground the answer. Contrast with 314, where\
+  \ 'crashing on Windows' names a failure and DOES dispatch an investigation."
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: false
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - posthog
+  - event
+  - davincios
+  must_not_contain:
+  - $ /
+  forbidden_actions:
+  - investigation
+  - shell
+gathered_tools_contract:
+  # A data lookup with PostHog connected should drive the gather loop to query
+  # PostHog, not start an investigation.
+  must_call_any:
+  - list_posthog_tools
+  - call_posthog_tool
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+tier: full
+runs: 3
