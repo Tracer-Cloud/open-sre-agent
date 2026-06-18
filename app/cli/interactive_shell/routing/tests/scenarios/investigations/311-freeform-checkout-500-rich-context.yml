@@ -27,12 +27,9 @@ notes:
   \ multi-line format users naturally paste from incident dashboards."
 route:
   expected_kind: handle_message_with_agent
-  expected_signals: []
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
   content: incident_description:checkout_api_500_db_timeout

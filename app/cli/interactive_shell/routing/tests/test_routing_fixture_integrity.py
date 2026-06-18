@@ -128,21 +128,19 @@ def test_scenario_action_kinds_have_registered_tools() -> None:
     assert not missing, "scenario action kinds missing tool registrations:\n" + "\n".join(missing)
 
 
-def test_should_execute_invariants() -> None:
+def test_executes_terminal_action_invariants() -> None:
     violations: list[str] = []
     for case in load_all_scenarios():
         scenario_id = case.scenario.id
         policy = case.answer.policy
-        # has_unhandled_clause is deprecated; when still present it must not
-        # contradict should_execute.
-        if policy.has_unhandled_clause and policy.should_execute:
-            violations.append(f"{scenario_id}: has_unhandled_clause requires should_execute=false")
-        if not policy.should_execute and case.answer.executed_actions:
-            violations.append(f"{scenario_id}: should_execute=false requires executed_actions=[]")
-        # The loader auto-injects "$ /" into must_not_contain when should_execute=false,
-        # so this invariant always holds on loaded data.
+        if not policy.executes_terminal_action and case.answer.executed_actions:
+            violations.append(
+                f"{scenario_id}: executes_terminal_action=false requires executed_actions=[]"
+            )
+        # The loader auto-injects "$ /" into must_not_contain when
+        # executes_terminal_action=false, so this invariant always holds on loaded data.
         must_not = case.answer.response_contract.get("must_not_contain", [])
-        if not policy.should_execute and "$ /" not in must_not:
+        if not policy.executes_terminal_action and "$ /" not in must_not:
             violations.append(
                 f"{scenario_id}: non-executing cases must include '$ /' in must_not_contain"
             )
