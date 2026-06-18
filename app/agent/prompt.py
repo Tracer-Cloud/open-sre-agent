@@ -98,6 +98,49 @@ _ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
 # Generic fallback sources — always secondary, never primary.
 _SECONDARY_SOURCES = {"knowledge", "openclaw", "google_docs"}
 
+# Shared keywords that signal a relational/datastore problem regardless of which
+# specific database integration is connected.
+_DB_KEYWORDS: tuple[str, ...] = ("database", "db connection", "connection pool")
+
+# Keyword aliases used to match alert content to an integration source when the
+# alert_source itself does not map to a primary integration (generic/unknown
+# alerts). Each source's own name is always included implicitly. Kept small and
+# focused — extend deliberately rather than exhaustively.
+_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
+    "datadog": ("datadog", "datadoghq", "dd monitor"),
+    "sentry": ("sentry", "exception", "stack trace", "stacktrace", "error tracking"),
+    "vercel": ("vercel", "deploy", "deployment", "build failed"),
+    "github": ("github", "commit", "pull request", "merge"),
+    "gitlab": ("gitlab", "merge request"),
+    "grafana": ("grafana", "loki", "mimir", "prometheus"),
+    "honeycomb": ("honeycomb", "span", "trace latency"),
+    "coralogix": ("coralogix",),
+    "splunk": ("splunk",),
+    "cloudwatch": ("cloudwatch", "lambda", "log group"),
+    "eks": ("eks", "kubernetes", "k8s", "kubectl", "pod"),
+    "ec2": ("ec2", "instance"),
+    "rds": ("rds", "aurora", *_DB_KEYWORDS),
+    "postgresql": ("postgres", "postgresql", "psql", *_DB_KEYWORDS),
+    "mysql": ("mysql", *_DB_KEYWORDS),
+    "mariadb": ("mariadb", *_DB_KEYWORDS),
+    "mongodb": ("mongodb", "mongo", *_DB_KEYWORDS),
+    "redis": ("redis", "cache"),
+    "snowflake": ("snowflake",),
+    "clickhouse": ("clickhouse",),
+    "dagster": ("dagster",),
+    "airflow": ("airflow", "dag"),
+    "kafka": ("kafka",),
+    "rabbitmq": ("rabbitmq", "amqp"),
+    "supabase": ("supabase",),
+    "opensearch": ("opensearch", "elasticsearch"),
+    "openobserve": ("openobserve",),
+    "betterstack": ("betterstack", "better stack"),
+    "azure": ("azure",),
+    "signoz": ("signoz",),
+    "jenkins": ("jenkins",),
+    "tempo": ("tempo",),
+}
+
 _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
     "One of database / infrastructure / code_bug / configuration / network / performance / "
     "healthy / unknown"
@@ -143,7 +186,7 @@ def format_alert_context(state: dict[str, Any]) -> str:
         resolved,
         tools_by_source,
     )
-    start_guidance = _build_start_guidance(alert_source, alert_name, tools_by_source)
+    start_guidance = _build_start_guidance(state, alert_source, alert_name, tools_by_source)
     tools_section = _format_tools_by_source(tools_by_source)
 
     return _ALERT_CONTEXT_TEMPLATE.format(
@@ -223,35 +266,58 @@ def _group_tools_by_source(tools: list[Any]) -> dict[str, list[Any]]:
 
 
 def _build_start_guidance(
+    state: dict[str, Any],
     alert_source: str,
     alert_name: str,
     tools_by_source: dict[str, list[Any]],
 ) -> str:
     primary_sources = _ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, [])
-    # Find which primary sources actually have tools available
     available_primary = [s for s in primary_sources if s in tools_by_source]
 
-    if not available_primary:
-        # Fall back: any non-secondary source available
-        available_primary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
-
-    if not available_primary:
+    non_secondary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
+    if not available_primary and not non_secondary:
         return "No integration-specific tools are available. Use the knowledge tools to reason about this alert."
 
+    # Known alert source that maps to connected integrations: start there.
+    if available_primary:
+        return _format_call_first(alert_source, alert_name, available_primary, tools_by_source)
+
+    # Unknown/generic alert source: pick integrations by alert *content* instead
+    # of fanning out to every connected integration. Only when nothing matches
+    # do we hand the choice to the LLM — and even then we never instruct it to
+    # call them all.
+    relevant = _relevant_sources(state, tools_by_source)
+    if relevant:
+        return _format_call_first(alert_source, alert_name, relevant, tools_by_source)
+
+    available_list = ", ".join(sorted(non_secondary))
+    return (
+        f"The alert source is not tied to a specific integration ({alert_name}).\n"
+        f"Connected integrations available: {available_list}.\n"
+        "Review the alert details above and call only the integration(s) directly "
+        "relevant to this alert's service or symptoms. Do not call integrations "
+        "that are unrelated to the alert."
+    )
+
+
+def _format_call_first(
+    alert_source: str,
+    alert_name: str,
+    call_first: list[str],
+    tools_by_source: dict[str, list[Any]],
+) -> str:
     lines: list[str] = []
     if alert_source:
         lines.append(f"This is a **{alert_source}** alert ({alert_name}).")
-    lines.append(f"Call these tools first (from: {', '.join(available_primary)}):")
+    lines.append(f"Call these tools first (from: {', '.join(call_first)}):")
     lines.append("")
 
-    for source in available_primary:
+    for source in call_first:
         source_tools = tools_by_source.get(source, [])
         tool_names = [f"`{t.name}`" for t in source_tools]
         lines.append(f"- **{source}**: {', '.join(tool_names)}")
 
-    secondary = [
-        s for s in tools_by_source if s not in _SECONDARY_SOURCES and s not in available_primary
-    ]
+    secondary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES and s not in call_first]
     if secondary:
         lines.append("")
         lines.append(
@@ -259,6 +325,78 @@ def _build_start_guidance(
         )
 
     return "\n".join(lines)
+
+
+def _relevant_sources(
+    state: dict[str, Any],
+    tools_by_source: dict[str, list[Any]],
+) -> list[str]:
+    """Select integration sources relevant to the alert's content.
+
+    Honors an explicit ``context_sources`` annotation when present, otherwise
+    keyword-matches the alert text against each available source. Returns an
+    empty list when nothing is clearly relevant (the caller then defers the
+    choice to the LLM rather than calling every integration).
+    """
+    candidates = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
+    if not candidates:
+        return []
+
+    declared = _declared_context_sources(state)
+    if declared:
+        from_declared = [s for s in candidates if s in declared]
+        if from_declared:
+            return from_declared
+
+    text = _collect_alert_text(state)
+    if not text:
+        return []
+
+    matched: list[str] = []
+    for source in candidates:
+        keywords = {source, *_SOURCE_ALIASES.get(source, ())}
+        if any(keyword in text for keyword in keywords):
+            matched.append(source)
+    return matched
+
+
+def _declared_context_sources(state: dict[str, Any]) -> set[str]:
+    raw = state.get("raw_alert")
+    if not isinstance(raw, dict):
+        return set()
+    for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
+        block = raw.get(block_key)
+        if isinstance(block, dict):
+            value = block.get("context_sources")
+            if isinstance(value, str) and value.strip():
+                return {item.strip().lower() for item in value.split(",") if item.strip()}
+    return set()
+
+
+def _collect_alert_text(state: dict[str, Any]) -> str:
+    parts: list[str] = [
+        str(state.get("alert_name") or ""),
+        str(state.get("pipeline_name") or ""),
+        str(state.get("message") or ""),
+    ]
+    raw = state.get("raw_alert")
+    if isinstance(raw, dict):
+        for key in ("alert_name", "title", "message", "text", "error_message", "kube_namespace"):
+            value = raw.get(key)
+            if isinstance(value, str):
+                parts.append(value)
+        for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
+            block = raw.get(block_key)
+            if isinstance(block, dict):
+                parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
+    elif isinstance(raw, str):
+        parts.append(raw)
+
+    problem_md = state.get("problem_md")
+    if isinstance(problem_md, str):
+        parts.append(problem_md)
+
+    return " ".join(part for part in parts if part).lower()
 
 
 def _format_tools_by_source(tools_by_source: dict[str, list[Any]]) -> str:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.prompt import build_system_prompt, format_alert_context
+from app.agent.prompt import _relevant_sources, build_system_prompt, format_alert_context
 
 
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -22,6 +22,127 @@ def test_build_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
     assert "delivery_hang" in prompt
     assert "ghost_session" in prompt
     assert "connection_exhaustion" not in prompt
+
+
+def test_generic_alert_matches_relevant_integration_by_content() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "High error rate in payments ETL",
+            "alert_source": "generic",
+            "pipeline_name": "payments_etl",
+            "severity": "critical",
+            "message": "payments_etl is failing with repeated database connection errors",
+            "resolved_integrations": {
+                "postgresql": {"host": "orders-db", "database": "orders", "port": 5432},
+            },
+        }
+    )
+
+    assert "Call these tools first (from: postgresql" in context
+
+
+def test_generic_alert_excludes_unrelated_integrations() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "High error rate in payments ETL",
+            "alert_source": "generic",
+            "pipeline_name": "payments_etl",
+            "severity": "critical",
+            "message": "payments_etl is failing with repeated database connection errors",
+            "resolved_integrations": {
+                "postgresql": {"host": "orders-db", "database": "orders", "port": 5432},
+                "datadog": {"connection_verified": True, "api_key": "x", "app_key": "y"},
+            },
+        }
+    )
+
+    # Only the content-relevant integration is in the call-first list; Datadog
+    # has no content signal here and must be relegated to secondary.
+    assert "Call these tools first (from: postgresql)" in context
+    assert "Secondary integrations" in context
+
+
+def test_generic_alert_without_signal_does_not_fan_out() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Something went wrong",
+            "alert_source": "generic",
+            "pipeline_name": "widgets",
+            "severity": "critical",
+            "message": "an unexpected problem occurred",
+            "resolved_integrations": {
+                "datadog": {"connection_verified": True, "api_key": "x", "app_key": "y"},
+                "vercel": {"connection_verified": True, "token": "z"},
+            },
+        }
+    )
+
+    # No content signal points to a specific integration: the agent must be told
+    # to pick relevant ones, NOT to call every connected integration first.
+    assert "Call these tools first" not in context
+    assert "call only the integration(s) directly relevant" in context
+    assert "Do not call integrations" in context
+
+
+def test_generic_alert_honors_context_sources_annotation() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "Something went wrong",
+            "alert_source": "generic",
+            "pipeline_name": "widgets",
+            "severity": "critical",
+            "message": "an unexpected problem occurred",
+            "raw_alert": {
+                "commonAnnotations": {"context_sources": "datadog"},
+            },
+            "resolved_integrations": {
+                "datadog": {"connection_verified": True, "api_key": "x", "app_key": "y"},
+                "vercel": {"connection_verified": True, "token": "z"},
+            },
+        }
+    )
+
+    assert "Call these tools first (from: datadog)" in context
+
+
+def test_relevant_sources_matches_db_symptom_and_excludes_unrelated() -> None:
+    state = {
+        "alert_name": "High error rate in payments ETL",
+        "alert_source": "generic",
+        "pipeline_name": "payments_etl",
+        "message": "payments_etl is failing with repeated database connection errors",
+    }
+    tools_by_source = {"postgresql": [], "vercel": [], "knowledge": []}
+
+    # The DB-connection symptom matches Postgres; Vercel is irrelevant and the
+    # secondary "knowledge" source is never a candidate.
+    assert _relevant_sources(state, tools_by_source) == ["postgresql"]
+
+
+def test_relevant_sources_empty_when_no_content_signal() -> None:
+    state = {
+        "alert_name": "Something is wrong",
+        "alert_source": "generic",
+        "pipeline_name": "mystery",
+        "message": "an unexplained problem occurred",
+    }
+    tools_by_source = {"postgresql": [], "vercel": []}
+
+    assert _relevant_sources(state, tools_by_source) == []
+
+
+def test_relevant_sources_honors_explicit_context_sources() -> None:
+    state = {
+        "alert_name": "Something is wrong",
+        "alert_source": "generic",
+        "pipeline_name": "mystery",
+        "message": "an unexplained problem occurred",
+        "raw_alert": {"commonAnnotations": {"context_sources": "vercel"}},
+    }
+    tools_by_source = {"postgresql": [], "vercel": []}
+
+    # Explicit declaration wins even though the content has no Vercel keyword.
+    assert _relevant_sources(state, tools_by_source) == ["vercel"]
 
 
 def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:

@@ -48,6 +48,7 @@ from app.integrations.hermes.classifier import IncidentClassifier
 from app.integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from app.integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
 from app.tools.tool_decorator import tool
+from app.tools.utils.availability import hermes_available_or_backend
 
 # Default location of Hermes' own error log. The agent tool resolves
 # this lazily so a non-default ``$HERMES_HOME`` is respected without
@@ -213,6 +214,7 @@ def _serialise_poll(
     ],
     tags=("safe", "fast", "no-credentials"),
     cost_tier="cheap",
+    is_available=hermes_available_or_backend,
     input_schema={
         "type": "object",
         "properties": {
