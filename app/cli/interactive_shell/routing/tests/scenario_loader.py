@@ -102,20 +102,52 @@ class Scenario:
 @dataclass(frozen=True)
 class AnswerRoute:
     expected_kind: str
-    expected_signals: tuple[str, ...]
     expected_command_text: str | None
 
 
 @dataclass(frozen=True)
 class AnswerPolicy:
-    should_execute: bool
-    # Deprecated: use forbidden_actions in response_contract instead.
-    has_unhandled_clause: bool
-    fail_closed: bool
+    """Execution expectation for the planner -> dispatch path only.
+
+    ``executes_terminal_action`` is true when the turn is expected to run at
+    least one planned terminal action through the action-tool dispatch gate
+    (``REGISTRY.dispatch``) -- a slash command, shell command, sample alert,
+    investigation start, synthetic run, etc. It is false for conversational
+    turns that answer in chat without dispatching a terminal action.
+
+    This flag does NOT describe the conversational data-gathering path
+    (``gather_tool_evidence``), where the assistant may query configured
+    integrations (Sentry, GitHub, PostHog, ...) while composing a chat answer.
+    That path is not modeled as planned/executed actions; it is asserted via
+    ``response_contract`` text and by execution-layer tests. See the ``Answer``
+    docstring for the full two-path model.
+    """
+
+    executes_terminal_action: bool
 
 
 @dataclass(frozen=True)
 class Answer:
+    """Expected behavior for one routing scenario.
+
+    A turn can resolve down one of two independent execution paths, and these
+    fields only describe the first:
+
+    1. Planner -> terminal action -> ``REGISTRY.dispatch`` (the "execution"
+       path). Covered by ``policy.executes_terminal_action``,
+       ``planned_actions``, and ``executed_actions``. An empty ``planned_actions``
+       means the planner is expected to hand the turn to the conversational
+       assistant (an ``assistant_handoff``), i.e. no terminal action runs.
+
+    2. Conversational answer + ``gather_tool_evidence`` tool loop (the "chat"
+       path). This is where the assistant answers in prose and may query
+       configured integrations to ground that answer. It is NOT represented as
+       planned/executed actions; the only assertions available here are the
+       ``response_contract`` text checks. Deeper "did it actually query the
+       integration?" assertions belong in execution-layer tests, not these
+       routing fixtures.
+    """
+
     route: AnswerRoute
     policy: AnswerPolicy
     planned_actions: tuple[dict[str, Any], ...]
@@ -366,10 +398,18 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     if expected_kind != "handle_message_with_agent":
         msg = f"{answer_path}: invalid route.expected_kind {expected_kind!r}."
         raise ValueError(msg)
+    if "expected_signals" in route_raw:
+        msg = f"{answer_path}: route.expected_signals was removed; drop it from the fixture."
+        raise ValueError(msg)
 
-    should_execute = bool(policy_raw.get("should_execute", False))
-    has_unhandled_clause = bool(policy_raw.get("has_unhandled_clause", False))
-    fail_closed = bool(policy_raw.get("fail_closed", False))
+    for removed_key in ("should_execute", "has_unhandled_clause", "fail_closed"):
+        if removed_key in policy_raw:
+            msg = (
+                f"{answer_path}: policy.{removed_key!r} was removed; "
+                "use policy.executes_terminal_action instead."
+            )
+            raise ValueError(msg)
+    executes_terminal_action = bool(policy_raw.get("executes_terminal_action", False))
 
     planned_actions = tuple(
         _normalize_planned_action(dict(item))
@@ -425,14 +465,11 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
             msg = f"{answer_path}: forbidden_actions entry {entry!r} is not a valid action kind."
             raise ValueError(msg)
 
-    if not should_execute and "$ /" not in must_not_contain:
+    if not executes_terminal_action and "$ /" not in must_not_contain:
         must_not_contain.append("$ /")
 
-    if has_unhandled_clause and should_execute:
-        msg = f"{answer_path}: has_unhandled_clause=true requires should_execute=false."
-        raise ValueError(msg)
-    if not should_execute and executed_actions:
-        msg = f"{answer_path}: should_execute=false requires executed_actions=[]."
+    if not executes_terminal_action and executed_actions:
+        msg = f"{answer_path}: executes_terminal_action=false requires executed_actions=[]."
         raise ValueError(msg)
 
     tier = str(data.get("tier", "critical")).strip() or "critical"
@@ -461,16 +498,10 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     return Answer(
         route=AnswerRoute(
             expected_kind=expected_kind,
-            expected_signals=_string_list(
-                route_raw.get("expected_signals"),
-                label=f"{answer_path} route.expected_signals",
-            ),
             expected_command_text=expected_command_text,
         ),
         policy=AnswerPolicy(
-            should_execute=should_execute,
-            has_unhandled_clause=has_unhandled_clause,
-            fail_closed=fail_closed,
+            executes_terminal_action=executes_terminal_action,
         ),
         planned_actions=planned_actions,
         executed_actions=executed_actions,

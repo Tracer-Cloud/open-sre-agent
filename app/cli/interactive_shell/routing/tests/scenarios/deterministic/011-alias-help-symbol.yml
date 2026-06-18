@@ -20,9 +20,7 @@ route:
   expected_kind: handle_message_with_agent
   expected_command_text: /help
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: slash
   source: deterministic
