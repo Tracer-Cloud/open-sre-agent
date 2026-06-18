@@ -96,9 +96,8 @@ _ACTION_RULE = (
     "/model show, /health, /doctor, /version; "
     '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
     "to run any opensre subcommand (agent is blocked); "
-    '`{"action":"run_interactive","command":"/integrations setup <service>"}` '
-    "to launch an interactive setup/connect wizard the user asked for (only "
-    "`/integrations setup <service>` or `/mcp connect <server>` are allowed). "
+    '`{"action":"run_interactive","command":"/<command> <args>"}` '
+    "to launch any registered OpenSRE interactive slash command the user asked for. "
     "For ordinary "
     "questions, return normal Markdown. Do not return action JSON for vague "
     "local model requests such as `connect to local llama`; answer with a brief "
@@ -131,15 +130,34 @@ _SETUP_GUIDANCE_RULE = (
     "needs. This applies to any integration; never hardcode advice to one vendor."
 )
 
-# Interactive commands the assistant may auto-launch via a run_interactive action.
-# These spawn a child process that needs exclusive stdin, so they are queued to
-# run through the REPL's normal exclusive-stdin dispatch rather than inline.
-_INTERACTIVE_LAUNCH_PREFIXES: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("/integrations", "setup"),
-        ("/mcp", "connect"),
-    }
-)
+# `run_interactive` is not a narrow feature allowlist. It is the bridge from an
+# agent-planned action back into the OpenSRE interactive shell. Any command that
+# is registered in the slash-command registry is already an OpenSRE command and
+# must stay eligible here.
+#
+# Keep this registry-backed instead of listing subcommands like
+# `/integrations setup` or `/integrations remove`: duplicating subcommand lists
+# here drifts from the actual dispatcher and causes valid OpenSRE commands to be
+# rejected before the normal policy/confirmation flow can evaluate them. The
+# dispatcher remains the source of truth for argument validation, execution tier,
+# confirmation, exclusive-stdin handling, and the command's side effects.
+#
+# The only thing this gate should reject is non-OpenSRE input: empty strings,
+# shell snippets, arbitrary text, or unknown slash commands. Do not reintroduce
+# a per-command allowlist in this file.
+def _registered_interactive_command(command: str) -> bool:
+    parts = command.strip().split()
+    if not parts:
+        return False
+    name = parts[0].lower()
+    if name == "/":
+        return True
+    if not name.startswith("/"):
+        return False
+
+    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
+
+    return name in SLASH_COMMANDS
 
 _ALLOWED_SLASH_ACTIONS = frozenset(
     {
@@ -480,19 +498,17 @@ def _execute_action_plan(
 
         if kind == "run_interactive":
             command = str(action.get("command", "")).strip()
-            parts = command.split()
-            head = tuple(part.lower() for part in parts[:2])
-            if head not in _INTERACTIVE_LAUNCH_PREFIXES:
+            if not _registered_interactive_command(command):
                 console.print(f"[{ERROR}]unsupported interactive command:[/] {escape(command)}")
                 continue
             from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
             if not repl_tty_interactive():
                 # No interactive prompt to auto-submit into (scripted/non-TTY);
-                # fall back to telling the user the command to run.
+                # fall back to telling the user the exact registered OpenSRE
+                # slash command to run in an interactive shell.
                 console.print(
-                    f"Run [bold]{escape(command)}[/bold] to start the interactive setup; "
-                    "it prompts for the required credentials."
+                    f"Run [bold]{escape(command)}[/bold] in the interactive shell to continue."
                 )
                 continue
             console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(command)}[/]…")

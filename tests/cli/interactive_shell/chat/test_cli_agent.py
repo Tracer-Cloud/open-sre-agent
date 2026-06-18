@@ -629,19 +629,33 @@ def test_run_interactive_action_falls_back_to_guidance_without_tty(monkeypatch: 
     assert "/integrations setup sentry" in _strip_ansi(buf.getvalue())
 
 
-def test_run_interactive_action_rejects_non_allowlisted_command(monkeypatch: Any) -> None:
-    """Only setup/connect wizards may be auto-launched; other commands are rejected
-    so the agent cannot queue arbitrary commands for unattended execution."""
+def test_run_interactive_action_queues_any_registered_opensre_command(monkeypatch: Any) -> None:
     _patch_llm(
         monkeypatch,
-        '{"actions":[{"action":"run_interactive","command":"/integrations verify"}]}',
+        '{"actions":[{"action":"run_interactive","command":"/integrations remove github"}]}',
     )
     monkeypatch.setattr(
         "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
     )
     session = ReplSession()
     console, buf = _capture()
-    answer_cli_agent("verify", session, console)
+    answer_cli_agent("remove github connection", session, console)
+    assert session.pending_prompt_default == "/integrations remove github"
+    assert session.pending_prompt_autosubmit is True
+    assert "Launching" in _strip_ansi(buf.getvalue())
+
+
+def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) -> None:
+    _patch_llm(
+        monkeypatch,
+        '{"actions":[{"action":"run_interactive","command":"/not-an-opensre-command now"}]}',
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    answer_cli_agent("do a fake thing", session, console)
     assert session.pending_prompt_default is None
     assert "unsupported interactive command" in _strip_ansi(buf.getvalue())
 
