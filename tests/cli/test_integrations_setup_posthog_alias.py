@@ -69,7 +69,7 @@ def test_cmd_verify_posthog_alias_resolves_before_verifying(
     monkeypatch.setattr("app.integrations.cli.format_verification_results", lambda _results: "")
     monkeypatch.setattr(
         "app.integrations.cli.verification_exit_code",
-        lambda _results, requested_service=None: 0,
+        lambda *_args, **_kwargs: 0,
     )
 
     assert cmd_verify("posthog") == 0

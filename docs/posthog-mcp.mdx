@@ -35,6 +35,13 @@ opensre integrations setup
 
 Select **PostHog (MCP)** when prompted, then paste your personal API key. Keep the default Streamable HTTP transport and URL unless you have a reason to change them.
 
+To skip the menu, name the service directly. The canonical name is `posthog_mcp`, and `posthog` is accepted as a convenience alias:
+
+```bash
+opensre integrations setup posthog        # alias for posthog_mcp
+opensre integrations verify posthog
+```
+
 ### Option 2: Environment variables
 
 Add to your `.env`:
