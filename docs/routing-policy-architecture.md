@@ -122,7 +122,7 @@ inline mid-turn (the live prompt is competing for stdin). Instead the action
 queues the command via `session.queue_auto_command(...)`, which prefills the next
 prompt and marks it for auto-submit. The prompt refresh hook
 (`wire_prompt_refresh` in `prompting/prompt_surface.py`) then submits it, so the
-command flows through the REPL's normal exclusive-stdin dispatch path
+command flows through the normal exclusive-stdin dispatch path of the REPL
 (`dispatch_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
 place an interactive child process gets clean stdin. In a non-TTY/scripted
 context (no prompt to submit into) the action degrades to telling the user the

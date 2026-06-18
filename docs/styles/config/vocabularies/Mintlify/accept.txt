@@ -140,3 +140,10 @@ routable
 systemd
 tailer
 traceback
+# Interactive-shell routing / agent architecture terms
+dedupe
+hardcoding
+postprocessing
+prefills
+stdin
+validator
