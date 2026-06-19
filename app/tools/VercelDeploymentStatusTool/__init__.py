@@ -26,6 +26,7 @@ class VercelDeploymentStatusTool(BaseTool):
         "Listing recent deployment history for a Vercel project",
     ]
     requires = ["api_token"]
+    injected_params = ["api_token"]
     input_schema = {
         "type": "object",
         "properties": {

@@ -26,6 +26,7 @@ class VercelLogsTool(BaseTool):
         "Inspecting build output for dependency or compilation errors",
     ]
     requires = ["api_token", "deployment_id"]
+    injected_params = ["api_token"]
     input_schema = {
         "type": "object",
         "properties": {

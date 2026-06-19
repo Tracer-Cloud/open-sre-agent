@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Identifying stalled or inactive consumers on a specific queue",
     ],
     is_available=rabbitmq_is_available,
+    injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
 )
 def get_rabbitmq_consumer_health(

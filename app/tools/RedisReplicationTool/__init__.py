@@ -30,6 +30,7 @@ from app.tools.tool_decorator import tool
         "replicas": "For masters: per-replica address, state, offset, and lag_bytes.",
     },
     is_available=redis_is_available,
+    injected_params=("host",),
     extract_params=redis_extract_params,
 )
 def get_redis_replication(

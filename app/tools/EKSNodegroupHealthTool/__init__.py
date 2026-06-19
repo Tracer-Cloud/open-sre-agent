@@ -44,6 +44,7 @@ def _nodegroup_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "required": ["cluster_name", "role_arn"],
     },
     is_available=_nodegroup_is_available,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=_nodegroup_extract_params,
 )
 def get_eks_nodegroup_health(

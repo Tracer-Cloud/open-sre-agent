@@ -21,6 +21,7 @@ from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
     source="mariadb",
     surfaces=("investigation", "chat"),
     is_available=mariadb_is_available,
+    injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,
 )
 def get_mariadb_process_list(

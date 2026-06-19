@@ -24,6 +24,7 @@ class OpsGenieAlertDetailTool(BaseTool):
         "Reading alert details (custom fields, tags, entity) for RCA context",
     ]
     requires = ["api_key", "alert_id"]
+    injected_params = ["api_key"]
     input_schema = {
         "type": "object",
         "properties": {

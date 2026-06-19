@@ -26,6 +26,7 @@ from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
         "Spotting runaway queries during an incident",
     ],
     is_available=mysql_is_available,
+    injected_params=("host",),
     extract_params=mysql_extract_params,
 )
 def get_mysql_current_processes(

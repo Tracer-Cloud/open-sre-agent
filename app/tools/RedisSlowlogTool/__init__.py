@@ -28,6 +28,7 @@ from app.tools.tool_decorator import tool
         "entries": "Slow log records: id, start_time, duration_microseconds, command, and client.",
     },
     is_available=redis_is_available,
+    injected_params=("host",),
     extract_params=redis_extract_params,
 )
 def get_redis_slowlog(

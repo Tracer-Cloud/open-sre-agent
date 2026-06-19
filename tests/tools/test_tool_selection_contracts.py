@@ -1,6 +1,131 @@
 from __future__ import annotations
 
-from app.tools.registry import get_registered_tool_map
+import pytest
+
+from app.tools.registry import get_registered_tool_map, get_registered_tools
+
+# Parameter names that are supplied from resolved integration config (auth
+# secrets and connection/account identities) and that the model can NEVER
+# legitimately provide. Such a param MUST be declared in a tool's
+# ``injected_params`` so it is stripped from the model-facing schema and
+# auto-injected at run time. If one stays in the model-facing ``required`` list,
+# the LLM is asked for a value it cannot know, so it silently never calls the
+# tool — the conversational assistant then answers from prose instead of live
+# data. See ``app/tools/SentrySearchIssuesTool`` and the chat tool-gathering
+# loop in ``app/cli/interactive_shell/chat/tool_gathering.py``.
+CREDENTIAL_PARAM_NAMES = frozenset(
+    {
+        # auth secrets
+        "api_key",
+        "app_key",
+        "api_token",
+        "auth_token",
+        "sentry_token",
+        "access_token",
+        "api_private_key",
+        "api_public_key",
+        "password",
+        "secret",
+        "secret_key",
+        "client_secret",
+        "connection_string",
+        "grafana_api_key",
+        "grafana_password",
+        "token",
+        # connection / account identity (config-only)
+        "base_url",
+        "site",
+        "host",
+        "server",
+        "endpoint",
+        "url",
+        "api_url",
+        "project_url",
+        "workspace_id",
+        "account_identifier",
+        "bootstrap_servers",
+        "query_endpoint",
+        "organization_slug",
+        "role_arn",
+        "credentials_file",
+        "grafana_endpoint",
+        "grafana_username",
+        "username",
+        "email",
+        "credentials",
+        "external_id",
+    }
+)
+
+# (tool_name, param) pairs where a credential-NAMED parameter is genuinely a
+# model-supplied target, not a credential, and is intentionally exposed. Keep
+# this list tiny and justified; each entry is a deliberate exception.
+MODEL_SUPPLIED_CREDENTIAL_PARAMS = frozenset(
+    {
+        # CloudTrail filters events by an IAM principal name; ``username`` here is
+        # the forensic search target, not an auth credential.
+        ("lookup_cloudtrail_events", "username"),
+    }
+)
+
+
+def _all_registered_tools() -> dict[str, object]:
+    tools: dict[str, object] = {}
+    for surface in ("investigation", "chat"):
+        for tool in get_registered_tools(surface):
+            tools[tool.name] = tool
+    return tools
+
+
+def test_no_tool_requires_a_credential_in_its_model_facing_schema() -> None:
+    """Credentials must be injected from config, never required of the model.
+
+    Regression guard for the whole tool registry: a tool whose model-facing
+    ``required`` list contains an auth secret or connection identity can never be
+    invoked by the planner/assistant, because the model cannot supply that value.
+    The fix is always to add the param to the tool's ``injected_params``.
+    """
+    offenders: dict[str, list[str]] = {}
+    for name, tool in sorted(_all_registered_tools().items()):
+        schema = tool.public_input_schema  # type: ignore[attr-defined]
+        required = set(schema.get("required", []) or [])
+        leaked = sorted(
+            param
+            for param in (required & CREDENTIAL_PARAM_NAMES)
+            if (name, param) not in MODEL_SUPPLIED_CREDENTIAL_PARAMS
+        )
+        if leaked:
+            offenders[name] = leaked
+
+    assert not offenders, (
+        "These tools require a config-injected credential in their model-facing "
+        "schema; add each listed param to the tool's injected_params:\n"
+        + "\n".join(f"  - {name}: {params}" for name, params in offenders.items())
+    )
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    [
+        "search_sentry_issues",
+        "jira_search_issues",
+        "get_mysql_server_status",
+        "alertmanager_alerts",
+        "query_azure_monitor_logs",
+        "describe_eks_cluster",
+    ],
+)
+def test_representative_tools_hide_credentials_but_keep_targets(tool_name: str) -> None:
+    """Spot-check that fixed tools strip credentials yet keep model-facing args."""
+    tool = _all_registered_tools()[tool_name]
+    props = set(tool.public_input_schema.get("properties", {}).keys())  # type: ignore[attr-defined]
+    required = set(tool.public_input_schema.get("required", []))  # type: ignore[attr-defined]
+    assert CREDENTIAL_PARAM_NAMES.isdisjoint(required)
+    # The injected credentials are also gone from the visible properties.
+    assert (
+        set(tool.injected_params) & CREDENTIAL_PARAM_NAMES
+    )  # declares some creds  # type: ignore[attr-defined]
+    assert set(tool.injected_params).isdisjoint(props)  # type: ignore[attr-defined]
 
 
 def test_rds_performance_family_uses_rds_and_postgresql_contracts() -> None:
@@ -13,7 +138,13 @@ def test_rds_performance_family_uses_rds_and_postgresql_contracts() -> None:
     assert "db_instance_identifier" in set(rds_tool.public_input_schema.get("required", []))
 
     assert pg_tool.source == "postgresql"
-    assert {"host", "threshold_ms"} <= set(pg_tool.public_input_schema.get("properties", {}).keys())
+    pg_props = set(pg_tool.public_input_schema.get("properties", {}).keys())
+    # ``threshold_ms`` is a real model-supplied parameter and stays visible.
+    assert "threshold_ms" in pg_props
+    # ``host`` is a config-injected connection identity and must NOT be exposed
+    # to the model (it is supplied from the resolved integration, not the LLM).
+    assert "host" not in pg_props
+    assert "host" not in set(pg_tool.public_input_schema.get("required", []))
 
 
 def test_kubernetes_contract_requires_cluster_and_namespace_filters() -> None:

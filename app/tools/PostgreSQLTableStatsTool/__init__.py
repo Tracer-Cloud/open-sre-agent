@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Checking table maintenance status like vacuum and analyze operations",
     ],
     is_available=postgresql_is_available,
+    injected_params=("host",),
     extract_params=postgresql_extract_params,
 )
 def get_postgresql_table_stats(

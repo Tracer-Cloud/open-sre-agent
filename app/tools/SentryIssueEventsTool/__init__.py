@@ -48,6 +48,7 @@ def _issue_events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         },
         "required": ["organization_slug", "sentry_token", "issue_id"],
     },
+    injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_issue_events_available,
     extract_params=_issue_events_extract_params,
     surfaces=("investigation", "chat"),

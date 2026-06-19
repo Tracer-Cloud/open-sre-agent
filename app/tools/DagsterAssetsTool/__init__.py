@@ -17,6 +17,7 @@ from app.tools.tool_decorator import tool
     source="dagster",
     surfaces=("investigation", "chat"),
     is_available=dagster_is_available,
+    injected_params=("api_token", "endpoint"),
     extract_params=dagster_extract_params,
 )
 def list_dagster_assets(

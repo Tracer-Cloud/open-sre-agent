@@ -24,6 +24,7 @@ class JiraIssueDetailTool(BaseTool):
         "Pulling assignee and label information for an existing ticket",
     ]
     requires = ["base_url", "email", "api_token", "issue_key"]
+    injected_params = ["api_token", "base_url", "email"]
     input_schema = {
         "type": "object",
         "properties": {

@@ -30,6 +30,7 @@ from app.tools.tool_decorator import tool
         "samples": "Per-key samples: key, ttl_seconds (-1 none, -2 missing), and type.",
     },
     is_available=redis_is_available,
+    injected_params=("host",),
     extract_params=redis_extract_params,
 )
 def scan_redis_keys(

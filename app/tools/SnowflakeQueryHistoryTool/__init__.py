@@ -117,6 +117,7 @@ def _normalize_rows(response_payload: dict[str, Any]) -> list[dict[str, Any]]:
         "required": ["account_identifier"],
     },
     is_available=_snowflake_available,
+    injected_params=("account_identifier",),
     extract_params=_snowflake_extract_params,
 )
 def query_snowflake_history(

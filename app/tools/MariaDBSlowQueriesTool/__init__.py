@@ -17,6 +17,7 @@ from app.tools.tool_decorator import tool
     source="mariadb",
     surfaces=("investigation", "chat"),
     is_available=mariadb_is_available,
+    injected_params=("host", "password", "username"),
     extract_params=mariadb_extract_params,
 )
 def get_mariadb_slow_queries(

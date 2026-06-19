@@ -23,6 +23,7 @@ from app.tools.tool_decorator import tool
         "Reviewing connection and query counts for capacity issues",
     ],
     is_available=clickhouse_is_available,
+    injected_params=("host",),
     extract_params=clickhouse_extract_params,
 )
 def get_clickhouse_system_health(

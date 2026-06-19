@@ -40,6 +40,7 @@ class VictoriaLogsTool(BaseTool):
     # follow-up. Mirrors SplunkSearchTool, the closest log-query analog.
     surfaces = ("investigation", "chat")
     requires = ["base_url"]
+    injected_params = ["base_url"]
     input_schema = {
         "type": "object",
         "properties": {

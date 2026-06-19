@@ -31,6 +31,7 @@ from app.tools.tool_decorator import tool
         "keyspace": "Per-database key counts, expires, and average TTL.",
     },
     is_available=redis_is_available,
+    injected_params=("host",),
     extract_params=redis_extract_params,
 )
 def get_redis_server_info(

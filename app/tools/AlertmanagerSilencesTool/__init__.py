@@ -28,6 +28,7 @@ class AlertmanagerSilencesTool(BaseTool):
         "Determining if an alert is suppressed by an ongoing maintenance window",
     ]
     requires = ["base_url"]
+    injected_params = ["base_url", "password", "username"]
     input_schema = {
         "type": "object",
         "properties": {

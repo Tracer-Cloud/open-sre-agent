@@ -86,6 +86,7 @@ def _search_issues_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         },
         "required": ["organization_slug", "sentry_token"],
     },
+    injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_sentry_available,
     extract_params=_search_issues_extract_params,
     surfaces=("investigation", "chat"),

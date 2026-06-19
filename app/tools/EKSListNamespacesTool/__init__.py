@@ -43,6 +43,7 @@ def _list_ns_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "required": ["cluster_name", "role_arn"],
     },
     is_available=_list_ns_is_available,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=_list_ns_extract_params,
 )
 def list_eks_namespaces(

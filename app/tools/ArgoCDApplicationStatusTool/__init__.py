@@ -23,6 +23,7 @@ class ArgoCDApplicationStatusTool(BaseTool):
         "Listing visible Argo CD applications when an alert omits the application name",
     ]
     requires = ["base_url"]
+    injected_params = ["base_url", "password", "username"]
     input_schema = {
         "type": "object",
         "properties": {

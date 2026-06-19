@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Reviewing query activity after an alert fires",
     ],
     is_available=clickhouse_is_available,
+    injected_params=("host",),
     extract_params=clickhouse_extract_params,
 )
 def get_clickhouse_query_activity(

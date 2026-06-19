@@ -31,6 +31,7 @@ from app.tools.tool_decorator import tool
         "Scanning a specific source (e.g. t123456_myapp) for recent and archived activity",
     ],
     is_available=betterstack_is_available,
+    injected_params=("password", "query_endpoint", "username"),
     extract_params=betterstack_extract_params,
 )
 def query_betterstack_logs(

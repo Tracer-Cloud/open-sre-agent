@@ -60,6 +60,7 @@ def _opensearch_extract_params(sources: dict[str, dict[str, Any]]) -> dict[str, 
         "required": ["url"],
     },
     is_available=_opensearch_available,
+    injected_params=("url",),
     extract_params=_opensearch_extract_params,
 )
 def query_opensearch_analytics(

@@ -25,6 +25,7 @@ from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
         "Finding resource-intensive queries correlating with alert timeframes",
     ],
     is_available=postgresql_is_available,
+    injected_params=("host",),
     extract_params=postgresql_extract_params,
 )
 def get_postgresql_current_queries(

@@ -48,6 +48,7 @@ def _node_health_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "required": ["cluster_name", "role_arn"],
     },
     is_available=_node_health_is_available,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=_node_health_extract_params,
 )
 def get_eks_node_health(

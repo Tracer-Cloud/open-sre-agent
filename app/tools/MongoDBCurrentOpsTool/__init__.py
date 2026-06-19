@@ -17,6 +17,7 @@ from app.tools.tool_decorator import tool
     source="mongodb",
     surfaces=("investigation", "chat"),
     is_available=mongodb_is_available,
+    injected_params=("connection_string",),
     extract_params=mongodb_extract_params,
 )
 def get_mongodb_current_ops(

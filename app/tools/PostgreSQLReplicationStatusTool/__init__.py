@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Monitoring WAL streaming and replica connectivity problems",
     ],
     is_available=postgresql_is_available,
+    injected_params=("host",),
     extract_params=postgresql_extract_params,
 )
 def get_postgresql_replication_status(

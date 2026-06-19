@@ -49,6 +49,7 @@ def _eks_creds(eks: dict) -> dict:
         "required": ["role_arn"],
     },
     is_available=_eks_available,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=extract_cluster_params,
 )
 def list_eks_clusters(

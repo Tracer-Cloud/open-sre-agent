@@ -53,6 +53,7 @@ def _pod_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "required": ["cluster_name", "namespace", "pod_name", "role_arn"],
     },
     is_available=_pod_logs_is_available,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=_pod_logs_extract_params,
 )
 def get_eks_pod_logs(

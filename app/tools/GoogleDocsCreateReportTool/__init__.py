@@ -116,6 +116,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         ],
     },
     is_available=_is_available,
+    injected_params=("credentials_file",),
     extract_params=_extract_params,
 )
 def create_google_docs_incident_report(

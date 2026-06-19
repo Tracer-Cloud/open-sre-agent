@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Diagnosing replication errors and identifying last error details",
     ],
     is_available=mysql_is_available,
+    injected_params=("host",),
     extract_params=mysql_extract_params,
 )
 def get_mysql_replication_status(
