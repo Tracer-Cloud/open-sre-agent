@@ -115,7 +115,7 @@ Reports a list key's depth via `LLEN`, with an optional bounded head/tail sample
 Runs `LATENCY DOCTOR` for a human-readable diagnosis of recent latency spikes (fork/RDB save, AOF rewrite, blocking commands, slow disk) and lists the latest monitored events via `LATENCY LATEST`; an optional `event` argument adds `LATENCY HISTORY` for that event.
 
 <Info>
-Latency monitoring must be enabled for events to be recorded — set `latency-monitor-threshold` to a value greater than `0` (in milliseconds). When it is disabled the report is a benign "no spikes" message and `monitoring_active` is `false`.
+Latency monitoring must be enabled for events to be recorded — set `latency-monitor-threshold` to a value greater than `0` (in milliseconds). The tool reads this threshold via `CONFIG GET`, so `monitoring_active` reflects whether monitoring is *enabled* (a healthy, enabled-but-quiet server reports `monitoring_active: true` with no events). When the threshold is `0`, the report is a benign "monitoring disabled" message and `monitoring_active` is `false`.
 </Info>
 
 ## Verify
@@ -138,7 +138,7 @@ Detail: Connected to Redis 7.2.4 at localhost:6379; database 0.
 | --- | --- |
 | **Connection refused** | Verify the host/port, check firewalls, and ensure Redis is running and bound to a reachable interface (`protected-mode`). |
 | **Authentication failed (NOAUTH/WRONGPASS)** | Set `REDIS_PASSWORD`. For ACL users, also set `REDIS_USERNAME`. |
-| **No permissions (NOPERM)** | Grant the user read access to the `INFO`, `SLOWLOG`, and `SCAN`/`TTL`/`TYPE` commands. |
+| **No permissions (NOPERM)** | Grant the user read access to the diagnostic commands it needs: `INFO`, `CLIENT`, `SLOWLOG`, `LATENCY`, `TYPE`, `LLEN`/`LRANGE`, `SCAN`/`TTL` (and `CONFIG GET` for the latency-monitoring threshold). |
 | **TLS handshake failed** | Set `REDIS_SSL=true`; confirm the server has TLS enabled. |
 | **Empty replication / no replicas** | Expected for a standalone instance — the role is reported as `master` with no replicas. |
 

@@ -28,7 +28,8 @@ from app.tools.tool_decorator import tool
     ],
     outputs={
         "report": "Human-readable LATENCY DOCTOR diagnosis.",
-        "monitoring_active": "Whether latency monitoring is recording events.",
+        "monitoring_active": "Whether latency monitoring is enabled (latency-monitor-threshold > 0).",
+        "monitoring_threshold_ms": "The configured threshold in ms (null if CONFIG GET is denied).",
         "latest": "Latest spike per monitored event: event, last_occurrence, latest_ms, max_ms.",
         "history": "Bounded time series for the requested event (when 'event' is set).",
     },
@@ -44,7 +45,8 @@ def get_redis_latency_doctor(
     db: int = 0,
     ssl: bool = False,
     event: str = "",
+    history_limit: int | None = None,
 ) -> dict[str, Any]:
     """Run LATENCY DOCTOR and report the latest latency events for a Redis instance."""
     config = RedisConfig(host=host, port=port, username=username, password=password, db=db, ssl=ssl)
-    return get_latency_doctor(config, event=event)
+    return get_latency_doctor(config, event=event, history_limit=history_limit)

@@ -19,12 +19,13 @@ def test_metadata() -> None:
     assert rt.source == "redis"
 
 
-def test_run_happy_path_forwards_event() -> None:
+def test_run_happy_path_forwards_event_and_history_limit() -> None:
     fake = {"source": "redis", "available": True, "report": "ok", "monitoring_active": True}
     with patch("app.tools.RedisLatencyDoctorTool.get_latency_doctor", return_value=fake) as mock_fn:
-        result = get_redis_latency_doctor(host="localhost", event="command")
+        result = get_redis_latency_doctor(host="localhost", event="command", history_limit=10)
     assert result["available"] is True
     assert mock_fn.call_args.kwargs["event"] == "command"
+    assert mock_fn.call_args.kwargs["history_limit"] == 10
 
 
 def test_run_error_propagated() -> None:

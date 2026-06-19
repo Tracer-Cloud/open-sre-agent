@@ -378,6 +378,13 @@ class TestRedisClientList:
         assert result["command_breakdown"]["blpop"] == 1
         assert result["returned_clients"] == 3
         assert result["clients"][1]["blocked"] is True
+        # CLIENT LIST returns every field as a string (parse_client_list); the
+        # sample must coerce the numeric fields to int via safe_int.
+        first = result["clients"][0]
+        assert first["id"] == 1 and isinstance(first["id"], int)
+        assert isinstance(first["db"], int)
+        assert result["clients"][2]["idle_seconds"] == 120
+        assert isinstance(result["clients"][2]["idle_seconds"], int)
         mock_client.close.assert_called_once()
 
     @patch("app.integrations.redis._get_client")
@@ -417,6 +424,10 @@ class TestRedisListDepth:
         assert result["tail"] == ["c"]
         mock_client.pipeline.assert_called_once_with(transaction=False)
         mock_client.close.assert_called_once()
+        # Head uses [0, n-1]; tail uses negative indices [-n, -1] — different slices.
+        lrange_calls = mock_client.pipeline.return_value.lrange.call_args_list
+        assert lrange_calls[0].args == ("jobs", 0, 1)  # head
+        assert lrange_calls[1].args == ("jobs", -1, -1)  # tail
 
     @patch("app.integrations.redis._get_client")
     def test_depth_only_when_no_sample_requested(self, mock_get_client):
@@ -475,6 +486,34 @@ class TestRedisListDepth:
         assert result["head"][0].endswith("…")
         assert len(result["head"][0]) <= 257
 
+    @patch("app.integrations.redis._get_client")
+    def test_tail_only_sampling(self, mock_get_client):
+        # head=0, tail>0: the pipeline buffers only [llen, lrange(tail)], so the
+        # cursor must read the tail from results[1] — the asymmetric branch.
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [10, ["last-job"]]
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="jobs", tail=1)
+
+        assert result["depth"] == 10
+        assert result["head"] == []
+        assert result["tail"] == ["last-job"]
+        assert mock_client.pipeline.return_value.lrange.call_args.args == ("jobs", -1, -1)
+
+    @patch("app.integrations.redis._get_client")
+    def test_tail_sample_clamped_to_max_results(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [1000, ["x"]]
+        mock_get_client.return_value = mock_client
+
+        get_list_depth(RedisConfig(host="cache", max_results=50), key="jobs", tail=999)
+
+        # tail clamped to max_results -> LRANGE(-50, -1)
+        assert mock_client.pipeline.return_value.lrange.call_args.args == ("jobs", -50, -1)
+
     def test_empty_key_rejected(self):
         result = get_list_depth(RedisConfig(host="cache"), key="  ")
         assert result["available"] is False
@@ -482,18 +521,29 @@ class TestRedisListDepth:
 
 
 class TestRedisLatencyDoctor:
+    @staticmethod
+    def _mock_client(threshold: str = "100", latest=None, history=None, report="report"):
+        mock_client = MagicMock()
+        mock_client.execute_command.return_value = report
+        mock_client.latency_latest.return_value = latest if latest is not None else []
+        mock_client.latency_history.return_value = history if history is not None else []
+        mock_client.config_get.return_value = {"latency-monitor-threshold": threshold}
+        return mock_client
+
     @patch("app.integrations.redis._get_client")
     def test_report_latest_and_history(self, mock_get_client):
-        mock_client = MagicMock()
-        mock_client.execute_command.return_value = "Dave, I found spikes in command."
-        mock_client.latency_latest.return_value = [["command", 1700000000, 250, 900]]
-        mock_client.latency_history.return_value = [[1700000000, 250], [1700000060, 300]]
-        mock_get_client.return_value = mock_client
+        mock_get_client.return_value = self._mock_client(
+            threshold="100",
+            report="Dave, I found spikes in command.",
+            latest=[["command", 1700000000, 250, 900]],
+            history=[[1700000000, 250], [1700000060, 300]],
+        )
 
         result = get_latency_doctor(RedisConfig(host="cache"), event="command")
 
         assert result["available"] is True
         assert result["monitoring_active"] is True
+        assert result["monitoring_threshold_ms"] == 100
         assert result["monitored_events"] == 1
         assert result["latest"][0]["event"] == "command"
         assert result["latest"][0]["max_ms"] == 900
@@ -501,34 +551,58 @@ class TestRedisLatencyDoctor:
             {"timestamp": 1700000000, "latency_ms": 250},
             {"timestamp": 1700000060, "latency_ms": 300},
         ]
-        mock_client.execute_command.assert_called_once_with("LATENCY", "DOCTOR")
-        mock_client.close.assert_called_once()
+        mock_get_client.return_value.execute_command.assert_called_once_with("LATENCY", "DOCTOR")
+        mock_get_client.return_value.close.assert_called_once()
 
     @patch("app.integrations.redis._get_client")
-    def test_no_events_when_monitoring_disabled(self, mock_get_client):
-        mock_client = MagicMock()
-        mock_client.execute_command.return_value = "Latency monitoring is disabled."
-        mock_client.latency_latest.return_value = []
-        mock_get_client.return_value = mock_client
+    def test_monitoring_disabled_reports_inactive(self, mock_get_client):
+        mock_get_client.return_value = self._mock_client(threshold="0", latest=[])
 
         result = get_latency_doctor(RedisConfig(host="cache"))
 
         assert result["available"] is True
         assert result["monitoring_active"] is False
+        assert result["monitoring_threshold_ms"] == 0
         assert result["latest"] == []
-        assert result["history"] == []
-        mock_client.latency_history.assert_not_called()  # no event requested
+        mock_get_client.return_value.latency_history.assert_not_called()  # no event requested
 
     @patch("app.integrations.redis._get_client")
-    def test_history_capped_at_max_results(self, mock_get_client):
-        mock_client = MagicMock()
-        mock_client.execute_command.return_value = "report"
-        mock_client.latency_latest.return_value = []
-        mock_client.latency_history.return_value = [[i, i] for i in range(100)]
+    def test_enabled_but_quiet_reports_active(self, mock_get_client):
+        # The key regression: monitoring is ON (threshold > 0) but no spike has
+        # crossed it yet — a healthy server, NOT "monitoring disabled".
+        mock_get_client.return_value = self._mock_client(threshold="100", latest=[])
+
+        result = get_latency_doctor(RedisConfig(host="cache"))
+
+        assert result["monitoring_active"] is True
+        assert result["monitoring_threshold_ms"] == 100
+        assert result["latest"] == []
+
+    @patch("app.integrations.redis._get_client")
+    def test_config_get_denied_falls_back_to_event_presence(self, mock_get_client):
+        import redis.exceptions as redis_exc
+
+        mock_client = self._mock_client(latest=[["command", 1, 2, 3]])
+        mock_client.config_get.side_effect = redis_exc.NoPermissionError("NOPERM config")
         mock_get_client.return_value = mock_client
 
-        result = get_latency_doctor(RedisConfig(host="cache", max_results=50), event="command")
-        assert len(result["history"]) == 50
+        result = get_latency_doctor(RedisConfig(host="cache"))
+
+        # CONFIG denied -> threshold unknown, but events exist so monitoring is on.
+        assert result["monitoring_threshold_ms"] is None
+        assert result["monitoring_active"] is True
+
+    @patch("app.integrations.redis._get_client")
+    def test_history_capped_by_max_results_and_explicit_limit(self, mock_get_client):
+        mock_get_client.return_value = self._mock_client(history=[[i, i] for i in range(100)])
+        cfg = RedisConfig(host="cache", max_results=50)
+
+        # default: capped at max_results
+        assert len(get_latency_doctor(cfg, event="command")["history"]) == 50
+        # explicit smaller limit honored
+        assert len(get_latency_doctor(cfg, event="command", history_limit=5)["history"]) == 5
+        # explicit larger limit clamped down to max_results
+        assert len(get_latency_doctor(cfg, event="command", history_limit=500)["history"]) == 50
 
 
 class TestNewToolErrorHandling:

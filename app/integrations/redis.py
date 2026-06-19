@@ -583,10 +583,12 @@ def get_latency_doctor(
     latency spikes (fork/RDB save, AOF rewrite, blocking commands, slow disk).
     ``LATENCY LATEST`` lists each monitored event's latest/max spike; when
     ``event`` is given, ``LATENCY HISTORY`` for that event is included (capped at
-    ``config.max_results``). Latency monitoring must be enabled
-    (``latency-monitor-threshold`` > 0) for events to be recorded — when it is
-    not, the report is a benign "no spikes" message and ``monitoring_active`` is
-    ``False``.
+    ``history_limit`` or ``config.max_results``). ``monitoring_active`` reflects
+    whether latency monitoring is *enabled* (``latency-monitor-threshold`` > 0),
+    read via ``CONFIG GET`` — so a healthy, enabled-but-quiet server is reported
+    as active even when no spikes have been recorded yet. The threshold read is
+    best-effort: if the ACL forbids ``CONFIG GET`` it falls back to whether any
+    events exist, and ``monitoring_threshold_ms`` is ``None``.
     """
     if not config.is_configured:
         return {"source": "redis", "available": False, "error": "Not configured."}
@@ -601,6 +603,15 @@ def get_latency_doctor(
             report = client.execute_command("LATENCY", "DOCTOR")
             latest_raw = client.latency_latest()
             history_raw = client.latency_history(event) if event else []
+            # Best-effort read of whether monitoring is enabled. CONFIG GET is
+            # read-only (only CONFIG SET is out of scope); guard it separately so
+            # an ACL that forbids CONFIG doesn't fail the whole tool.
+            threshold_ms: int | None = None
+            try:
+                cfg = client.config_get("latency-monitor-threshold")
+                threshold_ms = safe_int(cfg.get("latency-monitor-threshold", 0), 0)
+            except Exception:
+                threshold_ms = None
         finally:
             client.close()
     except Exception as err:
@@ -622,11 +633,13 @@ def get_latency_doctor(
         if isinstance(row, (list, tuple)) and len(row) >= 2
     ]
 
+    monitoring_active = threshold_ms > 0 if threshold_ms is not None else bool(latest)
     return {
         "source": "redis",
         "available": True,
         "report": str(report),
-        "monitoring_active": bool(latest),
+        "monitoring_active": monitoring_active,
+        "monitoring_threshold_ms": threshold_ms,
         "monitored_events": len(latest),
         "latest": latest,
         "event": event,
