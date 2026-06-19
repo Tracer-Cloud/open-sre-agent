@@ -457,15 +457,26 @@ def capture_integration_verified(service: str) -> None:
 
 
 def identify_github_username(username: str) -> None:
-    """Attach the authenticated GitHub username as a PostHog person property.
+    """Attach the authenticated GitHub username to PostHog.
+
+    Calls :meth:`~app.analytics.provider.Analytics.identify` to persist
+    ``github_username`` on the person profile AND
+    :meth:`~app.analytics.provider.Analytics.set_persistent_property` so the
+    property is stamped directly on every subsequent event.  Both are needed:
+    the ``$identify`` call keeps the person profile up-to-date for cohort
+    queries, while the persistent property makes ``github_username`` queryable
+    as a plain ``properties.github_username`` filter on any event without
+    requiring a person-profile join.
 
     No-op for an empty username. Best-effort: telemetry kill-switches make the
-    underlying call a no-op, and any unexpected error is swallowed to Sentry.
+    underlying calls no-ops, and any unexpected error is swallowed to Sentry.
     """
     if not username:
         return
     try:
-        get_analytics().identify({"github_username": username})
+        analytics = get_analytics()
+        analytics.identify({"github_username": username})
+        analytics.set_persistent_property("github_username", username)
     except Exception as exc:
         capture_exception(exc)
 

@@ -671,6 +671,7 @@ class Analytics:
         self._worker: threading.Thread | None = None
         self._shutdown = False
         self._worker_alive = not self._disabled
+        self._persistent_properties: Properties = {}
 
         if not self._disabled:
             atexit.register(self.shutdown)
@@ -682,9 +683,24 @@ class Analytics:
             return
         envelope = _Envelope(
             event=event.value,
-            properties=_BASE_PROPERTIES | _coerce_properties(event.value, properties),
+            properties=_BASE_PROPERTIES
+            | self._persistent_properties
+            | _coerce_properties(event.value, properties),
         )
         self._enqueue(envelope)
+
+    def set_persistent_property(self, key: str, value: JsonScalar) -> None:
+        """Store a property merged into every subsequent :meth:`capture` call.
+
+        Use for user-scoped attributes discovered after the ``Analytics``
+        instance is created (e.g. ``github_username`` after OAuth login) so
+        they appear on all future events as direct event properties and are
+        trivially queryable without a person-profile join. No-ops when
+        telemetry is disabled.
+        """
+        if self._disabled:
+            return
+        self._persistent_properties[key] = value
 
     def identify(self, set_properties: Properties) -> None:
         """Attach person properties to the anonymous distinct id via a ``$identify`` event.

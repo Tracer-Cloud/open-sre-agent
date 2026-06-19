@@ -282,6 +282,47 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     assert f'distinct_id="{analytics._anonymous_id}"' in log_lines[0]
 
 
+def test_set_persistent_property_merges_into_subsequent_captures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED)
+    analytics.set_persistent_property("github_username", "octocat")
+    analytics.capture(Event.ONBOARD_STARTED, {"entrypoint": "cli"})
+    analytics.capture(Event.INTERACTIVE_SHELL_ROUTE_DECISION, {"route": "agent"})
+    analytics.shutdown(flush=True)
+
+    assert len(posted_payloads) == 3
+    props_before = posted_payloads[0]["json"]["properties"]
+    props_after_1 = posted_payloads[1]["json"]["properties"]
+    props_after_2 = posted_payloads[2]["json"]["properties"]
+
+    assert "github_username" not in props_before
+    assert props_after_1["github_username"] == "octocat"
+    assert props_after_2["github_username"] == "octocat"
+    assert props_after_2["route"] == "agent"
+
+
+def test_set_persistent_property_noop_when_telemetry_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSRE_NO_TELEMETRY", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+
+    analytics = provider.Analytics()
+    analytics.set_persistent_property("github_username", "octocat")
+
+    assert analytics._persistent_properties == {}
+
+
 def test_existing_install_missing_anonymous_id_captures_posthog_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
