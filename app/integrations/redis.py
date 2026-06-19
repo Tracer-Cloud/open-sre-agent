@@ -594,7 +594,11 @@ def get_latency_doctor(
         return {"source": "redis", "available": False, "error": "Not configured."}
 
     event = str(event or "").strip()
-    history_cap = min(history_limit or config.max_results, config.max_results)
+    # Floor at 0 (mirrors get_list_depth's head/tail clamp): a negative
+    # history_limit is truthy, so without max(0, ...) it would survive the min()
+    # and turn ``history_raw[:history_cap]`` into a back-truncating slice that
+    # silently drops the most recent events instead of capping the count.
+    history_cap = max(0, min(history_limit or config.max_results, config.max_results))
     try:
         client = _get_client(config)
         try:

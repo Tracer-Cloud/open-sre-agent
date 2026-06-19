@@ -402,6 +402,57 @@ class TestRedisClientList:
         assert result["returned_clients"] == 50  # sample capped
         assert len(result["address_breakdown"]) == 50  # top-N cap on breakdown
 
+    @patch("app.integrations.redis._get_client")
+    def test_pubsub_detected_by_flag_or_subscription_independently(self, mock_get_client):
+        # is_pubsub = "P" in flags OR (sub + psub) > 0. Each disjunct must count a
+        # client on its own — otherwise a regression in either half hides behind the
+        # other. One client per branch, plus a plain client that must NOT count.
+        mock_client = MagicMock()
+        mock_client.client_list.return_value = [
+            {
+                "id": "1",
+                "addr": "10.0.0.1:5000",
+                "flags": "N",
+                "cmd": "get",
+                "sub": "0",
+                "psub": "0",
+            },
+            # flag-only: pub/sub via the "P" flag, zero subscriptions
+            {
+                "id": "2",
+                "addr": "10.0.0.1:5001",
+                "flags": "P",
+                "cmd": "subscribe",
+                "sub": "0",
+                "psub": "0",
+            },
+            # sub-only: no "P" flag, channel subscriptions > 0
+            {
+                "id": "3",
+                "addr": "10.0.0.1:5002",
+                "flags": "N",
+                "cmd": "subscribe",
+                "sub": "2",
+                "psub": "0",
+            },
+            # psub-only: no "P" flag, pattern subscriptions > 0 (exercises the psub coercion)
+            {
+                "id": "4",
+                "addr": "10.0.0.1:5003",
+                "flags": "N",
+                "cmd": "psubscribe",
+                "sub": "0",
+                "psub": "2",
+            },
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = get_client_list(RedisConfig(host="cache"))
+
+        assert result["pubsub_clients"] == 3  # ids 2, 3, 4 — not the plain client id 1
+        by_id = {c["id"]: c["pubsub"] for c in result["clients"]}
+        assert by_id == {1: False, 2: True, 3: True, 4: True}
+
     def test_not_configured(self):
         assert get_client_list(RedisConfig(host=""))["available"] is False
 
@@ -514,6 +565,23 @@ class TestRedisListDepth:
         # tail clamped to max_results -> LRANGE(-50, -1)
         assert mock_client.pipeline.return_value.lrange.call_args.args == ("jobs", -50, -1)
 
+    @patch("app.integrations.redis._get_client")
+    def test_negative_head_tail_collapse_to_zero_no_lrange(self, mock_get_client):
+        # head_n/tail_n = max(0, min(head or 0, max_results)). A negative bound is
+        # truthy, so without the max(0, ...) floor it would forward a negative count
+        # into LRANGE; assert it collapses to 0 and no LRANGE is buffered.
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [42]  # LLEN only
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="jobs", head=-5, tail=-5)
+
+        assert result["depth"] == 42
+        assert result["head"] == []
+        assert result["tail"] == []
+        mock_client.pipeline.return_value.lrange.assert_not_called()
+
     def test_empty_key_rejected(self):
         result = get_list_depth(RedisConfig(host="cache"), key="  ")
         assert result["available"] is False
@@ -593,6 +661,22 @@ class TestRedisLatencyDoctor:
         assert result["monitoring_active"] is True
 
     @patch("app.integrations.redis._get_client")
+    def test_config_get_denied_and_no_events_reports_inactive(self, mock_get_client):
+        # The other half of the fallback: CONFIG denied AND no monitored events ->
+        # bool([]) is False, so monitoring_active must be False. Without this case a
+        # regression to `else True` would still pass the suite.
+        import redis.exceptions as redis_exc
+
+        mock_client = self._mock_client(latest=[])
+        mock_client.config_get.side_effect = redis_exc.NoPermissionError("NOPERM config")
+        mock_get_client.return_value = mock_client
+
+        result = get_latency_doctor(RedisConfig(host="cache"))
+
+        assert result["monitoring_threshold_ms"] is None
+        assert result["monitoring_active"] is False
+
+    @patch("app.integrations.redis._get_client")
     def test_history_capped_by_max_results_and_explicit_limit(self, mock_get_client):
         mock_get_client.return_value = self._mock_client(history=[[i, i] for i in range(100)])
         cfg = RedisConfig(host="cache", max_results=50)
@@ -603,6 +687,18 @@ class TestRedisLatencyDoctor:
         assert len(get_latency_doctor(cfg, event="command", history_limit=5)["history"]) == 5
         # explicit larger limit clamped down to max_results
         assert len(get_latency_doctor(cfg, event="command", history_limit=500)["history"]) == 50
+
+    @patch("app.integrations.redis._get_client")
+    def test_negative_history_limit_yields_empty_not_back_truncated(self, mock_get_client):
+        # A negative history_limit is truthy and survives the min(); the max(0, ...)
+        # floor must turn it into an empty (count=0) slice rather than
+        # history_raw[:-n], which would silently drop the most recent events.
+        mock_get_client.return_value = self._mock_client(history=[[i, i] for i in range(100)])
+        cfg = RedisConfig(host="cache", max_results=50)
+
+        result = get_latency_doctor(cfg, event="command", history_limit=-5)
+
+        assert result["history"] == []
 
 
 class TestNewToolErrorHandling:

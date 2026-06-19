@@ -155,6 +155,17 @@ class TestRedisVerification:
 class TestRedisToolsAvailability:
     """Test Redis tools are available and configured."""
 
+    @pytest.fixture(autouse=True)
+    def _clear_registry_cache(self):
+        """Force fresh tool discovery so registry assertions never depend on a
+        cache populated by a prior test (per the ``tests/`` convention that any
+        test calling ``get_registered_tools()`` clears the cache in a fixture)."""
+        from app.tools.registry import clear_tool_registry_cache
+
+        clear_tool_registry_cache()
+        yield
+        clear_tool_registry_cache()
+
     def test_redis_tools_exist_as_modules(self):
         """Redis tools modules exist and are properly structured."""
         try:
@@ -181,15 +192,19 @@ class TestRedisToolsAvailability:
             pytest.fail(f"Failed to import Redis tool modules: {e}")
 
     def test_p1_tools_registered_on_investigation_surface(self):
-        """The three new P1 tools are discoverable for investigations and chat."""
+        """The three new P1 tools are discoverable on the investigation and chat surfaces."""
         from app.tools.registry import get_registered_tools
 
-        names = {t.name for t in get_registered_tools("investigation") if t.source == "redis"}
-        assert {
+        p1_tools = {
             "get_redis_client_list",
             "get_redis_list_depth",
             "get_redis_latency_doctor",
-        } <= names
+        }
+        for surface in ("investigation", "chat"):
+            names = {t.name for t in get_registered_tools(surface) if t.source == "redis"}
+            assert p1_tools <= names, (
+                f"missing P1 redis tools on {surface} surface: {p1_tools - names}"
+            )
 
     def test_redis_integration_config_has_required_fields(self):
         """Redis integration provides required fields in resolved config."""
@@ -268,12 +283,17 @@ class TestRedisP1ToolPaths:
         mock_client = MagicMock()
         mock_client.execute_command.return_value = "I detected spikes caused by fork."
         mock_client.latency_latest.return_value = [["fork", 1700000000, 480, 1200]]
+        # Explicitly configure CONFIG GET so monitoring_active is driven by the
+        # real threshold (> 0) — not MagicMock's implicit __int__ == 1, which
+        # would make the assertion pass even if the threshold logic regressed.
+        mock_client.config_get.return_value = {"latency-monitor-threshold": "100"}
         mock_get_client.return_value = mock_client
 
         result = get_redis_latency_doctor(host="prod-cache.redis.internal")
 
         assert result["available"] is True
         assert result["monitoring_active"] is True
+        assert result["monitoring_threshold_ms"] == 100
         assert result["latest"][0]["event"] == "fork"
         assert "fork" in result["report"]
 

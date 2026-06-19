@@ -115,7 +115,7 @@ Reports a list key's depth via `LLEN`, with an optional bounded head/tail sample
 Runs `LATENCY DOCTOR` for a human-readable diagnosis of recent latency spikes (fork/RDB save, AOF rewrite, blocking commands, slow disk) and lists the latest monitored events via `LATENCY LATEST`; an optional `event` argument adds `LATENCY HISTORY` for that event.
 
 <Info>
-Latency monitoring must be enabled for events to be recorded — set `latency-monitor-threshold` to a value greater than `0` (in milliseconds). The tool reads this threshold via `CONFIG GET`, so `monitoring_active` reflects whether monitoring is *enabled* (a healthy, enabled-but-quiet server reports `monitoring_active: true` with no events). When the threshold is `0`, the report is a benign "monitoring disabled" message and `monitoring_active` is `false`.
+Latency monitoring must be enabled for events to be recorded — set `latency-monitor-threshold` to a value greater than `0` (in milliseconds). The tool reads this threshold via `CONFIG GET`, so `monitoring_active` reflects whether monitoring is *enabled* (a healthy, enabled-but-quiet server reports `monitoring_active: true` with no events). When the threshold is `0`, `monitoring_active` is `false` and `monitoring_threshold_ms` is `0`; the `report` field still carries Redis's raw `LATENCY DOCTOR` output (Redis itself does not emit a special "disabled" message).
 </Info>
 
 ## Verify
