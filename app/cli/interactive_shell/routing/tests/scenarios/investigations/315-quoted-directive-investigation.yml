@@ -8,7 +8,20 @@ input:
 session:
   has_prior_state: false
   remote_connected: false
-  configured_integrations: []
+  configured_integrations:
+  - sentry
+  # Pin a fixture-owned Sentry config so the planner sees >=1 connected
+  # integration and the integration-backed investigation gate is satisfied. The
+  # token is fake; no real investigation runs because the oracle stubs the
+  # dispatch boundary (REGISTRY.dispatch), so the call is recorded without
+  # remote I/O.
+  resolved_integrations:
+    sentry:
+      connection_verified: true
+      organization_slug: fixture-org
+      project_slug: fixture-project
+      auth_token: fixture-token
+      base_url: https://sentry.io
 available_capabilities:
   slash_commands: []
   cli_commands: []
@@ -16,8 +29,13 @@ available_capabilities:
 notes:
 - "Regression for quoted directives. An explicit action verb (investigate) whose\
   \ object is quotation-marked text must treat the quoted text as the investigation\
-  \ payload and emit investigation_start. Quoted content must never be downgraded to\
-  \ a chatty statement or rhetorical question and handed off to the assistant."
+  \ payload and emit investigation_start with alert_text set to the quoted text\
+  \ verbatim. Quoted content must never be downgraded to a chatty statement or\
+  \ rhetorical question and handed off to the assistant."
+- "Sentry is connected so the integration-backed investigation gate (>=1 connected\
+  \ integration, added in #2871) is satisfied. With a data source connected, the\
+  \ explicit quoted directive dispatches an investigation instead of handing off to\
+  \ suggest connecting one. Contrast with 313 (incident, no integrations -> handoff)."
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
