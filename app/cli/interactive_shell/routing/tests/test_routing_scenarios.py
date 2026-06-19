@@ -25,6 +25,7 @@ from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
+    resolve_live_integrations,
     run_oracle_once,
     session_capabilities,
 )
@@ -83,6 +84,27 @@ def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
             "Natural-language investigation loop is disabled in the interactive shell "
             "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
             "this investigation scenario does not apply. Re-enable the flag to run it."
+        )
+
+
+def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
+    """Skip scenarios that need a real credentialed integration we can't resolve.
+
+    Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` (paired
+    with ``gathered_tools_contract.must_return_valid_data``) make a real call to
+    that integration during the gather loop. That only works when the integration
+    is configured locally (store/env) or via CI secrets. When the credential is
+    absent the scenario is skipped — it is an environment gap, not a regression —
+    rather than failing every credential-less run.
+    """
+    _expanded, unavailable = resolve_live_integrations(case.scenario.session.resolved_integrations)
+    if unavailable:
+        pytest.skip(
+            "Live integration credentials unavailable for: "
+            + ", ".join(sorted(unavailable))
+            + ". Configure the integration in the local store/env or provide CI "
+            "secrets (e.g. SENTRY_AUTH_TOKEN, SENTRY_ORG_SLUG, SENTRY_PROJECT_SLUG) "
+            "to run this scenario."
         )
 
 
@@ -274,6 +296,7 @@ def test_live_turn_execution_oracle(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     _skip_if_investigation_disabled(live_oracle_case)
+    _skip_if_live_integrations_unavailable(live_oracle_case)
     runs = max(1, live_oracle_case.answer.runs)
     run_results: list[OracleRunResult] = []
     passed_count = 0

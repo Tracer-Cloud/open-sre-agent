@@ -27,11 +27,69 @@ from app.cli.interactive_shell.routing.tests.scenario_loader import (
 from app.cli.interactive_shell.runtime.execution import execute_routed_turn
 from app.cli.interactive_shell.runtime.session import ReplSession
 
+# Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
+# live-resolved config for a service instead of a pinned fake one. The oracle
+# replaces ``<service>: "@live"`` with the integration resolved from the local
+# store / env (real credentials) and forces ``connection_verified: true`` so the
+# tool is available. Scenarios that use it pair it with
+# ``gathered_tools_contract.must_return_valid_data`` to assert the tool reached
+# the live integration and returned valid data (not a 401). When the credential
+# cannot be resolved the scenario is skipped, never failed (env gap, not bug).
+LIVE_INTEGRATION_SENTINEL = "@live"
+
 
 @dataclass
 class OracleRunResult:
     passed: bool
     details: dict[str, Any]
+
+
+def resolve_live_integrations(
+    override: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Expand any ``<service>: "@live"`` sentinel into a real resolved config.
+
+    A fixture marks a service ``"@live"`` to opt into a real, credentialed call
+    during the gather loop (see :data:`LIVE_INTEGRATION_SENTINEL`). For each such
+    service this resolves the integration from the developer's local store / env
+    (via the production ``resolve_integrations`` path) and forces
+    ``connection_verified: true`` so the tool's ``is_available`` check passes —
+    the local store omits that flag, but the live REPL sets it during startup, so
+    the test mirrors the REPL rather than the bare classifier.
+
+    Returns ``(expanded_override, unavailable_services)``. ``unavailable_services``
+    lists services whose credentials could not be resolved; callers skip those
+    scenarios rather than failing them (a missing credential is an environment
+    gap, not a routing regression). Non-sentinel entries pass through untouched.
+    """
+    if not override:
+        return override, []
+
+    live_services = [
+        service for service, config in override.items() if config == LIVE_INTEGRATION_SENTINEL
+    ]
+    if not live_services:
+        return override, []
+
+    from app.agent.context import resolve_integrations
+
+    resolved = resolve_integrations({})  # type: ignore[arg-type]  # real store/env resolution
+    expanded: dict[str, Any] = {}
+    unavailable: list[str] = []
+    for service, config in override.items():
+        if config != LIVE_INTEGRATION_SENTINEL:
+            expanded[service] = config
+            continue
+        live_config = resolved.get(service)
+        # A usable integration must carry at least one credential token; the bare
+        # classifier returns an empty shell for unconfigured services.
+        if not isinstance(live_config, dict) or not any(
+            live_config.get(field) for field in ("auth_token", "api_key", "api_token", "token")
+        ):
+            unavailable.append(service)
+            continue
+        expanded[service] = {**live_config, "connection_verified": True}
+    return expanded, unavailable
 
 
 def session_capabilities(capabilities: ScenarioCapabilities) -> dict[str, tuple[str, ...]]:
@@ -251,11 +309,14 @@ def patch_execution_boundary(
 
 
 def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> OracleRunResult:
+    resolved_override, _unavailable = resolve_live_integrations(
+        case.scenario.session.resolved_integrations
+    )
     session = fresh_session(
         with_prior_state=case.scenario.session.has_prior_state,
         configured_integrations=case.scenario.session.configured_integrations,
         available_capabilities=session_capabilities(case.scenario.available_capabilities),
-        resolved_integrations_override=case.scenario.session.resolved_integrations,
+        resolved_integrations_override=resolved_override,
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)

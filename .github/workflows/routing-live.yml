@@ -99,6 +99,15 @@ jobs:
       ROUTING_SHARD_TOTAL: "8"
       ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
       PYTHONUTF8: "1"
+      # Live-data routing scenarios (e.g. 316) resolve a real Sentry integration
+      # from these env vars and assert the gather loop returns valid data. Only
+      # the token is a secret; org/project/url are non-sensitive. When the secret
+      # is absent (e.g. fork PRs) the scenario SKIPS rather than fails, so this is
+      # additive and never breaks the suite.
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG_SLUG: tracer-30
+      SENTRY_PROJECT_SLUG: python
+      SENTRY_URL: https://sentry.io
 
     steps:
       - uses: actions/checkout@v5
