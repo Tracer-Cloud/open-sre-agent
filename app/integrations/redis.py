@@ -28,6 +28,10 @@ DEFAULT_REDIS_TIMEOUT_SECONDS = 5.0
 # Hard cap on how many keys SCAN will iterate
 DEFAULT_REDIS_SCAN_LIMIT = 10_000
 
+# Per-element character cap when sampling list/queue values, so a queue of
+# large JSON payloads can never blow up the tool response.
+DEFAULT_REDIS_LIST_VALUE_PREVIEW = 256
+
 
 class RedisConfig(StrictConfigModel):
     """Normalized Redis connection settings."""
@@ -396,6 +400,240 @@ def scan_keys(
     }
 
 
+def _truncate_value(value: Any, limit: int = DEFAULT_REDIS_LIST_VALUE_PREVIEW) -> str:
+    """Stringify a sampled value and cap its length so payloads stay bounded."""
+    text = str(value)
+    return text if len(text) <= limit else f"{text[:limit]}…"
+
+
+def get_client_list(config: RedisConfig) -> dict[str, Any]:
+    """Summarize connected clients via ``CLIENT LIST`` (read-only).
+
+    Surfaces connection-pool pressure during an incident: total client count,
+    how many are blocked (waiting on ``BLPOP``/``BRPOP``/``XREAD`` etc.), how
+    many are in pub/sub mode, and breakdowns by source address and last
+    command. The full client list is parsed for the aggregate counts, but only
+    ``config.max_results`` clients are returned in the per-client sample so the
+    response stays bounded even on a saturated server with thousands of
+    connections.
+    """
+    if not config.is_configured:
+        return {"source": "redis", "available": False, "error": "Not configured."}
+
+    try:
+        client = _get_client(config)
+        try:
+            raw_clients = client.client_list()
+        finally:
+            client.close()
+    except Exception as err:
+        return _redis_error(err, "get_client_list")
+
+    blocked = 0
+    pubsub = 0
+    max_idle_seconds = 0
+    by_address: dict[str, int] = {}
+    by_command: dict[str, int] = {}
+    samples: list[dict[str, Any]] = []
+    for entry in raw_clients:
+        flags = str(entry.get("flags", ""))
+        subscriptions = safe_int(entry.get("sub", 0), 0) + safe_int(entry.get("psub", 0), 0)
+        idle = safe_int(entry.get("idle", 0), 0)
+        addr = str(entry.get("addr", ""))
+        # addr is "ip:port" (or "[v6]:port"); group by the host portion only.
+        source = addr.rsplit(":", 1)[0] if ":" in addr else (addr or "unknown")
+        command = str(entry.get("cmd", "") or "unknown")
+        is_blocked = "b" in flags
+        is_pubsub = "P" in flags or subscriptions > 0
+
+        if is_blocked:
+            blocked += 1
+        if is_pubsub:
+            pubsub += 1
+        max_idle_seconds = max(max_idle_seconds, idle)
+        by_address[source] = by_address.get(source, 0) + 1
+        by_command[command] = by_command.get(command, 0) + 1
+
+        if len(samples) < config.max_results:
+            samples.append(
+                {
+                    "id": safe_int(entry.get("id", 0), 0),
+                    "addr": addr,
+                    "name": str(entry.get("name", "")),
+                    "age_seconds": safe_int(entry.get("age", 0), 0),
+                    "idle_seconds": idle,
+                    "flags": flags,
+                    "db": safe_int(entry.get("db", 0), 0),
+                    "command": command,
+                    "user": str(entry.get("user", "")),
+                    "blocked": is_blocked,
+                    "pubsub": is_pubsub,
+                }
+            )
+
+    def _top(counts: dict[str, int]) -> dict[str, int]:
+        return dict(
+            sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[: config.max_results]
+        )
+
+    return {
+        "source": "redis",
+        "available": True,
+        "total_clients": len(raw_clients),
+        "blocked_clients": blocked,
+        "pubsub_clients": pubsub,
+        "max_idle_seconds": max_idle_seconds,
+        "address_breakdown": _top(by_address),
+        "command_breakdown": _top(by_command),
+        "returned_clients": len(samples),
+        "clients": samples,
+    }
+
+
+def get_list_depth(
+    config: RedisConfig,
+    key: str,
+    head: int = 0,
+    tail: int = 0,
+) -> dict[str, Any]:
+    """Report a list/queue key's depth (``LLEN``) with an optional bounded sample.
+
+    Read-only. ``TYPE`` is checked first so a non-list key returns a clear
+    message instead of a ``WRONGTYPE`` error, and a missing key reports
+    ``exists=False`` rather than being indistinguishable from an empty list.
+    Head/tail sampling uses bounded ``LRANGE`` (each side capped at
+    ``config.max_results``); every sampled element is truncated so a queue of
+    large job payloads cannot blow up the response.
+    """
+    if not config.is_configured:
+        return {"source": "redis", "available": False, "error": "Not configured."}
+    key = str(key or "").strip()
+    if not key:
+        return {"source": "redis", "available": False, "error": "A list key is required."}
+
+    head_n = max(0, min(head or 0, config.max_results))
+    tail_n = max(0, min(tail or 0, config.max_results))
+    try:
+        client = _get_client(config)
+        try:
+            key_type = client.type(key)
+            if key_type == "none":
+                return {
+                    "source": "redis",
+                    "available": True,
+                    "key": key,
+                    "exists": False,
+                    "type": "none",
+                    "depth": 0,
+                    "head": [],
+                    "tail": [],
+                }
+            if key_type != "list":
+                return {
+                    "source": "redis",
+                    "available": True,
+                    "key": key,
+                    "exists": True,
+                    "type": key_type,
+                    "depth": None,
+                    "head": [],
+                    "tail": [],
+                    "error": f"Key '{key}' is a {key_type}, not a list.",
+                }
+            pipe = client.pipeline(transaction=False)
+            pipe.llen(key)
+            if head_n:
+                pipe.lrange(key, 0, head_n - 1)
+            if tail_n:
+                pipe.lrange(key, -tail_n, -1)
+            results = pipe.execute()
+        finally:
+            client.close()
+    except Exception as err:
+        return _redis_error(err, "get_list_depth")
+
+    depth = results[0]
+    cursor = 1
+    head_values: list[Any] = []
+    if head_n:
+        head_values = results[cursor]
+        cursor += 1
+    tail_values: list[Any] = results[cursor] if tail_n else []
+
+    return {
+        "source": "redis",
+        "available": True,
+        "key": key,
+        "exists": True,
+        "type": "list",
+        "depth": depth,
+        "head": [_truncate_value(value) for value in head_values],
+        "tail": [_truncate_value(value) for value in tail_values],
+    }
+
+
+def get_latency_doctor(
+    config: RedisConfig,
+    event: str = "",
+    history_limit: int | None = None,
+) -> dict[str, Any]:
+    """Return ``LATENCY DOCTOR`` analysis plus the latest monitored events.
+
+    Read-only. ``LATENCY DOCTOR`` produces a human-readable diagnosis of recent
+    latency spikes (fork/RDB save, AOF rewrite, blocking commands, slow disk).
+    ``LATENCY LATEST`` lists each monitored event's latest/max spike; when
+    ``event`` is given, ``LATENCY HISTORY`` for that event is included (capped at
+    ``config.max_results``). Latency monitoring must be enabled
+    (``latency-monitor-threshold`` > 0) for events to be recorded — when it is
+    not, the report is a benign "no spikes" message and ``monitoring_active`` is
+    ``False``.
+    """
+    if not config.is_configured:
+        return {"source": "redis", "available": False, "error": "Not configured."}
+
+    event = str(event or "").strip()
+    history_cap = min(history_limit or config.max_results, config.max_results)
+    try:
+        client = _get_client(config)
+        try:
+            # redis-py intentionally does not implement latency_doctor() (its
+            # output is human-readable, not parseable), so issue the raw command.
+            report = client.execute_command("LATENCY", "DOCTOR")
+            latest_raw = client.latency_latest()
+            history_raw = client.latency_history(event) if event else []
+        finally:
+            client.close()
+    except Exception as err:
+        return _redis_error(err, "get_latency_doctor")
+
+    latest = [
+        {
+            "event": str(row[0]),
+            "last_occurrence": row[1],
+            "latest_ms": row[2],
+            "max_ms": row[3],
+        }
+        for row in latest_raw
+        if isinstance(row, (list, tuple)) and len(row) >= 4
+    ]
+    history = [
+        {"timestamp": row[0], "latency_ms": row[1]}
+        for row in history_raw[:history_cap]
+        if isinstance(row, (list, tuple)) and len(row) >= 2
+    ]
+
+    return {
+        "source": "redis",
+        "available": True,
+        "report": str(report),
+        "monitoring_active": bool(latest),
+        "monitored_events": len(latest),
+        "latest": latest,
+        "event": event,
+        "history": history,
+    }
+
+
 def _redis_error(err: Exception, method: str) -> dict[str, Any]:
     """Normalize a Redis exception into a graceful, available=False payload.
 
@@ -416,8 +654,9 @@ def _redis_error(err: Exception, method: str) -> dict[str, Any]:
             "source": "redis",
             "available": False,
             "error": (
-                "Redis user lacks permission for this command. "
-                "Grant read access to the INFO, SLOWLOG, and SCAN commands."
+                "Redis user lacks permission for this command. Grant the user read "
+                "access to the diagnostic commands it needs (e.g. INFO, CLIENT, "
+                "SLOWLOG, LATENCY, LLEN/LRANGE, TYPE, SCAN)."
             ),
         }
     report_validation_failure(

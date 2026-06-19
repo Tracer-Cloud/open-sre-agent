@@ -7,6 +7,9 @@ from app.integrations.catalog import classify_integrations as _classify_integrat
 from app.integrations.redis import (
     RedisConfig,
     build_redis_config,
+    get_client_list,
+    get_latency_doctor,
+    get_list_depth,
     get_replication,
     get_server_info,
     get_slowlog,
@@ -327,6 +330,230 @@ class TestRedisScanKeys:
         mock_get_client.return_value = mock_client
 
         result = scan_keys(RedisConfig(host="cache"))
+        assert result["available"] is False
+        assert "connection reset" in result["error"]
+        mock_report.assert_called_once()
+
+
+class TestRedisClientList:
+    @patch("app.integrations.redis._get_client")
+    def test_aggregates_blocked_pubsub_and_breakdowns(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.client_list.return_value = [
+            {
+                "id": "1",
+                "addr": "10.0.0.1:5000",
+                "flags": "N",
+                "idle": "0",
+                "cmd": "get",
+                "sub": "0",
+            },
+            {
+                "id": "2",
+                "addr": "10.0.0.1:5001",
+                "flags": "b",
+                "idle": "2",
+                "cmd": "blpop",
+                "sub": "0",
+            },
+            {
+                "id": "3",
+                "addr": "10.0.0.2:6000",
+                "flags": "P",
+                "idle": "120",
+                "cmd": "subscribe",
+                "sub": "3",
+            },
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = get_client_list(RedisConfig(host="cache"))
+
+        assert result["available"] is True
+        assert result["total_clients"] == 3
+        assert result["blocked_clients"] == 1  # the "b"-flagged blpop client
+        assert result["pubsub_clients"] == 1  # the "P"-flagged subscriber
+        assert result["max_idle_seconds"] == 120
+        assert result["address_breakdown"]["10.0.0.1"] == 2
+        assert result["command_breakdown"]["blpop"] == 1
+        assert result["returned_clients"] == 3
+        assert result["clients"][1]["blocked"] is True
+        mock_client.close.assert_called_once()
+
+    @patch("app.integrations.redis._get_client")
+    def test_sample_capped_but_aggregates_count_all(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.client_list.return_value = [
+            {"id": str(i), "addr": f"10.0.0.{i}:5000", "flags": "N", "idle": "0", "cmd": "ping"}
+            for i in range(60)
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = get_client_list(RedisConfig(host="cache", max_results=50))
+
+        assert result["total_clients"] == 60  # all counted
+        assert result["returned_clients"] == 50  # sample capped
+        assert len(result["address_breakdown"]) == 50  # top-N cap on breakdown
+
+    def test_not_configured(self):
+        assert get_client_list(RedisConfig(host=""))["available"] is False
+
+
+class TestRedisListDepth:
+    @patch("app.integrations.redis._get_client")
+    def test_list_depth_with_head_and_tail(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [3, ["a", "b"], ["c"]]
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="jobs", head=2, tail=1)
+
+        assert result["available"] is True
+        assert result["type"] == "list"
+        assert result["exists"] is True
+        assert result["depth"] == 3
+        assert result["head"] == ["a", "b"]
+        assert result["tail"] == ["c"]
+        mock_client.pipeline.assert_called_once_with(transaction=False)
+        mock_client.close.assert_called_once()
+
+    @patch("app.integrations.redis._get_client")
+    def test_depth_only_when_no_sample_requested(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [42]
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="jobs")
+
+        assert result["depth"] == 42
+        assert result["head"] == []
+        assert result["tail"] == []
+
+    @patch("app.integrations.redis._get_client")
+    def test_missing_key_reports_not_exists(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.type.return_value = "none"
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="absent")
+
+        assert result["available"] is True
+        assert result["exists"] is False
+        assert result["depth"] == 0
+        mock_client.pipeline.assert_not_called()  # no LLEN/LRANGE on a missing key
+
+    @patch("app.integrations.redis._get_client")
+    def test_wrong_type_returns_clear_message_not_wrongtype_error(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.type.return_value = "string"
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="counter")
+
+        assert result["available"] is True
+        assert result["type"] == "string"
+        assert result["depth"] is None
+        assert "not a list" in result["error"]
+        mock_client.pipeline.assert_not_called()
+
+    @patch("app.integrations.redis._get_client")
+    def test_head_sample_capped_and_values_truncated(self, mock_get_client):
+        long_value = "x" * 1000
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [1, [long_value]]
+        mock_get_client.return_value = mock_client
+
+        result = get_list_depth(RedisConfig(host="cache"), key="jobs", head=999)
+
+        # head clamped to max_results (default 50) when the LRANGE was issued
+        _, start, end = mock_client.pipeline.return_value.lrange.call_args.args
+        assert (start, end) == (0, 49)
+        # each value truncated to the preview cap
+        assert result["head"][0].endswith("…")
+        assert len(result["head"][0]) <= 257
+
+    def test_empty_key_rejected(self):
+        result = get_list_depth(RedisConfig(host="cache"), key="  ")
+        assert result["available"] is False
+        assert "required" in result["error"]
+
+
+class TestRedisLatencyDoctor:
+    @patch("app.integrations.redis._get_client")
+    def test_report_latest_and_history(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.execute_command.return_value = "Dave, I found spikes in command."
+        mock_client.latency_latest.return_value = [["command", 1700000000, 250, 900]]
+        mock_client.latency_history.return_value = [[1700000000, 250], [1700000060, 300]]
+        mock_get_client.return_value = mock_client
+
+        result = get_latency_doctor(RedisConfig(host="cache"), event="command")
+
+        assert result["available"] is True
+        assert result["monitoring_active"] is True
+        assert result["monitored_events"] == 1
+        assert result["latest"][0]["event"] == "command"
+        assert result["latest"][0]["max_ms"] == 900
+        assert result["history"] == [
+            {"timestamp": 1700000000, "latency_ms": 250},
+            {"timestamp": 1700000060, "latency_ms": 300},
+        ]
+        mock_client.execute_command.assert_called_once_with("LATENCY", "DOCTOR")
+        mock_client.close.assert_called_once()
+
+    @patch("app.integrations.redis._get_client")
+    def test_no_events_when_monitoring_disabled(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.execute_command.return_value = "Latency monitoring is disabled."
+        mock_client.latency_latest.return_value = []
+        mock_get_client.return_value = mock_client
+
+        result = get_latency_doctor(RedisConfig(host="cache"))
+
+        assert result["available"] is True
+        assert result["monitoring_active"] is False
+        assert result["latest"] == []
+        assert result["history"] == []
+        mock_client.latency_history.assert_not_called()  # no event requested
+
+    @patch("app.integrations.redis._get_client")
+    def test_history_capped_at_max_results(self, mock_get_client):
+        mock_client = MagicMock()
+        mock_client.execute_command.return_value = "report"
+        mock_client.latency_latest.return_value = []
+        mock_client.latency_history.return_value = [[i, i] for i in range(100)]
+        mock_get_client.return_value = mock_client
+
+        result = get_latency_doctor(RedisConfig(host="cache", max_results=50), event="command")
+        assert len(result["history"]) == 50
+
+
+class TestNewToolErrorHandling:
+    @patch("app.integrations.redis.report_validation_failure")
+    @patch("app.integrations.redis._get_client")
+    def test_client_list_auth_error_is_graceful_without_sentry(self, mock_get_client, mock_report):
+        import redis.exceptions as redis_exc
+
+        mock_client = MagicMock()
+        mock_client.client_list.side_effect = redis_exc.AuthenticationError("WRONGPASS")
+        mock_get_client.return_value = mock_client
+
+        result = get_client_list(RedisConfig(host="cache"))
+        assert result["available"] is False
+        assert "authentication" in result["error"].lower()
+        mock_report.assert_not_called()
+
+    @patch("app.integrations.redis.report_validation_failure")
+    @patch("app.integrations.redis._get_client")
+    def test_latency_other_error_reports_sentry(self, mock_get_client, mock_report):
+        mock_client = MagicMock()
+        mock_client.execute_command.side_effect = Exception("connection reset")
+        mock_get_client.return_value = mock_client
+
+        result = get_latency_doctor(RedisConfig(host="cache"))
         assert result["available"] is False
         assert "connection reset" in result["error"]
         mock_report.assert_called_once()
