@@ -28,6 +28,19 @@ def _format_supported_models(provider_models: tuple[object, ...]) -> str:
     return ", ".join(visible) if visible else "provider default"
 
 
+def _normalize_model_id(model: str) -> str:
+    """Collapse internal whitespace in a model id to single hyphens.
+
+    A model id is a single token, so a value like ``"gpt 5.5"`` is a mis-parsed
+    ``"gpt-5.5"``. The CLI path (``/model set gpt 5.5``) already rebuilds the id as
+    ``gpt-5.5``; normalizing here keeps the planner/tool path
+    (``llm_set_provider`` -> ``switch_reasoning_model``) consistent so a custom-model
+    provider (e.g. openai) can't persist a whitespace-bearing slug that later fails
+    availability checks and silently falls back.
+    """
+    return "-".join(model.split())
+
+
 def _is_model_supported(
     _provider_value: str, model: str, provider_models: tuple[object, ...]
 ) -> bool:
@@ -105,7 +118,7 @@ def switch_llm_provider(
         )
         return False
 
-    selected_model = model.strip() if model else provider.default_model
+    selected_model = _normalize_model_id(model) if model else provider.default_model
     if selected_model and not _is_model_allowed(provider, selected_model):
         console.print(f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}")
         console.print(
@@ -121,7 +134,7 @@ def switch_llm_provider(
                 "toolcall model[/] — toolcall override ignored."
             )
         else:
-            selected_toolcall = toolcall_model.strip()
+            selected_toolcall = _normalize_model_id(toolcall_model)
             if selected_toolcall and not _is_model_allowed(provider, selected_toolcall):
                 console.print(
                     f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_toolcall)}"
@@ -182,7 +195,7 @@ def switch_toolcall_model(
             "toolcall model[/] — nothing to set."
         )
         return False
-    new_model = toolcall_model.strip()
+    new_model = _normalize_model_id(toolcall_model)
     if not new_model:
         console.print(f"[{ERROR}]toolcall model cannot be empty[/]")
         return False
@@ -223,7 +236,7 @@ def switch_reasoning_model(
         )
         return False
 
-    new_model = reasoning_model.strip()
+    new_model = _normalize_model_id(reasoning_model)
     if not new_model:
         console.print(f"[{ERROR}]reasoning model cannot be empty[/]")
         return False

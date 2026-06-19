@@ -853,6 +853,36 @@ class TestModelCommand:
         assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
         assert "OPENAI_MODEL=gpt-5.5" in contents
 
+    def test_switch_reasoning_model_normalizes_whitespace_slug(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Regression: the planner ``llm_set_provider`` tool dispatches the raw
+        target straight to ``switch_reasoning_model`` (no CLI arg-splitting), so a
+        spoken "set model to gpt 5.5" arrived as the single token ``"gpt 5.5"``.
+        Because openai allows custom models, that malformed slug used to be
+        persisted verbatim and then silently fail availability checks. It must be
+        normalized to ``gpt-5.5`` instead."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.commands import switch_reasoning_model
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        console, buf = _capture()
+        ok = switch_reasoning_model("gpt 5.5", console)
+
+        assert ok is True
+        assert "gpt-5.5" in buf.getvalue()
+        assert "gpt 5.5" not in buf.getvalue()
+        contents = env_path.read_text(encoding="utf-8")
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+        assert "gpt 5.5" not in contents
+
     def test_set_unknown_toolcall_model_is_rejected(
         self,
         monkeypatch: pytest.MonkeyPatch,
