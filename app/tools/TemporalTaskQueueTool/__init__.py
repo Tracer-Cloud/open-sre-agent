@@ -109,9 +109,7 @@ class TemporalTaskQueueTool(BaseTool):
             }
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
-        client = TemporalClient(config)
-
-        try:
+        with TemporalClient(config) as client:
             result = client.describe_task_queue(task_queue_name=task_queue_name)
             if not result.get("success"):
                 return {
@@ -128,8 +126,6 @@ class TemporalTaskQueueTool(BaseTool):
                 "stats": result["stats"],
                 "total": result["total"],
             }
-        finally:
-            client.close()
 
 
 temporal_task_queue = TemporalTaskQueueTool()

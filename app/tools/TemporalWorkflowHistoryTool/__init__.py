@@ -116,9 +116,7 @@ class TemporalWorkflowHistoryTool(BaseTool):
             }
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
-        client = TemporalClient(config)
-
-        try:
+        with TemporalClient(config) as client:
             result = client.get_workflow_history(
                 workflow_id=workflow_id,
                 run_id=run_id if run_id else None,
@@ -139,8 +137,6 @@ class TemporalWorkflowHistoryTool(BaseTool):
                 "next_page_token": result["next_page_token"],
                 "archived": result["archived"],
             }
-        finally:
-            client.close()
 
 
 temporal_workflow_history = TemporalWorkflowHistoryTool()

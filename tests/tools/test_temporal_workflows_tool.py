@@ -44,6 +44,7 @@ def test_run_returns_unavailable_when_no_base_url() -> None:
 def test_run_happy_path(monkeypatch) -> None:
     tool = TemporalWorkflowsTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.list_workflow_executions.return_value = {
         "success": True,
         "executions": [
@@ -78,6 +79,7 @@ def test_run_happy_path(monkeypatch) -> None:
 def test_run_returns_error_on_failure(monkeypatch) -> None:
     tool = TemporalWorkflowsTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.list_workflow_executions.return_value = {
         "success": False,
         "error": "HTTP 401: Unauthorized",
@@ -97,6 +99,7 @@ def test_run_returns_error_on_failure(monkeypatch) -> None:
 def test_run_passes_pagination_token(monkeypatch) -> None:
     tool = TemporalWorkflowsTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.list_workflow_executions.return_value = {
         "success": True,
         "executions": [],

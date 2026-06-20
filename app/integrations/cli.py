@@ -1242,10 +1242,7 @@ _HANDLERS["dagster"] = _setup_dagster
 
 
 def _setup_temporal() -> None:
-    base_url = _p(
-        "Temporal HTTP API base URL "
-        "(e.g. http://localhost:7243)"
-    )
+    base_url = _p("Temporal HTTP API base URL (e.g. http://localhost:7243)")
     if not base_url:
         _die("base_url is required.")
     namespace = _p("Temporal namespace", default="default")

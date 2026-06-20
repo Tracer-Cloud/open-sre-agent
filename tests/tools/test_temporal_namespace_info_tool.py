@@ -43,6 +43,7 @@ def test_run_returns_unavailable_when_no_base_url() -> None:
 def test_run_happy_path(monkeypatch) -> None:
     tool = TemporalNamespaceInfoTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.get_namespace_info.return_value = {
         "success": True,
         "name": "default",
@@ -77,6 +78,7 @@ def test_run_happy_path(monkeypatch) -> None:
 def test_run_returns_error_on_failure(monkeypatch) -> None:
     tool = TemporalNamespaceInfoTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.get_namespace_info.return_value = {
         "success": False,
         "error": "HTTP 404: Namespace not found.",

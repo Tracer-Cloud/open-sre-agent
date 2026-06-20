@@ -52,6 +52,7 @@ def test_run_returns_error_when_no_workflow_id() -> None:
 def test_run_happy_path(monkeypatch) -> None:
     tool = TemporalWorkflowHistoryTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.get_workflow_history.return_value = {
         "success": True,
         "events": [
@@ -111,6 +112,7 @@ def test_run_happy_path(monkeypatch) -> None:
 def test_run_returns_error_on_failure(monkeypatch) -> None:
     tool = TemporalWorkflowHistoryTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.get_workflow_history.return_value = {
         "success": False,
         "error": "HTTP 404: Workflow not found.",

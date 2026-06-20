@@ -93,9 +93,7 @@ class TemporalWorkflowsTool(BaseTool):
             }
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
-        client = TemporalClient(config)
-
-        try:
+        with TemporalClient(config) as client:
             token = next_page_token if next_page_token else None
             result = client.list_workflow_executions(next_page_token=token)
             if not result.get("success"):
@@ -112,8 +110,6 @@ class TemporalWorkflowsTool(BaseTool):
                 "total": result["total"],
                 "next_page_token": result["next_page_token"],
             }
-        finally:
-            client.close()
 
 
 temporal_workflows = TemporalWorkflowsTool()

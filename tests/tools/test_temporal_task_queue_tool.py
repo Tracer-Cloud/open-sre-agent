@@ -53,6 +53,7 @@ def test_run_returns_error_when_no_task_queue_name() -> None:
 def test_run_happy_path(monkeypatch) -> None:
     tool = TemporalTaskQueueTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.describe_task_queue.return_value = {
         "success": True,
         "pollers": [
@@ -98,6 +99,7 @@ def test_run_happy_path(monkeypatch) -> None:
 def test_run_returns_error_on_failure(monkeypatch) -> None:
     tool = TemporalTaskQueueTool()
     mock_client = MagicMock()
+    mock_client.__enter__.return_value = mock_client
     mock_client.describe_task_queue.return_value = {
         "success": False,
         "error": "HTTP 404: Task queue not found.",

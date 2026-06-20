@@ -87,9 +87,7 @@ class TemporalNamespaceInfoTool(BaseTool):
             }
 
         config = TemporalConfig(base_url=base_url, api_key=api_key, namespace=namespace)
-        client = TemporalClient(config)
-
-        try:
+        with TemporalClient(config) as client:
             result = client.get_namespace_info()
             if not result.get("success"):
                 return {
@@ -105,8 +103,6 @@ class TemporalNamespaceInfoTool(BaseTool):
                 "workflow_count": result["workflow_count"],
                 "groups": result["groups"],
             }
-        finally:
-            client.close()
 
 
 temporal_namespace_info = TemporalNamespaceInfoTool()
