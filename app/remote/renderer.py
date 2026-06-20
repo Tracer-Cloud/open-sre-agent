@@ -33,7 +33,10 @@ from app.cli.interactive_shell.ui.theme import (
     ANSI_RESET,
     BOLD_BRAND_ANSI,
     BRAND,
+    DIM,
+    HIGHLIGHT,
     HIGHLIGHT_ANSI,
+    TEXT,
     TEXT_ANSI,
 )
 from app.cli.support.output import (
@@ -243,13 +246,13 @@ class _DiagnoseStreamRenderer:
                 self._live = None
                 # Unregister only if we own it (safeguard against subsequent activations)
                 unregister_live_console(self._console)
-            sys.stdout.write(
-                f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
-                f"  {_DIM}{elapsed:.1f}s{_RESET}"
-            )
+            t = Text()
+            t.append("  ●  ", style=f"bold {HIGHLIGHT}")
+            t.append(_DIAGNOSE_NODE, style=f"bold {TEXT}")
+            t.append(f"  {elapsed:.1f}s", style=DIM)
             if message:
-                sys.stdout.write(f"  {_DIM}{message}{_RESET}")
-            sys.stdout.write("\n")
+                t.append(f"  {message}", style=DIM)
+            self._console.print(t)
             sys.stdout.flush()
         else:
             if self.buffer:
@@ -922,10 +925,11 @@ def _flatten_chunk_content(content: Any) -> str:
 
 def _print_connection_banner() -> None:
     if get_output_format() == "rich":
-        sys.stdout.write(
-            f"\n  {_BOLD}{_CYAN}Remote Investigation{_RESET}"
-            f"  {_DIM}streaming from deployed agent{_RESET}\n\n"
-        )
+        c = Console(highlight=False)
+        t = Text()
+        t.append("\n  Remote Investigation", style=f"bold {BRAND}")
+        t.append("  streaming from deployed agent\n", style=DIM)
+        c.print(t)
     else:
         print("\n  Remote Investigation  streaming from deployed agent\n")
     sys.stdout.flush()
@@ -954,7 +958,8 @@ def _print_section(title: str, content: str, console: Any | None = None) -> None
 
 def _print_info(message: str) -> None:
     if get_output_format() == "rich":
-        sys.stdout.write(f"\n  {_DIM}{message}{_RESET}\n")
+        c = Console(highlight=False)
+        c.print(Text(f"\n  {message}\n", style=DIM))
     else:
         print(f"\n  {message}")
     sys.stdout.flush()
