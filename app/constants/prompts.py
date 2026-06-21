@@ -28,7 +28,7 @@ ROUTER_PROMPT = """You are a router that classifies the user's message.
 Classify the message as either "tracer_data" or "general":
 
 - "tracer_data": The message indicates a specific system error, outage, incident, alert, or requires investigating real or simulated environment metrics, logs, traces, or database/container stats. Examples:
-  * Pasted JSON alert payload or alert summaries (e.g., RDS latency spike, OOMKilled pod, CrashLoopBackOff, PostgreSQL connection exhaustion, CPU/Memory alerts).
+  * Pasted JSON alert payload or alert summaries (e.g., RDS latency spike, OOMKilled pod, CrashLoopBackOff pod status, PostgreSQL connection exhaustion, CPU/Memory alerts).
   * Error logs, stack traces, specific database lock warnings, replication errors.
   * Requests to analyze or investigate a specific host, database, service, or queue (e.g., "check the orders queue", "investigate the rds instance").
   * Requests querying current/slow SQL queries, replication status, or container statuses.
@@ -36,7 +36,7 @@ Classify the message as either "tracer_data" or "general":
 - "general": The message is a conceptual question, a greeting, or asking for general best practices, definitions, how-to explanations, or general system design. Examples:
   * "How do I configure SQS in AWS?"
   * "What causes PostgreSQL lock contention?"
-  * "Explain CrashLoopBackOff."
+  * "Explain what CrashLoopBackOff means."
   * "Hello, how are you?"
   * "What are best practices for database indexes?"
 
