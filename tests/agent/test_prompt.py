@@ -173,4 +173,3 @@ def test_router_prompt_contains_expected_keywords() -> None:
     assert "general" in ROUTER_PROMPT.lower()
     assert "crashloopbackoff" in ROUTER_PROMPT.lower()
     assert "rds" in ROUTER_PROMPT.lower()
-
