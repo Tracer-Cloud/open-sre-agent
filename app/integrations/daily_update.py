@@ -728,8 +728,8 @@ def write_daily_archive(update: DailyUpdate, *, output_dir: Path | None = None) 
     target_dir.mkdir(parents=True, exist_ok=True)
     archive_path = target_dir / f"{update.window.london_date.isoformat()}.mdx"
     archive_path.write_text(render_markdown(update), encoding="utf-8")
-    regenerate_overview(target_dir)
-    update_docs_navigation(target_dir)
+    # regenerate_overview(target_dir)
+    # update_docs_navigation(target_dir)
     return archive_path
 
 
