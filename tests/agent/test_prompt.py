@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.agent.prompt import _relevant_sources, build_system_prompt, format_alert_context
+from app.constants.prompts import ROUTER_PROMPT
 
 
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -164,3 +165,12 @@ def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:
     assert "source_id=aws_rds" in context
     assert "evidence=deployment_metadata" in context
     assert "avoid=Use this tool to inspect SQL query text or Postgres locks." in context
+
+
+def test_router_prompt_contains_expected_keywords() -> None:
+    # Verify ROUTER_PROMPT contains the new classification examples
+    assert "tracer_data" in ROUTER_PROMPT.lower()
+    assert "general" in ROUTER_PROMPT.lower()
+    assert "crashloopbackoff" in ROUTER_PROMPT.lower()
+    assert "rds" in ROUTER_PROMPT.lower()
+
