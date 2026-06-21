@@ -176,4 +176,3 @@ def test_system_and_general_prompts_contain_key_guidelines() -> None:
     # Verify GENERAL_SYSTEM_PROMPT guidelines
     assert "general chat mode" in GENERAL_SYSTEM_PROMPT.lower()
     assert "do not guess or speculate" in GENERAL_SYSTEM_PROMPT.lower()
-
