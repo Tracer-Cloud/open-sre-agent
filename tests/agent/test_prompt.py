@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.agent.prompt import _relevant_sources, build_system_prompt, format_alert_context
+from app.constants.prompts import GENERAL_SYSTEM_PROMPT, SYSTEM_PROMPT
 
 
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -164,3 +165,15 @@ def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:
     assert "source_id=aws_rds" in context
     assert "evidence=deployment_metadata" in context
     assert "avoid=Use this tool to inspect SQL query text or Postgres locks." in context
+
+
+def test_system_and_general_prompts_contain_key_guidelines() -> None:
+    # Verify SYSTEM_PROMPT guidelines
+    assert "clearly separate observations" in SYSTEM_PROMPT.lower()
+    assert "premature root-cause claims" in SYSTEM_PROMPT.lower()
+    assert "alternative failure modes" in SYSTEM_PROMPT.lower()
+
+    # Verify GENERAL_SYSTEM_PROMPT guidelines
+    assert "general chat mode" in GENERAL_SYSTEM_PROMPT.lower()
+    assert "do not guess or speculate" in GENERAL_SYSTEM_PROMPT.lower()
+
