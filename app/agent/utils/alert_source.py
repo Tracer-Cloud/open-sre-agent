@@ -170,7 +170,9 @@ def relevant_sources_for_alert(
     candidate_sources: Iterable[str],
 ) -> list[str]:
     """Select candidate sources relevant to the alert content."""
-    candidates = sorted(source for source in candidate_sources if source not in SECONDARY_TOOL_SOURCES)
+    candidates = sorted(
+        source for source in candidate_sources if source not in SECONDARY_TOOL_SOURCES
+    )
     if not candidates:
         return []
 
