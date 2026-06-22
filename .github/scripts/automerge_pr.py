@@ -10,6 +10,8 @@ import sys
 from typing import Any
 
 AUTOMERGE_LABEL = "automerge"
+AUTOMERGE_WORKFLOW_NAME = "Auto-merge"
+AUTOMERGE_JOB_CHECK_NAME = "Merge when CI is green"
 CHECK_RUN_PENDING_STATUSES = frozenset({"IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED"})
 CHECK_RUN_ALLOWED_CONCLUSIONS = frozenset({"SUCCESS", "SKIPPED", "NEUTRAL"})
 STATUS_CONTEXT_PENDING_STATES = frozenset({"PENDING", "EXPECTED"})
@@ -18,6 +20,12 @@ STATUS_CONTEXT_ALLOWED_STATES = frozenset({"SUCCESS"})
 
 def _check_display_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unknown")
+
+
+def _is_automerge_workflow_check(check: dict[str, Any]) -> bool:
+    if check.get("workflowName") == AUTOMERGE_WORKFLOW_NAME:
+        return True
+    return check.get("name") == AUTOMERGE_JOB_CHECK_NAME
 
 
 def _check_run_is_green(check: dict[str, Any]) -> tuple[bool, str]:
@@ -66,6 +74,8 @@ def _checks_are_green(status_rollup: list[dict[str, Any]]) -> tuple[bool, str]:
         return False, "no status checks reported yet"
 
     for check in status_rollup:
+        if _is_automerge_workflow_check(check):
+            continue
         green, reason = _rollup_item_is_green(check)
         if not green:
             return False, reason

@@ -91,3 +91,25 @@ def test_status_context_pending_blocks_merge() -> None:
     )
     assert green is False
     assert reason == "status still pending: ci/legacy"
+
+
+def test_ignores_automerge_workflow_check_while_running() -> None:
+    green, reason = automerge_pr._checks_are_green(
+        [
+            {
+                "__typename": "CheckRun",
+                "name": "quality (ubuntu-latest)",
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            },
+            {
+                "__typename": "CheckRun",
+                "name": "Merge when CI is green",
+                "workflowName": "Auto-merge",
+                "status": "IN_PROGRESS",
+                "conclusion": None,
+            },
+        ]
+    )
+    assert green is True
+    assert reason == "all checks green"

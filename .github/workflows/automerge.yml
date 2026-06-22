@@ -1,10 +1,10 @@
 name: Auto-merge
 
 # Opt-in squash merge once all PR checks are green. Add the `automerge` label when the PR
-# is ready (Greptile 5/5, review done, etc.). Works for branches pushed to this repo;
-# fork PRs still need a maintainer merge because GITHUB_TOKEN cannot write on fork heads.
+# is ready (Greptile 5/5, review done, etc.). Uses pull_request_target so fork PRs can merge
+# via GITHUB_TOKEN; the job only calls gh APIs and never executes PR head code.
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled, synchronize, reopened]
     branches: [main]
   check_suite:
@@ -23,8 +23,10 @@ jobs:
     name: Merge when CI is green
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'check_suite' && github.event.check_suite.conclusion == 'success') ||
-      (github.event_name == 'pull_request' &&
+      (github.event_name == 'check_suite' &&
+        contains(fromJSON('["success", "neutral"]'), github.event.check_suite.conclusion) &&
+        github.event.check_suite.name != 'Auto-merge') ||
+      (github.event_name == 'pull_request_target' &&
         (github.event.action != 'labeled' || github.event.label.name == 'automerge'))
     steps:
       - uses: actions/checkout@v5
@@ -37,7 +39,7 @@ jobs:
           CHECK_SUITE_PRS: ${{ toJson(github.event.check_suite.pull_requests) }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then
             if [ -z "$PR_NUMBER" ]; then
               echo "No pull request number on event."
               exit 0
