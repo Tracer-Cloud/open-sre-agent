@@ -17,13 +17,12 @@ from app.cli.interactive_shell.ui.output.console_state import (
 from app.cli.interactive_shell.ui.output.events import ProgressEvent
 from app.cli.interactive_shell.ui.output.labels import (
     BADGE_STYLES,
-    _elapsed_hms,
-    _fmt_timing,
     _humanise_message,
     _node_event_type,
     _node_label,
     _node_phase_label,
 )
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,

@@ -13,6 +13,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.tools.registry import resolve_tool_display_name
 
 # (padded_label, text_color) -- all labels are 6 chars wide.
@@ -93,16 +94,6 @@ def _humanise_message(message: str) -> str:
     if m3:
         return f"confidence {m3.group(1)}"
     return re.sub(r"^datadog:", "", message)
-
-
-def _fmt_timing(elapsed_ms: int) -> str:
-    return f"{elapsed_ms / 1000:.1f}s" if elapsed_ms >= 1000 else f"{elapsed_ms}ms"
-
-
-def _elapsed_hms(seconds: float) -> str:
-    m = int(seconds // 60)
-    s = int(seconds % 60)
-    return f"{m}:{s:02d}"
 
 
 def build_progress_step_text(

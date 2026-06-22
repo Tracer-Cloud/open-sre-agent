@@ -16,10 +16,10 @@ from app.cli.interactive_shell.ui.output.console_state import (
 )
 from app.cli.interactive_shell.ui.output.events import ProgressEvent
 from app.cli.interactive_shell.ui.output.labels import (
-    _elapsed_hms,
     _node_phase_label,
     build_progress_step_text,
 )
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
