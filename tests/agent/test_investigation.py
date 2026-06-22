@@ -656,6 +656,51 @@ def test_context_budget_preserves_protected_seed_evidence() -> None:
     assert all("later" not in json.dumps(message) for message in messages)
 
 
+def test_context_budget_oldest_policy_replays_legacy_seed_eviction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENSRE_CONTEXT_EVICTION_POLICY", "oldest")
+    big_payload = "x" * 80_000
+    seed_assistant = _tag_context_message(
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "query_logs", "input": {}}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_logs"],
+    )
+    seed_result = _tag_context_message(
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "seed", "content": big_payload}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_logs"],
+    )
+    messages = [
+        {"role": "user", "content": "alert"},
+        seed_assistant,
+        seed_result,
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "later", "name": "query_logs", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "later", "content": "small"}],
+        },
+    ]
+
+    _enforce_context_budget(messages, ceiling=10_000)
+
+    assert all("seed" not in json.dumps(message) for message in messages)
+    assert any("later" in json.dumps(message) for message in messages)
+
+
 def test_context_budget_evicts_duplicate_before_larger_unique_pair() -> None:
     unique_payload = "u" * 30_000
     duplicate_payload = "d" * 10_000

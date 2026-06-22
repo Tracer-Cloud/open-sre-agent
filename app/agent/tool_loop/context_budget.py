@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,13 @@ _TRUNCATION_SAFETY_TOKENS = 2_000
 # truncated message carries some signal instead of being blanked.
 _TRUNCATION_MIN_TOKENS = 1_000
 _CONTEXT_METADATA_KEY = "_opensre_context"
+_CONTEXT_EVICTION_POLICY_ENV = "OPENSRE_CONTEXT_EVICTION_POLICY"
+_CONTEXT_EVICTION_POLICY_OLDEST = "oldest"
+_CONTEXT_EVICTION_POLICY_VALUE = "value"
+_CONTEXT_EVICTION_POLICIES = {
+    _CONTEXT_EVICTION_POLICY_OLDEST,
+    _CONTEXT_EVICTION_POLICY_VALUE,
+}
 
 
 def _tag_context_message(
@@ -109,6 +117,20 @@ def _message_metadata(message: dict[str, Any]) -> dict[str, Any]:
 
 def _is_protected_message(message: dict[str, Any]) -> bool:
     return bool(_message_metadata(message).get("protected"))
+
+
+def _context_eviction_policy() -> str:
+    raw = os.getenv(_CONTEXT_EVICTION_POLICY_ENV, _CONTEXT_EVICTION_POLICY_VALUE)
+    policy = raw.strip().lower()
+    if policy in _CONTEXT_EVICTION_POLICIES:
+        return policy
+    logger.warning(
+        "[agent] unknown %s=%r; using %s context eviction",
+        _CONTEXT_EVICTION_POLICY_ENV,
+        raw,
+        _CONTEXT_EVICTION_POLICY_VALUE,
+    )
+    return _CONTEXT_EVICTION_POLICY_VALUE
 
 
 def _context_budget_ceiling_for_model(model: str | None) -> int:
@@ -309,6 +331,12 @@ def _trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> str | None:
     return "low_value"
 
 
+def _trim_tool_pair_for_policy(messages: list[dict[str, Any]], policy: str) -> str | None:
+    if policy == _CONTEXT_EVICTION_POLICY_OLDEST:
+        return "oldest" if _trim_oldest_tool_pair(messages) else None
+    return _trim_lowest_value_tool_pair(messages)
+
+
 def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
     """Truncate ``text`` to ``max_chars`` (inclusive of the marker). No-op if it fits."""
     if len(text) <= max_chars:
@@ -441,8 +469,9 @@ def _enforce_context_budget(
     investigations. Only fires on long investigations where unbounded tool
     history has pushed the prompt past the model's limit.
     """
+    policy = _context_eviction_policy()
     while _estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
-        trim_reason = _trim_lowest_value_tool_pair(messages)
+        trim_reason = _trim_tool_pair_for_policy(messages, policy)
         if trim_reason is None:
             # Whole-pair trimming exhausted but still over budget: the remaining
             # base prompt (e.g. an oversized initial alert or other non-tool
@@ -463,6 +492,12 @@ def _enforce_context_budget(
         if trim_reason == "duplicate":
             logger.warning(
                 "[agent] trimmed duplicate tool pair to fit context budget (ceiling=%d)",
+                ceiling,
+            )
+            continue
+        if trim_reason == "oldest":
+            logger.warning(
+                "[agent] trimmed oldest tool pair to fit context budget (ceiling=%d)",
                 ceiling,
             )
             continue

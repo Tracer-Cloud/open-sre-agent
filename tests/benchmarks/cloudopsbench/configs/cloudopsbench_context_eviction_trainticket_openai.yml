@@ -1,0 +1,51 @@
+# Cloud-OpsBench — context-eviction policy comparison on large trainticket cases.
+#
+# Purpose: isolate the context-window eviction change on the cases most likely
+# to overflow, where seed observability evidence can be pushed out by later tool
+# chatter. Run the exact same config twice and vary only
+# OPENSRE_CONTEXT_EVICTION_POLICY:
+#
+#   OPENSRE_CONTEXT_EVICTION_POLICY=oldest BENCH_MIN_TOOL_CALLS=5 \
+#     uv run python -m tests.benchmarks._framework.cli \
+#       run tests/benchmarks/cloudopsbench/configs/cloudopsbench_context_eviction_trainticket_openai.yml --dev
+#
+#   OPENSRE_CONTEXT_EVICTION_POLICY=value BENCH_MIN_TOOL_CALLS=5 \
+#     uv run python -m tests.benchmarks._framework.cli \
+#       run tests/benchmarks/cloudopsbench/configs/cloudopsbench_context_eviction_trainticket_openai.yml --dev
+#
+# Keep value-aware eviction only if a1/object accuracy improves or remains flat
+# and cost, latency, degraded-run rate, and tool-call count do not materially
+# regress. Use --dev for this targeted policy comparison; the definitive grid
+# remains the full-corpus preregistered config.
+
+benchmark: cloudopsbench
+
+modes:
+  - opensre+llm
+
+llms:
+  - gpt-4o
+
+model_versions:
+  gpt-4o: gpt-4o-2024-11-20
+
+runs_per_case: 3
+
+workers: 2
+
+cost_budget_usd: 50.0
+seed: 42
+
+output_dir: .bench-results/cloudopsbench_context_eviction_trainticket_openai/
+
+pre_registration_path: tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml
+
+filters:
+  seen_shape: [true, false]
+  systems:
+    - trainticket
+  fault_categories: []
+
+report_formats:
+  - json
+  - markdown
