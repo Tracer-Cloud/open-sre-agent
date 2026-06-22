@@ -811,11 +811,7 @@ def _is_recoverable_repo_probe_error(
 
     if tool_name == "search_repositories":
         lowered = detail.lower()
-        return (
-            "422" in lowered
-            or "validation failed" in lowered
-            or "cannot be searched" in lowered
-        )
+        return "422" in lowered or "validation failed" in lowered or "cannot be searched" in lowered
     return False
 
 
