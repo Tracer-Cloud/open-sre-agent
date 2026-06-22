@@ -216,11 +216,12 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from app.agent.stages.resolve_integrations import resolve_integrations
             from app.agent.stages.diagnose import diagnose
             from app.agent.stages.extract_alert import extract_alert
             from app.agent.stages.investigate import ConnectedInvestigationAgent
+            from app.agent.stages.plan_actions import plan_actions
             from app.agent.stages.publish_findings.node import generate_report
+            from app.agent.stages.resolve_integrations import resolve_integrations
             from app.pipeline.pipeline import _merge
 
             state_any = cast(dict[str, Any], initial)
@@ -262,6 +263,26 @@ async def astream_investigation(
                 with contextlib.suppress(RuntimeError):  # loop closed (consumer cancelled)
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
                 return
+
+            # --- plan_actions ---
+            _put(_make_node_event("on_chain_start", "plan_actions", {}))
+            _merge(
+                state_any,
+                _traced_node("plan_actions", plan_actions, cast("AgentState", state_any)),
+            )
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "plan_actions",
+                    {
+                        "output": {
+                            "planned_actions": state_any.get("planned_actions", []),
+                            "plan_rationale": state_any.get("plan_rationale", ""),
+                            "plan_audit": state_any.get("plan_audit", {}),
+                        }
+                    },
+                )
+            )
 
             # --- investigation agent (with real tool events) ---
             _merge(

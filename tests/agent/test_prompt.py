@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.agent.stages.investigate.prompt import _relevant_sources, build_system_prompt, format_alert_context
+from app.agent.stages.investigate.prompt import (
+    _relevant_sources,
+    build_system_prompt,
+    format_alert_context,
+)
 
 
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
@@ -103,6 +107,28 @@ def test_generic_alert_honors_context_sources_annotation() -> None:
     )
 
     assert "Call these tools first (from: datadog)" in context
+
+
+def test_alert_context_uses_planned_actions_when_present() -> None:
+    context = format_alert_context(
+        {
+            "alert_name": "High error rate",
+            "alert_source": "generic",
+            "pipeline_name": "payments",
+            "severity": "critical",
+            "planned_actions": ["get_sre_guidance"],
+            "plan_rationale": "Knowledge guidance is the selected fallback.",
+            "resolved_integrations": {
+                "grafana": {"url": "http://grafana", "api_key": "x"},
+                "datadog": {"connection_verified": True, "api_key": "x", "app_key": "y"},
+            },
+        }
+    )
+
+    assert "Use the planned investigation actions first" in context
+    assert "`get_sre_guidance`" in context
+    assert "Plan rationale: Knowledge guidance is the selected fallback." in context
+    assert "`query_datadog_logs`" not in context
 
 
 def test_relevant_sources_matches_db_symptom_and_excludes_unrelated() -> None:

@@ -18,7 +18,7 @@ def resolve_available_tool_sources(
     """
     sources: dict[str, dict[str, Any]] = {}
     tools = get_registered_tools("investigation")
-    availability_sources = _availability_view(resolved_integrations)
+    availability_sources = availability_view(resolved_integrations)
 
     for source_name, config in availability_sources.items():
         if source_name == "_all" or not isinstance(config, dict):

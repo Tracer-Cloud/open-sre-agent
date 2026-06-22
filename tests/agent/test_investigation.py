@@ -11,6 +11,7 @@ import pytest
 from app.agent.stages.investigate import (
     ConnectedInvestigationAgent,
 )
+from app.agent.stages.investigate.agent import _tools_for_plan
 from app.agent.stages.investigate.loop import (
     duplicate_call_result,
     tool_call_signature,
@@ -26,6 +27,47 @@ from app.agent.tool_loop import (
 )
 from app.integrations.llm_cli.errors import CLITimeoutError
 from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
+from app.tools.registered_tool import RegisteredTool
+
+
+def _registered_tool(name: str, source: str) -> RegisteredTool:
+    def _run(**_kwargs: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    return RegisteredTool(
+        name=name,
+        description=name,
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        source=source,  # type: ignore[arg-type]
+        run=_run,
+    )
+
+
+def test_tools_for_plan_preserves_plan_order_and_filters_unknown_tools() -> None:
+    tools = [
+        _registered_tool("query_logs", "datadog"),
+        _registered_tool("query_metrics", "datadog"),
+        _registered_tool("query_commits", "github"),
+    ]
+
+    selected = _tools_for_plan(
+        tools,
+        {
+            "planned_actions": [
+                "query_metrics",
+                "missing_tool",
+                "query_logs",
+            ]
+        },
+    )
+
+    assert [tool.name for tool in selected] == ["query_metrics", "query_logs"]
+
+
+def test_tools_for_plan_falls_back_when_no_plan_matches() -> None:
+    tools = [_registered_tool("query_logs", "datadog")]
+
+    assert _tools_for_plan(tools, {"planned_actions": ["missing_tool"]}) == tools
 
 
 def test_availability_view_marks_configured_integrations_without_mutating_state() -> None:

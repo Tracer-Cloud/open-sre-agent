@@ -11,6 +11,7 @@ from app.agent.stages.investigate.loop import (
     duplicate_call_result,
     tool_call_signature,
 )
+from app.agent.stages.investigate.prompt import build_system_prompt, format_alert_context
 from app.agent.stages.investigate.tools import (
     MAX_STAGNANT_ITERATIONS,
     STAGNATION_NUDGE,
@@ -20,7 +21,6 @@ from app.agent.stages.investigate.tools import (
     merge_tool_evidence,
     tool_event_payload,
 )
-from app.agent.stages.investigate.prompt import build_system_prompt, format_alert_context
 from app.agent.tool_loop import (
     AgentEventCallback,
     _build_assistant_msg,
@@ -41,6 +41,20 @@ from app.tools.registered_tool import RegisteredTool
 from app.utils.tool_trace import redact_sensitive
 
 logger = logging.getLogger(__name__)
+
+
+def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[RegisteredTool]:
+    planned_raw = state.get("planned_actions")
+    if not isinstance(planned_raw, list) or not planned_raw:
+        return tools
+
+    planned_names = [str(name) for name in planned_raw if str(name).strip()]
+    if not planned_names:
+        return tools
+
+    by_name = {tool.name: tool for tool in tools}
+    planned = [by_name[name] for name in planned_names if name in by_name]
+    return planned or tools
 
 
 class ConnectedInvestigationAgent:
@@ -94,7 +108,7 @@ class ConnectedInvestigationAgent:
             _emit("tool_end", tool_event_payload(tc, output=output))
 
         resolved = state.get("resolved_integrations") or {}
-        tools = self._filter_tools(get_available_tools(resolved))
+        tools = _tools_for_plan(self._filter_tools(get_available_tools(resolved)), state)
         tool_context = build_connected_tool_context(resolved, tools)
         state["available_sources"] = tool_context["available_sources"]
         state["available_action_names"] = tool_context["available_action_names"]

@@ -60,6 +60,7 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     with (
         patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
@@ -80,6 +81,7 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
     with (
         patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch(
             "app.agent.stages.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
         ) as mock_run,
@@ -105,6 +107,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     with (
         patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
@@ -114,3 +117,50 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
         "agent_class did not thread from run_investigation through to the agent — "
         "a future refactor likely dropped the parameter forwarding."
     )
+
+
+def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
+    from app.pipeline.pipeline import run_connected_investigation
+    from app.state.factory import make_initial_state
+
+    calls: list[str] = []
+
+    class _OrderAgent(ConnectedInvestigationAgent):
+        def run(  # type: ignore[override]
+            self,
+            state: dict[str, Any],  # noqa: ARG002
+            on_event: Any | None = None,  # noqa: ARG002
+        ) -> dict[str, Any]:
+            calls.append("investigation_agent")
+            return {}
+
+    state = make_initial_state(raw_alert="alert text")
+    with (
+        patch(
+            "app.agent.stages.resolve_integrations.resolve_integrations",
+            side_effect=lambda _state: calls.append("resolve_integrations") or {},
+        ),
+        patch(
+            "app.agent.stages.extract_alert.extract_alert",
+            side_effect=lambda _state: calls.append("extract_alert") or {"is_noise": False},
+        ),
+        patch(
+            "app.agent.stages.plan_actions.plan_actions",
+            side_effect=lambda _state: calls.append("plan_actions") or {},
+        ),
+        patch(
+            "app.agent.stages.diagnose.diagnose",
+            side_effect=lambda _state: calls.append("diagnose") or {},
+        ),
+        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
+        patch("app.agent.stages.publish_findings.deliver", return_value={}),
+    ):
+        run_connected_investigation(state, agent_class=_OrderAgent)
+
+    assert calls == [
+        "resolve_integrations",
+        "extract_alert",
+        "plan_actions",
+        "investigation_agent",
+        "diagnose",
+    ]

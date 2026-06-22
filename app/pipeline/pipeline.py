@@ -154,12 +154,13 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from app.agent.stages.resolve_integrations import resolve_integrations
     from app.agent.correlation.node import node_correlate_upstream
     from app.agent.stages.diagnose import diagnose
     from app.agent.stages.extract_alert import extract_alert
     from app.agent.stages.investigate import ConnectedInvestigationAgent
+    from app.agent.stages.plan_actions import plan_actions
     from app.agent.stages.publish_findings import deliver
+    from app.agent.stages.resolve_integrations import resolve_integrations
     from app.utils.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent
@@ -172,6 +173,7 @@ def run_connected_investigation(
         if state_any.get("is_noise"):
             return cast(AgentState, state_any)
 
+        _merge(state_any, plan_actions(cast(AgentState, state_any)))
         _merge(state_any, agent_class().run(state_any))
         _merge(state_any, diagnose(state_any))
         _merge(

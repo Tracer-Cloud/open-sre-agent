@@ -184,6 +184,7 @@ def format_alert_context(state: dict[str, Any]) -> str:
 
     resolved = state.get("resolved_integrations") or {}
     available_tools = [t for t in get_registered_tools("investigation") if t.is_available(resolved)]
+    available_tools = _tools_for_plan(available_tools, state)
 
     tools_by_source = _group_tools_by_source(available_tools)
     connected_integrations = _format_connected_integrations(
@@ -204,6 +205,7 @@ def format_alert_context(state: dict[str, Any]) -> str:
         start_guidance=start_guidance,
         tools_by_source=tools_section,
     )
+
 
 def _build_extra_parts(state: dict[str, Any]) -> list[str]:
     parts: list[str] = []
@@ -255,6 +257,15 @@ def _build_start_guidance(
     alert_name: str,
     tools_by_source: dict[str, list[Any]],
 ) -> str:
+    planned_actions = _planned_action_names(state)
+    if planned_actions:
+        rationale = str(state.get("plan_rationale") or "").strip()
+        planned_list = ", ".join(f"`{name}`" for name in planned_actions)
+        lines = ["Use the planned investigation actions first:", "", f"- {planned_list}"]
+        if rationale:
+            lines.extend(["", f"Plan rationale: {rationale}"])
+        return "\n".join(lines)
+
     primary_sources = _ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, [])
     available_primary = [s for s in primary_sources if s in tools_by_source]
 
@@ -309,6 +320,22 @@ def _format_call_first(
         )
 
     return "\n".join(lines)
+
+
+def _tools_for_plan(tools: list[Any], state: dict[str, Any]) -> list[Any]:
+    planned_actions = _planned_action_names(state)
+    if not planned_actions:
+        return tools
+    by_name = {str(tool.name): tool for tool in tools}
+    planned_tools = [by_name[name] for name in planned_actions if name in by_name]
+    return planned_tools or tools
+
+
+def _planned_action_names(state: dict[str, Any]) -> list[str]:
+    planned_raw = state.get("planned_actions")
+    if not isinstance(planned_raw, list):
+        return []
+    return [str(name).strip() for name in planned_raw if str(name).strip()]
 
 
 def _relevant_sources(
