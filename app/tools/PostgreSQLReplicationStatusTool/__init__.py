@@ -9,6 +9,7 @@ from app.integrations.postgresql import (
     resolve_postgresql_config,
 )
 from app.tools.tool_decorator import tool
+from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(
@@ -31,13 +32,10 @@ def get_postgresql_replication_status(
     port: int = 5432,
 ) -> dict[str, Any]:
     """Fetch replication status from a PostgreSQL primary server."""
-    _db_defaulted = database is None
-    if database is None:
-        database = "postgres"
-    config = resolve_postgresql_config(host=host, database=database, port=port)
-    result = get_replication_status(config)
-    if _db_defaulted:
-        result["default_db_warning"] = (
-            "WARNING: No database was specified; defaulted to 'postgres'. Results may not reflect application data."
-        )
-    return result
+    return call_db_tool_with_default_db_warning(
+        database=database,
+        default_db_name="postgres",
+        config_resolver=resolve_postgresql_config,
+        resolver_kwargs={"host": host, "port": port},
+        db_caller=get_replication_status,
+    )
