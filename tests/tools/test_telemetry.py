@@ -1041,6 +1041,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_mysql_table_stats",
         "get_pods_on_node",
         "get_postgresql_current_queries",
+        "get_postgresql_lock_status",
         "get_postgresql_replication_status",
         "get_postgresql_server_status",
         "get_postgresql_slow_queries",
