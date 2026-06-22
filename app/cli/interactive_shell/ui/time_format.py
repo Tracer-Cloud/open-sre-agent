@@ -17,6 +17,7 @@ def _elapsed_hms(seconds: float) -> str:
     s = int(seconds % 60)
     return f"{m}:{s:02d}"
 
+
 ReplTimestampStyle = Literal["table", "compact", "utc"]
 
 
