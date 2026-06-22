@@ -52,6 +52,7 @@ from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig
 from app.services.google_docs import GoogleDocsClient
+from app.services.groundcover.client import GroundcoverClient, GroundcoverConfig
 from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
@@ -658,6 +659,11 @@ _verify_datadog = build_probe_verifier(
     build_config=DatadogConfig.model_validate,
     client_factory=DatadogClient,
 )
+_verify_groundcover = build_probe_verifier(
+    "groundcover",
+    build_config=GroundcoverConfig.model_validate,
+    client_factory=GroundcoverClient,
+)
 _verify_honeycomb = build_probe_verifier(
     "honeycomb",
     build_config=HoneycombIntegrationConfig.model_validate,
@@ -750,6 +756,7 @@ __all__ = [
     "_verify_github",
     "_verify_google_docs",
     "_verify_grafana",
+    "_verify_groundcover",
     "_verify_honeycomb",
     "_verify_helm",
     "_verify_incident_io",

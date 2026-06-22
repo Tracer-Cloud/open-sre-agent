@@ -124,6 +124,7 @@
               "datadog",
               "grafana",
               "grafana_annotations",
+              "groundcover",
               "hermes",
               "honeycomb",
               "incident_io",

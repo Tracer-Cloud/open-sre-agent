@@ -172,6 +172,26 @@ def _setup_datadog() -> None:
     )
 
 
+def _setup_groundcover() -> None:
+    api_key = _p("Service-account API key", secret=True)
+    mcp_url = _p("MCP URL", default="https://mcp.groundcover.com/api/mcp")
+    tenant_uuid = _p("Tenant UUID (optional, for multi-workspace accounts)")
+    backend_id = _p("Backend ID (optional, for multi-backend tenants)")
+    timezone = _p("Timezone", default="UTC")
+    if not api_key:
+        _die("api_key is required.")
+    credentials: dict[str, str] = {
+        "api_key": api_key,
+        "mcp_url": mcp_url,
+        "timezone": timezone,
+    }
+    if tenant_uuid:
+        credentials["tenant_uuid"] = tenant_uuid
+    if backend_id:
+        credentials["backend_id"] = backend_id
+    upsert_integration("groundcover", {"credentials": credentials})
+
+
 def _setup_honeycomb() -> None:
     api_key = _p("Configuration API key", secret=True)
     dataset = _p("Dataset slug or __all__", default="__all__")
@@ -1134,6 +1154,7 @@ _HANDLERS: dict[str, Any] = {
     "betterstack": _setup_betterstack,
     "coralogix": _setup_coralogix,
     "datadog": _setup_datadog,
+    "groundcover": _setup_groundcover,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "incident_io": _setup_incident_io,

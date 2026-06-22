@@ -23,6 +23,7 @@ from app.integrations.config_models import (
     DatadogIntegrationConfig,
     DiscordBotConfig,
     GrafanaIntegrationConfig,
+    GroundcoverIntegrationConfig,
     HelmIntegrationConfig,
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
@@ -278,6 +279,25 @@ def _classify_service_instance(
             return None, None
         if datadog_config.api_key and datadog_config.app_key:
             return datadog_config.model_dump(), "datadog"
+        return None, None
+
+    if key == "groundcover":
+        try:
+            groundcover_config = GroundcoverIntegrationConfig.model_validate(
+                {
+                    "api_key": credentials.get("api_key", "") or credentials.get("mcp_token", ""),
+                    "mcp_url": credentials.get("mcp_url", ""),
+                    "tenant_uuid": credentials.get("tenant_uuid", ""),
+                    "backend_id": credentials.get("backend_id", ""),
+                    "timezone": credentials.get("timezone", ""),
+                    "integration_id": record_id,
+                }
+            )
+        except Exception as exc:
+            _report_classify_failure(exc, integration=key, record_id=record_id)
+            return None, None
+        if groundcover_config.api_key:
+            return groundcover_config.model_dump(), "groundcover"
         return None, None
 
     if key == "honeycomb":
@@ -1226,6 +1246,39 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 datadog_config.model_dump(exclude={"integration_id"}),
             )
         )
+
+    groundcover_multi = _parse_instances_env("GROUNDCOVER_INSTANCES", "groundcover")
+    if groundcover_multi is not None:
+        integrations.append(groundcover_multi)
+        groundcover_api_key = ""
+    else:
+        groundcover_api_key = (
+            os.getenv("GROUNDCOVER_API_KEY", "").strip()
+            or os.getenv("GROUNDCOVER_MCP_TOKEN", "").strip()
+        )
+    if groundcover_api_key:
+        # The groundcover config validates the MCP URL (HTTPS-or-loopback), which
+        # can raise on a bad GROUNDCOVER_MCP_URL. Guard it so one malformed value
+        # cannot abort discovery of every other env integration.
+        try:
+            groundcover_config = GroundcoverIntegrationConfig.model_validate(
+                {
+                    "api_key": groundcover_api_key,
+                    "mcp_url": os.getenv("GROUNDCOVER_MCP_URL", "").strip(),
+                    "tenant_uuid": os.getenv("GROUNDCOVER_TENANT_UUID", "").strip(),
+                    "backend_id": os.getenv("GROUNDCOVER_BACKEND_ID", "").strip(),
+                    "timezone": os.getenv("GROUNDCOVER_TIMEZONE", "").strip(),
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="groundcover")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "groundcover",
+                    groundcover_config.model_dump(exclude={"integration_id"}),
+                )
+            )
 
     honeycomb_multi = _parse_instances_env("HONEYCOMB_INSTANCES", "honeycomb")
     if honeycomb_multi is not None:

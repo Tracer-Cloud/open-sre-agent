@@ -22,6 +22,7 @@ from app.integrations._verification_adapters import (
     _verify_github,
     _verify_google_docs,
     _verify_grafana,
+    _verify_groundcover,
     _verify_helm,
     _verify_honeycomb,
     _verify_incident_io,
@@ -101,6 +102,15 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         core_verify=True,
         setup_order=4,
         verify_order=3,
+    ),
+    IntegrationSpec(
+        service="groundcover",
+        aliases=("gc",),
+        verifier=_verify_groundcover,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=35,
+        verify_order=46,
     ),
     IntegrationSpec(
         service="honeycomb",

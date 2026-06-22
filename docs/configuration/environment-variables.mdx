@@ -180,6 +180,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |
 | `DD_APP_KEY` | | Datadog application key | `integrations/_catalog_impl` |
 | `DD_SITE` | `datadoghq.com` | Datadog site (us/eu) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_API_KEY` | | groundcover read-only service-account token (alias: `GROUNDCOVER_MCP_TOKEN`) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_MCP_URL` | `https://mcp.groundcover.com/api/mcp` | groundcover MCP endpoint | `integrations/_catalog_impl` |
+| `GROUNDCOVER_TENANT_UUID` | | Tenant UUID (multi-workspace accounts) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_BACKEND_ID` | | Backend ID (multi-backend tenants) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_TIMEZONE` | `UTC` | Timezone for returned timestamps (`X-Timezone`) | `integrations/_catalog_impl` |
 | `HONEYCOMB_API_KEY` | | Honeycomb API key | `integrations/_catalog_impl` |
 | `HONEYCOMB_DATASET` | `__all__` | Honeycomb dataset slug | `integrations/_catalog_impl` |
 | `HONEYCOMB_API_URL` | `https://api.honeycomb.io` | Honeycomb API endpoint | `integrations/_catalog_impl` |
@@ -388,6 +393,7 @@ Many integrations support multi-instance configuration via JSON:
 |------------------|-------------|
 | `GRAFANA_INSTANCES` | JSON array of Grafana instances |
 | `DD_INSTANCES` | JSON array of Datadog instances |
+| `GROUNDCOVER_INSTANCES` | JSON array of groundcover instances |
 | `HONEYCOMB_INSTANCES` | JSON array of Honeycomb instances |
 | `CORALOGIX_INSTANCES` | JSON array of Coralogix instances |
 | `AWS_INSTANCES` | JSON array of AWS accounts |

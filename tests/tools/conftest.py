@@ -33,6 +33,16 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "time_range_minutes": 60,
             "node_ip": "10.0.1.42",
         },
+        "groundcover": {
+            "connection_verified": True,
+            "api_key": "gc_test_token",
+            "mcp_url": "https://mcp.groundcover.com/api/mcp",
+            "tenant_uuid": "",
+            "backend_id": "",
+            "timezone": "UTC",
+            "default_query": "level:error | fields _time, workload, instance, content | limit 50",
+            "period": "PT1H",
+        },
         "grafana": {
             "connection_verified": True,
             "grafana_endpoint": "https://grafana.example.com",

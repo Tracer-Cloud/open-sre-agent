@@ -54,6 +54,7 @@ class EffectiveIntegrations(StrictConfigModel):
 
     grafana: EffectiveIntegrationEntry | None = None
     datadog: EffectiveIntegrationEntry | None = None
+    groundcover: EffectiveIntegrationEntry | None = None
     honeycomb: EffectiveIntegrationEntry | None = None
     coralogix: EffectiveIntegrationEntry | None = None
     dagster: EffectiveIntegrationEntry | None = None
