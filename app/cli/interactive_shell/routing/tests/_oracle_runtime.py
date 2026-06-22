@@ -81,7 +81,7 @@ def resolve_live_integrations(
     if not live_services:
         return override, []
 
-    from app.agent.context import resolve_integrations
+    from app.agent.nodes.resolve_integrations import resolve_integrations
 
     resolved = resolve_integrations({})  # type: ignore[arg-type]  # real store/env resolution
     expanded: dict[str, Any] = {}

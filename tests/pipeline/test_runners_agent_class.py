@@ -58,7 +58,7 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     # Avoid running real integration/extraction; mock them to no-ops so the
     # test focuses on the agent_class threading specifically.
     with (
-        patch("app.agent.context.resolve_integrations", return_value={}),
+        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.agent.nodes.publish_findings.deliver", return_value={}),
@@ -78,7 +78,7 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
 
     state = make_initial_state(raw_alert="alert text")
     with (
-        patch("app.agent.context.resolve_integrations", return_value={}),
+        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch(
             "app.agent.nodes.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
@@ -103,7 +103,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     from app.pipeline.runners import run_investigation
 
     with (
-        patch("app.agent.context.resolve_integrations", return_value={}),
+        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
         patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.agent.nodes.publish_findings.deliver", return_value={}),

@@ -48,7 +48,7 @@ def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
 
-    from app.agent.context import resolve_integrations
+    from app.agent.nodes.resolve_integrations import resolve_integrations
 
     resolved = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
     session.resolved_integrations_cache = resolved

@@ -7,7 +7,7 @@ from typing import NoReturn
 
 def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
     """Convert CLI auth/setup failures to structured CLI UX errors."""
-    from app.agent.llm_invoke_errors import classify_llm_invoke_failure
+    from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
     from app.cli.interactive_shell.error_handling.errors import OpenSREError
     from app.integrations.llm_cli.errors import CLIAuthenticationRequired
 

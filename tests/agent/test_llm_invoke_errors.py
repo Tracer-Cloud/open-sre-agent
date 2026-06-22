@@ -4,7 +4,7 @@ import sys
 from types import ModuleType
 from unittest.mock import patch
 
-from app.agent.llm_invoke_errors import _looks_like_timeout, classify_llm_invoke_failure
+from app.agent.utils.llm_invoke_errors import _looks_like_timeout, classify_llm_invoke_failure
 from app.integrations.llm_cli.errors import CLITimeoutError
 
 
@@ -34,7 +34,7 @@ def test_classify_returns_none_for_credit_exhausted_so_it_propagates() -> None:
     just text-matches "rate limit" in the wrapped message text on some
     provider error variants) and silently mask the billing failure as
     a recoverable cell error."""
-    from app.agent.llm_invoke_errors import classify_llm_invoke_failure
+    from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
     from app.utils.llm_retry import LLMCreditExhaustedError
 
     err = LLMCreditExhaustedError("OpenAI credit exhausted: insufficient_quota")

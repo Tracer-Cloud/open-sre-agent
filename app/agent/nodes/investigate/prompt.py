@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.alert_source import resolve_alert_source
+from app.agent.utils.alert_source import resolve_alert_source
 from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.

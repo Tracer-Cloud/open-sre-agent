@@ -1,4 +1,4 @@
-"""Integration resolution — discovers which integrations are available for this alert."""
+"""Resolve integrations node — discovers which integrations are available for this alert."""
 
 from __future__ import annotations
 

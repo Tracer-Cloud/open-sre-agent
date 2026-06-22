@@ -83,7 +83,7 @@ def fixture_client(monkeypatch: pytest.MonkeyPatch) -> _FixtureJenkinsClient:
 def test_jenkins_alert_source_maps_to_tools() -> None:
     """A jenkins-sourced alert auto-seeds and prioritizes the jenkins tools."""
     from app.agent.nodes.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
-    from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
+    from app.agent.nodes.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
 
     assert seed_map.get("jenkins") == ["jenkins"]
     assert priority_map.get("jenkins") == ["jenkins"]

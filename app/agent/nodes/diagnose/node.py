@@ -8,7 +8,7 @@ from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
-from app.agent.alert_source import resolve_alert_source
+from app.agent.utils.alert_source import resolve_alert_source
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,

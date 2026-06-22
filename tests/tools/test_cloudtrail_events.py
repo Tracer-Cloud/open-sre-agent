@@ -75,7 +75,7 @@ def test_cloudtrail_prioritized_but_not_auto_seeded_for_aws_alerts() -> None:
     planner to reach for it once it has a concrete resource/principal/time target.
     """
     from app.agent.nodes.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
-    from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
+    from app.agent.nodes.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
 
     for alert_source in ("cloudwatch", "eks", "alertmanager"):
         assert "cloudtrail" not in seed_map[alert_source]

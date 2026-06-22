@@ -154,7 +154,7 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from app.agent.context import resolve_integrations
+    from app.agent.nodes.resolve_integrations import resolve_integrations
     from app.agent.correlation.node import node_correlate_upstream
     from app.agent.nodes.diagnose import diagnose
     from app.agent.nodes.extract_alert import extract_alert

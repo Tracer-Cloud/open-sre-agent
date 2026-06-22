@@ -216,7 +216,7 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from app.agent.context import resolve_integrations
+            from app.agent.nodes.resolve_integrations import resolve_integrations
             from app.agent.nodes.diagnose import diagnose
             from app.agent.nodes.extract_alert import extract_alert
             from app.agent.nodes.investigate import ConnectedInvestigationAgent

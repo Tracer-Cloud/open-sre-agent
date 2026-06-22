@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.alert_source import resolve_alert_source
 from app.agent.tool_loop import _public_tool_input
+from app.agent.utils.alert_source import resolve_alert_source
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools

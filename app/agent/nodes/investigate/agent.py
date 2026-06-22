@@ -6,7 +6,6 @@ import contextlib
 import logging
 from typing import Any
 
-from app.agent.llm_invoke_errors import classify_llm_invoke_failure
 from app.agent.nodes.investigate.loop import (
     degraded_investigation_from_llm_failure,
     duplicate_call_result,
@@ -21,7 +20,7 @@ from app.agent.nodes.investigate.tools import (
     merge_tool_evidence,
     tool_event_payload,
 )
-from app.agent.prompt import build_system_prompt, format_alert_context
+from app.agent.nodes.investigate.prompt import build_system_prompt, format_alert_context
 from app.agent.tool_loop import (
     AgentEventCallback,
     _build_assistant_msg,
@@ -33,6 +32,7 @@ from app.agent.tool_loop import (
     _summarise,
     _tool_source,
 )
+from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
 from app.cli.interactive_shell.ui.output import debug_print, get_tracker
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.services.agent_llm_client import ToolCall, get_agent_llm

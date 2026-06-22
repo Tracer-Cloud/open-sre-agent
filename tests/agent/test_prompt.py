@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.prompt import _relevant_sources, build_system_prompt, format_alert_context
+from app.agent.nodes.investigate.prompt import _relevant_sources, build_system_prompt, format_alert_context
 
 
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:

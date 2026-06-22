@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from app.agent.llm_invoke_errors import LLMInvokeFailure
+from app.agent.utils.llm_invoke_errors import LLMInvokeFailure
 from app.services.agent_llm_client import ToolCall
 from app.state.evidence import EvidenceEntry
 
