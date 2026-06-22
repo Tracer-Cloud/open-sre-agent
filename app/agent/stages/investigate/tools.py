@@ -91,7 +91,7 @@ def build_seed_calls(
     if not alert_source:
         return []
 
-    target_sources = set(_ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, []))
+    target_sources = set(ALERT_SOURCE_TO_SEED_TOOL_SOURCES.get(alert_source, ()))
     if not target_sources:
         return []
 
