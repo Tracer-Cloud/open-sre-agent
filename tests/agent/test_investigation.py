@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.nodes.diagnose import InvestigationResult
 from app.agent.nodes.investigate import (
     ConnectedInvestigationAgent,
 )
@@ -276,7 +275,7 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("app.agent.tool_loop.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("app.agent.tool_loop.execution.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
@@ -858,10 +857,6 @@ def _run_agent_with_scripted_llm(
         patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch("app.agent.nodes.investigate.agent.get_tracker", return_value=MagicMock()),
         patch("app.agent.nodes.investigate.agent.get_available_tools", return_value=tools),
-        patch(
-            "app.agent.nodes.investigate.agent.parse_diagnosis",
-            return_value=InvestigationResult(root_cause="done", root_cause_category="unknown"),
-        ),
     ):
         result = ConnectedInvestigationAgent().run(state)
     return result, mock_llm
@@ -898,9 +893,9 @@ def test_run_does_not_suppress_calls_with_different_args() -> None:
         _text_response("Final diagnosis."),
     ]
 
-    tool_run = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
+    result = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
     assert tool.run.call_count == 2
-    assert tool_run["root_cause"] == "done"
+    assert result["agent_messages"][-1]["content"] == "Final diagnosis."
 
 
 def test_run_forces_conclusion_when_stuck_repeating() -> None:
@@ -924,7 +919,7 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
     assert mock_llm.invoke.call_count < 6
     # The final forced turn was invoked with NO tools.
     assert mock_llm.invoke.call_args_list[-1].kwargs["tools"] == []
-    assert result["root_cause"] == "done"
+    assert result["agent_messages"][-1]["content"] == "Final diagnosis: insufficient evidence."
 
 
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
