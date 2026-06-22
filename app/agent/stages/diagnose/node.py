@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, TypedDict, cast
+from typing import Any, NamedTuple, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
+from app.agent.category_alignment import apply_category_alignment_adjustments
 from app.agent.utils.alert_source import resolve_alert_source
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
@@ -16,6 +17,31 @@ from app.types.root_cause_categories import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _CategoryAlignment(NamedTuple):
+    validity_score: float
+    investigation_recommendations: list[str]
+    category_text_mismatch: bool
+    category_text_mismatch_reason: str | None
+
+
+def _apply_category_alignment(
+    *,
+    root_cause: str,
+    root_cause_category: str,
+    validity_score: float,
+    investigation_recommendations: list[str] | None = None,
+) -> _CategoryAlignment:
+    score, recommendations, mismatch, reason = apply_category_alignment_adjustments(
+        root_cause=root_cause,
+        root_cause_category=root_cause_category,
+        validity_score=validity_score,
+        investigation_recommendations=list(investigation_recommendations or []),
+    )
+    if mismatch and reason:
+        logger.warning("Root cause category may not match explanation: %s", reason)
+    return _CategoryAlignment(score, recommendations, mismatch, reason)
 
 
 @dataclass
@@ -31,6 +57,8 @@ class InvestigationResult:
     evidence_entries: list[dict] = field(default_factory=list)
     agent_messages: list[dict] = field(default_factory=list)
     investigation_recommendations: list[str] = field(default_factory=list)
+    category_text_mismatch: bool = False
+    category_text_mismatch_reason: str | None = None
 
     @classmethod
     def unknown(cls, alert_name: str = "Unknown alert") -> InvestigationResult:
@@ -82,6 +110,7 @@ def diagnose(state: dict[str, Any]) -> dict[str, Any]:
     if str(state.get("root_cause") or "").strip():
         return {}
 
+    from app.analytics.cli import capture_diagnosis_category_mismatch
     from app.cli.interactive_shell.ui.output import get_tracker
 
     tracker = get_tracker()
@@ -99,6 +128,12 @@ def diagnose(state: dict[str, Any]) -> dict[str, Any]:
     result.evidence = evidence
     result.evidence_entries = _list_of_dicts(state.get("evidence_entries"))
     result.agent_messages = messages
+
+    if result.category_text_mismatch:
+        capture_diagnosis_category_mismatch(
+            root_cause_category=result.root_cause_category,
+            mismatch_reason=result.category_text_mismatch_reason,
+        )
 
     tracker.complete(
         "diagnose_root_cause",
@@ -231,6 +266,12 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
     def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
         return [{"claim": c, "validation_status": status} for c in claims if c]
 
+    alignment = _apply_category_alignment(
+        root_cause=schema["root_cause"],
+        root_cause_category=schema["root_cause_category"],
+        validity_score=schema["validity_score"],
+    )
+
     return InvestigationResult(
         root_cause=schema["root_cause"],
         root_cause_category=schema["root_cause_category"],
@@ -238,7 +279,10 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
         non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
         remediation_steps=schema["remediation_steps"],
-        validity_score=schema["validity_score"],
+        validity_score=alignment.validity_score,
+        investigation_recommendations=alignment.investigation_recommendations,
+        category_text_mismatch=alignment.category_text_mismatch,
+        category_text_mismatch_reason=alignment.category_text_mismatch_reason,
     )
 
 
@@ -249,6 +293,11 @@ def _parse_via_legacy(
 
     try:
         rr = parse_root_cause(last_text)
+        alignment = _apply_category_alignment(
+            root_cause=rr.root_cause,
+            root_cause_category=rr.root_cause_category,
+            validity_score=0.5,
+        )
         return InvestigationResult(
             root_cause=rr.root_cause,
             root_cause_category=rr.root_cause_category,
@@ -260,7 +309,10 @@ def _parse_via_legacy(
                 {"claim": c, "validation_status": "not_validated"} for c in rr.non_validated_claims
             ],
             remediation_steps=rr.remediation_steps,
-            validity_score=0.5,
+            validity_score=alignment.validity_score,
+            investigation_recommendations=alignment.investigation_recommendations,
+            category_text_mismatch=alignment.category_text_mismatch,
+            category_text_mismatch_reason=alignment.category_text_mismatch_reason,
         )
     except Exception as err:
         logger.warning("Legacy parse_root_cause also failed: %s", err)

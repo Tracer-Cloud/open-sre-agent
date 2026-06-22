@@ -12,7 +12,6 @@ from app.cli.interactive_shell.ui.output import (
     ProgressEvent,
     ProgressTracker,
     _fmt_timing,
-    _humanise_message,
     get_output_format,
     get_tracker,
     reset_tracker,
@@ -23,6 +22,7 @@ from app.cli.interactive_shell.ui.output import environment as output_environmen
 from app.cli.interactive_shell.ui.output import repl_display as output_repl
 from app.cli.interactive_shell.ui.output import toggles as output_toggles
 from app.cli.interactive_shell.ui.output import tracker as output_tracker
+from app.cli.interactive_shell.ui.output.labels import _humanise_message
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 

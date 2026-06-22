@@ -114,17 +114,12 @@ def _menu_height(crumb: str, labels: list[str]) -> int:
     return _MENU_LEADING_LINES + 1 + (1 if crumb else 0) + 1 + 1 + len(labels) + 1 + 1
 
 
-def _write_menu_line(text: str = "") -> None:
-    """Write a menu line at column zero even while the terminal is in raw mode."""
+def write_menu_line(text: str = "") -> None:
+    """Write one inline-menu line at column zero even while the terminal is in raw mode."""
     if text:
         sys.stdout.write(f"\r{text}{_TERMINAL_NEWLINE}")
         return
     sys.stdout.write(_TERMINAL_NEWLINE)
-
-
-def write_menu_line(text: str = "") -> None:
-    """Write one inline-menu line at column zero."""
-    _write_menu_line(text)
 
 
 def _erase_menu_block(height: int) -> None:
@@ -162,26 +157,26 @@ def _draw_menu(
     if erase_lines:
         _erase_menu_block(erase_lines)
     for _ in range(_MENU_LEADING_LINES):
-        _write_menu_line()
+        write_menu_line()
     # title
-    _write_menu_line(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}")
+    write_menu_line(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}")
     # breadcrumb path
     if crumb:
-        _write_menu_line(f"{DIM_COUNTER_ANSI}{crumb}{ANSI_RESET}")
+        write_menu_line(f"{DIM_COUNTER_ANSI}{crumb}{ANSI_RESET}")
     # separator below header
-    _write_menu_line(f"{DIM_COUNTER_ANSI}{_rule(w)}{ANSI_RESET}")
-    _write_menu_line()
+    write_menu_line(f"{DIM_COUNTER_ANSI}{_rule(w)}{ANSI_RESET}")
+    write_menu_line()
     # choices
     for i, label in enumerate(labels):
         here = i == index
         sym = ">" if here else " "
         padded = _pad(sym, label, w)
         if here:
-            _write_menu_line(f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}")
+            write_menu_line(f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}")
         else:
-            _write_menu_line(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}")
-    _write_menu_line()
-    _write_menu_line(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}")
+            write_menu_line(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}")
+    write_menu_line()
+    write_menu_line(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}")
     out.flush()
 
 

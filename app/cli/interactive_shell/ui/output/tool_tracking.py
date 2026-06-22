@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from rich.text import Text
 
 from app.cli.interactive_shell.ui.output.environment import _safe_print
+
+if TYPE_CHECKING:
+    from app.cli.interactive_shell.ui.output.events import DisplayProtocol
 from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from app.cli.interactive_shell.ui.output.tool_details import (
@@ -38,7 +41,7 @@ class ToolTrackingMixin:
     _silent: bool
     _rich: bool
     _t0: float
-    _display: Any | None
+    _display: DisplayProtocol | None
     _tool_start_times: dict[str, float]
     _tool_inputs: dict[str, Any]
     _tool_details_visible: bool

@@ -7,7 +7,7 @@ from typing import Any
 from app.agent.utils.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES,
     SECONDARY_TOOL_SOURCES,
-    SOURCE_ALIASES,
+    relevant_sources_for_alert,
     resolve_alert_source,
 )
 from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
@@ -35,6 +35,7 @@ Your task: investigate the alert below and produce a clear, evidence-backed root
 - **Discovery or listing tools (those that just enumerate other tools or resources) are useful at most once.** Call such a tool a single time, then act on what it returned — do not keep re-listing.
 - **Prefer tools relevant to the alert.** Do not fan out to integrations unrelated to the alert's service or symptoms just because they are available.
 - **If your recent tool calls stopped producing new evidence, stop investigating and write your diagnosis** with whatever you have, rather than repeating calls.
+- **Dependency traversal (connection failures only):** When logs show connection-related errors (connection refused, timeout, authentication failure, write failure, port unreachable), the fault may live in a stateful dependency (database, cache, message queue) rather than the caller. Before concluding, also query error logs on the dependency itself (MySQL, Postgres, Redis, RabbitMQ, etc.) using the log tools listed under Available tools. Dependencies log their own failure modes (read-only mode, pool exhaustion, replication errors, slow queries, credential rejections) that are not visible from the caller's side. When multiple pods in a namespace fail together, also check namespace-level resources (quotas, network policies, service accounts). This expands evidence collection only — it does not bias localization; if the dependency is healthy and the caller's config is wrong, the caller is the fault.
 
 ## What to produce at the end
 
@@ -72,7 +73,6 @@ _ALERT_SOURCE_TO_TOOL_SOURCES = {
     source: list(tool_sources) for source, tool_sources in ALERT_SOURCE_TO_TOOL_SOURCES.items()
 }
 _SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
-_SOURCE_ALIASES = SOURCE_ALIASES
 
 _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
     "One of database / infrastructure / code_bug / configuration / network / performance / "
@@ -277,65 +277,7 @@ def _relevant_sources(
     empty list when nothing is clearly relevant (the caller then defers the
     choice to the LLM rather than calling every integration).
     """
-    candidates = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
-    if not candidates:
-        return []
-
-    declared = _declared_context_sources(state)
-    if declared:
-        from_declared = [s for s in candidates if s in declared]
-        if from_declared:
-            return from_declared
-
-    text = _collect_alert_text(state)
-    if not text:
-        return []
-
-    matched: list[str] = []
-    for source in candidates:
-        keywords = {source, *_SOURCE_ALIASES.get(source, ())}
-        if any(keyword in text for keyword in keywords):
-            matched.append(source)
-    return matched
-
-
-def _declared_context_sources(state: dict[str, Any]) -> set[str]:
-    raw = state.get("raw_alert")
-    if not isinstance(raw, dict):
-        return set()
-    for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-        block = raw.get(block_key)
-        if isinstance(block, dict):
-            value = block.get("context_sources")
-            if isinstance(value, str) and value.strip():
-                return {item.strip().lower() for item in value.split(",") if item.strip()}
-    return set()
-
-
-def _collect_alert_text(state: dict[str, Any]) -> str:
-    parts: list[str] = [
-        str(state.get("alert_name") or ""),
-        str(state.get("pipeline_name") or ""),
-        str(state.get("message") or ""),
-    ]
-    raw = state.get("raw_alert")
-    if isinstance(raw, dict):
-        for key in ("alert_name", "title", "message", "text", "error_message", "kube_namespace"):
-            value = raw.get(key)
-            if isinstance(value, str):
-                parts.append(value)
-        for block_key in ("commonAnnotations", "annotations", "commonLabels", "labels"):
-            block = raw.get(block_key)
-            if isinstance(block, dict):
-                parts.extend(str(v) for v in block.values() if isinstance(v, (str, int, float)))
-    elif isinstance(raw, str):
-        parts.append(raw)
-
-    problem_md = state.get("problem_md")
-    if isinstance(problem_md, str):
-        parts.append(problem_md)
-
-    return " ".join(part for part in parts if part).lower()
+    return relevant_sources_for_alert(state, tools_by_source.keys())
 
 
 def _format_tools_by_source(tools_by_source: dict[str, list[Any]]) -> str:
