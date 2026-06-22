@@ -10,7 +10,6 @@ from app.agent.llm_invoke_errors import classify_llm_invoke_failure
 from app.agent.nodes.investigate.loop import (
     degraded_investigation_from_llm_failure,
     duplicate_call_result,
-    result_to_state,
     tool_call_signature,
 )
 from app.agent.nodes.investigate.tools import (
@@ -18,13 +17,11 @@ from app.agent.nodes.investigate.tools import (
     STAGNATION_NUDGE,
     build_connected_tool_context,
     build_seed_calls,
-    get_alert_source,
     get_available_tools,
     merge_tool_evidence,
     tool_event_payload,
 )
 from app.agent.prompt import build_system_prompt, format_alert_context
-from app.agent.nodes.diagnose import parse_diagnosis
 from app.agent.tool_loop import (
     AgentEventCallback,
     _build_assistant_msg,
@@ -273,33 +270,26 @@ class ConnectedInvestigationAgent:
                 MAX_INVESTIGATION_LOOPS,
             )
 
-        result = parse_diagnosis(
-            messages,
-            evidence,
-            state.get("alert_name", ""),
-            alert_source=get_alert_source(state),
-        )
-        result.evidence = evidence
-        result.evidence_entries = [e.model_dump() for e in evidence_entries]
-        result.agent_messages = messages
-
         _emit(
             "agent_end",
             {
-                "root_cause": result.root_cause,
-                "validity_score": result.validity_score,
-                "root_cause_category": result.root_cause_category,
+                "evidence_count": len(evidence_entries),
+                "message_count": len(messages),
             },
         )
 
         tracker.complete(
             "investigation_agent",
-            fields_updated=["root_cause", "evidence", "validated_claims"],
-            message=f"validity:{result.validity_score:.0%} category:{result.root_cause_category}",
+            fields_updated=["evidence", "evidence_entries", "agent_messages"],
+            message=f"evidence:{len(evidence_entries)} messages:{len(messages)}",
         )
 
-        updates = result_to_state(result)
-        updates["executed_hypotheses"] = executed_hypotheses
+        updates = {
+            "evidence": evidence,
+            "evidence_entries": [e.model_dump() for e in evidence_entries],
+            "agent_messages": messages,
+            "executed_hypotheses": executed_hypotheses,
+        }
         updates.update(tool_context)
         return updates
 

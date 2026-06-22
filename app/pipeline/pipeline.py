@@ -144,7 +144,7 @@ def run_connected_investigation(
     *,
     agent_class: type[ConnectedInvestigationAgent] | None = None,
 ) -> AgentState:
-    """Resolve connected integrations → parse alert → agent loop → deliver.
+    """Resolve connected integrations → parse alert → investigate → diagnose → deliver.
 
     All steps mutate a shared state dict. Each step returns a dict of updates
     which are merged in. Pure function: inputs in, state out.
@@ -156,6 +156,7 @@ def run_connected_investigation(
     """
     from app.agent.context import resolve_integrations
     from app.agent.correlation.node import node_correlate_upstream
+    from app.agent.nodes.diagnose import diagnose
     from app.agent.nodes.extract_alert import extract_alert
     from app.agent.nodes.investigate import ConnectedInvestigationAgent
     from app.agent.nodes.publish_findings import deliver
@@ -172,6 +173,7 @@ def run_connected_investigation(
             return cast(AgentState, state_any)
 
         _merge(state_any, agent_class().run(state_any))
+        _merge(state_any, diagnose(state_any))
         _merge(
             state_any,
             node_correlate_upstream(

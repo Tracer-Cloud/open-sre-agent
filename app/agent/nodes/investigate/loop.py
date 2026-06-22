@@ -7,7 +7,6 @@ from collections.abc import Callable
 from typing import Any
 
 from app.agent.llm_invoke_errors import LLMInvokeFailure
-from app.agent.nodes.diagnose import InvestigationResult
 from app.services.agent_llm_client import ToolCall
 from app.state.evidence import EvidenceEntry
 
@@ -75,19 +74,3 @@ def degraded_investigation_from_llm_failure(
     }
     updates.update(tool_context)
     return updates
-
-
-def result_to_state(result: InvestigationResult) -> dict[str, Any]:
-    return {
-        "root_cause": result.root_cause,
-        "root_cause_category": result.root_cause_category,
-        "causal_chain": result.causal_chain,
-        "validated_claims": result.validated_claims,
-        "non_validated_claims": result.non_validated_claims,
-        "remediation_steps": result.remediation_steps,
-        "validity_score": result.validity_score,
-        "investigation_recommendations": result.investigation_recommendations,
-        "evidence": result.evidence,
-        "evidence_entries": result.evidence_entries,
-        "agent_messages": result.agent_messages,
-    }

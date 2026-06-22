@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.alert_source import resolve_alert_source
 from app.agent.tool_loop import _public_tool_input
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
@@ -146,23 +147,7 @@ def build_seed_calls(
 
 
 def get_alert_source(state: dict[str, Any]) -> str:
-    source = str(state.get("alert_source") or "").lower().strip()
-    if source:
-        return source
-    raw = state.get("raw_alert")
-    if isinstance(raw, dict):
-        source = str(raw.get("alert_source") or "").lower().strip()
-        if source:
-            return source
-        labels = raw.get("commonLabels") or raw.get("labels") or {}
-        if isinstance(labels, dict) and (
-            labels.get("grafana_folder") or labels.get("datasource_uid")
-        ):
-            return "grafana"
-        ext_url = raw.get("externalURL", "")
-        if isinstance(ext_url, str) and "grafana" in ext_url.lower():
-            return "grafana"
-    return ""
+    return resolve_alert_source(state)
 
 
 def tool_event_payload(tc: ToolCall, *, output: Any | None = None) -> dict[str, Any]:

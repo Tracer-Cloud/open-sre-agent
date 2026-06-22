@@ -8,6 +8,7 @@ from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
+from app.agent.alert_source import resolve_alert_source
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,
@@ -74,6 +75,59 @@ def parse_diagnosis(
     except Exception as err:
         logger.warning("Structured diagnosis parse failed, falling back: %s", err)
         return _parse_via_legacy(last_text, evidence, alert_name)
+
+
+def diagnose(state: dict[str, Any]) -> dict[str, Any]:
+    """Parse investigation output into structured RCA fields."""
+    if str(state.get("root_cause") or "").strip():
+        return {}
+
+    from app.cli.interactive_shell.ui.output import get_tracker
+
+    tracker = get_tracker()
+    tracker.start("diagnose_root_cause", "Parsing investigation conclusion")
+
+    messages = _list_of_dicts(state.get("agent_messages"))
+    raw_evidence = state.get("evidence")
+    evidence = cast(dict[str, Any], raw_evidence) if isinstance(raw_evidence, dict) else {}
+    result = parse_diagnosis(
+        messages,
+        evidence,
+        str(state.get("alert_name") or ""),
+        alert_source=resolve_alert_source(state),
+    )
+    result.evidence = evidence
+    result.evidence_entries = _list_of_dicts(state.get("evidence_entries"))
+    result.agent_messages = messages
+
+    tracker.complete(
+        "diagnose_root_cause",
+        fields_updated=["root_cause", "validated_claims", "remediation_steps"],
+        message=f"validity:{result.validity_score:.0%} category:{result.root_cause_category}",
+    )
+    return result_to_state(result)
+
+
+def result_to_state(result: InvestigationResult) -> dict[str, Any]:
+    return {
+        "root_cause": result.root_cause,
+        "root_cause_category": result.root_cause_category,
+        "causal_chain": result.causal_chain,
+        "validated_claims": result.validated_claims,
+        "non_validated_claims": result.non_validated_claims,
+        "remediation_steps": result.remediation_steps,
+        "validity_score": result.validity_score,
+        "investigation_recommendations": result.investigation_recommendations,
+        "evidence": result.evidence,
+        "evidence_entries": result.evidence_entries,
+        "agent_messages": result.agent_messages,
+    }
+
+
+def _list_of_dicts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
 
 
 def _extract_last_assistant_text(messages: list[dict[str, Any]]) -> str:

@@ -217,6 +217,7 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         try:
             from app.agent.context import resolve_integrations
+            from app.agent.nodes.diagnose import diagnose
             from app.agent.nodes.extract_alert import extract_alert
             from app.agent.nodes.investigate import ConnectedInvestigationAgent
             from app.agent.nodes.publish_findings.node import generate_report
@@ -271,6 +272,25 @@ async def astream_investigation(
                     state_any,
                     on_event=_on_agent_event,
                 ),
+            )
+
+            # --- diagnose ---
+            _put(_make_node_event("on_chain_start", "diagnose", {}))
+            _merge(state_any, _traced_node("diagnose", diagnose, state_any))
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "diagnose",
+                    {
+                        "output": {
+                            "root_cause": state_any.get("root_cause", ""),
+                            "root_cause_category": state_any.get("root_cause_category", ""),
+                            "validity_score": state_any.get("validity_score"),
+                            "validated_claims": state_any.get("validated_claims", []),
+                            "remediation_steps": state_any.get("remediation_steps", []),
+                        }
+                    },
+                )
             )
 
             # --- upstream correlation ---

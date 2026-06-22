@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.alert_source import resolve_alert_source
 from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
@@ -152,7 +153,7 @@ _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
 
 
 def build_system_prompt(state: dict[str, Any]) -> str:
-    alert_source = _get_alert_source(state)
+    alert_source = resolve_alert_source(state)
     root_cause_category_instruction = _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION
 
     if alert_source == "hermes":
@@ -176,7 +177,7 @@ def format_alert_context(state: dict[str, Any]) -> str:
     alert_name = state.get("alert_name", "Unknown alert")
     pipeline_name = state.get("pipeline_name", "Unknown pipeline")
     severity = state.get("severity", "unknown")
-    alert_source = _get_alert_source(state)
+    alert_source = resolve_alert_source(state)
 
     extra_parts = _build_extra_parts(state)
     extra = ("\n" + "\n".join(extra_parts) + "\n") if extra_parts else ""
@@ -203,27 +204,6 @@ def format_alert_context(state: dict[str, Any]) -> str:
         start_guidance=start_guidance,
         tools_by_source=tools_section,
     )
-
-
-def _get_alert_source(state: dict[str, Any]) -> str:
-    source = str(state.get("alert_source") or "").lower().strip()
-    if source:
-        return source
-    raw = state.get("raw_alert")
-    if isinstance(raw, dict):
-        source = str(raw.get("alert_source") or "").lower().strip()
-        if source:
-            return source
-        labels = raw.get("commonLabels") or raw.get("labels") or {}
-        if isinstance(labels, dict) and (
-            labels.get("grafana_folder") or labels.get("datasource_uid")
-        ):
-            return "grafana"
-        ext_url = raw.get("externalURL", "")
-        if isinstance(ext_url, str) and "grafana" in ext_url.lower():
-            return "grafana"
-    return ""
-
 
 def _build_extra_parts(state: dict[str, Any]) -> list[str]:
     parts: list[str] = []
