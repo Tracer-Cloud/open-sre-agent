@@ -4,86 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.utils.alert_source import resolve_alert_source
+from app.agent.utils.alert_source import (
+    ALERT_SOURCE_TO_TOOL_SOURCES,
+    SECONDARY_TOOL_SOURCES,
+    SOURCE_ALIASES,
+    resolve_alert_source,
+)
 
-# Maps alert_source values to integration source keys (tool `.source` field).
-# An alert source can map to multiple integration sources.
-ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
-    "grafana": ("grafana",),
-    "datadog": ("datadog",),
-    "cloudwatch": ("cloudwatch", "ec2", "rds", "cloudtrail"),
-    "eks": ("eks", "ec2", "cloudtrail"),
-    "alertmanager": ("eks", "cloudwatch", "grafana", "cloudtrail"),
-    "sentry": ("sentry",),
-    "honeycomb": ("honeycomb",),
-    "coralogix": ("coralogix",),
-    "airflow": ("airflow", "tracer_web"),
-    "hermes": ("hermes",),
-    "kafka": ("kafka",),
-    "postgresql": ("postgresql",),
-    "mysql": ("mysql",),
-    "mariadb": ("mariadb",),
-    "mongodb": ("mongodb", "mongodb_atlas"),
-    "redis": ("redis",),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "rabbitmq": ("rabbitmq",),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch",),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack",),
-    "azure": ("azure", "azure_sql"),
-    "github": ("github",),
-    "gitlab": ("gitlab",),
-    "bitbucket": ("bitbucket",),
-    "argocd": ("eks",),
-    "splunk": ("splunk",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-}
-
-# Generic fallback sources: useful, but never primary when incident-specific
-# integrations match.
-SECONDARY_SOURCES = {"knowledge", "openclaw", "google_docs"}
-
-DB_KEYWORDS: tuple[str, ...] = ("database", "db connection", "connection pool")
-
-SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
-    "datadog": ("datadog", "datadoghq", "dd monitor"),
-    "sentry": ("sentry", "exception", "stack trace", "stacktrace", "error tracking"),
-    "vercel": ("vercel", "deploy", "deployment", "build failed"),
-    "github": ("github", "commit", "pull request", "merge"),
-    "gitlab": ("gitlab", "merge request"),
-    "grafana": ("grafana", "loki", "mimir", "prometheus"),
-    "honeycomb": ("honeycomb", "span", "trace latency"),
-    "coralogix": ("coralogix",),
-    "splunk": ("splunk",),
-    "cloudwatch": ("cloudwatch", "lambda", "log group"),
-    "eks": ("eks", "kubernetes", "k8s", "kubectl", "pod"),
-    "ec2": ("ec2", "instance"),
-    "rds": ("rds", "aurora", *DB_KEYWORDS),
-    "postgresql": ("postgres", "postgresql", "psql", *DB_KEYWORDS),
-    "mysql": ("mysql", *DB_KEYWORDS),
-    "mariadb": ("mariadb", *DB_KEYWORDS),
-    "mongodb": ("mongodb", "mongo", *DB_KEYWORDS),
-    "redis": ("redis", "cache"),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "airflow": ("airflow", "dag"),
-    "kafka": ("kafka",),
-    "rabbitmq": ("rabbitmq", "amqp"),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch", "elasticsearch"),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack", "better stack"),
-    "azure": ("azure",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-}
+SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
 
 
 def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:

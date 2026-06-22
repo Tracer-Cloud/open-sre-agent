@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.utils.alert_source import resolve_alert_source
+from app.agent.utils.alert_source import (
+    ALERT_SOURCE_TO_TOOL_SOURCES,
+    SECONDARY_TOOL_SOURCES,
+    SOURCE_ALIASES,
+    resolve_alert_source,
+)
 from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
@@ -63,88 +68,11 @@ Severity: {severity}
 {tools_by_source}
 """
 
-# Maps alert_source values to integration source keys (tool `.source` field).
-# An alert source can map to multiple integration sources.
-_ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
-    "grafana": ["grafana"],
-    "datadog": ["datadog"],
-    "cloudwatch": ["cloudwatch", "ec2", "rds", "cloudtrail"],
-    "eks": ["eks", "ec2", "cloudtrail"],
-    "alertmanager": ["eks", "cloudwatch", "grafana", "cloudtrail"],
-    "sentry": ["sentry"],
-    "honeycomb": ["honeycomb"],
-    "coralogix": ["coralogix"],
-    "airflow": ["airflow", "tracer_web"],
-    "hermes": ["hermes"],
-    "kafka": ["kafka"],
-    "postgresql": ["postgresql"],
-    "mysql": ["mysql"],
-    "mariadb": ["mariadb"],
-    "mongodb": ["mongodb", "mongodb_atlas"],
-    "redis": ["redis"],
-    "snowflake": ["snowflake"],
-    "clickhouse": ["clickhouse"],
-    "dagster": ["dagster"],
-    "rabbitmq": ["rabbitmq"],
-    "supabase": ["supabase"],
-    "opensearch": ["opensearch"],
-    "openobserve": ["openobserve"],
-    "betterstack": ["betterstack"],
-    "azure": ["azure", "azure_sql"],
-    "github": ["github"],
-    "gitlab": ["gitlab"],
-    "bitbucket": ["bitbucket"],
-    "argocd": ["eks"],
-    "splunk": ["splunk"],
-    "signoz": ["signoz"],
-    "jenkins": ["jenkins"],
+_ALERT_SOURCE_TO_TOOL_SOURCES = {
+    source: list(tool_sources) for source, tool_sources in ALERT_SOURCE_TO_TOOL_SOURCES.items()
 }
-
-# Generic fallback sources — always secondary, never primary.
-_SECONDARY_SOURCES = {"knowledge", "openclaw", "google_docs"}
-
-# Shared keywords that signal a relational/datastore problem regardless of which
-# specific database integration is connected.
-_DB_KEYWORDS: tuple[str, ...] = ("database", "db connection", "connection pool")
-
-# Keyword aliases used to match alert content to an integration source when the
-# alert_source itself does not map to a primary integration (generic/unknown
-# alerts). Each source's own name is always included implicitly. Kept small and
-# focused — extend deliberately rather than exhaustively.
-_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
-    "datadog": ("datadog", "datadoghq", "dd monitor"),
-    "sentry": ("sentry", "exception", "stack trace", "stacktrace", "error tracking"),
-    "vercel": ("vercel", "deploy", "deployment", "build failed"),
-    "github": ("github", "commit", "pull request", "merge"),
-    "gitlab": ("gitlab", "merge request"),
-    "grafana": ("grafana", "loki", "mimir", "prometheus"),
-    "honeycomb": ("honeycomb", "span", "trace latency"),
-    "coralogix": ("coralogix",),
-    "splunk": ("splunk",),
-    "cloudwatch": ("cloudwatch", "lambda", "log group"),
-    "eks": ("eks", "kubernetes", "k8s", "kubectl", "pod"),
-    "ec2": ("ec2", "instance"),
-    "rds": ("rds", "aurora", *_DB_KEYWORDS),
-    "postgresql": ("postgres", "postgresql", "psql", *_DB_KEYWORDS),
-    "mysql": ("mysql", *_DB_KEYWORDS),
-    "mariadb": ("mariadb", *_DB_KEYWORDS),
-    "mongodb": ("mongodb", "mongo", *_DB_KEYWORDS),
-    "redis": ("redis", "cache"),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "airflow": ("airflow", "dag"),
-    "kafka": ("kafka",),
-    "rabbitmq": ("rabbitmq", "amqp"),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch", "elasticsearch"),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack", "better stack"),
-    "azure": ("azure",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-}
+_SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
+_SOURCE_ALIASES = SOURCE_ALIASES
 
 _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
     "One of database / infrastructure / code_bug / configuration / network / performance / "

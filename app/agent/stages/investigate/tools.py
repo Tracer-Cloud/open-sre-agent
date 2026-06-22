@@ -5,44 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from app.agent.tool_loop import _public_tool_input
-from app.agent.utils.alert_source import resolve_alert_source
+from app.agent.utils.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES, resolve_alert_source
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.utils.tool_trace import redact_sensitive
 
-# Maps alert_source → tool source keys. Tools from these sources are auto-called
-# before the LLM loop starts when the alert source is known.
-_ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, list[str]] = {
-    "grafana": ["grafana"],
-    "datadog": ["datadog"],
-    "cloudwatch": ["cloudwatch"],
-    "eks": ["eks"],
-    "alertmanager": ["grafana", "cloudwatch"],
-    "sentry": ["sentry"],
-    "honeycomb": ["honeycomb"],
-    "coralogix": ["coralogix"],
-    "airflow": ["airflow"],
-    "hermes": ["hermes"],
-    "kafka": ["kafka"],
-    "postgresql": ["postgresql"],
-    "mysql": ["mysql"],
-    "mariadb": ["mariadb"],
-    "mongodb": ["mongodb", "mongodb_atlas"],
-    "redis": ["redis"],
-    "snowflake": ["snowflake"],
-    "clickhouse": ["clickhouse"],
-    "dagster": ["dagster"],
-    "rabbitmq": ["rabbitmq"],
-    "supabase": ["supabase"],
-    "opensearch": ["opensearch"],
-    "openobserve": ["openobserve"],
-    "betterstack": ["betterstack"],
-    "azure": ["azure", "azure_sql"],
-    "splunk": ["splunk"],
-    "signoz": ["signoz"],
-    "jenkins": ["jenkins"],
-    "tempo": ["tempo"],
+_ALERT_SOURCE_TO_TOOL_SOURCES = {
+    source: list(tool_sources) for source, tool_sources in ALERT_SOURCE_TO_SEED_TOOL_SOURCES.items()
 }
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
