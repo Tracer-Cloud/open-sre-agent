@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.agent.nodes.diagnose import InvestigationResult
 from app.agent.nodes.investigate import (
     ConnectedInvestigationAgent,
 )
@@ -16,7 +17,6 @@ from app.agent.nodes.investigate.loop import (
     tool_call_signature,
 )
 from app.agent.nodes.investigate.tools import availability_view
-from app.agent.result import InvestigationResult
 from app.agent.tool_loop import (
     _build_synthetic_assistant_tool_call_msg,
     _context_budget_ceiling_for_model,

@@ -158,7 +158,7 @@ def run_connected_investigation(
     from app.agent.correlation.node import node_correlate_upstream
     from app.agent.nodes.extract_alert import extract_alert
     from app.agent.nodes.investigate import ConnectedInvestigationAgent
-    from app.delivery import deliver
+    from app.agent.nodes.publish_findings import deliver
     from app.utils.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent

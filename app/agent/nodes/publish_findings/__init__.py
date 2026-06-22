@@ -1,10 +1,11 @@
-"""Delivery dispatcher — sends investigation results to all configured channels."""
+"""Publish findings node — format and deliver investigation reports."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
+from app.agent.nodes.publish_findings.node import generate_report, node_publish_findings
 from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)
@@ -13,13 +14,8 @@ logger = logging.getLogger(__name__)
 def deliver(state: InvestigationState) -> dict[str, Any]:
     """Format and deliver the investigation report to all configured channels.
 
-    Delegates to the existing generate_report implementation which handles
-    Slack, Discord, Telegram, GitLab, and terminal rendering.
-
     Returns state updates with slack_message and report fields.
     """
-    from app.delivery.publish_findings.node import generate_report
-
     state_dict = dict(state)
 
     if state_dict.get("opensre_evaluate"):
@@ -46,3 +42,10 @@ def deliver(state: InvestigationState) -> dict[str, Any]:
             }
 
     return generate_report(state)
+
+
+__all__ = [
+    "deliver",
+    "generate_report",
+    "node_publish_findings",
+]

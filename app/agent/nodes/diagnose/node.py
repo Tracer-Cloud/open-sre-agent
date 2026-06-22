@@ -1,4 +1,4 @@
-"""Structured investigation result — parsed from the agent's final LLM response."""
+"""Diagnose node — structured investigation result parsed from the agent's final LLM response."""
 
 from __future__ import annotations
 

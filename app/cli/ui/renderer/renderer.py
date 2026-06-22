@@ -555,7 +555,7 @@ class StreamRenderer:
                 _print_info("No events received from the remote agent.")
             return
 
-        from app.delivery.publish_findings.renderers.terminal import render_report as _render
+        from app.agent.nodes.publish_findings.renderers.terminal import render_report as _render
 
         _render(slack_message, root_cause_category=root_cause_category)
 

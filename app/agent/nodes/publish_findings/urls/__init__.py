@@ -1,6 +1,6 @@
 """AWS console URL builders."""
 
-from app.delivery.publish_findings.urls.aws import (
+from app.agent.nodes.publish_findings.urls.aws import (
     build_cloudwatch_url,
     build_lambda_console_url,
     build_s3_console_url,

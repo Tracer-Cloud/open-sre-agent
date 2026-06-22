@@ -24,7 +24,7 @@ from app.agent.nodes.investigate.tools import (
     tool_event_payload,
 )
 from app.agent.prompt import build_system_prompt, format_alert_context
-from app.agent.result import parse_diagnosis
+from app.agent.nodes.diagnose import parse_diagnosis
 from app.agent.tool_loop import (
     AgentEventCallback,
     _build_assistant_msg,

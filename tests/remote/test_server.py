@@ -907,7 +907,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.generate_report",
+        "app.agent.nodes.publish_findings.node.generate_report",
         lambda _state: {
             "root_cause": "RDS CPU spike",
             "report": "Correlation attached",

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.agent.llm_invoke_errors import LLMInvokeFailure
-from app.agent.result import InvestigationResult
+from app.agent.nodes.diagnose import InvestigationResult
 from app.services.agent_llm_client import ToolCall
 from app.state.evidence import EvidenceEntry
 

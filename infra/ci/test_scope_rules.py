@@ -47,7 +47,7 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/remote/", ("tests/remote/",)),
     PathRule("app/sandbox/", ("tests/sandbox/",)),
     PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
-    PathRule("app/delivery/", ("tests/delivery/",)),
+    PathRule("app/agent/nodes/publish_findings/", ("tests/delivery/",)),
     PathRule("app/auth/", ("tests/app/auth/",)),
     PathRule("app/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/webapp.py", ("tests/test_webapp.py",)),
