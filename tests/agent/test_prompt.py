@@ -14,6 +14,14 @@ def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> N
     assert "agent_hang" not in prompt
 
 
+def test_build_system_prompt_includes_dependency_traversal_rule() -> None:
+    prompt = build_system_prompt({"alert_source": "grafana"})
+
+    assert "Dependency traversal (connection failures only)" in prompt
+    assert "connection refused" in prompt
+    assert "does not bias localization" in prompt
+
+
 def test_build_system_prompt_hermes_includes_hermes_taxonomy_only() -> None:
     prompt = build_system_prompt({"alert_source": "hermes"})
 

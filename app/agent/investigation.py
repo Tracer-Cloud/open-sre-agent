@@ -23,6 +23,7 @@ from app.agent.tool_loop import (
     _summarise,
     _tool_source,
 )
+from app.analytics.cli import capture_diagnosis_category_mismatch
 from app.cli.interactive_shell.ui.output import debug_print, get_tracker
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.services.agent_llm_client import ToolCall, get_agent_llm
@@ -439,8 +440,13 @@ class ConnectedInvestigationAgent:
                 "root_cause": result.root_cause,
                 "validity_score": result.validity_score,
                 "root_cause_category": result.root_cause_category,
+                "category_text_mismatch": result.category_text_mismatch,
             },
         )
+        if result.category_text_mismatch:
+            capture_diagnosis_category_mismatch(
+                root_cause_category=result.root_cause_category,
+            )
 
         tracker.complete(
             "investigation_agent",

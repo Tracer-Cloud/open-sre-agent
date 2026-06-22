@@ -8,6 +8,7 @@ from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
+from app.agent.category_alignment import apply_category_alignment_adjustments
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,
@@ -30,6 +31,7 @@ class InvestigationResult:
     evidence_entries: list[dict] = field(default_factory=list)
     agent_messages: list[dict] = field(default_factory=list)
     investigation_recommendations: list[str] = field(default_factory=list)
+    category_text_mismatch: bool = False
 
     @classmethod
     def unknown(cls, alert_name: str = "Unknown alert") -> InvestigationResult:
@@ -177,6 +179,21 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
     def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
         return [{"claim": c, "validation_status": status} for c in claims if c]
 
+    validity_score, investigation_recommendations, category_text_mismatch = (
+        apply_category_alignment_adjustments(
+            root_cause=schema["root_cause"],
+            root_cause_category=schema["root_cause_category"],
+            validity_score=schema["validity_score"],
+            investigation_recommendations=[],
+        )
+    )
+    if category_text_mismatch:
+        logger.warning(
+            "Root cause category may not match explanation: category=%s text=%r",
+            schema["root_cause_category"],
+            schema["root_cause"][:200],
+        )
+
     return InvestigationResult(
         root_cause=schema["root_cause"],
         root_cause_category=schema["root_cause_category"],
@@ -184,7 +201,9 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
         non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
         remediation_steps=schema["remediation_steps"],
-        validity_score=schema["validity_score"],
+        validity_score=validity_score,
+        investigation_recommendations=investigation_recommendations,
+        category_text_mismatch=category_text_mismatch,
     )
 
 
