@@ -201,3 +201,29 @@ def test_axis2_with_json_emits_structured_payload_with_both_axes(
     assert len(payload["axis2"]) == 1
     assert payload["axis1"][0]["scenario_id"] == fixture.scenario_id
     assert payload["axis2"][0]["scenario_id"] == fixture.scenario_id
+
+
+def test_main_rejects_ollama_before_synthetic_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+
+    exit_code = run_suite_module.main(
+        [
+            "--scenario",
+            "001-replication-lag",
+            "--axis2",
+            "--observations-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "RDS PostgreSQL synthetic tests are not supported with LLM_PROVIDER=ollama" in (
+        captured.err
+    )
+    assert "Local Ollama models" in captured.err

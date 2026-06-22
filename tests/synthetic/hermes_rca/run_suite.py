@@ -16,6 +16,10 @@ from tests.synthetic.hermes_rca.scenario_loader import (
     load_all_scenarios,
     load_scenario,
 )
+from tests.synthetic.llm_provider_preflight import (
+    UnsupportedSyntheticLLMProviderError,
+    validate_synthetic_llm_provider,
+)
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
 
 HISTORY_DIR = SUITE_DIR / "benchmark_history"
@@ -212,6 +216,15 @@ def main(argv: list[str] | None = None) -> int:
         for fixture in scenarios:
             results.append(_offline_result(fixture))
     else:
+        try:
+            validate_synthetic_llm_provider(
+                suite_name="Hermes RCA",
+                offline_hint="--offline-only",
+            )
+        except UnsupportedSyntheticLLMProviderError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
         if not has_credentials_for_active_llm_provider():
             print(
                 "Skipping LLM-backed Hermes RCA run: no credentials for active provider. "

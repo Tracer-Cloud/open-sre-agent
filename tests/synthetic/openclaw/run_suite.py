@@ -25,6 +25,10 @@ import textwrap
 import time
 from typing import Any
 
+from tests.synthetic.llm_provider_preflight import (
+    UnsupportedSyntheticLLMProviderError,
+    validate_synthetic_llm_provider,
+)
 from tests.synthetic.mock_openclaw_backend.backend import FixtureOpenClawBackend
 from tests.synthetic.openclaw.scenario_loader import (
     OpenClawScenario,
@@ -131,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args, _ = parser.parse_known_args(argv)
     output_json: bool = bool(args.output_json)
+
+    try:
+        validate_synthetic_llm_provider(suite_name="OpenClaw")
+    except UnsupportedSyntheticLLMProviderError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     if args.scenario:
         try:
