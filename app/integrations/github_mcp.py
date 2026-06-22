@@ -798,7 +798,7 @@ def _github_mcp_verify_orgs_from_env() -> tuple[str, ...]:
 
 def _is_recoverable_repo_probe_error(
     tool_name: str,
-    args: dict[str, Any],
+    _args: dict[str, Any],
     detail: str,
 ) -> bool:
     """True when a failed repo probe should try another query or softer fallback.
@@ -811,12 +811,11 @@ def _is_recoverable_repo_probe_error(
 
     if tool_name == "search_repositories":
         lowered = detail.lower()
-        if "422" in lowered or "validation failed" in lowered:
-            return True
-        if "cannot be searched" in lowered:
-            return True
-        query = str(args.get("query") or "").strip().lower()
-        return query.startswith("user:") or query.startswith("org:")
+        return (
+            "422" in lowered
+            or "validation failed" in lowered
+            or "cannot be searched" in lowered
+        )
     return False
 
 

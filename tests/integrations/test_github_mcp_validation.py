@@ -588,6 +588,67 @@ def test_validate_github_mcp_config_auth_only_when_search_fails_without_profile_
     assert "authenticated; repo probes inconclusive" in result.detail
 
 
+def test_is_recoverable_repo_probe_error_only_matches_search_validation_failures() -> None:
+    assert github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "user:octocat"},
+        "422 Validation Failed",
+    )
+    assert github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "org:Tracer-Cloud"},
+        "The listed users and repositories cannot be searched",
+    )
+    assert not github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "user:octocat"},
+        "403 Forbidden",
+    )
+    assert not github_mcp_module._is_recoverable_repo_probe_error(
+        "list_repositories",
+        {},
+        "403 Forbidden",
+    )
+
+
+def test_validate_github_mcp_config_fails_when_user_search_returns_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev3"}, "text": ""}
+        if name == "search_repositories":
+            assert args == {"query": "user:dev3"}
+            return {"is_error": True, "text": "403 Forbidden", "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is False
+    assert result.failure_category == "repository_access"
+    assert "403 Forbidden" in result.detail
+    assert "repository access check failed" in result.detail
+
+
 def test_validate_github_mcp_config_succeeds_from_get_me_profile_without_list_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
