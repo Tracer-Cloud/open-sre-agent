@@ -43,13 +43,13 @@ def _raw_help_sections() -> list[HelpSection]:
     from app.cli.interactive_shell.command_registry.cli_parity import (
         COMMANDS as PARITY_COMMANDS,
     )
+    from app.cli.interactive_shell.command_registry.diagnostics_cmds import (
+        COMMANDS as DIAGNOSTICS_CMDS,
+    )
     from app.cli.interactive_shell.command_registry.integrations import COMMANDS as INT_CMDS
     from app.cli.interactive_shell.command_registry.investigation import COMMANDS as INV_CMDS
     from app.cli.interactive_shell.command_registry.model import COMMANDS as MODEL_CMDS
     from app.cli.interactive_shell.command_registry.privacy_cmds import COMMANDS as PRIVACY_CMDS
-    from app.cli.interactive_shell.command_registry.diagnostics_cmds import (
-        COMMANDS as DIAGNOSTICS_CMDS,
-    )
     from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_CMDS
     from app.cli.interactive_shell.command_registry.settings_cmds import (
         COMMANDS as SETTINGS_CMDS,
