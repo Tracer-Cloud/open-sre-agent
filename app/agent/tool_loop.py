@@ -7,7 +7,7 @@ budget enforcement that keeps long loops under each model's prompt limit.
 
 Two consumers build on top of it:
 
-* :mod:`app.agent.investigation` — the investigation agent layers evidence
+* :mod:`app.agent.nodes.investigate` — the investigation agent layers evidence
   collection, seed calls, and diagnosis parsing on top of these helpers and its
   own loop orchestration.
 * the interactive shell's tool-gathering pass — uses :func:`run_tool_calling_loop`
@@ -549,7 +549,7 @@ def run_tool_calling_loop(
 ) -> ToolLoopResult:
     """Run a generic think → call-tools → observe loop and return its outcome.
 
-    Unlike :class:`app.agent.investigation.ConnectedInvestigationAgent`, this is
+    Unlike :class:`app.agent.nodes.investigate.ConnectedInvestigationAgent`, this is
     a plain conversational loop: it does not seed tool calls, collect evidence,
     or parse a diagnosis. It exists so non-investigation surfaces (currently the
     interactive shell's tool-gathering pass) can call the *same* registered tools

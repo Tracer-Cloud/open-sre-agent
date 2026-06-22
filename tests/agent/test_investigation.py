@@ -8,12 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.investigation import (
+from app.agent.nodes.investigate import (
     ConnectedInvestigationAgent,
-    _availability_view,
-    _duplicate_call_result,
-    _tool_call_signature,
 )
+from app.agent.nodes.investigate.loop import (
+    duplicate_call_result,
+    tool_call_signature,
+)
+from app.agent.nodes.investigate.tools import availability_view
 from app.agent.result import InvestigationResult
 from app.agent.tool_loop import (
     _build_synthetic_assistant_tool_call_msg,
@@ -30,7 +32,7 @@ from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
 def test_availability_view_marks_configured_integrations_without_mutating_state() -> None:
     resolved = {"github": {"access_token": "token"}, "_all": [{"service": "github"}]}
 
-    view = _availability_view(resolved)
+    view = availability_view(resolved)
 
     assert view["github"]["connection_verified"] is True
     assert "connection_verified" not in resolved["github"]
@@ -77,8 +79,8 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -109,8 +111,8 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -133,8 +135,8 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -164,8 +166,8 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -201,8 +203,8 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -236,8 +238,8 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -611,8 +613,8 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=mock_tracker),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
         pytest.raises(ValueError, match="_should_accept_conclusion returned"),
     ):
         agent.run(state)
@@ -781,12 +783,12 @@ def test_tool_call_signature_is_argument_order_independent() -> None:
     b = ToolCall(id="2", name="query", input={"window": "1h", "service": "x"})
     c = ToolCall(id="3", name="query", input={"service": "y", "window": "1h"})
 
-    assert _tool_call_signature(a) == _tool_call_signature(b)
-    assert _tool_call_signature(a) != _tool_call_signature(c)
+    assert tool_call_signature(a) == tool_call_signature(b)
+    assert tool_call_signature(a) != tool_call_signature(c)
 
 
 def test_duplicate_call_result_marks_suppression() -> None:
-    result = _duplicate_call_result(ToolCall(id="1", name="list_posthog_tools", input={}))
+    result = duplicate_call_result(ToolCall(id="1", name="list_posthog_tools", input={}))
     assert result["suppressed_duplicate"] is True
     assert result["tool"] == "list_posthog_tools"
     assert "already" in result["note"].lower()
@@ -853,11 +855,11 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch("app.agent.investigation.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.investigation.get_tracker", return_value=MagicMock()),
-        patch("app.agent.investigation._get_available_tools", return_value=tools),
+        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=MagicMock()),
+        patch("app.agent.nodes.investigate.agent.get_available_tools", return_value=tools),
         patch(
-            "app.agent.investigation.parse_diagnosis",
+            "app.agent.nodes.investigate.agent.parse_diagnosis",
             return_value=InvestigationResult(root_cause="done", root_cause_category="unknown"),
         ),
     ):

@@ -143,12 +143,12 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from app.agent.investigation import _get_available_tools
+        from app.agent.nodes.investigate.tools import get_available_tools
         from app.agent.tool_loop import run_tool_calling_loop
         from app.services.agent_llm_client import get_agent_llm
 
         resolved = _resolve_session_integrations(session)
-        tools = _get_available_tools(resolved)
+        tools = get_available_tools(resolved)
         if not tools:
             return None
 

@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
-import app.agent.investigation as investigation
+import app.agent.nodes.investigate.tools as investigate_tools
 import app.agent.tool_loop as tool_loop
 import app.services.agent_llm_client as agent_llm_client
 from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
@@ -34,7 +34,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     session = ReplSession()
     session.resolved_integrations_cache = {}
 
-    monkeypatch.setattr(investigation, "_get_available_tools", lambda _resolved: [])
+    monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
 
     assert gather_tool_evidence("any question", session, _console()) is None
 
@@ -44,8 +44,8 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigation,
-        "_get_available_tools",
+        investigate_tools,
+        "get_available_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
@@ -77,8 +77,8 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigation,
-        "_get_available_tools",
+        investigate_tools,
+        "get_available_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
@@ -96,8 +96,8 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
     session.resolved_integrations_cache = {}
 
     monkeypatch.setattr(
-        investigation,
-        "_get_available_tools",
+        investigate_tools,
+        "get_available_tools",
         lambda _resolved: [_DummyTool("search_github_issues")],
     )
 

@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
+from app.agent.nodes.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
 from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
 from app.integrations import dagster as dagster_integration
 from app.services.dagster import DagsterClient

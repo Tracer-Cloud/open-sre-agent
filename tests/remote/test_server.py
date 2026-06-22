@@ -862,7 +862,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.extract.extract_alert",
+        "app.agent.nodes.extract_alert.extract_alert",
         lambda _state: {
             "raw_alert": {
                 "alert_name": "PayloadAlert",
@@ -880,7 +880,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.investigation.ConnectedInvestigationAgent.run",
+        "app.agent.nodes.investigate.agent.ConnectedInvestigationAgent.run",
         fake_investigation_run,
     )
 

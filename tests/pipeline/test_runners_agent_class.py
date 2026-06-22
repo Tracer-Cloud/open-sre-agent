@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-from app.agent.investigation import ConnectedInvestigationAgent
+from app.agent.nodes.investigate import ConnectedInvestigationAgent
 
 
 class _SentinelAgent(ConnectedInvestigationAgent):
@@ -59,7 +59,7 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     # test focuses on the agent_class threading specifically.
     with (
         patch("app.agent.context.resolve_integrations", return_value={}),
-        patch("app.agent.extract.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
     ):
@@ -79,9 +79,9 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
     state = make_initial_state(raw_alert="alert text")
     with (
         patch("app.agent.context.resolve_integrations", return_value={}),
-        patch("app.agent.extract.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch(
-            "app.agent.investigation.ConnectedInvestigationAgent.run", return_value={}
+            "app.agent.nodes.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
         ) as mock_run,
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
@@ -104,7 +104,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
 
     with (
         patch("app.agent.context.resolve_integrations", return_value={}),
-        patch("app.agent.extract.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
         patch("app.delivery.deliver", return_value={}),
     ):

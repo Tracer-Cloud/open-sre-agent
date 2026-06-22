@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
     # runner load while still letting static type-checkers validate
     # ``agent_class`` injections.
-    from app.agent.investigation import ConnectedInvestigationAgent
+    from app.agent.nodes.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -217,8 +217,8 @@ async def astream_investigation(
     def _run_pipeline() -> None:
         try:
             from app.agent.context import resolve_integrations
-            from app.agent.extract import extract_alert
-            from app.agent.investigation import ConnectedInvestigationAgent
+            from app.agent.nodes.extract_alert import extract_alert
+            from app.agent.nodes.investigate import ConnectedInvestigationAgent
             from app.delivery.publish_findings.node import generate_report
             from app.pipeline.pipeline import _merge
 

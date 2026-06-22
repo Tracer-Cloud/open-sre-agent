@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent.investigation import ConnectedInvestigationAgent
+from app.agent.nodes.investigate import ConnectedInvestigationAgent
 from app.tools.registered_tool import RegisteredTool
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
