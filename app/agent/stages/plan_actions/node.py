@@ -202,11 +202,11 @@ def _tool_budget(state: dict[str, Any]) -> int:
 def _build_retrieval_controls(
     state: dict[str, Any],
     selected: list[PlannedInvestigationAction],
+    available_tools: list[RegisteredTool] | None = None,
 ) -> RetrievalControlsMap:
-    tools_by_name = {
-        tool.name: tool
-        for tool in _available_investigation_tools(state.get("resolved_integrations") or {})
-    }
+    if available_tools is None:
+        available_tools = _available_investigation_tools(state.get("resolved_integrations") or {})
+    tools_by_name = {tool.name: tool for tool in available_tools}
     intent_by_name: RetrievalControlsMap = {}
     for action in selected:
         tool = tools_by_name.get(action.name)
