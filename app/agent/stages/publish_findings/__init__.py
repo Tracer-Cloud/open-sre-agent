@@ -17,20 +17,6 @@ def deliver(state: InvestigationState) -> dict[str, Any]:
     Returns state updates with slack_message and report fields.
     """
     state_dict = dict(state)
-
-    if state_dict.get("opensre_evaluate"):
-        rubric_value = state_dict.get("opensre_eval_rubric")
-        if isinstance(rubric_value, str) and rubric_value.strip():
-            from app.integrations.opensre.llm_eval_judge import run_opensre_llm_judge
-
-            try:
-                judge_result = run_opensre_llm_judge(
-def deliver(state: InvestigationState) -> dict[str, Any]:
-    """Format and deliver the investigation report to all configured channels.
-
-    Returns state updates with slack_message and report fields.
-    """
-    state_dict = dict(state)
     extra_updates: dict[str, Any] = {}
 
     if state_dict.get("opensre_evaluate"):

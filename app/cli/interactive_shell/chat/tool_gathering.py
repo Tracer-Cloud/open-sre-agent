@@ -29,6 +29,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.agent.utils.alert_source import SECONDARY_TOOL_SOURCES
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM
 
