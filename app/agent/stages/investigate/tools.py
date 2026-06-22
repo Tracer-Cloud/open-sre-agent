@@ -11,7 +11,6 @@ from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.utils.tool_trace import redact_sensitive
 
-
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
 MAX_STAGNANT_ITERATIONS = 2
