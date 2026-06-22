@@ -188,7 +188,12 @@ def _apply_budget(
     fallback = [action for action in scored if action.name in FALLBACK_TOOL_NAMES]
     candidates = positive or fallback
     budget = _tool_budget(state)
-    return candidates[:budget], candidates[budget:]
+    selected = candidates[:budget]
+    excluded_candidates = candidates[budget:]
+    not_candidates = [
+        action for action in scored if action not in positive and action not in fallback
+    ]
+    return selected, excluded_candidates + not_candidates
 
 
 def _tool_budget(state: dict[str, Any]) -> int:
