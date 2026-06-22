@@ -28,8 +28,10 @@ from app.agent.tool_loop import (
     _build_tool_result_messages,
     _context_budget_ceiling_for_model,
     _enforce_context_budget,
+    _messages_for_llm,
     _run_parallel,
     _summarise,
+    _tag_context_message,
     _tool_source,
 )
 from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
@@ -154,6 +156,22 @@ class ConnectedInvestigationAgent:
             seed_msgs = _build_tool_result_messages(llm, seed_calls, seed_results)
 
             seed_assistant_msg = _build_synthetic_assistant_tool_call_msg(llm, seed_calls)
+            seed_tool_names = [tc.name for tc in seed_calls]
+            _tag_context_message(
+                seed_assistant_msg,
+                protected=True,
+                seed=True,
+                iteration=-1,
+                tool_names=seed_tool_names,
+            )
+            for msg in seed_msgs:
+                _tag_context_message(
+                    msg,
+                    protected=True,
+                    seed=True,
+                    iteration=-1,
+                    tool_names=seed_tool_names,
+                )
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
 
@@ -183,7 +201,11 @@ class ConnectedInvestigationAgent:
                 messages, system=system, tools=active_tool_schemas, ceiling=context_ceiling
             )
             try:
-                response = llm.invoke(messages, system=system, tools=active_tool_schemas)
+                response = llm.invoke(
+                    _messages_for_llm(messages),
+                    system=system,
+                    tools=active_tool_schemas,
+                )
 
             except Exception as err:
                 failure = classify_llm_invoke_failure(err)
@@ -246,6 +268,21 @@ class ConnectedInvestigationAgent:
             ]
 
             tool_result_messages = _build_tool_result_messages(llm, response.tool_calls, results)
+            tool_names = [tc.name for tc in response.tool_calls]
+            round_is_duplicate = bool(response.tool_calls) and all(duplicate_flags)
+            _tag_context_message(
+                messages[-1],
+                duplicate=round_is_duplicate,
+                iteration=iteration,
+                tool_names=tool_names,
+            )
+            for msg in tool_result_messages:
+                _tag_context_message(
+                    msg,
+                    duplicate=round_is_duplicate,
+                    iteration=iteration,
+                    tool_names=tool_names,
+                )
             messages.extend(tool_result_messages)
 
             for tc, output, is_dup in zip(response.tool_calls, results, duplicate_flags):

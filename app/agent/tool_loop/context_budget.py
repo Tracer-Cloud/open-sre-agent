@@ -9,7 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Defensive context-window ceiling. Below this we never trim; above this we
-# drop the oldest tool_use/tool_result pair until back under the ceiling.
+# drop low-value tool_use/tool_result pairs until back under the ceiling.
 #
 # CRITICAL: the ceiling MUST be derived from the ACTIVE model's context window,
 # not hardcoded. A previous flat 170k ceiling was tuned for Anthropic's 200k
@@ -66,6 +66,49 @@ _TRUNCATION_SAFETY_TOKENS = 2_000
 # already consume the whole ceiling, we still leave at least this much so the
 # truncated message carries some signal instead of being blanked.
 _TRUNCATION_MIN_TOKENS = 1_000
+_CONTEXT_METADATA_KEY = "_opensre_context"
+
+
+def _tag_context_message(
+    message: dict[str, Any],
+    *,
+    protected: bool = False,
+    duplicate: bool = False,
+    seed: bool = False,
+    iteration: int | None = None,
+    tool_names: list[str] | None = None,
+) -> dict[str, Any]:
+    """Attach private budgeting metadata to a message.
+
+    Provider clients must not see this key; call ``_messages_for_llm`` before
+    invoke. Keeping the metadata alongside the message lets trimming mutate the
+    shared history without maintaining a fragile parallel side table.
+    """
+    message[_CONTEXT_METADATA_KEY] = {
+        "protected": protected,
+        "duplicate": duplicate,
+        "seed": seed,
+        "iteration": iteration,
+        "tool_names": list(tool_names or []),
+    }
+    return message
+
+
+def _messages_for_llm(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return provider-safe message copies without internal budgeting metadata."""
+    return [
+        {key: value for key, value in message.items() if key != _CONTEXT_METADATA_KEY}
+        for message in messages
+    ]
+
+
+def _message_metadata(message: dict[str, Any]) -> dict[str, Any]:
+    metadata = message.get(_CONTEXT_METADATA_KEY)
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _is_protected_message(message: dict[str, Any]) -> bool:
+    return bool(_message_metadata(message).get("protected"))
 
 
 def _context_budget_ceiling_for_model(model: str | None) -> int:
@@ -180,6 +223,92 @@ def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _tool_exchange_bounds(messages: list[dict[str, Any]], index: int) -> tuple[int, int] | None:
+    """Return ``[start, end)`` bounds for a tool-call exchange starting at index."""
+    message = messages[index]
+    if message.get("role") != "assistant":
+        return None
+
+    content = message.get("content")
+    if isinstance(content, list):
+        has_tool_use = any(
+            isinstance(block, dict) and block.get("type") == "tool_use" for block in content
+        )
+        if has_tool_use:
+            return index, min(index + 2, len(messages))
+
+    tool_calls = message.get("tool_calls")
+    if tool_calls and isinstance(tool_calls, list):
+        call_ids = {tc.get("id") for tc in tool_calls if isinstance(tc, dict) and tc.get("id")}
+        end = index + 1
+        while end < len(messages):
+            follower = messages[end]
+            if follower.get("role") == "tool" and follower.get("tool_call_id") in call_ids:
+                end += 1
+            else:
+                break
+        return index, end
+
+    return None
+
+
+def _exchange_metadata(messages: list[dict[str, Any]], start: int, end: int) -> dict[str, Any]:
+    merged: dict[str, Any] = {
+        "protected": False,
+        "duplicate": False,
+        "seed": False,
+        "iteration": None,
+        "tool_names": [],
+    }
+    tool_names: list[str] = []
+    for message in messages[start:end]:
+        metadata = _message_metadata(message)
+        merged["protected"] = bool(merged["protected"] or metadata.get("protected"))
+        merged["duplicate"] = bool(merged["duplicate"] or metadata.get("duplicate"))
+        merged["seed"] = bool(merged["seed"] or metadata.get("seed"))
+        if merged["iteration"] is None and metadata.get("iteration") is not None:
+            merged["iteration"] = metadata["iteration"]
+        raw_tool_names = metadata.get("tool_names")
+        if isinstance(raw_tool_names, list):
+            tool_names.extend(str(name) for name in raw_tool_names)
+    merged["tool_names"] = tool_names
+    return merged
+
+
+def _trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> str | None:
+    """Drop the least valuable removable tool exchange.
+
+    Seed evidence is protected from whole-exchange eviction. Among removable
+    exchanges, duplicate/suppressed observations go first, then the largest
+    remaining exchange. Oldest order is only a tie-breaker.
+    """
+    candidates: list[tuple[tuple[int, int, int], int, int, dict[str, Any]]] = []
+    for index in range(len(messages)):
+        bounds = _tool_exchange_bounds(messages, index)
+        if bounds is None:
+            continue
+        start, end = bounds
+        metadata = _exchange_metadata(messages, start, end)
+        if metadata.get("protected"):
+            continue
+        exchange_tokens = _estimate_message_tokens(messages[start:end])
+        score = (
+            0 if metadata.get("duplicate") else 1,
+            -exchange_tokens,
+            start,
+        )
+        candidates.append((score, start, end, metadata))
+
+    if not candidates:
+        return None
+
+    _score, start, end, metadata = min(candidates, key=lambda item: item[0])
+    del messages[start:end]
+    if metadata.get("duplicate"):
+        return "duplicate"
+    return "low_value"
+
+
 def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
     """Truncate ``text`` to ``max_chars`` (inclusive of the marker). No-op if it fits."""
     if len(text) <= max_chars:
@@ -273,9 +402,9 @@ def _truncate_largest_message(
     """
     order = sorted(
         range(len(messages)),
-        key=lambda i: _estimate_message_tokens([messages[i]]),
-        reverse=True,
+        key=lambda i: (_is_protected_message(messages[i]), -_estimate_message_tokens([messages[i]])),
     )
+    truncated_protected = False
     for idx in order:
         overhead = _estimate_message_tokens(
             [m for i, m in enumerate(messages) if i != idx], system=system, tools=tools
@@ -285,6 +414,13 @@ def _truncate_largest_message(
         new_content, changed = _truncate_content(messages[idx].get("content"), max_chars)
         if changed:
             messages[idx]["content"] = new_content
+            truncated_protected = _is_protected_message(messages[idx])
+            if truncated_protected:
+                logger.warning(
+                    "[agent] truncated protected seed evidence to fit context budget "
+                    "(ceiling=%d)",
+                    ceiling,
+                )
             return True
     return False
 
@@ -296,7 +432,7 @@ def _enforce_context_budget(
     tools: list[dict[str, Any]] | None = None,
     ceiling: int = _TOKEN_BUDGET_CEILING,
 ) -> None:
-    """Trim oldest tool pairs until prompt fits under ``ceiling``.
+    """Trim low-value tool pairs until prompt fits under ``ceiling``.
 
     ``ceiling`` MUST be sized for the active model (see
     ``_context_budget_ceiling_for_model``); the default is the conservative
@@ -306,7 +442,8 @@ def _enforce_context_budget(
     history has pushed the prompt past the model's limit.
     """
     while _estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
-        if not _trim_oldest_tool_pair(messages):
+        trim_reason = _trim_lowest_value_tool_pair(messages)
+        if trim_reason is None:
             # Whole-pair trimming exhausted but still over budget: the remaining
             # base prompt (e.g. an oversized initial alert or other non-tool
             # message) is itself too large. Truncate its payload so the request
@@ -323,6 +460,13 @@ def _enforce_context_budget(
                 "[agent] truncated oversized message to fit context budget (ceiling=%d)", ceiling
             )
             continue
+        if trim_reason == "duplicate":
+            logger.warning(
+                "[agent] trimmed duplicate tool pair to fit context budget (ceiling=%d)",
+                ceiling,
+            )
+            continue
         logger.warning(
-            "[agent] trimmed oldest tool pair to fit context budget (ceiling=%d)", ceiling
+            "[agent] trimmed lowest-value tool pair to fit context budget (ceiling=%d)",
+            ceiling,
         )

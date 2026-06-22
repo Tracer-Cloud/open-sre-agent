@@ -22,7 +22,9 @@ from app.agent.tool_loop import (
     _context_budget_ceiling_for_model,
     _enforce_context_budget,
     _estimate_message_tokens,
+    _messages_for_llm,
     _run_parallel,
+    _tag_context_message,
     _trim_oldest_tool_pair,
 )
 from app.integrations.llm_cli.errors import CLITimeoutError
@@ -596,6 +598,107 @@ def test_enforce_context_budget_noop_when_under_ceiling() -> None:
     assert messages == snapshot
 
 
+def test_messages_for_llm_strips_internal_context_metadata() -> None:
+    message = _tag_context_message(
+        {"role": "user", "content": "seed"},
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_logs"],
+    )
+
+    sanitized = _messages_for_llm([message])
+
+    assert sanitized == [{"role": "user", "content": "seed"}]
+    assert "_opensre_context" in message
+
+
+def test_context_budget_preserves_protected_seed_evidence() -> None:
+    big_payload = "x" * 80_000
+    seed_assistant = _tag_context_message(
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "query_logs", "input": {}}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_logs"],
+    )
+    seed_result = _tag_context_message(
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "seed", "content": "root clue"}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_logs"],
+    )
+    messages = [
+        {"role": "user", "content": "alert"},
+        seed_assistant,
+        seed_result,
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "later", "name": "query_logs", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "later", "content": big_payload}],
+        },
+    ]
+
+    _enforce_context_budget(messages, ceiling=10_000)
+
+    assert any("seed" in json.dumps(message) for message in messages)
+    assert any("root clue" in json.dumps(message) for message in messages)
+    assert all("later" not in json.dumps(message) for message in messages)
+
+
+def test_context_budget_evicts_duplicate_before_larger_unique_pair() -> None:
+    unique_payload = "u" * 30_000
+    duplicate_payload = "d" * 10_000
+    unique_assistant = {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "id": "unique", "name": "query_metrics", "input": {}}],
+    }
+    unique_result = {
+        "role": "user",
+        "content": [{"type": "tool_result", "tool_use_id": "unique", "content": unique_payload}],
+    }
+    duplicate_assistant = _tag_context_message(
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "dup", "name": "query_logs", "input": {}}],
+        },
+        duplicate=True,
+        iteration=1,
+        tool_names=["query_logs"],
+    )
+    duplicate_result = _tag_context_message(
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "dup", "content": duplicate_payload}],
+        },
+        duplicate=True,
+        iteration=1,
+        tool_names=["query_logs"],
+    )
+    messages = [
+        {"role": "user", "content": "alert"},
+        unique_assistant,
+        unique_result,
+        duplicate_assistant,
+        duplicate_result,
+    ]
+
+    _enforce_context_budget(messages, ceiling=17_000)
+
+    assert any("unique" in json.dumps(message) for message in messages)
+    assert all("dup" not in json.dumps(message) for message in messages)
+
+
 # --------------------------------------------------------------------------- #
 # Termination hook — production default + override mechanics                  #
 # --------------------------------------------------------------------------- #
@@ -792,6 +895,51 @@ def test_enforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None
     assert messages[0]["role"] == "user"
     assert len(messages[0]["content"]) < len(big)
     assert messages[0]["content"].endswith(_MARKER)
+
+
+def test_context_budget_truncates_protected_seed_only_as_last_resort() -> None:
+    big_seed = "s" * 100_000
+    seed_assistant = _tag_context_message(
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "query_traces", "input": {}}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_traces"],
+    )
+    seed_result = _tag_context_message(
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "seed", "content": big_seed}],
+        },
+        protected=True,
+        seed=True,
+        iteration=-1,
+        tool_names=["query_traces"],
+    )
+    messages = [
+        {"role": "user", "content": "alert"},
+        seed_assistant,
+        seed_result,
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "later", "name": "query_logs", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "later", "content": "small"}],
+        },
+    ]
+
+    _enforce_context_budget(messages, ceiling=8_000)
+
+    assert all("later" not in json.dumps(message) for message in messages)
+    serialized = json.dumps(messages, ensure_ascii=False)
+    assert "seed" in serialized
+    assert _MARKER in serialized
+    assert _estimate_message_tokens(messages) <= 8_000
 
 
 def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> None:
