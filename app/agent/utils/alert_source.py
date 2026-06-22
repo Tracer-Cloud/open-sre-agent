@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 # Maps alert_source values to integration source keys (tool `.source` field).
@@ -166,7 +167,7 @@ def collect_alert_text(state: dict[str, Any]) -> str:
 
 def relevant_sources_for_alert(
     state: dict[str, Any],
-    candidate_sources: set[str] | list[str],
+    candidate_sources: Iterable[str],
 ) -> list[str]:
     """Select candidate sources relevant to the alert content."""
     candidates = sorted(source for source in candidate_sources if source not in SECONDARY_TOOL_SOURCES)
