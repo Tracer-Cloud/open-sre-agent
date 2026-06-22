@@ -415,6 +415,179 @@ def test_validate_github_mcp_config_uses_search_repositories_when_no_list_tool(
     assert result.repo_access_probe_tool == "search_repositories"
 
 
+def _hosted_tools_with_search() -> list[dict[str, Any]]:
+    tools = [
+        {
+            "name": n,
+            "description": "",
+            "input_schema": {"type": "object", "properties": {}},
+        }
+        for n in (
+            "get_file_contents",
+            "get_me",
+            "get_repository_tree",
+            "list_commits",
+            "search_code",
+        )
+    ]
+    tools.append(
+        {
+            "name": "search_repositories",
+            "description": "",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        }
+    )
+    return tools
+
+
+def test_validate_github_mcp_config_falls_back_to_get_me_when_user_search_422(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Org-centric users often get 422 on ``user:<login>`` even with valid org access."""
+
+    tools = _hosted_tools_with_search()
+    search_422 = (
+        "422 Validation Failed "
+        "[{Resource:Search Field:q Code:invalid Message:The listed users and repositories "
+        "cannot be searched either because the resources do not exist or you do not have "
+        "permission to view them.}]"
+    )
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {
+                "is_error": False,
+                "structured_content": {
+                    "login": "larsspinetta12",
+                    "details": {"public_repos": 0, "total_private_repos": 0},
+                },
+                "text": "",
+            }
+        if name == "search_repositories":
+            assert args == {"query": "user:larsspinetta12"}
+            return {"is_error": True, "text": search_422, "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.authenticated_user == "larsspinetta12"
+    assert result.repo_access_count == 0
+    assert "get_me profile" in result.detail
+    assert "search_repositories" in result.detail
+
+
+def test_validate_github_mcp_config_tries_org_search_after_user_search_422(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+    search_422 = "422 Validation Failed"
+    calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        calls.append((name, args))
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev1"}, "text": ""}
+        if name == "search_repositories":
+            query = str((args or {}).get("query") or "")
+            if query == "user:dev1":
+                return {"is_error": True, "text": search_422, "structured_content": None}
+            if query == "org:Tracer-Cloud":
+                return {
+                    "is_error": False,
+                    "structured_content": {
+                        "items": [{"full_name": "Tracer-Cloud/opensre", "private": True}]
+                    },
+                    "text": "",
+                }
+            raise AssertionError(f"unexpected search query {query!r}")
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setenv("OPENSRE_GITHUB_MCP_VERIFY_ORGS", "Tracer-Cloud")
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.repo_access_samples == ("Tracer-Cloud/opensre",)
+    assert result.repo_access_probe_tool == "search_repositories"
+    assert calls.count(("search_repositories", {"query": "user:dev1"})) == 1
+    assert calls.count(("search_repositories", {"query": "org:Tracer-Cloud"})) == 1
+
+
+def test_validate_github_mcp_config_auth_only_when_search_fails_without_profile_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev2"}, "text": ""}
+        if name == "search_repositories":
+            return {"is_error": True, "text": "422 Validation Failed", "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.authenticated_user == "dev2"
+    assert result.repo_access_count is None
+    assert "authenticated; repo probes inconclusive" in result.detail
+
+
 def test_validate_github_mcp_config_succeeds_from_get_me_profile_without_list_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -745,14 +745,18 @@ def _repo_visibility_counts_from_get_me_profile(
         details = obj.get("details") or obj.get("Details")
         if not isinstance(details, dict):
             return None, None
-        pub = details.get("public_repos") or details.get("publicRepos")
-        priv = details.get("total_private_repos") or details.get("totalPrivateRepos")
+        pub_raw = details.get("public_repos")
+        if pub_raw is None:
+            pub_raw = details.get("publicRepos")
+        priv_raw = details.get("total_private_repos")
+        if priv_raw is None:
+            priv_raw = details.get("totalPrivateRepos")
         try:
-            public_n = int(pub) if pub is not None else None
+            public_n = int(pub_raw) if pub_raw is not None else None
         except (TypeError, ValueError):
             public_n = None
         try:
-            private_n = int(priv) if priv is not None else None
+            private_n = int(priv_raw) if priv_raw is not None else None
         except (TypeError, ValueError):
             private_n = None
         return public_n, private_n
@@ -774,6 +778,149 @@ def _repo_counts_from_get_me_profile(structured: dict[str, Any], text: str) -> i
     if pub is None and priv is None:
         return None
     return int(pub or 0) + int(priv or 0)
+
+
+def _github_mcp_verify_orgs_from_env() -> tuple[str, ...]:
+    """Optional org logins to probe via ``search_repositories org:<login>`` (comma-separated env)."""
+
+    raw = os.getenv("OPENSRE_GITHUB_MCP_VERIFY_ORGS", "").strip()
+    if not raw:
+        return ()
+    orgs: list[str] = []
+    seen: set[str] = set()
+    for part in raw.split(","):
+        org = part.strip()
+        if org and org.lower() not in seen:
+            seen.add(org.lower())
+            orgs.append(org)
+    return tuple(orgs)
+
+
+def _is_recoverable_repo_probe_error(
+    tool_name: str,
+    args: dict[str, Any],
+    detail: str,
+) -> bool:
+    """True when a failed repo probe should try another query or softer fallback.
+
+    Hosted MCP often validates via ``search_repositories user:<login>``. That query
+    fails with HTTP 422 when the user has no personally-owned repos (common for
+    org-centric accounts) even though org repo access is fine — those failures are
+    recoverable. Hard permission errors from listing tools (e.g. 403) are not.
+    """
+
+    if tool_name == "search_repositories":
+        lowered = detail.lower()
+        if "422" in lowered or "validation failed" in lowered:
+            return True
+        if "cannot be searched" in lowered:
+            return True
+        query = str(args.get("query") or "").strip().lower()
+        return query.startswith("user:") or query.startswith("org:")
+    return False
+
+
+def _validation_result_from_get_me_profile_counts(
+    *,
+    user_name: str,
+    tool_names: tuple[str, ...],
+    structured: dict[str, Any],
+    me_text: str,
+    profile_pub: int | None,
+    profile_priv: int | None,
+    note: str,
+) -> GitHubMCPValidationResult | None:
+    profile_count = _repo_counts_from_get_me_profile(structured, me_text)
+    if profile_count is None:
+        return None
+    scope_me = (user_name,) if user_name else ()
+    success_detail = (
+        f"OK @{user_name or 'unknown'}; repos={profile_count}; "
+        f"owners={','.join(scope_me) if scope_me else '-'}; "
+        f"examples=-; mcp_tools={len(tool_names)} | {note}"
+    )
+    return GitHubMCPValidationResult(
+        ok=True,
+        detail=success_detail,
+        tool_names=tool_names,
+        authenticated_user=user_name,
+        repo_access_count=profile_count,
+        repo_access_scope_owners=scope_me,
+        repo_access_samples=(),
+        profile_public_repos=profile_pub,
+        profile_private_repos=profile_priv,
+    )
+
+
+def _validation_result_authenticated_without_repo_samples(
+    *,
+    user_name: str,
+    tool_names: tuple[str, ...],
+    profile_pub: int | None,
+    profile_priv: int | None,
+    note: str,
+) -> GitHubMCPValidationResult:
+    who = user_name or "unknown"
+    success_detail = (
+        f"OK @{who}; repos=-; owners={who if user_name else '-'}; examples=-; "
+        f"mcp_tools={len(tool_names)} | {note}"
+    )
+    scope_me = (user_name,) if user_name else ()
+    return GitHubMCPValidationResult(
+        ok=True,
+        detail=success_detail,
+        tool_names=tool_names,
+        authenticated_user=user_name,
+        repo_access_count=None,
+        repo_access_scope_owners=scope_me,
+        repo_access_samples=(),
+        profile_public_repos=profile_pub,
+        profile_private_repos=profile_priv,
+    )
+
+
+def _validation_success_from_repo_probe_result(
+    *,
+    user_name: str,
+    tool_names: tuple[str, ...],
+    repo_tool: str,
+    list_result: dict[str, Any],
+    repo_visibility: GitHubMcpRepoVisibilityFilter,
+    profile_pub: int | None,
+    profile_priv: int | None,
+) -> GitHubMCPValidationResult:
+    limit = _repo_probe_capture_limit()
+    rows_all = _repo_probe_rows_from_tool_result(list_result)
+    rows_filtered = _filter_repo_rows(rows_all, visibility=repo_visibility)
+    all_names = [r.full_name for r in rows_filtered]
+    repo_count = len(all_names)
+    samples_rows = tuple(rows_filtered[:limit])
+    samples = tuple(r.full_name for r in samples_rows)
+    scope = _owners_from_repo_full_names(all_names)
+    suffix = ""
+    if not all_names:
+        suffix = (
+            f" | listing had no parseable repos ({repo_tool} empty or unexpected response shape)"
+        )
+    success_detail = (
+        f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={','.join(scope) if scope else '-'}; "
+        f"examples={','.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
+        f"{suffix}"
+    )
+    return GitHubMCPValidationResult(
+        ok=True,
+        detail=success_detail,
+        tool_names=tool_names,
+        authenticated_user=user_name,
+        repo_access_count=repo_count,
+        repo_access_scope_owners=scope,
+        repo_access_samples=samples,
+        repo_access_probe_tool=repo_tool,
+        repo_access_probe_rows=samples_rows,
+        repo_access_probe_limit_applied=limit,
+        profile_public_repos=profile_pub,
+        profile_private_repos=profile_priv,
+    )
 
 
 def _repo_probe_aggregate_hint(rows: Sequence[GitHubMCPRepoProbeRow]) -> str | None:
@@ -886,19 +1033,60 @@ def _repo_probe_order_and_search_fallback(
     return _REPO_PROBE_NO_ARG_TOOLS, True
 
 
+def _iter_repo_access_probe_plans(
+    tools: list[dict[str, Any]],
+    authenticated_login: str,
+    *,
+    view: GitHubMcpRepoView = "auto",
+) -> tuple[tuple[str, dict[str, Any]], ...]:
+    """Ordered repo-access probes: list tools, user search, then optional org searches."""
+
+    by_name = {str(t["name"]): t for t in tools if t.get("name")}
+    ordered, allow_search_fallback = _repo_probe_order_and_search_fallback(view)
+    plans: list[tuple[str, dict[str, Any]]] = []
+    for name in ordered:
+        entry = by_name.get(name)
+        if not entry:
+            continue
+        if _json_schema_allows_empty_object_call(entry.get("input_schema")):
+            plans.append((name, {}))
+    login = (authenticated_login or "").strip()
+    if allow_search_fallback and login and "search_repositories" in by_name:
+        plans.append(("search_repositories", {"query": f"user:{login}"}))
+    if "search_repositories" in by_name:
+        for org in _github_mcp_verify_orgs_from_env():
+            org_plan = ("search_repositories", {"query": f"org:{org}"})
+            if org_plan not in plans:
+                plans.append(org_plan)
+    return tuple(plans)
+
+
 def _repo_probe_attempts(
     tools: list[dict[str, Any]],
     authenticated_login: str,
     *,
     view: GitHubMcpRepoView = "auto",
 ) -> tuple[str, ...]:
+    """Human-readable probe names for errors (includes tools that need arguments)."""
+
     by_name = {str(t["name"]): t for t in tools if t.get("name")}
     ordered, allow_search_fallback = _repo_probe_order_and_search_fallback(view)
-    attempts = tuple(name for name in ordered if name in by_name)
+    attempts = [name for name in ordered if name in by_name]
     login = (authenticated_login or "").strip()
-    if allow_search_fallback and login and "search_repositories" in by_name:
-        return (*attempts, "search_repositories")
-    return attempts
+    if (
+        allow_search_fallback
+        and login
+        and "search_repositories" in by_name
+        and "search_repositories" not in attempts
+    ):
+        attempts.append("search_repositories")
+    if (
+        _github_mcp_verify_orgs_from_env()
+        and "search_repositories" in by_name
+        and "search_repositories" not in attempts
+    ):
+        attempts.append("search_repositories")
+    return tuple(attempts)
 
 
 def _format_repo_probe_attempts(attempts: Sequence[str]) -> str:
@@ -915,21 +1103,51 @@ def _plan_repo_access_probe(
     *,
     view: GitHubMcpRepoView = "auto",
 ) -> tuple[str, dict[str, Any]] | None:
-    """Pick a tool + arguments to sample repo access (hosted MCP shapes differ from local)."""
+    """Pick the first repo-access probe (hosted MCP shapes differ from local)."""
 
-    by_name = {str(t["name"]): t for t in tools if t.get("name")}
-    ordered, allow_search_fallback = _repo_probe_order_and_search_fallback(view)
+    plans = _iter_repo_access_probe_plans(tools, authenticated_login, view=view)
+    return plans[0] if plans else None
 
-    for name in ordered:
-        entry = by_name.get(name)
-        if not entry:
-            continue
-        if _json_schema_allows_empty_object_call(entry.get("input_schema")):
-            return name, {}
-    login = (authenticated_login or "").strip()
-    if allow_search_fallback and login and "search_repositories" in by_name:
-        return "search_repositories", {"query": f"user:{login}"}
-    return None
+
+def _repo_access_probe_fallback_result(
+    *,
+    user_name: str,
+    tool_names: tuple[str, ...],
+    structured: dict[str, Any],
+    me_text: str,
+    profile_pub: int | None,
+    profile_priv: int | None,
+    last_probe_tool: str,
+    last_probe_detail: str,
+) -> GitHubMCPValidationResult:
+    """Softer validation when brittle search probes fail but auth succeeded."""
+
+    profile_result = _validation_result_from_get_me_profile_counts(
+        user_name=user_name,
+        tool_names=tool_names,
+        structured=structured,
+        me_text=me_text,
+        profile_pub=profile_pub,
+        profile_priv=profile_priv,
+        note=(
+            "repository counts from get_me profile "
+            f"(repo probe {last_probe_tool} failed: {last_probe_detail.strip()})"
+        ),
+    )
+    if profile_result is not None:
+        return profile_result
+
+    return _validation_result_authenticated_without_repo_samples(
+        user_name=user_name,
+        tool_names=tool_names,
+        profile_pub=profile_pub,
+        profile_priv=profile_priv,
+        note=(
+            "authenticated; repo probes inconclusive "
+            f"({last_probe_tool}: {last_probe_detail.strip()}); "
+            "MCP investigation tools are available"
+        ),
+    )
 
 
 def validate_github_mcp_config(
@@ -1009,28 +1227,20 @@ def validate_github_mcp_config(
                 user_name = ""
 
         who = user_name or "authenticated GitHub user"
-        plan = _plan_repo_access_probe(tools, user_name, view=repo_view)
-        if plan is None:
+        probe_plans = _iter_repo_access_probe_plans(tools, user_name, view=repo_view)
+        if not probe_plans:
             attempted_tools = _repo_probe_attempts(tools, user_name, view=repo_view)
-            profile_count = _repo_counts_from_get_me_profile(structured, me_result.get("text", ""))
-            if profile_count is not None:
-                scope_me = (user_name,) if user_name else ()
-                success_detail = (
-                    f"OK @{user_name or 'unknown'}; repos={profile_count}; owners={','.join(scope_me) if scope_me else '-'}; "
-                    f"examples=-; mcp_tools={len(tool_names)} | repository counts from get_me profile "
-                    "(no list/search repo tool exposed)"
-                )
-                return GitHubMCPValidationResult(
-                    ok=True,
-                    detail=success_detail,
-                    tool_names=tool_names,
-                    authenticated_user=user_name,
-                    repo_access_count=profile_count,
-                    repo_access_scope_owners=scope_me,
-                    repo_access_samples=(),
-                    profile_public_repos=profile_pub,
-                    profile_private_repos=profile_priv,
-                )
+            profile_result = _validation_result_from_get_me_profile_counts(
+                user_name=user_name,
+                tool_names=tool_names,
+                structured=structured,
+                me_text=me_result.get("text", ""),
+                profile_pub=profile_pub,
+                profile_priv=profile_priv,
+                note=("repository counts from get_me profile (no list/search repo tool exposed)"),
+            )
+            if profile_result is not None:
+                return profile_result
             return GitHubMCPValidationResult(
                 ok=False,
                 detail=(
@@ -1046,57 +1256,48 @@ def validate_github_mcp_config(
                 profile_private_repos=profile_priv,
             )
 
-        repo_tool, repo_args = plan
-        list_result = call_github_mcp_tool(config, repo_tool, repo_args)
-        if list_result.get("is_error"):
-            list_detail = list_result.get("text") or "Unknown error listing repositories."
-            return GitHubMCPValidationResult(
-                ok=False,
-                detail=(
-                    f"Authenticated as {who}, but repository access check failed ({repo_tool}): "
-                    f"{list_detail} "
-                    "(connectivity OK; auth or token scope may be insufficient for repo APIs)."
-                ),
-                tool_names=tool_names,
-                authenticated_user=user_name,
-                failure_category="repository_access",
-                profile_public_repos=profile_pub,
-                profile_private_repos=profile_priv,
+        last_probe_tool = ""
+        last_probe_detail = ""
+        for repo_tool, repo_args in probe_plans:
+            list_result = call_github_mcp_tool(config, repo_tool, repo_args)
+            if not list_result.get("is_error"):
+                return _validation_success_from_repo_probe_result(
+                    user_name=user_name,
+                    tool_names=tool_names,
+                    repo_tool=repo_tool,
+                    list_result=list_result,
+                    repo_visibility=repo_visibility,
+                    profile_pub=profile_pub,
+                    profile_priv=profile_priv,
+                )
+            last_probe_tool = repo_tool
+            last_probe_detail = str(
+                list_result.get("text") or "Unknown error listing repositories."
             )
+            if not _is_recoverable_repo_probe_error(repo_tool, repo_args, last_probe_detail):
+                return GitHubMCPValidationResult(
+                    ok=False,
+                    detail=(
+                        f"Authenticated as {who}, but repository access check failed ({repo_tool}): "
+                        f"{last_probe_detail} "
+                        "(connectivity OK; auth or token scope may be insufficient for repo APIs)."
+                    ),
+                    tool_names=tool_names,
+                    authenticated_user=user_name,
+                    failure_category="repository_access",
+                    profile_public_repos=profile_pub,
+                    profile_private_repos=profile_priv,
+                )
 
-        limit = _repo_probe_capture_limit()
-        rows_all = _repo_probe_rows_from_tool_result(list_result)
-        rows_filtered = _filter_repo_rows(rows_all, visibility=repo_visibility)
-        all_names = [r.full_name for r in rows_filtered]
-        repo_count = len(all_names)
-        samples_rows = tuple(rows_filtered[:limit])
-        samples = tuple(r.full_name for r in samples_rows)
-        scope = _owners_from_repo_full_names(all_names)
-        suffix = ""
-        if not all_names:
-            suffix = (
-                f" | listing had no parseable repos "
-                f"({repo_tool} empty or unexpected response shape)"
-            )
-        success_detail = (
-            f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={','.join(scope) if scope else '-'}; "
-            f"examples={','.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
-            f"{suffix}"
-        )
-
-        return GitHubMCPValidationResult(
-            ok=True,
-            detail=success_detail,
+        return _repo_access_probe_fallback_result(
+            user_name=user_name,
             tool_names=tool_names,
-            authenticated_user=user_name,
-            repo_access_count=repo_count,
-            repo_access_scope_owners=scope,
-            repo_access_samples=samples,
-            repo_access_probe_tool=repo_tool,
-            repo_access_probe_rows=samples_rows,
-            repo_access_probe_limit_applied=limit,
-            profile_public_repos=profile_pub,
-            profile_private_repos=profile_priv,
+            structured=structured,
+            me_text=me_result.get("text", ""),
+            profile_pub=profile_pub,
+            profile_priv=profile_priv,
+            last_probe_tool=last_probe_tool,
+            last_probe_detail=last_probe_detail,
         )
     except Exception as err:
         report_validation_failure(
