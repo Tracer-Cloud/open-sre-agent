@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from app.cli.__main__ import cli
 from app.cli.commands import _COMMANDS
-from app.cli.support.layout import _commands_from_group
+from app.cli.interactive_shell.ui.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from app.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from app.analytics.provider import capture_first_run_if_needed, shutdown_analytics
-from app.cli.support.prompt_support import install_questionary_escape_cancel
+from app.cli.interactive_shell.ui.prompt_support import install_questionary_escape_cancel
 from app.cli.wizard.flow import run_wizard
 from app.utils.sentry_sdk import init_sentry
 

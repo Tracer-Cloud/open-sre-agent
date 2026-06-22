@@ -84,7 +84,7 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from app.cli.support.health_view import render_health_json, render_health_report
+    from app.cli.interactive_shell.ui.health_view import render_health_json, render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
     from app.integrations.verify import verify_integrations

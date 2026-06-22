@@ -7,7 +7,11 @@ import logging
 import time
 from typing import Any
 
-from app.cli.support.output import debug_print, get_tracker, render_investigation_header
+from app.cli.interactive_shell.ui.output import (
+    debug_print,
+    get_tracker,
+    render_investigation_header,
+)
 from app.incident_window import resolve_incident_window
 from app.services import get_llm_for_reasoning
 from app.state import InvestigationState

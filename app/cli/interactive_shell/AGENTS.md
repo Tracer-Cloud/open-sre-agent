@@ -17,7 +17,7 @@ should be predictable, interruptible, explainable, and safe by default.
 
 | Area | Owns | Keep out |
 | --- | --- | --- |
-| `loop.py` / `commands.py` | top-level REPL wiring and compatibility shims | feature-specific business logic |
+| `loop.py` / `commands.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
 | `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
@@ -49,6 +49,9 @@ owning area rather than adding more logic to the caller.
   labels, prompts, response bodies, and error wording are user-facing API.
 - Avoid new module-level mutable globals. If global coordination is unavoidable,
   provide deterministic reset/cleanup hooks and test isolation.
+- Do not keep compatibility-only forwarding modules after moving code. Migrate
+  callers/tests to the canonical owner and remove the old import path in the
+  same change.
 
 ## Slash commands
 

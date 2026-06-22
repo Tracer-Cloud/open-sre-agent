@@ -29,7 +29,7 @@ def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.support.health_view import render_health_report
+    from app.cli.interactive_shell.ui.health_view import render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
     from app.integrations.verify import verify_integrations

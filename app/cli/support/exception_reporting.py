@@ -1,37 +1,10 @@
-"""Shared exception reporting policy for CLI and interactive-shell boundaries."""
+"""Compatibility alias for interactive shell exception reporting helpers."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
+import sys
 
-import click
+from app.cli.interactive_shell.error_handling import exception_reporting as _exception_reporting
 
-from app.cli.support.errors import OpenSREError
-from app.utils.sentry_sdk import capture_exception
-
-
-def should_report_exception(exc: BaseException, *, expected: bool = False) -> bool:
-    """Return whether a caught exception should be reported to Sentry."""
-    if expected:
-        return False
-    if isinstance(exc, (KeyboardInterrupt, EOFError, OpenSREError, click.Abort)):
-        return False
-    return not isinstance(exc, click.UsageError)
-
-
-def report_exception(
-    exc: BaseException,
-    *,
-    context: str,
-    extra: Mapping[str, Any] | None = None,
-    expected: bool = False,
-) -> bool:
-    """Best-effort Sentry report for swallowed boundary exceptions."""
-    if not should_report_exception(exc, expected=expected):
-        return False
-    capture_exception(exc, context=context, extra=extra)
-    return True
-
-
-__all__ = ["report_exception", "should_report_exception"]
+sys.modules[__name__] = _exception_reporting
+sys.modules["app.cli.support"].exception_reporting = _exception_reporting

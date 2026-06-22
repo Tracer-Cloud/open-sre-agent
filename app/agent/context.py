@@ -8,7 +8,7 @@ import logging
 import os
 from typing import Any
 
-from app.cli.support.output import get_tracker
+from app.cli.interactive_shell.ui.output import get_tracker
 from app.integrations.catalog import (
     classify_integrations as _classify_integrations,
 )

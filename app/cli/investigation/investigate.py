@@ -255,7 +255,7 @@ def run_investigation_cli_streaming(
     Uses async pipeline streaming + ``StreamRenderer`` so the local CLI shows
     the same live tool-call and reasoning updates as a remote investigation.
     """
-    from app.remote.renderer import StreamRenderer
+    from app.cli.ui.renderer import StreamRenderer
 
     events = stream_investigation_cli(
         raw_alert=raw_alert,
@@ -269,7 +269,7 @@ def run_investigation_cli_streaming(
         events.close()
         raise
 
-    from app.cli.support.feedback import prompt_investigation_feedback
+    from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
 
     prompt_investigation_feedback(final_state)
     return {
@@ -290,8 +290,8 @@ def _run_session_alert_payload(
     """Run a streaming investigation from an already-structured session alert."""
     import queue
 
+    from app.cli.ui.renderer import StreamRenderer
     from app.pipeline.runners import astream_investigation
-    from app.remote.renderer import StreamRenderer
 
     _check_llm_settings()
     if context_overrides:

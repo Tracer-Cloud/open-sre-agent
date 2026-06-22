@@ -41,8 +41,11 @@ from app.cli.interactive_shell.runtime.state import (
     SpinnerState,
 )
 from app.cli.interactive_shell.ui import ERROR, WARNING
+from app.cli.interactive_shell.ui.prompt_support import (
+    repl_prompt_note_ctrl_c,
+    repl_reset_ctrl_c_gate,
+)
 from app.cli.support.exception_reporting import report_exception
-from app.cli.support.prompt_support import repl_prompt_note_ctrl_c, repl_reset_ctrl_c_gate
 from app.cli.support.repl_progress import repl_safe_progress_scope
 from app.fleet_monitoring.sampler import start_sampler
 
@@ -204,7 +207,7 @@ async def run_interactive(
             color_system="truecolor",
             legacy_windows=False,
         )
-        from app.cli.support.output import set_prompt_suppress_fn  # lazy — avoids circular import
+        from app.cli.interactive_shell.ui.output import set_prompt_suppress_fn
 
         show_spinner = dispatch_should_show_spinner(text, session)
         if show_spinner:

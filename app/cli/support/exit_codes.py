@@ -1,13 +1,10 @@
-"""Standard exit codes for the opensre CLI.
-
-Follows the convention from clig.dev and POSIX:
-  0 - success
-  1 - runtime / general error (retrying may help)
-  2 - usage error (user invoked the command incorrectly)
-"""
+"""Compatibility alias for interactive shell exit-code constants."""
 
 from __future__ import annotations
 
-SUCCESS: int = 0
-ERROR: int = 1
-USAGE_ERROR: int = 2
+import sys
+
+from app.cli.interactive_shell.error_handling import exit_codes as _exit_codes
+
+sys.modules[__name__] = _exit_codes
+sys.modules["app.cli.support"].exit_codes = _exit_codes

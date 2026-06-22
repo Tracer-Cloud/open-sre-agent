@@ -1,325 +1,48 @@
-"""Terminal renderer for remote agent streaming events.
-
-Reuses spinner and label patterns from app.cli.support.output so that remote
-investigation output looks identical to a local ``opensre investigate`` run.
-
-Handles both ``stream_mode: ["updates"]`` (legacy node-level) and
-``stream_mode: ["events"]`` (fine-grained tool/LLM callbacks).
-"""
+"""Terminal renderer for streamed investigation events."""
 
 from __future__ import annotations
 
-import math
-import re
-import sys
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
 from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
 from rich.markup import escape
 from rich.panel import Panel
-from rich.spinner import Spinner
 from rich.text import Text
 
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
-from app.analytics.source import EntrypointSource
-from app.cli.interactive_shell.ui.theme import (
-    ANSI_BOLD,
-    ANSI_DIM,
-    ANSI_RESET,
-    BOLD_BRAND_ANSI,
-    BRAND,
-    HIGHLIGHT_ANSI,
-    TEXT_ANSI,
-)
-from app.cli.support.output import (
+from app.cli.interactive_shell.ui.output import (
     CtrlOToggleWatcher,
     ProgressTracker,
     _fmt_timing,
     _repl_progress_active,
     get_output_format,
     register_tool_detail_toggle,
-    set_live_console,
-    stop_display,
-    unregister_live_console,
+)
+from app.cli.ui.renderer.constants import (
+    _DIAGNOSE_NODE,
+    _HIDDEN_PROGRESS_NODES,
+    _NODE_END_KINDS,
+    _NODE_START_KINDS,
+    _TOKEN_STREAM_KIND,
+    _render_source,
+)
+from app.cli.ui.renderer.diagnose import _DiagnoseStreamRenderer
+from app.cli.ui.renderer.formatting import _validity_score_percent
+from app.cli.ui.renderer.terminal import _print_connection_banner, _print_info
+from app.cli.ui.renderer.tools import (
+    _tool_event_key,
+    _tool_input,
+    _tool_output,
+    _tool_short_label,
+    _tool_source_label,
 )
 from app.remote.reasoning import reasoning_text
 from app.remote.stream import StreamEvent
-from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
+from app.tools.registry import resolve_tool_display_name
 from app.utils.tool_trace import format_json_preview
-
-_RESET = ANSI_RESET
-_DIM = ANSI_DIM
-_BOLD = ANSI_BOLD
-_WHITE = TEXT_ANSI
-_GREEN = HIGHLIGHT_ANSI
-_CYAN = BOLD_BRAND_ANSI
-
-_NODE_START_KINDS = frozenset(
-    {
-        "on_chain_start",
-    }
-)
-
-_NODE_END_KINDS = frozenset(
-    {
-        "on_chain_end",
-    }
-)
-
-# Remote streams emit this kind for every text-token delta from a chat model
-# inside a node. Held as a constant alongside the lifecycle kinds above so
-# the events-mode handler doesn't carry a magic string.
-_TOKEN_STREAM_KIND = "on_chat_model_stream"
-
-# Diagnose is the only node where the LLM's reasoning is visible enough to
-# warrant streaming the raw token deltas live as Markdown. Other nodes keep
-# the compact spinner UX from ``_LiveSpinner`` in app.cli.support.output.
-_DIAGNOSE_NODE = "diagnose_root_cause"
-# Same Rich.Live refresh / spinner choices as the interactive-shell streamer
-# so the two surfaces feel identical.
-_DIAGNOSE_LIVE_REFRESH = 20
-# Same throttle rationale as ``streaming._LIVE_RENDER_INTERVAL_S``: cap
-# Markdown(buffer) re-parses to one per refresh window. Without this, the
-# diagnose Live region performs O(n²) parsing on long streams and stalls
-# visibly past a few thousand tokens.
-_DIAGNOSE_RENDER_INTERVAL_S = 1.0 / _DIAGNOSE_LIVE_REFRESH
-_DIAGNOSE_SPINNER_NAME = "dots12"
-_DIAGNOSE_SPINNER_COLOR = "orange1"
-_HIDDEN_PROGRESS_NODES = frozenset({"publish_findings"})
-
-
-def _render_source(*, local: bool) -> str:
-    return EntrypointSource.CLI_PASTE.value if local else EntrypointSource.REMOTE_HTTP.value
-
-
-class _DiagnoseStreamRenderer:
-    """Owns the diagnose-node live-streaming state machine.
-
-    Encapsulates the buffer of incoming token deltas, the lazy Rich Console
-    + Live region, and the throttled Markdown re-parse cadence. Exists so
-    :class:`StreamRenderer` keeps a single responsibility (event dispatch
-    + node lifecycle + final report) while diagnose-specific streaming
-    concerns live in one focused place.
-
-    Lifecycle: :meth:`start` → :meth:`append_chunk` (per token-delta event)
-    → :meth:`finish`. The same instance can be reused across multiple
-    investigation runs — :meth:`start` resets all state.
-    """
-
-    def __init__(
-        self,
-        console: Console | None = None,
-        tracker: ProgressTracker | None = None,
-        *,
-        local: bool = False,
-    ) -> None:
-        self.buffer: list[str] = []
-        self._live: Live | None = None
-        self._started: float = 0.0
-        # Last time we re-rendered ``Markdown(buffer)`` into the Live region.
-        # Throttled to ``_DIAGNOSE_RENDER_INTERVAL_S`` so long streams don't
-        # incur O(n²) parsing.
-        self._last_render: float = 0.0
-        self._console: Console | None = console
-        self._tracker: ProgressTracker | None = tracker
-        self._local = local
-
-    @property
-    def streamed(self) -> bool:
-        """True if any chunks were buffered during the run.
-
-        Callers (specifically :meth:`StreamRenderer._print_report`) use this
-        to decide whether the final ``Root Cause`` summary should be
-        suppressed — it would duplicate text the user just watched stream.
-        """
-        return bool(self.buffer)
-
-    def start(self) -> None:
-        """Reset state and open the Live region (rich) or print a placeholder (text)."""
-        self.buffer = []
-        self._started = time.monotonic()
-        # 0.0 sentinel forces the first chunk past the throttle gate so the
-        # user sees something rendered as soon as tokens arrive.
-        self._last_render = 0.0
-
-        if _repl_progress_active():
-            return
-
-        if get_output_format() != "rich":
-            sys.stdout.write(f"  … {_DIAGNOSE_NODE}\n")
-            sys.stdout.flush()
-            return
-
-        if self._console is None:
-            self._console = Console(highlight=False)
-        spinner = Spinner(
-            _DIAGNOSE_SPINNER_NAME,
-            text=Text(
-                f"{_DIAGNOSE_NODE}  reasoning…",
-                style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-            ),
-            style=f"bold {_DIAGNOSE_SPINNER_COLOR}",
-        )
-        self._live = Live(
-            spinner,
-            console=self._console,
-            refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
-            transient=False,
-        )
-
-        # Shrink the gap: stop previous display immediately before starting new one
-        if self._tracker is not None:
-            self._tracker.stop()
-        else:
-            stop_display()
-
-        # Register console globally so that print_above_renderable fallbacks
-        # correctly print above this live region during the diagnose phase.
-        set_live_console(self._console)
-        self._live.start()
-
-    def append_chunk(self, event: StreamEvent) -> None:
-        """Append a token delta to the buffer; refresh the Live region (throttled).
-
-        The chunk's ``content`` shape varies by provider: OpenAI emits a
-        plain string; some Anthropic SDK paths emit a list of content blocks.
-        :func:`_flatten_chunk_content` handles both — calling ``str()`` on
-        the list shape would render its Python repr instead of reasoning.
-        """
-        chunk = event.data.get("data", {}).get("chunk", {})
-        content = chunk.get("content", "") if isinstance(chunk, dict) else ""
-        if not content:
-            return
-        text = _flatten_chunk_content(content)
-        if not text:
-            return
-        self.buffer.append(text)
-        if len(self.buffer) == 1:
-            latency_ms = (time.monotonic() - self._started) * 1000
-            get_analytics().capture(
-                Event.INVESTIGATION_FIRST_HYPOTHESIS_RENDERED,
-                {
-                    "latency_ms": int(latency_ms),
-                    "stage": _DIAGNOSE_NODE,
-                    "source": _render_source(local=self._local),
-                },
-            )
-        if self._live is None:
-            if _repl_progress_active() and self._tracker is not None:
-                preview = "".join(self.buffer)
-                if len(preview) > 80:
-                    preview = "…" + preview[-77:]
-                self._tracker.update_subtext(_DIAGNOSE_NODE, preview, duration=30.0)
-            return
-        # Throttle Markdown re-parse to once per refresh window; the final
-        # flush in :meth:`finish` guarantees the latest buffer is rendered
-        # before the Live region closes.
-        now = time.monotonic()
-        if now - self._last_render >= _DIAGNOSE_RENDER_INTERVAL_S:
-            self._live.update(Markdown("".join(self.buffer)))
-            self._last_render = now
-
-    def finish(self, message: str | None = None) -> None:
-        """Close the Live region (or text-mode flush) and print the resolved-dot line.
-
-        ``message`` is appended dim-styled to the resolution line — typically
-        a validity-score summary built by ``_build_node_message``.
-        """
-        elapsed = time.monotonic() - self._started
-
-        if self._live is not None:
-            # Final flush: any chunks pending in the last throttle window
-            # render here so the user sees the complete reasoning.
-            if self.buffer:
-                self._live.update(Markdown("".join(self.buffer)))
-            try:
-                self._live.stop()
-            finally:
-                self._live = None
-                # Unregister only if we own it (safeguard against subsequent activations)
-                unregister_live_console(self._console)
-            sys.stdout.write(
-                f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
-                f"  {_DIM}{elapsed:.1f}s{_RESET}"
-            )
-            if message:
-                sys.stdout.write(f"  {_DIM}{message}{_RESET}")
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        else:
-            if self.buffer:
-                for line in "".join(self.buffer).strip().splitlines():
-                    print(f"  {line}")
-            tail = f"  ● {_DIAGNOSE_NODE}  {elapsed:.1f}s"
-            if message:
-                tail += f"  {message}"
-            print(tail)
-
-
-def _clean_markdown_line(line: str) -> str:
-    """Strip both bulleted lists (•, ●, -, —, *) and numbered lists (e.g. 1., 2))."""
-    stripped = line.strip()
-    prev = ""
-    while stripped != prev:
-        prev = stripped
-        stripped = re.sub(r"^[-•●—]\s+", "", stripped)
-        # Markdown ``* item`` list marker only — not ``*Italic Section:*`` headings.
-        stripped = re.sub(r"^\*\s+", "", stripped)
-        stripped = re.sub(r"^\d+[.)]\s+", "", stripped)
-    return stripped
-
-
-def _normalized_report_heading_inner(line: str) -> str:
-    """Normalize LLM report lines for heading keyword matching."""
-    s = line.strip()
-    while s.startswith("#"):
-        s = s[1:].strip()
-    if s.startswith("**"):
-        core = s[2:]
-        if core.endswith("**:"):
-            core = core[:-3]
-        elif core.endswith("**"):
-            core = core[:-2]
-        return core.strip()
-    if len(s) >= 2 and s.startswith("[") and s.endswith("]") and ":" not in s:
-        return s[1:-1].strip()
-    if (
-        len(s) >= 3
-        and s.startswith("*")
-        and s.endswith("*")
-        and not s.startswith("* ")
-        and "**" not in s
-    ):
-        inner = s[1:-1].strip()
-        if ":" in inner or len(inner.split()) >= 3:
-            return inner
-    return s.strip()
-
-
-def _report_line_looks_like_heading(line: str, *, inner: str) -> bool:
-    """True if the line uses a heading-like structure (not prose)."""
-    stripped = line.strip()
-    if stripped.startswith("#"):
-        return True
-    is_bracket = (
-        stripped.startswith("[") and stripped.rstrip().endswith("]") and ":" not in stripped
-    )
-    is_bold_md = stripped.startswith("**") and (stripped.endswith("**") or stripped.endswith("**:"))
-    wrapped_ast = (
-        len(stripped) >= 3
-        and stripped.startswith("*")
-        and stripped.endswith("*")
-        and not stripped.startswith("* ")
-        and "**" not in stripped
-        and (":" in stripped[1:-1] or len(stripped[1:-1].strip().split()) >= 3)
-    )
-    shouty = inner.isupper() and len(inner.replace(" ", "")) >= 8 and len(inner.split()) <= 14
-    return bool(is_bracket or is_bold_md or wrapped_ast or shouty)
 
 
 class StreamRenderer:
@@ -413,12 +136,24 @@ class StreamRenderer:
 
     def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
         if get_output_format() == "rich" and self._tracker.has_active_display:
-            self._tracker.set_tool_detail_view(
-                visible=self._tool_details_visible,
-                records=self._tool_detail_records,
-                summary=self._format_tool_summary(),
-                clear=clear,
-            )
+            set_tool_detail_view = getattr(self._tracker, "set_tool_detail_view", None)
+            if callable(set_tool_detail_view):
+                set_tool_detail_view(
+                    visible=self._tool_details_visible,
+                    records=self._tool_detail_records,
+                    summary=self._format_tool_summary(),
+                    clear=clear,
+                )
+                return
+            display = getattr(self._tracker, "_display", None)
+            set_tool_details = getattr(display, "set_tool_details", None)
+            if callable(set_tool_details):
+                set_tool_details(
+                    visible=self._tool_details_visible,
+                    records=self._tool_detail_records,
+                    summary=self._format_tool_summary(),
+                    clear=clear,
+                )
 
     def render_stream(self, events: Iterator[StreamEvent]) -> dict[str, Any]:
         """Consume a full event stream and render progress to the terminal.
@@ -603,7 +338,9 @@ class StreamRenderer:
             elapsed=elapsed_str,
         )
         if elapsed_ms is not None:
-            self._tracker.print_tool_call_line(name, elapsed_ms)
+            print_tool_call_line = getattr(self._tracker, "print_tool_call_line", None)
+            if callable(print_tool_call_line):
+                print_tool_call_line(name, elapsed_ms)
 
     def _handle_llm_start(self, event: StreamEvent) -> None:
         if self._active_node != "investigation_agent":
@@ -802,7 +539,7 @@ class StreamRenderer:
         return None
 
     def _print_report(self) -> None:
-        from app.cli.support.output import stop_display
+        from app.cli.interactive_shell.ui.output import stop_display
 
         stop_display()
 
@@ -833,141 +570,3 @@ def _canonical_node_name(name: str) -> str:
         "investigation_agent": "investigation_agent",
     }
     return mapping.get(name, name)
-
-
-def _tool_event_key(data: dict[str, Any], name: str) -> str:
-    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
-    return str(
-        data.get("id")
-        or data.get("tool_call_id")
-        or nested.get("id")
-        or nested.get("tool_call_id")
-        or name
-    )
-
-
-def _tool_source_label(tool_name: str) -> str:
-    tool = get_registered_tool_map().get(tool_name)
-    source = str(tool.source) if tool is not None else _infer_tool_source(tool_name)
-    if source == "grafana":
-        return "Grafana"
-    if source == "knowledge":
-        return "SRE"
-    if source == "openclaw":
-        return "OpenClaw"
-    return source.replace("_", " ").title() if source else "Tools"
-
-
-def _infer_tool_source(tool_name: str) -> str:
-    lowered = tool_name.lower()
-    for source in ("grafana", "datadog", "cloudwatch", "sentry", "honeycomb", "openclaw"):
-        if source in lowered:
-            return source
-    if lowered.startswith("get_sre_"):
-        return "knowledge"
-    return "tools"
-
-
-def _tool_short_label(tool_name: str, source_label: str) -> str:
-    display = resolve_tool_display_name(tool_name)
-    label = display
-    for prefix in (
-        source_label,
-        source_label.lower(),
-        f"{source_label} ",
-        f"{source_label.lower()} ",
-        "query ",
-        "get ",
-    ):
-        if label.startswith(prefix):
-            label = label[len(prefix) :].strip()
-    if source_label == "Grafana" and label.lower().startswith("grafana "):
-        label = label[len("grafana ") :].strip()
-    return label or display
-
-
-def _tool_input(data: dict[str, Any]) -> Any:
-    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
-    return data.get("input", nested.get("input", {}))
-
-
-def _tool_output(data: dict[str, Any]) -> Any:
-    nested = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
-    return data.get("output", nested.get("output", {}))
-
-
-def _flatten_chunk_content(content: Any) -> str:
-    """Resolve a chat-model chunk's ``content`` to plain text.
-
-    OpenAI emits a string. Anthropic-style adapters may emit a list of content
-    blocks where each block may be an object with ``.text`` or a dict
-    with a ``"text"`` key. Non-text blocks (tool-use, image) are skipped.
-    """
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-    parts: list[str] = []
-    for block in content:
-        if isinstance(block, dict):
-            text_value = block.get("text")
-            if isinstance(text_value, str):
-                parts.append(text_value)
-            continue
-        text_value = getattr(block, "text", None)
-        if isinstance(text_value, str):
-            parts.append(text_value)
-    return "".join(parts)
-
-
-def _print_connection_banner() -> None:
-    if get_output_format() == "rich":
-        sys.stdout.write(
-            f"\n  {_BOLD}{_CYAN}Remote Investigation{_RESET}"
-            f"  {_DIM}streaming from deployed agent{_RESET}\n\n"
-        )
-    else:
-        print("\n  Remote Investigation  streaming from deployed agent\n")
-    sys.stdout.flush()
-
-
-def _print_section(title: str, content: str, console: Any | None = None) -> None:
-    if get_output_format() == "rich":
-        from rich.console import Console
-        from rich.markdown import Markdown
-        from rich.padding import Padding
-        from rich.rule import Rule
-
-        from app.cli.interactive_shell.ui.theme import MARKDOWN_THEME
-
-        c = console or Console(highlight=False)
-        c.print()
-        c.print(Rule(f"[bold] {title} [/]", style=BRAND, align="left"))
-        with c.use_theme(MARKDOWN_THEME):
-            c.print(Padding(Markdown(content.strip(), code_theme="ansi_dark"), (1, 2)))
-    else:
-        print(f"\n  {title}")
-        for line in content.strip().splitlines():
-            print(f"  {line}")
-    sys.stdout.flush()
-
-
-def _print_info(message: str) -> None:
-    if get_output_format() == "rich":
-        sys.stdout.write(f"\n  {_DIM}{message}{_RESET}\n")
-    else:
-        print(f"\n  {message}")
-    sys.stdout.flush()
-
-
-def _validity_score_percent(score: Any) -> str | None:
-    """Format a 0..1 validity score for display, or None if the payload is unusable."""
-    if score is None or isinstance(score, bool):
-        return None
-    if not isinstance(score, (int, float)):
-        return None
-    v = float(score)
-    if not math.isfinite(v):
-        return None
-    v = max(0.0, min(1.0, v))
-    return f"{int(v * 100)}%"

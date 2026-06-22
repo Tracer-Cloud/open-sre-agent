@@ -10,6 +10,8 @@
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
+- Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
+  are migrated, remove the old module path in the same change and use one canonical import path.
 
 Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typecheck, and test commands all live there.
 
@@ -164,6 +166,8 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
+  location. Update callers to the canonical module and delete the old path.
 
 ## 6. New Integration Checklist
 

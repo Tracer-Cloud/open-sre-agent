@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.text import Text
 
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, WARNING
-from app.cli.support.output import get_output_format
+from app.cli.interactive_shell.ui.output import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -114,7 +114,7 @@ def _render_rich_evidence_item(console: Console, line: str) -> None:
 
 def render_report(slack_message: str, root_cause_category: str | None = None) -> None:
     """Render the final RCA report to terminal."""
-    from app.cli.support.output import render_completed_investigation_footer, stop_display
+    from app.cli.interactive_shell.ui.output import render_completed_investigation_footer, stop_display
 
     stop_display()
     fmt = get_output_format()

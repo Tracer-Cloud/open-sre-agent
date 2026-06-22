@@ -23,7 +23,7 @@ from app.agent.tool_loop import (
     _summarise,
     _tool_source,
 )
-from app.cli.support.output import debug_print, get_tracker
+from app.cli.interactive_shell.ui.output import debug_print, get_tracker
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.services.agent_llm_client import ToolCall, get_agent_llm
 from app.state.evidence import EvidenceEntry

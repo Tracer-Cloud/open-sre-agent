@@ -1,1 +1,1 @@
-"""Shared CLI plumbing: Click context flags, Rich layout, prompts, health rendering, updates."""
+"""Shared CLI plumbing: Click context flags, runtime errors, updates, and data helpers."""

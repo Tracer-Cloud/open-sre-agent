@@ -69,11 +69,12 @@ uv run python -m tests.synthetic.rds_postgres.run_suite \
   --baseline-check tests/synthetic/rds_postgres/_baseline
 ```
 
-## Re-export shims
+## Re-export shim policy
 
-`observations.py` re-exports `TrajectoryPolicy`, `TrajectoryPolicyResult`, and
-`evaluate_trajectory_policy` from `trajectory_policy.py` (introduced in Phase 2).
-These shims are temporary; remove them once all import sites are updated.
+Do not add new compatibility-only re-export shims. When moving symbols, migrate
+import sites to the canonical module and delete the old path in the same change.
+Existing re-exports in `observations.py` are temporary legacy debt; remove them
+when touching that surface rather than extending the pattern.
 
 ## Module layout (after all phases)
 

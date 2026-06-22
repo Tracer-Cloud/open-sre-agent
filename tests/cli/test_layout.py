@@ -3,7 +3,7 @@ from __future__ import annotations
 import click
 
 from app.cli.__main__ import cli
-from app.cli.support.layout import (
+from app.cli.interactive_shell.ui.layout import (
     RichGroup,
     _options_from_command,
     render_help,
@@ -74,7 +74,7 @@ def test_rich_group_format_help_delegates_to_render_help(monkeypatch) -> None:
     def fake_render_help(group: click.Group) -> None:
         called_with.append(group)
 
-    monkeypatch.setattr("app.cli.support.layout.render_help", fake_render_help)
+    monkeypatch.setattr("app.cli.interactive_shell.ui.layout.render_help", fake_render_help)
 
     group = RichGroup(name="opensre")
     group.format_help(click.Context(group), click.HelpFormatter())
