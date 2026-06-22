@@ -117,7 +117,9 @@ def test_gitlab_writeback_calls_post_when_enabled(monkeypatch: pytest.MonkeyPatc
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch(
+            "app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note
+        ),
         patch(
             "app.agent.stages.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
@@ -144,7 +146,9 @@ def test_gitlab_writeback_skipped_when_env_var_not_set(monkeypatch: pytest.Monke
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch(
+            "app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note
+        ),
     ):
         from app.agent.stages.publish_findings.node import generate_report
 
@@ -167,7 +171,9 @@ def test_gitlab_writeback_skipped_when_mr_iid_missing(monkeypatch: pytest.Monkey
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch(
+            "app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note
+        ),
     ):
         from app.agent.stages.publish_findings.node import generate_report
 

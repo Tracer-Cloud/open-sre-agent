@@ -26,8 +26,9 @@ def _console() -> Console:
 
 
 class _DummyTool:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, source: str = "github") -> None:
         self.name = name
+        self.source = source
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
@@ -37,6 +38,24 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
     monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
 
     assert gather_tool_evidence("any question", session, _console()) is None
+
+
+def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {}
+
+    monkeypatch.setattr(
+        investigate_tools,
+        "get_available_tools",
+        lambda _resolved: [_DummyTool("get_sre_guidance", source="knowledge")],
+    )
+
+    def _unexpected_llm() -> Any:
+        raise AssertionError("knowledge-only tools should not invoke the gather loop")
+
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", _unexpected_llm)
+
+    assert gather_tool_evidence("why did it fail?", session, _console()) is None
 
 
 def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None:

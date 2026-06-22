@@ -28,6 +28,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
+from app.agent.utils.alert_source import SECONDARY_TOOL_SOURCES
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM
 from app.cli.support.exception_reporting import report_exception
@@ -150,6 +151,8 @@ def gather_tool_evidence(
         resolved = _resolve_session_integrations(session)
         tools = get_available_tools(resolved)
         if not tools:
+            return None
+        if not any(str(tool.source) not in SECONDARY_TOOL_SOURCES for tool in tools):
             return None
 
         try:
