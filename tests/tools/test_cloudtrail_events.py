@@ -76,6 +76,8 @@ def test_cloudtrail_prioritized_but_not_auto_seeded_for_aws_alerts() -> None:
     """
     from app.agent.utils.alert_source import (
         ALERT_SOURCE_TO_SEED_TOOL_SOURCES as seed_map,
+    )
+    from app.agent.utils.alert_source import (
         ALERT_SOURCE_TO_TOOL_SOURCES as priority_map,
     )
 
