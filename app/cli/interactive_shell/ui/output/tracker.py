@@ -13,9 +13,8 @@ from app.cli.interactive_shell.ui.output.environment import (
     _safe_print,
     get_output_format,
 )
-from app.cli.interactive_shell.ui.output.events import ProgressEvent
+from app.cli.interactive_shell.ui.output.events import DisplayProtocol, ProgressEvent
 from app.cli.interactive_shell.ui.output.labels import _humanise_message, _node_label
-from app.cli.interactive_shell.ui.time_format import _fmt_timing
 from app.cli.interactive_shell.ui.output.live_display import _EventLogDisplay
 from app.cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from app.cli.interactive_shell.ui.output.toggles import (
@@ -23,11 +22,10 @@ from app.cli.interactive_shell.ui.output.toggles import (
     register_tool_detail_toggle,
 )
 from app.cli.interactive_shell.ui.output.tool_tracking import ToolTrackingMixin
+from app.cli.interactive_shell.ui.time_format import _fmt_timing
 
-Display = _EventLogDisplay | _ReplEventLogDisplay
 
-
-def _make_event_log_display(*, t0: float) -> Display:
+def _make_event_log_display(*, t0: float) -> DisplayProtocol:
     return _ReplEventLogDisplay(t0=t0) if _repl_progress_active() else _EventLogDisplay(t0=t0)
 
 
@@ -41,7 +39,7 @@ class ProgressTracker(ToolTrackingMixin):
         self._silent = _is_silent_output()
         self._rich = get_output_format() == "rich"
         self._repl_append_only = _repl_progress_active()
-        self._display: Display | None = None
+        self._display: DisplayProtocol | None = None
         self._tool_start_times: dict[str, float] = {}
         self._tool_inputs: dict[str, Any] = {}
         self._tool_details_visible = False

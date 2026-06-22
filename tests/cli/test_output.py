@@ -12,13 +12,13 @@ from app.cli.interactive_shell.ui.output import (
     ProgressEvent,
     ProgressTracker,
     _fmt_timing,
-    _humanise_message,
     get_output_format,
     get_tracker,
     reset_tracker,
     suppress_stdin_watchers,
     toggle_active_tool_details,
 )
+from app.cli.interactive_shell.ui.output.labels import _humanise_message
 from app.cli.interactive_shell.ui.output import environment as output_environment
 from app.cli.interactive_shell.ui.output import repl_display as output_repl
 from app.cli.interactive_shell.ui.output import toggles as output_toggles
