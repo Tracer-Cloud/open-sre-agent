@@ -626,6 +626,7 @@ def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
                     AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid
                     AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid
                     AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid
+                    AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database
                     AND blocking_locks.pid != blocked_locks.pid
                     AND blocking_locks.granted = true
                 JOIN pg_catalog.pg_stat_activity blocking
