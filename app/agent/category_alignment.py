@@ -64,11 +64,17 @@ def detect_category_text_mismatch(root_cause: str, root_cause_category: str) -> 
         return None
 
     text = root_cause.lower()
+    # Only compare groups we have keyword signals for — avoids false positives when
+    # the category is e.g. code_and_configuration but the text describes downstream
+    # database symptoms caused by a deploy.
+    if category_group not in _GROUP_SIGNALS:
+        return None
+
     group_scores = {
         group: sum(1 for keyword in keywords if keyword in text)
         for group, keywords in _GROUP_SIGNALS.items()
     }
-    best_group = max(group_scores, key=group_scores.get)
+    best_group = max(group_scores, key=lambda group: group_scores[group])
     best_score = group_scores[best_group]
     if best_score < _MIN_GROUP_SIGNAL_HITS or best_group == category_group:
         return None
@@ -89,11 +95,11 @@ def apply_category_alignment_adjustments(
     root_cause_category: str,
     validity_score: float,
     investigation_recommendations: list[str],
-) -> tuple[float, list[str], bool]:
+) -> tuple[float, list[str], bool, str | None]:
     """Lower confidence and add a recommendation when text and category disagree."""
-    mismatch = detect_category_text_mismatch(root_cause, root_cause_category)
-    if mismatch is None:
-        return validity_score, investigation_recommendations, False
+    mismatch_reason = detect_category_text_mismatch(root_cause, root_cause_category)
+    if mismatch_reason is None:
+        return validity_score, investigation_recommendations, False, None
 
     adjusted_score = max(0.0, validity_score - _VALIDITY_PENALTY)
     recommendation = (
@@ -101,5 +107,10 @@ def apply_category_alignment_adjustments(
         "review the classification before acting on it."
     )
     if recommendation in investigation_recommendations:
-        return adjusted_score, investigation_recommendations, True
-    return adjusted_score, [*investigation_recommendations, recommendation], True
+        return adjusted_score, investigation_recommendations, True, mismatch_reason
+    return (
+        adjusted_score,
+        [*investigation_recommendations, recommendation],
+        True,
+        mismatch_reason,
+    )

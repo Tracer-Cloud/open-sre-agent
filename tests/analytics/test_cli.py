@@ -316,7 +316,10 @@ def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) ->
     stub = _StubAnalytics()
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
-    cli.capture_diagnosis_category_mismatch(root_cause_category="dns_resolution_failure")
+    cli.capture_diagnosis_category_mismatch(
+        root_cause_category="dns_resolution_failure",
+        mismatch_reason="root cause text signals database (2 keyword hits)",
+    )
 
     assert stub.events == [
         (
@@ -324,6 +327,7 @@ def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) ->
             {
                 "category_text_mismatch": True,
                 "root_cause_category": "dns_resolution_failure",
+                "mismatch_reason": "root cause text signals database (2 keyword hits)",
             },
         )
     ]

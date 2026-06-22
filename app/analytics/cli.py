@@ -343,14 +343,18 @@ def capture_investigation_started(
     )
 
 
-def capture_diagnosis_category_mismatch(*, root_cause_category: str) -> None:
-    _capture(
-        Event.DIAGNOSIS_CATEGORY_MISMATCH,
-        {
-            "category_text_mismatch": True,
-            "root_cause_category": root_cause_category,
-        },
-    )
+def capture_diagnosis_category_mismatch(
+    *,
+    root_cause_category: str,
+    mismatch_reason: str | None = None,
+) -> None:
+    properties: Properties = {
+        "category_text_mismatch": True,
+        "root_cause_category": root_cause_category,
+    }
+    if mismatch_reason:
+        properties["mismatch_reason"] = mismatch_reason
+    _capture(Event.DIAGNOSIS_CATEGORY_MISMATCH, properties)
 
 
 def capture_investigation_completed(*, tracker: InvestigationTracker | None = None) -> None:

@@ -446,6 +446,7 @@ class ConnectedInvestigationAgent:
         if result.category_text_mismatch:
             capture_diagnosis_category_mismatch(
                 root_cause_category=result.root_cause_category,
+                mismatch_reason=result.category_text_mismatch_reason,
             )
 
         tracker.complete(
