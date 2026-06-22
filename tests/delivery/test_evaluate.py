@@ -47,8 +47,8 @@ def test_deliver_runs_judge_when_evaluate_and_rubric_present(
     )
 
     state = _make_state(evaluate=True, rubric="test rubric")
-    deliver(state)
-    assert state["opensre_llm_eval"] == fake
+    updates = deliver(state)
+    assert updates["opensre_llm_eval"] == fake
 
 
 def test_deliver_skips_judge_when_evaluate_is_false(
@@ -62,8 +62,8 @@ def test_deliver_skips_judge_when_evaluate_is_false(
 
     state = _make_state(evaluate=False, rubric="test rubric")
     state["opensre_eval_rubric"] = "test rubric"
-    deliver(state)
-    assert not state.get("opensre_llm_eval")
+    updates = deliver(state)
+    assert not updates.get("opensre_llm_eval")
 
 
 def test_deliver_sets_skip_on_judge_failure(
@@ -80,8 +80,8 @@ def test_deliver_sets_skip_on_judge_failure(
     )
 
     state = _make_state(evaluate=True, rubric="test rubric")
-    deliver(state)
-    ev = state.get("opensre_llm_eval")
+    updates = deliver(state)
+    ev = updates.get("opensre_llm_eval")
     assert ev is not None
     assert ev.get("skipped") is True
     assert "API timeout" in ev.get("reason", "")

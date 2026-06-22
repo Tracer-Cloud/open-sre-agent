@@ -18,8 +18,10 @@ from typing import Any
 import httpx
 import pytest
 
-from app.agent.stages.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
-from app.agent.stages.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
+from app.agent.utils.alert_source import (
+    ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
+    ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
+)
 from app.integrations import dagster as dagster_integration
 from app.services.dagster import DagsterClient
 from app.tools.DagsterAssetsTool import list_dagster_assets
@@ -259,13 +261,13 @@ def patched_dagster_client(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_dagster_alert_source_seeds_dagster_tools() -> None:
     """A dagster-sourced alert pre-seeds dagster tools before the ReAct loop."""
     assert "dagster" in _SEEDING_MAP
-    assert _SEEDING_MAP["dagster"] == ["dagster"]
+    assert _SEEDING_MAP["dagster"] == ("dagster",)
 
 
 def test_dagster_alert_source_appears_in_prompt_map() -> None:
     """A dagster-sourced alert is treated as a primary dagster-tool source in the prompt."""
     assert "dagster" in _PROMPT_MAP
-    assert _PROMPT_MAP["dagster"] == ["dagster"]
+    assert _PROMPT_MAP["dagster"] == ("dagster",)
 
 
 # --- tool scenarios --------------------------------------------------------

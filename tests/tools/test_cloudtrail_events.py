@@ -74,8 +74,10 @@ def test_cloudtrail_prioritized_but_not_auto_seeded_for_aws_alerts() -> None:
     CloudTrail's low lookup rate limit. The prompt prioritization map nudges the
     planner to reach for it once it has a concrete resource/principal/time target.
     """
-    from app.agent.stages.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as priority_map
-    from app.agent.stages.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as seed_map
+    from app.agent.utils.alert_source import (
+        ALERT_SOURCE_TO_SEED_TOOL_SOURCES as seed_map,
+        ALERT_SOURCE_TO_TOOL_SOURCES as priority_map,
+    )
 
     for alert_source in ("cloudwatch", "eks", "alertmanager"):
         assert "cloudtrail" not in seed_map[alert_source]

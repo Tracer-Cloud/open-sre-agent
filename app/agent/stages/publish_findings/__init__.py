@@ -42,7 +42,7 @@ def deliver(state: InvestigationState) -> dict[str, Any]:
                 "reason": "opensre_eval_rubric missing or invalid; expected non-empty string",
             }
 
-    return {**extra_updates, **generate_report(state)}
+    return {**generate_report(state), **extra_updates}
 
 
 __all__ = [
