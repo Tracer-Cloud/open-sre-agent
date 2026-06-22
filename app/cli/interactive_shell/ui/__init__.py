@@ -6,22 +6,27 @@ from app.cli.interactive_shell.ui.banner import (
     render_banner,
     render_ready_box,
 )
-from app.cli.interactive_shell.ui.provider import resolve_provider_models
 from app.cli.interactive_shell.ui.choice_menu import (
     print_valid_choice_list,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
+from app.cli.interactive_shell.ui.provider import resolve_provider_models
 from app.cli.interactive_shell.ui.rendering import (
     print_repl_json,
     print_repl_table,
     repl_print,
     repl_table,
 )
+from app.cli.interactive_shell.ui.streaming import (
+    STREAM_LABEL_ANSWER,
+    STREAM_LABEL_ASSISTANT,
+    stream_to_console,
+)
 from app.cli.interactive_shell.ui.tables import (
-    ColumnDef,
     MCP_INTEGRATION_SERVICES,
+    ColumnDef,
     print_command_output,
     print_planned_actions,
     render_integrations_table,
@@ -29,11 +34,6 @@ from app.cli.interactive_shell.ui.tables import (
     render_models_table,
     render_table,
     render_tools_table,
-)
-from app.cli.interactive_shell.ui.streaming import (
-    STREAM_LABEL_ANSWER,
-    STREAM_LABEL_ASSISTANT,
-    stream_to_console,
 )
 from app.cli.interactive_shell.ui.theme import (
     ANSI_DIM,

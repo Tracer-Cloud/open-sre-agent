@@ -260,9 +260,9 @@ def _run_service_investigation(
     """Run a runtime investigation for a deployed service by name."""
     import os
 
-    from app.cli.investigation import run_investigation_cli
     from app.cli.interactive_shell.data_store.args import write_json
     from app.cli.interactive_shell.error_handling.errors import OpenSREError
+    from app.cli.investigation import run_investigation_cli
     from app.remote.runtime_alert import build_runtime_alert_payload
 
     conflicting = [

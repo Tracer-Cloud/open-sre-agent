@@ -18,8 +18,6 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from app.cli.interactive_shell.ui.theme import DIM
-
 _REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
 
 

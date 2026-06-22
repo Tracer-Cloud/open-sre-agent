@@ -42,7 +42,7 @@ from rich.text import Text
 
 from app.cli.interactive_shell.config import WHATS_NEW
 from app.cli.interactive_shell.ui.banner_art import _render_art
-from app.cli.interactive_shell.ui.provider import detect_provider_model, resolve_provider_models
+from app.cli.interactive_shell.ui.provider import detect_provider_model
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,

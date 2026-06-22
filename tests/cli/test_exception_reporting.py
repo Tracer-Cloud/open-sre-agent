@@ -4,7 +4,10 @@ import click
 import pytest
 
 from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.interactive_shell.error_handling.exception_reporting import report_exception, should_report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import (
+    report_exception,
+    should_report_exception,
+)
 
 
 def test_should_not_report_unknown_command_usage_error() -> None:
@@ -26,7 +29,9 @@ def test_report_exception_captures_unexpected_error(monkeypatch: pytest.MonkeyPa
         context = kwargs.get("context")
         captured.append((exc, context if isinstance(context, str) else None))
 
-    monkeypatch.setattr("app.cli.interactive_shell.error_handling.exception_reporting.capture_exception", _capture)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception", _capture
+    )
     exc = RuntimeError("boom")
 
     assert report_exception(exc, context="test.boundary") is True

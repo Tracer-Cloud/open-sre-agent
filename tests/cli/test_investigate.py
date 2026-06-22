@@ -4,13 +4,13 @@ from typing import Any, NoReturn
 
 import pytest
 
+from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.cli.investigation import (
     resolve_investigation_context,
     run_investigation_cli,
     stream_investigation_cli,
 )
-from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.integrations.llm_cli.errors import CLIAuthenticationRequired
 from app.remote.stream import StreamEvent
 
