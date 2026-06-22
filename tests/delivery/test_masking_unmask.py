@@ -36,7 +36,7 @@ def _state_with_masking() -> dict[str, object]:
 
 
 def test_slack_message_is_unmasked_before_delivery() -> None:
-    from app.agent.nodes.publish_findings import node as pub_node
+    from app.agent.stages.publish_findings import node as pub_node
 
     masked_message = "Root cause: <POD_0> crashed in <NAMESPACE_0>. Impact: customer-facing."
 
@@ -64,7 +64,7 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
 
 
 def test_empty_masking_map_is_passthrough() -> None:
-    from app.agent.nodes.publish_findings import node as pub_node
+    from app.agent.stages.publish_findings import node as pub_node
 
     state = _state_with_masking()
     state["masking_map"] = {}

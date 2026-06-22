@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.agent.nodes.publish_findings.node import generate_report, node_publish_findings
+from app.agent.stages.publish_findings.node import generate_report, node_publish_findings
 from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
     # runner load while still letting static type-checkers validate
     # ``agent_class`` injections.
-    from app.agent.nodes.investigate import ConnectedInvestigationAgent
+    from app.agent.stages.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -216,11 +216,11 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from app.agent.nodes.resolve_integrations import resolve_integrations
-            from app.agent.nodes.diagnose import diagnose
-            from app.agent.nodes.extract_alert import extract_alert
-            from app.agent.nodes.investigate import ConnectedInvestigationAgent
-            from app.agent.nodes.publish_findings.node import generate_report
+            from app.agent.stages.resolve_integrations import resolve_integrations
+            from app.agent.stages.diagnose import diagnose
+            from app.agent.stages.extract_alert import extract_alert
+            from app.agent.stages.investigate import ConnectedInvestigationAgent
+            from app.agent.stages.publish_findings.node import generate_report
             from app.pipeline.pipeline import _merge
 
             state_any = cast(dict[str, Any], initial)
@@ -332,8 +332,8 @@ async def astream_investigation(
 
             # Patch render_report to a no-op so generate_report handles external
             # delivery but leaves terminal rendering to the StreamRenderer.
-            from app.agent.nodes.publish_findings import node as _publish_node
-            from app.agent.nodes.publish_findings.renderers import terminal as _term_mod
+            from app.agent.stages.publish_findings import node as _publish_node
+            from app.agent.stages.publish_findings.renderers import terminal as _term_mod
 
             with _render_report_patch_lock:
                 _orig_terminal_render = _term_mod.render_report

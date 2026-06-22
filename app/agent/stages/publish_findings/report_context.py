@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 from typing_extensions import TypedDict
 
-from app.agent.nodes.publish_findings.urls.aws import (
+from app.agent.stages.publish_findings.urls.aws import (
     build_datadog_logs_url,
     build_grafana_explore_url,
     build_s3_console_url,

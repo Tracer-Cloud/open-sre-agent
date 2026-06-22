@@ -3,16 +3,16 @@
 import logging
 from typing import Any
 
-from app.agent.nodes.publish_findings.formatters.report import (
+from app.agent.stages.publish_findings.formatters.report import (
     build_slack_blocks,
     format_slack_message,
     format_telegram_message,
     format_whatsapp_message,
 )
-from app.agent.nodes.publish_findings.gitlab_writeback import post_gitlab_mr_writeback
-from app.agent.nodes.publish_findings.renderers.editor import open_in_editor
-from app.agent.nodes.publish_findings.renderers.terminal import render_report
-from app.agent.nodes.publish_findings.report_context import build_report_context
+from app.agent.stages.publish_findings.gitlab_writeback import post_gitlab_mr_writeback
+from app.agent.stages.publish_findings.renderers.editor import open_in_editor
+from app.agent.stages.publish_findings.renderers.terminal import render_report
+from app.agent.stages.publish_findings.report_context import build_report_context
 from app.masking import MaskingContext
 from app.state import InvestigationState
 from app.types.config import NodeConfig

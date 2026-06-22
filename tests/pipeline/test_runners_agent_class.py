@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-from app.agent.nodes.investigate import ConnectedInvestigationAgent
+from app.agent.stages.investigate import ConnectedInvestigationAgent
 
 
 class _SentinelAgent(ConnectedInvestigationAgent):
@@ -58,10 +58,10 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     # Avoid running real integration/extraction; mock them to no-ops so the
     # test focuses on the agent_class threading specifically.
     with (
-        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
-        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
-        patch("app.agent.nodes.publish_findings.deliver", return_value={}),
+        patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_SentinelAgent)
 
@@ -78,13 +78,13 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
 
     state = make_initial_state(raw_alert="alert text")
     with (
-        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
-        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch(
-            "app.agent.nodes.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
+            "app.agent.stages.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
         ) as mock_run,
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
-        patch("app.agent.nodes.publish_findings.deliver", return_value={}),
+        patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state)  # no agent_class kwarg
 
@@ -103,10 +103,10 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     from app.pipeline.runners import run_investigation
 
     with (
-        patch("app.agent.nodes.resolve_integrations.resolve_integrations", return_value={}),
-        patch("app.agent.nodes.extract_alert.extract_alert", return_value={"is_noise": False}),
+        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
-        patch("app.agent.nodes.publish_findings.deliver", return_value={}),
+        patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_investigation(raw_alert={"alert": "test"}, agent_class=_SentinelAgent)
 

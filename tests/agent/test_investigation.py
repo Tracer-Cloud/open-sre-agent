@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.nodes.investigate import (
+from app.agent.stages.investigate import (
     ConnectedInvestigationAgent,
 )
-from app.agent.nodes.investigate.loop import (
+from app.agent.stages.investigate.loop import (
     duplicate_call_result,
     tool_call_signature,
 )
-from app.agent.nodes.investigate.tools import availability_view
+from app.agent.stages.investigate.tools import availability_view
 from app.agent.tool_loop import (
     _build_synthetic_assistant_tool_call_msg,
     _context_budget_ceiling_for_model,
@@ -78,8 +78,8 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -110,8 +110,8 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -134,8 +134,8 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -165,8 +165,8 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -202,8 +202,8 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -237,8 +237,8 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -612,8 +612,8 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
         pytest.raises(ValueError, match="_should_accept_conclusion returned"),
     ):
         agent.run(state)
@@ -854,9 +854,9 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch("app.agent.nodes.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.nodes.investigate.agent.get_tracker", return_value=MagicMock()),
-        patch("app.agent.nodes.investigate.agent.get_available_tools", return_value=tools),
+        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("app.agent.stages.investigate.agent.get_tracker", return_value=MagicMock()),
+        patch("app.agent.stages.investigate.agent.get_available_tools", return_value=tools),
     ):
         result = ConnectedInvestigationAgent().run(state)
     return result, mock_llm

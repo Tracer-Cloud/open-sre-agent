@@ -265,7 +265,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.agent.chat.agent import _apply_guardrails as _apply_guardrails_to_messages
 
         secret = "key is AKIAIOSFODNN7EXAMPLE"
         msgs: list[dict[str, Any]] = [
@@ -293,7 +293,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.agent.chat.agent import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "this is forbidden"}]
         with pytest.raises(GuardrailBlockedError):
@@ -313,7 +313,7 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.agent.chat.agent import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": None}]
         _apply_guardrails_to_messages(msgs)
@@ -328,7 +328,7 @@ class TestChatNodeGuardrails:
             lambda: tmp_path / "missing.yml",
         )
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.agent.chat.agent import _apply_guardrails as _apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "AKIAIOSFODNN7EXAMPLE"}]
         result = _apply_guardrails_to_messages(msgs)
@@ -449,7 +449,7 @@ class TestOverlappingRedactionReachesDownstream:
         overlapping rules, leaving originals untouched (it copies)."""
         self._install_rules(tmp_path, monkeypatch)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.agent.chat.agent import _apply_guardrails as _apply_guardrails_to_messages
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
         msgs: list[dict[str, Any]] = [{"role": "user", "content": original}]

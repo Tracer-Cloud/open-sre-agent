@@ -16,8 +16,8 @@ globs:
 
 ## Key packages
 
-- `app/agent/nodes/` for pipeline stages (extract, investigate, diagnose, publish findings)
-- `app/agent/context.py`, `chat.py`
+- `app/agent/stages/` for pipeline stages (extract, investigate, diagnose, publish findings)
+- `app/agent/chat/`, `app/agent/tool_loop/`
 - `app/state/agent_state.py` for `AgentState` / `InvestigationState`
 
 ## Conventions

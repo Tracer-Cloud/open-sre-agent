@@ -48,7 +48,7 @@ def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
 
-    from app.agent.nodes.resolve_integrations import resolve_integrations
+    from app.agent.stages.resolve_integrations import resolve_integrations
 
     resolved = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
     session.resolved_integrations_cache = resolved
@@ -143,7 +143,7 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from app.agent.nodes.investigate.tools import get_available_tools
+        from app.agent.stages.investigate.tools import get_available_tools
         from app.agent.tool_loop import run_tool_calling_loop
         from app.services.agent_llm_client import get_agent_llm
 

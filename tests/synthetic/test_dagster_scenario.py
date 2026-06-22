@@ -18,8 +18,8 @@ from typing import Any
 import httpx
 import pytest
 
-from app.agent.nodes.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
-from app.agent.nodes.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
+from app.agent.stages.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
+from app.agent.stages.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
 from app.integrations import dagster as dagster_integration
 from app.services.dagster import DagsterClient
 from app.tools.DagsterAssetsTool import list_dagster_assets

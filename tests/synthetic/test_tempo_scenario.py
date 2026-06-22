@@ -12,7 +12,7 @@ import pytest
 
 pytestmark = pytest.mark.synthetic
 
-from app.agent.nodes.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES
+from app.agent.stages.investigate.tools import _ALERT_SOURCE_TO_TOOL_SOURCES
 from app.tools.TempoTool import query_tempo
 
 

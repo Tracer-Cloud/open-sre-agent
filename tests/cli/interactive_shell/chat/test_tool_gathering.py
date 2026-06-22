@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
-import app.agent.nodes.investigate.tools as investigate_tools
+import app.agent.stages.investigate.tools as investigate_tools
 import app.agent.tool_loop as tool_loop
 import app.services.agent_llm_client as agent_llm_client
 from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence

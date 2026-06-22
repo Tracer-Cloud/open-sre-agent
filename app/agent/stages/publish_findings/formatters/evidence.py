@@ -4,13 +4,13 @@ import html
 from collections.abc import Callable
 from typing import Any
 
-from app.agent.nodes.publish_findings.formatters.base import (
+from app.agent.stages.publish_findings.formatters.base import (
     format_html_link,
     format_slack_link,
     shorten_text,
 )
-from app.agent.nodes.publish_findings.report_context import ReportContext
-from app.agent.nodes.publish_findings.urls.aws import (
+from app.agent.stages.publish_findings.report_context import ReportContext
+from app.agent.stages.publish_findings.urls.aws import (
     build_datadog_logs_url,
     build_grafana_explore_url,
 )

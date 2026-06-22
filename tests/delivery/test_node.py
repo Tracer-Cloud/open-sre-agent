@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.nodes.publish_findings.gitlab_writeback import _build_mr_note
+from app.agent.stages.publish_findings.gitlab_writeback import _build_mr_note
 
 # ---------------------------------------------------------------------------
 # _build_mr_note
@@ -70,38 +70,38 @@ def _make_state(**overrides: Any) -> dict[str, Any]:
 def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch all heavy dependencies of generate_report so we can run it in tests."""
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.build_report_context",
+        "app.agent.stages.publish_findings.node.build_report_context",
         lambda _state: {},
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.format_slack_message",
+        "app.agent.stages.publish_findings.node.format_slack_message",
         lambda _ctx: "slack report text",
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.format_telegram_message",
+        "app.agent.stages.publish_findings.node.format_telegram_message",
         lambda _ctx: "telegram report text",
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.format_whatsapp_message",
+        "app.agent.stages.publish_findings.node.format_whatsapp_message",
         lambda _ctx: "whatsapp report text",
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.build_slack_blocks",
+        "app.agent.stages.publish_findings.node.build_slack_blocks",
         lambda _ctx: [],
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.create_investigation_and_attach_url",
+        "app.agent.stages.publish_findings.node.create_investigation_and_attach_url",
         lambda _state, _msg, _summary: (
             "inv-id-123",
             "https://app.example.com/inv/1",
         ),
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.render_report",
+        "app.agent.stages.publish_findings.node.render_report",
         lambda _msg, **_kw: None,
     )
     monkeypatch.setattr(
-        "app.agent.nodes.publish_findings.node.open_in_editor",
+        "app.agent.stages.publish_findings.node.open_in_editor",
         lambda _msg: None,
     )
 
@@ -117,13 +117,13 @@ def test_gitlab_writeback_calls_post_when_enabled(monkeypatch: pytest.MonkeyPatc
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.nodes.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
         patch(
-            "app.agent.nodes.publish_findings.gitlab_writeback.build_gitlab_config",
+            "app.agent.stages.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -144,9 +144,9 @@ def test_gitlab_writeback_skipped_when_env_var_not_set(monkeypatch: pytest.Monke
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.nodes.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -167,9 +167,9 @@ def test_gitlab_writeback_skipped_when_mr_iid_missing(monkeypatch: pytest.Monkey
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.agent.nodes.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(state)  # type: ignore[arg-type]
 
@@ -187,15 +187,15 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch(
-            "app.agent.nodes.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "app.agent.stages.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             side_effect=RuntimeError("network error"),
         ),
         patch(
-            "app.agent.nodes.publish_findings.gitlab_writeback.build_gitlab_config",
+            "app.agent.stages.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         result = generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -216,7 +216,7 @@ def test_openclaw_writeback_calls_delivery_when_configured(
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch("app.utils.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -245,7 +245,7 @@ def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPat
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch("app.utils.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -283,7 +283,7 @@ def test_twilio_sms_dispatched_when_enabled(monkeypatch: pytest.MonkeyPatch) -> 
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -326,7 +326,7 @@ def test_twilio_sms_skipped_when_channel_disabled(monkeypatch: pytest.MonkeyPatc
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -355,7 +355,7 @@ def test_twilio_sms_skipped_without_recipient(monkeypatch: pytest.MonkeyPatch) -
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
         patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.agent.nodes.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(

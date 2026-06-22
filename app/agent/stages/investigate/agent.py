@@ -6,12 +6,12 @@ import contextlib
 import logging
 from typing import Any
 
-from app.agent.nodes.investigate.loop import (
+from app.agent.stages.investigate.loop import (
     degraded_investigation_from_llm_failure,
     duplicate_call_result,
     tool_call_signature,
 )
-from app.agent.nodes.investigate.tools import (
+from app.agent.stages.investigate.tools import (
     MAX_STAGNANT_ITERATIONS,
     STAGNATION_NUDGE,
     build_connected_tool_context,
@@ -20,7 +20,7 @@ from app.agent.nodes.investigate.tools import (
     merge_tool_evidence,
     tool_event_payload,
 )
-from app.agent.nodes.investigate.prompt import build_system_prompt, format_alert_context
+from app.agent.stages.investigate.prompt import build_system_prompt, format_alert_context
 from app.agent.tool_loop import (
     AgentEventCallback,
     _build_assistant_msg,
