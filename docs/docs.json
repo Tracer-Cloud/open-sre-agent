@@ -312,18 +312,6 @@
             ]
           }
         ]
-      },
-      {
-        "tab": "Changelog",
-        "icon": "clock",
-        "groups": [
-          {
-            "group": "Daily updates",
-            "pages": [
-              "daily-updates/overview"
-            ]
-          }
-        ]
       }
     ]
   },
