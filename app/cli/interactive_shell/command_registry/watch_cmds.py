@@ -25,7 +25,7 @@ from app.cli.interactive_shell.ui import (
     repl_table,
 )
 from app.cli.interactive_shell.ui.time_format import format_repl_timestamp
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.fleet_monitoring.probe import pid_exists
 from app.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 from app.watch_dog.monitor import start_watchdog_daemon_thread

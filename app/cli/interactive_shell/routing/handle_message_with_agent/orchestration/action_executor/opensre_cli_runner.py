@@ -20,7 +20,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
 )
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR, WARNING, print_command_output
-from app.cli.support.exception_reporting import report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 
 from .background_tasks import start_background_cli_task as _start_background_cli_task_default
 from .task_streaming import SHELL_COMMAND_TIMEOUT_SECONDS, _ae_resolve

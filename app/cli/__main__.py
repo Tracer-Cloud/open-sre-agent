@@ -26,7 +26,7 @@ from app.cli.interactive_shell.ui.prompt_support import (
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
-from app.cli.support.exception_reporting import report_exception, should_report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception, should_report_exception
 from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
 

@@ -282,7 +282,7 @@ class TestDispatchSlash:
             lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
         )
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -304,7 +304,7 @@ class TestDispatchSlash:
             lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
         )
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -1348,7 +1348,7 @@ class TestInvestigateFileCommand:
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object
     ) -> None:
-        from app.cli.support.errors import OpenSREError
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]

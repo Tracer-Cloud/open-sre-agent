@@ -19,7 +19,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
 from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
-from app.cli.support.exception_reporting import report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
 from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 

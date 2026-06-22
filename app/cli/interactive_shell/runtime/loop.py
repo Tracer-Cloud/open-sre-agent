@@ -45,8 +45,8 @@ from app.cli.interactive_shell.ui.prompt_support import (
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,
 )
-from app.cli.support.exception_reporting import report_exception
-from app.cli.support.repl_progress import repl_safe_progress_scope
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
+from app.cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
 from app.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)

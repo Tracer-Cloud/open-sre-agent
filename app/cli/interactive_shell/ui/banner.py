@@ -41,6 +41,8 @@ from rich.table import Table
 from rich.text import Text
 
 from app.cli.interactive_shell.config import WHATS_NEW
+from app.cli.interactive_shell.ui.banner_art import _render_art
+from app.cli.interactive_shell.ui.provider import detect_provider_model, resolve_provider_models
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -49,113 +51,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from app.config import LLMSettings
-from app.utils.figlet import render_figlet
 from app.version import get_version
-
-# ── Splash art ───────────────────────────────────────────────────────────────
-# Pre-rendered during development and checked into this module as a static string.
-# Colour codes are stripped; HIGHLIGHT is re-applied at render time.
-#
-# SPLASH_ART         block font, 59 cols, solid ██ fills
-# SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
-# _FALLBACK_ART      minimal art, 44 cols, last resort
-
-SPLASH_ART = """\
- ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██████╗ ███████╗
-██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██╔══██╗██╔════╝
-██║   ██║██████╔╝█████╗  ██╔██╗ ██║███████╗██████╔╝█████╗
-██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║╚════██║██╔══██╗██╔══╝
-╚██████╔╝██║     ███████╗██║ ╚████║███████║██║  ██║███████╗
- ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝╚══════╝"""
-
-SPLASH_ART_NARROW = """\
-    _|_|    _|_|_|    _|_|_|_|  _|      _|    _|_|_|  _|_|_|    _|_|_|_|
-  _|    _|  _|    _|  _|        _|_|    _|  _|        _|    _|  _|
-  _|    _|  _|_|_|    _|_|_|    _|  _|  _|    _|_|    _|_|_|    _|_|_|
-  _|    _|  _|        _|        _|    _|_|        _|  _|    _|  _|
-    _|_|    _|        _|_|_|_|  _|      _|  _|_|_|    _|    _|  _|_|_|_|"""
-
-_FALLBACK_ART = """\
-  ___                    ____  ____  _____
- / _ \\ _ __   ___ _ __  / ___||  _ \\| ____|
-| | | | '_ \\ / _ \\ '_ \\ \\___ \\| |_) |  _|
-| |_| | |_) |  __/ | | | ___) |  _ <| |___
- \\___/| .__/ \\___|_| |_||____/|_| \\_\\_____|
-      |_|"""
-
-
-def _render_art(console_width: int = 80) -> str:
-    """Return the splash art string for the given terminal width.
-
-    Priority: SPLASH_ART (grid, 34 cols) → SPLASH_ART_NARROW (simpleBlock, 72 cols)
-    → _FALLBACK_ART (minimal, 44 cols).  OPENSRE_FIGLET_FONT overrides the default
-    when pyfiglet is installed.
-    """
-    custom_font = os.getenv("OPENSRE_FIGLET_FONT")
-    if custom_font:
-        rendered = render_figlet("OpenSRE", font=custom_font, max_line_width=console_width - 2)
-        if rendered:
-            return rendered
-
-    art_width = max(len(ln) for ln in SPLASH_ART.splitlines())
-    narrow_width = max(len(ln) for ln in SPLASH_ART_NARROW.splitlines())
-    fallback_width = max(len(ln) for ln in _FALLBACK_ART.splitlines())
-
-    if console_width >= art_width + 4:
-        return SPLASH_ART
-    if console_width >= narrow_width + 4:
-        return SPLASH_ART_NARROW
-    if console_width >= fallback_width + 4:
-        return _FALLBACK_ART
-    return _FALLBACK_ART
-
-
-# ── Provider detection ────────────────────────────────────────────────────────
-
-
-def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
-    """Return the active (reasoning_model, toolcall_model) for a provider."""
-    if provider in {
-        "codex",
-        "claude-code",
-        "gemini-cli",
-        "antigravity-cli",
-        "cursor",
-        "kimi",
-        "opencode",
-    }:
-        env_key = {
-            "codex": "CODEX_MODEL",
-            "claude-code": "CLAUDE_CODE_MODEL",
-            "gemini-cli": "GEMINI_CLI_MODEL",
-            "antigravity-cli": "ANTIGRAVITY_CLI_MODEL",
-            "cursor": "CURSOR_MODEL",
-            "kimi": "KIMI_MODEL",
-            "opencode": "OPENCODE_MODEL",
-        }.get(provider, "")
-        cli_model = (os.getenv(env_key, "").strip() if env_key else "") or "CLI default"
-        return (cli_model, cli_model)
-
-    single_model = str(getattr(settings, f"{provider}_model", "")).strip()
-    if single_model:
-        return (single_model, single_model)
-
-    reasoning_model = str(getattr(settings, f"{provider}_reasoning_model", "")).strip()
-    toolcall_model = str(getattr(settings, f"{provider}_toolcall_model", "")).strip()
-    return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
-
-
-def detect_provider_model() -> tuple[str, str]:
-    """Return (provider, model) for the active LLM config."""
-    try:
-        settings = LLMSettings.from_env()
-    except Exception:
-        return ("unknown", "unknown")
-
-    provider = settings.provider or os.getenv("LLM_PROVIDER", "anthropic")
-    reasoning_model, _toolcall_model = resolve_provider_models(settings, provider)
-    return (provider, reasoning_model)
 
 
 def _is_first_run() -> bool:
@@ -177,7 +73,6 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     Rendered output (with colour roles):
     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
     ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [HIGHLIGHT art]
-    ╋┏━━┓╋┏━━┓╋┏━━┓╋┏━┓╋╋┏━━┓╋┏━┓╋┏━━┓
     ...
       opensre  [SECONDARY]  ·  v<version> [BRAND]
       open-source SRE agent for automated incident
@@ -579,20 +474,7 @@ def render_ready_box(
     *,
     session: object = None,
 ) -> None:
-    """Print the two-column welcome panel with an embedded title bar.
-
-    Layout:
-    ── OpenSRE · v<version> ────────────────────────────────────────────────╮
-    │                                                                         │
-    │      Welcome back paul!          │  Tips for getting started            │
-    │           █▀█                   │  Paste alert JSON or describe…        │
-    │           █▄█                   │  ───                                  │
-    │                                  │  What's new                          │
-    │  claude-opus-4-7  ·  anthropic  │  Two-column welcome with tips…        │
-    │  · ~/code/opensre                │  /release-notes for more             │
-    │                                                                         │
-    ╰─────────────────────────────────────────────────────────────────────────╯
-    """
+    """Print the two-column welcome panel with an embedded title bar."""
     console = console or Console(
         highlight=False,
         force_terminal=True,

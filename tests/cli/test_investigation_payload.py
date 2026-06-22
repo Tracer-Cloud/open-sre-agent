@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.cli.investigation.payload import load_payload
-from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
+from app.cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
 
 
 def test_load_payload_tty_guided_menu_template_choice(

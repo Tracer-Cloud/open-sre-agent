@@ -542,7 +542,7 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
-    from app.cli.interactive_shell.ui.banner import _render_art
+    from app.cli.interactive_shell.ui.banner_art import _render_art
 
     art = _render_art()
     version = get_version()

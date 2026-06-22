@@ -45,7 +45,7 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     stream_to_console,
 )
-from app.cli.support.exception_reporting import report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.integrations.llm_cli.errors import CLITimeoutError
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000

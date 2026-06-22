@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
+from app.cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
 
 _DEMO_ALERT_FILENAME = "alert.json"
 

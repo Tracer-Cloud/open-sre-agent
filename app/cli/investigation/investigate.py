@@ -9,7 +9,7 @@ import threading
 from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from app.config import resolve_llm_settings
 from app.utils.tracing import traceable
 
@@ -31,7 +31,7 @@ def _check_llm_settings() -> None:
     """Validate LLM settings early and surface misconfiguration as a structured error."""
     from pydantic import ValidationError
 
-    from app.cli.support.errors import OpenSREError
+    from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
     try:
         resolve_llm_settings()
@@ -52,7 +52,7 @@ def _check_llm_settings() -> None:
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
     if isinstance(exc, _InvestigationPumpCancelled):
-        from app.cli.support.errors import OpenSREError
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "Investigation streaming stopped before completion.",

@@ -25,7 +25,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.s
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
 from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
-from app.cli.support.exception_reporting import report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 
 from .task_streaming import (
     _SYNTHETIC_DIAG_CHARS,

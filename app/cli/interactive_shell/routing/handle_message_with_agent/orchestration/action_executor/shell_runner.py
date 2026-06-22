@@ -23,7 +23,7 @@ from app.cli.interactive_shell.shell import (
     parse_shell_command,
 )
 from app.cli.interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
-from app.cli.support.exception_reporting import report_exception
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 
 from .task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,

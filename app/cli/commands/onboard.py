@@ -26,7 +26,7 @@ def _load_local_config() -> dict[str, Any]:
 def _run_onboarding_command(
     run_command: RunCommand, *, load_config: ConfigLoader = _load_local_config
 ) -> None:
-    from app.cli.support.errors import OpenSREError
+    from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
     capture_onboard_started()
     try:
