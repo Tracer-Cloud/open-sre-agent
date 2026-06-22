@@ -5,6 +5,7 @@ import binascii
 import json
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -98,7 +99,8 @@ class TemporalClient:
             params["execution.runId"] = run_id
         try:
             r = self._client.get(
-                f"/api/v1/namespaces/{self.config.namespace}/workflows/{workflow_id}/history",
+                f"/api/v1/namespaces/{self.config.namespace}"
+                f"/workflows/{quote(workflow_id, safe='')}/history",
                 params=params,
             )
             r.raise_for_status()
@@ -151,7 +153,8 @@ class TemporalClient:
         }
         try:
             r = self._client.get(
-                f"/api/v1/namespaces/{self.config.namespace}/task-queues/{task_queue_name}",
+                f"/api/v1/namespaces/{self.config.namespace}"
+                f"/task-queues/{quote(task_queue_name, safe='')}",
                 params=params,
             )
             r.raise_for_status()

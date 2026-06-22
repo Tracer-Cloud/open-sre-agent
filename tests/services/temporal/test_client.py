@@ -208,6 +208,23 @@ def test_get_workflow_history_omits_archived_and_token(monkeypatch):
     assert response["archived"] is False
 
 
+def test_get_workflow_history_encodes_workflow_id_with_slashes(monkeypatch):
+    """Workflow IDs may contain '/' (e.g. 'order-service/order-123'). The client
+    must percent-encode it into a single path segment, or the Temporal frontend
+    parses the extra segment as a different route and returns 404."""
+    captured = []
+
+    def fake_get(url, **_kwargs):
+        captured.append(url)
+        return _FakeResponse({"history": {"events": []}})
+
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", fake_get)
+
+    temporal.get_workflow_history("order-service/order-123", "run-1")
+    assert captured[0] == "/api/v1/namespaces/default/workflows/order-service%2Forder-123/history"
+
+
 def test_get_workflow_history_failure(monkeypatch):
     temporal = _client()
 
@@ -288,6 +305,22 @@ def test_describe_task_queue_omits_pollers(monkeypatch):
     assert response["success"] is True
     assert response["pollers"] == []
     assert response["total"] == 0
+
+
+def test_describe_task_queue_encodes_name_with_slashes(monkeypatch):
+    """Task queue names are free-form strings and may contain '/'. Encode them
+    into a single path segment so the request hits the right route."""
+    captured = []
+
+    def fake_get(url, **_kwargs):
+        captured.append(url)
+        return _FakeResponse({"stats": {}})
+
+    temporal = _client()
+    monkeypatch.setattr(temporal._client, "get", fake_get)
+
+    temporal.describe_task_queue("payments/charge-queue")
+    assert captured[0] == "/api/v1/namespaces/default/task-queues/payments%2Fcharge-queue"
 
 
 def test_describe_task_queue_failure(monkeypatch):

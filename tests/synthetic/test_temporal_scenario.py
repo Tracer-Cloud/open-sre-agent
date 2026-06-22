@@ -27,8 +27,8 @@ from typing import Any
 import httpx
 import pytest
 
-from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES as _SEEDING_MAP
-from app.agent.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
+from app.agent.stages.investigate.prompt import _ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP
+from app.agent.utils.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP
 from app.services.temporal import TemporalClient, TemporalConfig
 from app.tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
 from app.tools.TemporalTaskQueueTool import TemporalTaskQueueTool
@@ -270,7 +270,7 @@ def patched_temporal_client(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_temporal_alert_source_seeds_temporal_tools() -> None:
     """A temporal-sourced alert pre-seeds temporal tools before the ReAct loop."""
     assert "temporal" in _SEEDING_MAP
-    assert _SEEDING_MAP["temporal"] == ["temporal"]
+    assert _SEEDING_MAP["temporal"] == ("temporal",)
 
 
 def test_temporal_alert_source_appears_in_prompt_map() -> None:
