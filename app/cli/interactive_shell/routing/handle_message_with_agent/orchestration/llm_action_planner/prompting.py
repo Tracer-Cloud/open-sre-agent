@@ -7,7 +7,8 @@ from typing import Any
 
 from app.cli.interactive_shell.prompting.conversation_history import format_recent_conversation
 
-from .constants import _MAX_TEXT_LEN, _SYSTEM_PROMPT_BASE
+from .constants import _MAX_TEXT_LEN
+from .system_prompt import _SYSTEM_PROMPT_BASE
 
 
 def _system_prompt() -> str:

@@ -15,6 +15,9 @@ from app.cli.interactive_shell.command_registry.alerts import COMMANDS as ALERTS
 from app.cli.interactive_shell.command_registry.cli_parity import (
     COMMANDS as PARITY_COMMANDS,
 )
+from app.cli.interactive_shell.command_registry.diagnostics_cmds import (
+    COMMANDS as DIAGNOSTICS_COMMANDS,
+)
 from app.cli.interactive_shell.command_registry.help import COMMANDS as HELP_COMMANDS
 from app.cli.interactive_shell.command_registry.integrations import (
     COMMANDS as INTEGRATIONS_COMMANDS,
@@ -34,6 +37,9 @@ from app.cli.interactive_shell.command_registry.repl_data import (
     load_verified_integrations,
 )
 from app.cli.interactive_shell.command_registry.session_cmds import COMMANDS as SESSION_COMMANDS
+from app.cli.interactive_shell.command_registry.settings_cmds import (
+    COMMANDS as SETTINGS_COMMANDS,
+)
 from app.cli.interactive_shell.command_registry.suggestions import closest_choice
 from app.cli.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
@@ -52,6 +58,8 @@ _MERGED_SEQUENCE = tuple(
     chain(
         HELP_COMMANDS,
         SESSION_COMMANDS,
+        SETTINGS_COMMANDS,
+        DIAGNOSTICS_COMMANDS,
         INTEGRATIONS_COMMANDS,
         MODEL_COMMANDS,
         TOOLS_COMMANDS,

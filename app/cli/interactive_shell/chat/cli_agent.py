@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Callable
-from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.chat.action_plan import (
+    _ALLOWED_SLASH_ACTIONS,
+    _actions_allowed_by_capabilities,
+    _opensre_integration_command_blocked,
+    _parse_action_plan,
+    _registered_interactive_command,
+)
+from app.cli.interactive_shell.chat.message_classifier import (
+    _load_synthetic_observation_text,
+    _user_message_requests_synthetic_failure_explanation,
+)
+from app.cli.interactive_shell.chat.system_prompt import (
+    _build_environment_block,
+    _build_observation_block,
+    _build_system_prompt,
+)
 from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.conversation_history import (
@@ -18,10 +32,6 @@ from app.cli.interactive_shell.prompting.conversation_history import (
     format_recent_conversation,
 )
 from app.cli.interactive_shell.prompting.follow_up import _summarize_last_state
-from app.cli.interactive_shell.prompting.prompt_rules import (
-    CLI_ASSISTANT_MARKDOWN_RULE,
-    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
-)
 from app.cli.interactive_shell.references.agents_md_reference import (
     build_agents_md_reference_text,
 )
@@ -33,9 +43,6 @@ from app.cli.interactive_shell.references.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
 from app.cli.interactive_shell.runtime import ReplSession
-from app.cli.interactive_shell.runtime.session import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-)
 from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -47,314 +54,6 @@ from app.cli.interactive_shell.ui import (
     stream_to_console,
 )
 from app.integrations.llm_cli.errors import CLITimeoutError
-
-_MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
-
-
-def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
-    """True when the user is likely asking about a failed synthetic benchmark."""
-    m = message.strip().lower()
-    if not m:
-        return False
-    suggested = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST.lower().rstrip("?")
-    if m.rstrip("?") == suggested:
-        return True
-    if "why" in m and "fail" in m:
-        return True
-    return "what went wrong" in m
-
-
-def _load_synthetic_observation_text(
-    path_str: str, *, max_chars: int = _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS
-) -> str:
-    try:
-        raw = Path(path_str).read_text(encoding="utf-8")
-    except OSError:
-        return ""
-    if len(raw) > max_chars:
-        return (
-            raw[:max_chars]
-            + f"\n… [truncated for prompt size; observation is {len(raw)} characters total]"
-        )
-    return raw
-
-
-_TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
-_MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
-
-_ACTION_RULE = (
-    "Action planning: if the user asks you to change OpenSRE runtime state, "
-    "return ONLY a compact JSON object with an `actions` array. Do not give "
-    "instructions when an allowed action can satisfy the request. Allowed "
-    "action object schemas: "
-    '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
-    "where provider is one of anthropic, openai, openrouter, deepseek, gemini, nvidia, "
-    "ollama, codex, claude-code, gemini-cli, antigravity-cli; both `model` (reasoning) and `toolcall_model` are optional; "
-    '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
-    "to change ONLY the toolcall model on the currently active provider; "
-    '`{"action":"slash","command":"/model show"}` where command is one of '
-    "/model show, /health, /doctor, /version; "
-    '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
-    "to run any opensre subcommand (agent is blocked); "
-    '`{"action":"run_interactive","command":"/<command> <args>"}` '
-    "to launch any registered OpenSRE interactive slash command the user asked for. "
-    "For ordinary "
-    "questions, return normal Markdown. Do not return action JSON for vague "
-    "local model requests such as `connect to local llama`; answer with a brief "
-    "clarification or mention `/model set ollama` as an option instead."
-)
-
-_SOURCE_SCOPED_INVESTIGATION_RULE = (
-    "Source-scoped investigation requests: when the user asks you to find or "
-    "figure out the cause of a problem AND explicitly names which connected "
-    "sources to query (for example 'figure out why it's crashing on Windows by "
-    "querying Sentry, GitHub issues, and PostHog'), do NOT just tell them to "
-    "paste an alert or run `opensre investigate`. Acknowledge EACH named source "
-    "by name, and for each one report what you checked or found from the gathered "
-    "tool results below — or state plainly that it returned nothing, is not "
-    "reachable, or needs a repo/project scope. You may still ask for a tighter "
-    "scope (service, version, error message, time window) to refine the search, "
-    "but lead by engaging the named sources rather than deflecting."
-)
-
-_SETUP_GUIDANCE_RULE = (
-    "Configuring or connecting an integration: when the user asks to configure, "
-    "connect, set up, add, or enable a specific integration they already named "
-    "(for example 'can you configure sentry?' or 'connect datadog'), do NOT just "
-    "tell them the command to type and do NOT talk about 'changing runtime state'. "
-    "Launch it for them by returning an action plan: "
-    '`{"action":"run_interactive","command":"/integrations setup <service>"}` '
-    "using the service they named (for an MCP server use "
-    '`{"action":"run_interactive","command":"/mcp connect <server>"}`). The '
-    "interactive wizard then prompts them for the credentials that integration "
-    "needs. This applies to any integration; never hardcode advice to one vendor."
-)
-
-
-# `run_interactive` is not a narrow feature allowlist. It is the bridge from an
-# agent-planned action back into the OpenSRE interactive shell. Any command that
-# is registered in the slash-command registry is already an OpenSRE command and
-# must stay eligible here.
-#
-# Keep this registry-backed instead of listing subcommands like
-# `/integrations setup` or `/integrations remove`: duplicating subcommand lists
-# here drifts from the actual dispatcher and causes valid OpenSRE commands to be
-# rejected before the normal policy/confirmation flow can evaluate them. The
-# dispatcher remains the source of truth for argument validation, execution tier,
-# confirmation, exclusive-stdin handling, and the command's side effects.
-#
-# The only thing this gate should reject is non-OpenSRE input: empty strings,
-# shell snippets, arbitrary text, or unknown slash commands. Do not reintroduce
-# a per-command allowlist in this file.
-def _registered_interactive_command(command: str) -> bool:
-    parts = command.strip().split()
-    if not parts:
-        return False
-    name = parts[0].lower()
-    if name == "/":
-        return True
-    if not name.startswith("/"):
-        return False
-
-    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
-
-    return name in SLASH_COMMANDS
-
-
-_ALLOWED_SLASH_ACTIONS = frozenset(
-    {
-        "/model show",
-        "/health",
-        "/doctor",
-        "/version",
-    }
-)
-
-
-# Conversational action kinds map onto the same capability gates the action
-# planner uses, so a session that explicitly disables a surface (an
-# ``available_capabilities`` entry set to an empty list) cannot actuate it from
-# the chat answer path either. Production sets no capability constraints, so
-# every action stays allowed there; the gate only bites in tests/scenarios that
-# deliberately pin a surface off. ``switch_*`` map to ``llm_provider`` because
-# they mutate the active provider/model.
-_ACTION_CAPABILITY: dict[str, str] = {
-    "switch_llm_provider": "llm_provider",
-    "switch_toolcall_model": "llm_provider",
-    "slash": "slash_commands",
-    "run_interactive": "slash_commands",
-    "run_cli_command": "cli_commands",
-}
-
-
-def _actions_allowed_by_capabilities(
-    actions: list[dict[str, object]], session: ReplSession
-) -> list[dict[str, object]]:
-    """Drop actions whose capability surface is explicitly disabled for *session*.
-
-    An action kind with no capability mapping is always kept. An action mapped
-    to a capability is kept unless that capability is explicitly disabled (set
-    to ``()``); an absent capability key leaves the action enabled, matching the
-    production default.
-    """
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
-        capability_not_explicitly_disabled,
-    )
-
-    allowed: list[dict[str, object]] = []
-    for action in actions:
-        capability = _ACTION_CAPABILITY.get(str(action.get("action", "")).strip())
-        if capability is None or capability_not_explicitly_disabled(session, capability):
-            allowed.append(action)
-    return allowed
-
-
-def _opensre_integration_command_blocked(payload: str, session: ReplSession) -> bool:
-    """Block integration-management CLI runs when the session has none configured."""
-    if not session.configured_integrations_known or session.configured_integrations:
-        return False
-    lowered = payload.strip().lower()
-    return lowered.startswith("integrations") or "integration" in lowered
-
-
-def _build_environment_block(session: ReplSession) -> str:
-    """Render configured-integration facts so the assistant can answer directly.
-
-    Returns an empty string when the configured set is unknown, so we never
-    assert facts we don't have. When known, the model is told the exact set and
-    that anything absent is not configured — enough to answer "is X installed?"
-    without deflecting to ``/integrations``.
-    """
-    if not session.configured_integrations_known:
-        return ""
-    if session.configured_integrations:
-        connected = ", ".join(session.configured_integrations)
-        body = (
-            f"Configured integrations in this session: {connected}. "
-            "Any integration not in that list is NOT configured. When the user asks "
-            "whether a specific integration is installed/configured/connected, answer "
-            "directly and definitively from this list instead of telling them to run "
-            "a command."
-        )
-    else:
-        body = (
-            "No integrations are configured in this session. If the user asks whether "
-            "a specific integration is installed/configured, answer that none are "
-            "configured rather than deflecting."
-        )
-    return f"--- Environment (configured integrations) ---\n{body}\n\n"
-
-
-def _build_system_prompt(
-    reference: str,
-    history: str,
-    agents_md: str = "",
-    investigation_flow: str = "",
-    prior_investigation: str = "",
-    environment: str = "",
-) -> str:
-    """Build the system prompt for one assistant turn.
-
-    Split out so tests can assert on terminology / formatting rules without
-    invoking an LLM. ``agents_md`` is the optional repo-map block from
-    :mod:`app.cli.interactive_shell.references.agents_md_reference`; when empty the
-    section is omitted so callers in environments that ship no AGENTS.md
-    files don't waste tokens on an empty header. ``investigation_flow`` is a
-    concise reference to how ``opensre investigate`` processes alerts.
-    """
-    repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
-    investigation_flow_block = (
-        f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
-        if investigation_flow
-        else ""
-    )
-    prior_investigation_block = (
-        f"--- Prior investigation in this session ---\n{prior_investigation}\n\n"
-        if prior_investigation
-        else ""
-    )
-    return (
-        "You are the OpenSRE terminal assistant. You help with OpenSRE CLI "
-        "usage, the interactive shell, and onboarding. Explicit slash commands "
-        "and command aliases execute before this assistant as argv, without "
-        "shell semantics; ordinary free text should be answered conversationally. "
-        "Users must prefix with ! for full-shell semantics (pipes, redirects, "
-        "mutating commands). Do not tell users the interactive shell cannot "
-        "execute commands. You do NOT run incident "
-        "investigations yourself "
-        "(those use the separate investigation pipeline), but you are grounded on "
-        "that pipeline's architecture below and can answer questions about its "
-        "stages and source files.\n"
-        "When the user wants to investigate an alert, tell them to paste "
-        "alert text, JSON, or a concrete incident description (errors, "
-        "services, symptoms). Mention `opensre investigate` and pasting "
-        "into this interactive shell.\n"
-        "Be brief and friendly. Ground CLI facts in the reference below; do "
-        "not invent subcommands. For investigation-flow questions, use the "
-        "investigation flow reference below and do not claim the pipeline "
-        "definition is unavailable.\n"
-        "For vague operational questions (for example why a database is slow) "
-        "with no pasted alert, restate the user's question in your reply and "
-        "ask for the target system, service, or alert context.\n\n"
-        f"{_SETUP_GUIDANCE_RULE}\n\n"
-        f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
-        f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
-        f"{environment}"
-        f"--- CLI reference ---\n{reference}\n\n"
-        f"{investigation_flow_block}"
-        f"{prior_investigation_block}"
-        f"{repo_map_block}"
-        f"--- Recent CLI conversation ---\n{history}\n"
-    )
-
-
-def _extract_json_object(text: str) -> dict[str, object] | None:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        lines = stripped.splitlines()
-        if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip() == "```":
-            stripped = "\n".join(lines[1:-1]).strip()
-
-    decoder = json.JSONDecoder()
-    for index, char in enumerate(stripped):
-        if char != "{":
-            continue
-        try:
-            payload, _end = decoder.raw_decode(stripped[index:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            return payload
-    return None
-
-
-def _normalize_action(action: dict[str, object]) -> dict[str, object] | None:
-    normalized = dict(action)
-    kind = str(normalized.get("action", "")).strip()
-    if not kind and str(normalized.get("provider", "")).strip():
-        normalized["action"] = "switch_llm_provider"
-        return normalized
-    if not kind and str(normalized.get("command", "")).strip():
-        normalized["action"] = "slash"
-        return normalized
-    return normalized if kind else None
-
-
-def _parse_action_plan(text: str) -> list[dict[str, object]]:
-    payload = _extract_json_object(text)
-    if payload is None:
-        return []
-    actions = payload.get("actions")
-    if not isinstance(actions, list):
-        normalized = _normalize_action(payload)
-        return [normalized] if normalized is not None else []
-    return [
-        normalized
-        for action in actions
-        if isinstance(action, dict)
-        for normalized in [_normalize_action(action)]
-        if normalized is not None
-    ]
 
 
 def _execute_action_plan(
@@ -370,9 +69,6 @@ def _execute_action_plan(
 
     actions = _actions_allowed_by_capabilities(actions, session)
     if not actions:
-        # Every proposed action targets a surface this session has explicitly
-        # disabled. Fall through so the caller renders the model's text instead
-        # of actuating anything.
         return False
 
     from app.cli.interactive_shell.commands import (
@@ -551,9 +247,6 @@ def _execute_action_plan(
             from app.cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
             if not repl_tty_interactive():
-                # No interactive prompt to auto-submit into (scripted/non-TTY);
-                # fall back to telling the user the exact registered OpenSRE
-                # slash command to run in an interactive shell.
                 console.print(
                     f"Run [bold]{escape(command)}[/bold] in the interactive shell to continue."
                 )
@@ -574,47 +267,6 @@ def _record_cli_agent_turn(session: ReplSession, message: str, assistant_text: s
         session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
 
 
-def _build_observation_block(tool_observation: str | None, *, on_screen: bool = True) -> str:
-    """Wrap freshly-gathered tool output so the assistant summarizes it directly.
-
-    Used by the observe→answer loop in two cases:
-
-    * ``on_screen=True`` — the planner ran a read-only discovery command (e.g.
-      ``/integrations``) whose raw output is already printed; keep the summary
-      short since the user can see the table.
-    * ``on_screen=False`` — a tool-gathering pass fetched live integration data
-      (logs, GitHub issues, metrics, …) that is NOT printed in full; the answer
-      should report the relevant findings from the data below.
-    """
-    if not tool_observation or not tool_observation.strip():
-        return ""
-    if on_screen:
-        framing = (
-            "A read-only discovery command was just run to answer the user's question; "
-            "its output is below. Summarize it to answer the user's question directly "
-            "and concisely (for example, whether a specific integration is configured), "
-            "citing the relevant status. The output is already on screen, so keep it "
-            "short."
-        )
-    else:
-        framing = (
-            "Live data was just gathered from the connected integrations to answer the "
-            "user's question; the tool results are below and are NOT otherwise shown to "
-            "the user. Answer the user's question directly using these results, citing "
-            "the concrete findings (e.g. relevant issues, log lines, or metrics). If the "
-            "data does not contain the answer, say so plainly. You have ALREADY queried "
-            "the connected sources, so do NOT tell the user to paste an alert or to run "
-            "`opensre investigate`; instead report what each source returned and, if you "
-            "need more signal, ask for the specific detail (error string, service, "
-            "version, or time window) that would let you narrow it down here."
-        )
-    return (
-        f"{framing} Do NOT request, plan, or emit any further actions — just answer in "
-        "plain Markdown.\n\n"
-        f"--- tool_results ---\n{tool_observation}\n\n"
-    )
-
-
 def answer_cli_agent(
     message: str,
     session: ReplSession,
@@ -625,19 +277,7 @@ def answer_cli_agent(
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
 ) -> LlmRunInfo | None:
-    """Run one turn of the terminal assistant (guidance only; no investigation run).
-
-    For documentation-grounded procedural Q&A use :func:`answer_cli_help`, which
-    also pulls relevant ``docs/`` pages into the grounding context.
-
-    ``confirm_fn`` and ``is_tty`` are forwarded to :func:`_execute_action_plan`
-    so the interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
-    through its active prompt_toolkit input, while scripted seeded input fails
-    closed instead of blocking on stdin.
-
-    ``tool_observation`` carries the output of a read-only discovery command the
-    planner just ran, so this turn summarizes that result into a direct answer.
-    """
+    """Run one turn of the terminal assistant (guidance only; no investigation run)."""
     try:
         from app.services.llm_client import get_llm_for_reasoning
     except Exception as exc:
@@ -696,9 +336,6 @@ def answer_cli_agent(
             console,
             label=STREAM_LABEL_ASSISTANT,
             chunks=client.invoke_stream(prompt),
-            # Suppress the live render if the model is emitting a JSON action
-            # plan: that payload is consumed by ``_execute_action_plan`` and
-            # would otherwise leak raw braces to the user (#1263).
             suppress_if_starts_with="{",
         )
     except KeyboardInterrupt:
@@ -734,9 +371,6 @@ def answer_cli_agent(
 
     _record_cli_agent_turn(session, message, text_str)
 
-    # If the response was suppressed (looked like a JSON action plan) but no
-    # valid actions parsed, render it now as Markdown so the user sees
-    # something. The non-suppressed path was already rendered live.
     if text_str.lstrip().startswith("{") and text_str.strip():
         console.print()
         console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")

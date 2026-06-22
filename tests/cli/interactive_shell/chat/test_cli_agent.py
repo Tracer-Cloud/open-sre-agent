@@ -19,15 +19,15 @@ from typing import Any
 from rich.console import Console
 
 from app.cli.interactive_shell.chat import cli_agent
-from app.cli.interactive_shell.chat.cli_agent import (
+from app.cli.interactive_shell.chat.action_plan import _parse_action_plan
+from app.cli.interactive_shell.chat.cli_agent import answer_cli_agent
+from app.cli.interactive_shell.chat.system_prompt import (
     _ACTION_RULE,
     _MARKDOWN_RULE,
     _TERMINOLOGY_RULE,
     _build_environment_block,
     _build_observation_block,
     _build_system_prompt,
-    _parse_action_plan,
-    answer_cli_agent,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 
@@ -696,7 +696,7 @@ def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) 
 def test_prompt_advertises_run_interactive_for_configure_requests() -> None:
     """The system prompt must tell the model to LAUNCH setup via run_interactive,
     catch-all for any integration (no hardcoded vendor advice)."""
-    prompt = cli_agent._build_system_prompt(reference="(ref)", history="(hist)")
+    prompt = _build_system_prompt(reference="(ref)", history="(hist)")
     assert "run_interactive" in prompt
     assert "/integrations setup <service>" in prompt
     assert "any integration" in prompt

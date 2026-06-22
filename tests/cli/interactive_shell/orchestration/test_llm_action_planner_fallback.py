@@ -7,14 +7,14 @@ from unittest.mock import patch
 import pytest
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.constants import (
-    _SYSTEM_PROMPT_BASE,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.planner import (
     plan_actions_with_llm_result,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.prompting import (
     _system_prompt,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.system_prompt import (
+    _SYSTEM_PROMPT_BASE,
 )
 from app.integrations.llm_cli.failure_explain import is_context_length_overflow
 

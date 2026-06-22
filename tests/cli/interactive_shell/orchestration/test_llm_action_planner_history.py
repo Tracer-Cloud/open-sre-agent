@@ -9,12 +9,12 @@ from app.cli.interactive_shell.prompting.conversation_history import NO_HISTORY_
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     llm_client,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.constants import (
-    _SYSTEM_PROMPT_BASE,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.prompting import (
     _connected_integrations_block,
     _recent_conversation_block,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.system_prompt import (
+    _SYSTEM_PROMPT_BASE,
 )
 
 
