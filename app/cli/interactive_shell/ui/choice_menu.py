@@ -11,14 +11,14 @@ pile up — only the result output and the next level appear on screen.
 from __future__ import annotations
 
 import os
-import select
 import shutil
 import sys
-from typing import Any, Literal, cast
+from typing import Literal
 
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.ui.key_reader import read_key_unix, read_key_windows
 from app.cli.interactive_shell.ui.theme import (
     ANSI_RESET,
     DIM,
@@ -66,80 +66,20 @@ def repl_section_break(console: Console) -> None:
 
 
 def _read_action() -> MenuAction:
-    """Return up | down | enter | cancel | eof."""
-    if os.name == "nt":
-        import msvcrt
+    """Map a raw keypress to a menu action.
 
-        c = msvcrt.getch()  # type: ignore[attr-defined]
-        if c in (b"\x03",):
-            return "cancel"
-        if c in (b"\r", b"\n", b" "):
-            return "enter"
-        if c == b"\t":
-            return "down"
-        if c in (b"j", b"J"):
-            return "down"
-        if c in (b"k", b"K"):
-            return "up"
-        if c in (b"q", b"Q"):
-            return "cancel"
-        if c in (b"\xe0", b"\x00"):
-            c2 = msvcrt.getch()  # type: ignore[attr-defined]
-            if c2 == b"H":
-                return "up"
-            if c2 == b"P":
-                return "down"
-            if c2 == b"M":
-                return "enter"
-            if c2 == b"K":
-                return "ignore"
-            return "ignore"
-        if c == b"\x1b":
-            return "cancel"
+    Delegates terminal I/O to :mod:`key_reader` and applies
+    choice_menu-specific overrides: Tab → ``"down"``,
+    right-arrow → ``"enter"``, left-arrow → ``"ignore"``.
+    """
+    key = read_key_windows() if os.name == "nt" else read_key_unix()
+    if key == "tab":
+        return "down"
+    if key == "right":
+        return "enter"
+    if key == "left":
         return "ignore"
-
-    import termios
-    import tty
-
-    fd = sys.stdin.fileno()
-    # ``termios`` / ``tty`` are POSIX-only; stubs expose no attributes when
-    # typechecking with ``mypy --platform win32``.
-    old_attrs: Any = termios.tcgetattr(fd)  # type: ignore[attr-defined]
-    try:
-        tty.setraw(fd)  # type: ignore[attr-defined]
-        data = os.read(fd, 1)
-        if not data:
-            return "eof"
-        key_code = cast(int, data[0])
-        if key_code in (3, 4):
-            return "cancel"
-        if key_code in (10, 13, 32):
-            return "enter"
-        if key_code == 9:
-            return "down"
-        if data in (b"j", b"J"):
-            return "down"
-        if data in (b"k", b"K"):
-            return "up"
-        if data in (b"q", b"Q"):
-            return "cancel"
-        if key_code == 27:
-            if select.select([fd], [], [], 0.05)[0]:
-                seq = os.read(fd, 1)
-                if seq == b"[":
-                    arrow = os.read(fd, 1)
-                    if arrow == b"A":
-                        return "up"
-                    if arrow == b"B":
-                        return "down"
-                    if arrow == b"C":
-                        return "enter"
-                    if arrow == b"D":
-                        return "ignore"
-            return "cancel"
-        return "ignore"
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)  # type: ignore[attr-defined]
+    return key  # type: ignore[return-value]
 
 
 def read_menu_action() -> MenuAction:
