@@ -23,7 +23,7 @@ def _masked(value: str | None) -> str:
 
 def _emit_llm_config() -> None:
     """Print current LLM provider and model from environment (legacy `opensre config`)."""
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
     from app.config import (
         get_configured_llm_provider,
         get_llm_provider_api_key,
@@ -156,7 +156,7 @@ def config_command(ctx: click.Context) -> None:
 @config_command.command(name="show")
 def config_show() -> None:
     """Show local ~/.opensre/config.yml values."""
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
     payload = _load_config()
 

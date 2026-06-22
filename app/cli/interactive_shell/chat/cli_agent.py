@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.conversation_history import (
     MAX_CONVERSATION_MESSAGES,
@@ -45,7 +46,6 @@ from app.cli.interactive_shell.ui import (
     WARNING,
     stream_to_console,
 )
-from app.cli.support.exception_reporting import report_exception
 from app.integrations.llm_cli.errors import CLITimeoutError
 
 _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000

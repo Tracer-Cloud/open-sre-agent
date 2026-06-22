@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.integrations.llm_cli.errors import CLITimeoutError
 
 

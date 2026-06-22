@@ -7,14 +7,14 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     execution_allowed,
     plan_investigation_execution,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
 from app.cli.interactive_shell.ui import ERROR, WARNING
-from app.cli.support.errors import OpenSREError
-from app.cli.support.exception_reporting import report_exception
 
 
 def run_sample_alert(

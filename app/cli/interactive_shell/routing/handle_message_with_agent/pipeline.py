@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.analytics.cli import capture_terminal_turn_summarized
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo, PromptRecorder
 from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
@@ -23,7 +24,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM, ERROR
-from app.cli.support.exception_reporting import report_exception
 from app.llm_reasoning_effort import apply_reasoning_effort
 
 

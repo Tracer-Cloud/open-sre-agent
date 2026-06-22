@@ -31,6 +31,9 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
+from app.cli.interactive_shell.data_store.context import is_json_output
+from app.cli.interactive_shell.error_handling.exit_codes import ERROR as EXIT_ERROR
+from app.cli.interactive_shell.error_handling.exit_codes import SUCCESS
 from app.cli.interactive_shell.ui.theme import (
     DIM,
     ERROR,
@@ -42,9 +45,6 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from app.cli.support.context import is_json_output
-from app.cli.support.exit_codes import ERROR as EXIT_ERROR
-from app.cli.support.exit_codes import SUCCESS
 from app.version import get_version
 
 
@@ -122,7 +122,7 @@ def _check_integrations() -> tuple[bool, str]:
 
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_version()
-    from app.cli.support.update import (
+    from app.cli.interactive_shell.data_store.update import (
         _fetch_latest_version,
         _is_update_available,
         development_install_doctor_version_detail,

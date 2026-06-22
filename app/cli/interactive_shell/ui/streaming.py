@@ -33,11 +33,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from app.cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
-
-# Approximate characters per token. Single source of truth for the
-# streaming layer and ``runtime.state.SpinnerState`` (which imports this so the
-# live spinner and the post-stream footer can't drift apart).
-_CHARS_PER_TOKEN = 4
+from app.cli.interactive_shell.ui.token_format import (
+    _CHARS_PER_TOKEN,
+    format_token_count_short,
+)
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
@@ -69,18 +68,6 @@ def render_response_header(console: Console, label: str) -> None:
     and the streaming response path use the exact same prefix.
     """
     console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
-
-
-def format_token_count_short(token_count: int) -> str:
-    """Format a token count as a short string — ``42`` / ``1.2k`` / ``5.2k``.
-
-    Shared with :class:`app.cli.interactive_shell.runtime.state.SpinnerState` so
-    the streaming footer (``· 9.5s · ↓ 1.2k tokens``) and the live
-    spinner (``⠋ thinking… (5s · ↓ 1.2k tokens)``) format identically.
-    """
-    if token_count >= 1000:
-        return f"{token_count / 1000:.1f}k"
-    return str(token_count)
 
 
 def _format_tokens(token_count: int) -> str:

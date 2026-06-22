@@ -14,7 +14,8 @@ from app.cli.interactive_shell.ui.output.environment import (
     get_output_format,
 )
 from app.cli.interactive_shell.ui.output.events import ProgressEvent
-from app.cli.interactive_shell.ui.output.labels import _fmt_timing, _humanise_message, _node_label
+from app.cli.interactive_shell.ui.output.labels import _humanise_message, _node_label
+from app.cli.interactive_shell.ui.time_format import _fmt_timing
 from app.cli.interactive_shell.ui.output.live_display import _EventLogDisplay
 from app.cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from app.cli.interactive_shell.ui.output.toggles import (

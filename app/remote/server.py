@@ -46,8 +46,8 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from app.analytics.cli import capture_investigation_failed, track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
-from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.remote.error_reporting import report_remote_exception
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,

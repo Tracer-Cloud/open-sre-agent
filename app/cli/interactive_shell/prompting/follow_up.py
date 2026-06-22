@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ANSWER, WARNING, stream_to_console
-from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
 

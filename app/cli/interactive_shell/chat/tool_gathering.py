@@ -31,7 +31,6 @@ from rich.markup import escape
 from app.agent.utils.alert_source import SECONDARY_TOOL_SOURCES
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM
-from app.cli.support.exception_reporting import report_exception
 
 # Keep the gathering loop short: this runs inline on a REPL turn, so it must stay
 # responsive. A handful of iterations is enough to fetch the data needed to

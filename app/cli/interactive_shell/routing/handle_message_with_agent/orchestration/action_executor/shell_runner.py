@@ -12,6 +12,7 @@ from rich.markup import escape
 from rich.text import Text
 
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.intent_parser as _intent_parser
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     execution_allowed,
     plan_shell_execution,
@@ -23,7 +24,6 @@ from app.cli.interactive_shell.shell import (
     parse_shell_command,
 )
 from app.cli.interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
-from app.cli.support.exception_reporting import report_exception
 
 from .task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,

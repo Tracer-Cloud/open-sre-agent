@@ -182,7 +182,7 @@ class TestAnswerCliHelp:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 

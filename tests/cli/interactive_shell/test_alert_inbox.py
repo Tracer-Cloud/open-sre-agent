@@ -18,7 +18,7 @@ from app.cli.interactive_shell.alert_inbox import (
     IncomingAlert,
     start_alert_listener,
 )
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
 # A Content-Length value guaranteed to trip the listener's pre-auth
 # body cap. Computed from the cap itself so the constant can't drift

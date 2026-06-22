@@ -16,9 +16,9 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.runtime import TaskRecord
 from app.cli.interactive_shell.ui import DIM, ERROR
-from app.cli.support.exception_reporting import report_exception
 
 # Full dotted name of the ``action_executor`` package. Submodules use this to
 # look up patchable names from the parent namespace at call time so that tests

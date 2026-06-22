@@ -376,7 +376,7 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
         _boom,
     )
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     session = ReplSession()

@@ -29,6 +29,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app.cli.interactive_shell.ui.key_reader import (
+    flush_stdin_unix,
+    read_key_unix,
+    read_key_windows,
+)
+
 if TYPE_CHECKING:
     from rich.console import Console
 
@@ -150,71 +156,6 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
 # ── self-contained select (CLI path) ─────────────────────────────────────────
 
 
-def _flush_stdin_unix() -> None:
-    """Discard pending stdin bytes before raw-mode reading."""
-    with contextlib.suppress(Exception):
-        import termios
-
-        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)  # type: ignore[attr-defined]
-
-
-def _read_key_unix() -> str:
-    """Read one logical keypress in raw mode; returns a normalised action name."""
-    import select as _sel
-    import termios
-    import tty
-
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)  # type: ignore[attr-defined]
-    try:
-        tty.setraw(fd)  # type: ignore[attr-defined]
-        ch = os.read(fd, 1)
-        if not ch:
-            return "eof"
-        b = ch[0]
-        if b in (3, 4):  # Ctrl-C / Ctrl-D
-            return "cancel"
-        if b in (10, 13, 32):  # LF / CR / Space → select
-            return "enter"
-        if b == 27:  # ESC or arrow-key prefix
-            if _sel.select([fd], [], [], 0.1)[0]:
-                nxt = os.read(fd, 1)
-                if nxt == b"[" and _sel.select([fd], [], [], 0.1)[0]:
-                    arr = os.read(fd, 1)
-                    if arr == b"A":
-                        return "up"
-                    if arr == b"B":
-                        return "down"
-            return "cancel"
-        if ch in (b"j", b"J"):
-            return "down"
-        if ch in (b"k", b"K"):
-            return "up"
-        if ch in (b"q", b"Q"):
-            return "cancel"
-        return "ignore"
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
-
-
-def _read_key_windows() -> str:
-    """Minimal Windows keypress reader."""
-    import msvcrt  # type: ignore[import,attr-defined]
-
-    ch = msvcrt.getch()  # type: ignore[attr-defined]
-    if ch in (b"\x03", b"\x1b"):
-        return "cancel"
-    if ch in (b"\r", b" "):
-        return "enter"
-    if ch == b"\xe0":
-        ch2 = msvcrt.getch()  # type: ignore[attr-defined]
-        if ch2 == b"H":
-            return "up"
-        if ch2 == b"P":
-            return "down"
-    return "ignore"
-
-
 def _run_select(choices: list[tuple[str, str]]) -> str | None:
     """Arrow-key select menu that works in any TTY context after streaming output.
 
@@ -231,7 +172,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
     is_unix = os.name != "nt"
 
     if is_unix:
-        _flush_stdin_unix()
+        flush_stdin_unix()
 
     def _out(s: str) -> None:
         sys.stdout.write(s)
@@ -251,7 +192,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
     _draw(False)
 
     while True:
-        key = _read_key_unix() if is_unix else _read_key_windows()
+        key = read_key_unix() if is_unix else read_key_windows()
 
         if key == "enter":
             _out(f"\x1b[{total_lines}A\r\x1b[J")

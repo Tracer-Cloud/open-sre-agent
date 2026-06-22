@@ -8,7 +8,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.utils.telegram_delivery import post_telegram_message, truncate_for_telegram_html
 from app.utils.truncation import truncate
 

@@ -82,7 +82,7 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -118,8 +118,12 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "9999.0.0")
-    monkeypatch.setattr("app.cli.support.update._is_update_available", lambda _c, _l: False)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "9999.0.0"
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.data_store.update._is_update_available", lambda _c, _l: False
+    )
 
     exit_code = main(["update", "--check"])
 
@@ -167,7 +171,7 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -190,7 +194,7 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     )
     monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 

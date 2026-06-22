@@ -11,7 +11,11 @@ from app.analytics.cli import (
     capture_integration_verified,
     capture_integrations_listed,
 )
-from app.cli.support.constants import MANAGED_INTEGRATION_SERVICES, SETUP_SERVICES, VERIFY_SERVICES
+from app.cli.interactive_shell.data_store.constants import (
+    MANAGED_INTEGRATION_SERVICES,
+    SETUP_SERVICES,
+    VERIFY_SERVICES,
+)
 
 
 class IntegrationServiceChoice(click.Choice):

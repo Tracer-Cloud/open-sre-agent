@@ -1279,7 +1279,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
     items = list_integrations()
 
@@ -1312,7 +1312,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from app.cli.support.context import is_yes
+    from app.cli.interactive_shell.data_store.context import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -1333,7 +1333,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
     if service:
         service = resolve_management_service(service)

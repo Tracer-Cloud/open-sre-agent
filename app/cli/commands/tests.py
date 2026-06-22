@@ -24,8 +24,8 @@ from app.analytics.cli import (
     capture_tests_listed,
     capture_tests_picker_opened,
 )
-from app.cli.support.context import is_json_output, is_yes
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.data_store.context import is_json_output, is_yes
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
 _TEST_CATEGORIES: tuple[str, ...] = (
     "all",

@@ -17,6 +17,7 @@ import time
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
@@ -30,7 +31,6 @@ from app.cli.interactive_shell.references.grounding_diagnostics import (
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ASSISTANT, stream_to_console
-from app.cli.support.exception_reporting import report_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.

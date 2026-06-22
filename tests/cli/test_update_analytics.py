@@ -34,7 +34,7 @@ def test_update_check_only_emits_started_then_completed(
     monkeypatch: pytest.MonkeyPatch,
     _capture_analytics: list[tuple[str, dict[str, object]]],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.run_update", lambda **_kw: 0)
+    monkeypatch.setattr("app.cli.interactive_shell.data_store.update.run_update", lambda **_kw: 0)
 
     result = CliRunner().invoke(update_command, ["--check"])
 
@@ -49,7 +49,7 @@ def test_update_real_install_emits_completed_with_updated_true(
     monkeypatch: pytest.MonkeyPatch,
     _capture_analytics: list[tuple[str, dict[str, object]]],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.run_update", lambda **_kw: 0)
+    monkeypatch.setattr("app.cli.interactive_shell.data_store.update.run_update", lambda **_kw: 0)
     monkeypatch.setattr(general_module, "is_yes", lambda: True)
 
     result = CliRunner().invoke(update_command, ["--yes"])
@@ -68,7 +68,7 @@ def test_update_failure_emits_started_then_failed(
     def _boom(**_kwargs: object) -> int:
         raise RuntimeError("network down")
 
-    monkeypatch.setattr("app.cli.support.update.run_update", _boom)
+    monkeypatch.setattr("app.cli.interactive_shell.data_store.update.run_update", _boom)
     monkeypatch.setattr(general_module, "is_yes", lambda: False)
 
     result = CliRunner().invoke(update_command, [])

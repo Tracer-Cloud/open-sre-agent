@@ -133,7 +133,7 @@ class TestAnswerFollowUpMarkupSafety:
             _boom,
         )
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 

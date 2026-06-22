@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from rich.text import Text
 
 from app.cli.interactive_shell.ui.output.environment import _safe_print
-from app.cli.interactive_shell.ui.output.labels import _elapsed_hms, _fmt_timing
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from app.cli.interactive_shell.ui.output.tool_details import (
     build_tool_call_line,
@@ -23,6 +23,15 @@ from app.cli.interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
 from app.tools.registry import resolve_tool_display_name
+
+
+@runtime_checkable
+class ToolTrackingSupport(Protocol):
+    """Interface that concrete classes must satisfy to use :class:`ToolTrackingMixin`."""
+
+    def update_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None: ...
+
+    def print_above_renderable(self, renderable: Any) -> None: ...
 
 
 class ToolTrackingMixin:
