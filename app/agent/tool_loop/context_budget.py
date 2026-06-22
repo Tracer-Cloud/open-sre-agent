@@ -430,7 +430,10 @@ def _truncate_largest_message(
     """
     order = sorted(
         range(len(messages)),
-        key=lambda i: (_is_protected_message(messages[i]), -_estimate_message_tokens([messages[i]])),
+        key=lambda i: (
+            _is_protected_message(messages[i]),
+            -_estimate_message_tokens([messages[i]]),
+        ),
     )
     truncated_protected = False
     for idx in order:
@@ -445,8 +448,7 @@ def _truncate_largest_message(
             truncated_protected = _is_protected_message(messages[idx])
             if truncated_protected:
                 logger.warning(
-                    "[agent] truncated protected seed evidence to fit context budget "
-                    "(ceiling=%d)",
+                    "[agent] truncated protected seed evidence to fit context budget (ceiling=%d)",
                     ceiling,
                 )
             return True

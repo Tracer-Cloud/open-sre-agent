@@ -724,7 +724,9 @@ def test_context_budget_evicts_duplicate_before_larger_unique_pair() -> None:
     duplicate_result = _tag_context_message(
         {
             "role": "user",
-            "content": [{"type": "tool_result", "tool_use_id": "dup", "content": duplicate_payload}],
+            "content": [
+                {"type": "tool_result", "tool_use_id": "dup", "content": duplicate_payload}
+            ],
         },
         duplicate=True,
         iteration=1,
