@@ -11,9 +11,6 @@ from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.utils.tool_trace import redact_sensitive
 
-_ALERT_SOURCE_TO_TOOL_SOURCES = {
-    source: list(tool_sources) for source, tool_sources in ALERT_SOURCE_TO_SEED_TOOL_SOURCES.items()
-}
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
@@ -91,7 +88,7 @@ def build_seed_calls(
     if not alert_source:
         return []
 
-    target_sources = set(_ALERT_SOURCE_TO_TOOL_SOURCES.get(alert_source, []))
+    target_sources = set(ALERT_SOURCE_TO_SEED_TOOL_SOURCES.get(alert_source, ()))
     if not target_sources:
         return []
 

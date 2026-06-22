@@ -188,7 +188,12 @@ def _apply_budget(
     fallback = [action for action in scored if action.name in FALLBACK_TOOL_NAMES]
     candidates = positive or fallback
     budget = _tool_budget(state)
-    return candidates[:budget], candidates[budget:]
+    selected = candidates[:budget]
+    excluded_candidates = candidates[budget:]
+    not_candidates = [
+        action for action in scored if action not in positive and action not in fallback
+    ]
+    return selected, excluded_candidates + not_candidates
 
 
 def _tool_budget(state: dict[str, Any]) -> int:
@@ -202,11 +207,11 @@ def _tool_budget(state: dict[str, Any]) -> int:
 def _build_retrieval_controls(
     state: dict[str, Any],
     selected: list[PlannedInvestigationAction],
+    available_tools: list[RegisteredTool] | None = None,
 ) -> RetrievalControlsMap:
-    tools_by_name = {
-        tool.name: tool
-        for tool in _available_investigation_tools(state.get("resolved_integrations") or {})
-    }
+    if available_tools is None:
+        available_tools = _available_investigation_tools(state.get("resolved_integrations") or {})
+    tools_by_name = {tool.name: tool for tool in available_tools}
     intent_by_name: RetrievalControlsMap = {}
     for action in selected:
         tool = tools_by_name.get(action.name)
