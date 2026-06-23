@@ -7,9 +7,9 @@ from datetime import datetime
 
 import pytest
 
+from app.guardrails.apply import apply_guardrails_to_converse_payload
 from app.services.agent_llm_client import ToolCall
 from app.services.bedrock_converse import (
-    apply_guardrails_to_converse_payload,
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,

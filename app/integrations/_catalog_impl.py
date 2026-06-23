@@ -585,7 +585,10 @@ def _classify_pagerduty(
     credentials: dict[str, Any], record_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
     try:
-        raw: dict[str, Any] = {"api_key": credentials.get("api_key", ""), "integration_id": record_id}
+        raw: dict[str, Any] = {
+            "api_key": credentials.get("api_key", ""),
+            "integration_id": record_id,
+        }
         if credentials.get("base_url"):
             raw["base_url"] = credentials["base_url"]
         cfg = PagerDutyIntegrationConfig.model_validate(raw)
@@ -676,7 +679,8 @@ def _classify_telegram(
 
 
 def _classify_whatsapp(
-    credentials: dict[str, Any], record_id: str  # noqa: ARG001
+    credentials: dict[str, Any],
+    record_id: str,  # noqa: ARG001
 ) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = WhatsAppConfig.model_validate(
@@ -833,7 +837,11 @@ def _classify_dagster(
         _report_classify_failure(exc, integration="dagster", record_id=record_id)
         return None, None
     if cfg.endpoint:
-        return {"endpoint": cfg.endpoint, "api_token": cfg.api_token, "integration_id": record_id}, "dagster"
+        return {
+            "endpoint": cfg.endpoint,
+            "api_token": cfg.api_token,
+            "integration_id": record_id,
+        }, "dagster"
     return None, None
 
 
