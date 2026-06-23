@@ -25,6 +25,7 @@ from app.agent.tool_loop.context_budget import (
     _context_budget_ceiling_for_model,
     _enforce_context_budget,
     _estimate_message_tokens,
+    _trim_lowest_value_tool_pair,
     _trim_oldest_tool_pair,
     _truncate_content,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "_run_parallel",
     "_summarise",
     "_tool_source",
+    "_trim_lowest_value_tool_pair",
     "_trim_oldest_tool_pair",
     "_truncate_content",
     "run_tool_calling_loop",

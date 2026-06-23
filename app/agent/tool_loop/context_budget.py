@@ -4,25 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Defensive context-window ceiling. Below this we never trim; above this we
-# drop the oldest tool_use/tool_result pair until back under the ceiling.
-#
-# CRITICAL: the ceiling MUST be derived from the ACTIVE model's context window,
-# not hardcoded. A previous flat 170k ceiling was tuned for Anthropic's 200k
-# window and silently overflowed every OpenAI run — gpt-4o's window is 128k, so
-# trimming "down to 170k" still exceeds the API limit and the call is rejected
-# with context_length_exceeded (observed on 40-service train-ticket cases where
-# tool payloads are large). Always size the ceiling per-model.
-#
-# Per-model prompt windows (tokens). Substring-matched against the model id, so
-# dated snapshots (gpt-4o-2024-11-20) and Bedrock prefixes (us.anthropic.claude)
-# resolve correctly. Unknown models fall back to the conservative default — it
-# is always safe to assume a SMALLER window (we trim a little early) and never
-# safe to assume a larger one (we overflow and the call dies).
+# Prompt windows are substring-matched against provider model ids. Unknown
+# models use a conservative default so we trim early rather than overflow.
 _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "claude": 200_000,
     "gpt-4o": 128_000,
@@ -36,36 +24,109 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 _DEFAULT_CONTEXT_WINDOW = 128_000
 
-# Reserve for the model's response + estimator slack. ceiling = window - this.
 _RESPONSE_HEADROOM_TOKENS = 16_000
-
-# Default ceiling when the active model is unknown at the call site (also the
-# value used by callers/tests that don't pass an explicit ceiling).
 _TOKEN_BUDGET_CEILING = _DEFAULT_CONTEXT_WINDOW - _RESPONSE_HEADROOM_TOKENS
 
-# ratio=0.5 over-estimates slightly to absorb JSON-structural overhead in tool
-# payloads — better to trim one pair early than to under-count and overflow.
-# Overflow logs showed real tokens/char of 0.4–0.5 for opensre's tool-result
-# mix, so 0.5 is the safe upper edge.
+# Conservative char-to-token estimate for JSON-heavy tool payloads.
 _TOKENS_PER_CHAR = 0.50
 
-# Last-resort truncation. Whole-pair trimming (``_trim_oldest_tool_pair``) drops
-# tool exchanges oldest-first, but once every tool pair is gone the base prompt
-# can still exceed the window — e.g. a 40-service train-ticket alert whose initial
-# user message is huge, or any single non-tool message that isn't part of a
-# trimmable pair. The old code returned there and let the request overflow. When
-# trimming is exhausted but the prompt is still over budget, we truncate the
-# largest message's text payload in place so the request can never exceed the
-# model window. Marker tells the model (and anyone reading the trace) that
-# content was elided.
 _TRUNCATION_MARKER = "…[truncated to fit context budget]"
-# Slack subtracted from the per-message budget so the post-truncation estimate
-# lands safely under the ceiling rather than exactly on it.
 _TRUNCATION_SAFETY_TOKENS = 2_000
-# Floor for a single message's content budget. If system+tools+other messages
-# already consume the whole ceiling, we still leave at least this much so the
-# truncated message carries some signal instead of being blanked.
 _TRUNCATION_MIN_TOKENS = 1_000
+
+_PINNED_MESSAGE_KEY = "_opensre_seed"
+_DUPLICATE_RESULT_KEY = "_opensre_duplicate_result"
+
+
+@dataclass(frozen=True)
+class _ToolExchange:
+    start: int
+    end: int
+    token_estimate: int
+    duplicate_only: bool
+
+
+def _is_pinned_message(message: dict[str, Any]) -> bool:
+    """Whether whole-pair eviction must preserve this message."""
+    return bool(message.get(_PINNED_MESSAGE_KEY))
+
+
+def _is_duplicate_result_message(message: dict[str, Any]) -> bool:
+    """Whether this message belongs to a duplicate-only tool exchange."""
+    return bool(message.get(_DUPLICATE_RESULT_KEY))
+
+
+def _has_tool_use_block(content: Any) -> bool:
+    if not isinstance(content, list):
+        return False
+    return any(
+        isinstance(block, dict) and (block.get("type") == "tool_use" or "toolUse" in block)
+        for block in content
+    )
+
+
+def _candidate_exchange(
+    messages: list[dict[str, Any]],
+    *,
+    start: int,
+    end: int,
+) -> _ToolExchange | None:
+    exchange_messages = messages[start:end]
+    if any(_is_pinned_message(message) for message in exchange_messages):
+        return None
+
+    result_messages = exchange_messages[1:]
+    duplicate_only = bool(result_messages) and all(
+        _is_duplicate_result_message(message) for message in result_messages
+    )
+    return _ToolExchange(
+        start=start,
+        end=end,
+        token_estimate=_estimate_message_tokens(exchange_messages),
+        duplicate_only=duplicate_only,
+    )
+
+
+def _append_candidate(
+    candidates: list[_ToolExchange],
+    messages: list[dict[str, Any]],
+    *,
+    start: int,
+    end: int,
+) -> None:
+    candidate = _candidate_exchange(messages, start=start, end=end)
+    if candidate is not None:
+        candidates.append(candidate)
+
+
+def _tool_exchange_candidates(messages: list[dict[str, Any]]) -> list[_ToolExchange]:
+    candidates: list[_ToolExchange] = []
+    for index, message in enumerate(messages):
+        if message.get("role") != "assistant":
+            continue
+
+        if _has_tool_use_block(message.get("content")):
+            _append_candidate(candidates, messages, start=index, end=min(index + 2, len(messages)))
+            continue
+
+        tool_calls = message.get("tool_calls")
+        if tool_calls and isinstance(tool_calls, list):
+            call_ids = {tc.get("id") for tc in tool_calls if isinstance(tc, dict) and tc.get("id")}
+            end = index + 1
+            while end < len(messages):
+                follower = messages[end]
+                if follower.get("role") == "tool" and follower.get("tool_call_id") in call_ids:
+                    end += 1
+                else:
+                    break
+            _append_candidate(candidates, messages, start=index, end=end)
+    return candidates
+
+
+def _eviction_priority(exchange: _ToolExchange) -> tuple[int, int, int]:
+    """Lower priority tuple is evicted first."""
+    duplicate_rank = 0 if exchange.duplicate_only else 1
+    return (duplicate_rank, -exchange.token_estimate, exchange.start)
 
 
 def _context_budget_ceiling_for_model(model: str | None) -> int:
@@ -117,67 +178,20 @@ def _estimate_message_tokens(
     return total
 
 
+def _trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> bool:
+    """Drop one non-pinned tool exchange using the eviction heuristic."""
+    candidates = _tool_exchange_candidates(messages)
+    if not candidates:
+        return False
+
+    selected = min(candidates, key=_eviction_priority)
+    del messages[selected.start : selected.end]
+    return True
+
+
 def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
-    """Drop the oldest tool-call exchange (assistant + paired results).
-
-    Provider message shapes differ:
-
-      * **Anthropic / Bedrock**: the assistant message's ``content`` is a list
-        of blocks; tool calls show up as blocks with ``type == "tool_use"``.
-        Tool results come in the SINGLE next user message as ``tool_result``
-        blocks. So the pair is ``[assistant, user]`` — always two messages.
-
-      * **OpenAI**: the assistant message has a top-level ``tool_calls`` field
-        (``content`` is a plain string or empty). Each tool call produces a
-        SEPARATE follow-up message with ``role == "tool"`` and
-        ``tool_call_id`` matching the assistant's call id. So the exchange is
-        ``[assistant, tool, tool, ...]`` — variable length.
-
-    Returning False when an OpenAI exchange wasn't detected was the bug that
-    let gpt-4o cells overflow at 181k tokens during the 2026-06-05 floorsweep:
-    the Anthropic-only check skipped every OpenAI assistant turn (whose
-    ``content`` is a string), so the trimmer found nothing to drop, returned
-    False, and the runtime ceiling never fired before the API call.
-
-    Returns True if an exchange was dropped, False when nothing trimmable
-    remains (e.g. only the initial user prompt + a no-tool-call assistant
-    turn is left).
-    """
-    for index, message in enumerate(messages):
-        if message.get("role") != "assistant":
-            continue
-
-        # Anthropic shape: tool_use blocks inside content list.
-        content = message.get("content")
-        if isinstance(content, list):
-            has_tool_use = any(
-                isinstance(block, dict) and block.get("type") == "tool_use" for block in content
-            )
-            if has_tool_use:
-                # Drop the assistant turn + the paired user turn carrying the
-                # tool_result blocks. If the user turn is missing (truncated
-                # mid-iteration), ``del [i:i+2]`` safely drops just the
-                # assistant turn.
-                del messages[index : index + 2]
-                return True
-
-        # OpenAI shape: tool_calls as a top-level field. Drop the assistant
-        # message + all immediately-following role:"tool" messages whose
-        # tool_call_id matches one of the assistant's tool_calls (per OpenAI's
-        # Chat Completions contract).
-        tool_calls = message.get("tool_calls")
-        if tool_calls and isinstance(tool_calls, list):
-            call_ids = {tc.get("id") for tc in tool_calls if isinstance(tc, dict) and tc.get("id")}
-            end = index + 1
-            while end < len(messages):
-                follower = messages[end]
-                if follower.get("role") == "tool" and follower.get("tool_call_id") in call_ids:
-                    end += 1
-                else:
-                    break
-            del messages[index:end]
-            return True
-    return False
+    """Compatibility wrapper for older tests/imports."""
+    return _trim_lowest_value_tool_pair(messages)
 
 
 def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
@@ -296,22 +310,9 @@ def _enforce_context_budget(
     tools: list[dict[str, Any]] | None = None,
     ceiling: int = _TOKEN_BUDGET_CEILING,
 ) -> None:
-    """Trim oldest tool pairs until prompt fits under ``ceiling``.
-
-    ``ceiling`` MUST be sized for the active model (see
-    ``_context_budget_ceiling_for_model``); the default is the conservative
-    unknown-model value. No-op on the happy path: the estimate covers messages
-    + system + tools in one pass and returns under the ceiling for normal
-    investigations. Only fires on long investigations where unbounded tool
-    history has pushed the prompt past the model's limit.
-    """
+    """Trim low-value tool exchanges until the prompt fits under ``ceiling``."""
     while _estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
-        if not _trim_oldest_tool_pair(messages):
-            # Whole-pair trimming exhausted but still over budget: the remaining
-            # base prompt (e.g. an oversized initial alert or other non-tool
-            # message) is itself too large. Truncate its payload so the request
-            # can't overflow. If nothing is left to shrink, return and let the
-            # API surface the error rather than spin.
+        if not _trim_lowest_value_tool_pair(messages):
             if not _truncate_largest_message(messages, system=system, tools=tools, ceiling=ceiling):
                 logger.warning(
                     "[agent] context still over budget after trimming + truncation "
@@ -324,5 +325,5 @@ def _enforce_context_budget(
             )
             continue
         logger.warning(
-            "[agent] trimmed oldest tool pair to fit context budget (ceiling=%d)", ceiling
+            "[agent] trimmed low-value tool pair to fit context budget (ceiling=%d)", ceiling
         )

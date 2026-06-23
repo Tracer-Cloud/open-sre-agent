@@ -43,6 +43,11 @@ from app.utils.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 
+def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
+    for msg in messages:
+        msg[key] = True
+
+
 def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[RegisteredTool]:
     planned_raw = state.get("planned_actions")
     if not isinstance(planned_raw, list) or not planned_raw:
@@ -154,6 +159,7 @@ class ConnectedInvestigationAgent:
             seed_msgs = _build_tool_result_messages(llm, seed_calls, seed_results)
 
             seed_assistant_msg = _build_synthetic_assistant_tool_call_msg(llm, seed_calls)
+            _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
 
@@ -246,6 +252,8 @@ class ConnectedInvestigationAgent:
             ]
 
             tool_result_messages = _build_tool_result_messages(llm, response.tool_calls, results)
+            if duplicate_flags and all(duplicate_flags):
+                _mark_messages([messages[-1], *tool_result_messages], "_opensre_duplicate_result")
             messages.extend(tool_result_messages)
 
             for tc, output, is_dup in zip(response.tool_calls, results, duplicate_flags):

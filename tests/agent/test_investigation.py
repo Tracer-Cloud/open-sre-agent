@@ -415,6 +415,115 @@ def test_trim_oldest_tool_pair_returns_false_when_no_tool_use_remains() -> None:
     assert len(messages) == 2
 
 
+def test_trim_oldest_tool_pair_skips_pinned_anthropic_tool_exchange() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "seed", "content": "seed"}],
+            "_opensre_seed": True,
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "later", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "later", "content": "later"}],
+        },
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    assert len(messages) == 3
+    assert messages[1]["content"][0]["id"] == "seed"
+    assert messages[2]["content"][0]["tool_use_id"] == "seed"
+    assert all("later" not in json.dumps(message) for message in messages)
+
+
+def test_trim_oldest_tool_pair_returns_false_when_only_pinned_pairs_remain() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "seed", "content": "seed"}],
+            "_opensre_seed": True,
+        },
+    ]
+    snapshot = [message.copy() for message in messages]
+
+    assert _trim_oldest_tool_pair(messages) is False
+    assert messages == snapshot
+
+
+def test_trim_oldest_tool_pair_evicts_duplicate_exchange_before_large_normal_exchange() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "normal", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "normal", "content": "x" * 10_000}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "dupe", "name": "n", "input": {}}],
+            "_opensre_duplicate_result": True,
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "dupe", "content": "duplicate"}],
+            "_opensre_duplicate_result": True,
+        },
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    assert len(messages) == 3
+    assert messages[1]["content"][0]["id"] == "normal"
+    assert all("dupe" not in json.dumps(message) for message in messages)
+
+
+def test_trim_oldest_tool_pair_evicts_larger_non_seed_exchange_before_tiny_oldest() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "tiny", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tiny", "content": "tiny"}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "large", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "large", "content": "x" * 10_000}],
+        },
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    assert len(messages) == 3
+    assert messages[1]["content"][0]["id"] == "tiny"
+    assert all("large" not in json.dumps(message) for message in messages)
+
+
 # --------------------------------------------------------------------------- #
 # OpenAI shape — regression pin for the 2026-06-05 floorsweep overflow bug.   #
 # Pre-fix, the trim function only recognized Anthropic tool_use blocks inside #
@@ -458,6 +567,39 @@ def test_trim_oldest_tool_pair_drops_openai_assistant_and_following_tool_message
     assert messages[0]["content"] == "alert"
     assert messages[1]["tool_calls"][0]["id"] == "call_2"
     assert messages[2]["tool_call_id"] == "call_2"
+
+
+def test_trim_oldest_tool_pair_skips_pinned_openai_tool_exchange() -> None:
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "seed_a", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+                {"id": "seed_b", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+            "_opensre_seed": True,
+        },
+        {"role": "tool", "tool_call_id": "seed_a", "content": "seed a", "_opensre_seed": True},
+        {"role": "tool", "tool_call_id": "seed_b", "content": "seed b", "_opensre_seed": True},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "later", "type": "function", "function": {"name": "n", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "later", "content": "later"},
+    ]
+
+    assert _trim_oldest_tool_pair(messages) is True
+
+    assert len(messages) == 4
+    assert messages[1]["tool_calls"][0]["id"] == "seed_a"
+    assert messages[2]["tool_call_id"] == "seed_a"
+    assert messages[3]["tool_call_id"] == "seed_b"
+    assert all("later" not in json.dumps(message) for message in messages)
 
 
 def test_trim_oldest_tool_pair_stops_at_unrelated_tool_message_after_openai_assistant() -> None:
@@ -718,8 +860,45 @@ def test_enforce_context_budget_trims_when_over_ceiling() -> None:
     assert messages[1]["content"][0]["id"] == "t2"
 
 
+def test_enforce_context_budget_preserves_pinned_seed_pair_before_truncation() -> None:
+    ceiling = 50_000
+    big_seed_payload = "s" * 200_000
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
+            "_opensre_seed": True,
+        },
+        {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "seed", "content": big_seed_payload}
+            ],
+            "_opensre_seed": True,
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "later", "name": "n", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "later", "content": "later"}],
+        },
+    ]
+
+    _enforce_context_budget(messages, ceiling=ceiling)
+
+    assert len(messages) == 3
+    assert messages[1]["content"][0]["id"] == "seed"
+    assert messages[2]["content"][0]["tool_use_id"] == "seed"
+    assert messages[2]["content"][0]["content"].endswith(_MARKER)
+    assert all("later" not in json.dumps(message) for message in messages)
+    assert _estimate_message_tokens(messages) <= ceiling
+
+
 # --------------------------------------------------------------------------- #
-# Last-resort truncation. Whole-pair trimming drops tool exchanges oldest-first #
+# Last-resort truncation. Whole-pair trimming drops low-value tool exchanges    #
 # but cannot shrink the base prompt (e.g. an oversized initial alert / non-tool #
 # message). The old code returned there and overflowed the API; these pin the   #
 # truncation fallback that closes that crash vector.                            #
@@ -923,6 +1102,12 @@ def test_run_suppresses_duplicate_tool_calls() -> None:
         isinstance(m.get("content"), str) and "suppressed_duplicate" in m["content"]
         for m in result["agent_messages"]
     )
+    duplicate_messages = [
+        m for m in result["agent_messages"] if m.get("_opensre_duplicate_result") is True
+    ]
+    assert len(duplicate_messages) == 2
+    assert duplicate_messages[0]["role"] == "assistant"
+    assert "suppressed_duplicate" in duplicate_messages[1]["content"]
     assert mock_llm.invoke.call_count == 3
 
 
