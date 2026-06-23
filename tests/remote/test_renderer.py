@@ -742,24 +742,7 @@ class TestStreamRendererDiagnoseStreaming:
 
 
 class TestStreamRendererFocusedUXAndParsing:
-    """Focused tests for plan preview and deterministic report parsing."""
-
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
-    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_plan_preview_printed_exactly_once(self, _mock_display, _mock_live) -> None:
-        """The plan preview panel is printed exactly once when the plan_actions node completes."""
-        renderer = StreamRenderer()
-        renderer._final_state = {"planned_actions": ["check_logs", "query_metrics"]}
-        renderer._active_node = "plan_actions"
-
-        renderer._finish_active_node()
-        assert renderer._plan_preview_printed is True
-
-        renderer._plan_preview_printed = True
-        renderer._active_node = "plan_actions"
-        renderer._finish_active_node()
-        assert renderer._plan_preview_printed is True
+    """Focused tests for deterministic report parsing."""
 
     @patch("app.cli.ui.renderer.diagnose.Live")
     @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")

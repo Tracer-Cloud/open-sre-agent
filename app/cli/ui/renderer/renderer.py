@@ -7,8 +7,6 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 from rich.console import Console
-from rich.markup import escape
-from rich.panel import Panel
 from rich.text import Text
 
 from app.analytics.events import Event
@@ -68,7 +66,6 @@ class StreamRenderer:
         # orchestrates lifecycle (active_node tracking, finish-on-end).
         self._console = Console(highlight=False)
         self._diagnose = _DiagnoseStreamRenderer(self._console, self._tracker, local=self._local)
-        self._plan_preview_printed = False
         # Track tool call start times keyed by tool name for elapsed display
         self._tool_start_times: dict[str, float] = {}
         self._tool_inputs: dict[str, Any] = {}
@@ -478,24 +475,6 @@ class StreamRenderer:
         node = self._active_node
         message = self._build_node_message(node)
         self._tracker.complete(node, message=message)
-        if (
-            node == "plan_actions"
-            and get_output_format() == "rich"
-            and not self._plan_preview_printed
-        ):
-            actions = self._final_state.get("planned_actions", [])
-            if actions:
-                panel = Panel(
-                    "\n".join(
-                        f"  [bold green]{i + 1}.[/bold green] [white]{escape(resolve_tool_display_name(act))}[/white]"
-                        for i, act in enumerate(actions)
-                    ),
-                    title="[bold yellow]📋 Investigation Plan Preview[/bold yellow]",
-                    border_style="yellow",
-                    expand=False,
-                )
-                self._print_above_renderable(panel)
-                self._plan_preview_printed = True
         self._active_node = None
 
     def _merge_state(self, update: Any) -> None:
