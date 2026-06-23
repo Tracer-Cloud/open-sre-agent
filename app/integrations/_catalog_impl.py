@@ -1303,10 +1303,7 @@ def _classify_service_instance(
     handler = _CLASSIFIERS.get(key)
     if handler is not None:
         return handler(credentials, record_id)
-    logger.warning(
-        "classify_service_instance: no classifier registered for service=%r; passing through raw credentials",
-        key,
-    )
+    # Fallback for unknown services: pass through credentials + record id.
     return {"credentials": credentials, "integration_id": record_id}, key
 
 
