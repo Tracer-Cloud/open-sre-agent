@@ -47,7 +47,7 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
     monkeypatch.setattr("app.agent.correlation.node.node_correlate_upstream", lambda *_a: {})
     monkeypatch.setattr(
         "app.agent.stages.publish_findings.node.generate_report",
-        lambda _state: {"report": "done"},
+        lambda _state, **_kwargs: {"report": "done"},
     )
 
     events = [event async for event in astream_investigation("alert text")]

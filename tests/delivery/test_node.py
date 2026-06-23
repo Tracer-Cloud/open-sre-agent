@@ -69,25 +69,20 @@ def _make_state(**overrides: Any) -> dict[str, Any]:
 
 def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch all heavy dependencies of generate_report so we can run it in tests."""
+    from app.agent.stages.publish_findings.formatters.messages import ReportMessages
+
     monkeypatch.setattr(
         "app.agent.stages.publish_findings.node.build_report_context",
         lambda _state: {},
     )
     monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.format_slack_message",
-        lambda _ctx: "slack report text",
-    )
-    monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.format_telegram_message",
-        lambda _ctx: "telegram report text",
-    )
-    monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.format_whatsapp_message",
-        lambda _ctx: "whatsapp report text",
-    )
-    monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.build_slack_blocks",
-        lambda _ctx: [],
+        "app.agent.stages.publish_findings.node.build_report_messages",
+        lambda _ctx: ReportMessages(
+            slack_text="slack report text",
+            telegram_html="telegram report text",
+            whatsapp_text="whatsapp report text",
+            slack_blocks=[],
+        ),
     )
     monkeypatch.setattr(
         "app.agent.stages.publish_findings.node.create_investigation_and_attach_url",

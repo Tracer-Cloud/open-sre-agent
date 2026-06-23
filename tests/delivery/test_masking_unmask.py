@@ -37,14 +37,17 @@ def _state_with_masking() -> dict[str, object]:
 
 def test_slack_message_is_unmasked_before_delivery() -> None:
     from app.agent.stages.publish_findings import node as pub_node
+    from app.agent.stages.publish_findings.formatters.messages import ReportMessages
 
     masked_message = "Root cause: <POD_0> crashed in <NAMESPACE_0>. Impact: customer-facing."
 
     with (
         patch.object(pub_node, "build_report_context", return_value=MagicMock()),
-        patch.object(pub_node, "format_slack_message", return_value=masked_message),
-        patch.object(pub_node, "format_telegram_message", return_value="tg"),
-        patch.object(pub_node, "build_slack_blocks", return_value=[]),
+        patch.object(
+            pub_node,
+            "build_report_messages",
+            return_value=ReportMessages(masked_message, "tg", "wa", []),
+        ),
         patch.object(pub_node, "render_report"),
         patch.object(pub_node, "open_in_editor"),
         patch.object(
@@ -65,6 +68,7 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
 
 def test_empty_masking_map_is_passthrough() -> None:
     from app.agent.stages.publish_findings import node as pub_node
+    from app.agent.stages.publish_findings.formatters.messages import ReportMessages
 
     state = _state_with_masking()
     state["masking_map"] = {}
@@ -72,9 +76,11 @@ def test_empty_masking_map_is_passthrough() -> None:
 
     with (
         patch.object(pub_node, "build_report_context", return_value=MagicMock()),
-        patch.object(pub_node, "format_slack_message", return_value=message_without_placeholders),
-        patch.object(pub_node, "format_telegram_message", return_value="tg"),
-        patch.object(pub_node, "build_slack_blocks", return_value=[]),
+        patch.object(
+            pub_node,
+            "build_report_messages",
+            return_value=ReportMessages(message_without_placeholders, "tg", "wa", []),
+        ),
         patch.object(pub_node, "render_report"),
         patch.object(pub_node, "open_in_editor"),
         patch.object(

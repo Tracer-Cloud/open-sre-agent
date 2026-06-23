@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from app.agent.stages.publish_findings.node import generate_report, node_publish_findings
+from app.agent.stages.publish_findings.evaluation import run_optional_opensre_evaluation
+from app.agent.stages.publish_findings.node import generate_report
 from app.state import InvestigationState
-
-logger = logging.getLogger(__name__)
 
 
 def deliver(state: InvestigationState) -> dict[str, Any]:
@@ -17,36 +15,11 @@ def deliver(state: InvestigationState) -> dict[str, Any]:
     Returns state updates with slack_message and report fields.
     """
     state_dict = dict(state)
-    extra_updates: dict[str, Any] = {}
-
-    if state_dict.get("opensre_evaluate"):
-        rubric_value = state_dict.get("opensre_eval_rubric")
-        if isinstance(rubric_value, str) and rubric_value.strip():
-            from app.integrations.opensre.llm_eval_judge import run_opensre_llm_judge
-
-            try:
-                judge_result = run_opensre_llm_judge(
-                    state=state_dict,
-                    rubric=rubric_value,
-                )
-                extra_updates["opensre_llm_eval"] = judge_result
-            except Exception as exc:
-                logger.exception("LLM judge failed: %s", exc)
-                extra_updates["opensre_llm_eval"] = {
-                    "skipped": True,
-                    "reason": f"Judge run failed: {exc}",
-                }
-        else:
-            extra_updates["opensre_llm_eval"] = {
-                "skipped": True,
-                "reason": "opensre_eval_rubric missing or invalid; expected non-empty string",
-            }
-
+    extra_updates = run_optional_opensre_evaluation(state_dict)
     return {**generate_report(state), **extra_updates}
 
 
 __all__ = [
     "deliver",
     "generate_report",
-    "node_publish_findings",
 ]

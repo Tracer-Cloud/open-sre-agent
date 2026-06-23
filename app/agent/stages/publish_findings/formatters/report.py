@@ -3,6 +3,7 @@
 import html
 import re
 
+from app.agent.stages.publish_findings.context import ReportContext
 from app.agent.stages.publish_findings.formatters.base import format_html_link, format_slack_link
 from app.agent.stages.publish_findings.formatters.evidence import (
     format_cited_evidence_section,
@@ -13,7 +14,6 @@ from app.agent.stages.publish_findings.formatters.infrastructure import (
     format_pod_line,
     get_failed_pods,
 )
-from app.agent.stages.publish_findings.report_context import ReportContext
 from app.agent.stages.publish_findings.urls.aws import build_cloudwatch_url
 
 

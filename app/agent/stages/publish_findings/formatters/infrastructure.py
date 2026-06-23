@@ -2,8 +2,8 @@
 
 from typing import Any
 
+from app.agent.stages.publish_findings.context import ReportContext
 from app.agent.stages.publish_findings.formatters.base import format_slack_link
-from app.agent.stages.publish_findings.report_context import ReportContext
 from app.agent.stages.publish_findings.urls.aws import build_s3_console_url
 
 
@@ -311,23 +311,3 @@ def build_investigation_trace(ctx: ReportContext) -> list[str]:
         step_num += 1
 
     return trace_steps
-
-
-def format_infrastructure_correlation(ctx: ReportContext) -> str:
-    """Format infrastructure correlation showing the investigation trace path.
-
-    Args:
-        ctx: Report context
-
-    Returns:
-        Formatted investigation trace section
-    """
-    trace_steps = build_investigation_trace(ctx)
-
-    if not trace_steps:
-        return ""
-
-    lines = ["*Investigation Trace*"]
-    lines.extend(trace_steps)
-
-    return "\n" + "\n".join(lines) + "\n" if lines else ""

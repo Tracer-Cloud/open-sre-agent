@@ -21,7 +21,7 @@ def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:
 
 def _patch_generate_report(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.generate_report",
+        "app.agent.stages.publish_findings.generate_report",
         lambda _s: {"slack_message": "", "report": ""},
     )
 

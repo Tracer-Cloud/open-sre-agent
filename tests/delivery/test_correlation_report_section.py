@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from app.agent.stages.publish_findings.context import build_report_context
 from app.agent.stages.publish_findings.formatters.report import (
     build_slack_blocks,
     format_slack_message,
 )
-from app.agent.stages.publish_findings.report_context import build_report_context
 
 
 def test_publish_report_includes_upstream_correlation_section() -> None:

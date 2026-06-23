@@ -25,9 +25,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Serializes temporary render_report monkeypatches when multiple streaming
-# investigations run concurrently (e.g. remote server).
-_render_report_patch_lock = threading.Lock()
 _SENTRY_CAPTURED_ATTR = "_opensre_sentry_captured"
 
 
@@ -348,27 +345,18 @@ async def astream_investigation(
                 )
             )
 
-            # --- deliver / publish (skip terminal render — StreamRenderer owns it) ---
+            # --- deliver / publish (skip terminal/editor render; StreamRenderer owns output) ---
             _put(_make_node_event("on_chain_start", "publish_findings", {}))
-
-            # Patch render_report to a no-op so generate_report handles external
-            # delivery but leaves terminal rendering to the StreamRenderer.
-            from app.agent.stages.publish_findings import node as _publish_node
-            from app.agent.stages.publish_findings.renderers import terminal as _term_mod
-
-            with _render_report_patch_lock:
-                _orig_terminal_render = _term_mod.render_report
-                _orig_node_render = _publish_node.render_report
-                _term_mod.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
-                _publish_node.render_report = lambda *_a, **_kw: None  # type: ignore[assignment]
-                try:
-                    _merge(
-                        state_any,
-                        _traced_node("publish_findings", generate_report, cast("Any", state_any)),
-                    )
-                finally:
-                    _term_mod.render_report = _orig_terminal_render  # type: ignore[assignment]
-                    _publish_node.render_report = _orig_node_render  # type: ignore[assignment]
+            _merge(
+                state_any,
+                _traced_node(
+                    "publish_findings",
+                    generate_report,
+                    cast("Any", state_any),
+                    render_terminal=False,
+                    open_editor=False,
+                ),
+            )
 
             _put(
                 _make_node_event(
