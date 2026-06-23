@@ -525,7 +525,6 @@ class StreamRenderer:
         slack_message = self._final_state.get("slack_message") or self._final_state.get(
             "report", ""
         )
-        root_cause_category = self._final_state.get("root_cause_category")
 
         if not slack_message:
             if self._final_state.get("is_noise"):
@@ -536,7 +535,7 @@ class StreamRenderer:
 
         from app.agent.stages.publish_findings.renderers.terminal import render_report as _render
 
-        _render(slack_message, root_cause_category=root_cause_category)
+        _render(slack_message)
 
 
 def _canonical_node_name(name: str) -> str:

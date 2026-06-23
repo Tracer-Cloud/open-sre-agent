@@ -156,22 +156,6 @@ def build_source_provenance(
             ),
         }
 
-    tracer_web = available_sources.get("tracer_web") or {}
-    if tracer_web:
-        provenance["tracer_web"] = {
-            "label": "Tracer Web",
-            "summary": ", ".join(
-                part
-                for part in [
-                    f"trace_id={tracer_web.get('trace_id')}"
-                    if tracer_web.get("trace_id")
-                    else None,
-                    f"run_url={tracer_web.get('run_url')}" if tracer_web.get("run_url") else None,
-                ]
-                if part
-            ),
-        }
-
     github = available_sources.get("github") or {}
     if github:
         provenance["github"] = {

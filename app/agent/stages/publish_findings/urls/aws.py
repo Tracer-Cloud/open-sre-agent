@@ -81,54 +81,6 @@ def build_s3_console_url(bucket: str, key: str, region: str = "us-east-1") -> st
     )
 
 
-def build_lambda_console_url(
-    function_name: str, region: str = "us-east-1", tab: str = "code"
-) -> str:
-    """Generate AWS Lambda console URL for a function.
-
-    Args:
-        function_name: Lambda function name
-        region: AWS region (defaults to us-east-1)
-        tab: Console tab to display (code, monitoring, configuration, etc.)
-
-    Returns:
-        Lambda console URL for the specified function
-    """
-    return (
-        f"https://{region}.console.aws.amazon.com/lambda/home"
-        f"?region={region}#/functions/{function_name}?tab={tab}"
-    )
-
-
-def build_ecs_console_url(cluster: str, region: str = "us-east-1") -> str:
-    """Generate AWS ECS console URL for a cluster.
-
-    Args:
-        cluster: ECS cluster name
-        region: AWS region (defaults to us-east-1)
-
-    Returns:
-        ECS console URL for the specified cluster
-    """
-    return f"https://{region}.console.aws.amazon.com/ecs/v2/clusters/{cluster}?region={region}"
-
-
-def build_batch_console_url(job_queue: str, region: str = "us-east-1") -> str:
-    """Generate AWS Batch console URL for a job queue.
-
-    Args:
-        job_queue: Batch job queue name
-        region: AWS region (defaults to us-east-1)
-
-    Returns:
-        Batch console URL for the specified job queue
-    """
-    return (
-        f"https://{region}.console.aws.amazon.com/batch/home"
-        f"?region={region}#queues/detail/{job_queue}"
-    )
-
-
 def build_grafana_explore_url(
     grafana_endpoint: str,
     query: str,

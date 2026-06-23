@@ -44,7 +44,6 @@ class NormalizedState:
     """All raw data extracted from InvestigationState in one place."""
 
     def __init__(self, state: InvestigationState) -> None:
-        context = state.get("context", {}) or {}
         evidence = state.get("evidence", {}) or {}
         available_sources = state.get("available_sources", {}) or {}
         raw_alert_value = state.get("raw_alert", {})
@@ -53,8 +52,6 @@ class NormalizedState:
         self.raw_alert: dict[str, Any] = (
             raw_alert_value if isinstance(raw_alert_value, dict) else {}
         )
-        self.web_run: dict[str, Any] = context.get("tracer_web_run", {}) or {}
-        self.batch: dict[str, Any] = evidence.get("batch_jobs", {}) or {}
         self.s3: dict[str, Any] = evidence.get("s3", {}) or {}
         self.available_sources: dict[str, dict[str, Any]] = available_sources
 

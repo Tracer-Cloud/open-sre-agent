@@ -45,7 +45,7 @@ def generate_report(
     )
 
     if render_terminal:
-        render_report(messages.slack_text, root_cause_category=state.get("root_cause_category"))
+        render_report(messages.slack_text)
     if open_editor:
         open_in_editor(messages.slack_text)
 

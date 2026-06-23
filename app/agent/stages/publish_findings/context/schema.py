@@ -19,31 +19,13 @@ class ReportContext(TypedDict, total=False):
     pipeline_name: str
     alert_name: str | None
     root_cause: str
-    root_cause_category: str | None
     validated_claims: list[dict]
     non_validated_claims: list[dict]
-    validity_score: float
-    investigation_recommendations: list[str]
     remediation_steps: list[str]
     correlation: dict[str, Any]
 
     # S3 verification
     s3_marker_exists: bool
-
-    # Tracer web run metadata
-    tracer_run_status: str | None
-    tracer_run_name: str | None
-    tracer_pipeline_name: str | None
-    tracer_run_cost: float
-    tracer_max_ram_gb: float
-    tracer_user_email: str | None
-    tracer_team: str | None
-    tracer_instance_type: str | None
-    tracer_failed_tasks: int
-
-    # AWS Batch metadata
-    batch_failure_reason: str | None
-    batch_failed_jobs: int
 
     # CloudWatch metadata
     cloudwatch_log_group: str | None
@@ -60,7 +42,6 @@ class ReportContext(TypedDict, total=False):
 
     # Tool call history for investigation transparency
     executed_hypotheses: list[dict]
-    evidence_entries: list[dict]
 
     # Integration endpoints (for building deep links)
     grafana_endpoint: str | None

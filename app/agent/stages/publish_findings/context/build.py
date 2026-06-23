@@ -38,28 +38,12 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "pipeline_name": state.get("pipeline_name", "unknown"),
         "alert_name": state.get("alert_name"),
         "root_cause": state.get("root_cause", ""),
-        "root_cause_category": state.get("root_cause_category"),
         "validated_claims": validated_claims,
         "non_validated_claims": non_validated_claims,
-        "validity_score": state.get("validity_score", 0.0),
-        "investigation_recommendations": state.get("investigation_recommendations", []),
         "remediation_steps": state.get("remediation_steps", []),
         "correlation": state.get("correlation", {}),
         # S3 verification
         "s3_marker_exists": ns.s3.get("marker_exists", False),
-        # Tracer web run metadata
-        "tracer_run_status": ns.web_run.get("status"),
-        "tracer_run_name": ns.web_run.get("run_name"),
-        "tracer_pipeline_name": ns.web_run.get("pipeline_name"),
-        "tracer_run_cost": ns.web_run.get("run_cost", 0),
-        "tracer_max_ram_gb": ns.web_run.get("max_ram_gb", 0),
-        "tracer_user_email": ns.web_run.get("user_email"),
-        "tracer_team": ns.web_run.get("team"),
-        "tracer_instance_type": ns.web_run.get("instance_type"),
-        "tracer_failed_tasks": len(ns.evidence.get("failed_jobs", [])),
-        # AWS Batch metadata
-        "batch_failure_reason": ns.batch.get("failure_reason"),
-        "batch_failed_jobs": ns.batch.get("failed_jobs", 0),
         # CloudWatch metadata
         "cloudwatch_log_group": ns.cloudwatch_group,
         "cloudwatch_log_stream": ns.cloudwatch_stream,
@@ -73,7 +57,6 @@ def build_report_context(state: InvestigationState) -> ReportContext:
         "raw_alert": ns.raw_alert,
         # Tool call history for investigation transparency
         "executed_hypotheses": state.get("executed_hypotheses", []),
-        "evidence_entries": state.get("evidence_entries", []),
         # Integration endpoints for deep links
         "grafana_endpoint": ns.grafana_endpoint,
         "datadog_site": ns.datadog_site,

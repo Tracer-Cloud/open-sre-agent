@@ -6,12 +6,9 @@ from urllib.parse import urlparse
 
 from app.agent.stages.publish_findings.urls.aws import (
     _encode_aws_path,
-    build_batch_console_url,
     build_cloudwatch_url,
     build_datadog_logs_url,
-    build_ecs_console_url,
     build_grafana_explore_url,
-    build_lambda_console_url,
     build_s3_console_url,
 )
 
@@ -116,53 +113,6 @@ class TestBuildS3ConsoleUrl:
         # Spaces and parens should be URL-encoded
         assert "%20" in url or "+" in url
         assert "path" in url
-
-
-class TestBuildLambdaConsoleUrl:
-    """Tests for build_lambda_console_url."""
-
-    def test_basic_url(self) -> None:
-        url = build_lambda_console_url("my-function")
-        parsed = urlparse(url)
-        assert parsed.netloc == "us-east-1.console.aws.amazon.com"
-        assert parsed.path.startswith("/lambda")
-        assert "functions/my-function" in url
-        assert "tab=code" in url
-
-    def test_custom_region_and_tab(self) -> None:
-        url = build_lambda_console_url("func", region="ap-south-1", tab="monitoring")
-        assert "ap-south-1" in url
-        assert "tab=monitoring" in url
-
-
-class TestBuildEcsConsoleUrl:
-    """Tests for build_ecs_console_url."""
-
-    def test_basic_url(self) -> None:
-        url = build_ecs_console_url("prod-cluster")
-        parsed = urlparse(url)
-        assert parsed.netloc == "us-east-1.console.aws.amazon.com"
-        assert parsed.path.startswith("/ecs/v2/clusters/prod-cluster")
-        assert "region=us-east-1" in url
-
-    def test_custom_region(self) -> None:
-        url = build_ecs_console_url("cluster", region="eu-west-1")
-        assert "eu-west-1" in url
-
-
-class TestBuildBatchConsoleUrl:
-    """Tests for build_batch_console_url."""
-
-    def test_basic_url(self) -> None:
-        url = build_batch_console_url("my-queue")
-        parsed = urlparse(url)
-        assert parsed.netloc == "us-east-1.console.aws.amazon.com"
-        assert parsed.path.startswith("/batch")
-        assert "queues/detail/my-queue" in url
-
-    def test_custom_region(self) -> None:
-        url = build_batch_console_url("queue", region="us-west-2")
-        assert "us-west-2" in url
 
 
 class TestBuildGrafanaExploreUrl:

@@ -112,7 +112,7 @@ def _format_tool_calls_line(
             None,
         ),
         "get_failed_tools": (
-            "tracer tools",
+            "failed tools",
             lambda e: f"{len(e.get('failed_tools', []))} failed" if e.get("failed_tools") else None,
             None,
         ),
