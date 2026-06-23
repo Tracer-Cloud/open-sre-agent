@@ -28,7 +28,7 @@ def apply_guardrails_to_messages(
             msg = {**msg, "content": engine.apply(content)}
         guarded.append(msg)
 
-    guarded_system = engine.apply(system) if system else system
+    guarded_system = engine.apply(system) if system is not None else None
     return guarded, guarded_system
 
 
