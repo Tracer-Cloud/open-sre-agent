@@ -217,43 +217,6 @@ def to_converse_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]
     return converted
 
 
-def apply_guardrails_to_converse_payload(
-    *,
-    messages: list[dict[str, Any]],
-    system: str | None,
-) -> tuple[list[dict[str, Any]], str | None]:
-    """Apply active guardrails to string or text-block message content."""
-    from app.guardrails.engine import get_guardrail_engine
-
-    engine = get_guardrail_engine()
-    if not engine.is_active:
-        return messages, system
-
-    guarded_messages: list[dict[str, Any]] = []
-    for message in messages:
-        role = message["role"]
-        content = message.get("content", "")
-        if isinstance(content, str):
-            guarded_messages.append({"role": role, "content": [{"text": engine.apply(content)}]})
-            continue
-        if not isinstance(content, list):
-            guarded_messages.append(message)
-            continue
-        blocks: list[dict[str, Any]] = []
-        for block in content:
-            if not isinstance(block, dict):
-                blocks.append(block)
-                continue
-            if "text" in block and isinstance(block["text"], str):
-                blocks.append({"text": engine.apply(block["text"])})
-            else:
-                blocks.append(block)
-        guarded_messages.append({"role": role, "content": blocks})
-
-    guarded_system = engine.apply(system) if system is not None else None
-    return guarded_messages, guarded_system
-
-
 def build_assistant_tool_use_message(tool_calls: list[Any]) -> dict[str, Any]:
     """Build a Converse assistant message containing ``toolUse`` blocks."""
     return {

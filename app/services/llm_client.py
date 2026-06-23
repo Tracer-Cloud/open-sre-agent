@@ -231,14 +231,9 @@ class LLMClient:
         self._ensure_client()
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -430,14 +425,10 @@ class BedrockLLMClient:
         assert self._anthropic_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import GuardrailBlockedError, get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
+        from app.guardrails.engine import GuardrailBlockedError
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -540,14 +531,10 @@ class BedrockLLMClient:
         assert self._boto3_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import GuardrailBlockedError, get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
+        from app.guardrails.engine import GuardrailBlockedError
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         # Convert to converse API message format ({ "text": "..." } blocks only).
         converse_messages = [
@@ -872,12 +859,9 @@ class OpenAILLMClient:
         self._ensure_client()
         messages = _normalize_messages_openai(prompt_or_messages)
 
-        from app.guardrails.engine import get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
+        messages, _ = apply_guardrails_to_messages(messages)
 
         token_param = (
             "max_completion_tokens" if _uses_max_completion_tokens(self._model) else "max_tokens"

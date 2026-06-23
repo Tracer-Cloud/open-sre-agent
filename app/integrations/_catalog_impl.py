@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 
 from app.config import get_tracer_base_url
@@ -204,6 +205,1083 @@ def classify_integrations(integrations: list[dict[str, Any]]) -> dict[str, Any]:
     return resolved
 
 
+_ClassifyFn = Callable[[dict[str, Any], str], tuple[dict[str, Any] | None, str | None]]
+
+
+def _classify_grafana(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = GrafanaIntegrationConfig.model_validate(
+            {
+                "endpoint": credentials.get("endpoint", ""),
+                "api_key": credentials.get("api_key", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="grafana", record_id=record_id)
+        return None, None
+    if not cfg.endpoint:
+        return None, None
+    if cfg.is_local:
+        return {
+            "endpoint": cfg.endpoint,
+            "api_key": "",
+            "username": cfg.username,
+            "password": cfg.password,
+            "integration_id": cfg.integration_id,
+        }, "grafana_local"
+    if cfg.api_key and cfg.api_key != "local":
+        return cfg.model_dump(), "grafana"
+    return None, None
+
+
+def _classify_aws(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    raw: dict[str, Any] = {
+        "region": credentials.get("region", "us-east-1"),
+        "role_arn": credentials.get("role_arn", ""),
+        "external_id": credentials.get("external_id", ""),
+        "integration_id": record_id,
+    }
+    if credentials.get("access_key_id") and credentials.get("secret_access_key"):
+        raw["credentials"] = {
+            "access_key_id": credentials.get("access_key_id", ""),
+            "secret_access_key": credentials.get("secret_access_key", ""),
+            "session_token": credentials.get("session_token", ""),
+        }
+    try:
+        return AWSIntegrationConfig.model_validate(raw).model_dump(exclude_none=True), "aws"
+    except Exception as exc:
+        _report_classify_failure(exc, integration="aws", record_id=record_id)
+        return None, None
+
+
+def _classify_datadog(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = DatadogIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", ""),
+                "app_key": credentials.get("app_key", ""),
+                "site": credentials.get("site", "datadoghq.com"),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="datadog", record_id=record_id)
+        return None, None
+    if cfg.api_key and cfg.app_key:
+        return cfg.model_dump(), "datadog"
+    return None, None
+
+
+def _classify_groundcover(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = GroundcoverIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", "") or credentials.get("mcp_token", ""),
+                "mcp_url": credentials.get("mcp_url", ""),
+                "tenant_uuid": credentials.get("tenant_uuid", ""),
+                "backend_id": credentials.get("backend_id", ""),
+                "timezone": credentials.get("timezone", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="groundcover", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "groundcover"
+    return None, None
+
+
+def _classify_honeycomb(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = HoneycombIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", ""),
+                "dataset": credentials.get("dataset", ""),
+                "base_url": credentials.get("base_url", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="honeycomb", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "honeycomb"
+    return None, None
+
+
+def _classify_coralogix(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = CoralogixIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", ""),
+                "base_url": credentials.get("base_url", ""),
+                "application_name": credentials.get("application_name", ""),
+                "subsystem_name": credentials.get("subsystem_name", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="coralogix", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "coralogix"
+    return None, None
+
+
+def _classify_github(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_github_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "toolsets": credentials.get("toolsets", []),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="github", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "github"
+
+
+def _classify_sentry(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_sentry_config(
+            {
+                "base_url": credentials.get("base_url", "https://sentry.io"),
+                "organization_slug": credentials.get("organization_slug", ""),
+                "auth_token": credentials.get("auth_token", ""),
+                "project_slug": credentials.get("project_slug", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="sentry", record_id=record_id)
+        return None, None
+    if cfg.organization_slug and cfg.auth_token:
+        return cfg.model_dump(), "sentry"
+    return None, None
+
+
+def _classify_gitlab(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_gitlab_config(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "auth_token": credentials.get("auth_token", ""),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="gitlab", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "gitlab"
+
+
+def _classify_jenkins(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_jenkins_config(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "username": credentials.get("username", ""),
+                "api_token": credentials.get("api_token", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="jenkins", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "jenkins"
+    return None, None
+
+
+def _classify_mongodb(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mongodb_config(
+            {
+                "connection_string": credentials.get("connection_string", ""),
+                "database": credentials.get("database", ""),
+                "auth_source": credentials.get("auth_source", "admin"),
+                "tls": credentials.get("tls", True),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="mongodb", record_id=record_id)
+        return None, None
+    if cfg.connection_string:
+        return cfg.model_dump(), "mongodb"
+    return None, None
+
+
+def _classify_redis(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = RedisIntegrationConfig.model_validate(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 6379),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "db": credentials.get("db", 0),
+                "ssl": credentials.get("ssl", False),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="redis", record_id=record_id)
+        return None, None
+    if cfg.host:
+        return cfg.model_dump(), "redis"
+    return None, None
+
+
+def _classify_postgresql(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_postgresql_config(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 5432),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", "postgres"),
+                "password": credentials.get("password", ""),
+                "ssl_mode": credentials.get("ssl_mode", "prefer"),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="postgresql", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.database:
+        return cfg.model_dump(), "postgresql"
+    return None, None
+
+
+def _classify_mongodb_atlas(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mongodb_atlas_config(
+            {
+                "api_public_key": credentials.get("api_public_key", ""),
+                "api_private_key": credentials.get("api_private_key", ""),
+                "project_id": credentials.get("project_id", ""),
+                "base_url": credentials.get("base_url", "https://cloud.mongodb.com/api/atlas/v2"),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="mongodb_atlas", record_id=record_id)
+        return None, None
+    if cfg.api_public_key and cfg.api_private_key and cfg.project_id:
+        return {
+            "api_public_key": cfg.api_public_key,
+            "api_private_key": cfg.api_private_key,
+            "project_id": cfg.project_id,
+            "base_url": cfg.base_url,
+            "integration_id": record_id,
+        }, "mongodb_atlas"
+    return None, None
+
+
+def _classify_mariadb(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mariadb_config(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 3306),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "ssl": credentials.get("ssl", True),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="mariadb", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.database:
+        return {
+            "host": cfg.host,
+            "port": cfg.port,
+            "database": cfg.database,
+            "username": cfg.username,
+            "password": cfg.password,
+            "ssl": cfg.ssl,
+            "integration_id": record_id,
+        }, "mariadb"
+    return None, None
+
+
+def _classify_vercel(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = VercelConfig.model_validate(
+            {
+                "api_token": credentials.get("api_token", ""),
+                "team_id": credentials.get("team_id", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="vercel", record_id=record_id)
+        return None, None
+    if cfg.api_token:
+        return cfg.model_dump(), "vercel"
+    return None, None
+
+
+def _classify_opsgenie(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = OpsGenieIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", ""),
+                "region": credentials.get("region", "us"),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="opsgenie", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "opsgenie"
+    return None, None
+
+
+def _classify_pagerduty(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        raw: dict[str, Any] = {"api_key": credentials.get("api_key", ""), "integration_id": record_id}
+        if credentials.get("base_url"):
+            raw["base_url"] = credentials["base_url"]
+        cfg = PagerDutyIntegrationConfig.model_validate(raw)
+    except Exception as exc:
+        _report_classify_failure(exc, integration="pagerduty", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "pagerduty"
+    return None, None
+
+
+def _classify_incident_io(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = IncidentIoIntegrationConfig.model_validate(
+            {
+                "api_key": credentials.get("api_key", ""),
+                "base_url": credentials.get("base_url", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="incident_io", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "incident_io"
+    return None, None
+
+
+def _classify_jira(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = JiraIntegrationConfig.model_validate(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "email": credentials.get("email", ""),
+                "api_token": credentials.get("api_token", ""),
+                "project_key": credentials.get("project_key", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="jira", record_id=record_id)
+        return None, None
+    if cfg.base_url and cfg.email and cfg.api_token:
+        return cfg.model_dump(), "jira"
+    return None, None
+
+
+def _classify_discord(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    if not (credentials.get("bot_token") or "").strip():
+        return None, None
+    try:
+        cfg = DiscordBotConfig.model_validate(
+            {
+                "bot_token": credentials.get("bot_token", ""),
+                "application_id": credentials.get("application_id", ""),
+                "public_key": credentials.get("public_key", ""),
+                "default_channel_id": credentials.get("default_channel_id"),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="discord", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "discord"
+
+
+def _classify_telegram(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    if not (credentials.get("bot_token") or "").strip():
+        return None, None
+    try:
+        cfg = TelegramBotConfig.model_validate(
+            {
+                "bot_token": credentials.get("bot_token", ""),
+                "default_chat_id": credentials.get("default_chat_id"),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="telegram", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "telegram"
+
+
+def _classify_whatsapp(
+    credentials: dict[str, Any], record_id: str  # noqa: ARG001
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = WhatsAppConfig.model_validate(
+            {
+                "account_sid": credentials.get("account_sid", ""),
+                "auth_token": credentials.get("auth_token", ""),
+                "from_number": credentials.get("from_number", ""),
+                "default_to": credentials.get("default_to"),
+            }
+        )
+    except Exception:
+        return None, None
+    return cfg.model_dump(), "whatsapp"
+
+
+def _classify_twilio(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = TwilioIntegrationConfig.model_validate(
+            {
+                "account_sid": credentials.get("account_sid", ""),
+                "auth_token": credentials.get("auth_token", ""),
+                "sms": credentials.get("sms", {}),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
+        return None, None
+    return cfg.model_dump(), "twilio"
+
+
+def _classify_openclaw(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_openclaw_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="openclaw", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        config_dict = cfg.model_dump()
+        config_dict["connection_verified"] = True
+        return config_dict, "openclaw"
+    return None, None
+
+
+def _classify_posthog_mcp(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_posthog_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "organization_id": credentials.get("organization_id", ""),
+                "project_id": credentials.get("project_id", ""),
+                "features": credentials.get("features", []),
+                "read_only": credentials.get("read_only", True),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="posthog_mcp", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        config_dict = cfg.model_dump()
+        config_dict["connection_verified"] = True
+        return config_dict, "posthog_mcp"
+    return None, None
+
+
+def _classify_sentry_mcp(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_sentry_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "host": credentials.get("host", ""),
+                "organization_slug": credentials.get("organization_slug", ""),
+                "project_slug": credentials.get("project_slug", ""),
+                "skills": credentials.get("skills", []),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="sentry_mcp", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        config_dict = cfg.model_dump()
+        config_dict["connection_verified"] = True
+        return config_dict, "sentry_mcp"
+    return None, None
+
+
+def _classify_mysql(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mysql_config(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 3306),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", "root"),
+                "password": credentials.get("password", ""),
+                "ssl_mode": credentials.get("ssl_mode", "preferred"),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="mysql", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.database:
+        return {
+            "host": cfg.host,
+            "port": cfg.port,
+            "database": cfg.database,
+            "username": cfg.username,
+            "password": cfg.password,
+            "ssl_mode": cfg.ssl_mode,
+            "integration_id": record_id,
+        }, "mysql"
+    return None, None
+
+
+def _classify_dagster(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_dagster_config(
+            {
+                "endpoint": credentials.get("endpoint", ""),
+                "api_token": credentials.get("api_token", ""),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="dagster", record_id=record_id)
+        return None, None
+    if cfg.endpoint:
+        return {"endpoint": cfg.endpoint, "api_token": cfg.api_token, "integration_id": record_id}, "dagster"
+    return None, None
+
+
+def _classify_rabbitmq(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_rabbitmq_config(
+            {
+                "host": credentials.get("host", ""),
+                "management_port": credentials.get("management_port", 15672),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "vhost": credentials.get("vhost", "/"),
+                "ssl": credentials.get("ssl", False),
+                "verify_ssl": credentials.get("verify_ssl", True),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="rabbitmq", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.username:
+        return {
+            "host": cfg.host,
+            "management_port": cfg.management_port,
+            "username": cfg.username,
+            "password": cfg.password,
+            "vhost": cfg.vhost,
+            "ssl": cfg.ssl,
+            "verify_ssl": cfg.verify_ssl,
+            "integration_id": record_id,
+        }, "rabbitmq"
+    return None, None
+
+
+def _classify_rds(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_rds_config(
+            {
+                "db_instance_identifier": credentials.get("db_instance_identifier", ""),
+                "region": credentials.get("region", DEFAULT_RDS_REGION),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="rds", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return {**cfg.model_dump(), "integration_id": record_id}, "rds"
+    return None, None
+
+
+def _classify_airflow(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_airflow_config(
+            {
+                "base_url": credentials.get("base_url", DEFAULT_AIRFLOW_BASE_URL),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "auth_token": credentials.get("auth_token", ""),
+                "timeout_seconds": credentials.get("timeout_seconds", 15.0),
+                "verify_ssl": credentials.get("verify_ssl", True),
+                "max_results": credentials.get("max_results", 50),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="airflow", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return {**cfg.model_dump(), "integration_id": record_id}, "airflow"
+    return None, None
+
+
+def _classify_betterstack(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_betterstack_config(
+            {
+                "query_endpoint": credentials.get("query_endpoint", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "sources": credentials.get("sources", []),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="betterstack", record_id=record_id)
+        return None, None
+    if cfg.query_endpoint and cfg.username:
+        return {
+            "query_endpoint": cfg.query_endpoint,
+            "username": cfg.username,
+            "password": cfg.password,
+            "sources": list(cfg.sources),
+            "integration_id": record_id,
+        }, "betterstack"
+    return None, None
+
+
+def _classify_azure_sql(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_azure_sql_config(
+            {
+                "server": credentials.get("server", ""),
+                "port": credentials.get("port", 1433),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "driver": credentials.get("driver", "ODBC Driver 18 for SQL Server"),
+                "encrypt": credentials.get("encrypt", True),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="azure_sql", record_id=record_id)
+        return None, None
+    if cfg.server and cfg.database:
+        return cfg.model_dump(), "azure_sql"
+    return None, None
+
+
+def _classify_alertmanager(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = AlertmanagerIntegrationConfig.model_validate(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "bearer_token": credentials.get("bearer_token", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="alertmanager", record_id=record_id)
+        return None, None
+    if cfg.base_url:
+        return cfg.model_dump(), "alertmanager"
+    return None, None
+
+
+def _classify_argocd(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = ArgoCDIntegrationConfig.model_validate(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "bearer_token": credentials.get("bearer_token", "")
+                or credentials.get("auth_token", "")
+                or credentials.get("token", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "project": credentials.get("project", ""),
+                "app_namespace": credentials.get("app_namespace", ""),
+                "verify_ssl": credentials.get("verify_ssl", True),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="argocd", record_id=record_id)
+        return None, None
+    if cfg.base_url and (cfg.bearer_token or (cfg.username and cfg.password)):
+        return cfg.model_dump(), "argocd"
+    return None, None
+
+
+def _classify_helm(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = HelmIntegrationConfig.model_validate(
+            {
+                "helm_path": credentials.get("helm_path", "helm"),
+                "kube_context": credentials.get("kube_context", "")
+                or credentials.get("context", ""),
+                "kubeconfig": credentials.get("kubeconfig", "")
+                or credentials.get("kubeconfig_path", "")
+                or credentials.get("kube_config", ""),
+                "default_namespace": credentials.get("default_namespace", "")
+                or credentials.get("namespace", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="helm", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "helm"
+
+
+def _classify_victoria_logs(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = VictoriaLogsIntegrationConfig.model_validate(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "tenant_id": credentials.get("tenant_id"),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="victoria_logs", record_id=record_id)
+        return None, None
+    if cfg.base_url:
+        return cfg.model_dump(), "victoria_logs"
+    return None, None
+
+
+def _classify_bitbucket(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    workspace = str(credentials.get("workspace", "")).strip()
+    if not workspace:
+        return None, None
+    base_url = (
+        str(credentials.get("base_url", "https://api.bitbucket.org/2.0")).strip()
+        or "https://api.bitbucket.org/2.0"
+    )
+    return {
+        "workspace": workspace,
+        "username": str(credentials.get("username", "")).strip(),
+        "app_password": str(credentials.get("app_password", "")).strip(),
+        "base_url": base_url,
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 25), 25), 100)),
+        "integration_id": record_id,
+    }, "bitbucket"
+
+
+def _classify_snowflake(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    account_identifier = str(
+        credentials.get("account_identifier", credentials.get("account", ""))
+    ).strip()
+    token = str(credentials.get("token", "")).strip()
+    if not (account_identifier and token):
+        return None, None
+    return {
+        "account_identifier": account_identifier,
+        "user": str(credentials.get("user", "")).strip(),
+        "password": str(credentials.get("password", "")).strip(),
+        "token": token,
+        "warehouse": str(credentials.get("warehouse", "")).strip(),
+        "role": str(credentials.get("role", "")).strip(),
+        "database": str(credentials.get("database", "")).strip(),
+        "schema": str(credentials.get("schema", "")).strip(),
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 50), 50), 200)),
+        "integration_id": record_id,
+    }, "snowflake"
+
+
+def _classify_azure(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    workspace_id = str(credentials.get("workspace_id", "")).strip()
+    access_token = str(credentials.get("access_token", "")).strip()
+    if not (workspace_id and access_token):
+        return None, None
+    endpoint = (
+        str(credentials.get("endpoint", "https://api.loganalytics.io")).strip()
+        or "https://api.loganalytics.io"
+    )
+    return {
+        "workspace_id": workspace_id,
+        "access_token": access_token,
+        "endpoint": endpoint,
+        "tenant_id": str(credentials.get("tenant_id", "")).strip(),
+        "subscription_id": str(credentials.get("subscription_id", "")).strip(),
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
+        "integration_id": record_id,
+    }, "azure"
+
+
+def _classify_openobserve(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    base_url = str(credentials.get("base_url", "")).strip()
+    api_token = str(credentials.get("api_token", "")).strip()
+    username = str(credentials.get("username", "")).strip()
+    password = str(credentials.get("password", "")).strip()
+    if not (base_url and (api_token or (username and password))):
+        return None, None
+    return {
+        "base_url": base_url.rstrip("/"),
+        "org": str(credentials.get("org", "default")).strip() or "default",
+        "api_token": api_token,
+        "username": username,
+        "password": password,
+        "stream": str(credentials.get("stream", "")).strip(),
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
+        "integration_id": record_id,
+    }, "openobserve"
+
+
+def _classify_opensearch(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    url = str(credentials.get("url", "")).strip()
+    if not url:
+        return None, None
+    return {
+        "url": url.rstrip("/"),
+        "api_key": str(credentials.get("api_key", "")).strip(),
+        "username": str(credentials.get("username", "")).strip(),
+        "password": str(credentials.get("password", "")).strip(),
+        "index_pattern": str(credentials.get("index_pattern", "*")).strip() or "*",
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
+        "integration_id": record_id,
+    }, "opensearch"
+
+
+def _classify_splunk(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = SplunkIntegrationConfig.model_validate(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "token": credentials.get("token", ""),
+                "index": credentials.get("index", "main"),
+                "verify_ssl": credentials.get("verify_ssl", True),
+                "ca_bundle": credentials.get("ca_bundle", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="splunk", record_id=record_id)
+        return None, None
+    if cfg.base_url and cfg.token:
+        return cfg.model_dump(), "splunk"
+    return None, None
+
+
+def _classify_supabase(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_supabase_config(
+            {
+                "url": credentials.get("url", ""),
+                "service_key": credentials.get("service_key", ""),
+            }
+        )
+    except Exception as exc:
+        _report_classify_failure(exc, integration="supabase", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return {"project_url": cfg.url, "integration_id": record_id}, "supabase"
+    return None, None
+
+
+def _classify_signoz(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_signoz_config(
+            {
+                "url": credentials.get("url", ""),
+                "api_key": credentials.get("api_key", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "signoz"
+    return None, None
+
+
+def _classify_tempo(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_tempo_config(
+            {
+                "url": credentials.get("url", ""),
+                "api_key": credentials.get("api_key", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "org_id": credentials.get("org_id", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "tempo"
+    return None, None
+
+
+_CLASSIFIERS: dict[str, _ClassifyFn] = {
+    "grafana": _classify_grafana,
+    "grafana_local": _classify_grafana,
+    "aws": _classify_aws,
+    "datadog": _classify_datadog,
+    "groundcover": _classify_groundcover,
+    "honeycomb": _classify_honeycomb,
+    "coralogix": _classify_coralogix,
+    "github": _classify_github,
+    "sentry": _classify_sentry,
+    "gitlab": _classify_gitlab,
+    "jenkins": _classify_jenkins,
+    "mongodb": _classify_mongodb,
+    "redis": _classify_redis,
+    "postgresql": _classify_postgresql,
+    "mongodb_atlas": _classify_mongodb_atlas,
+    "mariadb": _classify_mariadb,
+    "vercel": _classify_vercel,
+    "opsgenie": _classify_opsgenie,
+    "pagerduty": _classify_pagerduty,
+    "incident_io": _classify_incident_io,
+    "jira": _classify_jira,
+    "discord": _classify_discord,
+    "telegram": _classify_telegram,
+    "whatsapp": _classify_whatsapp,
+    "twilio": _classify_twilio,
+    "openclaw": _classify_openclaw,
+    "posthog_mcp": _classify_posthog_mcp,
+    "sentry_mcp": _classify_sentry_mcp,
+    "mysql": _classify_mysql,
+    "dagster": _classify_dagster,
+    "rabbitmq": _classify_rabbitmq,
+    "rds": _classify_rds,
+    "airflow": _classify_airflow,
+    "betterstack": _classify_betterstack,
+    "azure_sql": _classify_azure_sql,
+    "alertmanager": _classify_alertmanager,
+    "argocd": _classify_argocd,
+    "helm": _classify_helm,
+    "victoria_logs": _classify_victoria_logs,
+    "bitbucket": _classify_bitbucket,
+    "snowflake": _classify_snowflake,
+    "azure": _classify_azure,
+    "openobserve": _classify_openobserve,
+    "opensearch": _classify_opensearch,
+    "splunk": _classify_splunk,
+    "supabase": _classify_supabase,
+    "signoz": _classify_signoz,
+    "tempo": _classify_tempo,
+}
+
+
 def _classify_service_instance(
     key: str, credentials: dict[str, Any], *, record_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -214,910 +1292,9 @@ def _classify_service_instance(
     ``key`` itself, but Grafana splits into ``grafana`` or ``grafana_local``
     based on its ``is_local`` property.
     """
-    if key in ("grafana", "grafana_local"):
-        try:
-            grafana_config = GrafanaIntegrationConfig.model_validate(
-                {
-                    "endpoint": credentials.get("endpoint", ""),
-                    "api_key": credentials.get("api_key", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if not grafana_config.endpoint:
-            return None, None
-        if grafana_config.is_local:
-            return {
-                "endpoint": grafana_config.endpoint,
-                "api_key": "",
-                "username": grafana_config.username,
-                "password": grafana_config.password,
-                "integration_id": grafana_config.integration_id,
-            }, "grafana_local"
-        if grafana_config.api_key and grafana_config.api_key != "local":
-            return grafana_config.model_dump(), "grafana"
-        return None, None
-
-    if key == "aws":
-        raw_config: dict[str, Any] = {
-            "region": credentials.get("region", "us-east-1"),
-            "role_arn": credentials.get("role_arn", ""),
-            "external_id": credentials.get("external_id", ""),
-            "integration_id": record_id,
-        }
-        if credentials.get("access_key_id") and credentials.get("secret_access_key"):
-            raw_config["credentials"] = {
-                "access_key_id": credentials.get("access_key_id", ""),
-                "secret_access_key": credentials.get("secret_access_key", ""),
-                "session_token": credentials.get("session_token", ""),
-            }
-        try:
-            return (
-                AWSIntegrationConfig.model_validate(raw_config).model_dump(exclude_none=True),
-                "aws",
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-
-    if key == "datadog":
-        try:
-            datadog_config = DatadogIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", ""),
-                    "app_key": credentials.get("app_key", ""),
-                    "site": credentials.get("site", "datadoghq.com"),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if datadog_config.api_key and datadog_config.app_key:
-            return datadog_config.model_dump(), "datadog"
-        return None, None
-
-    if key == "groundcover":
-        try:
-            groundcover_config = GroundcoverIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", "") or credentials.get("mcp_token", ""),
-                    "mcp_url": credentials.get("mcp_url", ""),
-                    "tenant_uuid": credentials.get("tenant_uuid", ""),
-                    "backend_id": credentials.get("backend_id", ""),
-                    "timezone": credentials.get("timezone", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if groundcover_config.api_key:
-            return groundcover_config.model_dump(), "groundcover"
-        return None, None
-
-    if key == "honeycomb":
-        try:
-            honeycomb_config = HoneycombIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", ""),
-                    "dataset": credentials.get("dataset", ""),
-                    "base_url": credentials.get("base_url", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if honeycomb_config.api_key:
-            return honeycomb_config.model_dump(), "honeycomb"
-        return None, None
-
-    if key == "coralogix":
-        try:
-            coralogix_config = CoralogixIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", ""),
-                    "base_url": credentials.get("base_url", ""),
-                    "application_name": credentials.get("application_name", ""),
-                    "subsystem_name": credentials.get("subsystem_name", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if coralogix_config.api_key:
-            return coralogix_config.model_dump(), "coralogix"
-        return None, None
-
-    if key == "github":
-        try:
-            github_config = build_github_mcp_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "mode": credentials.get("mode", "streamable-http"),
-                    "command": credentials.get("command", ""),
-                    "args": credentials.get("args", []),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "toolsets": credentials.get("toolsets", []),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        return github_config.model_dump(), "github"
-
-    if key == "sentry":
-        try:
-            sentry_config = build_sentry_config(
-                {
-                    "base_url": credentials.get("base_url", "https://sentry.io"),
-                    "organization_slug": credentials.get("organization_slug", ""),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "project_slug": credentials.get("project_slug", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if sentry_config.organization_slug and sentry_config.auth_token:
-            return sentry_config.model_dump(), "sentry"
-        return None, None
-
-    if key == "gitlab":
-        try:
-            gitlab_config = build_gitlab_config(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "auth_token": credentials.get("auth_token", ""),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        return gitlab_config.model_dump(), "gitlab"
-
-    if key == "jenkins":
-        try:
-            jenkins_config = build_jenkins_config(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "username": credentials.get("username", ""),
-                    "api_token": credentials.get("api_token", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if jenkins_config.is_configured:
-            return jenkins_config.model_dump(), "jenkins"
-        return None, None
-
-    if key == "mongodb":
-        try:
-            mongodb_config = build_mongodb_config(
-                {
-                    "connection_string": credentials.get("connection_string", ""),
-                    "database": credentials.get("database", ""),
-                    "auth_source": credentials.get("auth_source", "admin"),
-                    "tls": credentials.get("tls", True),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if mongodb_config.connection_string:
-            return mongodb_config.model_dump(), "mongodb"
-        return None, None
-
-    if key == "redis":
-        try:
-            redis_config = RedisIntegrationConfig.model_validate(
-                {
-                    "host": credentials.get("host", ""),
-                    "port": credentials.get("port", 6379),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "db": credentials.get("db", 0),
-                    "ssl": credentials.get("ssl", False),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if redis_config.host:
-            return redis_config.model_dump(), "redis"
-        return None, None
-
-    if key == "postgresql":
-        try:
-            postgresql_config = build_postgresql_config(
-                {
-                    "host": credentials.get("host", ""),
-                    "port": credentials.get("port", 5432),
-                    "database": credentials.get("database", ""),
-                    "username": credentials.get("username", "postgres"),
-                    "password": credentials.get("password", ""),
-                    "ssl_mode": credentials.get("ssl_mode", "prefer"),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if postgresql_config.host and postgresql_config.database:
-            return postgresql_config.model_dump(), "postgresql"
-        return None, None
-
-    if key == "mongodb_atlas":
-        try:
-            atlas_config = build_mongodb_atlas_config(
-                {
-                    "api_public_key": credentials.get("api_public_key", ""),
-                    "api_private_key": credentials.get("api_private_key", ""),
-                    "project_id": credentials.get("project_id", ""),
-                    "base_url": credentials.get(
-                        "base_url", "https://cloud.mongodb.com/api/atlas/v2"
-                    ),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if atlas_config.api_public_key and atlas_config.api_private_key and atlas_config.project_id:
-            return {
-                "api_public_key": atlas_config.api_public_key,
-                "api_private_key": atlas_config.api_private_key,
-                "project_id": atlas_config.project_id,
-                "base_url": atlas_config.base_url,
-                "integration_id": record_id,
-            }, "mongodb_atlas"
-        return None, None
-
-    if key == "mariadb":
-        try:
-            mariadb_config = build_mariadb_config(
-                {
-                    "host": credentials.get("host", ""),
-                    "port": credentials.get("port", 3306),
-                    "database": credentials.get("database", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "ssl": credentials.get("ssl", True),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if mariadb_config.host and mariadb_config.database:
-            return {
-                "host": mariadb_config.host,
-                "port": mariadb_config.port,
-                "database": mariadb_config.database,
-                "username": mariadb_config.username,
-                "password": mariadb_config.password,
-                "ssl": mariadb_config.ssl,
-                "integration_id": record_id,
-            }, "mariadb"
-        return None, None
-
-    if key == "vercel":
-        try:
-            vercel_config = VercelConfig.model_validate(
-                {
-                    "api_token": credentials.get("api_token", ""),
-                    "team_id": credentials.get("team_id", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if vercel_config.api_token:
-            return vercel_config.model_dump(), "vercel"
-        return None, None
-
-    if key == "opsgenie":
-        try:
-            opsgenie_config = OpsGenieIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", ""),
-                    "region": credentials.get("region", "us"),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if opsgenie_config.api_key:
-            return opsgenie_config.model_dump(), "opsgenie"
-        return None, None
-
-    if key == "pagerduty":
-        try:
-            pd_raw: dict[str, Any] = {
-                "api_key": credentials.get("api_key", ""),
-                "integration_id": record_id,
-            }
-            if credentials.get("base_url"):
-                pd_raw["base_url"] = credentials["base_url"]
-            pagerduty_config = PagerDutyIntegrationConfig.model_validate(pd_raw)
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if pagerduty_config.api_key:
-            return pagerduty_config.model_dump(), "pagerduty"
-        return None, None
-
-    if key == "incident_io":
-        try:
-            incident_io_config = IncidentIoIntegrationConfig.model_validate(
-                {
-                    "api_key": credentials.get("api_key", ""),
-                    "base_url": credentials.get("base_url", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if incident_io_config.api_key:
-            return incident_io_config.model_dump(), "incident_io"
-        return None, None
-
-    if key == "jira":
-        try:
-            jira_config = JiraIntegrationConfig.model_validate(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "email": credentials.get("email", ""),
-                    "api_token": credentials.get("api_token", ""),
-                    "project_key": credentials.get("project_key", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if jira_config.base_url and jira_config.email and jira_config.api_token:
-            return jira_config.model_dump(), "jira"
-        return None, None
-
-    if key == "discord":
-        if not (credentials.get("bot_token") or "").strip():
-            return None, None
-        try:
-            discord_config = DiscordBotConfig.model_validate(
-                {
-                    "bot_token": credentials.get("bot_token", ""),
-                    "application_id": credentials.get("application_id", ""),
-                    "public_key": credentials.get("public_key", ""),
-                    "default_channel_id": credentials.get("default_channel_id"),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        return discord_config.model_dump(), "discord"
-
-    if key == "telegram":
-        if not (credentials.get("bot_token") or "").strip():
-            return None, None
-        try:
-            tg_config = TelegramBotConfig.model_validate(
-                {
-                    "bot_token": credentials.get("bot_token", ""),
-                    "default_chat_id": credentials.get("default_chat_id"),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        return tg_config.model_dump(), "telegram"
-
-    if key == "whatsapp":
-        try:
-            wa_config = WhatsAppConfig.model_validate(
-                {
-                    "account_sid": credentials.get("account_sid", ""),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "from_number": credentials.get("from_number", ""),
-                    "default_to": credentials.get("default_to"),
-                }
-            )
-        except Exception:
-            return None, None
-        return wa_config.model_dump(), "whatsapp"
-
-    if key == "twilio":
-        try:
-            twilio_config = TwilioIntegrationConfig.model_validate(
-                {
-                    "account_sid": credentials.get("account_sid", ""),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "sms": credentials.get("sms", {}),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception:
-            return None, None
-        return twilio_config.model_dump(), "twilio"
-
-    if key == "openclaw":
-        try:
-            openclaw_config = build_openclaw_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "mode": credentials.get("mode", "streamable-http"),
-                    "command": credentials.get("command", ""),
-                    "args": credentials.get("args", []),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if openclaw_config.is_configured:
-            config_dict = openclaw_config.model_dump()
-            config_dict["connection_verified"] = True
-            return config_dict, "openclaw"
-        return None, None
-
-    if key == "posthog_mcp":
-        try:
-            posthog_mcp_config = build_posthog_mcp_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "mode": credentials.get("mode", "streamable-http"),
-                    "command": credentials.get("command", ""),
-                    "args": credentials.get("args", []),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "organization_id": credentials.get("organization_id", ""),
-                    "project_id": credentials.get("project_id", ""),
-                    "features": credentials.get("features", []),
-                    "read_only": credentials.get("read_only", True),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if posthog_mcp_config.is_configured:
-            config_dict = posthog_mcp_config.model_dump()
-            config_dict["connection_verified"] = True
-            return config_dict, "posthog_mcp"
-        return None, None
-
-    if key == "sentry_mcp":
-        try:
-            sentry_mcp_config = build_sentry_mcp_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "mode": credentials.get("mode", "streamable-http"),
-                    "command": credentials.get("command", ""),
-                    "args": credentials.get("args", []),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "host": credentials.get("host", ""),
-                    "organization_slug": credentials.get("organization_slug", ""),
-                    "project_slug": credentials.get("project_slug", ""),
-                    "skills": credentials.get("skills", []),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if sentry_mcp_config.is_configured:
-            config_dict = sentry_mcp_config.model_dump()
-            config_dict["connection_verified"] = True
-            return config_dict, "sentry_mcp"
-        return None, None
-
-    if key == "mysql":
-        try:
-            mysql_config = build_mysql_config(
-                {
-                    "host": credentials.get("host", ""),
-                    "port": credentials.get("port", 3306),
-                    "database": credentials.get("database", ""),
-                    "username": credentials.get("username", "root"),
-                    "password": credentials.get("password", ""),
-                    "ssl_mode": credentials.get("ssl_mode", "preferred"),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if mysql_config.host and mysql_config.database:
-            return {
-                "host": mysql_config.host,
-                "port": mysql_config.port,
-                "database": mysql_config.database,
-                "username": mysql_config.username,
-                "password": mysql_config.password,
-                "ssl_mode": mysql_config.ssl_mode,
-                "integration_id": record_id,
-            }, "mysql"
-        return None, None
-
-    if key == "dagster":
-        try:
-            dagster_config = build_dagster_config(
-                {
-                    "endpoint": credentials.get("endpoint", ""),
-                    "api_token": credentials.get("api_token", ""),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if dagster_config.endpoint:
-            return {
-                "endpoint": dagster_config.endpoint,
-                "api_token": dagster_config.api_token,
-                "integration_id": record_id,
-            }, "dagster"
-        return None, None
-
-    if key == "rabbitmq":
-        try:
-            rabbitmq_config = build_rabbitmq_config(
-                {
-                    "host": credentials.get("host", ""),
-                    "management_port": credentials.get("management_port", 15672),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "vhost": credentials.get("vhost", "/"),
-                    "ssl": credentials.get("ssl", False),
-                    "verify_ssl": credentials.get("verify_ssl", True),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if rabbitmq_config.host and rabbitmq_config.username:
-            return {
-                "host": rabbitmq_config.host,
-                "management_port": rabbitmq_config.management_port,
-                "username": rabbitmq_config.username,
-                "password": rabbitmq_config.password,
-                "vhost": rabbitmq_config.vhost,
-                "ssl": rabbitmq_config.ssl,
-                "verify_ssl": rabbitmq_config.verify_ssl,
-                "integration_id": record_id,
-            }, "rabbitmq"
-        return None, None
-
-    if key == "rds":
-        try:
-            rds_config = build_rds_config(
-                {
-                    "db_instance_identifier": credentials.get("db_instance_identifier", ""),
-                    "region": credentials.get("region", DEFAULT_RDS_REGION),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if rds_config.is_configured:
-            return {**rds_config.model_dump(), "integration_id": record_id}, "rds"
-        return None, None
-
-    if key == "airflow":
-        try:
-            airflow_config = build_airflow_config(
-                {
-                    "base_url": credentials.get("base_url", DEFAULT_AIRFLOW_BASE_URL),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "auth_token": credentials.get("auth_token", ""),
-                    "timeout_seconds": credentials.get("timeout_seconds", 15.0),
-                    "verify_ssl": credentials.get("verify_ssl", True),
-                    "max_results": credentials.get("max_results", 50),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if airflow_config.is_configured:
-            return {
-                **airflow_config.model_dump(),
-                "integration_id": record_id,
-            }, "airflow"
-        return None, None
-
-    if key == "betterstack":
-        try:
-            bs_config = build_betterstack_config(
-                {
-                    "query_endpoint": credentials.get("query_endpoint", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "sources": credentials.get("sources", []),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if bs_config.query_endpoint and bs_config.username:
-            return {
-                "query_endpoint": bs_config.query_endpoint,
-                "username": bs_config.username,
-                "password": bs_config.password,
-                "sources": list(bs_config.sources),
-                "integration_id": record_id,
-            }, "betterstack"
-        return None, None
-
-    if key == "azure_sql":
-        try:
-            azure_sql_config = build_azure_sql_config(
-                {
-                    "server": credentials.get("server", ""),
-                    "port": credentials.get("port", 1433),
-                    "database": credentials.get("database", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "driver": credentials.get("driver", "ODBC Driver 18 for SQL Server"),
-                    "encrypt": credentials.get("encrypt", True),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if azure_sql_config.server and azure_sql_config.database:
-            return azure_sql_config.model_dump(), "azure_sql"
-        return None, None
-
-    if key == "alertmanager":
-        try:
-            alertmanager_config = AlertmanagerIntegrationConfig.model_validate(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "bearer_token": credentials.get("bearer_token", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if alertmanager_config.base_url:
-            return alertmanager_config.model_dump(), "alertmanager"
-        return None, None
-
-    if key == "argocd":
-        try:
-            argocd_config = ArgoCDIntegrationConfig.model_validate(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "bearer_token": credentials.get("bearer_token", "")
-                    or credentials.get("auth_token", "")
-                    or credentials.get("token", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "project": credentials.get("project", ""),
-                    "app_namespace": credentials.get("app_namespace", ""),
-                    "verify_ssl": credentials.get("verify_ssl", True),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if argocd_config.base_url and (
-            argocd_config.bearer_token or (argocd_config.username and argocd_config.password)
-        ):
-            return argocd_config.model_dump(), "argocd"
-        return None, None
-
-    if key == "helm":
-        try:
-            helm_config = HelmIntegrationConfig.model_validate(
-                {
-                    "helm_path": credentials.get("helm_path", "helm"),
-                    "kube_context": credentials.get("kube_context", "")
-                    or credentials.get("context", ""),
-                    "kubeconfig": credentials.get("kubeconfig", "")
-                    or credentials.get("kubeconfig_path", "")
-                    or credentials.get("kube_config", ""),
-                    "default_namespace": credentials.get("default_namespace", "")
-                    or credentials.get("namespace", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        return helm_config.model_dump(), "helm"
-
-    if key == "victoria_logs":
-        try:
-            victoria_logs_config = VictoriaLogsIntegrationConfig.model_validate(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "tenant_id": credentials.get("tenant_id"),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if victoria_logs_config.base_url:
-            return victoria_logs_config.model_dump(), "victoria_logs"
-        return None, None
-
-    if key == "bitbucket":
-        workspace = str(credentials.get("workspace", "")).strip()
-        if not workspace:
-            return None, None
-        base_url = (
-            str(credentials.get("base_url", "https://api.bitbucket.org/2.0")).strip()
-            or "https://api.bitbucket.org/2.0"
-        )
-        return {
-            "workspace": workspace,
-            "username": str(credentials.get("username", "")).strip(),
-            "app_password": str(credentials.get("app_password", "")).strip(),
-            "base_url": base_url,
-            "max_results": max(1, min(safe_int(credentials.get("max_results", 25), 25), 100)),
-            "integration_id": record_id,
-        }, "bitbucket"
-
-    if key == "snowflake":
-        account_identifier = str(
-            credentials.get("account_identifier", credentials.get("account", ""))
-        ).strip()
-        token = str(credentials.get("token", "")).strip()
-        if not (account_identifier and token):
-            return None, None
-        return {
-            "account_identifier": account_identifier,
-            "user": str(credentials.get("user", "")).strip(),
-            "password": str(credentials.get("password", "")).strip(),
-            "token": token,
-            "warehouse": str(credentials.get("warehouse", "")).strip(),
-            "role": str(credentials.get("role", "")).strip(),
-            "database": str(credentials.get("database", "")).strip(),
-            "schema": str(credentials.get("schema", "")).strip(),
-            "max_results": max(1, min(safe_int(credentials.get("max_results", 50), 50), 200)),
-            "integration_id": record_id,
-        }, "snowflake"
-
-    if key == "azure":
-        workspace_id = str(credentials.get("workspace_id", "")).strip()
-        access_token = str(credentials.get("access_token", "")).strip()
-        if not (workspace_id and access_token):
-            return None, None
-        endpoint = (
-            str(credentials.get("endpoint", "https://api.loganalytics.io")).strip()
-            or "https://api.loganalytics.io"
-        )
-        return {
-            "workspace_id": workspace_id,
-            "access_token": access_token,
-            "endpoint": endpoint,
-            "tenant_id": str(credentials.get("tenant_id", "")).strip(),
-            "subscription_id": str(credentials.get("subscription_id", "")).strip(),
-            "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
-            "integration_id": record_id,
-        }, "azure"
-
-    if key == "openobserve":
-        base_url = str(credentials.get("base_url", "")).strip()
-        api_token = str(credentials.get("api_token", "")).strip()
-        username = str(credentials.get("username", "")).strip()
-        password = str(credentials.get("password", "")).strip()
-        if not (base_url and (api_token or (username and password))):
-            return None, None
-        return {
-            "base_url": base_url.rstrip("/"),
-            "org": str(credentials.get("org", "default")).strip() or "default",
-            "api_token": api_token,
-            "username": username,
-            "password": password,
-            "stream": str(credentials.get("stream", "")).strip(),
-            "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
-            "integration_id": record_id,
-        }, "openobserve"
-
-    if key == "opensearch":
-        url = str(credentials.get("url", "")).strip()
-        api_key = str(credentials.get("api_key", "")).strip()
-        username = str(credentials.get("username", "")).strip()
-        password = str(credentials.get("password", "")).strip()
-        if not url:
-            return None, None
-        return {
-            "url": url.rstrip("/"),
-            "api_key": api_key,
-            "username": username,
-            "password": password,
-            "index_pattern": str(credentials.get("index_pattern", "*")).strip() or "*",
-            "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
-            "integration_id": record_id,
-        }, "opensearch"
-
-    if key == "splunk":
-        try:
-            splunk_config = SplunkIntegrationConfig.model_validate(
-                {
-                    "base_url": credentials.get("base_url", ""),
-                    "token": credentials.get("token", ""),
-                    "index": credentials.get("index", "main"),
-                    "verify_ssl": credentials.get("verify_ssl", True),
-                    "ca_bundle": credentials.get("ca_bundle", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if splunk_config.base_url and splunk_config.token:
-            return splunk_config.model_dump(), "splunk"
-        return None, None
-
-    if key == "supabase":
-        try:
-            sb_config = build_supabase_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "service_key": credentials.get("service_key", ""),
-                }
-            )
-        except Exception as exc:
-            _report_classify_failure(exc, integration=key, record_id=record_id)
-            return None, None
-        if sb_config.is_configured:
-            return {
-                "project_url": sb_config.url,
-                "integration_id": record_id,
-            }, "supabase"
-        return None, None
-
-    if key == "signoz":
-        try:
-            signoz_config = build_signoz_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "api_key": credentials.get("api_key", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception:
-            return None, None
-        if signoz_config.is_configured:
-            return signoz_config.model_dump(), "signoz"
-        return None, None
-
-    if key == "tempo":
-        try:
-            tempo_config = build_tempo_config(
-                {
-                    "url": credentials.get("url", ""),
-                    "api_key": credentials.get("api_key", ""),
-                    "username": credentials.get("username", ""),
-                    "password": credentials.get("password", ""),
-                    "org_id": credentials.get("org_id", ""),
-                    "integration_id": record_id,
-                }
-            )
-        except Exception:
-            return None, None
-        if tempo_config.is_configured:
-            return tempo_config.model_dump(), "tempo"
-        return None, None
-
+    handler = _CLASSIFIERS.get(key)
+    if handler is not None:
+        return handler(credentials, record_id)
     # Fallback for unknown services: pass through credentials + record id.
     return {"credentials": credentials, "integration_id": record_id}, key
 

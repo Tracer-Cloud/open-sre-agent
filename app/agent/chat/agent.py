@@ -7,6 +7,7 @@ import logging
 from typing import Any, cast
 
 from app.constants.prompts import GENERAL_SYSTEM_PROMPT, ROUTER_PROMPT, SYSTEM_PROMPT
+from app.guardrails.apply import apply_guardrails_to_messages
 from app.guardrails.engine import GuardrailBlockedError
 from app.services import get_llm_for_tools
 from app.services.chat_sdk_adapter import (
@@ -208,25 +209,8 @@ def _prepare_messages(raw: list[Any], default_system: str) -> list[dict[str, Any
     msgs = messages_to_invocation_dicts(raw)
     if not any(m.get("role") == "system" for m in msgs):
         msgs = [{"role": "system", "content": default_system}, *msgs]
-    return _apply_guardrails(msgs)
-
-
-def _apply_guardrails(msgs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    from app.guardrails.engine import get_guardrail_engine
-
-    engine = get_guardrail_engine()
-    if not engine.is_active:
-        return msgs
-    result: list[dict[str, Any]] = []
-    for msg in msgs:
-        content = msg.get("content")
-        if isinstance(content, str) and content:
-            redacted = engine.apply(content)
-            if redacted != content:
-                msg = dict(msg)
-                msg["content"] = redacted
-        result.append(msg)
-    return result
+    guarded, _ = apply_guardrails_to_messages(msgs)
+    return guarded
 
 
 def _turn_to_message(turn: Any) -> dict[str, Any]:
