@@ -233,7 +233,8 @@ class ConnectedInvestigationAgent:
             ]
             duplicate_flags = [cached is not None for cached in cached_entries]
             fresh_calls = [
-                tc for tc, is_dup in zip(response.tool_calls, duplicate_flags) if not is_dup
+                tc for tc, cached in zip(response.tool_calls, cached_entries, strict=True)
+                if cached is None
             ]
             for tc in fresh_calls:
                 _record_tool_start(tc)
@@ -248,11 +249,8 @@ class ConnectedInvestigationAgent:
 
             fresh_results = iter(_run_parallel(fresh_calls, tools, resolved) if fresh_calls else [])
             results: list[Any] = []
-            for tc, cached_entry, is_dup in zip(
-                response.tool_calls, cached_entries, duplicate_flags, strict=True
-            ):
-                if is_dup:
-                    assert cached_entry is not None
+            for tc, cached_entry in zip(response.tool_calls, cached_entries, strict=True):
+                if cached_entry is not None:
                     results.append(duplicate_call_result(tc, cached_entry))
                     continue
                 output = next(fresh_results)

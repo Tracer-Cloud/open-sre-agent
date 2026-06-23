@@ -10,6 +10,9 @@ from typing import Any
 from app.agent.utils.llm_invoke_errors import LLMInvokeFailure
 from app.services.agent_llm_client import ToolCall
 from app.state.evidence import EvidenceEntry
+from app.utils.truncation import truncate
+
+_MAX_CACHED_RESULT_CHARS = 8_000
 
 
 def tool_call_signature(tool_call: ToolCall) -> str:
@@ -34,10 +37,26 @@ class InvestigationToolCallCache:
         self._entries: dict[str, CachedToolResult] = {}
 
     def store(self, signature: str, result: Any, *, loop_iteration: int) -> None:
+        if signature in self._entries:
+            return
         self._entries[signature] = CachedToolResult(result=result, loop_iteration=loop_iteration)
 
     def lookup(self, signature: str) -> CachedToolResult | None:
         return self._entries.get(signature)
+
+
+def _bounded_cached_result_payload(result: Any, *, max_chars: int) -> Any:
+    """Bound duplicate replay size; the cache still stores the full first result."""
+    try:
+        serialized = json.dumps(result, default=str, ensure_ascii=False)
+    except (TypeError, ValueError):
+        serialized = repr(result)
+    if len(serialized) <= max_chars:
+        return result
+    return {
+        "_truncated_for_duplicate_replay": True,
+        "preview": truncate(serialized, max_chars),
+    }
 
 
 def duplicate_call_result(tool_call: ToolCall, cached: CachedToolResult) -> dict[str, Any]:
@@ -59,7 +78,10 @@ def duplicate_call_result(tool_call: ToolCall, cached: CachedToolResult) -> dict
             "tool with DIFFERENT arguments) to gather new evidence, or write your final "
             "diagnosis."
         ),
-        "cached_result": cached.result,
+        "cached_result": _bounded_cached_result_payload(
+            cached.result,
+            max_chars=_MAX_CACHED_RESULT_CHARS,
+        ),
     }
 
 

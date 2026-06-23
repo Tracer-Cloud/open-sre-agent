@@ -1033,6 +1033,29 @@ def test_investigation_tool_call_cache_lookup_after_store() -> None:
     assert cached.loop_iteration == 0
 
 
+def test_investigation_tool_call_cache_first_write_wins() -> None:
+    cache = InvestigationToolCallCache()
+    signature = tool_call_signature(ToolCall(id="1", name="query_logs", input={"svc": "api"}))
+
+    cache.store(signature, {"lines": 3}, loop_iteration=0)
+    cache.store(signature, {"lines": 99}, loop_iteration=1)
+
+    cached = cache.lookup(signature)
+    assert cached is not None
+    assert cached.result == {"lines": 3}
+    assert cached.loop_iteration == 0
+
+
+def test_duplicate_call_result_truncates_large_cached_payload() -> None:
+    cached = CachedToolResult(result={"logs": "x" * 20_000}, loop_iteration=0)
+    result = duplicate_call_result(ToolCall(id="1", name="query_logs", input={}), cached)
+
+    payload = result["cached_result"]
+    assert isinstance(payload, dict)
+    assert payload["_truncated_for_duplicate_replay"] is True
+    assert len(payload["preview"]) <= 8_000
+
+
 def _fake_tool(name: str, *, source: str = "posthog_mcp") -> MagicMock:
     tool = MagicMock()
     tool.name = name
