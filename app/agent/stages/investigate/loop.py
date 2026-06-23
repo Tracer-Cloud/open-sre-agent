@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from app.agent.utils.llm_invoke_errors import LLMInvokeFailure
@@ -20,18 +21,45 @@ def tool_call_signature(tool_call: ToolCall) -> str:
     return f"{tool_call.name}::{args}"
 
 
-def duplicate_call_result(tool_call: ToolCall) -> dict[str, Any]:
-    """Synthetic result returned in place of re-running an already-seen call."""
+@dataclass(frozen=True)
+class CachedToolResult:
+    result: Any
+    loop_iteration: int
+
+
+class InvestigationToolCallCache:
+    """Per-investigation cache of tool results keyed by ``tool_call_signature``."""
+
+    def __init__(self) -> None:
+        self._entries: dict[str, CachedToolResult] = {}
+
+    def store(self, signature: str, result: Any, *, loop_iteration: int) -> None:
+        self._entries[signature] = CachedToolResult(result=result, loop_iteration=loop_iteration)
+
+    def lookup(self, signature: str) -> CachedToolResult | None:
+        return self._entries.get(signature)
+
+
+def duplicate_call_result(tool_call: ToolCall, cached: CachedToolResult) -> dict[str, Any]:
+    """Return a wrapped cached result instead of re-running an identical tool call."""
+    if cached.loop_iteration < 0:
+        when = "during seed evidence collection"
+    else:
+        when = f"in lap {cached.loop_iteration + 1}"
+
     return {
         "suppressed_duplicate": True,
+        "reused_cached_result": True,
         "tool": tool_call.name,
+        "first_called_at_loop": cached.loop_iteration,
         "note": (
-            f"Skipped: '{tool_call.name}' was already called earlier in this "
-            "investigation with identical arguments, so re-running it would return "
-            "the same data. Do not call it again. Either call a DIFFERENT tool (or "
-            "the same tool with DIFFERENT arguments) to gather new evidence, or "
-            "write your final diagnosis."
+            f"You already called '{tool_call.name}' with identical arguments {when}. "
+            "Reused the cached result below instead of fetching again. Do not call it "
+            "again with the same arguments — either call a DIFFERENT tool (or the same "
+            "tool with DIFFERENT arguments) to gather new evidence, or write your final "
+            "diagnosis."
         ),
+        "cached_result": cached.result,
     }
 
 

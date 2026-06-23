@@ -13,6 +13,8 @@ from app.agent.stages.investigate import (
 )
 from app.agent.stages.investigate.agent import _tools_for_plan
 from app.agent.stages.investigate.loop import (
+    CachedToolResult,
+    InvestigationToolCallCache,
     duplicate_call_result,
     tool_call_signature,
 )
@@ -1008,10 +1010,27 @@ def test_tool_call_signature_is_argument_order_independent() -> None:
 
 
 def test_duplicate_call_result_marks_suppression() -> None:
-    result = duplicate_call_result(ToolCall(id="1", name="list_posthog_tools", input={}))
+    cached = CachedToolResult(result={"logs": ["error A"]}, loop_iteration=2)
+    result = duplicate_call_result(ToolCall(id="1", name="list_posthog_tools", input={}), cached)
+
     assert result["suppressed_duplicate"] is True
+    assert result["reused_cached_result"] is True
     assert result["tool"] == "list_posthog_tools"
-    assert "already" in result["note"].lower()
+    assert result["cached_result"] == {"logs": ["error A"]}
+    assert "lap 3" in result["note"]
+
+
+def test_investigation_tool_call_cache_lookup_after_store() -> None:
+    cache = InvestigationToolCallCache()
+    signature = tool_call_signature(ToolCall(id="1", name="query_logs", input={"svc": "api"}))
+
+    assert cache.lookup(signature) is None
+    cache.store(signature, {"lines": 3}, loop_iteration=0)
+
+    cached = cache.lookup(signature)
+    assert cached is not None
+    assert cached.result == {"lines": 3}
+    assert cached.loop_iteration == 0
 
 
 def _fake_tool(name: str, *, source: str = "posthog_mcp") -> MagicMock:
@@ -1097,9 +1116,12 @@ def test_run_suppresses_duplicate_tool_calls() -> None:
 
     # Executed exactly once despite being requested twice.
     assert tool.run.call_count == 1
-    # The duplicate got a synthetic suppression result fed back to the model.
+    # The duplicate got the wrapped cached result fed back to the model.
     assert any(
-        isinstance(m.get("content"), str) and "suppressed_duplicate" in m["content"]
+        isinstance(m.get("content"), str)
+        and "suppressed_duplicate" in m["content"]
+        and "cached_result" in m["content"]
+        and '"ok": true' in m["content"].lower()
         for m in result["agent_messages"]
     )
     duplicate_messages = [

@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from app.agent.stages.investigate.loop import (
+    InvestigationToolCallCache,
     degraded_investigation_from_llm_failure,
     duplicate_call_result,
     tool_call_signature,
@@ -131,7 +132,7 @@ class ConnectedInvestigationAgent:
         evidence: dict[str, Any] = {}
         evidence_entries: list[EvidenceEntry] = []
         executed_hypotheses: list[dict[str, Any]] = []
-        seen_signatures: set[str] = set()
+        tool_call_cache = InvestigationToolCallCache()
 
         _emit(
             "agent_start",
@@ -146,7 +147,6 @@ class ConnectedInvestigationAgent:
         if seed_calls:
             logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
             for tc in seed_calls:
-                seen_signatures.add(tool_call_signature(tc))
                 _record_tool_start(tc)
             executed_hypotheses.append(
                 {
@@ -164,6 +164,7 @@ class ConnectedInvestigationAgent:
             messages.extend(seed_msgs)
 
             for tc, output in zip(seed_calls, seed_results):
+                tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
                 merge_tool_evidence(evidence, tc.name, output, tc.input)
                 evidence_entries.append(
                     EvidenceEntry(
@@ -227,14 +228,14 @@ class ConnectedInvestigationAgent:
                 messages.append({"role": "user", "content": nudge})
                 continue
 
-            duplicate_flags = [
-                tool_call_signature(tc) in seen_signatures for tc in response.tool_calls
+            cached_entries = [
+                tool_call_cache.lookup(tool_call_signature(tc)) for tc in response.tool_calls
             ]
+            duplicate_flags = [cached is not None for cached in cached_entries]
             fresh_calls = [
                 tc for tc, is_dup in zip(response.tool_calls, duplicate_flags) if not is_dup
             ]
             for tc in fresh_calls:
-                seen_signatures.add(tool_call_signature(tc))
                 _record_tool_start(tc)
 
             executed_hypotheses.append(
@@ -246,10 +247,17 @@ class ConnectedInvestigationAgent:
             )
 
             fresh_results = iter(_run_parallel(fresh_calls, tools, resolved) if fresh_calls else [])
-            results = [
-                duplicate_call_result(tc) if is_dup else next(fresh_results)
-                for tc, is_dup in zip(response.tool_calls, duplicate_flags)
-            ]
+            results: list[Any] = []
+            for tc, cached_entry, is_dup in zip(
+                response.tool_calls, cached_entries, duplicate_flags, strict=True
+            ):
+                if is_dup:
+                    assert cached_entry is not None
+                    results.append(duplicate_call_result(tc, cached_entry))
+                    continue
+                output = next(fresh_results)
+                tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
+                results.append(output)
 
             tool_result_messages = _build_tool_result_messages(llm, response.tool_calls, results)
             if duplicate_flags and all(duplicate_flags):
