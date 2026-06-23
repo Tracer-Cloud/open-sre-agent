@@ -233,7 +233,8 @@ class ConnectedInvestigationAgent:
             ]
             duplicate_flags = [cached is not None for cached in cached_entries]
             fresh_calls = [
-                tc for tc, cached in zip(response.tool_calls, cached_entries, strict=True)
+                tc
+                for tc, cached in zip(response.tool_calls, cached_entries, strict=True)
                 if cached is None
             ]
             for tc in fresh_calls:
