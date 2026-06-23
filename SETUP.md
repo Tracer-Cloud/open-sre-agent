@@ -156,6 +156,26 @@ If those pass, you are ready to develop. Contribution flow: **[CONTRIBUTING.md](
 
 ---
 
+## Common Installation Errors
+
+### `ModuleNotFoundError: No module named 'app'`
+**Cause:** Running `python` directly instead of `uv run` from the repo root.
+**Solution:** Use `uv run opensre ...` or `uv run python ...` to ensure the project's virtualenv is active.
+
+### `make install` fails with "Lock file version is too new"
+**Cause:** Outdated `uv` version. The lockfile format may be newer than your installed `uv`.
+**Solution:** Run `uv self update` to upgrade uv, then retry `make install`.
+
+### `ruff` or `mypy` not found
+**Cause:** Dependencies not installed or running outside the project virtualenv.
+**Solution:** Run `uv sync --frozen --extra dev` to install all dev dependencies, then use `uv run ruff ...` or `uv run mypy ...`.
+
+### `opensre` command not found after install
+**Cause:** Install directory not in `PATH`, or shell hasn't been reloaded.
+**Solution:** Run `source ~/.zshrc` (or `source ~/.bashrc`) or open a new terminal. Verify with `which opensre`.
+
+---
+
 ## Connecting OpenClaw
 
 OpenSRE no longer exposes a separate `opensre-mcp` server. Instead, OpenSRE connects to the OpenClaw bridge directly to read recent conversation context and write RCA findings back into OpenClaw.

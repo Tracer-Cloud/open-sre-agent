@@ -5,7 +5,7 @@ Welcome to OpenSRE
 ## Quick Links
 
 - **GitHub:** [https://github.com/Tracer-Cloud/opensre](https://github.com/Tracer-Cloud/opensre)
-- **Discord:** [https://discord.gg/opensre](https://discord.gg/opensre)
+- **Discord:** [https://discord.gg/7NTpevXf7w](https://discord.gg/7NTpevXf7w)
 - **X/Twitter:** [@open_sre](https://x.com/open_sre)
 
 ## How to Contribute
