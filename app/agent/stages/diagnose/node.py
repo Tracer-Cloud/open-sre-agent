@@ -9,12 +9,12 @@ from typing import Any, NamedTuple, TypedDict, cast
 from pydantic import BaseModel, Field
 
 from app.agent.category_alignment import apply_category_alignment_adjustments
-from app.agent.utils.alert_source import resolve_alert_source
-from app.types.root_cause_categories import (
-    HERMES_ROOT_CAUSE_CATEGORIES,
-    VALID_ROOT_CAUSE_CATEGORIES,
-    render_prompt_taxonomy,
+from app.agent.category_normalization import (
+    normalize_root_cause_category,
+    taxonomy_categories_for_alert_source,
 )
+from app.agent.utils.alert_source import resolve_alert_source
+from app.types.root_cause_categories import render_prompt_taxonomy
 
 logger = logging.getLogger(__name__)
 
@@ -193,10 +193,14 @@ def _extract_last_assistant_text(messages: list[dict[str, Any]]) -> str:
 
 
 def _taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
-    source = alert_source.strip().lower()
-    if source == "hermes":
-        return set(HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"})
-    return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
+    return taxonomy_categories_for_alert_source(alert_source)
+
+
+def _normalize_parsed_category(raw: str, *, alert_source: str) -> str:
+    return normalize_root_cause_category(
+        raw,
+        allowed_categories=_taxonomy_categories_for_alert_source(alert_source),
+    )
 
 
 def _build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
@@ -266,15 +270,19 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
     def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
         return [{"claim": c, "validation_status": status} for c in claims if c]
 
+    root_cause_category = _normalize_parsed_category(
+        schema["root_cause_category"],
+        alert_source=alert_source,
+    )
     alignment = _apply_category_alignment(
         root_cause=schema["root_cause"],
-        root_cause_category=schema["root_cause_category"],
+        root_cause_category=root_cause_category,
         validity_score=schema["validity_score"],
     )
 
     return InvestigationResult(
         root_cause=schema["root_cause"],
-        root_cause_category=schema["root_cause_category"],
+        root_cause_category=root_cause_category,
         causal_chain=schema["causal_chain"],
         validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
         non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
@@ -293,14 +301,18 @@ def _parse_via_legacy(
 
     try:
         rr = parse_root_cause(last_text)
+        root_cause_category = _normalize_parsed_category(
+            rr.root_cause_category,
+            alert_source="",
+        )
         alignment = _apply_category_alignment(
             root_cause=rr.root_cause,
-            root_cause_category=rr.root_cause_category,
+            root_cause_category=root_cause_category,
             validity_score=0.5,
         )
         return InvestigationResult(
             root_cause=rr.root_cause,
-            root_cause_category=rr.root_cause_category,
+            root_cause_category=root_cause_category,
             causal_chain=rr.causal_chain,
             validated_claims=[
                 {"claim": c, "validation_status": "validated"} for c in rr.validated_claims
