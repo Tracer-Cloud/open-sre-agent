@@ -2,10 +2,11 @@
 # Runs the FastAPI health application (see app/webapp.py).
 #
 # Usage:
-#   docker build -t opensre:latest .
+#   docker build -t opensre:latest .                                # default port 8000
+#   docker build --build-arg PORT=8080 -t opensre:latest .          # custom port
 #   docker run -p 8000:8000 --env-file .env opensre:latest
 #
-# Health check:
+# Health check (uses PORT env var, defaults to 8000):
 #   curl http://localhost:8000/health
 
 FROM python:3.12-slim
