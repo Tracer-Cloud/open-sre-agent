@@ -43,9 +43,6 @@ class ChatAgent:
             return _chat_with_tools(state)
         return _chat_general(state)
 
-    def invoke(self, state: AgentState, _config: NodeConfig | None = None) -> dict[str, Any]:
-        return self.run(state, _config)
-
 
 def _route(state: AgentState) -> str:
     msgs = messages_to_invocation_dicts(list(state.get("messages", [])))

@@ -77,14 +77,6 @@ class InvestigationResult:
             ],
         )
 
-    @classmethod
-    def noise(cls) -> InvestigationResult:
-        return cls(
-            root_cause="Message classified as noise — no investigation needed.",
-            root_cause_category="healthy",
-            validity_score=1.0,
-        )
-
 
 def parse_diagnosis(
     messages: list[dict[str, Any]],

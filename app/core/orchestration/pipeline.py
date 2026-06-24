@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from app.core.orchestration.state_updates import apply_state_updates
@@ -13,9 +12,6 @@ if TYPE_CHECKING:
     # at pipeline load while still letting static type-checkers validate
     # ``agent_class`` injections.
     from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
-
-logger = logging.getLogger(__name__)
-
 
 def run_connected_investigation(
     state: AgentState,
@@ -57,11 +53,6 @@ def run_connected_investigation(
         raise
 
     return state
-
-
-def run_investigation(state: AgentState) -> AgentState:
-    """Backward-compatible alias for the connected investigation pipeline."""
-    return run_connected_investigation(state)
 
 
 def run_chat(state: AgentState) -> AgentState:

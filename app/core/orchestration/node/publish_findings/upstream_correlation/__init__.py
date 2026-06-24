@@ -20,16 +20,8 @@ from app.core.orchestration.node.publish_findings.upstream_correlation.upstream 
     UpstreamEvidenceBundle,
     UpstreamEvidenceProvider,
 )
-from app.integrations.datadog.correlation import (
-    DatadogCorrelationAdapter,
-    DatadogCorrelationQueries,
-    DatadogUpstreamEvidenceProvider,
-)
 
 __all__ = [
-    "DatadogCorrelationAdapter",
-    "DatadogCorrelationQueries",
-    "DatadogUpstreamEvidenceProvider",
     "LogSignal",
     "MetricSeries",
     "NoopUpstreamEvidenceProvider",

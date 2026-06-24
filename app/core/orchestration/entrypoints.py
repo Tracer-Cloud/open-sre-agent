@@ -8,7 +8,6 @@ import logging
 import queue
 import threading
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
@@ -390,17 +389,3 @@ async def astream_investigation(
         yield item
 
     thread.join()
-
-
-@dataclass
-class SimpleAgent:
-    def invoke(self, state: AgentState, _config: NodeConfig | None = None) -> AgentState:
-        init_sentry(entrypoint="pipeline")
-        from app.core.orchestration.pipeline import run_connected_investigation as _run
-
-        with report_and_reraise(
-            logger=logger,
-            message="SimpleAgent.invoke failed",
-            tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
-        ):
-            return _run(state)

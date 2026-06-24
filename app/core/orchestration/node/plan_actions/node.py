@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.utils.alert_source import (
+    SECONDARY_TOOL_SOURCES as SECONDARY_SOURCES,
+)
+from app.agent.utils.alert_source import (
+    collect_alert_text,
+    primary_sources_for_alert,
+    relevant_sources_for_alert,
+)
 from app.core.orchestration.node.investigate.tools import (
     availability_view,
     build_connected_tool_context,
 )
 from app.core.orchestration.node.plan_actions.models import PlannedInvestigationAction
-from app.core.orchestration.node.plan_actions.selectors import (
-    SECONDARY_SOURCES,
-    collect_alert_text,
-    primary_sources_for_alert,
-    relevant_sources_for_alert,
-)
 from app.state import InvestigationState
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
