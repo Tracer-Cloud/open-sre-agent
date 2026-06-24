@@ -23,7 +23,7 @@ class BackgroundInvestigationRecord:
 class BackgroundNotificationPreferences:
     """Session-scoped channel preferences for background RCA completion notifications."""
 
-    channels: tuple[str, ...] = ("email",)
+    channels: tuple[str, ...] = ()
 
     def set_channels(self, values: list[str]) -> None:
         cleaned: list[str] = []
@@ -31,4 +31,4 @@ class BackgroundNotificationPreferences:
             normalized = value.strip().lower()
             if normalized and normalized not in cleaned:
                 cleaned.append(normalized)
-        self.channels = tuple(cleaned) or ("email",)
+        self.channels = tuple(cleaned)

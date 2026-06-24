@@ -52,7 +52,7 @@ class StreamRenderer:
     in real time with tool calls, LLM reasoning, and other decisions.
     """
 
-    def __init__(self, *, local: bool = False) -> None:
+    def __init__(self, *, local: bool = False, display: bool = True) -> None:
         self._tracker = ProgressTracker()
         self._active_node: str | None = None
         self._events_received: int = 0
@@ -60,6 +60,7 @@ class StreamRenderer:
         self._final_state: dict[str, Any] = {}
         self._stream_completed = False
         self._local = local
+        self._display = display
         # diagnose_root_cause streams the model's reasoning live as Markdown
         # instead of into the compact spinner subtext. The helper owns the
         # buffer + Live region + throttle state; the renderer only
@@ -157,9 +158,10 @@ class StreamRenderer:
 
         Returns the accumulated final state dict.
         """
-        if not self._local:
+        if not self._local and self._display:
             _print_connection_banner()
-        self._start_toggle_watcher()
+        if self._display:
+            self._start_toggle_watcher()
 
         _interrupted = False
         try:
@@ -185,7 +187,7 @@ class StreamRenderer:
             # silently discarded before the exception propagates.
             self._finish_active_node()
             self._tracker.stop()
-            if not _interrupted:
+            if self._display and not _interrupted:
                 self._print_report()
         return dict(self._final_state)
 

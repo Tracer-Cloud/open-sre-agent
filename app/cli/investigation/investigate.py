@@ -375,35 +375,23 @@ def _run_session_alert_payload(
                 )
         return dict(rendered_state)
 
-    final_state: dict[str, Any] = {}
+    from app.cli.interactive_shell.ui.output import reset_tracker, set_silent_tracker
+
+    set_silent_tracker()
+    renderer = StreamRenderer(local=True, display=False)
     try:
-        for event in _events():
-            if event.event_type == "updates":
-                payload = event.data if isinstance(event.data, dict) else {}
-                final_state.update(payload)
-                continue
-            if event.event_type != "events":
-                continue
-            if event.kind == "on_chain_start":
-                input_payload = event.data.get("data", {}).get("input", {})
-                if isinstance(input_payload, dict):
-                    final_state.update(input_payload)
-                continue
-            if event.kind == "on_chain_end":
-                output_payload = event.data.get("data", {}).get("output", {})
-                if isinstance(output_payload, dict):
-                    final_state.update(output_payload)
+        return dict(renderer.render_stream(_events()))
     except KeyboardInterrupt:
         _cancel_pump()
         raise
     finally:
+        reset_tracker()
         thread.join(timeout=5)
         if thread.is_alive():
             _logger.warning(
                 "investigation thread did not terminate within 5s after cancellation; "
                 "an LLM call may still be in flight"
             )
-    return final_state
 
 
 def run_investigation_for_session(

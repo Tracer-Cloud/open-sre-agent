@@ -57,6 +57,14 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
     assert "Root cause" in str(captured["report"])
 
 
+def test_deliver_background_notifications_skips_when_no_channels_configured() -> None:
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=())
+    assert results == {}
+
+
 def test_deliver_background_notifications_marks_missing_smtp(monkeypatch) -> None:
     monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", lambda: {})
     record = BackgroundInvestigationRecord(

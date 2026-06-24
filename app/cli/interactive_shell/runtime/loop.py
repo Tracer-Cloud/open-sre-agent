@@ -24,6 +24,7 @@ from app.cli.interactive_shell import alert_inbox as _alert_inbox
 from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
+from app.cli.interactive_shell.runtime.background_runner import drain_background_notices
 from app.cli.interactive_shell.runtime.dispatch import (
     DispatchCancelled,
     build_cancel_key_bindings,
@@ -59,7 +60,7 @@ _CPR_SEQUENCE_RE = re.compile(
 )
 
 
-def drain_stale_cpr_bytes() -> None:
+def _drain_stale_cpr_bytes() -> None:
     """Discard any CPR escape-sequence bytes left in stdin after a prompt_async teardown.
 
     When prompt_async returns (e.g. after the user types Y to confirm), the
@@ -175,8 +176,6 @@ async def run_interactive(
 
     pt_app = pt_session.app
     main_loop = asyncio.get_running_loop()
-    session.pt_style_app = pt_app
-    session.main_loop = main_loop
     state.bind_loop(main_loop)
 
     _invalidate_prompt = _prompt_surface.wire_prompt_refresh(session, pt_app, main_loop)
@@ -252,7 +251,7 @@ async def run_interactive(
             # Investigation Rich Live + bottom-toolbar CPR can leave bytes in stdin;
             # drain before the next prompt_async so they are not typed into the field.
             await asyncio.sleep(0.05)
-            drain_stale_cpr_bytes()
+            _drain_stale_cpr_bytes()
 
     async def _alert_watcher() -> None:
         if inbox is None:
@@ -333,6 +332,10 @@ async def run_interactive(
                         drain_and_render_incoming(session, echo_console, inbox)
                     except Exception as exc:
                         log.warning("Error draining alerts at turn start: %s", exc)
+                try:
+                    drain_background_notices(session, echo_console)
+                except Exception as exc:
+                    log.warning("Error draining background notices at turn start: %s", exc)
 
                 # Drain any CPR bytes (ESC[row;colR) left in stdin from the
                 # previous prompt_async's bottom-toolbar refresh cycles.
@@ -343,7 +346,7 @@ async def run_interactive(
                 # The brief sleep lets in-transit terminal responses land in the
                 # buffer before the non-blocking select drain runs.
                 await asyncio.sleep(0.05)
-                drain_stale_cpr_bytes()
+                _drain_stale_cpr_bytes()
                 try:
                     prefilled = session.take_pending_prompt_default()
                     if prefilled and session.take_pending_autosubmit():

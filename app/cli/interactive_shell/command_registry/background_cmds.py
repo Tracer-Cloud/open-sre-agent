@@ -36,7 +36,7 @@ def _render_background_status(session: ReplSession, console: Console) -> None:
     table.add_row("tracked jobs", str(len(session.background_investigations)))
     table.add_row(
         "notify channels",
-        ", ".join(session.background_notification_preferences.channels),
+        ", ".join(session.background_notification_preferences.channels) or "none",
     )
     print_repl_table(console, table)
 
@@ -142,7 +142,7 @@ def _cmd_background(session: ReplSession, console: Console, args: list[str]) -> 
         if action == "list":
             console.print(
                 f"[{DIM}]background notify channels:[/] "
-                f"{', '.join(session.background_notification_preferences.channels)}"
+                f"{', '.join(session.background_notification_preferences.channels) or 'none'}"
             )
             return True
         if action == "set":

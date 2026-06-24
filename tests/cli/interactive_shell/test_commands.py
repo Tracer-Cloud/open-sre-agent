@@ -192,7 +192,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Background mode" in output
         assert "notify channels" in output
-        assert "email" in output
+        assert "none" in output
 
     def test_background_list_empty_message(self) -> None:
         session = ReplSession()
@@ -231,7 +231,7 @@ class TestDispatchSlash:
         assert dispatch_slash("/background notify set pagerduty", session, console) is True
         output = buf.getvalue()
         assert "invalid channel" in output
-        assert session.background_notification_preferences.channels == ("email",)
+        assert session.background_notification_preferences.channels == ()
 
     def test_background_notify_set_updates_channels(self) -> None:
         session = ReplSession()
@@ -2165,9 +2165,7 @@ class TestRunCliCommand:
 
         console, buf = _capture()
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
-        from app.cli.interactive_shell.ui.theme import ERROR
-
-        assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
+        assert replayed == [("partial stdout\n", None), ("partial stderr\n", m.ERROR)]
         assert "timed out" in buf.getvalue()
 
 
