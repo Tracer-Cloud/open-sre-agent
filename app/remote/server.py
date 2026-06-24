@@ -48,6 +48,7 @@ from app.analytics.cli import capture_investigation_failed, track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
 from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from app.cli.interactive_shell.ui.output.boundary import install_product_adapters
 from app.remote.error_reporting import report_remote_exception
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -60,6 +61,7 @@ from app.version import get_version
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
+install_product_adapters()
 
 INVESTIGATIONS_DIR = Path(
     os.getenv("INVESTIGATIONS_DIR", str(Path.home() / ".opensre" / "investigations"))

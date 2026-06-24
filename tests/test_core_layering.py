@@ -22,12 +22,23 @@ _CORE_PACKAGES: tuple[Path, ...] = (
     Path("app/pipeline"),
     Path("app/utils"),
 )
-# Anything imported from ``app.cli.*`` by a core module is a layering
-# violation. Inverted dependency: core defines ports, CLI implements
-# them. Exemption note: at the time of writing none of the core
-# packages legitimately need CLI internals; if a real need ever comes
-# up, prefer a new observability port over an exemption.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.cli",)
+# Anything imported from a forbidden prefix by a core module is a
+# layering violation. Inverted dependency: core defines ports, CLI /
+# vendor service packages implement them at the boundary.
+#
+# Forbidden prefixes:
+# - ``app.cli`` — closed by #35 (observability ports). Core never
+#   needs CLI internals; if you think you do, file a new
+#   observability port instead.
+# - ``app.services.tracer_client`` — closed by #36
+#   (``app.integrations.port`` ``fetch_remote_integrations``). Other
+#   ``app.services.*`` modules (LLM client, chat SDK adapter,
+#   ``agent_llm_client``) stay allowed because they are core
+#   capability access, not vendor-coupled like ``tracer_client``.
+_FORBIDDEN_PREFIXES: tuple[str, ...] = (
+    "app.cli",
+    "app.services.tracer_client",
+)
 
 
 def _core_modules() -> list[Path]:
@@ -54,14 +65,14 @@ def _imported_modules(source: str) -> set[str]:
 
 
 @pytest.mark.parametrize("module_path", _core_modules(), ids=str)
-def test_core_module_does_not_import_cli(module_path: Path) -> None:
+def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
     """Every module under ``app/agent/``, ``app/pipeline/``, ``app/utils/``
-    must avoid imports from ``app.cli.*``.
+    must avoid imports from forbidden boundary packages (``app.cli.*``,
+    ``app.services.tracer_client``).
 
-    If you need progress reporting, debug output, or display rendering
-    from core, use the ports under :mod:`app.observability` and let the
-    CLI layer register its concrete implementation at boundary via
-    ``install_cli_observability_adapters``.
+    Use ports instead — ``app.observability`` for progress/debug/display,
+    ``app.integrations.port`` for remote integrations — and register
+    concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
     imports = _imported_modules(source)
@@ -71,7 +82,7 @@ def test_core_module_does_not_import_cli(module_path: Path) -> None:
         if any(imp == prefix or imp.startswith(f"{prefix}.") for prefix in _FORBIDDEN_PREFIXES)
     }
     assert not leaks, (
-        f"{module_path} imports CLI module(s) {sorted(leaks)} — route through an "
-        "observability port (``app.observability.progress`` / ``debug`` / "
-        "``display`` / ``output_format``) instead."
+        f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
+        "port (``app.observability.*`` or ``app.integrations.port``) and register "
+        "adapters via ``install_product_adapters``."
     )
