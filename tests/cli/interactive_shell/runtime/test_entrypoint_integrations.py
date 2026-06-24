@@ -45,8 +45,8 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "app.agent.stages.resolve_integrations.resolve_integrations",
-        lambda _state: {"resolved_integrations": resolved},
+        "app.agent.stages.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: resolved,
     )
     session = ReplSession()
     session.warm_resolved_integrations()
@@ -58,10 +58,10 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
 
     def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
         calls.append("resolve")
-        return {"resolved_integrations": {"github": {}}}
+        return {"github": {}}
 
     monkeypatch.setattr(
-        "app.agent.stages.resolve_integrations.resolve_integrations",
+        "app.agent.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -75,10 +75,10 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
 
     def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
         calls.append("resolve")
-        return {"resolved_integrations": {}}
+        return {}
 
     monkeypatch.setattr(
-        "app.agent.stages.resolve_integrations.resolve_integrations",
+        "app.agent.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -88,32 +88,34 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
     assert calls == ["resolve", "resolve"]
 
 
-def test_warm_resolved_integrations_resets_tracker_on_resolve_failure(
-    monkeypatch: Any,
-) -> None:
-    resets: list[str] = []
-
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
-        raise RuntimeError("resolve failed")
+def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None:
+    progress_calls: list[str] = []
+    quiet_calls: list[str] = []
 
     monkeypatch.setattr(
         "app.agent.stages.resolve_integrations.resolve_integrations",
-        _resolve,
+        lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.output.set_silent_tracker",
-        lambda: None,
-    )
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.output.reset_tracker",
-        lambda: resets.append("reset"),
+        "app.agent.stages.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
     session = ReplSession()
     session.warm_resolved_integrations()
 
-    assert session.resolved_integrations_cache is None
-    assert resets == ["reset"]
+    assert quiet_calls == ["quiet"]
+    assert progress_calls == []
+    assert session.resolved_integrations_cache == {"datadog": {}}
+
+
+def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
+    session = ReplSession()
+    stale_generation = session._integration_warm_generation
+    session._integration_warm_generation += 1
+    session._store_warm_cache({"fresh": {"token": "new"}}, generation=session._integration_warm_generation)
+    session._store_warm_cache({"stale": {"token": "old"}}, generation=stale_generation)
+    assert session.resolved_integrations_cache == {"fresh": {"token": "new"}}
 
 
 def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> None:
@@ -125,10 +127,10 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
 
     def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
         resolve_calls.append("resolve")
-        return {"resolved_integrations": {"datadog": {"site": "datadoghq.com"}}}
+        return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "app.agent.stages.resolve_integrations.resolve_integrations",
+        "app.agent.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -145,7 +147,7 @@ def test_schedule_warm_resolved_integrations_runs_in_background(
 
     warmed = asyncio.Event()
 
-    def _warm(self: ReplSession) -> None:
+    def _warm(self: ReplSession, *, generation: int | None = None) -> None:
         warmed.set()
 
     monkeypatch.setattr(ReplSession, "warm_resolved_integrations", _warm)
@@ -154,6 +156,7 @@ def test_schedule_warm_resolved_integrations_runs_in_background(
         session = ReplSession()
         session.schedule_warm_resolved_integrations()
         await asyncio.wait_for(warmed.wait(), timeout=1.0)
+        assert warmed.is_set()
 
     asyncio.run(_run())
 

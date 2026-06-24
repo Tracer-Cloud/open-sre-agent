@@ -7,6 +7,9 @@ Node contract:
     Writes     : resolved_integrations
 """
 
-from app.agent.stages.resolve_integrations.node import resolve_integrations
+from app.agent.stages.resolve_integrations.node import (
+    resolve_integrations,
+    resolve_integrations_quiet,
+)
 
-__all__ = ["resolve_integrations"]
+__all__ = ["resolve_integrations", "resolve_integrations_quiet"]
