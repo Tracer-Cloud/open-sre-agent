@@ -27,7 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_integrations(state: InvestigationState) -> dict[str, Any]:
-    """Fetch and classify all available integrations. Returns resolved_integrations dict."""
+    """Discover and classify all integrations available for this investigation.
+
+    Reads  : _auth_token, org_id, resolved_integrations (idempotency guard)
+    Writes : resolved_integrations
+    """
+    return {"resolved_integrations": _resolve(state)}
+
+
+def _resolve(state: InvestigationState) -> dict[str, Any]:
+    """Return the raw integrations dict (keyed by vendor name)."""
     if state.get("resolved_integrations"):
         return dict(state["resolved_integrations"])
 

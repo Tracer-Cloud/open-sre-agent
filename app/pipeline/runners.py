@@ -225,8 +225,9 @@ async def astream_investigation(
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
-            resolved = _traced_node("resolve_integrations", resolve_integrations, initial)
-            _merge(state_any, {"resolved_integrations": resolved})
+            resolved_updates = _traced_node("resolve_integrations", resolve_integrations, initial)
+            _merge(state_any, resolved_updates)
+            resolved = resolved_updates.get("resolved_integrations") or {}
             _put(
                 _make_node_event(
                     "on_chain_end",

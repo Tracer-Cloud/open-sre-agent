@@ -858,7 +858,7 @@ async def test_investigate_stream_emits_correlation_payload(
 
     monkeypatch.setattr(
         "app.agent.stages.resolve_integrations.resolve_integrations",
-        lambda _state: {},
+        lambda _state: {"resolved_integrations": {}},
     )
 
     monkeypatch.setattr(

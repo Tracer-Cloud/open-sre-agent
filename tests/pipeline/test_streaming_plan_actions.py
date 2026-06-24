@@ -25,7 +25,7 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
 ) -> None:
     monkeypatch.setattr(
         "app.agent.stages.resolve_integrations.resolve_integrations",
-        lambda _state: {},
+        lambda _state: {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
         "app.agent.stages.extract_alert.extract_alert",

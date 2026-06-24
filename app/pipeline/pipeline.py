@@ -61,7 +61,7 @@ def run_connected_investigation(
     state_any = cast(dict[str, Any], state)
 
     try:
-        _merge(state_any, {"resolved_integrations": resolve_integrations(state)})
+        _merge(state_any, resolve_integrations(state))
 
         _merge(state_any, extract_alert(state))
         if state_any.get("is_noise"):

@@ -58,7 +58,10 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     # Avoid running real integration/extraction; mock them to no-ops so the
     # test focuses on the agent_class threading specifically.
     with (
-        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch(
+            "app.agent.stages.resolve_integrations.resolve_integrations",
+            return_value={"resolved_integrations": {}},
+        ),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
@@ -79,7 +82,10 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
 
     state = make_initial_state(raw_alert="alert text")
     with (
-        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch(
+            "app.agent.stages.resolve_integrations.resolve_integrations",
+            return_value={"resolved_integrations": {}},
+        ),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch(
@@ -105,7 +111,10 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     from app.pipeline.runners import run_investigation
 
     with (
-        patch("app.agent.stages.resolve_integrations.resolve_integrations", return_value={}),
+        patch(
+            "app.agent.stages.resolve_integrations.resolve_integrations",
+            return_value={"resolved_integrations": {}},
+        ),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
         patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
@@ -138,7 +147,8 @@ def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
     with (
         patch(
             "app.agent.stages.resolve_integrations.resolve_integrations",
-            side_effect=lambda _state: calls.append("resolve_integrations") or {},
+            side_effect=lambda _state: calls.append("resolve_integrations")
+            or {"resolved_integrations": {}},
         ),
         patch(
             "app.agent.stages.extract_alert.extract_alert",
