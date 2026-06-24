@@ -433,6 +433,17 @@ class ReplSession:
         finally:
             reset_tracker()
 
+    def schedule_warm_resolved_integrations(self) -> None:
+        """Warm integration configs off the interactive prompt critical path."""
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.warm_resolved_integrations()
+            return
+        loop.create_task(asyncio.to_thread(self.warm_resolved_integrations))
+
     def refresh_integration_state(self) -> None:
         """Re-resolve integration state after the local store changes.
 

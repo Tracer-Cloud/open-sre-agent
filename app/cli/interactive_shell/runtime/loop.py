@@ -164,6 +164,7 @@ async def run_interactive(
     pt_session: PromptSession[str] | None = None,
     inbox: _alert_inbox.AlertInbox | None = None,
 ) -> None:
+    session.schedule_warm_resolved_integrations()
     if pt_session is None:
         pt_session = _prompt_surface._build_prompt_session(session)
         session.prompt_history_backend = pt_session.history
