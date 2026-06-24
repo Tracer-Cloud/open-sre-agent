@@ -156,9 +156,9 @@ async def astream_investigation(
     # Silence the global ProgressTracker before starting the background thread
     # so pipeline internals (extract_alert, resolve_integrations, etc.) don't
     # open their own Rich Live display — the StreamRenderer drives it instead.
-    from app.cli.interactive_shell.ui.output import set_silent_tracker
+    from app.observability import silence_progress_tracker
 
-    set_silent_tracker()
+    silence_progress_tracker()
 
     event_queue: queue.Queue[StreamEvent | BaseException | None] = queue.Queue()
     loop = asyncio.get_running_loop()

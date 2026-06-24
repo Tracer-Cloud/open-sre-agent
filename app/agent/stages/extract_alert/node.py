@@ -10,12 +10,12 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
-from app.cli.interactive_shell.ui.output import (
+from app.incident_window import resolve_incident_window
+from app.observability import (
     debug_print,
-    get_tracker,
     render_investigation_header,
 )
-from app.incident_window import resolve_incident_window
+from app.observability import get_progress_tracker as get_tracker
 from app.services import get_llm_for_reasoning
 from app.state import InvestigationState
 

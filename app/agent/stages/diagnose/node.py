@@ -111,9 +111,9 @@ def diagnose(state: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     from app.analytics.cli import capture_diagnosis_category_mismatch
-    from app.cli.interactive_shell.ui.output import get_tracker
+    from app.observability import get_progress_tracker
 
-    tracker = get_tracker()
+    tracker = get_progress_tracker()
     tracker.start("diagnose_root_cause", "Parsing investigation conclusion")
 
     messages = _list_of_dicts(state.get("agent_messages"))

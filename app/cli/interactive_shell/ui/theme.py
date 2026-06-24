@@ -28,13 +28,14 @@ from __future__ import annotations
 from rich.theme import Theme
 
 # ── Semantic color tokens (the only permitted colours) ─────────────────────
+# BRAND/DIM/HIGHLIGHT/WARNING are re-exported from app.ui_theme so core
+# modules (e.g. the publish_findings terminal renderer) can read the
+# same hex values without depending on the CLI layer. CLI-only tokens
+# (TEXT, SECONDARY, ERROR, BG) stay here.
+from app.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING  # noqa: F401 — re-exported
 
-HIGHLIGHT = "#B9EDAF"
-BRAND = "#66A17D"
 TEXT = "#E0E0E0"
 SECONDARY = "#888888"
-DIM = "#444444"
-WARNING = "#CEA25C"
 ERROR = "#C45B52"
 BG = "#0A0A0A"
 

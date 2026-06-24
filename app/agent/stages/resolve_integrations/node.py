@@ -8,7 +8,6 @@ import logging
 import os
 from typing import Any
 
-from app.cli.interactive_shell.ui.output import get_tracker
 from app.integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
@@ -21,6 +20,7 @@ from app.integrations.catalog import (
 from app.integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
+from app.observability import get_progress_tracker as get_tracker
 from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)

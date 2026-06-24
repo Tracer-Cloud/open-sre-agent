@@ -164,12 +164,27 @@ class ProgressTracker(ToolTrackingMixin):
 _tracker: ProgressTracker | None = None
 
 
+def _register_with_observability(tracker: ProgressTracker) -> None:
+    """Tell the observability port which tracker core code should see.
+
+    The Rich tracker structurally satisfies the
+    :class:`app.observability.progress.ProgressTracker` Protocol;
+    registering it here means any module that imports
+    ``get_progress_tracker`` from core gets the same instance the CLI
+    is driving.
+    """
+    from app.observability.progress import set_progress_tracker
+
+    set_progress_tracker(tracker)
+
+
 def get_tracker(*, reset: bool = False) -> ProgressTracker:
     global _tracker
     if _tracker is None or reset:
         if reset and _tracker is not None:
             _tracker.stop()
         _tracker = ProgressTracker()
+        _register_with_observability(_tracker)
     return _tracker
 
 
@@ -197,6 +212,7 @@ def set_silent_tracker() -> None:
     _tracker._tool_summary_order = []
     _tracker._toggle_watcher = None
     _tracker._toggle_unregister = None
+    _register_with_observability(_tracker)
 
 
 def _stop_active_tracker_toggle_watcher() -> None:

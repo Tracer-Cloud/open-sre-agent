@@ -34,8 +34,9 @@ from app.agent.tool_loop import (
     _tool_source,
 )
 from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
-from app.cli.interactive_shell.ui.output import debug_print, get_tracker
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
+from app.observability import debug_print
+from app.observability import get_progress_tracker as get_tracker
 from app.services.agent_llm_client import ToolCall, get_agent_llm
 from app.state.evidence import EvidenceEntry
 from app.tools.registered_tool import RegisteredTool
