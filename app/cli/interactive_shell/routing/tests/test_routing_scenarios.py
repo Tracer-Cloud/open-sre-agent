@@ -22,6 +22,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.l
     plan_actions_with_llm,
 )
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
+from app.cli.interactive_shell.routing.tests._oracle_normalize import cli_command_payload_matches
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
@@ -170,6 +171,16 @@ def _assert_planned_actions_match(
             assert actual.get("kind") == "investigation"
             content = str(actual.get("content", "")).strip()
             assert content, f"investigation action {index} must include synthesized alert_text."
+            continue
+        if expected_kind == "cli_command":
+            assert actual.get("kind") == "cli_command"
+            actual_payload = str(actual.get("payload", "")).strip()
+            expected_payload = str(expected.get("payload", "")).strip()
+            assert actual_payload, f"cli_command action {index} must include payload."
+            assert cli_command_payload_matches(actual_payload, expected_payload), (
+                f"cli_command action {index} payload mismatch: "
+                f"{actual_payload!r} vs {expected_payload!r}"
+            )
             continue
         assert _action_match_view(actual) == _action_match_view(expected)
 
