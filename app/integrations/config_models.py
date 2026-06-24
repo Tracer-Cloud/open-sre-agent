@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from app.config import get_tracer_base_url
 from app.integrations._validators import (
@@ -1013,7 +1013,11 @@ class SnowflakeIntegrationConfig(StrictConfigModel):
     warehouse: str = ""
     role: str = ""
     database: str = ""
-    schema: str = ""  # type: ignore[assignment]  # "schema" shadows BaseModel.schema classmethod
+    db_schema: str = Field(
+        default="",
+        alias="schema",
+        validation_alias=AliasChoices("schema", "db_schema"),
+    )
     max_results: int = 50
     integration_id: str = ""
 
@@ -1023,7 +1027,7 @@ class SnowflakeIntegrationConfig(StrictConfigModel):
         "warehouse",
         "role",
         "database",
-        "schema",
+        "db_schema",
         "integration_id",
         mode="before",
     )(normalize_str())

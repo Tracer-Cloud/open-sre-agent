@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[SnowflakeIntegrationConfig | None, str | None]:
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = SnowflakeIntegrationConfig.model_validate(
             {
@@ -35,5 +35,7 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="snowflake", record_id=record_id)
         return None, None
     if cfg.account_identifier and cfg.token:
-        return cfg, "snowflake"
+        config = cfg.model_dump(exclude_none=True)
+        config["schema"] = config.pop("db_schema", "")
+        return config, "snowflake"
     return None, None
