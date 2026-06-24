@@ -9,12 +9,10 @@ from app.agent.stages.publish_findings.upstream_correlation import (
     candidate_services_from_state,
     target_resource_from_state,
 )
-from app.agent.stages.publish_findings.upstream_correlation.datadog_factory import (
-    datadog_avg_query,
-)
 from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     UpstreamEvidenceBundle,
 )
+from app.integrations.datadog.correlation.factory import datadog_avg_query
 
 
 def test_datadog_avg_query_preserves_existing_scope() -> None:

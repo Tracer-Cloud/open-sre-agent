@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.stages.publish_findings.upstream_correlation.datadog_factory import (
-    build_datadog_provider,
-)
 from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     UpstreamEvidenceProvider,
 )
+from app.integrations.datadog.correlation import build_datadog_provider
 
 
 def target_resource_from_state(state: dict[str, Any]) -> str:

@@ -11,7 +11,7 @@ Node contract:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from app.agent.stages.publish_findings.context import build_report_context
 from app.agent.stages.publish_findings.delivery import dispatch_report
@@ -46,14 +46,14 @@ def generate_report(
 ) -> dict[str, Any]:
     """Generate and publish the final RCA report."""
     correlation_updates = enrich_upstream_correlation(state)
-    state = {**dict(state), **correlation_updates}
-    ctx = build_report_context(state)
-    short_summary = state.get("problem_md")
+    enriched_state = cast(InvestigationState, {**dict(state), **correlation_updates})
+    ctx = build_report_context(enriched_state)
+    short_summary = enriched_state.get("problem_md")
     messages = build_report_messages(ctx)
 
     # Restore any masked infrastructure identifiers in user-facing output.
     # No-op when masking is disabled or the state has no placeholders.
-    masking_ctx = MaskingContext.from_state(dict(state))
+    masking_ctx = MaskingContext.from_state(dict(enriched_state))
     messages = ReportMessages(
         slack_text=masking_ctx.unmask(messages.slack_text),
         telegram_html=masking_ctx.unmask(messages.telegram_html),
@@ -64,7 +64,7 @@ def generate_report(
         short_summary = masking_ctx.unmask(short_summary)
 
     investigation_id, investigation_url = create_investigation_and_attach_url(
-        state,
+        enriched_state,
         messages.slack_text,
         short_summary,
     )
@@ -75,7 +75,7 @@ def generate_report(
         open_in_editor(messages.slack_text)
 
     dispatch_report(
-        state,
+        enriched_state,
         messages,
         investigation_id=investigation_id,
         investigation_url=investigation_url,

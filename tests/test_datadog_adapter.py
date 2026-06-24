@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.stages.publish_findings.upstream_correlation.datadog_adapter import (
+from app.integrations.datadog.correlation.adapter import (
     DatadogCorrelationAdapter,
 )
 

@@ -1,12 +1,5 @@
 from __future__ import annotations
 
-from app.agent.stages.publish_findings.upstream_correlation.datadog_adapter import (
-    DatadogCorrelationAdapter,
-)
-from app.agent.stages.publish_findings.upstream_correlation.datadog_provider import (
-    DatadogCorrelationQueries,
-    DatadogUpstreamEvidenceProvider,
-)
 from app.agent.stages.publish_findings.upstream_correlation.enrich import (
     build_correlation_config,
     enrich_upstream_correlation,
@@ -26,6 +19,11 @@ from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
     UpstreamEvidenceProvider,
+)
+from app.integrations.datadog.correlation import (
+    DatadogCorrelationAdapter,
+    DatadogCorrelationQueries,
+    DatadogUpstreamEvidenceProvider,
 )
 
 __all__ = [
