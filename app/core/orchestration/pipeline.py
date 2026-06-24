@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     # ``agent_class`` injections.
     from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
 
+
 def run_connected_investigation(
     state: AgentState,
     *,
