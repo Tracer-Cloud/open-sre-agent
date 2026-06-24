@@ -8,9 +8,28 @@ Node contract:
                  investigation_started_at, investigation_loop_count
 """
 
-from app.core.orchestration.node.investigate.agent import (
-    ConnectedInvestigationAgent,
-    InvestigationAgent,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.core.orchestration.node.investigate.agent import (
+        ConnectedInvestigationAgent,
+        InvestigationAgent,
+    )
 
 __all__ = ["ConnectedInvestigationAgent", "InvestigationAgent"]
+
+
+def __getattr__(name: str) -> object:
+    if name in __all__:
+        from app.core.orchestration.node.investigate.agent import (
+            ConnectedInvestigationAgent,
+            InvestigationAgent,
+        )
+
+        return {
+            "ConnectedInvestigationAgent": ConnectedInvestigationAgent,
+            "InvestigationAgent": InvestigationAgent,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
