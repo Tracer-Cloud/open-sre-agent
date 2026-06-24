@@ -147,8 +147,9 @@ def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
     with (
         patch(
             "app.agent.stages.resolve_integrations.resolve_integrations",
-            side_effect=lambda _state: calls.append("resolve_integrations")
-            or {"resolved_integrations": {}},
+            side_effect=lambda _state: (
+                calls.append("resolve_integrations") or {"resolved_integrations": {}}
+            ),
         ),
         patch(
             "app.agent.stages.extract_alert.extract_alert",
