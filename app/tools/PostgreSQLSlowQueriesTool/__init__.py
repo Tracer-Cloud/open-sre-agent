@@ -70,6 +70,7 @@ class PostgreSQLSlowQueriesOutput(BaseModel):
     input_model=PostgreSQLSlowQueriesInput,
     output_model=PostgreSQLSlowQueriesOutput,
     is_available=postgresql_is_available,
+    injected_params=("host",),
     extract_params=postgresql_extract_params,
 )
 def get_postgresql_slow_queries(

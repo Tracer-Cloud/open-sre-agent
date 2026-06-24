@@ -23,7 +23,7 @@ Rendered output legend (colour roles)
 # [SECONDARY]  "opensre" product name label · cwd · tip / note body
 # [DIM]        subtitle description · rule lines · box chrome · dividers
 # [TEXT]       provider/model values · greeting
-# [WARNING]    read-only or trust-mode notice
+# [WARNING]    read-only or trust-mode notice · incomplete-integration marker
 """
 
 from __future__ import annotations
@@ -41,6 +41,9 @@ from rich.table import Table
 from rich.text import Text
 
 from app.cli.interactive_shell.config import WHATS_NEW
+from app.cli.interactive_shell.ui.banner_art import _render_art
+from app.cli.interactive_shell.ui.banner_state import _build_ambient_right_column
+from app.cli.interactive_shell.ui.provider import detect_provider_model
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -49,118 +52,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from app.config import LLMSettings
 from app.version import get_version
-
-# ── Splash art ───────────────────────────────────────────────────────────────
-# Pre-rendered during development and checked into this module as a static string.
-# Colour codes are stripped; HIGHLIGHT is re-applied at render time.
-#
-# SPLASH_ART         block font, 59 cols, solid ██ fills
-# SPLASH_ART_NARROW  simpleBlock font, 72 cols, pure ASCII fallback
-# _FALLBACK_ART      minimal art, 44 cols, last resort
-
-SPLASH_ART = """\
- ██████╗ ██████╗ ███████╗███╗   ██╗███████╗██████╗ ███████╗
-██╔═══██╗██╔══██╗██╔════╝████╗  ██║██╔════╝██╔══██╗██╔════╝
-██║   ██║██████╔╝█████╗  ██╔██╗ ██║███████╗██████╔╝█████╗
-██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║╚════██║██╔══██╗██╔══╝
-╚██████╔╝██║     ███████╗██║ ╚████║███████║██║  ██║███████╗
- ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝╚══════╝"""
-
-SPLASH_ART_NARROW = """\
-    _|_|    _|_|_|    _|_|_|_|  _|      _|    _|_|_|  _|_|_|    _|_|_|_|
-  _|    _|  _|    _|  _|        _|_|    _|  _|        _|    _|  _|
-  _|    _|  _|_|_|    _|_|_|    _|  _|  _|    _|_|    _|_|_|    _|_|_|
-  _|    _|  _|        _|        _|    _|_|        _|  _|    _|  _|
-    _|_|    _|        _|_|_|_|  _|      _|  _|_|_|    _|    _|  _|_|_|_|"""
-
-_FALLBACK_ART = """\
-  ___                    ____  ____  _____
- / _ \\ _ __   ___ _ __  / ___||  _ \\| ____|
-| | | | '_ \\ / _ \\ '_ \\ \\___ \\| |_) |  _|
-| |_| | |_) |  __/ | | | ___) |  _ <| |___
- \\___/| .__/ \\___|_| |_||____/|_| \\_\\_____|
-      |_|"""
-
-
-def _render_art(console_width: int = 80) -> str:
-    """Return the splash art string for the given terminal width.
-
-    Priority: SPLASH_ART (grid, 34 cols) → SPLASH_ART_NARROW (simpleBlock, 72 cols)
-    → _FALLBACK_ART (minimal, 44 cols).  OPENSRE_FIGLET_FONT overrides the default
-    when pyfiglet is installed.
-    """
-    custom_font = os.getenv("OPENSRE_FIGLET_FONT")
-    if custom_font:
-        try:
-            import pyfiglet
-
-            rendered: str = pyfiglet.figlet_format("OpenSRE", font=custom_font).rstrip()
-            if rendered and all(len(ln) <= console_width - 2 for ln in rendered.splitlines()):
-                return rendered
-        except Exception:
-            # pyfiglet missing or font lookup failed — fall through to ASCII art
-            pass
-
-    art_width = max(len(ln) for ln in SPLASH_ART.splitlines())
-    narrow_width = max(len(ln) for ln in SPLASH_ART_NARROW.splitlines())
-    fallback_width = max(len(ln) for ln in _FALLBACK_ART.splitlines())
-
-    if console_width >= art_width + 4:
-        return SPLASH_ART
-    if console_width >= narrow_width + 4:
-        return SPLASH_ART_NARROW
-    if console_width >= fallback_width + 4:
-        return _FALLBACK_ART
-    return _FALLBACK_ART
-
-
-# ── Provider detection ────────────────────────────────────────────────────────
-
-
-def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
-    """Return the active (reasoning_model, toolcall_model) for a provider."""
-    if provider in {
-        "codex",
-        "claude-code",
-        "gemini-cli",
-        "antigravity-cli",
-        "cursor",
-        "kimi",
-        "opencode",
-    }:
-        env_key = {
-            "codex": "CODEX_MODEL",
-            "claude-code": "CLAUDE_CODE_MODEL",
-            "gemini-cli": "GEMINI_CLI_MODEL",
-            "antigravity-cli": "ANTIGRAVITY_CLI_MODEL",
-            "cursor": "CURSOR_MODEL",
-            "kimi": "KIMI_MODEL",
-            "opencode": "OPENCODE_MODEL",
-        }.get(provider, "")
-        cli_model = (os.getenv(env_key, "").strip() if env_key else "") or "CLI default"
-        return (cli_model, cli_model)
-
-    single_model = str(getattr(settings, f"{provider}_model", "")).strip()
-    if single_model:
-        return (single_model, single_model)
-
-    reasoning_model = str(getattr(settings, f"{provider}_reasoning_model", "")).strip()
-    toolcall_model = str(getattr(settings, f"{provider}_toolcall_model", "")).strip()
-    return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
-
-
-def detect_provider_model() -> tuple[str, str]:
-    """Return (provider, model) for the active LLM config."""
-    try:
-        settings = LLMSettings.from_env()
-    except Exception:
-        return ("unknown", "unknown")
-
-    provider = settings.provider or os.getenv("LLM_PROVIDER", "anthropic")
-    reasoning_model, _toolcall_model = resolve_provider_models(settings, provider)
-    return (provider, reasoning_model)
 
 
 def _is_first_run() -> bool:
@@ -182,7 +74,6 @@ def render_splash(console: Console | None = None, *, first_run: bool | None = No
     Rendered output (with colour roles):
     ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ [DIM divider]
     ╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋╋           [HIGHLIGHT art]
-    ╋┏━━┓╋┏━━┓╋┏━━┓╋┏━┓╋╋┏━━┓╋┏━┓╋┏━━┓
     ...
       opensre  [SECONDARY]  ·  v<version> [BRAND]
       open-source SRE agent for automated incident
@@ -267,117 +158,6 @@ _TIPS: tuple[str, ...] = (
     "Use /investigate for runnable demos/templates",
 )
 
-# Display-name overrides for known integration service slugs.
-_SERVICE_DISPLAY_NAMES: dict[str, str] = {
-    "grafana": "Grafana",
-    "datadog": "Datadog",
-    "honeycomb": "Honeycomb",
-    "coralogix": "Coralogix",
-    "aws": "AWS",
-    "github": "GitHub",
-    "sentry": "Sentry",
-    "prometheus": "Prometheus",
-    "loki": "Loki",
-    "elasticsearch": "Elasticsearch",
-    "bigquery": "BigQuery",
-    "pagerduty": "PagerDuty",
-    "slack": "Slack",
-    "telegram": "Telegram",
-    "signoz": "SigNoz",
-    "jira": "Jira",
-    "gitlab": "GitLab",
-    "vercel": "Vercel",
-    "mongodb": "MongoDB",
-    "postgresql": "PostgreSQL",
-    "mysql": "MySQL",
-    "redis": "Redis",
-    "kafka": "Kafka",
-    "rabbitmq": "RabbitMQ",
-    "clickhouse": "ClickHouse",
-    "mariadb": "MariaDB",
-    "kubernetes": "Kubernetes",
-    "betterstack": "Better Stack",
-    "snowflake": "Snowflake",
-    "newrelic": "New Relic",
-    "opsgenie": "OpsGenie",
-    "linear": "Linear",
-    "supabase": "Supabase",
-}
-
-
-def _load_configured_integrations() -> list[str]:
-    """Return display names for integrations currently configured via env vars. Never raises."""
-    try:
-        from app.integrations.catalog import load_env_integrations  # lazy — avoids circular deps
-
-        records = load_env_integrations()
-        names: list[str] = []
-        for record in records:
-            service = str(record.get("service", "")).strip().lower()
-            if service:
-                names.append(_SERVICE_DISPLAY_NAMES.get(service, service.title()))
-        return list(dict.fromkeys(names))  # deduplicate, preserve order
-    except Exception:
-        return []
-
-
-def _is_alert_listener_active() -> bool:
-    """Return True if the alert listener is enabled in config. Never raises."""
-    try:
-        from app.cli.interactive_shell.config import ReplConfig
-
-        return ReplConfig.load().alert_listener_enabled
-    except Exception:
-        return False
-
-
-def _build_ambient_right_column(session: object = None) -> Text:
-    """Right column for returning users: live integration status and alert listener state."""
-    parts: list[Text] = []
-
-    # Integrations
-    parts.append(Text("Integrations", style=f"bold {BRAND}"))
-    names = _load_configured_integrations()
-    if names:
-        _MAX_SHOWN = 6
-        shown = names[:_MAX_SHOWN]
-        overflow = len(names) - len(shown)
-        name_line = Text(overflow="fold")
-        for idx, name in enumerate(shown):
-            if idx:
-                name_line.append("  ·  ", style=DIM)
-            name_line.append(name, style=SECONDARY)
-        if overflow:
-            name_line.append(f"  +{overflow}", style=DIM)
-        parts.append(name_line)
-    else:
-        parts.append(Text("run /onboard to connect tools", style=DIM))
-
-    parts.append(Text("───", style=DIM))
-
-    # Alert listener
-    parts.append(Text("Alert listener", style=f"bold {BRAND}"))
-    if _is_alert_listener_active():
-        listener_line = Text()
-        listener_line.append("● ", style=f"bold {HIGHLIGHT}")
-        listener_line.append("active", style=SECONDARY)
-        parts.append(listener_line)
-    else:
-        parts.append(Text("○  not configured", style=DIM))
-
-    # Session summary — only shown when /clear is used mid-session with history
-    if session is not None:
-        history: list[object] = getattr(session, "history", [])
-        if history:
-            parts.append(Text("───", style=DIM))
-            parts.append(Text("This session", style=f"bold {BRAND}"))
-            count = len(history)
-            noun = "interaction" if count == 1 else "interactions"
-            parts.append(Text(f"{count} {noun}", style=SECONDARY))
-
-    return Text("\n").join(parts)
-
-
 # Panel geometry. The body switches to a stacked layout on narrow terminals,
 # and otherwise expands to fill the full console width while keeping the left
 # identity column readable and the right notes column roomy.
@@ -396,7 +176,30 @@ _LOGO_MARK_ROWS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _github_username() -> str:
+    """Return the saved GitHub login for the configured GitHub integration, or "".
+
+    Best-effort and never raises: the welcome greeting must render even when the
+    integration store is unreadable or GitHub is not configured.
+    """
+    try:
+        from app.integrations.store import get_integration
+
+        record = get_integration("github")
+        if not record:
+            return ""
+        credentials = record.get("credentials") or {}
+        return str(credentials.get("username") or "").strip()
+    except Exception:
+        return ""
+
+
 def _get_username() -> str:
+    # Prefer the authenticated GitHub handle once it is known, so the greeting
+    # reflects the user's GitHub identity rather than the local system account.
+    github = _github_username()
+    if github:
+        return github
     try:
         return getpass.getuser()
     except Exception:
@@ -550,20 +353,7 @@ def render_ready_box(
     *,
     session: object = None,
 ) -> None:
-    """Print the two-column welcome panel with an embedded title bar.
-
-    Layout:
-    ── OpenSRE · v<version> ────────────────────────────────────────────────╮
-    │                                                                         │
-    │      Welcome back paul!          │  Tips for getting started            │
-    │           █▀█                   │  Paste alert JSON or describe…        │
-    │           █▄█                   │  ───                                  │
-    │                                  │  What's new                          │
-    │  claude-opus-4-7  ·  anthropic  │  Two-column welcome with tips…        │
-    │  · ~/code/opensre                │  /release-notes for more             │
-    │                                                                         │
-    ╰─────────────────────────────────────────────────────────────────────────╯
-    """
+    """Print the two-column welcome panel with an embedded title bar."""
     console = console or Console(
         highlight=False,
         force_terminal=True,

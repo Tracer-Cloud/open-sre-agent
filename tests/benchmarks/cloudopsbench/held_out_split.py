@@ -6,7 +6,7 @@ optimization cycles. The split is **derived deterministically** from the
 sorted ``case_id`` list — same corpus + same seed → same split, forever.
 
 Policy (mirrors the pre-registration YAML at
-``tests/benchmarks/configs/preregistrations/cloudopsbench_v1.yml``):
+``tests/benchmarks/cloudopsbench/configs/preregistrations/cloudopsbench_v1.yml``):
 
   - 80% optimize-against / 20% eval-only
   - ``HELD_OUT_SEED = 42`` — distinct from ``config.seed`` (case-selection seed

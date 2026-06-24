@@ -7,14 +7,14 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     execution_allowed,
     plan_investigation_execution,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
 from app.cli.interactive_shell.ui import ERROR, WARNING
-from app.cli.support.errors import OpenSREError
-from app.cli.support.exception_reporting import report_exception
 
 
 def run_sample_alert(
@@ -28,7 +28,7 @@ def run_sample_alert(
 ) -> None:
     from app.cli.investigation import run_sample_alert_for_session
 
-    plan = plan_investigation_execution(action_type="sample_alert")
+    plan = plan_investigation_execution(action_type="sample_alert", user_initiated=True)
     if not execution_allowed(
         plan.policy,
         session=session,
@@ -42,6 +42,20 @@ def run_sample_alert(
         return
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
+    if session.background_mode_enabled:
+        from app.cli.interactive_shell.runtime.background_runner import (
+            start_background_template_investigation,
+        )
+
+        start_background_template_investigation(
+            template_name=template_name,
+            session=session,
+            console=console,
+            display_command=f"sample alert:{template_name}",
+        )
+        session.record("alert", f"sample:{template_name}")
+        return
+
     task = session.task_registry.create(
         TaskKind.INVESTIGATION, command=f"sample alert:{template_name}"
     )
@@ -73,8 +87,7 @@ def run_sample_alert(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", f"sample:{template_name}")
 
 
@@ -89,7 +102,7 @@ def run_text_investigation(
 ) -> None:
     from app.cli.investigation import run_investigation_for_session
 
-    plan = plan_investigation_execution(action_type="investigation")
+    plan = plan_investigation_execution(action_type="investigation", user_initiated=True)
     if not execution_allowed(
         plan.policy,
         session=session,
@@ -103,6 +116,20 @@ def run_text_investigation(
         return
 
     console.print(f"[bold]investigation:[/bold] {escape(alert_text)}")
+    if session.background_mode_enabled:
+        from app.cli.interactive_shell.runtime.background_runner import (
+            start_background_text_investigation,
+        )
+
+        start_background_text_investigation(
+            alert_text=alert_text,
+            session=session,
+            console=console,
+            display_command="background free-text investigation",
+        )
+        session.record("alert", alert_text)
+        return
+
     task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"investigate:{alert_text}")
     task.mark_running()
     try:
@@ -132,6 +159,5 @@ def run_text_investigation(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", alert_text)

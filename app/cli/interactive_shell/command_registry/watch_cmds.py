@@ -6,13 +6,15 @@ import os
 import re
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from rich.console import Console
 from rich.markup import escape
 
-from app.agents.probe import pid_exists
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import (
     BOLD_BRAND,
@@ -23,7 +25,8 @@ from app.cli.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.ui.time_format import format_repl_timestamp
+from app.fleet_monitoring.probe import pid_exists
 from app.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 from app.watch_dog.monitor import start_watchdog_daemon_thread
 
@@ -256,7 +259,7 @@ def _cmd_watches(session: ReplSession, console: Console, _args: list[str]) -> bo
     }
     for task in rows:
         st = status_style.get(task.status, DIM)
-        started = datetime.fromtimestamp(task.started_at, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+        started = format_repl_timestamp(task.started_at, style="utc")
         thresholds = task.command or "—"
         sample = task.progress or "—"
         table.add_row(
@@ -339,6 +342,7 @@ COMMANDS: list[SlashCommand] = [
         "/watches",
         "List watchdog background tasks with the latest resource sample.",
         _cmd_watches,
+        usage=("/watches",),
     ),
     SlashCommand(
         "/unwatch",

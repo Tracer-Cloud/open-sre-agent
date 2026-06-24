@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any
 
-from app.cli.support.output import debug_print
+from app.cli.interactive_shell.ui.output import debug_print
 from app.config import SLACK_CHANNEL
 from app.utils.delivery_transport import post_json
 

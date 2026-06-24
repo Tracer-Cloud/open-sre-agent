@@ -584,6 +584,121 @@ def get_slow_queries(
         return {"source": "postgresql", "available": False, "error": str(err)}
 
 
+def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
+    """Retrieve active locks and blocking relationships.
+
+    Read-only: queries pg_locks and pg_stat_activity system views.
+    Results are capped at config.max_results.
+    """
+    if not config.is_configured:
+        return {"source": "postgresql", "available": False, "error": "Not configured."}
+
+    try:
+        conn = _get_connection(config)
+        try:
+            cursor = conn.cursor()
+
+            # Get blocked queries and their blockers
+            cursor.execute(
+                """
+                SELECT
+                    blocked.pid                     AS blocked_pid,
+                    blocked.usename                 AS blocked_user,
+                    blocked.application_name        AS blocked_app,
+                    left(blocked.query, 300)        AS blocked_query,
+                    blocking.pid                    AS blocking_pid,
+                    blocking.usename                AS blocking_user,
+                    blocking.application_name       AS blocking_app,
+                    left(blocking.query, 300)       AS blocking_query,
+                    extract(epoch from (now() - blocked.query_start))::int AS wait_seconds,
+                    blocked_locks.locktype,
+                    blocked_locks.relation::regclass::text AS relation
+                FROM pg_catalog.pg_locks         blocked_locks
+                JOIN pg_catalog.pg_stat_activity blocked
+                    ON blocked.pid = blocked_locks.pid
+                JOIN pg_catalog.pg_locks         blocking_locks
+                    ON blocking_locks.locktype = blocked_locks.locktype
+                    AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation
+                    AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page
+                    AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple
+                    AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid
+                    AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid
+                    AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid
+                    AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid
+                    AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid
+                    AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database
+                    AND blocking_locks.pid != blocked_locks.pid
+                    AND blocking_locks.granted = true
+                JOIN pg_catalog.pg_stat_activity blocking
+                    ON blocking.pid = blocking_locks.pid
+                WHERE NOT blocked_locks.granted
+                ORDER BY wait_seconds DESC
+                LIMIT %s
+            """,
+                (config.max_results,),
+            )
+
+            blocked_queries = []
+            for row in cursor.fetchall():
+                blocked_queries.append(
+                    {
+                        "blocked_pid": row[0],
+                        "blocked_user": row[1] or "",
+                        "blocked_app": row[2] or "",
+                        "blocked_query": row[3] or "",
+                        "blocking_pid": row[4],
+                        "blocking_user": row[5] or "",
+                        "blocking_app": row[6] or "",
+                        "blocking_query": row[7] or "",
+                        "wait_seconds": row[8] or 0,
+                        "locktype": row[9] or "",
+                        "relation": row[10] or "",
+                    }
+                )
+
+            # Get total lock count summary
+            cursor.execute(
+                """
+                SELECT
+                    locktype,
+                    count(*) FILTER (WHERE granted)     AS granted,
+                    count(*) FILTER (WHERE NOT granted) AS waiting
+                FROM pg_locks
+                GROUP BY locktype
+                ORDER BY waiting DESC, granted DESC
+            """
+            )
+
+            lock_summary = []
+            for row in cursor.fetchall():
+                lock_summary.append(
+                    {
+                        "locktype": row[0],
+                        "granted": row[1],
+                        "waiting": row[2],
+                    }
+                )
+
+            cursor.close()
+            return {
+                "source": "postgresql",
+                "available": True,
+                "blocked_query_count": len(blocked_queries),
+                "blocked_queries": blocked_queries,
+                "lock_summary": lock_summary,
+            }
+        finally:
+            conn.close()
+    except Exception as err:
+        report_validation_failure(
+            err,
+            logger=logger,
+            integration="postgresql",
+            method="get_lock_status",
+        )
+        return {"source": "postgresql", "available": False, "error": str(err)}
+
+
 def get_table_stats(
     config: PostgreSQLConfig,
     schema_name: str = "public",

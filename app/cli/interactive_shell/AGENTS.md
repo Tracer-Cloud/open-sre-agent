@@ -17,7 +17,7 @@ should be predictable, interruptible, explainable, and safe by default.
 
 | Area | Owns | Keep out |
 | --- | --- | --- |
-| `loop.py` / `commands.py` | top-level REPL wiring and compatibility shims | feature-specific business logic |
+| `loop.py` / `commands.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
 | `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
@@ -49,6 +49,9 @@ owning area rather than adding more logic to the caller.
   labels, prompts, response bodies, and error wording are user-facing API.
 - Avoid new module-level mutable globals. If global coordination is unavoidable,
   provide deterministic reset/cleanup hooks and test isolation.
+- Do not keep compatibility-only forwarding modules after moving code. Migrate
+  callers/tests to the canonical owner and remove the old import path in the
+  same change.
 
 ## Slash commands
 
@@ -79,8 +82,22 @@ owning area rather than adding more logic to the caller.
   trigger confirmations or side effects.
 - Route command execution through the central dispatch and execution-policy
   helpers. Do not bypass `execution_policy.py` for new commands.
-- Preserve non-TTY behavior: commands that require confirmation must fail closed
-  when stdin is not interactive unless trust mode explicitly allows them.
+- **Default-allow execution policy (current behavior):** the REPL is
+  default-allow. `execution_policy.py` resolves every action to `allow` with **no
+  confirmation prompt** — all slash/`opensre` commands (any tier, including
+  `ELEVATED`), investigations, synthetic tests, code-agent launches, LLM runtime
+  switches, and inferred shell commands (including `!` passthrough and mutating
+  commands such as `rm`/`mv`/`docker`) run immediately, in any context (TTY or
+  not, trust mode or not). The only hard `deny` floor that remains is
+  `restricted` shell commands (`sudo`, `systemctl`, `kill`, `dd`, …) and shell
+  input that cannot be safely parsed (operators `| && ; > <`, command
+  substitution). Keep assigning accurate `ExecutionTier` values anyway: the tier
+  still feeds analytics, help text, and any future opt-in stricter policy, and
+  `trust_mode` plus the `ask` confirmation UX are retained for that purpose.
+- Non-TTY behavior under default-allow: actions no longer fail closed on
+  non-interactive stdin (there is nothing to confirm). The fail-closed path only
+  applies if a verdict is explicitly `ask`, which the default policy does not
+  emit.
 - **CPR / exclusive-stdin registration (required for table-outputting commands):**
   Under `patch_stdout(raw=True)`, the REPL runs dispatch concurrently with the
   next `prompt_async()`. When a command emits Rich table output, prompt_toolkit
@@ -96,9 +113,33 @@ owning area rather than adding more logic to the caller.
   - **How to check:** after adding a command, run it in the REPL and type a few
     characters in the next prompt. If no `^[[…R` garbage appears, the registration
     is correct.
+  - **Agent-planned (LLM) interactive commands:** `_EXCLUSIVE_STDIN_MENU_COMMANDS`
+    only reserves stdin for *deterministically-typed* commands
+    (`deterministic_command_text` returns the slash). When free text like
+    "remove github" is resolved by the action planner into an inline-picker
+    command (`/integrations remove`, `/integrations setup`, `/mcp connect`,
+    `/mcp disconnect`, or a bare `/integrations` / `/mcp` menu), the loop has not
+    reserved stdin, so `slash_tool.py` must NOT run the picker inline. It defers
+    via `session.queue_auto_command(...)`, which re-submits the command as a
+    deterministic turn the loop then runs with exclusive stdin. New raw-stdin
+    picker/wizard commands the planner can emit must be added to
+    `_INTERACTIVE_PICKER_MENUS` / `_INTERACTIVE_PICKER_SUBCOMMANDS` in
+    `orchestration/tools/slash_tool.py`.
 
 ## Routing and action execution
 
+- **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
+  action planner never denies a turn. Because every terminal action is read-only,
+  an unmatched/ambiguous/chatty clause is not a safety risk — the planner executes
+  the clauses it can map and lets the rest fall through to the conversational
+  assistant. We removed the `denied` decision path, the `mark_unhandled` planner
+  tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
+  message because they caused frequent false denials (e.g. a conversational
+  question that embedded a quoted, list-style directive) with no safety upside.
+  Details and rationale live in `routing/AGENTS.md` ("Important routing decisions
+  (locked)"). If mutating actions are ever introduced, gate them with the
+  execution-stage confirmation policy (`orchestration/execution_policy.py`), not a
+  planner-stage denial.
 - Keep deterministic parsing in `orchestration/`; use LLM classification only where the
   deterministic rules cannot reasonably decide.
 - Route uncertainty to a safe surface: help/chat or a clarification, not direct

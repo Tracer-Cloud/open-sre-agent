@@ -28,6 +28,7 @@ class PrefectFlowRunsTool(BaseTool):
         "Identifying recurring flow failures across deployments",
     ]
     requires = ["api_url"]
+    injected_params = ["api_key", "api_url", "workspace_id"]
     input_schema = {
         "type": "object",
         "properties": {

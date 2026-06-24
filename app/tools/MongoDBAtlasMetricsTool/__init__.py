@@ -17,6 +17,7 @@ from app.tools.tool_decorator import tool
     source="mongodb_atlas",
     surfaces=("investigation", "chat"),
     is_available=atlas_is_available,
+    injected_params=("api_private_key", "api_public_key", "base_url"),
     extract_params=atlas_extract_params,
 )
 def get_mongodb_atlas_cluster_metrics(

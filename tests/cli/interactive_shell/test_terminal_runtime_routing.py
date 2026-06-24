@@ -19,7 +19,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
     slash_tool as _slash_tool,
 )
-from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
+from app.cli.interactive_shell.routing.types import RouteKind
 from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
 from app.cli.interactive_shell.runtime import execution as loop_execution
 from app.cli.interactive_shell.runtime.session import ReplSession
@@ -35,11 +35,6 @@ def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
         dispatched.append(command)
         return True
 
-    monkeypatch.setattr(
-        loop_dispatch._router,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
-    )
     monkeypatch.setattr(loop_execution, "dispatch_slash", _dispatch)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
@@ -58,11 +53,6 @@ def test_dispatch_one_turn_bare_integrations_alias_preserves_args(
         dispatched.append(command)
         return True
 
-    monkeypatch.setattr(
-        loop_dispatch._router,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.SLASH, 0.98, ("bare_command_alias",)),
-    )
     monkeypatch.setattr(loop_execution, "dispatch_slash", _dispatch)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
@@ -122,6 +112,26 @@ def test_dispatch_needs_exclusive_stdin_for_integration_setup(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp connect github", session) is True
 
 
+def test_dispatch_needs_exclusive_stdin_for_integration_remove(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``remove``/``disconnect`` drive a native inline picker that reads raw
+    stdin; the REPL must block the next prompt so keystrokes and CPR responses
+    do not leak into the prompt buffer."""
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations remove", session) is True
+    assert (
+        loop_dispatch.dispatch_needs_exclusive_stdin("/integrations remove github", session) is True
+    )
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations remove github", session) is (
+        True
+    )
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp disconnect", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp disconnect github", session) is True
+
+
 def test_dispatch_needs_exclusive_stdin_for_onboard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -158,30 +168,7 @@ def test_dispatch_needs_exclusive_stdin_for_config(
     )
 
 
-def test_dispatch_one_turn_routes_to_cli_help_for_help_questions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    answered_with: list[str] = []
-
-    monkeypatch.setattr(
-        loop_dispatch._router,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.CLI_HELP, 0.9, ("test",)),
-    )
-    monkeypatch.setattr(
-        loop_execution,
-        "answer_cli_help",
-        lambda text, _session, _console: answered_with.append(text),
-    )
-
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_dispatch.dispatch_one_turn("explain deploy", session, console, on_exit=lambda: None)
-
-    assert answered_with == ["explain deploy"]
-
-
-def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
+def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -189,16 +176,16 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
         'it an investigation. Can you please deploy the instance and send it "hello world"?'
     )
     action_calls: list[str] = []
-    help_calls: list[str] = []
     llm_calls: list[str] = []
 
-    def _fake_execute_cli_actions_with_metrics(
+    def _fake_execute_cli_actions(
         text: str,
         _session: ReplSession,
         _console: Console,
         confirm_fn=None,
+        is_tty=None,
     ) -> TerminalActionExecutionResult:
-        _ = confirm_fn
+        _ = confirm_fn, is_tty
         action_calls.append(text)
         return TerminalActionExecutionResult(
             planned_count=2,
@@ -218,19 +205,9 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
         llm_calls.append(text)
 
     monkeypatch.setattr(
-        loop_dispatch._router,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.CLI_AGENT, 0.9, ("cli_agent_action_plan",)),
-    )
-    monkeypatch.setattr(
         loop_execution,
-        "execute_cli_actions_with_metrics",
-        _fake_execute_cli_actions_with_metrics,
-    )
-    monkeypatch.setattr(
-        loop_execution,
-        "answer_cli_help",
-        lambda text, _session, _console: help_calls.append(text),
+        "execute_cli_actions",
+        _fake_execute_cli_actions,
     )
     monkeypatch.setattr(loop_execution, "answer_cli_agent", _fake_answer_cli_agent)
 
@@ -239,11 +216,9 @@ def test_dispatch_one_turn_nitro_prompt_uses_cli_agent_actions_not_cli_help(
     loop_dispatch.dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert action_calls == [nitro_prompt]
-    assert help_calls == []
     assert llm_calls == []
     assert session.last_route_decision is not None
-    assert session.last_route_decision.route_kind == RouteKind.CLI_AGENT
-    assert "cli_agent_action_plan" in session.last_route_decision.matched_signals
+    assert session.last_route_decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
 
 
 def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
@@ -254,7 +229,6 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         'it an investigation. Can you please deploy the instance and send it "hello world"?'
     )
     call_order: list[str] = []
-    help_calls: list[str] = []
 
     def _fake_dispatch(
         command: str,
@@ -276,11 +250,6 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        loop_dispatch._router,
-        "route_input",
-        lambda *_args: RouteDecision(RouteKind.CLI_AGENT, 0.9, ("cli_agent_action_plan",)),
-    )
-    monkeypatch.setattr(
         loop_execution._agent_actions,
         "_plan_actions",
         lambda _message, _session: (
@@ -294,21 +263,14 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
     )
     monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)
     monkeypatch.setattr(_investigation_tool, "run_text_investigation", _fake_run_text_investigation)
-    monkeypatch.setattr(
-        loop_execution,
-        "answer_cli_help",
-        lambda text, _session, _console: help_calls.append(text),
-    )
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
     loop_dispatch.dispatch_one_turn(nitro_prompt, session, console, on_exit=lambda: None)
 
     assert call_order == ["slash:/remote", "investigation:hello world"]
-    assert help_calls == []
     assert session.last_route_decision is not None
-    assert session.last_route_decision.route_kind == RouteKind.CLI_AGENT
-    assert "cli_agent_action_plan" in session.last_route_decision.matched_signals
+    assert session.last_route_decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
 
 
 class TestDispatchSpinnerRouting:
@@ -320,7 +282,7 @@ class TestDispatchSpinnerRouting:
             "/model show",
             "tests",
             "help",
-            # The router typo-corrects single-edit bare aliases before dispatch.
+            # The agent fast path typo-corrects single-edit bare aliases before dispatch.
             "testts",
             "hlep",
             "opensre investigate -i alert.json",

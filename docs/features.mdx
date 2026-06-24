@@ -3,10 +3,37 @@ title: "Features"
 description: "What OpenSRE can do today"
 ---
 
-## Coming soon
+## Investigation workflow
 
-- Investigation workflow (evidence → hypotheses → report)
-- Integrations (60+ tools)
-- Masking and safe sharing
-- Remote runtime investigations
+OpenSRE runs a structured RCA pipeline for each alert:
 
+1. **Extract context** from the alert payload and connected integrations
+2. **Plan evidence collection** across logs, metrics, deploys, and dependencies
+3. **Test hypotheses** in a tool-calling loop until confidence is high enough to stop
+4. **Publish findings** as `problem.md`, `theory/hypothesis_*.md`, and `report.md` (or JSON with `--output`)
+
+Run investigations from the interactive shell (`opensre`) or one-shot via `opensre investigate -i <alert-file>`. See [Investigations overview](/investigation-overview).
+
+## Integrations (60+ tools)
+
+Connect observability, cloud, databases, incident management, messaging, and workflow systems so investigations can query the same tools your engineers use. Setup via `opensre onboard`, `opensre integrations setup`, or environment variables. See [Integrations overview](/integrations-overview).
+
+## Interactive shell
+
+The TTY REPL (`opensre` with no subcommand) supports:
+
+- Plain-language incident descriptions and follow-up questions
+- Slash commands for health checks, investigations, integrations, remote agents, and more (`/help`)
+- [Session history](/sessions) with `/sessions`, `/resume`, and `/new`
+- [Local agent fleet](/fleet) monitoring for Claude Code, Cursor, Codex, and other coding agents
+- [Scheduled deliveries](/cron) and [Hermes log watch](/hermes)
+
+## Masking and safe sharing
+
+Reversible masking replaces sensitive infrastructure identifiers (pods, clusters, hostnames, account IDs) with stable placeholders before external LLM calls, then restores originals in user-facing output. See [Masking](/masking).
+
+Command-history redaction and persistence controls live under [Interactive Shell Privacy](/interactive-shell-privacy).
+
+## Remote runtime investigations
+
+Investigate deployed OpenSRE services by name — OpenSRE gathers live deployment status, recent logs, and health probes, then runs the standard RCA pipeline. See [Remote runtime investigation](/remote-runtime-investigation).

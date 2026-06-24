@@ -183,6 +183,35 @@ def test_investigate_captures_unexpected_exception(monkeypatch: pytest.MonkeyPat
     assert captured_errors == [expected_error]
 
 
+def test_investigate_maps_runtime_failure_to_service_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_error = RuntimeError("prompt too long")
+
+    def fake_execute_investigation(**_kwargs: Any) -> tuple[dict[str, Any], str, str, str]:
+        raise expected_error
+
+    def fake_reraise(_exc: BaseException) -> None:
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
+
+        raise OpenSREError(
+            "LLM invocation failed.",
+            suggestion="Shorten prompt and retry.",
+        )
+
+    monkeypatch.setattr(remote_server, "_execute_investigation", fake_execute_investigation)
+    monkeypatch.setattr(remote_server, "reraise_cli_runtime_error", fake_reraise)
+    capture_mock = MagicMock()
+    monkeypatch.setattr(remote_server, "capture_exception", capture_mock)
+
+    with pytest.raises(HTTPException) as exc_info:
+        investigate(InvestigateRequest(raw_alert={"alert_name": "PayloadAlert"}))
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "LLM invocation failed. Suggestion: Shorten prompt and retry."
+    capture_mock.assert_not_called()
+
+
 def test_execute_investigation_tracks_remote_http_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -828,12 +857,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.context.resolve_integrations",
+        "app.agent.stages.resolve_integrations.resolve_integrations",
         lambda _state: {},
     )
 
     monkeypatch.setattr(
-        "app.agent.extract.extract_alert",
+        "app.agent.stages.extract_alert.extract_alert",
         lambda _state: {
             "raw_alert": {
                 "alert_name": "PayloadAlert",
@@ -851,12 +880,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.investigation.ConnectedInvestigationAgent.run",
+        "app.agent.stages.investigate.agent.ConnectedInvestigationAgent.run",
         fake_investigation_run,
     )
 
     monkeypatch.setattr(
-        "app.correlation.node.node_correlate_upstream",
+        "app.agent.correlation.node.node_correlate_upstream",
         lambda _state, _config=None: {
             "correlation": {
                 "correlated_signals": [
@@ -878,7 +907,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.generate_report",
+        "app.agent.stages.publish_findings.node.generate_report",
         lambda _state: {
             "root_cause": "RDS CPU spike",
             "report": "Correlation attached",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -11,6 +12,10 @@ from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,
     K8sScenarioFixture,
     load_all_scenarios,
+)
+from tests.synthetic.llm_provider_preflight import (
+    UnsupportedSyntheticLLMProviderError,
+    validate_synthetic_llm_provider,
 )
 from tests.synthetic.mock_datadog_backend.backend import FixtureDatadogBackend
 from tests.synthetic.mock_eks_backend.backend import FixtureEKSBackend
@@ -453,6 +458,7 @@ def run_scenario(
 
 def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
     args = parse_args(argv)
+    validate_synthetic_llm_provider(suite_name="EKS")
     fixtures = load_all_scenarios(SUITE_DIR)
     if args.scenario:
         fixtures = [fixture for fixture in fixtures if fixture.scenario_id == args.scenario]
@@ -483,7 +489,11 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    results = run_suite(argv)
+    try:
+        results = run_suite(argv)
+    except UnsupportedSyntheticLLMProviderError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     return 0 if all(result.passed for result in results) else 1
 
 

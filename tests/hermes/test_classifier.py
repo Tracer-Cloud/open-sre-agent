@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.hermes.classifier`."""
+"""Tests for :mod:`app.integrations.hermes.classifier`."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.hermes.classifier import IncidentClassifier, classify_all
-from app.hermes.incident import IncidentSeverity, LogLevel, LogRecord
-from app.hermes.rules import RepeatRule, default_pattern_rules
+from app.integrations.hermes.classifier import IncidentClassifier, classify_all
+from app.integrations.hermes.incident import IncidentSeverity, LogLevel, LogRecord
+from app.integrations.hermes.rules import RepeatRule, default_pattern_rules
 
 
 def _record(

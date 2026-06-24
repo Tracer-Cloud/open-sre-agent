@@ -19,6 +19,8 @@ from app.strict_config import StrictConfigModel
 from app.utils.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
+DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"
 DEFAULT_HONEYCOMB_BASE_URL = "https://api.honeycomb.io"
 DEFAULT_HONEYCOMB_DATASET = "__all__"
 DEFAULT_CORALOGIX_BASE_URL = "https://api.coralogix.com"
@@ -27,6 +29,7 @@ DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
     "eu": "https://api.eu.opsgenie.com",
 }
 DEFAULT_INCIDENT_IO_BASE_URL = "https://api.incident.io"
+DEFAULT_PAGERDUTY_BASE_URL = "https://api.pagerduty.com"
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +77,61 @@ class DatadogIntegrationConfig(StrictConfigModel):
             "DD-APPLICATION-KEY": self.app_key,
             "Content-Type": "application/json",
         }
+
+
+class GroundcoverIntegrationConfig(StrictConfigModel):
+    """Normalized groundcover credentials used by resolution and verification flows.
+
+    groundcover is reached through its public streamable-HTTP MCP endpoint. The
+    bearer ``api_key`` is a read-only service-account token; ``tenant_uuid`` and
+    ``backend_id`` are optional routing selectors only needed when the account
+    has multiple workspaces/backends.
+    """
+
+    api_key: str = ""
+    mcp_url: str = DEFAULT_GROUNDCOVER_MCP_URL
+    tenant_uuid: str = ""
+    backend_id: str = ""
+    timezone: str = DEFAULT_GROUNDCOVER_TIMEZONE
+    integration_id: str = ""
+
+    _normalize_api_key = field_validator("api_key", mode="before")(normalize_bearer())
+    _normalize_strs = field_validator("tenant_uuid", "backend_id", "integration_id", mode="before")(
+        normalize_str()
+    )
+    _normalize_timezone = field_validator("timezone", mode="before")(
+        normalize_with_default(DEFAULT_GROUNDCOVER_TIMEZONE)
+    )
+
+    @field_validator("mcp_url", mode="before")
+    @classmethod
+    def _normalize_mcp_url(cls, value: object) -> str:
+        normalized = normalize_url(DEFAULT_GROUNDCOVER_MCP_URL)(value)
+        return validate_https_or_loopback_http_url(
+            normalized, service_name="groundcover", field_name="mcp_url"
+        )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key and self.mcp_url)
+
+    @property
+    def request_headers(self) -> dict[str, str]:
+        """HTTP headers for the MCP transport.
+
+        Only auth and timezone are always sent; tenant/backend routing headers
+        are added when configured so single-workspace accounts work with no
+        routing while multi-workspace accounts stay scoped to one context.
+        """
+        headers: dict[str, str] = {
+            "Authorization": f"Bearer {self.api_key}",
+            "X-Timezone": self.timezone,
+        }
+        if self.tenant_uuid:
+            headers["X-Tenant-UUID"] = self.tenant_uuid
+        if self.backend_id:
+            headers["X-Backend-Id"] = self.backend_id
+        return headers
 
 
 class HoneycombIntegrationConfig(StrictConfigModel):
@@ -205,6 +263,25 @@ class OpsGenieIntegrationConfig(StrictConfigModel):
     def headers(self) -> dict[str, str]:
         return {
             "Authorization": f"GenieKey {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+
+class PagerDutyIntegrationConfig(StrictConfigModel):
+    """PagerDuty config"""
+
+    api_key: str
+    base_url: str = DEFAULT_PAGERDUTY_BASE_URL
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(
+        normalize_url(DEFAULT_PAGERDUTY_BASE_URL)
+    )
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Token token={self.api_key}",
             "Content-Type": "application/json",
         }
 
@@ -518,6 +595,22 @@ class MongoDBIntegrationConfig(StrictConfigModel):
     _normalize_auth_source = field_validator("auth_source", mode="before")(
         normalize_with_default("admin")
     )
+
+
+class RedisIntegrationConfig(StrictConfigModel):
+    """Normalized Redis credentials used by resolution and verification flows."""
+
+    host: str
+    port: int = 6379
+    username: str = ""
+    password: str = ""
+    db: int = 0
+    ssl: bool = False
+    integration_id: str = ""
+
+    _normalize_host = field_validator("host", mode="before")(normalize_str())
+    _normalize_username = field_validator("username", mode="before")(normalize_str())
+    _normalize_password = field_validator("password", mode="before")(normalize_str())
 
 
 class MongoDBAtlasIntegrationConfig(StrictConfigModel):

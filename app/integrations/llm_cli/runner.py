@@ -123,12 +123,10 @@ class CLIBackedLLMClient:
         _ = self._max_tokens
         _ = self._model_type
 
-        from app.guardrails.engine import get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_text
 
         flat = flatten_messages_to_prompt(prompt_or_messages)
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            flat = engine.apply(flat)
+        flat = apply_guardrails_to_text(flat)
 
         probe = self._probe()
         if not probe.installed or not probe.bin_path:

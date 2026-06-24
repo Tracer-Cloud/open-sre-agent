@@ -24,6 +24,7 @@ class JiraSearchIssuesTool(BaseTool):
         "Listing high-priority issues updated recently in a project",
     ]
     requires = ["base_url", "email", "api_token"]
+    injected_params = ["api_token", "base_url", "email"]
     input_schema = {
         "type": "object",
         "properties": {

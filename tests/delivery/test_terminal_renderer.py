@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.delivery.publish_findings.renderers.terminal import (
+from app.agent.stages.publish_findings.renderers.terminal import (
     _rich_line_with_links,
     _strip_mrkdwn,
     _strip_slack_links,

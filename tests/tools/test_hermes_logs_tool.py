@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from app.hermes.poller import HermesLogCursor
+from app.integrations.hermes.poller import HermesLogCursor
 from app.tools.HermesLogsTool import get_hermes_logs
+from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 
 _LINES = [
     "2026-05-12 00:00:00,000 WARNING gateway.platforms.telegram: polling conflict (1/3)",
@@ -181,3 +182,31 @@ class TestDefaultPathResolution:
         # Don't pass log_path — env should win.
         result = get_hermes_logs(op="scan", tail_lines=10)
         assert len(result["records"]) == 3
+
+
+class TestAvailabilityGate:
+    """The tool must only be offered when Hermes is connected or a backend is injected.
+
+    Regression for the bug where ``get_hermes_logs`` had no ``is_available`` and
+    defaulted to always-available, so Hermes log polling ran on every alert.
+    """
+
+    def _registered(self) -> RegisteredTool:
+        registered = getattr(get_hermes_logs, REGISTERED_TOOL_ATTR)
+        assert isinstance(registered, RegisteredTool)
+        return registered
+
+    def test_unavailable_when_hermes_not_connected(self) -> None:
+        assert self._registered().is_available({}) is False
+
+    def test_unavailable_for_other_integrations(self) -> None:
+        sources = {"datadog": {"connection_verified": True}}
+        assert self._registered().is_available(sources) is False
+
+    def test_available_when_hermes_connected(self) -> None:
+        sources = {"hermes": {"connection_verified": True}}
+        assert self._registered().is_available(sources) is True
+
+    def test_available_with_injected_backend(self) -> None:
+        sources = {"hermes": {"_backend": object()}}
+        assert self._registered().is_available(sources) is True

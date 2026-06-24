@@ -103,6 +103,7 @@ def _extract_records(body: dict[str, Any]) -> list[dict[str, Any]]:
         "required": ["base_url"],
     },
     is_available=_openobserve_available,
+    injected_params=("base_url",),
     extract_params=_openobserve_extract_params,
 )
 def query_openobserve_logs(

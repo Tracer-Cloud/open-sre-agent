@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.ui.agents_view import _build_agents_table, render_agents_table
+from typing import TYPE_CHECKING, Any
+
 from app.cli.interactive_shell.ui.banner import (
     render_banner,
     render_ready_box,
-    resolve_provider_models,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
     print_valid_choice_list,
@@ -12,18 +12,10 @@ from app.cli.interactive_shell.ui.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
+from app.cli.interactive_shell.ui.provider import resolve_provider_models
 from app.cli.interactive_shell.ui.rendering import (
-    MCP_INTEGRATION_SERVICES,
-    ColumnDef,
-    print_command_output,
-    print_planned_actions,
     print_repl_json,
     print_repl_table,
-    render_integrations_table,
-    render_mcp_table,
-    render_models_table,
-    render_table,
-    render_tools_table,
     repl_print,
     repl_table,
 )
@@ -32,11 +24,24 @@ from app.cli.interactive_shell.ui.streaming import (
     STREAM_LABEL_ASSISTANT,
     stream_to_console,
 )
+from app.cli.interactive_shell.ui.tables import (
+    MCP_INTEGRATION_SERVICES,
+    ColumnDef,
+    print_command_output,
+    print_planned_actions,
+    render_integrations_table,
+    render_mcp_table,
+    render_models_table,
+    render_table,
+    render_tools_table,
+)
 from app.cli.interactive_shell.ui.theme import (
     ANSI_DIM,
     ANSI_RESET,
     BG,
     BOLD_BRAND,
+    DEVICE_CODE,
+    DEVICE_CODE_ANSI,
     DIM,
     DIM_COUNTER_ANSI,
     ERROR,
@@ -49,12 +54,34 @@ from app.cli.interactive_shell.ui.theme import (
     WARNING,
 )
 
+if TYPE_CHECKING:
+    # ``_build_agents_table`` and ``render_agents_table`` are PEP 562 lazy module
+    # attributes resolved by ``__getattr__`` below (loaded from ``agents_view`` only
+    # on first access so collectors don't pull in Rich). Declaring them here makes
+    # them visible to static analyzers that can't follow ``__getattr__`` (CodeQL
+    # ``py/undefined-export``, ruff F822) without eagerly importing the module.
+    from app.cli.interactive_shell.ui.agents_view import (
+        _build_agents_table,
+        render_agents_table,
+    )
+
+
+def __getattr__(name: str) -> Any:
+    if name in {"_build_agents_table", "render_agents_table"}:
+        from app.cli.interactive_shell.ui import agents_view
+
+        return getattr(agents_view, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "ANSI_DIM",
     "ANSI_RESET",
     "BG",
     "BOLD_BRAND",
     "ColumnDef",
+    "DEVICE_CODE",
+    "DEVICE_CODE_ANSI",
     "DIM",
     "DIM_COUNTER_ANSI",
     "ERROR",

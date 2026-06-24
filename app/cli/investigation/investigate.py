@@ -9,7 +9,7 @@ import threading
 from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from app.cli.support.cli_error_mapping import reraise_cli_runtime_error
+from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from app.config import resolve_llm_settings
 from app.utils.tracing import traceable
 
@@ -31,7 +31,7 @@ def _check_llm_settings() -> None:
     """Validate LLM settings early and surface misconfiguration as a structured error."""
     from pydantic import ValidationError
 
-    from app.cli.support.errors import OpenSREError
+    from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
     try:
         resolve_llm_settings()
@@ -52,7 +52,7 @@ def _check_llm_settings() -> None:
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
     if isinstance(exc, _InvestigationPumpCancelled):
-        from app.cli.support.errors import OpenSREError
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "Investigation streaming stopped before completion.",
@@ -255,7 +255,7 @@ def run_investigation_cli_streaming(
     Uses async pipeline streaming + ``StreamRenderer`` so the local CLI shows
     the same live tool-call and reasoning updates as a remote investigation.
     """
-    from app.remote.renderer import StreamRenderer
+    from app.cli.ui.renderer import StreamRenderer
 
     events = stream_investigation_cli(
         raw_alert=raw_alert,
@@ -269,7 +269,7 @@ def run_investigation_cli_streaming(
         events.close()
         raise
 
-    from app.cli.support.feedback import prompt_investigation_feedback
+    from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
 
     prompt_investigation_feedback(final_state)
     return {
@@ -291,8 +291,8 @@ def _run_session_alert_payload(
     """Run a streaming investigation from an already-structured session alert."""
     import queue
 
+    from app.cli.ui.renderer import StreamRenderer
     from app.pipeline.runners import astream_investigation
-    from app.remote.renderer import StreamRenderer
 
     _check_llm_settings()
     if context_overrides:

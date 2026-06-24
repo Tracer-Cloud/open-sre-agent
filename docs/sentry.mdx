@@ -29,6 +29,7 @@ SENTRY_ORG_SLUG=your-organization-slug
 SENTRY_AUTH_TOKEN=sntrys_your_token
 SENTRY_URL=https://sentry.io           # optional, for self-hosted Sentry
 SENTRY_PROJECT_SLUG=my-project         # optional, to scope to one project
+SENTRY_STATS_PERIOD=24h                # optional, issue search time window
 ```
 
 | Variable | Default | Description |
@@ -37,6 +38,14 @@ SENTRY_PROJECT_SLUG=my-project         # optional, to scope to one project
 | `SENTRY_AUTH_TOKEN` | — | **Required.** Sentry auth token with `event:read` |
 | `SENTRY_URL` | `https://sentry.io` | Override for self-hosted Sentry |
 | `SENTRY_PROJECT_SLUG` | — | Scope queries to a specific project |
+| `SENTRY_STATS_PERIOD` | `24h` | Time window for issue searches (e.g. `24h`, `14d`, `90d`) |
+
+<Info>
+A search returns up to 100 issues per query (Sentry's maximum page size) within
+the `SENTRY_STATS_PERIOD` window. Widen the window (e.g. `SENTRY_STATS_PERIOD=14d`)
+to surface older issues. If you expect more issues than appear, the cause is
+almost always the time window or a `SENTRY_PROJECT_SLUG` scope — not a cap of one.
+</Info>
 
 ### Option 3: Persistent store
 
@@ -87,8 +96,14 @@ Expected output:
 ```
 Service: sentry
 Status: passed
-Detail: Sentry validated for org your-org; issues API responded successfully with 5 issue(s)
+Detail: Sentry validated for org your-org; 30 issue(s) in the last 7 days
 ```
+
+<Note>
+The count reflects issues seen in the last 7 days (capped at 100, shown as
+`100+` when it saturates). Use a search (e.g. `search_sentry_issues` during an
+investigation) to enumerate the full issue set over a custom window.
+</Note>
 ## Telemetry knobs
 
 | Variable | Default | Description |
@@ -128,6 +143,7 @@ command exits non-zero without sending anything.
 | **Organization not found** | Verify `SENTRY_ORG_SLUG` matches the slug in your Sentry URL |
 | **Connection refused** | Check `SENTRY_URL` for self-hosted instances |
 | **No issues returned** | Normal if no issues exist in the time window — check `SENTRY_PROJECT_SLUG` |
+| **Fewer issues than the Sentry UI shows** | Widen `SENTRY_STATS_PERIOD` (e.g. `14d`) and confirm the search isn't scoped to the wrong `SENTRY_PROJECT_SLUG` |
 
 ## Security best practices
 

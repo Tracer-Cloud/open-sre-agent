@@ -3,7 +3,7 @@
 Exposes :func:`get_hermes_logs` to the investigation planner so the
 agent can read its own ``~/.hermes/logs/errors.log`` (or any file it's
 configured to watch) without re-implementing the polling logic. The
-heavy lifting lives in :mod:`app.hermes.poller`; this module is the
+heavy lifting lives in :mod:`app.integrations.hermes.poller`; this module is the
 thin presentation layer:
 
 * declares the tool metadata, input schema, and use-cases
@@ -27,11 +27,11 @@ Two modes:
 
     **Known limitation — classifier state is not persisted between
     calls.** Each invocation constructs a fresh
-    :class:`~app.hermes.classifier.IncidentClassifier`, so burst-window
+    :class:`~app.integrations.hermes.classifier.IncidentClassifier`, so burst-window
     counts and traceback-continuation state reset on every tool call.
     Multi-call burst detection will therefore under-count incidents
     whose constituent records span two separate ``tail`` invocations.
-    The production :class:`~app.hermes.agent.HermesAgent` avoids this by
+    The production :class:`~app.integrations.hermes.agent.HermesAgent` avoids this by
     keeping a single long-lived classifier; agents that need accurate
     cross-poll burst detection should use the watch command instead of
     repeated ``tail`` calls.
@@ -44,10 +44,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from app.hermes.classifier import IncidentClassifier
-from app.hermes.incident import HermesIncident, LogLevel, LogRecord
-from app.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
+from app.integrations.hermes.classifier import IncidentClassifier
+from app.integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
+from app.integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
 from app.tools.tool_decorator import tool
+from app.tools.utils.availability import hermes_available_or_backend
 
 # Default location of Hermes' own error log. The agent tool resolves
 # this lazily so a non-default ``$HERMES_HOME`` is respected without
@@ -213,6 +214,7 @@ def _serialise_poll(
     ],
     tags=("safe", "fast", "no-credentials"),
     cost_tier="cheap",
+    is_available=hermes_available_or_backend,
     input_schema={
         "type": "object",
         "properties": {

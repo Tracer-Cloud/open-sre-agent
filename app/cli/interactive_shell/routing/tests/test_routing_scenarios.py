@@ -9,17 +9,25 @@ from typing import NotRequired, TypedDict, cast
 import pytest
 
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
+)
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.feature_flags import (
+    investigation_loop_enabled,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
-from app.cli.interactive_shell.routing.router import classify_input, route_input
+from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
     OracleRunResult,
     fresh_session,
+    resolve_live_integrations,
     run_oracle_once,
+    session_capabilities,
 )
 from app.cli.interactive_shell.routing.tests.scenario_loader import (
     ScenarioCase,
@@ -54,6 +62,50 @@ _LIVE_CASES = iter_scenarios_for_shard(
 
 def _slash_content(command: str, args: list[str]) -> str:
     return " ".join([command, *args]) if args else command
+
+
+def _expects_investigation(case: ScenarioCase) -> bool:
+    """True when a scenario expects the planner to dispatch a natural-language
+    investigation (``investigation_start``).
+
+    The investigation loop can be disabled in the interactive shell via
+    ``feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED``. When it is off the
+    planner is not offered ``investigation_start``, so these scenarios no longer
+    apply and are skipped rather than asserted against the old behavior. Sample
+    alerts and synthetic runs are unaffected.
+    """
+    actions = (*case.answer.planned_actions, *case.answer.executed_actions)
+    return any(str(action.get("kind", "")).strip() == "investigation" for action in actions)
+
+
+def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
+    if not investigation_loop_enabled() and _expects_investigation(case):
+        pytest.skip(
+            "Natural-language investigation loop is disabled in the interactive shell "
+            "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
+            "this investigation scenario does not apply. Re-enable the flag to run it."
+        )
+
+
+def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
+    """Skip scenarios that need a real credentialed integration we can't resolve.
+
+    Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` (paired
+    with ``gathered_tools_contract.must_return_valid_data``) make a real call to
+    that integration during the gather loop. That only works when the integration
+    is configured locally (store/env) or via CI secrets. When the credential is
+    absent the scenario is skipped — it is an environment gap, not a regression —
+    rather than failing every credential-less run.
+    """
+    _expanded, unavailable = resolve_live_integrations(case.scenario.session.resolved_integrations)
+    if unavailable:
+        pytest.skip(
+            "Live integration credentials unavailable for: "
+            + ", ".join(sorted(unavailable))
+            + ". Configure the integration in the local store/env or provide CI "
+            "secrets (e.g. SENTRY_AUTH_TOKEN, SENTRY_ORG_SLUG, SENTRY_PROJECT_SLUG) "
+            "to run this scenario."
+        )
 
 
 def _build_actual_action(action: PlannedAction) -> ExpectedAction:
@@ -100,15 +152,26 @@ def _assert_planned_actions_match(
     assert len(actual_actions) == len(expected_actions)
     for index, expected in enumerate(expected_actions):
         actual = actual_actions[index]
-        if str(expected.get("kind", "")) != "assistant_handoff":
-            assert _action_match_view(actual) == _action_match_view(expected)
+        expected_kind = str(expected.get("kind", ""))
+        if expected_kind == "assistant_handoff":
+            assert actual.get("kind") == "assistant_handoff"
+            expected_source = str(expected.get("source", "")).strip()
+            if expected_source:
+                assert actual.get("source") == expected_source
+            content = str(actual.get("content", "")).strip()
+            assert content, f"assistant_handoff action {index} must include text content."
             continue
-        assert actual.get("kind") == "assistant_handoff"
-        expected_source = str(expected.get("source", "")).strip()
-        if expected_source:
-            assert actual.get("source") == expected_source
-        content = str(actual.get("content", "")).strip()
-        assert content, f"assistant_handoff action {index} must include text content."
+        # A synthesized investigation (no pasted/quoted payload) carries freeform
+        # alert_text that varies per live run. When the fixture leaves content
+        # empty, assert kind + non-empty alert_text rather than exact equality;
+        # fixtures that pin a verbatim payload (e.g. a pasted alert) keep the
+        # strict match below.
+        if expected_kind == "investigation" and not str(expected.get("content", "")).strip():
+            assert actual.get("kind") == "investigation"
+            content = str(actual.get("content", "")).strip()
+            assert content, f"investigation action {index} must include synthesized alert_text."
+            continue
+        assert _action_match_view(actual) == _action_match_view(expected)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -144,11 +207,13 @@ def test_deterministic_routing(deterministic_case: ScenarioCase) -> None:
     prompt = deterministic_case.scenario.input.prompt
     answer = deterministic_case.answer
 
+    # Routing is single-branch: every turn is handed to the agent.
     decision = route_input(prompt, session)
-    assert classify_input(prompt, session) == answer.route.expected_kind
-    assert decision.route_kind.value == answer.route.expected_kind
-    assert decision.matched_signals == tuple(answer.route.expected_signals)
-    assert decision.command_text == answer.route.expected_command_text
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+
+    # Deterministic command dispatch is the agent's pre-LLM fast path; it must
+    # reproduce the normalized slash command the scenario expects.
+    assert deterministic_command_text(prompt) == answer.route.expected_command_text
 
 
 def test_help_route_decision_has_structured_shape() -> None:
@@ -156,25 +221,25 @@ def test_help_route_decision_has_structured_shape() -> None:
     decision = route_input("/help", session)
 
     assert decision.to_event_payload() == {
-        "route_kind": "slash",
+        "route_kind": "handle_message_with_agent",
         "confidence": 1.0,
-        "matched_signals": "slash_prefix",
+        "matched_signals": "",
         "fallback_reason": "",
     }
-    assert decision.command_text == "/help"
+    # The agent fast path dispatches the literal slash command deterministically.
+    assert deterministic_command_text("/help") == "/help"
 
 
 @pytest.mark.integration
 @pytest.mark.live_llm
 def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
+    _skip_if_investigation_disabled(live_planning_case)
     session = fresh_session(
         with_prior_state=live_planning_case.scenario.session.has_prior_state,
         configured_integrations=live_planning_case.scenario.session.configured_integrations,
-        available_capabilities={
-            "slash_commands": live_planning_case.scenario.available_capabilities.slash_commands,
-            "cli_commands": live_planning_case.scenario.available_capabilities.cli_commands,
-            "synthetic_suites": live_planning_case.scenario.available_capabilities.synthetic_suites,
-        },
+        available_capabilities=session_capabilities(
+            live_planning_case.scenario.available_capabilities
+        ),
     )
     prompt = live_planning_case.scenario.input.prompt
     answer = live_planning_case.answer
@@ -230,6 +295,8 @@ def test_live_turn_execution_oracle(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
+    _skip_if_investigation_disabled(live_oracle_case)
+    _skip_if_live_integrations_unavailable(live_oracle_case)
     runs = max(1, live_oracle_case.answer.runs)
     run_results: list[OracleRunResult] = []
     passed_count = 0

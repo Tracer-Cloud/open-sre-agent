@@ -44,7 +44,7 @@ def _render_remote_health_report(report: dict[str, Any]) -> None:
     from rich.table import Table
     from rich.text import Text
 
-    from app.cli.support.health_view import status_badge
+    from app.cli.interactive_shell.ui.health_view import status_badge
 
     console = Console(highlight=False)
 

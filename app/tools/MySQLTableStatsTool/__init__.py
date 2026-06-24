@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Finding tables with unexpectedly high row counts or index overhead",
     ],
     is_available=mysql_is_available,
+    injected_params=("host",),
     extract_params=mysql_extract_params,
 )
 def get_mysql_table_stats(

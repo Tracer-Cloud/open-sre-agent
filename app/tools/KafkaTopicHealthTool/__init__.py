@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Reviewing topic metadata for capacity planning",
     ],
     is_available=kafka_is_available,
+    injected_params=("bootstrap_servers",),
     extract_params=kafka_extract_params,
 )
 def get_kafka_topic_health(

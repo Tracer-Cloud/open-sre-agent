@@ -17,6 +17,7 @@ import time
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
 from app.cli.interactive_shell.prompting.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
@@ -28,8 +29,8 @@ from app.cli.interactive_shell.references.grounding_diagnostics import (
     log_grounding_cache_diagnostics,
 )
 from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ASSISTANT, stream_to_console
-from app.cli.support.exception_reporting import report_exception
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.
@@ -81,7 +82,7 @@ def _build_grounded_prompt(question: str, cli_reference: str, docs_reference: st
 
 def answer_cli_help(
     question: str,
-    _session: ReplSession,
+    session: ReplSession,
     console: Console,
 ) -> LlmRunInfo | None:
     """Run one turn of the documentation-aware procedural assistant.
@@ -92,8 +93,8 @@ def answer_cli_help(
     history (stateless across turns) so it never interferes with follow-up
     routing on a prior investigation.
 
-    ``_session`` is accepted for API symmetry with :func:`answer_cli_agent` and
-    input routing; this path does not read session state today.
+    ``session`` is accepted for API symmetry with :func:`answer_cli_agent` and
+    input routing; this path records estimated token usage on the session.
     """
     try:
         from app.services.llm_client import get_llm_for_reasoning
@@ -122,33 +123,13 @@ def answer_cli_help(
         report_exception(exc, context="interactive_shell.cli_help.stream")
         console.print(f"[{ERROR}]assistant failed:[/] {escape(str(exc))}")
         return None
-    return LlmRunInfo(
-        model=_resolve_model_name(client),
-        provider=_resolve_provider_name(client),
-        latency_ms=int((time.monotonic() - started) * 1000),
+    return build_llm_run_info(
+        session=session,
+        prompt=prompt,
         response_text=response_text,
+        started=started,
+        client=client,
     )
-
-
-def _resolve_model_name(client: object) -> str | None:
-    value = getattr(client, "_model", None)
-    return value if isinstance(value, str) and value else None
-
-
-def _resolve_provider_name(client: object) -> str | None:
-    provider_label = getattr(client, "_provider_label", None)
-    if isinstance(provider_label, str) and provider_label:
-        return provider_label.strip().lower().replace(" ", "_")
-    name = type(client).__name__.lower()
-    if "openai" in name:
-        return "openai"
-    if "bedrock" in name:
-        return "bedrock"
-    if "cli" in name:
-        return "cli"
-    if "anthropic" in name or "llmclient" in name:
-        return "anthropic"
-    return None
 
 
 __all__ = ["answer_cli_help"]

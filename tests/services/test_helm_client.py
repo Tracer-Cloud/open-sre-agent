@@ -60,6 +60,29 @@ def test_helm_probe_passes_when_version_and_list_succeed(
     assert "Helm CLI" in result.detail
 
 
+def test_helm_probe_invokes_helm_version_without_client_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: modern Helm rejects ``helm version --client`` with an unknown-flag error."""
+    monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    cmds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
+        cmds.append(list(cmd))
+        if "version" in cmd:
+            return SimpleNamespace(returncode=0, stdout=_HELM_V3_VERSION_STDOUT, stderr="")
+        if "list" in cmd:
+            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
+
+    monkeypatch.setattr("app.services.helm.client.subprocess.run", fake_run)
+    _client().probe_access()
+    version_cmds = [c for c in cmds if "version" in c]
+    assert version_cmds, "probe_access did not invoke `helm version`"
+    for vc in version_cmds:
+        assert "--client" not in vc, f"`--client` must not be passed; argv: {vc}"
+
+
 def test_helm_probe_rejects_helm2_client(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
     helm2_out = 'Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}\n'

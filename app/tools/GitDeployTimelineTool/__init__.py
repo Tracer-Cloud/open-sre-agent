@@ -24,13 +24,13 @@ from typing import Any
 
 from app.incident_window import IncidentWindow
 from app.integrations.github_mcp import call_github_mcp_tool
-from app.tools.GitHubSearchCodeTool import (
-    _gh_available,
-    _gh_creds,
-    _normalize_tool_result,
-    _resolve_config,
-)
 from app.tools.tool_decorator import tool
+from app.tools.utils.github_helpers import (
+    github_creds,
+    github_source_available,
+    normalize_github_tool_result,
+    resolve_github_mcp_config,
+)
 
 DEFAULT_WINDOW_MINUTES = 120
 MAX_WINDOW_MINUTES = 7 * 24 * 60  # 7 days
@@ -142,13 +142,13 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "repo": gh["repo"],
         "branch": gh.get("branch") or gh.get("default_branch") or "main",
         "shared_incident_window": incident_window if isinstance(incident_window, dict) else None,
-        **_gh_creds(gh),
+        **github_creds(gh),
     }
 
 
 def _is_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(_gh_available(sources) and gh.get("owner") and gh.get("repo"))
+    return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
 
 
 @tool(
@@ -229,7 +229,9 @@ def get_git_deploy_timeline(
            and ``until`` are empty AND no explicit window-minutes override).
         4. ``DEFAULT_WINDOW_MINUTES`` (120 minutes before now).
     """
-    config = _resolve_config(github_url, github_mode, github_token, github_command, github_args)
+    config = resolve_github_mcp_config(
+        github_url, github_mode, github_token, github_command, github_args
+    )
     if config is None:
         return {
             "source": "github",
@@ -276,7 +278,7 @@ def get_git_deploy_timeline(
     }
 
     result = call_github_mcp_tool(config, "list_commits", arguments)
-    payload = _normalize_tool_result(result)
+    payload = normalize_github_tool_result(result)
     raw_commits = payload.pop("structured_content", None) or []
     if not isinstance(raw_commits, list):
         raw_commits = []

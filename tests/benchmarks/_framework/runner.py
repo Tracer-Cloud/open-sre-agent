@@ -17,12 +17,16 @@ Two entry points:
     promoted to a real report.
 
 opensre+LLM mode wires opensre's ``run_investigation`` against the adapter's
-integrations. ``llm_alone`` mode is Phase B; ``run()`` raises if requested.
+integrations + investigation agent. ``llm_alone`` mode (the control arm) wires
+the same per-case tool surface but the adapter's baseline agent class, so the
+contrast isolates opensre's policy delta on a fixed model. The runner refuses
+``modes=["llm_alone"]`` only when the adapter returns ``None`` from
+``baseline_agent_class`` (see ``_run_inner``).
 
-llm_dispatch is not yet implemented — the runner uses whatever LLM opensre
-is configured with via env vars. ``RunResult.model_version`` is set to
-``"(unpinned)"`` accordingly; a future llm_dispatch.py will enable per-cell
-model selection with version pinning.
+llm_dispatch pins the model per cell: the dispatcher activates each LLM, sets
+the provider env, resets opensre's client singletons, and verifies the
+resolved snapshot against ``config.model_versions``. ``RunResult.model_version``
+records what opensre actually resolved to, not what the YAML requested.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -38,6 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from app.utils.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     BenchmarkAdapter,
     BenchmarkCase,
@@ -52,6 +58,7 @@ from tests.benchmarks._framework.cost import CostBudgetExceeded, CostTracker, Un
 from tests.benchmarks._framework.integrity import (
     BenchmarkReport,
     IntegrityGuard,
+    IntegrityViolation,
     make_baseline_report,
 )
 from tests.benchmarks._framework.llm_dispatch import (
@@ -61,6 +68,7 @@ from tests.benchmarks._framework.llm_dispatch import (
     ModelVersionMismatch,
     UnknownLLM,
 )
+from tests.benchmarks._framework.provenance import capture_provenance
 from tests.benchmarks._framework.reporting import render_report_dir
 
 # --------------------------------------------------------------------------- #
@@ -99,11 +107,12 @@ class RunOutcome:
 class BenchmarkRunner:
     """Drives a single benchmark run end-to-end.
 
-    v1 limitations (will lift as later modules ship):
-      - Serial execution (parallel comes when worker-pool tested)
-      - opensre+llm mode only (llm_alone is Phase B)
-      - No per-cell LLM dispatch (uses opensre's configured LLM)
-      - Stratum reporting is `all` only until Phase D tagging adds seen/unseen
+    Supports: serial or worker-pool execution; both ``opensre+llm`` and the
+    ``llm_alone`` control arm (when the adapter provides a baseline agent);
+    per-cell LLM dispatch with version pinning; and per-stratum reporting
+    (all / seen-shape / unseen-shape / held-out / optimize / consistency-
+    selected). Headline aggregation (mean + scenario-clustered CI) lives in
+    ``reporting.py``; this runner stores per-stratum medians.
     """
 
     def __init__(
@@ -113,6 +122,7 @@ class BenchmarkRunner:
         integrity_guard: IntegrityGuard | None = None,
         cost_tracker: CostTracker | None = None,
         dispatcher: LLMDispatcher | None = None,
+        config_path: Path | None = None,
     ) -> None:
         self.config = config
         self.adapter = adapter
@@ -120,6 +130,10 @@ class BenchmarkRunner:
         self.cost = cost_tracker or CostTracker(budget_usd=config.cost_budget_usd)
         self.dispatcher = dispatcher or LLMDispatcher()
         self._opensre_sha = _git_sha()
+        # Where the YAML was loaded from. Threaded into capture_provenance so
+        # the run dir's provenance.json inlines the config content + sha256.
+        # None when the runner is constructed inline (e.g. unit tests).
+        self._config_path = config_path
 
     # ----------------------------------------------------------------------- #
     # Public API                                                              #
@@ -128,6 +142,23 @@ class BenchmarkRunner:
     def run(self) -> RunOutcome:
         """Production entry point: enforces all integrity gates."""
         self.integrity.pre_flight(self.config, self.adapter)
+        # Reject promotable runs whose opensre_sha is not a verifiable git
+        # SHA. Two failure modes the gate must catch:
+        #
+        # 1. ``(no-git)`` / ``(unknown)`` / empty — the 2026-06-11 partial
+        #    full-N's failure mode. Fargate container had no .git directory,
+        #    OPENSRE_SHA was not stamped, the runner reported (no-git), and
+        #    no integrity check rejected it.
+        # 2. Arbitrary non-SHA strings like ``hotfix-june`` or ``v1.0``.
+        #    Possible when a manual image build sets OPENSRE_SHA from a
+        #    user-supplied tag instead of the real commit SHA. Such values
+        #    pass the ``not (no-git)`` check but are unverifiable — you
+        #    cannot ``git checkout hotfix-june`` and reproduce the run.
+        #
+        # A valid git SHA is 7-40 lowercase hex characters (short or full
+        # form). Anything else is rejected. ``run_without_integrity`` is
+        # the explicit escape hatch for exploratory runs.
+        _validate_promotable_sha(self._opensre_sha)
         return self._run_inner(dev_mode=False)
 
     def run_without_integrity(self) -> RunOutcome:
@@ -148,11 +179,24 @@ class BenchmarkRunner:
     # ----------------------------------------------------------------------- #
 
     def _run_inner(self, *, dev_mode: bool) -> RunOutcome:
-        # Refuse unsupported modes upfront
-        if "llm_alone" in self.config.modes:
+        # Refuse baseline modes if the adapter declines — keeps the runner
+        # generic over adapters that don't yet ship a matched control arm.
+        # Both checks are pre-flight so an unsupported mode fails before any
+        # cell runs and burns tokens.
+        if "llm_alone" in self.config.modes and self.adapter.baseline_agent_class() is None:
             raise NotImplementedError(
-                "llm_alone mode is Phase B of the task scope — see "
-                "opensre-benchmark-task-scope.md. Run with modes=['opensre+llm'] only."
+                f"Adapter {self.adapter.name!r} does not implement an llm_alone "
+                "control arm (baseline_agent_class returned None). Run with "
+                "modes=['opensre+llm'] only, or extend the adapter."
+            )
+        if (
+            "llm_alone_pure" in self.config.modes
+            and self.adapter.pure_baseline_agent_class() is None
+        ):
+            raise NotImplementedError(
+                f"Adapter {self.adapter.name!r} does not implement a pure baseline "
+                "(pure_baseline_agent_class returned None). Drop llm_alone_pure "
+                "from modes, or extend the adapter with a prompt-stripped agent."
             )
 
         # Pre-flight: verify every LLM in config is registered AND that its
@@ -169,6 +213,22 @@ class BenchmarkRunner:
         cells: list[_CellResult] = []
         aborted = False
         abort_reason: str | None = None
+
+        # Capture provenance before any LLM call so reviewers can audit
+        # exactly what code + config + env produced the report. Failure is
+        # FATAL — a run without provenance has no reproducibility story.
+        provenance = capture_provenance(
+            config=self.config,
+            adapter=self.adapter,
+            run_id=run_id,
+            started_at=started_at,
+            config_path=self._config_path,
+        )
+        (output_dir / "provenance.json").write_text(
+            json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"  ✓ wrote {output_dir / 'provenance.json'}")
 
         cases = list(
             self.adapter.load_cases(
@@ -226,7 +286,9 @@ class BenchmarkRunner:
         ended_at = datetime.now(UTC).isoformat()
 
         # Build the report (per-stratum aggregation)
-        per_stratum = _aggregate_per_stratum(cells, self.adapter.metric_schema().all_metrics())
+        per_stratum = _aggregate_per_stratum(
+            cells, self.adapter.metric_schema().all_metrics(), adapter=self.adapter
+        )
         negative = _build_negative_results(cells, self.adapter)
         config_hash = _hash_config(self.config)
 
@@ -320,7 +382,12 @@ class BenchmarkRunner:
             for future in as_completed(future_to_spec):
                 try:
                     results.append(future.result())
-                except CostBudgetExceeded:
+                except (CostBudgetExceeded, LLMCreditExhaustedError):
+                    # Both are run-fatal: cost budget halts on operator-set
+                    # cap; credit exhaustion halts because no retry can
+                    # recover a dead provider account. Cancel pending
+                    # futures so we don't burn time on cells destined to
+                    # fail the same way.
                     for f in future_to_spec:
                         f.cancel()
                     raise
@@ -342,7 +409,23 @@ class BenchmarkRunner:
         from app.pipeline.runners import run_investigation
 
         alert = self.adapter.build_alert(case)
-        integrations = self.adapter.build_opensre_integrations(case)
+        # Mode dispatch: opensre+llm uses the adapter's full integration setup
+        # + investigation agent; llm_alone uses the (typically identical) baseline
+        # tool surface + a different agent class. Both go through the same
+        # run_investigation entry point so the rest of the pipeline (format,
+        # score, artifact write) is mode-agnostic.
+        if mode == "llm_alone":
+            integrations = self.adapter.build_baseline_tools(case)
+            agent_class = self.adapter.baseline_agent_class()
+        elif mode == "llm_alone_pure":
+            # Same tool surface as the other baseline (build_baseline_tools);
+            # only the agent class differs — minimal system prompt instead of
+            # opensre's full planner/verifier prompt.
+            integrations = self.adapter.build_baseline_tools(case)
+            agent_class = self.adapter.pure_baseline_agent_class()
+        else:
+            integrations = self.adapter.build_opensre_integrations(case)
+            agent_class = self.adapter.investigation_agent_class()
         started = datetime.now(UTC)
         t0 = time.monotonic()
         ok = True
@@ -350,16 +433,27 @@ class BenchmarkRunner:
         final_state_dict: dict[str, Any] = {}
 
         try:
-            final_state = run_investigation(alert.raw, resolved_integrations=integrations)
+            final_state = run_investigation(
+                alert.raw,
+                resolved_integrations=integrations,
+                agent_class=agent_class,
+            )
             final_state_dict = dict(final_state)
-        except (CostBudgetExceeded, UnknownModel):
+        except (CostBudgetExceeded, UnknownModel, LLMCreditExhaustedError):
             # Run-fatal: propagate up to _execute_llm_batch / _run_inner so
             # the run halts at the configured budget ceiling. Without this
             # explicit re-raise, the broad `except Exception` below would
-            # silently record the budget breach as a per-cell failure and
-            # the run would continue past the cap. UnknownModel is a
-            # pre-flight problem (model missing from pricing table) and
-            # should also halt rather than mask as a cell failure.
+            # silently record the breach as a per-cell failure and the run
+            # would continue past the cap.
+            #
+            # UnknownModel: pre-flight problem (model missing from pricing
+            # table) — must halt, not mask as cell failure.
+            #
+            # LLMCreditExhaustedError: provider billing/quota exhausted
+            # (e.g. OpenAI insufficient_quota, Anthropic credit-balance-too-low).
+            # Retries can't help — operator must top up balance. Run #2 of the
+            # June-3 bench burned 1h42m wall-clock on this before the halt
+            # path existed; halting on first occurrence prevents recurrence.
             raise
         except Exception as exc:
             ok = False
@@ -400,6 +494,12 @@ class BenchmarkRunner:
             latency_ms=latency_ms,
         )
 
+        # Adapter hook: optionally enrich run.final_diagnosis (e.g.,
+        # CloudOpsBench emits paper-format top_3_predictions here so the
+        # scorer doesn't have to inference from free-text RCA). Default
+        # ABC implementation is a no-op for adapters that don't need it.
+        run = self.adapter.format_final_answer(case, run, spec)
+
         score = self.adapter.score_case(case, run, RunContext(integrations=integrations))
 
         # Per-cell artifact
@@ -416,9 +516,11 @@ class BenchmarkRunner:
             encoding="utf-8",
         )
 
+        inv_a1 = score.metrics.get("investigation_a1")
+        inv_suffix = f" inv_a1={inv_a1:.2f}" if inv_a1 is not None else ""
         print(
             f"  {case.case_id} [{mode} · {llm} · run {run_index}] "
-            f"a1={score.metrics.get('a1', 0):.2f} "
+            f"a1={score.metrics.get('a1', 0):.2f}{inv_suffix} "
             f"steps={score.metrics.get('steps', 0):.0f} "
             f"{latency_ms}ms"
         )
@@ -449,35 +551,87 @@ class BenchmarkRunner:
 
 
 def _aggregate_per_stratum(
-    cells: list[_CellResult], metrics: list[str]
+    cells: list[_CellResult],
+    metrics: list[str],
+    *,
+    adapter: BenchmarkAdapter | None = None,
 ) -> dict[str, dict[str, dict[str, float]]]:
     """Aggregate cell metrics into the per_stratum shape IntegrityGuard expects.
 
     Shape: {stratum: {f"{mode}/{llm}": {metric: median_value}}}
 
-    For v1, only the `all` stratum is populated. Phase D adds seen/unseen
-    tagging which extends to multi-stratum.
+    Strata populated:
+      - ``all``                          — every cell, median across runs
+      - ``seen-shape`` / ``unseen-shape`` — Phase D tag from
+        ``BenchmarkCase.seen_shape``; mid-shape cells appear only in ``all``
+      - ``held-out`` / ``optimize``      — generalization-gate split from
+        ``BenchmarkCase.metadata["is_held_out"]``; required by integrity
+        Mechanism 8 so reports can compute ``held_out_lift / optimize_lift``
+        per the pre-registration's ``generalization_gate`` clause
+      - ``consistency-selected``         — one run per (case, mode, llm)
+        group, picked by ``adapter.select_best_run``. Emitted only when
+        the adapter overrides the hook AND at least one group returns a
+        non-None index. Lets reports show median + selected side-by-side
+        without mutating the standard ``all`` view.
+
+    ``adapter`` is optional so existing callers (tests, downstream
+    framework integrators) keep working with median-only aggregation;
+    passing the adapter enables the selected stratum.
     """
     by_stratum_mode_llm: dict[str, dict[str, dict[str, list[float]]]] = {"all": {}}
 
+    # Group cells by (case_id, mode, llm) so the adapter's selector can
+    # see all seeds of one scenario together. dict preserves insertion order
+    # so the index it returns is stable w.r.t. the runs list.
+    by_scenario: dict[tuple[str, str, str], list[_CellResult]] = {}
+
     for cell in cells:
         key = f"{cell.mode}/{cell.llm}"
-        all_bucket = by_stratum_mode_llm["all"].setdefault(key, {m: [] for m in metrics})
-        for m in metrics:
-            all_bucket[m].append(cell.score.metrics.get(m, 0.0))
-        # Per-stratum (seen-shape, unseen-shape, mid-shape) — only when tagged
+
+        def append_to(stratum: str, _cell: _CellResult = cell, _key: str = key) -> None:
+            bucket = by_stratum_mode_llm.setdefault(stratum, {}).setdefault(
+                _key, {m: [] for m in metrics}
+            )
+            for m in metrics:
+                bucket[m].append(_cell.score.metrics.get(m, 0.0))
+
+        append_to("all")
         if cell.case.seen_shape is True:
-            stratum_bucket = by_stratum_mode_llm.setdefault("seen-shape", {}).setdefault(
-                key, {m: [] for m in metrics}
-            )
-            for m in metrics:
-                stratum_bucket[m].append(cell.score.metrics.get(m, 0.0))
+            append_to("seen-shape")
         elif cell.case.seen_shape is False:
-            stratum_bucket = by_stratum_mode_llm.setdefault("unseen-shape", {}).setdefault(
+            append_to("unseen-shape")
+
+        held_out = cell.case.metadata.get("is_held_out") if cell.case.metadata else None
+        if held_out is True:
+            append_to("held-out")
+        elif held_out is False:
+            append_to("optimize")
+
+        by_scenario.setdefault((cell.case.case_id, cell.mode, cell.llm), []).append(cell)
+
+    # Consistency selection: ask the adapter to pick the canonical run per
+    # scenario. A None return for any group means "no pick" — that group's
+    # cells are skipped in the selected stratum, the others still count.
+    if adapter is not None:
+        for group in by_scenario.values():
+            if not group:
+                continue
+            try:
+                picked = adapter.select_best_run(group[0].case, [(c.run, c.score) for c in group])
+            except Exception as exc:
+                # Selector errors must not abort the report — fall back to
+                # median-only. Log so the failure surfaces in the run log.
+                print(f"  ⚠ select_best_run raised for {group[0].case.case_id}: {exc}")
+                continue
+            if picked is None or not (0 <= picked < len(group)):
+                continue
+            chosen = group[picked]
+            key = f"{chosen.mode}/{chosen.llm}"
+            bucket = by_stratum_mode_llm.setdefault("consistency-selected", {}).setdefault(
                 key, {m: [] for m in metrics}
             )
             for m in metrics:
-                stratum_bucket[m].append(cell.score.metrics.get(m, 0.0))
+                bucket[m].append(chosen.score.metrics.get(m, 0.0))
 
     return {
         stratum: {
@@ -526,8 +680,56 @@ def _hash_config(config: BenchmarkConfig) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
 
 
+_SHA_SHAPE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def _validate_promotable_sha(sha: str | None) -> None:
+    """Raise IntegrityViolation if ``sha`` is not a verifiable git SHA.
+
+    A real git SHA is 7-40 hex characters (lowercase). Anything else —
+    ``(no-git)``, ``(unknown)``, empty, or arbitrary tags like
+    ``hotfix-june`` / ``v1.0`` — cannot be checked out and therefore
+    breaks the reproducibility contract the promotable cycle depends on.
+    """
+    sha_str = (sha or "").strip()
+    if sha_str and _SHA_SHAPE.fullmatch(sha_str):
+        return
+    raise IntegrityViolation(
+        [
+            f"opensre_sha={sha!r} is not a verifiable git SHA (expected 7-40 "
+            f"lowercase hex characters). The promotable run path requires a "
+            f"real commit SHA so the artifacts can be reproduced. Resolution "
+            f"sources, in order: the OPENSRE_SHA env var stamped by the bench "
+            f"image build workflow (.github/workflows/benchmark-image.yml — "
+            f"set from github.sha, NOT the user-supplied image tag), or "
+            f"git rev-parse from a checked-out source tree. Use "
+            f"run_without_integrity() for exploratory runs that don't need "
+            f"a verifiable SHA."
+        ]
+    )
+
+
 def _git_sha() -> str:
-    """opensre git SHA for the running code. Used in RunResult for reproducibility."""
+    """opensre git SHA for the running code. Used in RunResult for reproducibility.
+
+    Resolution order:
+      1. ``OPENSRE_SHA`` environment variable — set by the bench image build
+         workflow (.github/workflows/benchmark-image.yml) so Fargate runs,
+         which have no ``.git`` directory, can still stamp the real SHA.
+      2. ``git rev-parse HEAD`` — used by local developer runs.
+      3. ``(no-git)`` — fallback when neither is available.
+
+    The env-var path is required because the bench image is built from a
+    checked-out source tree but the resulting container ships only the
+    runtime code (no .git). Without OPENSRE_SHA, every Fargate run stamps
+    ``(no-git)``, which the integrity gate then rejects for promotable
+    cycles. The build workflow must export OPENSRE_SHA at image-build time
+    (e.g. ``ENV OPENSRE_SHA=${GITHUB_SHA::7}`` in the Dockerfile, or pass
+    as an ECS container override).
+    """
+    env_sha = os.environ.get("OPENSRE_SHA", "").strip()
+    if env_sha:
+        return env_sha
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -553,6 +755,38 @@ def _git_sha() -> str:
         return "(no-git)"
 
 
+_EVIDENCE_OUTPUT_TRUNCATE_CHARS = 2000
+
+
+def _truncate_evidence_entries(entries: list[Any]) -> list[Any]:
+    """Truncate the verbose ``data`` payload on each entry for case-file size.
+
+    Keeps ``tool_name`` + ``tool_args`` verbatim — those are small and
+    structural. Truncates ``data.output`` / ``data.content`` to the first
+    ``_EVIDENCE_OUTPUT_TRUNCATE_CHARS`` characters so a B-track guard or
+    post-hoc analyzer can still detect failure-status tokens (CrashLoop,
+    ImagePull, etc.) without bloating the case JSON at full-grid scale.
+    """
+    truncated: list[Any] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            truncated.append(entry)
+            continue
+        kept = dict(entry)
+        data = kept.get("data")
+        if isinstance(data, dict):
+            shrunk = dict(data)
+            for key in ("output", "content", "text", "message"):
+                value = shrunk.get(key)
+                if isinstance(value, str) and len(value) > _EVIDENCE_OUTPUT_TRUNCATE_CHARS:
+                    shrunk[key] = value[:_EVIDENCE_OUTPUT_TRUNCATE_CHARS] + "...[truncated]"
+            kept["data"] = shrunk
+        elif isinstance(data, str) and len(data) > _EVIDENCE_OUTPUT_TRUNCATE_CHARS:
+            kept["data"] = data[:_EVIDENCE_OUTPUT_TRUNCATE_CHARS] + "...[truncated]"
+        truncated.append(kept)
+    return truncated
+
+
 def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict[str, Any]:
     """Serializable shape for per-case artifact JSON."""
     return {
@@ -573,6 +807,11 @@ def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict
             "error": run.error,
             "final_diagnosis": run.final_diagnosis,
             "evidence_entries_count": len(run.evidence_entries),
+            # Truncated entries (verbose ``data`` payload capped) for post-hoc
+            # analysis of which evidence the agent saw. The B-track false-healthy
+            # guard reads this at runtime from the full list; the truncated copy
+            # is the disk-side audit trail.
+            "evidence_entries": _truncate_evidence_entries(run.evidence_entries),
             "tokens_in": run.tokens_in,
             "tokens_out": run.tokens_out,
             "cost_usd": run.cost_usd,

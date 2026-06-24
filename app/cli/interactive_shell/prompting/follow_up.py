@@ -10,14 +10,39 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo
+from app.cli.interactive_shell.token_accounting import build_llm_run_info
 from app.cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ANSWER, WARNING, stream_to_console
-from app.cli.support.exception_reporting import report_exception
 
 _logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.cli.interactive_shell.runtime.session import ReplSession
+
+# Keep at most this many Q&A pairs in follow-up history (matches cli_agent cap).
+_MAX_FOLLOW_UP_TURNS = 12
+
+
+def _format_followup_history(session: ReplSession) -> str:
+    """Render prior follow-up Q&A pairs for the current investigation."""
+    if not session.follow_up_messages:
+        return ""
+    lines: list[str] = []
+    cap = _MAX_FOLLOW_UP_TURNS * 2
+    for role, content in session.follow_up_messages[-cap:]:
+        label = "User" if role == "user" else "Assistant"
+        lines.append(f"{label}: {content}")
+    return "\n".join(lines)
+
+
+def _record_follow_up_turn(session: ReplSession, question: str, answer: str) -> None:
+    """Append a follow-up Q&A pair to follow_up_messages (scoped to current investigation)."""
+    session.follow_up_messages.append(("user", question))
+    session.follow_up_messages.append(("assistant", answer))
+    cap = _MAX_FOLLOW_UP_TURNS * 2
+    if len(session.follow_up_messages) > cap:
+        session.follow_up_messages[:] = session.follow_up_messages[-cap:]
 
 
 def _summarize_evidence(evidence: Any) -> list[str]:
@@ -97,12 +122,15 @@ def answer_follow_up(
         return None
 
     context = _summarize_last_state(session.last_state)
+    history = _format_followup_history(session)
+    history_block = f"--- Prior follow-up conversation ---\n{history}\n\n" if history else ""
     prompt = (
-        "You are an SRE assistant answering a follow-up question about a prior "
-        "incident investigation that you just completed. Use only the provided "
-        "investigation context. If the context does not contain the answer, say so "
-        "plainly. Keep the answer concise and concrete.\n\n"
+        "You are an SRE assistant answering follow-up questions about a prior "
+        "incident investigation. Use only the provided investigation context. "
+        "If the context does not contain the answer, say so plainly. "
+        "Keep answers concise and concrete.\n\n"
         f"--- Prior investigation ---\n{context}\n\n"
+        f"{history_block}"
         f"--- Follow-up question ---\n{question}"
     )
 
@@ -121,33 +149,17 @@ def answer_follow_up(
         report_exception(exc, context="interactive_shell.follow_up.stream")
         console.print(f"[{ERROR}]follow-up failed:[/] {escape(str(exc))}")
         return None
-    return LlmRunInfo(
-        model=_resolve_model_name(client),
-        provider=_resolve_provider_name(client),
-        latency_ms=int((time.monotonic() - started) * 1000),
+
+    if response_text:
+        _record_follow_up_turn(session, question, response_text)
+
+    return build_llm_run_info(
+        session=session,
+        prompt=prompt,
         response_text=response_text,
+        started=started,
+        client=client,
     )
-
-
-def _resolve_model_name(client: object) -> str | None:
-    value = getattr(client, "_model", None)
-    return value if isinstance(value, str) and value else None
-
-
-def _resolve_provider_name(client: object) -> str | None:
-    provider_label = getattr(client, "_provider_label", None)
-    if isinstance(provider_label, str) and provider_label:
-        return provider_label.strip().lower().replace(" ", "_")
-    name = type(client).__name__.lower()
-    if "openai" in name:
-        return "openai"
-    if "bedrock" in name:
-        return "bedrock"
-    if "cli" in name:
-        return "cli"
-    if "anthropic" in name or "llmclient" in name:
-        return "anthropic"
-    return None
 
 
 __all__ = ["answer_follow_up"]

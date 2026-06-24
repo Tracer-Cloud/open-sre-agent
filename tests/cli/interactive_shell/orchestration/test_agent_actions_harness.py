@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
-    execute_cli_actions_with_metrics,
+    execute_cli_actions,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 
@@ -17,7 +17,7 @@ def test_execute_with_harness_dispatches_slash_action() -> None:
     dispatcher = FakeDispatcher()
     harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
 
-    result = execute_cli_actions_with_metrics(
+    result = execute_cli_actions(
         "check health",
         ReplSession(),
         cast_console(harness.console),
@@ -30,20 +30,23 @@ def test_execute_with_harness_dispatches_slash_action() -> None:
     assert dispatcher.calls == [("slash_invoke", {"command": "/health", "args": []})]
 
 
-def test_execute_with_harness_denies_on_unhandled_plan() -> None:
+def test_execute_with_harness_hands_off_handoff_only_plan() -> None:
     planner = FakePlanner(result=([planned_action("assistant_handoff", "docs:help")], True))
     dispatcher = FakeDispatcher()
     harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
 
-    result = execute_cli_actions_with_metrics(
+    result = execute_cli_actions(
         "half actionable prompt",
         ReplSession(),
         cast_console(harness.console),
         deps=harness.deps,
     )
 
-    assert result.handled is True
-    assert result.has_unhandled_clause is True
+    # A handoff-only plan is not "handled" by terminal execution: it falls
+    # through to the conversational assistant. v0.1 never denies the turn.
+    assert result.handled is False
+    assert result.has_unhandled_clause is False
+    assert result.planned_count == 0
     assert dispatcher.calls == []
 
 
@@ -52,15 +55,16 @@ def test_execute_with_harness_handles_planner_unavailable() -> None:
     dispatcher = FakeDispatcher()
     harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
 
-    result = execute_cli_actions_with_metrics(
+    result = execute_cli_actions(
         "planner outage",
         ReplSession(),
         cast_console(harness.console),
         deps=harness.deps,
     )
 
-    assert result.handled is True
-    assert result.has_unhandled_clause is True
+    # Planner outage falls through to the assistant instead of denying.
+    assert result.handled is False
+    assert result.has_unhandled_clause is False
     assert result.planned_count == 0
     assert dispatcher.calls == []
 

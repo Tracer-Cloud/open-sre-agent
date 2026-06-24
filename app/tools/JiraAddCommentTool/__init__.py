@@ -24,6 +24,7 @@ class JiraAddCommentTool(BaseTool):
         "Documenting resolution steps on the tracking ticket",
     ]
     requires = ["base_url", "email", "api_token", "issue_key", "body"]
+    injected_params = ["api_token", "base_url", "email"]
     input_schema = {
         "type": "object",
         "properties": {

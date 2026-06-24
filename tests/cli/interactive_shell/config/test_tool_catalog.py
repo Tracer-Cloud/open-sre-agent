@@ -1,4 +1,4 @@
-"""Tests for the registered-tool catalog used by the ``/list tools`` slash command."""
+"""Tests for the registered-tool catalog used by the ``/tools list`` slash command."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry.integrations import _cmd_list
+from app.cli.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
 from app.cli.interactive_shell.config import tool_catalog
 from app.cli.interactive_shell.config.tool_catalog import (
     ToolCatalogEntry,
@@ -231,7 +231,7 @@ class TestFormatToolCatalogText:
 
 
 class TestListToolsSlashCommand:
-    """``/list tools`` reaches the catalog and prints non-empty output."""
+    """``/tools list`` reaches the catalog and prints non-empty output."""
 
     def _capture(self) -> tuple[Console, io.StringIO]:
         buf = io.StringIO()
@@ -251,10 +251,10 @@ class TestListToolsSlashCommand:
             )
         ]
         with patch(
-            "app.cli.interactive_shell.command_registry.integrations.build_tool_catalog",
+            "app.cli.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=fake,
         ):
-            assert _cmd_list(session, console, ["tools"]) is True
+            assert _cmd_tools(session, console, ["list"]) is True
         out = buf.getvalue()
         assert "search_github" in out
         assert "investigation" in out
@@ -274,10 +274,10 @@ class TestListToolsSlashCommand:
             )
         ]
         with patch(
-            "app.cli.interactive_shell.command_registry.integrations.build_tool_catalog",
+            "app.cli.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=fake,
         ):
-            assert _cmd_list(session, console, ["tools"]) is True
+            assert _cmd_tools(session, console, ["list"]) is True
         out = buf.getvalue()
         assert "[bold]injection[/bold]" in out
 
@@ -285,14 +285,12 @@ class TestListToolsSlashCommand:
         console, buf = self._capture()
         session = ReplSession()
         with patch(
-            "app.cli.interactive_shell.command_registry.integrations.build_tool_catalog",
+            "app.cli.interactive_shell.command_registry.tools_cmds.build_tool_catalog",
             return_value=[],
         ):
-            assert _cmd_list(session, console, ["tools"]) is True
+            assert _cmd_tools(session, console, ["list"]) is True
         assert "no tools registered" in buf.getvalue()
 
-    def test_list_first_args_advertise_tools_for_tab_completion(self) -> None:
-        from app.cli.interactive_shell.command_registry.integrations import _LIST_FIRST_ARGS
-
-        names = {arg for arg, _hint in _LIST_FIRST_ARGS}
-        assert "tools" in names
+    def test_tools_first_args_advertise_list_for_tab_completion(self) -> None:
+        names = {arg for arg, _hint in _TOOLS_FIRST_ARGS}
+        assert "list" in names

@@ -17,6 +17,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.e
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
     ToolContext,
     ToolEntry,
+    capability_not_explicitly_disabled,
     object_schema,
 )
 
@@ -82,6 +83,7 @@ TOOL_ENTRY = ToolEntry(
     ),
     execution_tier=ExecutionTier.ELEVATED,
     execute=execute_llm_provider_action,
+    is_available=lambda session: capability_not_explicitly_disabled(session, "llm_provider"),
 )
 
 

@@ -10,16 +10,77 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
+from app.utils.llm_retry import (
+    LLMCreditExhaustedError,
+    extract_retry_after_seconds,
+    is_credit_exhausted_error,
+)
 
 logger = logging.getLogger(__name__)
 
 _RETRY_INITIAL_BACKOFF_SEC = 1.0
 _RETRY_MAX_ATTEMPTS = 3
 _CLIENT_TIMEOUT_SEC = 90.0
+
+
+def _maybe_raise_credit_exhausted(provider_name: str, err: BaseException) -> None:
+    """If ``err`` looks like provider billing / quota exhaustion, raise
+    :class:`LLMCreditExhaustedError` and short-circuit any retry path.
+
+    Providers route credit-exhaustion differently: OpenAI returns 429
+    with ``code: insufficient_quota`` (lands in our ``RateLimitError``
+    handler); Anthropic returns 400 with the body
+    ``"Your credit balance is too low ..."`` (lands in our
+    ``BadRequestError`` handler). Call this from BOTH handlers so neither
+    path silently retries on a dead account.
+    """
+    if is_credit_exhausted_error(err):
+        raise LLMCreditExhaustedError(
+            f"{provider_name} credit exhausted (provider billing/quota): "
+            f"top up balance or raise the spending cap at the provider "
+            f"console. Original error: {err}"
+        ) from err
+
+
+def _rate_limit_sleep_seconds(err: BaseException, fallback_backoff: float) -> float:
+    """Pick a sleep duration for a rate-limit retry.
+
+    Prefers the provider's ``Retry-After`` hint when present (and capped
+    via ``RETRY_AFTER_MAX_SEC`` inside the extractor). Falls back to full
+    jitter ``Uniform(0, fallback_backoff)`` when no hint is available — same
+    pattern AWS and the Anthropic/OpenAI SDKs use for transient errors.
+
+    Always adds ±10% jitter even on the server hint: with multiple
+    concurrent callers, clients all sleeping for *exactly* the suggested
+    94ms would still wake up in lockstep and re-trigger the same TPM
+    bucket.
+
+    Logs which branch produced the sleep duration so operators can audit
+    whether the Retry-After path is actually firing (most OpenAI 429s
+    carry a body hint; most Anthropic 429s carry a header).
+    """
+    suggested = extract_retry_after_seconds(err)
+    if suggested is not None:
+        sleep_sec = suggested * random.uniform(0.9, 1.1)  # noqa: S311 — backoff jitter
+        logger.warning(
+            "[llm] rate-limited, honoring Retry-After=%.2fs (sleeping %.2fs after jitter)",
+            suggested,
+            sleep_sec,
+        )
+        return sleep_sec
+    sleep_sec = random.uniform(0.0, fallback_backoff)  # noqa: S311 — backoff jitter
+    logger.warning(
+        "[llm] rate-limited, no Retry-After hint; sleeping %.2fs (jitter from [0, %.1fs])",
+        sleep_sec,
+        fallback_backoff,
+    )
+    return sleep_sec
 
 
 @dataclass
@@ -132,9 +193,28 @@ class AnthropicAgentClient:
             except PermissionDeniedError as err:
                 raise RuntimeError(self._permission_denied_error_message()) from err
             except BadRequestError as err:
+                # Anthropic surfaces "credit balance too low" as HTTP 400;
+                # distinguish credit exhaustion (fatal) from real schema
+                # errors before wrapping into a generic RuntimeError.
+                _maybe_raise_credit_exhausted(self.provider_name, err)
                 raise RuntimeError(self._bad_request_error_message(err)) from err
             except RateLimitError as err:
-                raise RuntimeError(f"{self.provider_name} rate limit exceeded: {err}") from err
+                # OpenAI's insufficient_quota lands here too, dressed as 429
+                # with "rate limit" text. Distinguish billing exhaustion
+                # (fatal — no retry will help) from transient TPM throttling.
+                _maybe_raise_credit_exhausted(self.provider_name, err)
+                # Transient by definition — back off and retry instead of
+                # failing the whole case. Honor ``Retry-After`` when the
+                # provider sends one (much tighter than our jittered
+                # default, which can be 10x longer than necessary).
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{self.provider_name} rate limit exceeded after "
+                        f"{_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(_rate_limit_sleep_seconds(err, backoff))
+                backoff *= 2
             except InternalServerError as err:
                 body = getattr(err, "body", {}) or {}
                 if (
@@ -305,9 +385,9 @@ class BedrockConverseAgentClient:
     ) -> AgentLLMResponse:
         import botocore.exceptions
 
+        from app.guardrails.apply import apply_guardrails_to_converse_payload
         from app.guardrails.engine import GuardrailBlockedError
         from app.services.bedrock_converse import (
-            apply_guardrails_to_converse_payload,
             is_non_retryable_bedrock_code,
             map_bedrock_client_error,
             parse_converse_output,
@@ -464,9 +544,27 @@ class OpenAIAgentClient:
             except NotFoundError as err:
                 raise RuntimeError(f"OpenAI model '{self._model}' not found.") from err
             except BadRequestError as err:
+                # Some providers (or proxies) surface insufficient_quota as
+                # 400 — distinguish before the generic wrap.
+                _maybe_raise_credit_exhausted("OpenAI", err)
                 raise RuntimeError(f"OpenAI request rejected: {err}") from err
             except RateLimitError as err:
-                raise RuntimeError(f"OpenAI rate limit exceeded: {err}") from err
+                # OpenAI returns insufficient_quota as HTTP 429 with body
+                # text "You exceeded your current quota". Halt rather than
+                # burning retries on a dead account.
+                _maybe_raise_credit_exhausted("OpenAI", err)
+                # Transient by definition — back off and retry instead of
+                # failing the whole cell. OpenAI's body usually carries a
+                # tight hint like ``"Please try again in 94ms"``; honor it
+                # when present instead of waiting our deterministic backoff
+                # (matters most on tight tiers like gpt-4o's 30k TPM).
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"OpenAI rate limit exceeded after {_RETRY_MAX_ATTEMPTS} attempts: {err}"
+                    ) from err
+                time.sleep(_rate_limit_sleep_seconds(err, backoff))
+                backoff *= 2
             except PermissionDeniedError as err:
                 raise RuntimeError(f"OpenAI request forbidden: {err}") from err
             except Exception as err:

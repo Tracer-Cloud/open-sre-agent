@@ -5,16 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
+from app.integrations.llm_cli.failure_explain import is_context_length_overflow
 
 from .llm_client import _call_llm
 from .parsing import _parse_tool_plan
-from .postprocessing import (
-    _fail_closed_vague_local_model,
-    finalize_planner_result_with_trace,
-)
+from .postprocessing import finalize_planner_result_with_trace
 from .prompting import _sanitise_text
 
 
@@ -27,6 +26,37 @@ class LlmActionPlanResult:
     policy_trace: tuple[str, ...]
 
 
+def _fallback_handoff(sanitised: str) -> list[PlannedAction]:
+    return [
+        PlannedAction(
+            kind="assistant_handoff",
+            content=sanitised,
+            position=0,
+            source="llm",
+        )
+    ]
+
+
+def _plan_prompt_overflow_fallback(
+    sanitised: str,
+    *,
+    session: Any | None,
+) -> LlmActionPlanResult:
+    # When the prompt is too long for the planner LLM, hand off to the
+    # conversational assistant rather than guessing an action.
+    finalized = finalize_planner_result_with_trace(
+        sanitised,
+        _fallback_handoff(sanitised),
+        False,
+        session=session,
+    )
+    return LlmActionPlanResult(
+        actions=tuple(finalized.actions),
+        has_unhandled_clause=finalized.has_unhandled,
+        policy_trace=("fallback_prompt_too_long",) + tuple(finalized.applied_policies),
+    )
+
+
 def plan_actions_with_llm_result(
     message: str,
     *,
@@ -34,16 +64,13 @@ def plan_actions_with_llm_result(
 ) -> LlmActionPlanResult | None:
     """Plan actions and return typed policy trace metadata."""
     sanitised = _sanitise_text(message.strip())
-    early = _fail_closed_vague_local_model(sanitised)
-    if early is not None:
-        actions, has_unhandled = early
-        return LlmActionPlanResult(
-            actions=tuple(actions),
-            has_unhandled_clause=has_unhandled,
-            policy_trace=("fail_closed_vague_local_model",),
-        )
 
-    raw = _call_llm(sanitised, session)
+    try:
+        raw = _call_llm(sanitised, session)
+    except PlannerLLMError as exc:
+        if not is_context_length_overflow(str(exc)):
+            raise
+        return _plan_prompt_overflow_fallback(sanitised, session=session)
     if raw is None:
         return None
 
@@ -60,7 +87,7 @@ def plan_actions_with_llm_result(
     return LlmActionPlanResult(
         actions=tuple(finalized.actions),
         has_unhandled_clause=finalized.has_unhandled,
-        policy_trace=tuple(tag.value for tag in finalized.applied_policies),
+        policy_trace=tuple(finalized.applied_policies),
     )
 
 

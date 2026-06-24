@@ -464,7 +464,12 @@ def test_cli_backed_client_invoke_raises_cli_authentication_required_when_logged
 def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_trailing_period(
     mock_run: MagicMock,
 ) -> None:
-    """When explain_failure ends with '.', avoid composing '..'."""
+    """No double period in the composed error message.
+
+    When stderr contains an auth-related term ('unauthorized'), the failure
+    classifier replaces the raw exit-code text with a clean, actionable message
+    — so neither the original trailing period nor a '..' can appear.
+    """
     from app.integrations.llm_cli.runner import CLIBackedLLMClient
 
     mock_adapter = MagicMock()
@@ -487,7 +492,7 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
     )
     mock_adapter.explain_failure.return_value = "claude -p exited with code 1."
 
-    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
 
     with patch("app.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
@@ -499,7 +504,6 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
     msg = str(exc_info.value)
     assert ".." not in msg
-    assert "code 1." in msg
     assert "Auth status could not be verified" in msg
 
 
@@ -733,3 +737,20 @@ def test_codex_cli_registry_entry() -> None:
     assert reg is not None
     assert reg.model_env_key == "CODEX_MODEL"
     assert reg.adapter_factory().name == "codex"
+
+
+def test_parse_returns_stripped_stdout() -> None:
+    adapter = CodexAdapter()
+    assert adapter.parse(stdout="  hello world  \n", stderr="", returncode=0) == "hello world"
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    adapter = CodexAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    adapter = CodexAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

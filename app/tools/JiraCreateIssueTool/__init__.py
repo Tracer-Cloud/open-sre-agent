@@ -24,6 +24,7 @@ class JiraCreateIssueTool(BaseTool):
         "Documenting a new issue with evidence from the investigation",
     ]
     requires = ["base_url", "email", "api_token", "summary", "description"]
+    injected_params = ["api_token", "base_url", "email"]
     input_schema = {
         "type": "object",
         "properties": {

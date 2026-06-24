@@ -15,7 +15,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 
-from .constants import _UNHANDLED_MARKER
 from .normalization import _content_from_tool_args, _normalize_tool_args
 
 _TOOL_TO_ACTION_KIND = {tool: kind for kind, tool in ACTION_KIND_TO_TOOL.items()}
@@ -26,35 +25,25 @@ def _parse_tool_plan(
     *,
     session: Any | None = None,
 ) -> tuple[list[PlannedAction], bool] | None:
+    """Parse planner output into executable actions.
+
+    The second tuple element (``has_unhandled``) is retained for back-compat with
+    callers but is always ``False``: v0.1 has no planning-stage fail-closed
+    safeguard, so unmapped or unavailable tool calls are simply dropped rather
+    than marked unhandled. Anything not mapped to an executable action falls
+    through to the conversational assistant.
+    """
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
-        return [], bool(raw.strip())
+        return [], False
 
     if not isinstance(data, dict):
         return None
 
     raw_calls = data.get("tool_calls")
-    text = str(data.get("text", "")).strip()
-    has_unhandled = text.startswith(_UNHANDLED_MARKER)
     if not isinstance(raw_calls, list):
-        return [], bool(text)
-
-    if not has_unhandled:
-        for call in raw_calls:
-            if not isinstance(call, dict):
-                continue
-            call_name = str(call.get("name", "")).strip()
-            if call_name == "mark_unhandled":
-                has_unhandled = True
-                break
-            if call_name == "assistant_handoff":
-                call_args = call.get("arguments")
-                if isinstance(call_args, dict) and str(
-                    call_args.get("content", "")
-                ).lstrip().startswith(_UNHANDLED_MARKER):
-                    has_unhandled = True
-                    break
+        return [], False
 
     actions: list[PlannedAction] = []
     session_for_availability = session if isinstance(session, ReplSession) else ReplSession()
@@ -67,14 +56,12 @@ def _parse_tool_plan(
             continue
         entry = REGISTRY.get(tool_name)
         if entry is None or not entry.is_available(session_for_availability):
-            has_unhandled = True
             continue
 
         raw_args = call.get("arguments")
         args = raw_args if isinstance(raw_args, dict) else {}
         normalized_args = _normalize_tool_args(kind, args, session=session)
         if normalized_args is None:
-            has_unhandled = True
             continue
 
         actions.append(
@@ -90,4 +77,4 @@ def _parse_tool_plan(
             )
         )
 
-    return actions, has_unhandled
+    return actions, False

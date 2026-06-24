@@ -16,9 +16,9 @@ from app.analytics.cli import (
     track_investigation,
 )
 from app.analytics.source import EntrypointSource, TriggerMode
-from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
-from app.cli.support.context import is_json_output, is_yes
-from app.cli.support.exit_codes import ERROR, SUCCESS
+from app.cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+from app.cli.interactive_shell.data_store.context import is_json_output, is_yes
+from app.cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
 from app.version import get_version
 
 
@@ -26,7 +26,7 @@ from app.version import get_version
 @click.option("--yes", "-y", "local_yes", is_flag=True, help="Skip the confirmation prompt.")
 def uninstall_command(local_yes: bool) -> None:
     """Remove opensre and all local data from this machine."""
-    from app.cli.support.uninstall import run_uninstall
+    from app.cli.interactive_shell.data_store.uninstall import run_uninstall
 
     raise SystemExit(run_uninstall(yes=local_yes or is_yes()))
 
@@ -41,7 +41,7 @@ def uninstall_command(local_yes: bool) -> None:
 @click.option("--yes", "-y", "local_yes", is_flag=True, help="Skip the confirmation prompt.")
 def update_command(check_only: bool, local_yes: bool) -> None:
     """Check for a newer version and update if one is available."""
-    from app.cli.support.update import run_update
+    from app.cli.interactive_shell.data_store.update import run_update
 
     capture_update_started(check_only=check_only)
     try:
@@ -84,7 +84,7 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from app.cli.support.health_view import render_health_json, render_health_report
+    from app.cli.interactive_shell.ui.health_view import render_health_json, render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
     from app.integrations.verify import verify_integrations
@@ -193,7 +193,7 @@ def investigate_command(
         )
         return
     if slack_thread:
-        from app.cli.support.errors import OpenSREError
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "--slack-thread requires --service.",
@@ -260,9 +260,9 @@ def _run_service_investigation(
     """Run a runtime investigation for a deployed service by name."""
     import os
 
+    from app.cli.interactive_shell.data_store.args import write_json
+    from app.cli.interactive_shell.error_handling.errors import OpenSREError
     from app.cli.investigation import run_investigation_cli
-    from app.cli.support.args import write_json
-    from app.cli.support.errors import OpenSREError
     from app.remote.runtime_alert import build_runtime_alert_payload
 
     conflicting = [

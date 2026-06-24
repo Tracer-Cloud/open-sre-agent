@@ -9,6 +9,16 @@ from typing import Any
 import pytest
 from rich.console import Console
 
+# Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
+# live-resolved config for a service instead of a pinned fake one. The oracle
+# replaces ``<service>: "@live"`` with the integration resolved from the local
+# store / env (real credentials) and forces ``connection_verified: true`` so the
+# tool is available. Scenarios that use it pair it with
+# ``gathered_tools_contract.must_return_valid_data`` to assert the tool reached
+# the live integration and returned valid data (not a 401). When the credential
+# cannot be resolved the scenario is skipped, never failed (env gap, not bug).
+LIVE_INTEGRATION_SENTINEL = "@live"
+
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
@@ -19,9 +29,23 @@ from app.cli.interactive_shell.routing.tests._oracle_normalize import (
     normalize_response_text,
     oracle_action_matches,
 )
-from app.cli.interactive_shell.routing.tests.scenario_loader import ScenarioCase
+from app.cli.interactive_shell.routing.tests.scenario_loader import (
+    GatheredToolsContract,
+    ScenarioCapabilities,
+    ScenarioCase,
+)
 from app.cli.interactive_shell.runtime.execution import execute_routed_turn
 from app.cli.interactive_shell.runtime.session import ReplSession
+
+# Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
+# live-resolved config for a service instead of a pinned fake one. The oracle
+# replaces ``<service>: "@live"`` with the integration resolved from the local
+# store / env (real credentials) and forces ``connection_verified: true`` so the
+# tool is available. Scenarios that use it pair it with
+# ``gathered_tools_contract.must_return_valid_data`` to assert the tool reached
+# the live integration and returned valid data (not a 401). When the credential
+# cannot be resolved the scenario is skipped, never failed (env gap, not bug).
+LIVE_INTEGRATION_SENTINEL = "@live"
 
 
 @dataclass
@@ -30,11 +54,81 @@ class OracleRunResult:
     details: dict[str, Any]
 
 
+def resolve_live_integrations(
+    override: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Expand any ``<service>: "@live"`` sentinel into a real resolved config.
+
+    A fixture marks a service ``"@live"`` to opt into a real, credentialed call
+    during the gather loop (see :data:`LIVE_INTEGRATION_SENTINEL`). For each such
+    service this resolves the integration from the developer's local store / env
+    (via the production ``resolve_integrations`` path) and forces
+    ``connection_verified: true`` so the tool's ``is_available`` check passes —
+    the local store omits that flag, but the live REPL sets it during startup, so
+    the test mirrors the REPL rather than the bare classifier.
+
+    Returns ``(expanded_override, unavailable_services)``. ``unavailable_services``
+    lists services whose credentials could not be resolved; callers skip those
+    scenarios rather than failing them (a missing credential is an environment
+    gap, not a routing regression). Non-sentinel entries pass through untouched.
+    """
+    if not override:
+        return override, []
+
+    live_services = [
+        service for service, config in override.items() if config == LIVE_INTEGRATION_SENTINEL
+    ]
+    if not live_services:
+        return override, []
+
+    from app.agent.stages.resolve_integrations import resolve_integrations
+
+    resolved = resolve_integrations({})  # type: ignore[arg-type]  # real store/env resolution
+    expanded: dict[str, Any] = {}
+    unavailable: list[str] = []
+    for service, config in override.items():
+        if config != LIVE_INTEGRATION_SENTINEL:
+            expanded[service] = config
+            continue
+        live_config = resolved.get(service)
+        # A usable integration must carry at least one credential token; the bare
+        # classifier returns an empty shell for unconfigured services.
+        if not isinstance(live_config, dict) or not any(
+            live_config.get(field) for field in ("auth_token", "api_key", "api_token", "token")
+        ):
+            unavailable.append(service)
+            continue
+        expanded[service] = {**live_config, "connection_verified": True}
+    return expanded, unavailable
+
+
+def session_capabilities(capabilities: ScenarioCapabilities) -> dict[str, tuple[str, ...]]:
+    """Project a scenario's three-state capabilities onto a session dict.
+
+    Keys whose value is ``None`` (the capability is absent from the fixture) are
+    omitted entirely so the tool stays available, mirroring the production
+    default where ``ReplSession()`` carries no capability constraints. An
+    explicit ``()`` (disabled) or a non-empty allowlist is passed through
+    verbatim so the runtime capability gate sees the intended constraint.
+    """
+    projected: dict[str, tuple[str, ...]] = {}
+    for key, value in (
+        ("slash_commands", capabilities.slash_commands),
+        ("cli_commands", capabilities.cli_commands),
+        ("synthetic_suites", capabilities.synthetic_suites),
+        ("llm_provider", capabilities.llm_provider),
+    ):
+        if value is not None:
+            projected[key] = value
+    return projected
+
+
 def fresh_session(
     *,
     with_prior_state: bool,
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
+    resolved_integrations_override: dict[str, Any] | None = None,
 ) -> ReplSession:
     session = ReplSession()
     if with_prior_state:
@@ -42,6 +136,12 @@ def fresh_session(
     session.configured_integrations = configured_integrations
     session.configured_integrations_known = True
     session.available_capabilities = available_capabilities or {}
+    # When a scenario pins resolved_integrations, seed the gather-loop cache so
+    # the conversational data-gathering pass sees a deterministic, fixture-owned
+    # integration set instead of resolving the developer's real ~/.opensre store.
+    # An explicit empty mapping ({}) deliberately forces a no-integration world.
+    if resolved_integrations_override is not None:
+        session.resolved_integrations_cache = resolved_integrations_override
     return session
 
 
@@ -94,6 +194,55 @@ def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]
             return False
         remaining.pop(match_index)
     return True
+
+
+def tool_output_returned_valid_data(output: Any) -> bool:
+    """Whether a gathered tool's output is a successful integration response.
+
+    The tool loop turns any tool exception (e.g. a Sentry 401 / 400) into
+    ``{"error": ...}`` and read-only tools self-report ``available: false`` when
+    they are not configured. A call returned valid data only when neither of
+    those failure markers is present, i.e. the tool reached the live integration
+    and got a real payload back. An empty-but-successful result (e.g. a 200 with
+    zero matching issues) still counts: it is a valid integration response, not
+    an auth/transport failure.
+    """
+    if isinstance(output, dict):
+        if "error" in output:
+            return False
+        return output.get("available") is not False
+    if isinstance(output, list):
+        return True
+    return output is not None
+
+
+def _gathered_contract_failures(
+    contract: GatheredToolsContract | None,
+    gathered_tool_calls: list[str],
+    gathered_valid_data: set[str],
+) -> list[str]:
+    """Return the names of any violated gathered-tools contract dimensions.
+
+    For ``must_call_*`` / ``must_not_call`` a tool counts as "called" when it
+    fired during the gather loop, regardless of whether it succeeded.
+    ``must_return_valid_data`` is checked against ``gathered_valid_data`` — the
+    set of tools that fired AND returned a successful integration response —
+    so a credential/transport error fails the contract instead of passing as a
+    bare "was called".
+    """
+    if contract is None:
+        return []
+    failures: list[str] = []
+    called = set(gathered_tool_calls)
+    if contract.must_call_any and not (called & set(contract.must_call_any)):
+        failures.append("must_call_any")
+    if any(name not in called for name in contract.must_call_all):
+        failures.append("must_call_all")
+    if any(name in called for name in contract.must_not_call):
+        failures.append("must_not_call")
+    if any(name not in gathered_valid_data for name in contract.must_return_valid_data):
+        failures.append("must_return_valid_data")
+    return failures
 
 
 def patch_execution_boundary(
@@ -171,17 +320,37 @@ def patch_execution_boundary(
 
 
 def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> OracleRunResult:
+    resolved_override, _unavailable = resolve_live_integrations(
+        case.scenario.session.resolved_integrations
+    )
     session = fresh_session(
         with_prior_state=case.scenario.session.has_prior_state,
         configured_integrations=case.scenario.session.configured_integrations,
-        available_capabilities={
-            "slash_commands": case.scenario.available_capabilities.slash_commands,
-            "cli_commands": case.scenario.available_capabilities.cli_commands,
-            "synthetic_suites": case.scenario.available_capabilities.synthetic_suites,
-        },
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+        resolved_integrations_override=resolved_override,
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)
+
+    # Record which registered tools fire during the conversational
+    # gather_tool_evidence pass. gather_tool_evidence imports
+    # run_tool_calling_loop lazily from app.agent.tool_loop, so patch the name on
+    # that source module (the local import re-binds from there at call time).
+    import app.agent.tool_loop as _tool_loop_mod
+
+    gathered_tool_calls: list[str] = []
+    gathered_valid_data: set[str] = set()
+    _original_tool_loop = _tool_loop_mod.run_tool_calling_loop
+
+    def _recording_tool_loop(*args: Any, **kwargs: Any) -> Any:
+        result = _original_tool_loop(*args, **kwargs)
+        for tc, output in result.executed:
+            gathered_tool_calls.append(tc.name)
+            if tool_output_returned_valid_data(output):
+                gathered_valid_data.add(tc.name)
+        return result
+
+    monkeypatch.setattr(_tool_loop_mod, "run_tool_calling_loop", _recording_tool_loop)
 
     console_buffer = io.StringIO()
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)
@@ -224,10 +393,14 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         action["kind"] for action in executed if action.get("kind") in forbidden_action_kinds
     ]
 
+    gathered_contract_failures = _gathered_contract_failures(
+        answer.gathered_tools_contract, gathered_tool_calls, gathered_valid_data
+    )
+
     passed = True
     if decision.route_kind.value != answer.route.expected_kind:
         passed = False
-    if answer.policy.should_execute:
+    if answer.policy.executes_terminal_action:
         if not executed_match:
             passed = False
     else:
@@ -237,9 +410,9 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             passed = False
     # Always enforce the response contract against actual runtime output;
     # there is no bypass for handoff-only runs. The oracle captures real console
-    # output including any text printed by _execute_planned_actions or
-    # _render_plan_denied, so must_contain_any / must_contain_all must match
-    # what the runtime actually emitted.
+    # output including any text printed by _execute_planned_actions, so
+    # must_contain_any / must_contain_all must match what the runtime actually
+    # emitted. (There is no planning-stage fail-closed denial in v0.1.)
     if not any_match:
         passed = False
     if not all_match:
@@ -249,6 +422,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     if forbidden_executed:
         passed = False
     if not history_match:
+        passed = False
+    if gathered_contract_failures:
         passed = False
 
     return OracleRunResult(
@@ -265,6 +440,9 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             "response_contract": answer.response_contract,
             "forbidden_tokens_matched": forbidden_tokens,
             "forbidden_executed_kinds": forbidden_executed,
+            "gathered_tool_calls": gathered_tool_calls,
+            "gathered_valid_data": sorted(gathered_valid_data),
+            "gathered_contract_failures": gathered_contract_failures,
             "last_assistant_intent": session.last_assistant_intent,
         },
     )

@@ -28,8 +28,12 @@ dependencies = [
     "fastapi>=0.135.3",
     "uvicorn[standard]>=0.30.0",
     # Authentication
-    "PyJWT>=2.8.0",
-    "cryptography>=42.0.0",
+    "PyJWT>=2.13.0",
+    # Cap below 49: cryptography 49.0.0 dropped x86-64 macOS wheels, which breaks
+    # the frozen darwin-x64 release binary (PyInstaller bundles a broken _openssl
+    # extension and the binary crashes at startup). Keep 48.x until the darwin-x64
+    # release target is dropped.
+    "cryptography>=48.0.1,<49",
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
@@ -56,6 +60,8 @@ dependencies = [
     "google-auth>=2.0.0,<3.0.0",
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
+    # Redis
+    "redis>=5.0.0,<6.0.0",
     # Signature verfication for discord
     "PyNaCl>=1.5.0",
     # MariaDB
@@ -179,4 +185,5 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "types-psutil>=7.2.2.20260408",
+    "types-PyYAML>=6.0.12",
 ]

@@ -14,6 +14,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_synthetic_test_launch,
     execution_allowed,
@@ -24,11 +25,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.s
     list_rds_postgres_scenarios,
 )
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord
-from app.cli.interactive_shell.runtime.session import (
-    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
-)
 from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
-from app.cli.support.exception_reporting import report_exception
 
 from .task_streaming import (
     _SYNTHETIC_DIAG_CHARS,
@@ -44,31 +41,6 @@ from .task_streaming import (
 _SYNTHETIC_SCENARIO_ID_RE = re.compile(r"^\d{3}-[a-z0-9][a-z0-9-]*$")
 
 
-def _scenario_id_from_synthetic_suite_name(suite_name: str) -> str:
-    if ":" not in suite_name:
-        return ""
-    return suite_name.split(":", 1)[1].strip()
-
-
-def _try_bind_synthetic_observation(session: ReplSession, suite_name: str) -> None:
-    """Point session at ``_observations/<scenario>/latest.json`` after a failed run."""
-    scenario_id = _scenario_id_from_synthetic_suite_name(suite_name)
-    if not scenario_id:
-        return
-    try:
-        from app.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
-    except Exception:
-        session.last_synthetic_observation_path = None
-        return
-    latest = SYNTHETIC_SCENARIOS_DIR / "_observations" / scenario_id / "latest.json"
-    for _ in range(8):
-        if latest.is_file():
-            session.last_synthetic_observation_path = str(latest.resolve())
-            return
-        time.sleep(0.06)
-    session.last_synthetic_observation_path = None
-
-
 def watch_synthetic_subprocess(
     task: TaskRecord,
     proc: subprocess.Popen[Any],
@@ -82,12 +54,6 @@ def watch_synthetic_subprocess(
 
     history_gen_when_watch_started = session.history_generation
 
-    def _suggest_follow_up_on_failure() -> None:
-        if session.history_generation != history_gen_when_watch_started:
-            return
-        session.pending_prompt_default = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-        _try_bind_synthetic_observation(session, suite_name)
-
     def _record_synthetic_if_current_session(ok: bool) -> None:
         if session.history_generation != history_gen_when_watch_started:
             return
@@ -95,6 +61,7 @@ def watch_synthetic_subprocess(
 
     def _run() -> None:
         output_threads: list[threading.Thread] = []
+        suggest_follow_up = False
         try:
             output_threads = (
                 _start_task_output_streams(
@@ -128,7 +95,7 @@ def watch_synthetic_subprocess(
             if timed_out:
                 task.mark_failed(f"timed out after {SYNTHETIC_TEST_TIMEOUT_SECONDS}s")
                 _record_synthetic_if_current_session(ok=False)
-                _suggest_follow_up_on_failure()
+                suggest_follow_up = True
                 return
 
             _join_task_output_streams(output_threads)
@@ -136,7 +103,7 @@ def watch_synthetic_subprocess(
             if code is None:
                 task.mark_failed("subprocess did not report exit code")
                 _record_synthetic_if_current_session(ok=False)
-                _suggest_follow_up_on_failure()
+                suggest_follow_up = True
                 return
 
             # Honour the real exit code when the process exited on its own.
@@ -155,17 +122,21 @@ def watch_synthetic_subprocess(
                 error_msg = f"exit code {code}" + (f": {diag}" if diag else "")
                 task.mark_failed(error_msg)
                 _record_synthetic_if_current_session(ok=False)
-                _suggest_follow_up_on_failure()
+                suggest_follow_up = True
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
             report_exception(exc, context="interactive_shell.synthetic_test.watch")
             _record_synthetic_if_current_session(ok=False)
-            _suggest_follow_up_on_failure()
+            suggest_follow_up = True
             if console is not None:
                 console.print(f"[{ERROR}]synthetic watcher failed:[/] {escape(str(exc))}")
         finally:
             _join_task_output_streams(output_threads)
             stderr_buf.close()
+            if suggest_follow_up and session.history_generation == history_gen_when_watch_started:
+                session.suggest_synthetic_failure_follow_up(label=suite_name)
+            else:
+                session.notify_prompt_changed()
 
     threading.Thread(target=_run, daemon=True, name=f"synthetic-{task.task_id}").start()
 

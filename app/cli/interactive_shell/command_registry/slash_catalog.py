@@ -15,7 +15,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.t
     string_property,
 )
 
-_MAX_COMPACT_DESC_CHARS = 180
+_MAX_COMPACT_DESC_CHARS = 120
 
 
 @dataclass(frozen=True)
@@ -55,12 +55,6 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Shortcut for /help — open the interactive slash-command help browser.",
         "User types ? or asks for command help via the shortcut alias",
         anti_examples=("User asks a docs/how-to question about OpenSRE features",),
-    ),
-    "/agents": _mcp(
-        "Show and manage the local AI agent fleet (Claude Code, Cursor, Aider, etc.). "
-        "Subcommands include budget, bus, claim, conflicts, kill, release, trace, wait, graph.",
-        "User asks to list, scan, or manage local coding agents",
-        anti_examples=("User asks about remote/hosted agents only",),
     ),
     "/alerts": _mcp(
         "Show status of the local alert listener inbox: queue depth, dropped count, "
@@ -122,6 +116,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Exit the interactive shell and return to the parent terminal.",
         "User asks to exit, quit, or leave the REPL",
     ),
+    "/fleet": _mcp(
+        "Show and manage the local AI agent fleet (Claude Code, Cursor, Aider, etc.). "
+        "Subcommands include budget, bus, claim, conflicts, kill, release, trace, wait, graph.",
+        "User asks to list, scan, or manage local coding agents",
+        anti_examples=("User asks about remote/hosted agents only",),
+    ),
     "/guardrails": _mcp(
         "Manage sensitive-information guardrail rules. Subcommands: audit, init, rules, test.",
         "User asks about guardrails, PII rules, or sensitive-data masking configuration",
@@ -132,7 +132,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks if OpenSRE is healthy, working, or connected",
         anti_examples=(
             "User asks what integrations OpenSRE supports in general (docs → assistant_handoff)",
-            "User asks to list connected integrations (use /list integrations)",
+            "User asks to list connected integrations (use /integrations list)",
         ),
     ),
     "/help": _mcp(
@@ -154,7 +154,7 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to show details for a configured integration",
         anti_examples=(
             "User asks which integrations OpenSRE supports without configuring (assistant_handoff)",
-            "User asks to list connected integrations (prefer /list integrations)",
+            "User asks to list connected integrations (prefer /integrations list)",
         ),
     ),
     "/investigate": _mcp(
@@ -169,14 +169,6 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/last": _mcp(
         "Reprint the most recent investigation report from this session.",
         "User asks to show the last investigation result or report again",
-    ),
-    "/list": _mcp(
-        "Browse connected integrations, MCP servers, active LLM models, or registered tools.",
-        "User asks to show or list connected/configured integrations or services",
-        "User asks to list MCP servers (/list mcp)",
-        anti_examples=(
-            "User asks what integrations OpenSRE supports in general (assistant_handoff)",
-        ),
     ),
     "/mcp": _mcp(
         "Manage connected MCP servers. Subcommands: list, connect, disconnect.",
@@ -214,9 +206,29 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about remote deployment status, health, or operations",
         anti_examples=("Vague connect to X without remote/hosted context (assistant_handoff)",),
     ),
-    "/reset": _mcp(
-        "Clear session state while preserving trust mode.",
-        "User asks to reset session state or start fresh in the REPL",
+    "/new": _mcp(
+        "Start a new session while preserving the current LLM conversation context and "
+        "accumulated infra context. Rotates the session ID and resets all session state "
+        "while keeping the conversation thread so you can continue seamlessly in a fresh session file.",
+        "User wants to continue a conversation in a new session after /resume",
+        "User asks to start a new session without losing their current conversation",
+        anti_examples=(
+            "User wants to clear the screen (use /clear)",
+            "User asks to list sessions (use /sessions)",
+        ),
+    ),
+    "/resume": _mcp(
+        "Restore the conversation context from a previous session. "
+        "Bare /resume opens an interactive numbered picker. "
+        "Pass a session ID prefix or a name substring to resume directly "
+        "(e.g. /resume 9b2e4f7a or /resume redis).",
+        "User asks to resume or continue a previous session",
+        "User wants to pick up where they left off in an earlier REPL session",
+        "User types /resume with no argument to pick from a list",
+        anti_examples=(
+            "User asks to list sessions (use /sessions)",
+            "User asks to start a new session keeping context (use /new)",
+        ),
     ),
     "/save": _mcp(
         "Save the last investigation report to a file path. Requires confirmation.",
@@ -245,6 +257,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/template": _mcp(
         "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, splunk).",
         "User asks for an alert template or example payload format",
+    ),
+    "/tools": _mcp(
+        "List registered investigation/chat tools wired into this OpenSRE build.",
+        "User asks what tools the REPL can use",
+        "User asks to list investigation or chat tools",
     ),
     "/tests": _mcp(
         "Browse and run inventoried tests from the terminal. Subcommands: list, run, synthetic.",
@@ -370,7 +387,7 @@ def format_slash_catalog_text(
         if compact and len(desc) > _MAX_COMPACT_DESC_CHARS:
             desc = desc[: _MAX_COMPACT_DESC_CHARS - 1].rstrip() + "…"
         lines.append(f"- **{spec.name}** — {desc}")
-        if spec.use_cases:
+        if spec.use_cases and not compact:
             lines.append(f"  - use when: {spec.use_cases[0]}")
         if spec.anti_examples and not compact:
             lines.append(f"  - not for: {spec.anti_examples[0]}")
@@ -386,7 +403,10 @@ def slash_invoke_tool_description(specs: list[SlashCommandSpec] | None = None) -
         "Pick the command whose use-case best matches the user request, then supply "
         "positional args in the args array."
     )
-    body = format_slash_catalog_text(entries, compact=True)
+    # Keep planner payload intentionally tiny for live LLM runs with strict
+    # prompt budgets. The full rich catalog remains available via
+    # format_slash_catalog_text(..., compact=False).
+    body = "\n".join(f"- `{spec.name}`" for spec in entries)
     return f"{header}\n\n{body}"
 
 
@@ -397,8 +417,8 @@ def slash_invoke_input_schema(
     command_names = tuple(spec.name for spec in entries)
     args_description = (
         "Positional arguments after the command name. Valid values depend on the "
-        "chosen command — see the tool description catalog. Examples: "
-        '["integrations"] for /list, ["verify", "datadog"] for /integrations.'
+        "chosen command — see the slash_invoke tool description. Examples: "
+        '["list"] for /tools, ["verify", "datadog"] for /integrations.'
     )
     return object_schema(
         properties={

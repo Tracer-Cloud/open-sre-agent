@@ -3,9 +3,9 @@ from __future__ import annotations
 import click
 
 from app.cli.__main__ import cli
-from app.cli.support.layout import (
-    _SHORT_OPTIONS,
+from app.cli.interactive_shell.ui.layout import (
     RichGroup,
+    _options_from_command,
     render_help,
     render_landing,
 )
@@ -20,17 +20,16 @@ def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
     render_help(cli)
     output = _normalized_output(capsys.readouterr().out)
 
-    assert "OpenSRE" in output
-    assert "Tips for getting started" in output
     assert "Usage: opensre [OPTIONS] [COMMAND] [ARGS]..." in output
     assert "Commands:" in output
     assert "Options:" in output
+    assert "Welcome back" not in output
 
     ctx = click.Context(cli)
     for name in cli.list_commands(ctx):
         assert name in output
 
-    for label, description in _SHORT_OPTIONS:
+    for label, description in _options_from_command(cli):
         assert label in output
         assert description in output
 
@@ -51,7 +50,7 @@ def test_render_help_command_list_matches_cli_registry(capsys) -> None:
 
 def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
     monkeypatch.setattr("app.cli.interactive_shell.ui.banner._is_first_run", lambda: True)
-    render_landing()
+    render_landing(cli)
     output = _normalized_output(capsys.readouterr().out)
 
     assert "OpenSRE" in output
@@ -64,7 +63,7 @@ def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
     assert "Quick start:" in output
     assert "Options:" in output
 
-    for label, description in _SHORT_OPTIONS:
+    for label, description in _options_from_command(cli):
         assert label in output
         assert description in output
 
@@ -75,7 +74,7 @@ def test_rich_group_format_help_delegates_to_render_help(monkeypatch) -> None:
     def fake_render_help(group: click.Group) -> None:
         called_with.append(group)
 
-    monkeypatch.setattr("app.cli.support.layout.render_help", fake_render_help)
+    monkeypatch.setattr("app.cli.interactive_shell.ui.layout.render_help", fake_render_help)
 
     group = RichGroup(name="opensre")
     group.format_help(click.Context(group), click.HelpFormatter())

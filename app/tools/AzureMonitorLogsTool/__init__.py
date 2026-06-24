@@ -71,6 +71,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
         "required": ["workspace_id", "access_token"],
     },
     is_available=_azure_available,
+    injected_params=("access_token", "workspace_id"),
     extract_params=_azure_extract_params,
 )
 def query_azure_monitor_logs(

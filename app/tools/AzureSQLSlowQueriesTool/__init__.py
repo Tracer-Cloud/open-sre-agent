@@ -26,6 +26,7 @@ from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
         "Reviewing query performance trends for capacity planning",
     ],
     is_available=azure_sql_is_available,
+    injected_params=("server",),
     extract_params=azure_sql_extract_params,
 )
 def get_azure_sql_slow_queries(

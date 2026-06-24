@@ -18,6 +18,7 @@ from app.integrations.openclaw import (
 )
 from app.tools._telemetry import report_run_error
 from app.tools.tool_decorator import tool
+from app.tools.utils.mcp_tool_listing import build_mcp_tool_listing
 
 OpenClawParams = dict[str, object]
 OpenClawBridgeResponse = dict[str, object]
@@ -207,15 +208,36 @@ def _normalize_named_bridge_call(
 @tool(
     name="list_openclaw_tools",
     source="openclaw",
-    description="List tools exposed by the configured OpenClaw MCP bridge.",
+    description=(
+        "List tools exposed by the configured OpenClaw MCP bridge. Returns a "
+        "compact, bounded listing (names + short descriptions, no schemas) so it "
+        "never overflows the agent's context budget. Pass name_filter (e.g. "
+        "'conversation event permission') to narrow the list, and include_schema=true "
+        "on a narrowed list to fetch the input schema of the tool you intend to call."
+    ),
     use_cases=[
         "Inspecting which OpenClaw bridge tools are available before making a call",
-        "Confirming whether conversation, event, or permissions tools are exposed",
+        "Finding the right tool by passing a name_filter (e.g. 'conversation event permission')",
+        "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
     surfaces=("investigation", "chat"),
     input_schema={
         "type": "object",
         "properties": {
+            "name_filter": {
+                "type": "string",
+                "description": (
+                    "Optional space- or comma-separated terms; tools whose name or "
+                    "description contains any term are returned (e.g. 'conversation event')."
+                ),
+            },
+            "include_schema": {
+                "type": "boolean",
+                "description": (
+                    "Include each tool's full input_schema. Only honored when the "
+                    "(filtered) result set is small; narrow with name_filter first."
+                ),
+            },
             "openclaw_url": {"type": "string"},
             "openclaw_mode": {"type": "string"},
             "openclaw_token": {"type": "string"},
@@ -228,6 +250,8 @@ def _normalize_named_bridge_call(
     extract_params=_openclaw_extract_params,
 )
 def list_openclaw_bridge_tools(
+    name_filter: str | None = None,
+    include_schema: bool = False,
     openclaw_url: str | None = None,
     openclaw_mode: str | None = None,
     openclaw_token: str | None = None,
@@ -235,7 +259,11 @@ def list_openclaw_bridge_tools(
     openclaw_args: list[str] | None = None,
     **_kwargs: object,
 ) -> OpenClawBridgeResponse:
-    """List tools available from the configured OpenClaw MCP bridge."""
+    """List tools available from the configured OpenClaw MCP bridge.
+
+    Returns a compact, bounded view by default so the listing never overflows the
+    agent's context budget.
+    """
     config = _resolve_config(
         openclaw_url,
         openclaw_mode,
@@ -269,12 +297,18 @@ def list_openclaw_bridge_tools(
         payload["tools"] = []
         return payload
 
+    listing = build_mcp_tool_listing(
+        [dict(descriptor) for descriptor in tools],
+        name_filter=(name_filter or "").strip() or None,
+        include_schema=bool(include_schema),
+        filter_example="conversation event permission",
+    )
     return {
         "source": "openclaw",
         "available": True,
         "transport": config.mode,
         "endpoint": config.command if config.mode == "stdio" else config.url,
-        "tools": tools,
+        **listing,
     }
 
 

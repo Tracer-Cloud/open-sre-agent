@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
@@ -53,6 +53,31 @@ def _patch_clock(monkeypatch: pytest.MonkeyPatch, ticks: list[float]) -> None:
         return next(iterator)
 
     monkeypatch.setattr(AlarmDispatcher, "_now", staticmethod(_now))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_credential_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make credential resolution hermetic.
+
+    By default the integration store is empty and the keyring is disabled, so
+    credential tests resolve purely from environment variables unless they opt
+    into the store (by patching ``resolve_effective_integrations``) or the
+    keyring. Without this, the new store-first resolution would read the real
+    ``~/.opensre`` store and make tests depend on local machine state.
+    """
+    monkeypatch.setattr(
+        "app.integrations.catalog.resolve_effective_integrations",
+        lambda: {},
+    )
+    monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
+
+
+def _patch_store(monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]) -> None:
+    """Point the store-backed Telegram config at *config*."""
+    monkeypatch.setattr(
+        "app.integrations.catalog.resolve_effective_integrations",
+        lambda: {"telegram": {"source": "local store", "config": config}},
+    )
 
 
 def test_alarm_credentials_repr_does_not_leak_bot_token() -> None:
@@ -149,6 +174,94 @@ def test_load_credentials_whitespace_override_falls_back_to_env(
     creds = load_credentials_from_env(chat_id_override="   ")
 
     assert creds.chat_id == "chat-from-env"
+
+
+def test_load_credentials_from_store_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Guided setup (`opensre integrations setup telegram` / `onboard`) saves the
+    # token to the store, not the environment. The watchdog must find it there.
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_DEFAULT_CHAT_ID", raising=False)
+    _patch_store(monkeypatch, {"bot_token": "store-tok", "default_chat_id": "store-chat"})
+
+    creds = load_credentials_from_env()
+
+    assert creds == AlarmCredentials(bot_token="store-tok", chat_id="store-chat")
+
+
+def test_load_credentials_chat_id_from_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TELEGRAM_DEFAULT_CHAT_ID", raising=False)
+    _patch_store(monkeypatch, {"bot_token": "store-tok", "default_chat_id": "store-chat"})
+
+    creds = load_credentials_from_env()
+
+    assert creds.chat_id == "store-chat"
+
+
+def test_load_credentials_store_bot_token_beats_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Store wins over env, matching the scheduler's precedence.
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-tok")
+    monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "chat-1")
+    _patch_store(monkeypatch, {"bot_token": "store-tok"})
+
+    creds = load_credentials_from_env()
+
+    assert creds.bot_token == "store-tok"
+
+
+def test_load_credentials_store_chat_id_beats_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "env-chat")
+    _patch_store(monkeypatch, {"bot_token": "tok", "default_chat_id": "store-chat"})
+
+    creds = load_credentials_from_env()
+
+    assert creds.chat_id == "store-chat"
+
+
+def test_load_credentials_override_beats_store_chat_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_store(monkeypatch, {"bot_token": "tok", "default_chat_id": "store-chat"})
+
+    creds = load_credentials_from_env(chat_id_override="arg-chat")
+
+    assert creds.chat_id == "arg-chat"
+
+
+def test_load_credentials_from_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No store, no env — the token lives only in the system keyring (as the
+    # onboarding wizard writes it via sync_env_secret).
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "chat-1")
+    monkeypatch.setattr(
+        "app.llm_credentials.resolve_llm_api_key",
+        lambda env_var: "keyring-tok" if env_var == "TELEGRAM_BOT_TOKEN" else "",
+    )
+
+    creds = load_credentials_from_env()
+
+    assert creds.bot_token == "keyring-tok"
+
+
+def test_load_credentials_store_failure_falls_back_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A broken/locked store must not crash the watchdog; resolution falls back
+    # to the environment.
+    def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("store is locked")
+
+    monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", _boom)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-tok")
+    monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "env-chat")
+
+    creds = load_credentials_from_env()
+
+    assert creds == AlarmCredentials(bot_token="env-tok", chat_id="env-chat")
 
 
 def test_first_dispatch_calls_telegram(monkeypatch: pytest.MonkeyPatch) -> None:

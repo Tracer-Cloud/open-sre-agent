@@ -31,6 +31,7 @@ on:
 permissions:
   contents: write
   actions: read
+  models: read
 
 concurrency:
   group: release-${{ github.event_name == 'push' && 'main' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'main' && 'main') || 'stable' }}
@@ -237,105 +238,83 @@ jobs:
       - name: Build binary
         run: uv run pyinstaller packaging/opensre.spec --clean --noconfirm
 
-      - name: Smoke test binary
-        if: runner.os != 'Windows' && env.RELEASE_CHANNEL == 'release'
+      - name: Smoke test binary (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          VERSION="${TAG_NAME#v}"
+          set -uo pipefail
+          # Capture the exit status explicitly so a crashing binary still prints
+          # its stdout/stderr (under `set -e` the failed substitution aborted the
+          # step before the output was ever shown, hiding the real error).
+          set +e
           VERSION_OUTPUT="$(./dist/${{ matrix.binary_name }} --version 2>&1)"
+          VERSION_STATUS=$?
+          set -e
           printf '%s\n' "$VERSION_OUTPUT"
-          case "$VERSION_OUTPUT" in
-            *"$VERSION"*) ;;
-            *)
-              printf 'Binary version mismatch: expected %s but saw %s\n' "$VERSION" "$VERSION_OUTPUT" >&2
-              exit 1
-              ;;
-          esac
+          if [ "$VERSION_STATUS" -ne 0 ]; then
+            printf '::error::%s --version exited with status %s\n' "${{ matrix.binary_name }}" "$VERSION_STATUS" >&2
+            exit "$VERSION_STATUS"
+          fi
+          if [ "$RELEASE_CHANNEL" = "release" ]; then
+            VERSION="${TAG_NAME#v}"
+            case "$VERSION_OUTPUT" in
+              *"$VERSION"*) ;;
+              *)
+                printf 'Binary version mismatch: expected %s but saw %s\n' "$VERSION" "$VERSION_OUTPUT" >&2
+                exit 1
+                ;;
+            esac
+          fi
           ./dist/${{ matrix.binary_name }} -h >/dev/null
 
-      - name: Smoke test binary
-        if: runner.os != 'Windows' && env.RELEASE_CHANNEL == 'main'
-        shell: bash
-        run: |
-          VERSION_OUTPUT="$(./dist/${{ matrix.binary_name }} --version 2>&1)"
-          printf '%s\n' "$VERSION_OUTPUT"
-          ./dist/${{ matrix.binary_name }} -h >/dev/null
-
-      - name: Smoke test binary
-        if: runner.os == 'Windows' && env.RELEASE_CHANNEL == 'release'
+      - name: Smoke test binary (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $expectedVersion = $env:TAG_NAME.TrimStart("v")
           $versionOutput = & ".\dist\${{ matrix.binary_name }}" --version 2>&1 | Out-String
           $versionText = $versionOutput.Trim()
           Write-Host $versionText
-          if ($versionText -notmatch [regex]::Escape($expectedVersion)) {
-            throw "Binary version mismatch. Expected '$expectedVersion' but saw '$versionText'."
+          if ($env:RELEASE_CHANNEL -eq "release") {
+            $expectedVersion = $env:TAG_NAME.TrimStart("v")
+            if ($versionText -notmatch [regex]::Escape($expectedVersion)) {
+              throw "Binary version mismatch. Expected '$expectedVersion' but saw '$versionText'."
+            }
           }
           & ".\dist\${{ matrix.binary_name }}" -h | Out-Null
 
-      - name: Smoke test binary
-        if: runner.os == 'Windows' && env.RELEASE_CHANNEL == 'main'
-        shell: pwsh
-        run: |
-          $versionOutput = & ".\dist\${{ matrix.binary_name }}" --version 2>&1 | Out-String
-          Write-Host $versionOutput.Trim()
-          & ".\dist\${{ matrix.binary_name }}" -h | Out-Null
-
-      - name: Package binary archive
-        if: runner.os != 'Windows' && env.RELEASE_CHANNEL == 'release'
+      - name: Package binary archive (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          VERSION="${TAG_NAME#v}"
-          ASSET_BASENAME="opensre_${VERSION}_${{ matrix.target }}"
+          set -euo pipefail
+          if [ "$RELEASE_CHANNEL" = "release" ]; then
+            ASSET_BASENAME="opensre_${TAG_NAME#v}_${{ matrix.target }}"
+          else
+            ASSET_BASENAME="opensre_main_${{ matrix.target }}"
+          fi
           tar -C dist -czf "${ASSET_BASENAME}.tar.gz" "${{ matrix.binary_name }}"
           shasum -a 256 "${ASSET_BASENAME}.tar.gz" > "${ASSET_BASENAME}.tar.gz.sha256"
 
-      - name: Package binary archive
-        if: runner.os != 'Windows' && env.RELEASE_CHANNEL == 'main'
-        shell: bash
-        run: |
-          ASSET_BASENAME="opensre_main_${{ matrix.target }}"
-          tar -C dist -czf "${ASSET_BASENAME}.tar.gz" "${{ matrix.binary_name }}"
-          shasum -a 256 "${ASSET_BASENAME}.tar.gz" > "${ASSET_BASENAME}.tar.gz.sha256"
-
-      - name: Package binary archive
-        if: runner.os == 'Windows' && env.RELEASE_CHANNEL == 'release'
+      - name: Package binary archive (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = $env:TAG_NAME.TrimStart("v")
-          $assetBaseName = "opensre_${version}_${{ matrix.target }}"
-          Compress-Archive -Path "dist\${{ matrix.binary_name }}" -DestinationPath "${assetBaseName}.zip"
-          $hash = (Get-FileHash -Algorithm SHA256 "${assetBaseName}.zip").Hash.ToLowerInvariant()
-          Set-Content -Path "${assetBaseName}.zip.sha256" -Value "$hash  ${assetBaseName}.zip"
-
-      - name: Package binary archive
-        if: runner.os == 'Windows' && env.RELEASE_CHANNEL == 'main'
-        shell: pwsh
-        run: |
-          $assetBaseName = "opensre_main_${{ matrix.target }}"
+          if ($env:RELEASE_CHANNEL -eq "release") {
+            $assetBaseName = "opensre_$($env:TAG_NAME.TrimStart('v'))_${{ matrix.target }}"
+          } else {
+            $assetBaseName = "opensre_main_${{ matrix.target }}"
+          }
           Compress-Archive -Path "dist\${{ matrix.binary_name }}" -DestinationPath "${assetBaseName}.zip"
           $hash = (Get-FileHash -Algorithm SHA256 "${assetBaseName}.zip").Hash.ToLowerInvariant()
           Set-Content -Path "${assetBaseName}.zip.sha256" -Value "$hash  ${assetBaseName}.zip"
 
       - name: Upload binary archive
-        if: env.RELEASE_CHANNEL == 'release'
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}
+          name: ${{ env.RELEASE_CHANNEL == 'main' && 'main-' || '' }}release-${{ matrix.target }}
           path: |
             opensre_*_${{ matrix.target }}.${{ matrix.archive_ext }}
             opensre_*_${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
-          if-no-files-found: error
-
-      - name: Upload binary archive
-        if: env.RELEASE_CHANNEL == 'main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: main-release-${{ matrix.target }}
-          path: |
-            opensre_main_${{ matrix.target }}.${{ matrix.archive_ext }}
-            opensre_main_${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
           if-no-files-found: error
 
   publish-release:
@@ -359,14 +338,16 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Create release notes
+      - name: Resolve release context
+        id: release_ctx
+        env:
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
 
-          TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
           default_branch="${{ github.event.repository.default_branch }}"
-
           git fetch origin "$default_branch" --tags --force
           target_sha="$(git rev-parse "origin/$default_branch")"
 
@@ -383,69 +364,86 @@ jobs:
           fi
 
           {
-            echo "## Changelog"
-            echo
-            if [ -n "$previous_tag" ]; then
-              echo "_Changes since ${previous_tag}_"
-            else
-              echo "_Changes up to ${TAG_NAME}_"
-            fi
-            echo
-            git log "$range_spec" --no-merges --pretty='- %s (%h) — %an'
-            echo
-          } > GENERATED_CHANGELOG.md
+            printf 'target_sha=%s\n' "$target_sha"
+            printf 'previous_tag=%s\n' "$previous_tag"
+            printf 'range_spec=%s\n' "$range_spec"
+          } >> "$GITHUB_OUTPUT"
 
-          GENERATED_NOTES="$(cat GENERATED_CHANGELOG.md)"
-
-          {
-            echo "## Install"
-            echo
-            echo "### cURL (macOS / Linux)"
-            echo
-            echo '```bash'
-            echo 'curl -fsSL https://install.opensre.com | bash'
-            echo '```'
-            echo
-            echo "### cURL (macOS / Linux, latest main build)"
-            echo
-            echo '```bash'
-            echo 'curl -fsSL https://install.opensre.com | bash -s -- --main'
-            echo '```'
-            echo
-            echo "### Homebrew (macOS / Linux)"
-            echo
-            echo '```bash'
-            echo 'brew tap tracer-cloud/tap'
-            echo 'brew install tracer-cloud/tap/opensre'
-            echo '```'
-            echo
-            echo "### PowerShell (Windows)"
-            echo
-            echo '```powershell'
-            echo 'irm https://install.opensre.com | iex'
-            echo '```'
-            echo
-            echo "### Python"
-            echo
-            echo '```bash'
-            echo "pipx install opensre"
-            echo '```'
-            echo
-            printf '%s\n' "$GENERATED_NOTES"
-          } > RELEASE_NOTES.md
-
-      - name: Create GitHub release
-        id: github_release
+      - name: Create release notes
         env:
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          RANGE_SPEC: ${{ steps.release_ctx.outputs.range_spec }}
+          PREVIOUS_TAG: ${{ steps.release_ctx.outputs.previous_tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
 
-          TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
-          default_branch="${{ github.event.repository.default_branch }}"
-          git fetch origin "$default_branch" --tags --force
-          target_sha="$(git rev-parse "origin/$default_branch")"
+          {
+            echo "## Changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "_Changes since ${PREVIOUS_TAG}_"
+            else
+              echo "_Changes up to ${TAG_NAME}_"
+            fi
+            echo
+            git log "$RANGE_SPEC" --no-merges -n 100 --pretty='- %s (%h) — %an'
+            echo
+          } > GENERATED_CHANGELOG.md
+
+          # Summarize commits into prose via GitHub Models (gpt-4o-mini).
+          # Falls back to raw changelog if the API is unavailable.
+          raw_commits="$(git log "$RANGE_SPEC" --no-merges --pretty='%s' | head -40 || true)"
+          if [ -n "$raw_commits" ]; then
+            api_body="$(jq -n --arg commits "$raw_commits" '{
+              model: "gpt-4o-mini",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are writing a Discord release announcement for an open-source SRE CLI tool called opensre. Summarize the git commits into 2-4 short, punchy prose sentences — no bullet points, no headers, no markdown. Write in present tense, active voice. Focus on what users will notice: new features, fixes, performance, integrations. Be specific but concise."
+                },
+                {role: "user", content: ("Commits:\n" + $commits)}
+              ],
+              max_tokens: 300,
+              temperature: 0.4
+            }')"
+            curl -sS --max-time 20 \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://models.inference.ai.azure.com/chat/completions" \
+              -d "$api_body" 2>/dev/null \
+              | jq -r '.choices[0].message.content // empty' 2>/dev/null \
+              | tr -d '\r' > DISCORD_NARRATIVE.md || true
+
+            if [ -s DISCORD_NARRATIVE.md ]; then
+              echo "LLM narrative generated ($(wc -c < DISCORD_NARRATIVE.md) bytes)."
+            else
+              echo "LLM summary unavailable; Discord will use raw changelog."
+              rm -f DISCORD_NARRATIVE.md
+            fi
+          fi
+
+          CB='```'
+          {
+            printf '## Install\n\n'
+            printf '### cURL (macOS / Linux)\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash\n%s\n\n' "$CB" "$CB"
+            printf '### cURL (macOS / Linux, latest main build)\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --main\n%s\n\n' "$CB" "$CB"
+            printf '### Homebrew (macOS / Linux)\n\n%sbash\nbrew tap tracer-cloud/tap\nbrew install tracer-cloud/tap/opensre\n%s\n\n' "$CB" "$CB"
+            printf '### PowerShell (Windows)\n\n%spowershell\nirm https://install.opensre.com | iex\n%s\n\n' "$CB" "$CB"
+            printf '### Python\n\n%sbash\npipx install opensre\n%s\n\n' "$CB" "$CB"
+          } > RELEASE_NOTES.md
+          cat GENERATED_CHANGELOG.md >> RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        id: github_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          TARGET_SHA: ${{ steps.release_ctx.outputs.target_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
 
           if gh release view "$TAG_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "created=false" >> "$GITHUB_OUTPUT"
@@ -467,7 +465,7 @@ jobs:
           gh release create "$TAG_NAME" \
             release-assets/* \
             --repo "${{ github.repository }}" \
-            --target "$target_sha" \
+            --target "$TARGET_SHA" \
             --title "$release_title" \
             --notes-file RELEASE_NOTES.md \
             "$latest_flag"
@@ -475,16 +473,15 @@ jobs:
           echo "created=true" >> "$GITHUB_OUTPUT"
 
       - name: Announce on Discord
-        if: ${{ steps.github_release.outputs.created == 'true' && !github.event.repository.fork && !github.event.repository.private }}
+        if: steps.github_release.outputs.created == 'true' && !github.event.repository.fork && !github.event.repository.private
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL_UPDATE: ${{ secrets.DISCORD_WEBHOOK_URL_UPDATE }}
           DISCORD_RELEASES_ROLE_ID: ${{ secrets.DISCORD_RELEASES_ROLE_ID }}
+          DISCORD_RELEASE_LOGO_EMOJI: ${{ secrets.DISCORD_RELEASE_LOGO_EMOJI }}
+          DISCORD_RELEASE_LOGO_URL: ${{ secrets.DISCORD_RELEASE_LOGO_URL }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag_name }}
           RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.tag_name }}
-          REPO_STARS: ${{ github.event.repository.stargazers_count }}
-          REPO_FORKS: ${{ github.event.repository.forks_count }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -494,109 +491,39 @@ jobs:
             exit 0
           fi
 
-          RELEASE_BODY="$(cat RELEASE_NOTES.md)"
-
-          role_mention=""
-          if [ -n "${DISCORD_RELEASES_ROLE_ID:-}" ]; then
-            role_mention="<@&${DISCORD_RELEASES_ROLE_ID}>"$'\n'
+          # Prefer LLM-generated narrative; fall back to raw changelog.
+          if [ -f DISCORD_NARRATIVE.md ] && [ -s DISCORD_NARRATIVE.md ]; then
+            changelog_file="DISCORD_NARRATIVE.md"
+          elif [ -f GENERATED_CHANGELOG.md ]; then
+            changelog_file="GENERATED_CHANGELOG.md"
+          else
+            echo "No changelog available." > /tmp/discord_fallback.md
+            changelog_file="/tmp/discord_fallback.md"
           fi
 
-          NOTES="${RELEASE_BODY:-No release notes provided.}"
-          NOTES="$(printf '%s' "$NOTES" | tr -d '\r')"
-          MAX_NOTES_LENGTH=1700
-          if [ "${#NOTES}" -gt "$MAX_NOTES_LENGTH" ]; then
-            NOTES="${NOTES:0:$((MAX_NOTES_LENGTH-3))}..."
+          # Use an external Python script to build the JSON payload.
+          # This avoids jq issues with multiline LLM output containing control characters.
+          payload="$(CHANGELOG_FILE="$changelog_file" python3 .github/scripts/build-discord-payload.py)"
+
+          curl --fail -sS --max-time 30 -X POST -H "Content-Type: application/json" \
+            -d "$payload" "$DISCORD_WEBHOOK_URL_UPDATE"
+
+      - name: Sync Homebrew tap formula
+        if: steps.github_release.outputs.created == 'true'
+        continue-on-error: true
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.tag_name }}
+          ASSET_DIR: release-assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_GITHUB_TOKEN is not set; skipping Homebrew tap sync."
+            exit 0
           fi
-
-          payload="$(jq -n \
-            --arg tag "$RELEASE_TAG" \
-            --arg notes "$NOTES" \
-            --arg url "$RELEASE_URL" \
-            --arg stars "${REPO_STARS:-0}" \
-            --arg forks "${REPO_FORKS:-0}" \
-            --arg mention "$role_mention" \
-            '{
-              content: (
-                $mention
-                + "🚀 **opensre `" + $tag + "` is live**\n"
-                + "🔗 " + $url + "\n"
-                + "⭐ " + $stars + " stars • 🍴 " + $forks + " forks\n\n"
-                + "**Release Notes**\n"
-                + $notes
-              )
-            }'
-          )"
-
-          curl --fail --silent --show-error --max-time 30 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "$DISCORD_WEBHOOK_URL_UPDATE"
-
-      # - name: Sync Homebrew tap formula
-      #   env:
-      #     HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-      #   shell: bash
-      #   run: |
-      #     set -euo pipefail
-      #
-      #     if [ -z "${HOMEBREW_TAP_GITHUB_TOKEN:-}" ]; then
-      #       echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is required to sync Tracer-Cloud/homebrew-tap."
-      #       exit 1
-      #     fi
-      #
-      #     TAG_NAME="${{ needs.prepare.outputs.tag_name }}"
-      #     VERSION="${TAG_NAME#v}"
-      #     ASSET_DIR="release-assets"
-      #
-      #     linux_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-x64.tar.gz.sha256")"
-      #     linux_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_linux-arm64.tar.gz.sha256")"
-      #     darwin_x64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-x64.tar.gz.sha256")"
-      #     darwin_arm64_sha="$(awk '{print $1}' "${ASSET_DIR}/opensre_${VERSION}_darwin-arm64.tar.gz.sha256")"
-      #
-      #     tap_dir="$(mktemp -d)/homebrew-tap"
-      #     git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/Tracer-Cloud/homebrew-tap.git" "$tap_dir"
-      #
-      #     python - "$tap_dir/Formula/opensre.rb" "$VERSION" "$darwin_arm64_sha" "$darwin_x64_sha" "$linux_arm64_sha" "$linux_x64_sha" <<'PY'
-      #     from __future__ import annotations
-      #
-      #     import re
-      #     import sys
-      #     from pathlib import Path
-      #
-      #     formula_path = Path(sys.argv[1])
-      #     version = sys.argv[2]
-      #     darwin_arm64_sha = sys.argv[3]
-      #     darwin_x64_sha = sys.argv[4]
-      #     linux_arm64_sha = sys.argv[5]
-      #     linux_x64_sha = sys.argv[6]
-      #
-      #     text = formula_path.read_text()
-      #     text = re.sub(r'version "[^"]+"', f'version "{version}"', text, count=1)
-      #     replacements = {
-      #         r'(opensre_#\{version\}_darwin-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_arm64_sha,
-      #         r'(opensre_#\{version\}_darwin-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': darwin_x64_sha,
-      #         r'(opensre_#\{version\}_linux-arm64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_arm64_sha,
-      #         r'(opensre_#\{version\}_linux-x64\.tar\.gz"\n\s*sha256 ")[^"]+(")': linux_x64_sha,
-      #     }
-      #     for pattern, sha in replacements.items():
-      #         text, count = re.subn(pattern, rf'\g<1>{sha}\g<2>', text, count=1)
-      #         if count != 1:
-      #             raise SystemExit(f"Failed to update checksum with pattern: {pattern}")
-      #     formula_path.write_text(text)
-      #     PY
-      #
-      #     cd "$tap_dir"
-      #     if git diff --quiet -- Formula/opensre.rb; then
-      #       echo "Homebrew tap formula already up to date."
-      #       exit 0
-      #     fi
-      #
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      #     git add Formula/opensre.rb
-      #     git commit -m "chore: update opensre formula to ${VERSION}"
-      #     git push origin HEAD:main
+          export VERSION="${VERSION#v}"
+          bash .github/scripts/sync-homebrew-tap-formula.sh
 
   publish-main-release:
     if: needs.prepare.outputs.channel == 'main'
@@ -621,40 +548,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           short_sha="$(printf '%s' "$GITHUB_SHA" | cut -c1-7)"
           built_at="$(date -u +"%Y-%m-%d %H:%M UTC")"
 
+          CB='```'
           {
-            echo "## Main build"
-            echo
-            echo "Rolling binary build from \`main\`."
-            echo
-            echo "- Commit: \`${short_sha}\`"
-            echo "- Built: ${built_at}"
-            echo
-            echo "### Install"
-            echo
-            echo "Stable:"
-            echo
-            echo
-            echo '```bash'
-            echo 'curl -fsSL https://install.opensre.com | bash'
-            echo '```'
-            echo
-            echo "Main:"
-            echo
-            echo
-            echo '```bash'
-            echo 'curl -fsSL https://install.opensre.com | bash -s -- --main'
-            echo '```'
-            echo
-            echo "Windows stable:"
-            echo
-            echo
-            echo '```powershell'
-            echo 'irm https://install.opensre.com | iex'
-            echo '```'
+            printf '## Main build\n\nRolling binary build from `main`.\n\n'
+            printf -- '- Commit: `%s`\n- Built: %s\n\n' "$short_sha" "$built_at"
+            printf '### Install\n\nStable:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash\n%s\n\n' "$CB" "$CB"
+            printf 'Main:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --main\n%s\n\n' "$CB" "$CB"
+            printf 'Windows stable:\n\n%spowershell\nirm https://install.opensre.com | iex\n%s\n' "$CB" "$CB"
           } > MAIN_RELEASE_NOTES.md
 
       - name: Move nightly tag to the latest commit

@@ -6,12 +6,7 @@ import ast
 from pathlib import Path
 
 _COMPLEXITY_LIMITS: dict[str, int] = {
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/deterministic_action_mapper.py": 13,
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/mapper_runner.py": 10,
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/rule_sets/registry_rules.py": 13,
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/rule_sets/integration_detail_rules.py": 9,
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/slash_commands/rule_sets/fallback_rules.py": 6,
-    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/llm_action_planner/postprocessing.py": 12,
+    "app/cli/interactive_shell/routing/handle_message_with_agent/orchestration/llm_action_planner/postprocessing.py": 5,
 }
 
 

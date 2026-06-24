@@ -128,21 +128,19 @@ def test_scenario_action_kinds_have_registered_tools() -> None:
     assert not missing, "scenario action kinds missing tool registrations:\n" + "\n".join(missing)
 
 
-def test_should_execute_invariants() -> None:
+def test_executes_terminal_action_invariants() -> None:
     violations: list[str] = []
     for case in load_all_scenarios():
         scenario_id = case.scenario.id
         policy = case.answer.policy
-        # has_unhandled_clause is deprecated; when still present it must not
-        # contradict should_execute.
-        if policy.has_unhandled_clause and policy.should_execute:
-            violations.append(f"{scenario_id}: has_unhandled_clause requires should_execute=false")
-        if not policy.should_execute and case.answer.executed_actions:
-            violations.append(f"{scenario_id}: should_execute=false requires executed_actions=[]")
-        # The loader auto-injects "$ /" into must_not_contain when should_execute=false,
-        # so this invariant always holds on loaded data.
+        if not policy.executes_terminal_action and case.answer.executed_actions:
+            violations.append(
+                f"{scenario_id}: executes_terminal_action=false requires executed_actions=[]"
+            )
+        # The loader auto-injects "$ /" into must_not_contain when
+        # executes_terminal_action=false, so this invariant always holds on loaded data.
         must_not = case.answer.response_contract.get("must_not_contain", [])
-        if not policy.should_execute and "$ /" not in must_not:
+        if not policy.executes_terminal_action and "$ /" not in must_not:
             violations.append(
                 f"{scenario_id}: non-executing cases must include '$ /' in must_not_contain"
             )
@@ -156,6 +154,54 @@ def test_should_execute_invariants() -> None:
                     f"{scenario_id}: forbidden_actions entry {entry!r} is not a valid kind"
                 )
     assert not violations, "policy invariant violations:\n" + "\n".join(violations)
+
+
+def test_available_capabilities_blocks_are_not_redundant_boilerplate() -> None:
+    """Guard the trimmed capability convention.
+
+    With the three-state ``available_capabilities`` model, omitting the block
+    inherits the production default (every planner tool enabled, matching
+    ``ReplSession()``). A block that explicitly disables all three surfaces
+    (``slash_commands: []`` + ``cli_commands: []`` + ``synthetic_suites: []``)
+    is the old redundant boilerplate this cleanup removed: it adds noise and
+    hides the production default. Scenarios should instead omit the block, or
+    set a non-empty allowlist for only the surface(s) they need to constrain.
+    """
+    offenders: list[str] = []
+    for case in load_all_scenarios():
+        caps = case.scenario.available_capabilities
+        if caps.slash_commands == () and caps.cli_commands == () and caps.synthetic_suites == ():
+            offenders.append(case.scenario.id)
+    assert not offenders, (
+        "These scenarios disable all three planner surfaces via an explicit "
+        "all-empty available_capabilities block; omit the block to use the "
+        "production default (all tools enabled) instead:\n" + "\n".join(offenders)
+    )
+
+
+def test_gathered_tools_contract_names_are_registered() -> None:
+    from app.tools.registry import clear_tool_registry_cache, get_registered_tools
+
+    clear_tool_registry_cache()
+    registered = {tool.name for tool in get_registered_tools()}
+
+    missing: list[str] = []
+    for case in load_all_scenarios():
+        contract = case.answer.gathered_tools_contract
+        if contract is None:
+            continue
+        names = (
+            *contract.must_call_any,
+            *contract.must_call_all,
+            *contract.must_not_call,
+            *contract.must_return_valid_data,
+        )
+        for name in names:
+            if name not in registered:
+                missing.append(f"{case.scenario.id}: gathered_tools_contract names {name!r}")
+    assert not missing, "gathered_tools_contract references unregistered tool names:\n" + "\n".join(
+        missing
+    )
 
 
 def test_routing_test_modules_do_not_use_mock_patterns() -> None:

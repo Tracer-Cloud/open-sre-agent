@@ -11,6 +11,7 @@ from app.cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
     validate_coralogix_integration,
+    validate_dagster_integration,
     validate_datadog_integration,
     validate_discord_bot,
     validate_github_mcp_integration,
@@ -35,6 +36,7 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_aws_integration",
         "validate_betterstack_integration",
         "validate_coralogix_integration",
+        "validate_dagster_integration",
         "validate_datadog_integration",
         "validate_discord_bot",
         "validate_telegram_bot",
@@ -44,14 +46,19 @@ def test_legacy_integration_health_import_surface_still_exports_validators() -> 
         "validate_grafana_integration",
         "validate_honeycomb_integration",
         "validate_incident_io_integration",
+        "validate_jenkins_integration",
         "validate_jira_integration",
         "validate_notion_integration",
         "validate_openclaw_integration",
         "validate_opensearch_integration",
         "validate_opsgenie_integration",
+        "validate_posthog_mcp_integration",
+        "validate_pagerduty_integration",
         "validate_sentry_integration",
+        "validate_sentry_mcp_integration",
         "validate_slack_webhook",
         "validate_splunk_integration",
+        "validate_tempo_integration",
         "validate_vercel_integration",
     }
 
@@ -359,6 +366,40 @@ def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
 
     assert result.ok is True
     assert result.detail == "Sentry ok"
+
+
+def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.cli.wizard.integration_validators.client_validators.validate_dagster_config",
+        lambda _config: types.SimpleNamespace(
+            ok=True, detail="Connected to Dagster version mock-1.0."
+        ),
+    )
+
+    result = validate_dagster_integration(
+        endpoint="http://localhost:3000/graphql",
+        api_token="",
+    )
+
+    assert result.ok is True
+    assert result.detail == "Connected to Dagster version mock-1.0."
+
+
+def test_validate_dagster_integration_surfaces_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.cli.wizard.integration_validators.client_validators.validate_dagster_config",
+        lambda _config: types.SimpleNamespace(
+            ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
+        ),
+    )
+
+    result = validate_dagster_integration(
+        endpoint="https://demo.dagster.cloud/graphql",
+        api_token="bad",
+    )
+
+    assert result.ok is False
+    assert "HTTP 401" in result.detail
 
 
 class _FakeVercelClient:

@@ -1,10 +1,12 @@
-"""Metamorphic routing invariants for command and non-command paths."""
+"""Metamorphic routing invariants for the single-branch agent entrypoint."""
 
 from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.routing.policy_tags import RouteSignal
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
+)
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.runtime.session import ReplSession
 
@@ -17,11 +19,10 @@ from app.cli.interactive_shell.runtime.session import ReplSession
         "\thelp\t",
     ],
 )
-def test_help_alias_whitespace_and_case_variants_route_to_slash_help(prompt: str) -> None:
+def test_help_alias_variants_dispatch_slash_help(prompt: str) -> None:
     decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.SLASH
-    assert decision.command_text == "/help"
-    assert decision.matched_signals == (RouteSignal.BARE_COMMAND_ALIAS.value,)
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+    assert deterministic_command_text(prompt) == "/help"
 
 
 @pytest.mark.parametrize(
@@ -32,12 +33,12 @@ def test_help_alias_whitespace_and_case_variants_route_to_slash_help(prompt: str
         "\topensre   investigate   -i   alert.json\t",
     ],
 )
-def test_opensre_investigate_variants_keep_deterministic_route(prompt: str) -> None:
+def test_opensre_investigate_variants_dispatch_deterministically(prompt: str) -> None:
     decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.SLASH
-    assert decision.command_text is not None
-    assert decision.command_text.startswith("/investigate")
-    assert decision.matched_signals == (RouteSignal.OPENSRE_INVESTIGATE.value,)
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+    command_text = deterministic_command_text(prompt)
+    assert command_text is not None
+    assert command_text.startswith("/investigate")
 
 
 @pytest.mark.parametrize(
@@ -48,7 +49,7 @@ def test_opensre_investigate_variants_keep_deterministic_route(prompt: str) -> N
         "  check opensre health and show connected services  ",
     ],
 )
-def test_non_command_action_plan_variants_keep_cli_agent_signal(prompt: str) -> None:
+def test_non_command_variants_have_no_deterministic_command(prompt: str) -> None:
     decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.CLI_AGENT
-    assert RouteSignal.CLI_AGENT_ACTION_PLAN.value in decision.matched_signals
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+    assert deterministic_command_text(prompt) is None

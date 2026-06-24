@@ -26,6 +26,7 @@ from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
         "Finding queries consuming excessive CPU or IO",
     ],
     is_available=azure_sql_is_available,
+    injected_params=("server",),
     extract_params=azure_sql_extract_params,
 )
 def get_azure_sql_current_queries(

@@ -11,7 +11,34 @@ from app.analytics.cli import (
     capture_integration_verified,
     capture_integrations_listed,
 )
-from app.cli.support.constants import MANAGED_INTEGRATION_SERVICES, SETUP_SERVICES, VERIFY_SERVICES
+from app.cli.interactive_shell.data_store.constants import (
+    MANAGED_INTEGRATION_SERVICES,
+    SETUP_SERVICES,
+    VERIFY_SERVICES,
+)
+
+
+class IntegrationServiceChoice(click.Choice):
+    """``click.Choice`` that resolves integration-management service aliases.
+
+    Without this, passing an intuitive alias such as ``posthog`` (whose only
+    management flow is ``posthog_mcp``) fails the enum check with exit code 2
+    before ``cmd_setup``/``cmd_verify`` ever run. Resolving the alias here keeps
+    Click's friendly ``[[a|b|c]]`` usage/error display and shell completion while
+    accepting the canonical service name the handlers expect.
+    """
+
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> object:
+        if isinstance(value, str):
+            from app.integrations.registry import resolve_management_service
+
+            value = resolve_management_service(value)
+        return super().convert(value, param, ctx)
 
 
 @click.group(name="integrations")
@@ -20,7 +47,9 @@ def integrations() -> None:
 
 
 @integrations.command(name="setup")
-@click.argument("service", required=False, default=None, type=click.Choice(SETUP_SERVICES))
+@click.argument(
+    "service", required=False, default=None, type=IntegrationServiceChoice(SETUP_SERVICES)
+)
 def setup_integration(service: str | None) -> None:
     """Set up credentials for a service."""
     from app.integrations.cli import cmd_setup, cmd_verify
@@ -48,7 +77,7 @@ def list_integrations() -> None:
 
 
 @integrations.command(name="show")
-@click.argument("service", type=click.Choice(MANAGED_INTEGRATION_SERVICES))
+@click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
 def show_integration(service: str) -> None:
     """Show details for a configured integration."""
     from app.integrations.cli import cmd_show
@@ -57,7 +86,7 @@ def show_integration(service: str) -> None:
 
 
 @integrations.command(name="remove")
-@click.argument("service", type=click.Choice(MANAGED_INTEGRATION_SERVICES))
+@click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
 def remove_integration(service: str) -> None:
     """Remove a configured integration."""
     from app.integrations.cli import cmd_remove
@@ -67,7 +96,9 @@ def remove_integration(service: str) -> None:
 
 
 @integrations.command(name="verify")
-@click.argument("service", required=False, default=None, type=click.Choice(VERIFY_SERVICES))
+@click.argument(
+    "service", required=False, default=None, type=IntegrationServiceChoice(VERIFY_SERVICES)
+)
 @click.option(
     "--send-slack-test", is_flag=True, help="Send a test message to the configured Slack webhook."
 )

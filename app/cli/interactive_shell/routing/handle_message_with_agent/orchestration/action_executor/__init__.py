@@ -55,8 +55,6 @@ from .opensre_cli_runner import (
 )
 from .shell_runner import run_cd_command, run_pwd_command, run_shell_command
 from .synthetic_tasks import (
-    _scenario_id_from_synthetic_suite_name,
-    _try_bind_synthetic_observation,
     run_synthetic_test,
     watch_synthetic_subprocess,
 )
@@ -79,6 +77,7 @@ from .task_streaming import (
     _start_task_output_streams,
     _subprocess_env_with_aligned_width,
     read_diag,
+    read_task_output,
     terminate_child_process,
 )
 
@@ -112,16 +111,15 @@ __all__ = [
     "_pump_task_stream",
     "_run_opensre_foreground",
     "_run_opensre_foreground_streaming",
-    "_scenario_id_from_synthetic_suite_name",
     "_should_run_opensre_in_foreground",
     "_should_use_pty",
     "_start_task_output_streams",
     "_subprocess_env_with_aligned_width",
-    "_try_bind_synthetic_observation",
     "execute_shell_command",
     "os",
     "print_interactive_wizard_handoff",
     "read_diag",
+    "read_task_output",
     "run_claude_code_implementation",
     "run_cd_command",
     "run_opensre_cli_command",

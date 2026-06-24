@@ -32,7 +32,7 @@ class ActionToolRegistry:
         specs: list[dict[str, Any]] = []
         for name in self.names():
             entry = self._tools[name]
-            if not entry.is_available(session):
+            if not entry.is_available(session) or not entry.is_planner_selectable(session):
                 continue
             specs.append(
                 {

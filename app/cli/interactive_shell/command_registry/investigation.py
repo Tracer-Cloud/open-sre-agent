@@ -9,6 +9,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind
 from app.cli.interactive_shell.runtime.background_runner import (
     start_background_template_investigation,
@@ -26,13 +28,11 @@ from app.cli.interactive_shell.ui.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
-from app.cli.support.errors import OpenSREError
-from app.cli.support.exception_reporting import report_exception
 from app.llm_reasoning_effort import apply_reasoning_effort
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
-    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
+    from app.cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
 
     root = "/template"
     choices: list[tuple[str, str]] = [(c, c) for c in ALERT_TEMPLATE_CHOICES]
@@ -50,7 +50,7 @@ def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
 
 
 def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
-    from app.cli.support.constants import SAMPLE_ALERT_OPTIONS
+    from app.cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
     choices: list[tuple[str, str]] = [
@@ -91,8 +91,8 @@ def _prompt_investigate_path(console: Console) -> str | None:
 
 
 def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
+    from app.cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
     from app.cli.investigation.alert_templates import build_alert_template
-    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
     if not args and repl_tty_interactive():
         return _interactive_template_menu(session, console)
@@ -137,9 +137,9 @@ def _validate_save_args(args: list[str]) -> str | None:
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
     from app.analytics.cli import track_investigation
     from app.analytics.source import EntrypointSource, TriggerMode
+    from app.cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
     from app.cli.investigation import run_investigation_for_session, run_sample_alert_for_session
     from app.cli.investigation.payload import resolve_alert_path
-    from app.cli.support.constants import ALERT_TEMPLATE_CHOICES
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)
@@ -220,8 +220,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
 
         root = final_state.get("root_cause")
         task.mark_completed(result=str(root) if root is not None else "")
-        session.last_state = final_state
-        session.accumulate_from_state(final_state)
+        session.apply_investigation_result(final_state)
         session.record("alert", f"/investigate {template_name}")
         return True
 
@@ -293,10 +292,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.last_state = final_state
-    # Match `run_new_alert` in runtime/execution.py: inherit service / cluster / region
-    # across subsequent investigations in the same REPL session.
-    session.accumulate_from_state(final_state)
+    session.apply_investigation_result(final_state)
     session.record("alert", f"/investigate {raw_target}")
     return True
 

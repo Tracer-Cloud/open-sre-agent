@@ -16,14 +16,29 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from app.cli.interactive_shell.ui.theme import ANSI_BOLD, ANSI_RESET
+from app.cli.interactive_shell.ui.theme import (
+    ANSI_BOLD,
+    ANSI_DIM,
+    ANSI_RESET,
+    DEVICE_CODE_ANSI,
+)
 
 if TYPE_CHECKING:
     from app.integrations.github_mcp import GitHubMcpDisplayDetailLevel
 
 from app.integrations.gitlab import DEFAULT_GITLAB_BASE_URL
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
-from app.integrations.registry import SUPPORTED_SETUP_SERVICES
+from app.integrations.posthog_mcp import (
+    DEFAULT_POSTHOG_MCP_URL,
+    build_posthog_mcp_config,
+    validate_posthog_mcp_config,
+)
+from app.integrations.registry import SUPPORTED_SETUP_SERVICES, resolve_management_service
+from app.integrations.sentry_mcp import (
+    DEFAULT_SENTRY_MCP_URL,
+    build_sentry_mcp_config,
+    validate_sentry_mcp_config,
+)
 from app.integrations.store import (
     STORE_PATH,
     get_integration,
@@ -40,6 +55,7 @@ from app.integrations.verify import (
 
 _B = ANSI_BOLD
 _R = ANSI_RESET
+_DIM = ANSI_DIM
 
 
 def _json_echo(data: Any) -> None:
@@ -154,6 +170,26 @@ def _setup_datadog() -> None:
     upsert_integration(
         "datadog", {"credentials": {"api_key": api_key, "app_key": app_key, "site": site}}
     )
+
+
+def _setup_groundcover() -> None:
+    api_key = _p("Service-account API key", secret=True)
+    mcp_url = _p("MCP URL", default="https://mcp.groundcover.com/api/mcp")
+    tenant_uuid = _p("Tenant UUID (optional, for multi-workspace accounts)")
+    backend_id = _p("Backend ID (optional, for multi-backend tenants)")
+    timezone = _p("Timezone", default="UTC")
+    if not api_key:
+        _die("api_key is required.")
+    credentials: dict[str, str] = {
+        "api_key": api_key,
+        "mcp_url": mcp_url,
+        "timezone": timezone,
+    }
+    if tenant_uuid:
+        credentials["tenant_uuid"] = tenant_uuid
+    if backend_id:
+        credentials["backend_id"] = backend_id
+    upsert_integration("groundcover", {"credentials": credentials})
 
 
 def _setup_honeycomb() -> None:
@@ -349,37 +385,102 @@ def _setup_incident_io() -> None:
     )
 
 
-def _setup_github() -> None:
-    from app.integrations.github_mcp import (
-        GitHubMcpRepoView,
-        GitHubMcpRepoVisibilityFilter,
-        build_github_mcp_config,
-        format_github_mcp_validation_cli_report,
-        print_github_mcp_validation_report,
-        validate_github_mcp_config,
+def _github_browser_authorize() -> str | None:
+    """Run GitHub device-flow browser authorization.
+
+    Returns the access token, or ``None`` when the flow is unavailable so the
+    caller can fall back to manual token entry.
+    """
+    from app.integrations.github_mcp_oauth import (
+        GitHubDeviceCode,
+        GitHubDeviceFlowError,
+        authorize_github_via_device_flow,
     )
 
-    print("  1) SSE  2) Streamable HTTP  3) stdio")
-    choice = _p("Choice", default="2")
-    mode = {"1": "sse", "2": "streamable-http", "3": "stdio"}.get(choice, "streamable-http")
-    credentials: dict[str, Any] = {"mode": mode}
+    def _show(code: GitHubDeviceCode) -> None:
+        print()
+        print(f"  1. Your browser will open {code.verification_uri}")
+        print("     (if it doesn't open automatically, visit that URL yourself).")
+        print(
+            f"  2. Enter this one-time code when GitHub asks: {DEVICE_CODE_ANSI}{code.user_code}{_R}"
+        )
+        print("  3. Approve the request for OpenSRE.")
+        print()
+        print(f"  {_DIM}Waiting for you to approve in the browser… (Ctrl-C to cancel){_R}")
+
+    print()
+    print("  Sign in to GitHub in your browser (device authorization):")
+    print(f"  {_DIM}Requesting a one-time code from GitHub…{_R}")
+    try:
+        token = authorize_github_via_device_flow(on_prompt=_show)
+    except GitHubDeviceFlowError as err:
+        print(f"  Browser authorization unavailable: {err}", file=sys.stderr)
+        return None
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.")
+        sys.exit(1)
+    except Exception as err:  # network/transport issues
+        print(f"  Browser authorization failed: {err}", file=sys.stderr)
+        return None
+    print(f"  {_B}Authorized.{_R} Saved a GitHub token from the browser sign-in.")
+    return token.access_token
+
+
+def _setup_github_auth_token(mode: str) -> str:
+    """Resolve a GitHub MCP auth token, offering browser sign-in for remote modes."""
     if mode == "stdio":
-        command = _p("Command", default="github-mcp-server")
-        args = _p("Args", default="stdio --toolsets repos,issues,pull_requests,actions")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-    else:
-        url = _p("MCP URL", default="https://api.githubcopilot.com/mcp/")
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
-    credentials["auth_token"] = _p(
-        "GitHub PAT / auth token (optional if the server authenticates upstream)",
-        secret=True,
+        return _p(
+            "GitHub PAT / auth token (optional if the server authenticates upstream)",
+            secret=True,
+        )
+
+    auth_method = questionary.select(
+        "  How do you want to connect OpenSRE to GitHub?",
+        choices=[
+            questionary.Choice(
+                "Sign in with GitHub in your browser (opens a page, enter a one-time code)",
+                value="browser",
+            ),
+            questionary.Choice("Paste a personal access token (PAT)", value="token"),
+            questionary.Choice("Skip — the MCP server authenticates upstream", value="none"),
+        ],
+        default="browser",
+    ).ask()
+    if auth_method is None:
+        print("\nAborted.")
+        sys.exit(1)
+    if auth_method == "none":
+        return ""
+    if auth_method == "browser":
+        token = _github_browser_authorize()
+        if token:
+            return token
+        print("  Falling back to manual token entry.")
+    return _p("GitHub PAT / auth token", secret=True)
+
+
+def _github_advanced_setup(credentials: dict[str, Any]) -> tuple[str, str]:
+    """Prompt the advanced GitHub MCP knobs and return (repo_view, repo_visibility).
+
+    Mutates ``credentials`` in place with mode/url/command/args/auth_token/toolsets.
+    """
+    from app.integrations.github_mcp import (
+        DEFAULT_GITHUB_MCP_TOOLSETS,
+        DEFAULT_GITHUB_MCP_URL,
     )
-    toolsets = _p("Toolsets", default="repos,issues,pull_requests,actions,search")
+
+    # Transport is fixed to Streamable HTTP. In practice it is the only mode anyone
+    # selects, and SSE/stdio are deprecated for the hosted GitHub MCP server. The
+    # transport prompt was removed on purpose — do NOT reintroduce a transport
+    # selection or a stdio branch here.
+    mode = "streamable-http"
+    credentials["mode"] = mode
+    url = _p("MCP URL", default=DEFAULT_GITHUB_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["auth_token"] = _setup_github_auth_token(mode)
+    toolsets = _p("Toolsets", default=",".join(DEFAULT_GITHUB_MCP_TOOLSETS))
     credentials["toolsets"] = [part.strip() for part in toolsets.split(",") if part.strip()]
 
     repo_view = questionary.select(
@@ -408,6 +509,49 @@ def _setup_github() -> None:
     if repo_visibility is None:
         print("\nAborted.")
         sys.exit(1)
+    return repo_view, repo_visibility
+
+
+def _setup_github() -> str | None:
+    """Configure + validate + save the GitHub MCP integration.
+
+    Returns the authenticated GitHub login on success (``None`` if the validated
+    result carried no login), so callers like the first-launch gate can propagate
+    the username. Exits the process on validation failure.
+    """
+    from app.integrations.github_mcp import (
+        DEFAULT_GITHUB_MCP_MODE,
+        DEFAULT_GITHUB_MCP_TOOLSETS,
+        DEFAULT_GITHUB_MCP_URL,
+        GitHubMcpDisplayDetailLevel,
+        GitHubMcpRepoView,
+        GitHubMcpRepoVisibilityFilter,
+        build_github_mcp_config,
+        format_github_mcp_validation_cli_report,
+        print_github_mcp_validation_report,
+        validate_github_mcp_config,
+    )
+
+    print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
+    advanced = questionary.confirm(
+        "  Customize advanced settings (transport, server URL, toolsets, repo scope)?",
+        default=False,
+    ).ask()
+    if advanced is None:
+        print("\nAborted.")
+        sys.exit(1)
+
+    credentials: dict[str, Any] = {}
+    repo_view: str = "auto"
+    repo_visibility: str = "any"
+
+    if advanced:
+        repo_view, repo_visibility = _github_advanced_setup(credentials)
+    else:
+        credentials["mode"] = DEFAULT_GITHUB_MCP_MODE
+        credentials["url"] = DEFAULT_GITHUB_MCP_URL
+        credentials["auth_token"] = _setup_github_auth_token(DEFAULT_GITHUB_MCP_MODE)
+        credentials["toolsets"] = list(DEFAULT_GITHUB_MCP_TOOLSETS)
 
     print("\n  Validating GitHub MCP integration...")
     mcp_config = build_github_mcp_config(credentials)
@@ -417,7 +561,13 @@ def _setup_github() -> None:
         repo_visibility=cast(GitHubMcpRepoVisibilityFilter, repo_visibility),
     )
     if result.ok:
-        level = _prompt_github_repo_report_level()
+        # The simple path stays concise: identity + tool availability, no repo dump.
+        # Only the advanced path offers the verbose repo listing.
+        level = (
+            _prompt_github_repo_report_level()
+            if advanced
+            else cast(GitHubMcpDisplayDetailLevel, "summary")
+        )
         print()
         print_github_mcp_validation_report(result, detail_level=level)
     else:
@@ -425,7 +575,13 @@ def _setup_github() -> None:
             print(f"  {line}")
         sys.exit(1)
 
+    if result.authenticated_user:
+        # Persist the resolved GitHub login as a non-secret credential field so
+        # surfaces like the welcome banner can greet the user by their GitHub
+        # handle instead of the local system username.
+        credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
+    return result.authenticated_user
 
 
 def _setup_gitlab() -> None:
@@ -485,6 +641,49 @@ def _setup_mongodb() -> None:
                 "database": database,
                 "auth_source": auth_source,
                 "tls": tls,
+            }
+        },
+    )
+
+
+def _setup_redis() -> None:
+    host = _p("Host (e.g. localhost or redis.example.net)")
+    if not host:
+        _die("host is required.")
+    port_input = _p("Port", default="6379")
+    username = _p("Username (leave blank unless using Redis ACLs)")
+    password = _p("Password (leave blank if not set)", secret=True)
+    db_input = _p("Database number", default="0")
+    ssl_choice = questionary.select(
+        "Use TLS?",
+        choices=[
+            questionary.Choice("No", value="0"),
+            questionary.Choice("Yes", value="1"),
+        ],
+        instruction="(use arrow keys)",
+    ).ask()
+    if ssl_choice is None:
+        print("\nAborted.")
+        sys.exit(1)
+    ssl = ssl_choice == "1"
+    try:
+        port = int(port_input)
+    except (TypeError, ValueError):
+        _die(f"port: {port_input} is invalid")
+    try:
+        db = int(db_input)
+    except (TypeError, ValueError):
+        _die(f"db: {db_input} is invalid")
+    upsert_integration(
+        "redis",
+        {
+            "credentials": {
+                "host": host,
+                "port": port,
+                "username": username,
+                "password": password,
+                "db": db,
+                "ssl": ssl,
             }
         },
     )
@@ -643,28 +842,19 @@ def _setup_twilio() -> None:
 
 
 def _setup_openclaw() -> None:
-    print("  1) stdio (recommended)  2) Streamable HTTP  3) SSE")
-    choice = _p("Choice", default="1")
-    mode = {"1": "stdio", "2": "streamable-http", "3": "sse"}.get(choice, "stdio")
-
+    # Transport is fixed to stdio (the local OpenClaw bridge). In practice it is the
+    # only mode anyone selects, so the transport prompt was removed on purpose — do
+    # NOT reintroduce a transport selection or a remote streamable-http/SSE branch.
+    mode = "stdio"
     credentials: dict[str, Any] = {"mode": mode}
-    if mode == "stdio":
-        command = _p("OpenClaw bridge command", default="openclaw")
-        args = _p("OpenClaw bridge args", default="mcp serve")
-        if not command:
-            _die("command is required for stdio mode.")
-        credentials["command"] = command
-        credentials["args"] = [part for part in args.split() if part]
-        credentials["url"] = ""
-        credentials["auth_token"] = ""
-    else:
-        url = _p("OpenClaw bridge URL")
-        if not url:
-            _die("url is required for remote MCP modes.")
-        credentials["url"] = url
-        credentials["command"] = ""
-        credentials["args"] = []
-        credentials["auth_token"] = _p("OpenClaw auth token (optional)", secret=True)
+    command = _p("OpenClaw bridge command", default="openclaw")
+    args = _p("OpenClaw bridge args", default="mcp serve")
+    if not command:
+        _die("command is required for stdio mode.")
+    credentials["command"] = command
+    credentials["args"] = [part for part in args.split() if part]
+    credentials["url"] = ""
+    credentials["auth_token"] = ""
 
     print("\n  Validating OpenClaw bridge...")
     config = build_openclaw_config(credentials)
@@ -678,6 +868,66 @@ def _setup_openclaw() -> None:
     print("    - opensre integrations verify openclaw")
     print("    - uv run opensre investigate -i tests/fixtures/openclaw_test_alert.json")
     print("    - for accurate RCA, also configure Grafana/Datadog and GitHub")
+
+
+def _setup_posthog_mcp() -> None:
+    # Transport is fixed to Streamable HTTP (the hosted PostHog MCP server). In
+    # practice it is the only mode anyone selects, so the transport prompt was removed
+    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
+    mode = "streamable-http"
+    credentials: dict[str, Any] = {"mode": mode, "read_only": True}
+    url = _p("PostHog MCP URL", default=DEFAULT_POSTHOG_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["command"] = ""
+    credentials["args"] = []
+
+    credentials["auth_token"] = _p("PostHog personal API key (MCP Server preset)", secret=True)
+    if not credentials["auth_token"]:
+        _die("a personal API key is required for the hosted PostHog MCP server.")
+    credentials["project_id"] = _p("PostHog project ID (optional)", default="")
+
+    print("\n  Validating PostHog MCP...")
+    config = build_posthog_mcp_config(credentials)
+    result = validate_posthog_mcp_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("posthog_mcp", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify posthog_mcp")
+
+
+def _setup_sentry_mcp() -> None:
+    # Transport is fixed to Streamable HTTP (the hosted Sentry MCP server). In
+    # practice it is the only mode anyone selects, so the transport prompt was removed
+    # on purpose — do NOT reintroduce a transport selection or a stdio branch here.
+    mode = "streamable-http"
+    credentials: dict[str, Any] = {"mode": mode}
+    url = _p("Sentry MCP URL", default=DEFAULT_SENTRY_MCP_URL)
+    if not url:
+        _die("url is required for remote MCP modes.")
+    credentials["url"] = url
+    credentials["command"] = ""
+    credentials["args"] = []
+
+    credentials["auth_token"] = _p("Sentry user auth token", secret=True)
+    if not credentials["auth_token"]:
+        _die("a user auth token is required for the hosted Sentry MCP server.")
+    credentials["host"] = _p("Self-hosted Sentry host (optional)", default="")
+
+    print("\n  Validating Sentry MCP...")
+    config = build_sentry_mcp_config(credentials)
+    result = validate_sentry_mcp_config(config)
+    print(f"  {result.detail}")
+    if not result.ok:
+        sys.exit(1)
+
+    upsert_integration("sentry_mcp", {"credentials": credentials})
+    print("  Next:")
+    print("    - opensre integrations verify sentry_mcp")
 
 
 def _setup_postgresql() -> None:
@@ -858,12 +1108,82 @@ def _setup_signoz() -> None:
     )
 
 
+def _setup_jenkins() -> None:
+    base_url = _p("Jenkins URL (e.g. http://localhost:8080)")
+    username = _p("Jenkins username")
+    api_token = _p("Jenkins API token", secret=True)
+
+    if not (base_url and username and api_token):
+        _die("Jenkins URL, username, and API token are required.")
+
+    upsert_integration(
+        "jenkins",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "username": username,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
+def _setup_tempo() -> None:
+    from app.integrations.tempo import build_tempo_config, validate_tempo_config
+
+    url = _p("Tempo URL (e.g. http://localhost:3200 for local Docker)")
+    if not url:
+        _die("Tempo URL is required.")
+
+    api_key = _p(
+        "Tempo bearer token (optional, leave blank if using basic auth or none)", secret=True
+    )
+    username = _p("Tempo username (optional, for basic auth)")
+    password = _p("Tempo password (optional, for basic auth)", secret=True)
+    org_id = _p("Tempo tenant / X-Scope-OrgID (optional, leave blank if single-tenant)")
+
+    credentials: dict[str, str] = {"url": url}
+    if api_key:
+        credentials["api_key"] = api_key
+    if username:
+        credentials["username"] = username
+    if password:
+        credentials["password"] = password
+    if org_id:
+        credentials["org_id"] = org_id
+
+    result = validate_tempo_config(build_tempo_config(credentials))
+    if not result.ok:
+        _die(f"Tempo validation failed: {result.detail}")
+
+    upsert_integration("tempo", {"credentials": credentials})
+
+
+def _setup_pagerduty() -> None:
+    api_key = _p("PagerDuty API key", secret=True)
+    base_url = _p("API base URL override (optional)")
+    if not api_key:
+        _die("api_key is required.")
+    if not base_url:
+        base_url = "https://api.pagerduty.com"
+    upsert_integration(
+        "pagerduty",
+        {
+            "credentials": {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+        },
+    )
+
+
 _HANDLERS: dict[str, Any] = {
     "alertmanager": _setup_alertmanager,
     "aws": _setup_aws,
     "betterstack": _setup_betterstack,
     "coralogix": _setup_coralogix,
     "datadog": _setup_datadog,
+    "groundcover": _setup_groundcover,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "incident_io": _setup_incident_io,
@@ -884,10 +1204,41 @@ _HANDLERS: dict[str, Any] = {
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
     "openclaw": _setup_openclaw,
+    "posthog_mcp": _setup_posthog_mcp,
+    "sentry_mcp": _setup_sentry_mcp,
     "postgresql": _setup_postgresql,
     "mysql": _setup_mysql,
+    "redis": _setup_redis,
     "signoz": _setup_signoz,
+    "jenkins": _setup_jenkins,
+    "tempo": _setup_tempo,
+    "pagerduty": _setup_pagerduty,
 }
+
+
+def _setup_dagster() -> None:
+    endpoint = _p(
+        "Dagster GraphQL endpoint "
+        "(e.g. http://localhost:3000 or https://<org>.dagster.plus/<deployment>)"
+    )
+    if not endpoint:
+        _die("endpoint is required.")
+    api_token = _p(
+        "Dagster Cloud API token (leave empty for local OSS Dagster with no auth)",
+        secret=True,
+    )
+    upsert_integration(
+        "dagster",
+        {
+            "credentials": {
+                "endpoint": endpoint,
+                "api_token": api_token,
+            }
+        },
+    )
+
+
+_HANDLERS["dagster"] = _setup_dagster
 
 
 def _setup_azure_sql() -> None:
@@ -947,6 +1298,8 @@ def cmd_setup(service: str | None) -> str:
         except (EOFError, KeyboardInterrupt):
             print("\nAborted.")
             sys.exit(1)
+    if service:
+        service = resolve_management_service(service)
     if not service or service not in _SETUP_SERVICES:
         _die(f"Usage: setup <service>. Supported: {SUPPORTED}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
@@ -956,7 +1309,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
     items = list_integrations()
 
@@ -980,6 +1333,7 @@ def cmd_show(service: str | None) -> None:
     if not service:
         _die("Usage: show <service>")
         return
+    service = resolve_management_service(service)
     record = get_integration(service)
     if not record:
         _die(f"No active integration for '{service}'.")
@@ -988,11 +1342,12 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from app.cli.support.context import is_yes
+    from app.cli.interactive_shell.data_store.context import is_yes
 
     if not service:
         _die("Usage: remove <service>")
         return
+    service = resolve_management_service(service)
     if not is_yes():
         try:
             confirmed = questionary.confirm(f"  Remove '{service}'?", default=False).ask()
@@ -1008,8 +1363,10 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
+    if service:
+        service = resolve_management_service(service)
     if service and service not in SUPPORTED_VERIFY_SERVICES:
         _die(f"Usage: verify [service]. Supported: {SUPPORTED_VERIFY}")
 

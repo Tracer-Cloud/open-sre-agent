@@ -265,14 +265,14 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.guardrails.apply import apply_guardrails_to_messages
 
         secret = "key is AKIAIOSFODNN7EXAMPLE"
         msgs: list[dict[str, Any]] = [
             {"role": "user", "content": "hello"},
             {"role": "user", "content": secret},
         ]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
 
         assert result[0]["content"] == "hello"
         assert "AKIA" not in str(result[1]["content"])
@@ -293,11 +293,11 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "this is forbidden"}]
         with pytest.raises(GuardrailBlockedError):
-            _apply_guardrails_to_messages(msgs)
+            apply_guardrails_to_messages(msgs)
 
     def test_skips_non_string_content(
         self,
@@ -313,10 +313,10 @@ class TestChatNodeGuardrails:
         monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
         monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": None}]
-        _apply_guardrails_to_messages(msgs)
+        apply_guardrails_to_messages(msgs)
 
     def test_noop_when_no_rules(
         self,
@@ -328,10 +328,10 @@ class TestChatNodeGuardrails:
             lambda: tmp_path / "missing.yml",
         )
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "AKIAIOSFODNN7EXAMPLE"}]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
         assert result[0]["content"] == "AKIAIOSFODNN7EXAMPLE"
 
 
@@ -449,11 +449,11 @@ class TestOverlappingRedactionReachesDownstream:
         overlapping rules, leaving originals untouched (it copies)."""
         self._install_rules(tmp_path, monkeypatch)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from app.guardrails.apply import apply_guardrails_to_messages
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
         msgs: list[dict[str, Any]] = [{"role": "user", "content": original}]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
 
         redacted = str(result[0]["content"])
         assert "api_key=" not in redacted

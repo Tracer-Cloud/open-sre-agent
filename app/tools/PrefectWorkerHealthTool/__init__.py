@@ -28,6 +28,7 @@ class PrefectWorkerHealthTool(BaseTool):
         "Auditing work pool concurrency limits during incident investigation",
     ]
     requires = ["api_url"]
+    injected_params = ["api_key", "api_url", "workspace_id"]
     input_schema = {
         "type": "object",
         "properties": {

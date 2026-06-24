@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
 
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
+from app.cli.interactive_shell.command_registry.types import (
+    ExecutionTier,
+    SlashCommand,
+)
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from app.cli.interactive_shell.ui import (
@@ -20,6 +22,7 @@ from app.cli.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
+from app.cli.interactive_shell.ui.time_format import format_repl_timestamp
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
 _MAX_DETAIL_CHARS = 120
@@ -27,7 +30,7 @@ _WATCHDOG_PID = re.compile(r"pid=(\d+)")
 
 
 def _task_started_label(task: TaskRecord) -> str:
-    return datetime.fromtimestamp(task.started_at, tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return format_repl_timestamp(task.started_at, style="utc")
 
 
 def _task_duration_label(task: TaskRecord) -> str:
@@ -217,7 +220,12 @@ def _cmd_cancel(session: ReplSession, console: Console, args: list[str]) -> bool
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand("/history", "Show persisted command history.", _cmd_history),
-    SlashCommand("/tasks", "List recent and in-flight shell tasks.", _cmd_tasks),
+    SlashCommand(
+        "/tasks",
+        "List recent and in-flight shell tasks.",
+        _cmd_tasks,
+        usage=("/tasks",),
+    ),
     SlashCommand(
         "/cancel",
         "Cancel a running task by id.",

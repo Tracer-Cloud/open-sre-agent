@@ -23,7 +23,7 @@ def _masked(value: str | None) -> str:
 
 def _emit_llm_config() -> None:
     """Print current LLM provider and model from environment (legacy `opensre config`)."""
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
     from app.config import (
         get_configured_llm_provider,
         get_llm_provider_api_key,
@@ -85,7 +85,7 @@ def _load_config() -> dict[str, Any]:
         return {}
 
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
 
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
@@ -102,7 +102,7 @@ def _load_config() -> dict[str, Any]:
 
 
 def _save_config(data: dict[str, Any]) -> None:
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +156,7 @@ def config_command(ctx: click.Context) -> None:
 @config_command.command(name="show")
 def config_show() -> None:
     """Show local ~/.opensre/config.yml values."""
-    from app.cli.support.context import is_json_output
+    from app.cli.interactive_shell.data_store.context import is_json_output
 
     payload = _load_config()
 
@@ -164,7 +164,7 @@ def config_show() -> None:
         click.echo(json.dumps(payload))
         return
 
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
     path = _config_path()
     click.echo(f"# {path} (on-disk values; environment variables do not override this output)")

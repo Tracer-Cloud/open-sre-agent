@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.result import (
+from app.agent.stages.diagnose.node import (
     _build_diagnosis_schema,
     _extract_last_assistant_text,
     _taxonomy_categories_for_alert_source,

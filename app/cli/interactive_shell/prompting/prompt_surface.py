@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Iterable
+from typing import Any
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.application.current import get_app
+from prompt_toolkit.application.current import get_app_or_none
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion, PathCompleter
 from prompt_toolkit.document import Document
@@ -17,9 +19,13 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.text import Text
 
+from app.cli.interactive_shell.command_registry.help import QUICK_ACCESS_COMMANDS
+from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.history import load_prompt_history
-from app.cli.interactive_shell.routing.resolve_cli_command.catalog import BARE_COMMAND_ALIASES
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.catalog import (
+    BARE_COMMAND_ALIASES,
+)
 from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.ui import (
     ANSI_DIM,
@@ -44,11 +50,7 @@ def _prompt_rule_line(width: int) -> str:
 
 
 def _prompt_rule_ansi() -> str:
-    try:
-        width = get_app().output.get_size().columns
-    except Exception:
-        width = 80
-    return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(width)}{ANSI_RESET}"
+    return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(_terminal_columns())}{ANSI_RESET}"
 
 
 def _prompt_counter_text(session: ReplSession) -> str:
@@ -144,8 +146,123 @@ class ReplInputLexer(Lexer):
         return get_line
 
 
-def _short_meta(text: str, max_len: int = 54) -> str:
-    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+_DEFAULT_TERMINAL_COLUMNS = 80
+_COMPLETION_META_PADDING = 6
+_COMPLETION_META_MIN_WIDTH = 24
+_COMPLETION_PREVIEW_SEP = " — "
+
+
+def _terminal_columns() -> int:
+    app = get_app_or_none()
+    if app is None:
+        return _DEFAULT_TERMINAL_COLUMNS
+    try:
+        return app.output.get_size().columns
+    except Exception:
+        return _DEFAULT_TERMINAL_COLUMNS
+
+
+def _clip_text(text: str, max_len: int) -> str:
+    if max_len <= 0:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1] + "…"
+
+
+def _completion_meta_width(command_name: str, cols: int) -> int:
+    return max(_COMPLETION_META_MIN_WIDTH, cols - len(command_name) - _COMPLETION_META_PADDING)
+
+
+def _short_meta(
+    text: str,
+    *,
+    command_name: str = "",
+    max_len: int | None = None,
+    cols: int | None = None,
+) -> str:
+    if max_len is None:
+        if command_name:
+            max_len = _completion_meta_width(command_name, cols or _terminal_columns())
+        else:
+            max_len = 54
+    return _clip_text(text, max_len)
+
+
+def _slash_command_name(completion: Completion) -> str | None:
+    for candidate in (completion.text, completion.display_text or ""):
+        if candidate.startswith("/"):
+            return candidate
+    return None
+
+
+def _resolve_completion_preview(
+    completion: Completion,
+    *,
+    buffer_text: str,
+) -> tuple[str, str] | None:
+    cmd_name = _slash_command_name(completion)
+    if cmd_name is not None:
+        entry = SLASH_COMMANDS.get(cmd_name)
+        if entry is not None:
+            return cmd_name, entry.description
+
+    meta = completion.display_meta_text
+    if not meta:
+        return None
+
+    display = completion.display_text or completion.text
+    if cmd_name is not None:
+        label = display
+    else:
+        parts = buffer_text.split()
+        label = f"{parts[0]} {display}" if parts and parts[0].startswith("/") else display
+    return label, meta
+
+
+def completion_preview_hint_ansi() -> str:
+    """Full description for the highlighted completion menu item."""
+    app = get_app_or_none()
+    if app is None:
+        return ""
+    buffer = app.current_buffer
+    complete_state = buffer.complete_state
+    if complete_state is None or not complete_state.completions:
+        return ""
+
+    completion = complete_state.current_completion or complete_state.completions[0]
+    preview = _resolve_completion_preview(completion, buffer_text=buffer.text)
+    if preview is None:
+        return ""
+
+    label, description = preview
+    try:
+        cols = app.output.get_size().columns
+    except Exception:
+        cols = _DEFAULT_TERMINAL_COLUMNS
+    line = _clip_text(f"{label}{_COMPLETION_PREVIEW_SEP}{description}", cols)
+    return f"{ANSI_DIM}{line}{ANSI_RESET}"
+
+
+def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
+    """Choose the prompt's top context line: spinner, completion preview, or idle hint."""
+    if inline_spinner:
+        return inline_spinner
+    preview = completion_preview_hint_ansi()
+    return preview or idle_hint
+
+
+# Precomputed at import time so bare-`/` completions never rebuild it per keystroke.
+_QUICK_ACCESS_SET: frozenset[str] = frozenset(QUICK_ACCESS_COMMANDS)
+
+
+def _slash_completion(cmd: SlashCommand, start_position: int, *, cols: int) -> Completion:
+    return Completion(
+        cmd.name,
+        start_position=start_position,
+        display=cmd.name,
+        display_meta=_short_meta(cmd.description, command_name=cmd.name, cols=cols),
+    )
 
 
 class ShellCompleter(Completer):
@@ -178,14 +295,20 @@ class ShellCompleter(Completer):
         trailing_space = text != text.rstrip(" ")
         if len(parts) == 1 and not trailing_space:
             needle = parts[0].lower()
-            for cmd in SLASH_COMMANDS.values():
-                if cmd.name.lower().startswith(needle):
-                    yield Completion(
-                        cmd.name,
-                        start_position=-len(parts[0]),
-                        display=cmd.name,
-                        display_meta=_short_meta(cmd.description),
-                    )
+            cols = _terminal_columns()
+            if needle == "/":
+                # Bare `/`: show most important commands first, then the rest.
+                for name in QUICK_ACCESS_COMMANDS:
+                    cmd = SLASH_COMMANDS.get(name)
+                    if cmd is not None:
+                        yield _slash_completion(cmd, -1, cols=cols)
+                for cmd in SLASH_COMMANDS.values():
+                    if cmd.name not in _QUICK_ACCESS_SET:
+                        yield _slash_completion(cmd, -1, cols=cols)
+            else:
+                for cmd in SLASH_COMMANDS.values():
+                    if cmd.name.lower().startswith(needle):
+                        yield _slash_completion(cmd, -len(parts[0]), cols=cols)
             return
 
         if len(parts) <= 2:
@@ -308,7 +431,69 @@ def _build_prompt_style() -> Style:
     )
 
 
-_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}Type a message, /command, or paste an alert{ANSI_RESET}")
+_DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
+_DEFAULT_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ANSI_RESET}")
+
+
+def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
+    """Contextual ghost text when the input buffer is empty."""
+    parts: list[str] = []
+    if session.trust_mode:
+        parts.append("trust on")
+    running = session.task_registry.running_count()
+    if running:
+        parts.append(f"{running} task{'s' if running != 1 else ''} running")
+    if session.resumed_from_name:
+        parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
+    if parts:
+        return ANSI(f"{ANSI_DIM}{' · '.join(parts)}{ANSI_RESET}")
+    return _DEFAULT_PLACEHOLDER_ANSI
+
+
+def wire_prompt_refresh(
+    session: ReplSession,
+    pt_app: Any,
+    loop: asyncio.AbstractEventLoop,
+) -> Callable[[], None]:
+    """Register session hook to prefill pending text and redraw the active prompt."""
+
+    def invalidate_prompt() -> None:
+        loop.call_soon_threadsafe(pt_app.invalidate)
+
+    def refresh_active_prompt() -> None:
+        def _apply() -> None:
+            pending = session.pending_prompt_default
+            buffer = pt_app.current_buffer
+            # Never clobber text the user is actively typing.
+            if not pending or buffer.text:
+                invalidate_prompt()
+                return
+            if session.pending_prompt_autosubmit:
+                # Auto-submit an agent-queued interactive command so it dispatches
+                # through the normal exclusive-stdin path (the only place an
+                # interactive child process gets clean stdin). Note: pt_app.is_running
+                # under-reports while prompt_async awaits during a dispatch, so we do
+                # not gate on it; validate_and_handle works regardless. If the app is
+                # genuinely not accepting input, leave the prefill in place so the
+                # next prompt iteration picks it up via the before-prompt path.
+                session.pending_prompt_default = None
+                session.take_pending_autosubmit()
+                buffer.text = pending
+                try:
+                    buffer.validate_and_handle()
+                except Exception:  # noqa: BLE001
+                    session.pending_prompt_default = pending
+                    session.pending_prompt_autosubmit = True
+            elif pt_app.is_running:
+                session.pending_prompt_default = None
+                buffer.text = pending
+            invalidate_prompt()
+
+        loop.call_soon_threadsafe(_apply)
+
+    session.prompt_refresh_fn = refresh_active_prompt
+    return invalidate_prompt
+
 
 # Commands where bare invocation opens an inline picker in TTY mode.
 _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
@@ -316,7 +501,6 @@ _INLINE_PICKER_COMMANDS: frozenset[str] = frozenset(
         "/history",
         "/integrations",
         "/investigate",
-        "/list",
         "/mcp",
         "/model",
         "/template",
@@ -332,7 +516,12 @@ def _suppress_empty_arg_completions_for_inline_picker(cmd_name: str, raw_arg: st
     return repl_tty_interactive() and not raw_arg and cmd_name in _INLINE_PICKER_COMMANDS
 
 
-def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[str]:
+def _build_prompt_session(session: ReplSession | None = None) -> PromptSession[str]:
+    placeholder = (
+        (lambda: resolve_prompt_placeholder(session))
+        if session is not None
+        else _DEFAULT_PLACEHOLDER_ANSI
+    )
     return _install_prompt_frame(
         PromptSession(
             completer=ShellCompleter(),
@@ -344,7 +533,7 @@ def _build_prompt_session(_session: ReplSession | None = None) -> PromptSession[
             key_bindings=_build_prompt_key_bindings(),
             style=_build_prompt_style(),
             erase_when_done=True,
-            placeholder=_PLACEHOLDER_ANSI,
+            placeholder=placeholder,
         )
     )
 
@@ -361,5 +550,9 @@ __all__ = [
     "_install_prompt_frame",
     "ReplInputLexer",
     "ShellCompleter",
+    "completion_preview_hint_ansi",
     "render_submitted_prompt",
+    "resolve_prompt_placeholder",
+    "resolve_prompt_prefix_ansi",
+    "wire_prompt_refresh",
 ]

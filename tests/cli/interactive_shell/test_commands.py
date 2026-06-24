@@ -20,6 +20,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
 )
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
+from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
 from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -55,7 +56,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         # Any slash command name suffices as proof the help table rendered.
         assert "/help" in output
-        assert "/list" in output
+        assert "/tools" in output
 
     def test_help_command_detail_shows_usage(self) -> None:
         session = ReplSession()
@@ -100,7 +101,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Slash commands" in output
         assert "/help" in output
-        assert "/list" in output
+        assert "/tools" in output
         assert "unknown command" not in output
 
     def test_trust_toggle(self) -> None:
@@ -154,18 +155,18 @@ class TestDispatchSlash:
         assert "default config:" in output
         assert "anthropic does not use reasoning-effort overrides" in output
 
-    def test_reset_clears_session(self) -> None:
+    def test_new_clears_session(self) -> None:
         session = ReplSession()
         session.record("alert", "test")
         session.last_state = {"x": 1}
         session.trust_mode = True
         console, _ = _capture()
 
-        dispatch_slash("/reset", session, console)
+        dispatch_slash("/new", session, console)
 
         assert session.history == []
         assert session.last_state is None
-        assert session.trust_mode is True  # reset keeps trust mode
+        assert session.trust_mode is True  # /new keeps trust mode
 
     def test_status_shows_session_fields(self) -> None:
         session = ReplSession()
@@ -316,7 +317,7 @@ class TestDispatchSlash:
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("opensre health")
-        history.store_string("/list integrations")
+        history.store_string("/integrations list")
 
         session = ReplSession()
         session.record("alert", "current session only")
@@ -326,7 +327,7 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "Command history" in output
         assert "opensre health" in output
-        assert "/list integrations" in output
+        assert "/integrations list" in output
         assert "current session only" not in output
 
     def test_investigate_file_read_failure_is_reported(
@@ -342,7 +343,7 @@ class TestDispatchSlash:
             lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
         )
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -364,7 +365,7 @@ class TestDispatchSlash:
             lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
         )
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -379,12 +380,11 @@ class TestDispatchSlash:
         assert isinstance(captured_errors[0], RuntimeError)
 
 
-class TestListCommand:
-    """Coverage for /list integrations / models / mcp and the default summary."""
+class TestSpecificListCommands:
+    """Coverage for /integrations list, /mcp list, /model show, and /tools list."""
 
     _FAKE_INTEGRATIONS = [
         {"service": "datadog", "source": "store", "status": "ok", "detail": "API ok"},
-        # `missing` integrations are omitted from `/list integrations`; keep slack visible here.
         {"service": "slack", "source": "env", "status": "failed", "detail": "No bot token"},
         {"service": "github", "source": "store", "status": "ok", "detail": "MCP ok"},
         {"service": "openclaw", "source": "store", "status": "failed", "detail": "401 from server"},
@@ -397,31 +397,24 @@ class TestListCommand:
             lambda: list(self._FAKE_INTEGRATIONS),
         )
 
-    def test_list_integrations_excludes_mcp_services(self, monkeypatch: object) -> None:
+    def test_integrations_list_includes_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list integrations", ReplSession(), console)
+        dispatch_slash("/integrations list", ReplSession(), console)
         output = buf.getvalue()
         assert "datadog" in output
         assert "slack" in output
-        # MCP-classified services are reserved for /list mcp.
-        assert "openclaw" not in output
-        assert "github" not in output
+        assert "openclaw" in output
+        assert "github" in output
 
-    def test_list_mcp_shows_only_mcp_services(self, monkeypatch: object) -> None:
+    def test_mcp_list_shows_only_mcp_services(self, monkeypatch: object) -> None:
         self._patch_verify(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list mcp", ReplSession(), console)
+        dispatch_slash("/mcp list", ReplSession(), console)
         output = buf.getvalue()
         assert "openclaw" in output
         assert "github" in output
         assert "datadog" not in output
-
-    def test_list_mcps_alias(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list mcps", ReplSession(), console)
-        assert "openclaw" in buf.getvalue()
 
     def _patch_llm(self, monkeypatch: object) -> None:
         """Provide a stable fake LLMSettings so the test doesn't depend on env."""
@@ -433,62 +426,68 @@ class TestListCommand:
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
 
-    def test_list_models_shows_provider_and_models(self, monkeypatch: object) -> None:
+    def test_model_show_displays_provider_and_models(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         output = buf.getvalue()
         assert "provider" in output
         assert "reasoning model" in output
         assert "toolcall model" in output
         assert "anthropic" in output
 
-    def test_list_models_shows_ollama_model(self, monkeypatch: object) -> None:
+    def test_model_show_displays_ollama_model(self, monkeypatch: object) -> None:
         class _FakeLLM:
             provider = "ollama"
             ollama_model = "qwen2.5:7b"
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _FakeLLM())
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         output = buf.getvalue()
         assert "ollama" in output
         assert "qwen2.5:7b" in output
         assert "default" not in output
 
-    def test_list_models_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
+    def test_model_show_handles_missing_env_gracefully(self, monkeypatch: object) -> None:
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: None)
         console, buf = _capture()
-        dispatch_slash("/list models", ReplSession(), console)
+        dispatch_slash("/model show", ReplSession(), console)
         assert "LLM settings unavailable" in buf.getvalue()
 
-    def test_list_default_shows_all_three_sections(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        self._patch_llm(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list", ReplSession(), console)
-        output = buf.getvalue()
-        assert "Integrations" in output
-        assert "MCP servers" in output
-        assert "LLM connection" in output
-
-    def test_list_unknown_target_prints_hint(self, monkeypatch: object) -> None:
-        self._patch_verify(monkeypatch)
-        console, buf = _capture()
-        dispatch_slash("/list bogus", ReplSession(), console)
-        output = buf.getvalue()
-        assert "unknown list target" in output
-        assert "/list integrations" in output
-
-    def test_list_empty_integrations_prints_onboarding_hint(self, monkeypatch: object) -> None:
+    def test_integrations_list_empty_prints_onboarding_hint(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
             repl_data_module,
             "load_verified_integrations",
             list,  # callable returning []
         )
         console, buf = _capture()
-        dispatch_slash("/list integrations", ReplSession(), console)
+        dispatch_slash("/integrations list", ReplSession(), console)
         assert "opensre onboard" in buf.getvalue()
+
+    def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
+        from app.cli.interactive_shell.command_registry import tools_cmds as tools_cmd_module
+
+        monkeypatch.setattr(
+            tools_cmd_module,
+            "build_tool_catalog",
+            lambda: [
+                ToolCatalogEntry(
+                    name="search_github",
+                    surfaces=("investigation", "chat"),
+                    description="Search GitHub code.",
+                    source_file="app/tools/search_github.py",
+                    input_schema_summary="query: string",
+                )
+            ],
+        )
+
+        console, buf = _capture()
+        dispatch_slash("/tools list", ReplSession(), console)
+        output = buf.getvalue()
+        assert "search_github" in output
+        assert "investigation" in output
+        assert "Search GitHub code." in output
 
 
 # ---------------------------------------------------------------------------
@@ -510,12 +509,13 @@ class TestIntegrationsCommand:
             lambda: list(self._FAKE),
         )
 
-    def test_list_shows_non_mcp_services(self, monkeypatch: object) -> None:
+    def test_list_shows_all_services_including_github(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
         console, buf = _capture()
         dispatch_slash("/integrations list", ReplSession(), console)
-        assert "datadog" in buf.getvalue()
-        assert "github" not in buf.getvalue()
+        output = buf.getvalue()
+        assert "datadog" in output
+        assert "github" in output
 
     def test_list_is_default_when_no_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -593,13 +593,29 @@ class TestIntegrationsCommand:
         dispatch_slash("/integrations setup", ReplSession(), Console())
         assert captured == [["integrations", "setup"]]
 
-    def test_remove_delegates_to_cli(self, monkeypatch: object) -> None:
+    def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import app.analytics.cli as analytics_cli
+        import app.integrations.store as store
         from app.cli.interactive_shell.command_registry import integrations as m
 
-        captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
         dispatch_slash("/integrations remove slack", ReplSession(), Console())
-        assert captured == [["integrations", "remove", "slack"]]
+        assert removed == ["slack"]
+
+    def test_remove_cancelled_does_not_touch_store(self, monkeypatch: object) -> None:
+        import app.integrations.store as store
+        from app.cli.interactive_shell.command_registry import integrations as m
+
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "no")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        dispatch_slash("/integrations remove slack", ReplSession(), Console())
+        assert removed == []
 
 
 class TestMcpCommand:
@@ -635,13 +651,18 @@ class TestMcpCommand:
         dispatch_slash("/mcp connect", ReplSession(), Console())
         assert captured == [["integrations", "setup"]]
 
-    def test_disconnect_delegates_to_cli(self, monkeypatch: object) -> None:
+    def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
+        import app.analytics.cli as analytics_cli
+        import app.integrations.store as store
         from app.cli.interactive_shell.command_registry import integrations as m
 
-        captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        removed: list[str] = []
+        monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
+        monkeypatch.setattr(m, "repl_choose_one", lambda **_: "yes")
+        monkeypatch.setattr(store, "remove_integration", lambda svc: (removed.append(svc), True)[1])
+        monkeypatch.setattr(analytics_cli, "capture_integration_removed", lambda *_: None)
         dispatch_slash("/mcp disconnect github", ReplSession(), Console())
-        assert captured == [["integrations", "remove", "github"]]
+        assert removed == ["github"]
 
     def test_unknown_subcommand(self, monkeypatch: object) -> None:
         self._patch(monkeypatch)
@@ -892,6 +913,36 @@ class TestModelCommand:
         contents = env_path.read_text(encoding="utf-8")
         assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
         assert "OPENAI_MODEL=gpt-5.5" in contents
+
+    def test_switch_reasoning_model_normalizes_whitespace_slug(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Regression: the planner ``llm_set_provider`` tool dispatches the raw
+        target straight to ``switch_reasoning_model`` (no CLI arg-splitting), so a
+        spoken "set model to gpt 5.5" arrived as the single token ``"gpt 5.5"``.
+        Because openai allows custom models, that malformed slug used to be
+        persisted verbatim and then silently fail availability checks. It must be
+        normalized to ``gpt-5.5`` instead."""
+        self._patch_llm(monkeypatch)
+        import app.cli.wizard.env_sync as env_sync
+        from app.cli.interactive_shell.commands import switch_reasoning_model
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+        console, buf = _capture()
+        ok = switch_reasoning_model("gpt 5.5", console)
+
+        assert ok is True
+        assert "gpt-5.5" in buf.getvalue()
+        assert "gpt 5.5" not in buf.getvalue()
+        contents = env_path.read_text(encoding="utf-8")
+        assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
+        assert "OPENAI_MODEL=gpt-5.5" in contents
+        assert "gpt 5.5" not in contents
 
     def test_set_unknown_toolcall_model_is_rejected(
         self,
@@ -1352,9 +1403,9 @@ class TestInvestigateFileCommand:
         self, tmp_path: object, monkeypatch: object
     ) -> None:
         """Regression for Greptile P1 (PR #591): /investigate previously skipped
-        the context-accumulation step that `execution.run_new_alert` does after a
-        free-text investigation, so subsequent follow-up alerts lost the infra
-        hints (service / cluster / region) that /investigate just discovered."""
+        the context-accumulation step that free-text investigations perform, so
+        subsequent follow-up alerts lost the infra hints (service / cluster /
+        region) that /investigate just discovered."""
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -1420,7 +1471,7 @@ class TestInvestigateFileCommand:
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object
     ) -> None:
-        from app.cli.support.errors import OpenSREError
+        from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -1445,6 +1496,217 @@ class TestInvestigateFileCommand:
 
 
 # Task 4 — Session-state commands
+
+
+class TestResumeCommand:
+    """Tests for /resume command — session adoption and context restoration."""
+
+    def test_apply_resume_adopts_target_session_and_restores_context(self, tmp_path: Path) -> None:
+        """_apply_resume_data must flush the current session, adopt the target ID,
+        reopen its file, and restore cli_agent_messages + accumulated_context."""
+        import json
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        session = ReplSession()
+        old_id = session.session_id
+        target_id = "old-abc-1234567890"
+
+        with patch(
+            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            return_value=tmp_path,
+        ):
+            SessionStore.open_session(session)
+            session.record("chat", "pre-resume turn")
+
+            # Pre-create a finalized target session file to resume into.
+            target_path = tmp_path / f"{target_id}.jsonl"
+            target_path.write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "type": "session_start",
+                                "session_id": target_id,
+                                "started_at": "2026-05-29T10:00:00+00:00",
+                            }
+                        ),
+                        json.dumps({"type": "turn", "kind": "chat", "text": "hello"}),
+                        json.dumps(
+                            {
+                                "type": "conversation_snapshot",
+                                "cli_agent_messages": [["user", "hello"], ["assistant", "hi"]],
+                                "accumulated_context": {"service": "redis"},
+                            }
+                        ),
+                        json.dumps({"type": "session_end", "total_turns": 1}),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            data = SessionStore.load_session(target_id[:8])
+            assert data is not None
+
+            console, buf = _capture()
+            slash_command = f"/resume {target_id[:8]}"
+            result = _apply_resume_data(data, session, console, slash_command=slash_command)
+
+            # Current (empty-ish) session file must be finalized without /resume turn
+            old_records = [
+                json.loads(line)
+                for line in (tmp_path / f"{old_id}.jsonl").read_text().splitlines()
+                if line.strip()
+            ]
+            assert old_records[-1]["type"] == "session_end"
+            assert not any(r.get("kind") == "slash" for r in old_records if r.get("type") == "turn")
+
+            # Target session is reopened — slash turn recorded on resumed session
+            assert session.session_id == target_id
+            target_records = [
+                json.loads(line)
+                for line in target_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            assert target_records[0]["type"] == "session_start"
+            assert target_records[-1]["type"] == "turn"
+            assert target_records[-1]["kind"] == "slash"
+            assert target_records[-1]["text"].startswith("/resume")
+
+        assert result is True
+        assert session.session_id == target_id
+        assert session.cli_agent_messages == [("user", "hello"), ("assistant", "hi")]
+        assert session.accumulated_context == {"service": "redis"}
+        output = buf.getvalue()
+        assert "resumed session" in output
+        assert "old-abc" in output
+
+    def test_apply_resume_noop_when_no_messages_or_context(self) -> None:
+        """When the session has no conversation, _apply_resume_data must return
+        early without rotating the session."""
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+
+        session = ReplSession()
+        old_id = session.session_id
+
+        data: dict = {
+            "session_id": "empty-sid",
+            "name": "",
+            "cli_agent_messages": [],
+            "accumulated_context": {},
+            "history": [],
+            "turn_details": [],
+            "has_snapshot": False,
+        }
+        console, buf = _capture()
+        _apply_resume_data(data, session, console)
+
+        assert session.session_id == old_id
+        assert "no conversation to resume" in buf.getvalue()
+
+    def test_apply_resume_displays_history_in_repl_format(self, tmp_path: Path) -> None:
+        """History display uses REPL turn order and includes slash commands."""
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from app.cli.interactive_shell.sessions.store import SessionStore
+
+        data = {
+            "session_id": "display-test-abc123456789",
+            "name": "My Session",
+            "cli_agent_messages": [
+                ("user", "what is opensre?"),
+                ("assistant", "OpenSRE is a tool"),
+            ],
+            "accumulated_context": {},
+            "history": [
+                {"type": "turn", "kind": "slash", "text": "/status"},
+                {"type": "turn", "kind": "chat", "text": "what is opensre?"},
+            ],
+            "turn_details": [],
+            "has_snapshot": True,
+        }
+        session = ReplSession()
+        console, buf = _capture()
+
+        with patch(
+            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            return_value=tmp_path,
+        ):
+            SessionStore.open_session(session)
+            _apply_resume_data(data, session, console)
+
+        output = buf.getvalue()
+        assert "❯" in output
+        assert "assistant" in output
+        assert "$ /status" in output
+        assert "you  " not in output
+        assert "sre  " not in output
+        assert "what is opensre?" in output
+        assert "OpenSRE is a tool" in output
+
+    def test_apply_resume_no_history_keeps_user_assistant_pairs_with_duplicate_prompts(
+        self,
+    ) -> None:
+        """No-history rendering should not emit orphaned assistant blocks."""
+        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+
+        data = {
+            "session_id": "display-no-history-abc123",
+            "name": "No History",
+            "cli_agent_messages": [
+                ("user", "repeat"),
+                ("assistant", "first answer"),
+                ("user", "repeat"),
+                ("assistant", "second answer"),
+            ],
+            "accumulated_context": {},
+            "history": [],
+            "turn_details": [],
+            "has_snapshot": True,
+        }
+
+        session = ReplSession()
+        console, buf = _capture()
+        _apply_resume_data(data, session, console)
+
+        output = buf.getvalue()
+        assert output.count("❯ repeat") == 2
+        assert output.count("assistant") == 2
+        assert "first answer" in output
+        assert "second answer" in output
+
+    def test_planner_llm_error_persisted_to_cli_agent_messages(self) -> None:
+        """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
+        from unittest.mock import patch
+
+        from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
+            PlannerLLMError,
+        )
+        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+            execute_cli_actions,
+        )
+
+        session = ReplSession()
+        console, _ = _capture()
+
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
+
+        with patch(
+            "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions._plan_actions",
+            side_effect=_raise,
+        ):
+            execute_cli_actions("check cpu usage", session, console)
+
+        # The error turn must be recorded in cli_agent_messages for /resume
+        assert len(session.cli_agent_messages) == 2
+        assert session.cli_agent_messages[0] == ("user", "check cpu usage")
+        assert session.cli_agent_messages[1][0] == "assistant"
+        assert "quota" in session.cli_agent_messages[1][1]
 
 
 class TestHistoryCommand:
@@ -1579,16 +1841,37 @@ class TestCostCommand:
     def test_no_token_data_shows_placeholder(self) -> None:
         console, buf = _capture()
         dispatch_slash("/cost", ReplSession(), console)
-        assert "not available" in buf.getvalue()
+        assert "no LLM usage recorded yet" in buf.getvalue()
 
     def test_shows_token_counts_when_available(self) -> None:
         session = ReplSession()
         session.token_usage = {"input": 1000, "output": 500}
+        session.llm_call_count = 2
         console, buf = _capture()
         dispatch_slash("/cost", session, console)
         output = buf.getvalue()
         assert "1,000" in output
         assert "500" in output
+        assert "llm calls" in output
+        assert "2" in output
+
+    def test_shows_estimate_labels_when_mixed(self) -> None:
+        session = ReplSession()
+        session.token_usage = {
+            "input": 400,
+            "output": 60,
+            "input_measured": 300,
+            "output_measured": 40,
+            "input_estimated": 100,
+            "output_estimated": 20,
+        }
+        session.llm_call_count = 2
+        console, buf = _capture()
+        dispatch_slash("/cost", session, console)
+        output = buf.getvalue()
+        assert "provider + 100 est." in output
+        assert "provider + 20 est." in output
+        assert "includes estimates" in output
 
 
 class TestVerboseCommand:

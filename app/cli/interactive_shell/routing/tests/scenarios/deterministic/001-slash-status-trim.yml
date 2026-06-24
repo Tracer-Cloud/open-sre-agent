@@ -1,30 +1,19 @@
 id: 001-slash-status-trim
 title: Slash /status with trimmed whitespace
 intent_class: deterministic
-risk_level: low
 input:
   prompt: '  /status  '
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
-available_capabilities:
-  slash_commands:
-  - /status
-  cli_commands: []
-  synthetic_suites: []
+  resolved_integrations: {}
 notes: []
 
 route:
-  expected_kind: slash
-  expected_signals:
-  - slash_prefix
+  expected_kind: handle_message_with_agent
   expected_command_text: /status
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: slash
   source: deterministic
@@ -45,5 +34,4 @@ history:
   expected:
   - type: slash
     ok: true
-tier: critical
 runs: 1

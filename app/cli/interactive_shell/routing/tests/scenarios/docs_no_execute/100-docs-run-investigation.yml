@@ -1,27 +1,18 @@
 id: 100-docs-run-investigation
 title: How to run an investigation
 intent_class: docs_no_execute
-risk_level: low
 input:
   prompt: how do I run an investigation?
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
-available_capabilities:
-  slash_commands: []
-  cli_commands: []
-  synthetic_suites: []
+  resolved_integrations: {}
 notes: []
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
   content: docs:run_investigation
@@ -37,9 +28,13 @@ response_contract:
   - paste
   must_not_contain:
   - $ /
+gathered_tools_contract:
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
-tier: critical
 runs: 1

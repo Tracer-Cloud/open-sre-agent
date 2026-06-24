@@ -416,17 +416,14 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
 def test_verify_github_passes_with_valid_streamable_http_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from types import SimpleNamespace
+
     import app.integrations._verification_adapters as _adapters
 
     monkeypatch.setattr(
         _adapters,
-        "_verify_with_validation_result",
-        lambda service, source, _config, **_kw: {
-            "service": service,
-            "source": source,
-            "status": "passed",
-            "detail": "GitHub MCP ok",
-        },
+        "validate_github_mcp_config",
+        lambda _config: SimpleNamespace(ok=True, detail="GitHub MCP ok", failure_category=""),
     )
 
     result = _verify_github(
@@ -440,6 +437,16 @@ def test_verify_github_passes_with_valid_streamable_http_config(
 
     assert result["status"] == "passed"
     assert result["service"] == "github"
+
+
+def test_verify_github_reports_credential_less_store_record_as_missing() -> None:
+    """A stale store record with no token is surfaced as missing, not a 401 failure."""
+
+    verdict = _verify_github("local store", {})
+
+    assert verdict["service"] == "github"
+    assert verdict["status"] == "missing"
+    assert "without an auth token" in verdict["detail"]
 
 
 def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -16,7 +16,7 @@ from threading import Thread
 from typing import Any
 from urllib.parse import urlparse
 
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.strict_config import StrictConfigModel
 
 log = logging.getLogger(__name__)

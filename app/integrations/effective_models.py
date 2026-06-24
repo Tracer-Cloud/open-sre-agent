@@ -54,8 +54,10 @@ class EffectiveIntegrations(StrictConfigModel):
 
     grafana: EffectiveIntegrationEntry | None = None
     datadog: EffectiveIntegrationEntry | None = None
+    groundcover: EffectiveIntegrationEntry | None = None
     honeycomb: EffectiveIntegrationEntry | None = None
     coralogix: EffectiveIntegrationEntry | None = None
+    dagster: EffectiveIntegrationEntry | None = None
     aws: EffectiveIntegrationEntry | None = None
     slack: EffectiveIntegrationEntry | None = None
     tracer: EffectiveIntegrationEntry | None = None
@@ -63,6 +65,7 @@ class EffectiveIntegrations(StrictConfigModel):
     sentry: EffectiveIntegrationEntry | None = None
     mongodb: EffectiveIntegrationEntry | None = None
     mongodb_atlas: EffectiveIntegrationEntry | None = None
+    redis: EffectiveIntegrationEntry | None = None
     mariadb: EffectiveIntegrationEntry | None = None
     rabbitmq: EffectiveIntegrationEntry | None = None
     betterstack: EffectiveIntegrationEntry | None = None
@@ -71,6 +74,7 @@ class EffectiveIntegrations(StrictConfigModel):
     vercel: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None
+    pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
     notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None
@@ -87,6 +91,8 @@ class EffectiveIntegrations(StrictConfigModel):
     whatsapp: EffectiveIntegrationEntry | None = None
     twilio: EffectiveIntegrationEntry | None = None
     openclaw: EffectiveIntegrationEntry | None = None
+    posthog_mcp: EffectiveIntegrationEntry | None = None
+    sentry_mcp: EffectiveIntegrationEntry | None = None
     mysql: EffectiveIntegrationEntry | None = None
     snowflake: EffectiveIntegrationEntry | None = None
     azure: EffectiveIntegrationEntry | None = None
@@ -100,3 +106,5 @@ class EffectiveIntegrations(StrictConfigModel):
     victoria_logs: EffectiveIntegrationEntry | None = None
     alicloud: EffectiveIntegrationEntry | None = None
     signoz: EffectiveIntegrationEntry | None = None
+    jenkins: EffectiveIntegrationEntry | None = None
+    tempo: EffectiveIntegrationEntry | None = None

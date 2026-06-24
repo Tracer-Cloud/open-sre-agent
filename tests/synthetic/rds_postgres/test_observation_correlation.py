@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.correlation.runtime import build_runtime_correlation
-from app.correlation.upstream import (
+from app.agent.correlation.runtime import build_runtime_correlation
+from app.agent.correlation.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

@@ -1,114 +1,31 @@
-"""Deterministic intent helpers used by the fallback action planner.
+"""Structural text helpers shared by the literal command fast path and shell layer.
 
-LLM-first planning is the primary path for non-slash requests. These helpers are
-kept for deterministic fallback behavior and regression tests.
+This package intentionally does NOT infer user intent from natural language.
+Tool/action selection is owned entirely by the LLM action planner (see
+``llm_action_planner``); the only logic kept here is:
 
-Public API is stable: all names exported below are importable directly from
-``intent_parser`` and will remain so regardless of internal submodule changes.
+- ``normalize_intent_text`` / ``is_single_edit_typo`` — typo-tolerant matching
+  of *literal* command aliases for the deterministic command fast path.
+- ``shell_action`` — a ``PlannedAction`` factory for the explicit ``!cmd``
+  shell-passthrough fast path.
+- ``IS_WINDOWS`` — platform flag consumed by the shell execution layer.
 """
 
 from __future__ import annotations
 
-# ``shutil`` is imported here so that tests can import it via
-# ``from intent_parser import shutil`` and monkeypatch ``shutil.which``
-# against the module singleton.
-import shutil
+import os
 
-from .action_builders import (
-    cli_command_action,
-    implementation_action,
-    investigation_action,
-    llm_provider_action,
-    sample_alert_action,
-    shell_action,
-    slash_action,
-    synthetic_test_action,
-    task_cancel_action,
-)
-from .clause_split import split_prompt_clauses
-from .extractors import (
-    extract_implementation_request,
-    extract_llm_provider_switch,
-    extract_quoted_investigation_request,
-    extract_quoted_investigation_request_text,
-    extract_shell_command,
-    extract_task_cancel_request,
-    looks_like_direct_shell_command,
-    mentioned_integration_services,
-    normalize_shell_command,
-)
-from .patterns import (
-    _EXPLICIT_SHELL_RE,
-    _LLM_PROVIDER_NAMES,
-    _LLM_PROVIDER_RE,
-    _LLM_PROVIDER_SWITCH_RE,
-    _NON_COMMAND_STARTS,
-    _SHELL_BUILTINS,
-    _SHELL_PROMPT_RE,
-    ACTION_PATTERNS,
-    CLAUSE_SPLIT_RE,
-    IMPLEMENTATION_RE,
-    INTEGRATION_CAPABILITY_RE,
-    INTEGRATION_CONFIG_DETAIL_RE,
-    INTEGRATION_DETAIL_RE,
-    IS_WINDOWS,
-    QUOTED_INVESTIGATION_RE,
-    SAMPLE_ALERT_RE,
-    SYNTHETIC_RDS_TEST_RE,
-    TASK_CANCEL_GENERIC_RE,
-    TASK_CANCEL_GENERIC_TRIGGER_RE,
-    TASK_CANCEL_ID_RE,
-    TASK_CANCEL_SYNTHETIC_RE,
-    TASK_CANCEL_TRIGGER_RE,
-)
+from .action_builders import shell_action
 from .typo_normalization import (
     is_single_edit_typo,
     normalize_intent_text,
 )
 
+IS_WINDOWS = os.name == "nt"
+
 __all__ = [
-    "ACTION_PATTERNS",
-    "CLAUSE_SPLIT_RE",
-    "IMPLEMENTATION_RE",
-    "INTEGRATION_CAPABILITY_RE",
-    "INTEGRATION_CONFIG_DETAIL_RE",
-    "INTEGRATION_DETAIL_RE",
     "IS_WINDOWS",
-    "QUOTED_INVESTIGATION_RE",
-    "SAMPLE_ALERT_RE",
-    "SYNTHETIC_RDS_TEST_RE",
-    "TASK_CANCEL_GENERIC_RE",
-    "TASK_CANCEL_GENERIC_TRIGGER_RE",
-    "TASK_CANCEL_ID_RE",
-    "TASK_CANCEL_SYNTHETIC_RE",
-    "TASK_CANCEL_TRIGGER_RE",
-    "_EXPLICIT_SHELL_RE",
-    "_LLM_PROVIDER_NAMES",
-    "_LLM_PROVIDER_RE",
-    "_LLM_PROVIDER_SWITCH_RE",
-    "_NON_COMMAND_STARTS",
-    "_SHELL_BUILTINS",
-    "_SHELL_PROMPT_RE",
-    "cli_command_action",
-    "extract_implementation_request",
-    "extract_llm_provider_switch",
-    "extract_quoted_investigation_request",
-    "extract_quoted_investigation_request_text",
-    "extract_shell_command",
-    "extract_task_cancel_request",
-    "implementation_action",
-    "investigation_action",
     "is_single_edit_typo",
-    "llm_provider_action",
-    "looks_like_direct_shell_command",
-    "mentioned_integration_services",
     "normalize_intent_text",
-    "normalize_shell_command",
-    "sample_alert_action",
     "shell_action",
-    "shutil",
-    "slash_action",
-    "split_prompt_clauses",
-    "synthetic_test_action",
-    "task_cancel_action",
 ]

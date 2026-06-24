@@ -1,45 +1,44 @@
 id: 200-show-connected-integrations
 title: Show connected integrations
 intent_class: local_execution
-risk_level: medium
 input:
   prompt: show me connected integrations
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
-  configured_integrations: []
+  configured_integrations:
+  - datadog
+  - sentry
+  resolved_integrations: {}
 available_capabilities:
   slash_commands:
-  - /list
+  - /integrations
   cli_commands: []
   synthetic_suites: []
 notes: []
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: slash
-  content: /list integrations
+  content: /integrations list
   source: llm
   target_surface: slash
-  command: /list
+  command: /integrations
   args:
-  - integrations
+  - list
 executed_actions:
 - kind: slash
-  command: /list
+  command: /integrations
   args:
-  - integrations
-  content: /list integrations
+  - list
+  content: /integrations list
 response_contract:
   must_contain_any:
-  - ran /list integrations
+  - connected integrations
+  - integrations
+  - ran /integrations list
   must_not_contain: []
 history:
   expected:
@@ -47,5 +46,4 @@ history:
     ok: true
   - type: slash
     ok: true
-tier: critical
 runs: 1

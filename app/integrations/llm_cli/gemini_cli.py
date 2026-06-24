@@ -259,10 +259,12 @@ class GeminiCLIAdapter:
         )
 
     def parse(self, *, stdout: str, stderr: str, returncode: int) -> str:
-        del stderr, returncode
         text = (stdout or "").strip()
         if not text:
-            return ""
+            raise RuntimeError(
+                self.explain_failure(stdout=stdout, stderr=stderr, returncode=returncode)
+                + " (empty output)"
+            )
         try:
             payload = json.loads(text)
         except json.JSONDecodeError:
@@ -279,11 +281,11 @@ class GeminiCLIAdapter:
         return text
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
-        err = (stderr or "").strip()
-        out = (stdout or "").strip()
-        bits = [f"gemini -p exited with code {returncode}"]
-        if err:
-            bits.append(err[:2000])
-        elif out:
-            bits.append(out[:2000])
-        return ". ".join(bits)
+        from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
+        return explain_cli_failure(
+            exit_label="gemini -p",
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+        )

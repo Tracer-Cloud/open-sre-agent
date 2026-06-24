@@ -19,13 +19,15 @@ from typing import Any
 from rich.console import Console
 
 from app.cli.interactive_shell.chat import cli_agent
-from app.cli.interactive_shell.chat.cli_agent import (
+from app.cli.interactive_shell.chat.action_plan import _parse_action_plan
+from app.cli.interactive_shell.chat.cli_agent import answer_cli_agent
+from app.cli.interactive_shell.chat.system_prompt import (
     _ACTION_RULE,
     _MARKDOWN_RULE,
     _TERMINOLOGY_RULE,
+    _build_environment_block,
+    _build_observation_block,
     _build_system_prompt,
-    _parse_action_plan,
-    answer_cli_agent,
 )
 from app.cli.interactive_shell.runtime.session import ReplSession
 
@@ -106,6 +108,19 @@ class TestSystemPromptTerminology:
         assert "gemini-cli" in prompt
         assert "antigravity-cli" in prompt
 
+    def test_prompt_gives_generic_integration_setup_guidance(self) -> None:
+        """Any "configure/connect X" request should LAUNCH setup via a run_interactive
+        action rather than just printing a command — and generically, not per vendor
+        (see the "can you configure sentry?" deflection)."""
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert "/integrations setup <service>" in prompt
+        assert "run_interactive" in prompt
+        # Launch it for them, do not merely instruct.
+        assert "do NOT just" in prompt
+        # Catch-all phrasing, not vendor-specific hardcoding.
+        assert "any integration" in prompt
+        assert "never hardcode advice to one vendor" in prompt
+
 
 class TestSystemPromptAgentsMdGrounding:
     """The conversational shell wires AGENTS.md repo-map content (#1442).
@@ -182,6 +197,81 @@ class TestSystemPromptInvestigationFlowGrounding:
         assert "resolve → extract → investigate → deliver" in client.last_prompt
 
 
+class TestEnvironmentIntegrationGrounding:
+    """The assistant must be told which integrations are configured (#sentry-context)."""
+
+    def test_block_lists_configured_services_when_known(self) -> None:
+        session = ReplSession()
+        session.configured_integrations_known = True
+        session.configured_integrations = ("gitlab", "datadog")
+        block = _build_environment_block(session)
+        assert "--- Environment (configured integrations) ---" in block
+        assert "gitlab" in block
+        assert "datadog" in block
+        assert "not in that list is NOT configured" in block
+
+    def test_block_states_none_when_known_and_empty(self) -> None:
+        session = ReplSession()
+        session.configured_integrations_known = True
+        session.configured_integrations = ()
+        block = _build_environment_block(session)
+        assert "No integrations are configured" in block
+
+    def test_block_omitted_when_unknown(self) -> None:
+        session = ReplSession()
+        assert session.configured_integrations_known is False
+        assert _build_environment_block(session) == ""
+
+    def test_answer_cli_agent_injects_configured_integrations(self, monkeypatch: Any) -> None:
+        client = _patch_llm(monkeypatch, "No, Sentry is not configured.")
+        monkeypatch.setattr(cli_agent, "build_cli_reference_text", lambda: "(ref)")
+        monkeypatch.setattr(cli_agent, "build_agents_md_reference_text", lambda: "")
+        monkeypatch.setattr(cli_agent, "build_investigation_flow_reference_text", lambda: "")
+
+        session = ReplSession()
+        session.configured_integrations_known = True
+        session.configured_integrations = ("gitlab",)
+        console, _ = _capture()
+        answer_cli_agent("is sentry installed?", session, console)
+
+        assert client.last_prompt is not None
+        assert "--- Environment (configured integrations) ---" in client.last_prompt
+        assert "gitlab" in client.last_prompt
+
+
+class TestObservationSummaryBlock:
+    """The observe→answer loop feeds discovery output back for summarization."""
+
+    def test_block_empty_without_observation(self) -> None:
+        assert _build_observation_block(None) == ""
+        assert _build_observation_block("   ") == ""
+
+    def test_block_wraps_command_output_with_summarize_instruction(self) -> None:
+        block = _build_observation_block("- sentry: missing (Not configured.)")
+        assert "tool_results" in block
+        assert "- sentry: missing (Not configured.)" in block
+        assert "summarize" in block.lower()
+        # The summary turn must not kick off more actions.
+        assert "not request, plan, or emit any further actions" in block.lower()
+
+    def test_answer_cli_agent_injects_observation(self, monkeypatch: Any) -> None:
+        client = _patch_llm(monkeypatch, "No — Sentry is not configured.")
+        monkeypatch.setattr(cli_agent, "build_cli_reference_text", lambda: "(ref)")
+        monkeypatch.setattr(cli_agent, "build_agents_md_reference_text", lambda: "")
+        monkeypatch.setattr(cli_agent, "build_investigation_flow_reference_text", lambda: "")
+
+        session = ReplSession()
+        console, _ = _capture()
+        observation = (
+            "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
+        )
+        answer_cli_agent("is sentry installed?", session, console, tool_observation=observation)
+
+        assert client.last_prompt is not None
+        assert "tool_results" in client.last_prompt
+        assert "sentry: missing" in client.last_prompt
+
+
 class TestActionPlanParsing:
     def test_parses_prose_wrapped_json(self) -> None:
         actions = _parse_action_plan(
@@ -238,6 +328,7 @@ class TestAssistantOutputRendering:
         assert "**world**" not in output
         assert "world" in output
         assert "Hello" in output
+        assert session.token_usage.get("output", 0) > 0
 
     def test_table_markdown_is_rendered_as_table(self, monkeypatch: Any) -> None:
         markdown = (
@@ -266,24 +357,18 @@ class TestAssistantOutputRendering:
             ("assistant", "Sure thing."),
         ]
 
-    def test_command_selection_prompt_uses_deterministic_response(self) -> None:
+    def test_command_selection_prompt_uses_llm_response(self, monkeypatch: Any) -> None:
+        _patch_llm(monkeypatch, "Use `opensre investigate` for incidents.")
         session = ReplSession()
         console, buf = _capture()
         answer_cli_agent("what command do I use?", session, console)
         output = _strip_ansi(buf.getvalue()).casefold()
-        assert "which command to use" in output
         assert "opensre investigate" in output
-        assert "opensre --help" in output
         assert session.cli_agent_messages[-2:] == [
             ("user", "what command do I use?"),
-            (
-                "assistant",
-                "If you're asking which command to use, start with `opensre investigate` "
-                "for incidents and paste alert text, JSON, or a concrete incident "
-                "description into this interactive shell.\n\n"
-                "If you want a full command list, run `opensre --help`.",
-            ),
+            ("assistant", "Use `opensre investigate` for incidents."),
         ]
+        assert session.llm_call_count == 1
 
     def test_structured_content_blocks_are_rendered(self, monkeypatch: Any) -> None:
         class _Block:
@@ -311,7 +396,7 @@ class TestAssistantOutputRendering:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "app.cli.support.exception_reporting.capture_exception",
+            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
         session = ReplSession()
@@ -361,6 +446,39 @@ class TestAssistantOutputRendering:
         assert "switched LLM provider" in output
         assert "LLM_PROVIDER=anthropic" in (tmp_path / ".env").read_text(encoding="utf-8")
         assert session.history[-1] == {"type": "slash", "text": "/model set anthropic", "ok": True}
+
+    def test_provider_switch_blocked_when_llm_provider_capability_disabled(
+        self,
+        monkeypatch: Any,
+        tmp_path: Any,
+    ) -> None:
+        """A session that explicitly disables the ``llm_provider`` surface must
+        not actuate a switch_llm_provider action from the chat answer path.
+
+        This is the deterministic guard behind scenario 700: pasted meta-text
+        that quotes an example command (``switch my model to gpt-5.5``) can bait
+        the assistant into emitting a provider-switch action. When the surface is
+        pinned off, the action is dropped before execution -- no ``/model set``
+        runs, no ``.env`` write, and no ``slash`` history entry is recorded."""
+        _patch_llm(
+            monkeypatch,
+            '{"actions":[{"action":"switch_llm_provider","provider":"openai","model":"gpt-5.5"}]}',
+        )
+
+        import app.cli.wizard.env_sync as env_sync
+
+        env_path = tmp_path / ".env"
+        monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+
+        session = ReplSession(available_capabilities={"llm_provider": ()})
+        console, buf = _capture()
+        answer_cli_agent("switch my model to gpt-5.5", session, console)
+
+        output = _strip_ansi(buf.getvalue())
+        assert "$ /model set" not in output
+        assert "switched LLM provider" not in output
+        assert not env_path.exists()
+        assert all(entry.get("type") != "slash" for entry in session.history)
 
     def test_prose_wrapped_provider_only_action_is_executed(
         self,
@@ -506,6 +624,83 @@ def test_answer_cli_agent_skips_observation_without_failure_question(
     answer_cli_agent("hello", session, console)
     assert client.last_prompt is not None
     assert "observation_json" not in client.last_prompt
+
+
+def test_run_interactive_action_queues_setup_command(monkeypatch: Any) -> None:
+    """'can you configure sentry?' should LAUNCH setup (queue it for auto-submit),
+    not just print a command for the user to type."""
+    _patch_llm(
+        monkeypatch,
+        '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    answer_cli_agent("can you configure sentry?", session, console)
+    assert session.pending_prompt_default == "/integrations setup sentry"
+    assert session.pending_prompt_autosubmit is True
+    assert "Launching" in _strip_ansi(buf.getvalue())
+
+
+def test_run_interactive_action_falls_back_to_guidance_without_tty(monkeypatch: Any) -> None:
+    """Without an interactive prompt to submit into (scripted/non-TTY), the action
+    degrades to telling the user the command rather than silently no-op'ing."""
+    _patch_llm(
+        monkeypatch,
+        '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: False
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    answer_cli_agent("can you configure sentry?", session, console)
+    assert session.pending_prompt_default is None
+    assert session.pending_prompt_autosubmit is False
+    assert "/integrations setup sentry" in _strip_ansi(buf.getvalue())
+
+
+def test_run_interactive_action_queues_any_registered_opensre_command(monkeypatch: Any) -> None:
+    _patch_llm(
+        monkeypatch,
+        '{"actions":[{"action":"run_interactive","command":"/integrations remove github"}]}',
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    answer_cli_agent("remove github connection", session, console)
+    assert session.pending_prompt_default == "/integrations remove github"
+    assert session.pending_prompt_autosubmit is True
+    assert "Launching" in _strip_ansi(buf.getvalue())
+
+
+def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) -> None:
+    _patch_llm(
+        monkeypatch,
+        '{"actions":[{"action":"run_interactive","command":"/not-an-opensre-command now"}]}',
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    answer_cli_agent("do a fake thing", session, console)
+    assert session.pending_prompt_default is None
+    assert "unsupported interactive command" in _strip_ansi(buf.getvalue())
+
+
+def test_prompt_advertises_run_interactive_for_configure_requests() -> None:
+    """The system prompt must tell the model to LAUNCH setup via run_interactive,
+    catch-all for any integration (no hardcoded vendor advice)."""
+    prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+    assert "run_interactive" in prompt
+    assert "/integrations setup <service>" in prompt
+    assert "any integration" in prompt
+    assert "never hardcode advice to one vendor" in prompt
 
 
 # ---------------------------------------------------------------------------

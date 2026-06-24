@@ -1,14 +1,14 @@
 id: 405-slash-then-sample-alert-success
 title: Health check slash followed by sample alert investigation, both execute
 intent_class: compound
-risk_level: medium
 input:
   prompt: run /health and then trigger a sample alert investigation
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
+  # Pin an empty resolved store for environment isolation so the planned/executed
+  # action sequence does not depend on the developer's local ~/.opensre integrations.
+  resolved_integrations: {}
 available_capabilities:
   slash_commands:
   - /health
@@ -19,13 +19,10 @@ notes:
   with two supported sequential actions executes successfully without fail-closing.
 
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: slash
   content: /health
@@ -58,5 +55,4 @@ history:
     ok: true
   - type: alert
     ok: true
-tier: critical
 runs: 3

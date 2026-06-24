@@ -7,7 +7,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-# ``app.cli.commands`` imports ``app.agents.probe`` via command registration.
+# ``app.cli.commands`` imports ``app.fleet_monitoring.probe`` via command registration.
 # ``probe`` depends on optional ``psutil``; provide a tiny stub so this
 # focused CLI argv-plumbing test remains hermetic in minimal environments.
 if "psutil" not in sys.modules:

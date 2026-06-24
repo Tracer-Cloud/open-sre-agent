@@ -1,27 +1,20 @@
 id: 300-sample-alert-run
 title: Run a sample alert
 intent_class: investigation
-risk_level: medium
 input:
   prompt: run a sample alert
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
-available_capabilities:
-  slash_commands: []
-  cli_commands: []
-  synthetic_suites: []
+  # Pin an empty resolved store so this scenario is isolated from the developer's
+  # local ~/.opensre integrations.
+  resolved_integrations: {}
 notes: []
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: true
-  has_unhandled_clause: false
-  fail_closed: false
+  executes_terminal_action: true
 planned_actions:
 - kind: sample_alert
   content: generic
@@ -42,5 +35,4 @@ history:
     ok: true
   - type: alert
     ok: true
-tier: critical
 runs: 1

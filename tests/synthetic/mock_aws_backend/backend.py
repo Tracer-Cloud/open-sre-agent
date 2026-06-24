@@ -90,6 +90,17 @@ class AWSBackend(Protocol):
     ) -> dict[str, Any]:
         """Return a response matching ``describe_rds_events``."""
 
+    def lookup_events(
+        self,
+        lookup_attributes: list[dict[str, str]] | None = None,
+        duration_minutes: int = 60,
+        max_results: int = 50,
+        region: str = "",
+        next_token: str = "",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Return a response matching ``lookup_cloudtrail_events``."""
+
 
 class FixtureAWSBackend:
     """AWSBackend implementation backed by a ScenarioFixture.
@@ -308,5 +319,36 @@ class FixtureAWSBackend:
             "duration_minutes": duration_minutes,
             "total_events": len(events),
             "events": events,
+            "error": None,
+        }
+
+    # ------------------------------------------------------------------ CloudTrail
+
+    def lookup_events(
+        self,
+        lookup_attributes: list[dict[str, str]] | None = None,
+        duration_minutes: int = 60,
+        region: str = "",
+        **_: Any,
+    ) -> dict[str, Any]:
+        """Serve ``lookup_cloudtrail_events`` from fixture data.
+
+        No scenario currently declares CloudTrail evidence, so this returns an
+        empty (but well-shaped) account-wide result. Its purpose is to keep
+        synthetic runs off real AWS — never leak a boto3 ``lookup_events`` call —
+        while giving the agent a valid "no recent changes" answer. ``filter``
+        echoes the single LookupAttribute the tool sent, mirroring the real tool.
+        """
+        attributes = lookup_attributes or []
+        return {
+            "source": "cloudtrail",
+            "available": True,
+            "region": region,
+            "duration_minutes": duration_minutes,
+            "filter": attributes[0] if attributes else None,
+            "total_events": 0,
+            "truncated": False,
+            "next_token": None,
+            "events": [],
             "error": None,
         }

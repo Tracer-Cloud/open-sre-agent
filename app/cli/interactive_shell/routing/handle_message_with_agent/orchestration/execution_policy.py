@@ -1,4 +1,30 @@
-"""Central execution policy (allow / ask / deny) for interactive REPL actions."""
+"""Central execution policy (allow / ask / deny) for interactive REPL actions.
+
+Default-allow policy
+--------------------
+This REPL is **default-allow**: actions run without a confirmation prompt. Every
+policy decision below resolves to ``allow`` except for a small hard ``deny``
+floor. There is intentionally no friction for normal use — slash/``opensre``
+commands, investigations, synthetic tests, code-agent launches, LLM runtime
+switches, and inferred shell commands (including ``!`` passthrough and mutating
+commands like ``rm``/``mv``) all run immediately, in any context (TTY or not,
+trust mode or not).
+
+Remaining hard ``deny`` floor (the only things the policy still blocks):
+
+* ``restricted`` shell commands (``sudo``, ``su``, ``systemctl``, ``kill``,
+  ``dd``, ``mkfs``, ``mount`` …) — see ``shell/policy.py``.
+* Shell input that cannot be safely parsed (shell operators ``| && ; > <``,
+  command substitution `` ` ``/``$(...)``, quoting errors). These are denied
+  because the policy cannot reason about what they would run, not because the
+  action is gated. Use ``!<command>`` for explicit passthrough.
+
+The ``ask`` verdict and its confirmation UX (``execution_allowed``) are retained
+so that ``trust_mode`` and any future opt-in stricter policy still work, but the
+default policy functions here no longer emit ``ask``. To make the REPL fully
+unrestricted (no ``deny`` floor at all), change ``evaluate_shell_from_parsed``
+to allow ``restricted``/unparseable input as well.
+"""
 
 from __future__ import annotations
 
@@ -227,9 +253,9 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
 
     if parsed.passthrough:
         return ExecutionPolicyResult(
-            verdict="ask",
+            verdict="allow",
             action_type="shell",
-            reason="explicit shell passthrough (!) runs your full user shell",
+            reason=None,
             hint=d.hint,
             shell_classification=d.classification,
         )
@@ -260,10 +286,11 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
             shell_classification=d.classification,
         )
 
+    # Default-allow: mutating / unknown inferred commands run without confirmation.
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict="allow",
         action_type="shell",
-        reason=d.reason,
+        reason=None,
         hint=d.hint,
         shell_classification=d.classification,
     )
@@ -287,14 +314,12 @@ def evaluate_shell_command(command: str) -> ExecutionPolicyResult:
 
 
 def evaluate_slash_tier(tier: ExecutionTier) -> ExecutionPolicyResult:
-    """Turn a resolved slash tier into an execution verdict."""
-    if tier == ExecutionTier.EXEMPT or tier == ExecutionTier.SAFE:
-        return ExecutionPolicyResult(verdict="allow", action_type="slash", reason=None)
-    return ExecutionPolicyResult(
-        verdict="ask",
-        action_type="slash",
-        reason="this command may change configuration or run heavy work",
-    )
+    """Turn a resolved slash tier into an execution verdict.
+
+    Default-allow: every slash tier (including ``ELEVATED``) resolves to ``allow``.
+    """
+    del tier  # default-allow: tier no longer gates slash execution
+    return ExecutionPolicyResult(verdict="allow", action_type="slash", reason=None)
 
 
 def plan_slash_execution(
@@ -311,20 +336,29 @@ def plan_slash_execution(
 
 
 def evaluate_investigation_launch(
-    *, action_type: Literal["investigation", "sample_alert"]
+    *,
+    action_type: Literal["investigation", "sample_alert"],
+    user_initiated: bool = False,
 ) -> ExecutionPolicyResult:
-    """Policy for starting an RCA / investigation pipeline from the REPL."""
+    """Policy for starting an RCA / investigation pipeline from the REPL.
+
+    Default-allow: investigations run without confirmation whether or not the
+    launch was ``user_initiated``.
+    """
+    del user_initiated  # default-allow: launches never require confirmation
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict="allow",
         action_type=action_type,
-        reason="investigations call external tools and consume LLM quota",
+        reason=None,
     )
 
 
 def plan_investigation_execution(
-    *, action_type: Literal["investigation", "sample_alert"]
+    *,
+    action_type: Literal["investigation", "sample_alert"],
+    user_initiated: bool = False,
 ) -> ActionExecutionPlan:
-    policy = evaluate_investigation_launch(action_type=action_type)
+    policy = evaluate_investigation_launch(action_type=action_type, user_initiated=user_initiated)
     return ActionExecutionPlan(
         action_type=action_type,
         classification="investigation_launch",
@@ -335,25 +369,25 @@ def plan_investigation_execution(
 
 def evaluate_synthetic_test_launch() -> ExecutionPolicyResult:
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict="allow",
         action_type="synthetic_test",
-        reason="synthetic tests spawn a long-running subprocess",
+        reason=None,
     )
 
 
 def evaluate_code_agent_launch() -> ExecutionPolicyResult:
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict="allow",
         action_type="code_agent",
-        reason="Claude Code may edit files, run tools, and consume LLM quota",
+        reason=None,
     )
 
 
 def evaluate_llm_runtime_switch(*, action_type: str) -> ExecutionPolicyResult:
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict="allow",
         action_type=action_type,
-        reason="this updates LLM provider / model environment configuration",
+        reason=None,
     )
 
 

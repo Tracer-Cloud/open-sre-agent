@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.analytics.cli import track_investigation
 from app.analytics.source import EntrypointSource, TriggerMode
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.cli.investigation import run_investigation_cli
-from app.cli.support.errors import OpenSREError
 from app.utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)

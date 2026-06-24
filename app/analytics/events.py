@@ -13,6 +13,9 @@ class Event(StrEnum):
     USER_ID_LOAD_FAILED = "user_id_load_failed"
     SENTRY_INIT_SKIPPED = "sentry_init_skipped"
 
+    # GitHub first-launch login
+    GITHUB_LOGIN_COMPLETED = "github_login_completed"
+
     # Onboarding
     ONBOARD_STARTED = "onboard_started"
     ONBOARD_COMPLETED = "onboard_completed"
@@ -25,6 +28,7 @@ class Event(StrEnum):
     INVESTIGATION_FIRST_HYPOTHESIS_RENDERED = "investigation_first_hypothesis_rendered"
     INVESTIGATION_ABANDONED = "investigation_abandoned"
     INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"
+    DIAGNOSIS_CATEGORY_MISMATCH = "diagnosis_category_mismatch"
     INTERACTIVE_SHELL_ROUTE_DECISION = "interactive_shell_route_decision"
 
     # Integrations

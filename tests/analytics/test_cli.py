@@ -27,9 +27,17 @@ def _assert_investigation_events_have_source(
 class _StubAnalytics:
     def __init__(self) -> None:
         self.events: list[tuple[Event, dict[str, object] | None]] = []
+        self.identified: list[dict[str, object]] = []
+        self.persistent_properties: dict[str, object] = {}
 
     def capture(self, event: Event, properties: dict[str, object] | None = None) -> None:
         self.events.append((event, properties))
+
+    def identify(self, set_properties: dict[str, object]) -> None:
+        self.identified.append(set_properties)
+
+    def set_persistent_property(self, key: str, value: object) -> None:
+        self.persistent_properties[key] = value
 
 
 def test_capture_cli_invoked_uses_safe_capture(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,6 +66,53 @@ def test_capture_cli_invoked_reports_analytics_failures_to_sentry(
     cli.capture_cli_invoked()
 
     assert captured_errors == [expected_error]
+
+
+def test_identify_github_username_sets_person_property(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.identify_github_username("octocat")
+
+    assert stub.identified == [{"github_username": "octocat"}]
+    assert stub.persistent_properties == {"github_username": "octocat"}
+
+
+def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.identify_github_username("")
+
+    assert stub.identified == []
+
+
+def test_identify_github_username_reports_failures_to_sentry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_errors: list[BaseException] = []
+    expected_error = RuntimeError("analytics unavailable")
+
+    def raise_error() -> _StubAnalytics:
+        raise expected_error
+
+    monkeypatch.setattr(cli, "get_analytics", raise_error)
+    monkeypatch.setattr(cli, "capture_exception", captured_errors.append)
+
+    cli.identify_github_username("octocat")
+
+    assert captured_errors == [expected_error]
+
+
+def test_capture_github_login_completed(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_github_login_completed("octocat")
+
+    assert stub.events == [
+        (Event.GITHUB_LOGIN_COMPLETED, {"github_username": "octocat"}),
+    ]
 
 
 def test_build_cli_invoked_properties_includes_full_command_path() -> None:
@@ -255,3 +310,24 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
     _assert_investigation_events_have_source(stub.events)
+
+
+def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_diagnosis_category_mismatch(
+        root_cause_category="dns_resolution_failure",
+        mismatch_reason="root cause text signals database (2 keyword hits)",
+    )
+
+    assert stub.events == [
+        (
+            Event.DIAGNOSIS_CATEGORY_MISMATCH,
+            {
+                "category_text_mismatch": True,
+                "root_cause_category": "dns_resolution_failure",
+                "mismatch_reason": "root cause text signals database (2 keyword hits)",
+            },
+        )
+    ]

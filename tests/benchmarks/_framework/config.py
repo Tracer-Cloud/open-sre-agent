@@ -2,7 +2,7 @@
 
 The benchmark framework is YAML-driven (Yauhen's stated requirement: easy
 to configure, parallel by default). Configs live under
-``tests/benchmarks/configs/*.yml``. Loading a config goes through these
+``tests/benchmarks/cloudopsbench/configs/*.yml``. Loading a config goes through these
 validation layers:
 
   1. Pydantic — types and field constraints (always-on, fast).
@@ -22,12 +22,33 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from tests.benchmarks._framework.adapters import Mode
+from tests.benchmarks._framework.adapters import (
+    AdapterCapabilities,
+    Mode,
+    capabilities_for,
+)
 
 
 def _default_report_formats() -> list[Literal["json", "markdown", "html"]]:
     """Module-level factory keeps mypy happy with the Literal element type."""
     return ["json", "markdown"]
+
+
+def _resolve_capabilities_or_default(benchmark_name: str) -> AdapterCapabilities:
+    """Look up an adapter's capabilities; fall back to the all-False default.
+
+    Unknown adapters return the all-False default — every gated feature
+    is refused. This is intentional: a typo in ``config.benchmark`` (e.g.
+    ``cloudopsbnech``) must NOT silently bypass capability-based guards
+    just because the adapter cannot be looked up. The user gets a clear
+    "this feature requires the adapter to declare X" error for each
+    gated knob, plus the underlying unknown-benchmark error when the
+    runner subsequently tries to build the adapter via ``build_adapter``.
+    """
+    try:
+        return capabilities_for(benchmark_name)
+    except (KeyError, ImportError):
+        return AdapterCapabilities()
 
 
 # --------------------------------------------------------------------------- #
@@ -105,6 +126,45 @@ class BenchmarkConfig(BaseModel):
         default_factory=_default_report_formats, min_length=1
     )
 
+    # Adapter-specific termination floor (currently honored only by the
+    # CloudOpsBench adapter's ``BenchInvestigationAgent``). When set, the
+    # CLI overrides ``BenchInvestigationAgent.MIN_TOOL_CALLS`` to this
+    # value before the run starts — keeping the floor as part of the
+    # experiment definition rather than a launch-time env var. Leave
+    # ``None`` to inherit the agent's default (which itself can be
+    # overridden by the ``BENCH_MIN_TOOL_CALLS`` env var at import time).
+    # Required for floor-ablation experiments so the floor is reproducible
+    # from the config file alone — see ``cloudopsbench_floor_ablation_v2_openai.yml``.
+    min_tool_calls: int | None = Field(ge=0, default=None)
+
+    # Adapter-specific bench agent variant. ``"default"`` (the default) keeps
+    # ``BenchInvestigationAgent`` and its full opensre system prompt — the
+    # apples-to-apples comparison with production behavior. ``"trimmed_prompt"``
+    # swaps in ``BenchInvestigationAgentTrimmedPrompt``, which keeps tool
+    # filtering + tool-output citation but drops the multi-stage / validation /
+    # hedging scaffolding the full opensre prompt carries. Honored only by the
+    # CloudOpsBench adapter; other adapters ignore the field.
+    #
+    # Predictor-drift mode (60% of opensre+llm losses on the floor=0 full-N
+    # run) is upstream of the predictor — opensre's investigation TEXT itself
+    # is biased toward adjacent vocabulary, which the predictor faithfully
+    # formalizes. This field exists to test whether a less structured prompt
+    # produces less adjacent-token bias.
+    agent_variant: Literal["default", "trimmed_prompt"] = "default"
+
+    # Predictor variant for adapters with a paper-format predictor stage.
+    # ``"default"`` (the default) uses the text-emit predictor in
+    # ``predictor/llm_call.py`` — fed back through opensre's LLM client wrapper.
+    # ``"structured"`` swaps in the OpenAI structured-outputs variant in
+    # ``predictor/llm_call_structured_openai.py`` — grammar-constrained sampling at
+    # the API level, so ``root_cause`` and ``fault_taxonomy`` are emitted
+    # from the closed vocabulary by construction (no off-vocab fallout).
+    #
+    # OpenAI-only (gpt-4o-2024-08-06+ or gpt-5). Honored only by the
+    # CloudOpsBench adapter — cross-field lint refuses ``"structured"`` on
+    # other adapters or with non-OpenAI llms.
+    predictor_variant: Literal["default", "structured"] = "default"
+
     # ----------------------------------------------------------------------- #
     # Pydantic-level validation                                               #
     # ----------------------------------------------------------------------- #
@@ -174,6 +234,60 @@ class BenchmarkConfig(BaseModel):
                 f"cost_budget_usd=${self.cost_budget_usd:,.0f} is unusually "
                 "large for a single run. Confirm intent in pre-registration."
             )
+
+        # Cross-field guard: agent_variant is silently ignored by adapters
+        # that don't declare ``supports_agent_variant=True`` in their
+        # ``AdapterCapabilities``. Setting it on such a config would run
+        # the wrong agent without warning — refuse the config so the
+        # intent is explicit. ``"default"`` is always allowed.
+        #
+        # Looking up capabilities by adapter (not by hardcoded
+        # ``benchmark == "cloudopsbench"``) means a new adapter that opts
+        # in to ``supports_agent_variant=True`` is automatically accepted
+        # by the framework without changes here.
+        adapter_caps = _resolve_capabilities_or_default(self.benchmark)
+        if self.agent_variant != "default" and not adapter_caps.supports_agent_variant:
+            errors.append(
+                f"agent_variant={self.agent_variant!r} requires the "
+                f"benchmark adapter to declare "
+                f"``supports_agent_variant=True`` in its "
+                f"``AdapterCapabilities``, but benchmark={self.benchmark!r} "
+                f"does not. The field would be silently ignored, producing "
+                f"an experiment that measures the default agent. Set "
+                f"agent_variant: default or use an adapter that supports it."
+            )
+
+        # Cross-field guard: predictor_variant="structured" requires an
+        # adapter that declares a predictor stage AND an OpenAI-compatible
+        # LLM (structured outputs is OpenAI-only on the predictor side).
+        if self.predictor_variant == "structured":
+            if not adapter_caps.supports_predictor_variant:
+                errors.append(
+                    f"predictor_variant=structured requires the benchmark "
+                    f"adapter to declare ``supports_predictor_variant=True`` "
+                    f"in its ``AdapterCapabilities``, but "
+                    f"benchmark={self.benchmark!r} does not. "
+                    f"Set predictor_variant: default or use an adapter "
+                    f"that has a predictor stage."
+                )
+            # Prefixes for OpenAI models that support structured outputs.
+            # Includes the o-series (o1, o3, o4-mini) and gpt-series. Other
+            # providers may add structured-output support — when they do, a
+            # peer ``llm_call_structured_<provider>.py`` module lands and
+            # the dispatcher routes by LLM provider. Until then, this guard
+            # refuses non-OpenAI llms with a clear error.
+            openai_prefixes = ("gpt-", "openai", "o1", "o3", "o4")
+            non_openai_llms = [llm for llm in self.llms if not llm.startswith(openai_prefixes)]
+            if non_openai_llms:
+                errors.append(
+                    f"predictor_variant=structured currently supports OpenAI "
+                    f"models only (gpt-4o-2024-08-06+, gpt-5, o-series). "
+                    f"Found non-OpenAI llms: {non_openai_llms}. Either set "
+                    "predictor_variant: default or restrict llms to OpenAI "
+                    "models. Other-provider peer variants "
+                    "(llm_call_structured_anthropic.py, "
+                    "llm_call_structured_deepseek.py) are planned follow-ups."
+                )
 
         # Output dir must not be a managed system path. Compare BOTH the lexical
         # form and the resolved form (on macOS /etc → /private/etc symlink would

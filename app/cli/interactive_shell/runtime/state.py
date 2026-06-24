@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from prompt_toolkit.application.current import get_app_or_none
 
 from app.cli.interactive_shell.ui import ANSI_DIM, ANSI_RESET, PROMPT_ACCENT_ANSI
-from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN, format_token_count_short
+from app.cli.interactive_shell.ui.token_format import _CHARS_PER_TOKEN, format_token_count_short
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
 PROMPT_REFRESH_INTERVAL_S = 0.25

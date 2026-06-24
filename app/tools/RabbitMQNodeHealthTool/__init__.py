@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Investigating file descriptor or socket exhaustion on a broker node",
     ],
     is_available=rabbitmq_is_available,
+    injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
 )
 def get_rabbitmq_node_health(

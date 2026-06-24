@@ -9,12 +9,11 @@ import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.runtime import loop
-from app.cli.interactive_shell.ui.rendering import (
+from app.cli.interactive_shell.ui.rendering import repl_print, repl_table
+from app.cli.interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
     render_mcp_table,
-    repl_print,
-    repl_table,
 )
 
 
@@ -125,6 +124,24 @@ def test_render_integrations_table_renders_content(
     )
 
     assert "grafana" in capsys.readouterr().out
+
+
+def test_render_integrations_table_sorts_services_and_includes_mcp(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    console = Console(force_terminal=False, width=80)
+    render_integrations_table(
+        console,
+        [
+            {"service": "sentry", "source": "-", "status": "missing", "detail": "missing"},
+            {"service": "github", "source": "-", "status": "missing", "detail": "missing"},
+            {"service": "datadog", "source": "env", "status": "passed", "detail": "ok"},
+        ],
+    )
+
+    output = capsys.readouterr().out
+    assert output.index("datadog") < output.index("github") < output.index("sentry")
+    assert "github" in output
 
 
 def test_render_mcp_table_renders_content(

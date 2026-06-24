@@ -19,6 +19,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
     _pump_task_pty,
     _pump_task_stream,
     read_diag,
+    read_task_output,
     run_cd_command,
     run_claude_code_implementation,
     run_opensre_cli_command,
@@ -32,7 +33,6 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from app.cli.interactive_shell.shell.execution import ShellExecutionResult
-from app.cli.interactive_shell.shell.policy import PolicyDecision
 from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
 
 
@@ -73,6 +73,24 @@ def test_read_diag_respects_byte_cap() -> None:
         buf.write(b"z" * 5_000)
         text = read_diag(buf)
     assert len(text) == 2_000
+
+
+def test_read_task_output_handles_none_buffer() -> None:
+    assert read_task_output(None, limit=100) == ""
+
+
+def test_read_task_output_strips_ansi_and_caps() -> None:
+    with tempfile.SpooledTemporaryFile() as buf:  # type: ignore[type-arg]
+        buf.write(b"\x1b[31merror\x1b[0m line\n")
+        text = read_task_output(buf, limit=1_000)
+    assert text == "error line"
+
+
+def test_read_task_output_returns_empty_for_closed_buffer() -> None:
+    with tempfile.SpooledTemporaryFile() as buf:  # type: ignore[type-arg]
+        buf.write(b"data")
+    # Buffer is closed once the ``with`` block exits.
+    assert read_task_output(buf, limit=100) == ""
 
 
 def test_run_pwd_command_prints_cwd(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -131,7 +149,7 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         _chdir,
     )
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -144,35 +162,37 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
     assert "cd failed" in buf.getvalue()
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], OSError)
-    assert session.history[-1] == {"type": "shell", "text": "cd /root/blocked", "ok": False}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "cd /root/blocked",
+        "ok": False,
+        "response_text": "cd failed: permission denied",
+    }
 
 
-def test_run_shell_command_records_when_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy.evaluate_policy",
-        lambda **_: PolicyDecision(
-            allow=False,
-            classification="mutating",
-            reason="test block",
-            hint="use ! for passthrough",
-        ),
-    )
+def test_run_shell_command_records_when_policy_denies() -> None:
+    """Default-allow still blocks the restricted ``deny`` floor (e.g. ``sudo``).
 
+    The command must not run, the REPL prints a ``blocked`` notice, and the
+    attempt is recorded as ``ok=False``.
+    """
     session = ReplSession()
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
     run_shell_command(
-        "rm -rf /nope",
+        "sudo rm -rf /nope",
         session,
         console,
         confirm_fn=lambda _p: "n",
         is_tty=True,
     )
 
-    assert "test block" in buf.getvalue()
-    assert "cancelled" in buf.getvalue().lower()
-    assert session.history[-1] == {"type": "shell", "text": "rm -rf /nope", "ok": False}
+    out = buf.getvalue()
+    assert "blocked" in out.lower()
+    # The denied command must never be echoed/executed.
+    assert "$ sudo" not in out
+    assert session.history[-1] == {"type": "shell", "text": "sudo rm -rf /nope", "ok": False}
 
 
 def test_run_claude_code_implementation_starts_tracked_task(
@@ -353,7 +373,12 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
     out = buf.getvalue()
     assert "✗" in out
     assert "exit 7" in out
-    assert session.history[-1] == {"type": "shell", "text": "false", "ok": False}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "false",
+        "ok": False,
+        "response_text": "✗ exit 7",
+    }
 
 
 def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,7 +392,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         _raise,
     )
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -380,14 +405,19 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
     assert "command failed to start" in buf.getvalue()
     assert len(captured_errors) == 1
     assert isinstance(captured_errors[0], RuntimeError)
-    assert session.history[-1] == {"type": "shell", "text": "true", "ok": False}
+    assert session.history[-1] == {
+        "type": "shell",
+        "text": "true",
+        "ok": False,
+        "response_text": "command failed to start: spawn failed",
+    }
 
 
 def test_run_opensre_agents_scan_prints_clean_foreground_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        assert command[-2:] == ["agents", "scan"]
+        assert command[-2:] == ["fleet", "scan"]
         assert kwargs["capture_output"] is True
         return subprocess.CompletedProcess(
             args=command,
@@ -405,15 +435,15 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False)
 
-    assert run_opensre_cli_command("agents scan", session, console) is True
+    assert run_opensre_cli_command("fleet scan", session, console) is True
 
     out = buf.getvalue()
-    assert "$ opensre agents scan" in out
+    assert "$ opensre fleet scan" in out
     assert "agent scan" in out
     assert "777 claude-code-777 claude code" in out
     assert "started." not in out
     assert "stdout │" not in out
-    assert session.history[-1] == {"type": "cli_command", "text": "opensre agents scan", "ok": True}
+    assert session.history[-1] == {"type": "cli_command", "text": "opensre fleet scan", "ok": True}
 
 
 def test_run_opensre_agents_scan_register_explains_confirmation(
@@ -438,7 +468,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
 
     assert (
         run_opensre_cli_command(
-            "agents scan --register",
+            "fleet scan --register",
             session,
             console,
             confirm_fn=lambda _prompt: "y",
@@ -453,7 +483,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
     assert "stdout │" not in out
     assert session.history[-1] == {
         "type": "cli_command",
-        "text": "opensre agents scan --register",
+        "text": "opensre fleet scan --register",
         "ok": True,
     }
 
@@ -470,7 +500,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
             return 0
 
     def _fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
-        assert command[-3:] == ["agents", "watch", "1234"]
+        assert command[-3:] == ["fleet", "watch", "1234"]
         popen_kwargs.append(kwargs)
         return _FakeProcess()
 
@@ -485,7 +515,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
 
     assert (
         run_opensre_cli_command(
-            "agents watch 1234",
+            "fleet watch 1234",
             session,
             console,
             confirm_fn=lambda _prompt: "y",
@@ -495,7 +525,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
     )
 
     out = buf.getvalue()
-    assert "$ opensre agents watch 1234" in out
+    assert "$ opensre fleet watch 1234" in out
     assert "watching pid 1234" in out
     assert "pid 1234 exited" in out
     assert "started" not in out
@@ -504,7 +534,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
     assert session.task_registry.list_recent() == []
     assert session.history[-1] == {
         "type": "cli_command",
-        "text": "opensre agents watch 1234",
+        "text": "opensre fleet watch 1234",
         "ok": True,
     }
 
@@ -638,6 +668,117 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
     assert "pipe progress" in buf.getvalue()
 
 
+def test_start_background_cli_task_logs_failure_outcome_to_posthog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A background CLI task that fails asynchronously must still send its real
+    stderr/exit outcome to the prompt-log/PostHog sink. This is the regression
+    for ``opensre investigate`` errors arriving after the turn recorder flushed.
+    """
+    captured: list[dict[str, object]] = []
+
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda properties: captured.append(properties),
+    )
+
+    class _FakeProcess:
+        returncode = 1
+        stdout = io.StringIO("")
+        stderr = io.StringIO("No remote named 'myportfolio' is configured.\n")
+
+        def poll(self) -> int:
+            return 1
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        lambda _command, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre investigate --service myportfolio",
+        argv_list=["python", "-m", "app.cli", "investigate", "--service", "myportfolio"],
+        session=session,
+        console=console,
+        kind=TaskKind.CLI_COMMAND,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.FAILED
+    assert len(captured) == 1
+    props = captured[0]
+    assert props["cli_route_kind"] == "background_task"
+    assert props["$ai_trace_id"] == task.task_id
+    ai_input = props["$ai_input"]
+    assert isinstance(ai_input, list)
+    assert ai_input[0]["content"] == "opensre investigate --service myportfolio"
+    choices = props["$ai_output_choices"]
+    assert isinstance(choices, list)
+    content = choices[0]["content"]
+    assert "command failed (exit 1)" in content
+    assert "No remote named 'myportfolio' is configured." in content
+
+
+def test_start_background_cli_task_logs_success_outcome_to_posthog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful background task logs its stdout outcome, not an empty reply."""
+    captured: list[dict[str, object]] = []
+
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda properties: captured.append(properties),
+    )
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("investigation complete: root cause identified\n")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        lambda _command, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre investigate --service checkout",
+        argv_list=["python", "-m", "app.cli", "investigate", "--service", "checkout"],
+        session=session,
+        console=console,
+        kind=TaskKind.CLI_COMMAND,
+    )
+
+    assert task is not None
+    assert task.status == TaskStatus.COMPLETED
+    assert len(captured) == 1
+    content = captured[0]["$ai_output_choices"][0]["content"]
+    assert "command completed (exit 0)" in content
+    assert "investigation complete: root cause identified" in content
+
+
 def test_task_output_stream_reports_unexpected_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -651,7 +792,7 @@ def test_task_output_stream_reports_unexpected_failure(
             raise RuntimeError("stream broke")
 
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -682,7 +823,7 @@ def test_task_pty_stream_reports_unexpected_failure(
         raise RuntimeError("pty broke")
 
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -714,7 +855,7 @@ def test_start_background_cli_task_reports_spawn_failure(
         raise RuntimeError("spawn broke")
 
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -758,7 +899,7 @@ def test_start_background_cli_task_reports_watcher_failure(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -793,6 +934,69 @@ def test_start_background_cli_task_reports_watcher_failure(
     assert isinstance(captured_errors[0], RuntimeError)
 
 
+def test_start_background_cli_task_skips_follow_up_after_session_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeProcess:
+        stdout = None
+        stderr = None
+        returncode = 1
+
+        def poll(self) -> int:
+            return 1
+
+    class _DeferredThread:
+        pending: list[object] = []
+
+        def __init__(
+            self,
+            group: object = None,
+            target: object = None,
+            name: object = None,
+            args: tuple[object, ...] = (),
+            kwargs: dict[str, object] | None = None,
+            *,
+            daemon: object = None,
+        ) -> None:
+            del group, name, daemon, args, kwargs
+            if callable(target):
+                _DeferredThread.pending.append(target)
+
+        def start(self) -> None:
+            return
+
+    def _fake_popen(_command: list[str], **_kwargs: object) -> _FakeProcess:
+        return _FakeProcess()
+
+    _DeferredThread.pending.clear()
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        _DeferredThread,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        _fake_popen,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command="opensre tests synthetic --scenario 001-replication-lag",
+        argv_list=["python", "-m", "app.cli", "tests", "synthetic"],
+        session=session,
+        console=console,
+        kind=TaskKind.SYNTHETIC_TEST,
+    )
+    assert task is not None
+    assert len(_DeferredThread.pending) == 1
+    session.clear()
+    _DeferredThread.pending[0]()  # type: ignore[operator]
+    assert session.pending_prompt_default is None
+    _DeferredThread.pending.clear()
+
+
 def test_watch_synthetic_subprocess_reports_daemon_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -806,7 +1010,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
             raise RuntimeError("poll broke")
 
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -1177,7 +1381,7 @@ def test_run_synthetic_test_forwards_columns_to_subprocess(
         # Other subcommands — must NOT match.
         (["health"], False),
         (["version"], False),
-        (["agents", "list"], False),
+        (["fleet", "list"], False),
         # Edge: empty.
         ([], False),
     ],

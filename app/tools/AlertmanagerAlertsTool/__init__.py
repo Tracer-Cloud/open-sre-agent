@@ -33,6 +33,7 @@ class AlertmanagerAlertsTool(BaseTool):
         "Determining the blast radius of an infrastructure change via active alert labels",
     ]
     requires = ["base_url"]
+    injected_params = ["base_url", "password", "username"]
     input_schema = {
         "type": "object",
         "properties": {

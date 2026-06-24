@@ -23,6 +23,7 @@ class ArgoCDApplicationDiffTool(BaseTool):
         "Correlating deployment drift with application health degradation",
     ]
     requires = ["base_url", "application_name"]
+    injected_params = ["base_url", "password", "username"]
     input_schema = {
         "type": "object",
         "properties": {

@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Finding queues with zero consumers that are silently accumulating messages",
     ],
     is_available=rabbitmq_is_available,
+    injected_params=("host", "password", "username"),
     extract_params=rabbitmq_extract_params,
 )
 def get_rabbitmq_queue_backlog(

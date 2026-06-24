@@ -39,7 +39,6 @@ the environment.
 export ANTHROPIC_API_KEY=...        # Claude-4-Sonnet via Anthropic direct
 export OPENAI_API_KEY=...           # GPT-5, GPT-4o
 export DEEPSEEK_API_KEY=...         # DeepSeek-V3.2
-export TOGETHER_API_KEY=...         # Qwen (optional)
 
 # 3. Pull the corpus (one-time, a few hundred MB)
 make download-cloudopsbench-hf
@@ -60,7 +59,7 @@ uv run python -m tests.benchmarks._framework.cli list
 
 ```bash
 uv run python -m tests.benchmarks._framework.cli validate \
-    tests/benchmarks/configs/example.yml
+    tests/benchmarks/configs/cloudopsbench_smoke.yml
 ```
 
 The config lint catches anti-patterns (`runs_per_case < 3`, missing
@@ -75,7 +74,7 @@ prefix so dev results can't be silently promoted.
 
 ```bash
 uv run python -m tests.benchmarks._framework.cli run \
-    tests/benchmarks/configs/example.yml --dev
+    tests/benchmarks/configs/cloudopsbench_smoke.yml --dev
 ```
 
 ### Production run

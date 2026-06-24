@@ -19,13 +19,17 @@ from app.cli.interactive_shell.ui import (
 )
 
 
-def _cmd_exit(_session: ReplSession, console: Console, _args: list[str]) -> bool:
+def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    if session.session_id:
+        console.print()
+        console.print(f"[{DIM}]Resume this session with:[/]")
+        console.print(f"[{DIM}]/resume {session.session_id} [/]")
     console.print(f"[{DIM}]goodbye.[/]")
     return False
 
 
 def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.support.health_view import render_health_report
+    from app.cli.interactive_shell.ui.health_view import render_health_report
     from app.config import get_environment
     from app.integrations.store import STORE_PATH
     from app.integrations.verify import verify_integrations

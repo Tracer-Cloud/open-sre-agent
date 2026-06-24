@@ -59,26 +59,87 @@ If all answers are weak, keep the logic inline.
 | `app/cli/interactive_shell/routing/tests/scenarios/**/scenario.yml` | Routing package owners | Input world: prompt, session, capabilities, intent metadata |
 | `app/cli/interactive_shell/routing/tests/scenarios/**/answer.yml` | Routing package owners | Expected behavior: route, policy, planned/executed actions, response contract |
 
+## Scenario schema and `available_capabilities` semantics
+
+Scenario fixtures are intentionally minimal: the loader (`scenario_loader.py`)
+parses only fields the runner asserts on. Do **not** re-add decorative metadata.
+
+- **Removed fields (do not re-add):** `risk_level`, `tier`,
+  `session.remote_connected`, and `input.surface` were parsed-but-unused and have
+  been dropped from the schema and every fixture. `title` and `notes` remain as
+  human-only documentation.
+- **`available_capabilities` is a three-state, production-faithful knob.** It
+  constrains which planner tools the live oracle offers. Its default mirrors
+  production: `ReplSession()` carries no capability constraints, so every tool is
+  enabled. For each surface (`slash_commands`, `cli_commands`, `synthetic_suites`):
+  - **omit the key (or omit the whole block)** → the tool stays enabled (the
+    production default). This is the right choice for almost every scenario.
+  - **explicit empty list `[]`** → the tool is explicitly disabled (hidden from
+    the planner specs and blocked at dispatch). Use only when a scenario genuinely
+    needs that surface off to test a specific path.
+  - **non-empty list** → an allowlist: the tool is enabled and the action
+    normalizer drops proposed actions outside the list.
+- **Do not re-introduce all-empty `available_capabilities` blocks.** A block that
+  disables all three surfaces is the old redundant boilerplate that predated the
+  production-faithful default; it is rejected by
+  `test_available_capabilities_blocks_are_not_redundant_boilerplate`. Omit the
+  block instead.
+
 ## Routing test isolation policy (no mocks)
 
 - Do **not** use `unittest.mock`, `patch`, `MagicMock`, or equivalent mocking
   primitives in routing tests.
 - Do **not** stub or monkeypatch the LLM client path in routing tests.
 - Routing contract tests must exercise the real routing stack
-  (`route_input` -> `handle_message_with_agent`) and
-  rely on curated prompts instead of synthetic mocked return values.
+  (`route_input` -> `handle_message_with_agent`) and rely on curated prompts
+  instead of synthetic mocked return values.
 
 ## Important routing decisions (locked)
 
-- Keep `route_input` as a strict two-branch flow only:
-  1) `resolve_cli_command(...)`; else 2) `handle_message_with_agent(...)`.
-- `resolve_cli_command(...)` owns deterministic command routing only
-  (slash-prefixed commands and bare command aliases).
-- `handle_message_with_agent(...)` owns non-command routing and should stay
-  linear: direct default `cli_agent` routing for non-command input.
+- Keep `route_input` as a **single-branch** entrypoint: every turn returns a
+  `handle_message_with_agent` decision. Do **not** add command/slash/help/alert
+  branches or any other top-level routing phases here.
+- Deterministic command dispatch is an **internal fast path of the agent**, not
+  a routing branch. `handle_message_with_agent` detects literal slash commands,
+  bare command aliases, and `opensre investigate` quick-starts via
+  `handle_message_with_agent/command_dispatch/` and dispatches them directly
+  (no LLM); everything else falls through to LLM action planning + assistant.
+- The runtime (`runtime/dispatch.py`) may reuse
+  `command_dispatch.deterministic_command_text` for terminal-UI concerns only
+  (spinner suppression and exclusive-stdin gating). This is a presentation
+  concern and must not re-introduce a routing branch.
 - Regex fallback has been intentionally removed from routing. Do **not**
   re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
   unless there is an explicit product decision to restore them.
+- **The LLM action planner is the sole tool selector for non-command turns.**
+  There is no regex/keyword intent inference and no deterministic
+  natural-language → action mapping in `orchestration/`. The former
+  `slash_commands/deterministic_action_mapper.py`, `intent_parser` regex
+  patterns/extractors, and the regex planner postprocessing overrides were
+  removed. Do **not** reintroduce them: change tool selection by editing the
+  planner system prompt (`llm_action_planner/constants.py`) and the per-tool
+  descriptions in `orchestration/tools/*`, never by adding pattern matching.
+  Tool-call argument *validation* (shape/availability checks in
+  `llm_action_planner/normalization.py` and `parsing.py`) is allowed; intent
+  *classification* by regex is not.
+- When the planner LLM is unavailable or the prompt overflows, hand off to the
+  conversational `assistant` — do not guess an action deterministically and do
+  **not** deny the turn.
+- **No planning-stage fail-closed safeguard (v0.1).** There is no "I couldn't
+  safely decide actions" denial. Every terminal action is read-only, so an
+  unmatched, ambiguous, or chatty clause never blocks a turn: the planner runs
+  the clauses it can map and the rest fall through to the assistant. The former
+  `denied` decision, the `mark_unhandled` planner tool, the `UNHANDLED:` text
+  convention, and `render_plan_denied` were removed for this reason. Do **not**
+  reintroduce a planning-stage denial; if write/mutating actions are ever added,
+  gate them with an execution-stage confirmation (see
+  `orchestration/execution_policy.py`), not a planner denial. The legacy
+  `fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fixture
+  fields were removed (the oracle never asserted on them); the policy block now
+  carries a single `executes_terminal_action` boolean. See the `Answer` and
+  `AnswerPolicy` docstrings in `tests/scenario_loader.py` for the two execution
+  paths a turn can take (planner→dispatch vs conversational tool-gathering) and
+  which fixture fields cover which.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 
@@ -87,9 +148,15 @@ If all answers are weak, keep the logic inline.
 - Routing tests are part of the default CI/CD flow; do **not** move them to
   optional-only jobs.
 - Keep deterministic routing contracts (`test_routing_scenarios.py::test_deterministic_routing` and
-  `test_routing_fixture_integrity.py`) in the default PR CI flow.
-- Run live-LLM routing suites (`test_routing_scenarios.py` live tests)
-  in the post-merge sharded workflow.
+  `test_routing_fixture_integrity.py`) in the default PR CI flow. These run as
+  the no-LLM `routing-checks` job in `.github/workflows/routing-live.yml`
+  (`pytest app/cli/interactive_shell/routing/tests/ -m "not live_llm"`), which
+  needs no secrets and therefore also gates fork PRs.
+- Run the live-LLM routing suites (`test_routing_scenarios.py` live tests) on
+  **both** same-repo pull requests and post-merge `main` pushes, sharded across
+  **8** shards (`ROUTING_SHARD_TOTAL=8`, matrix `shard_index: 0..7`) via the
+  `routing-live` job in `.github/workflows/routing-live.yml`. Fork PRs skip the
+  live job (no secrets); the `routing-checks` job still gates them.
 - Execute routing suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
   in both local and CI environments.
 - Local developer goal: the live-LLM routing contract suite should be runnable

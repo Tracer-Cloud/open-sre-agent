@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Triaging intermittent 503 or 401 errors from a Supabase-backed application",
     ],
     is_available=supabase_is_available,
+    injected_params=("project_url",),
     extract_params=supabase_extract_params,
 )
 def get_supabase_service_health(

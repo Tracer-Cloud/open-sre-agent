@@ -276,22 +276,23 @@ class KimiAdapter:
         return result
 
     def explain_failure(self, *, stdout: str, stderr: str, returncode: int) -> str:
+        from app.integrations.llm_cli.failure_explain import explain_cli_failure
+
         err = (stderr or "").strip()
         out = (stdout or "").strip()
-        bits = []
-        if returncode != 0:
-            bits.append(f"kimi exited with code {returncode}")
-
-        if "LLM not set" in err or "LLM not set" in out:
-            bits.append("Not logged in or model unavailable. Run: kimi login")
-        elif "Error code: 401" in err or "Error code: 401" in out:
-            bits.append("API key invalid or expired. Re-authenticate: kimi login")
-        elif err:
-            bits.append(err[:2000])
-        elif out:
-            bits.append(out[:2000])
-
-        if not bits and returncode == 0:
+        if returncode == 0 and not err and not out:
             return "kimi returned no output"
 
-        return ". ".join(bits)
+        extra: tuple[str, ...] = ()
+        if "LLM not set" in err or "LLM not set" in out:
+            extra = ("Not logged in or model unavailable. Run: kimi login",)
+        elif "Error code: 401" in err or "Error code: 401" in out:
+            extra = ("API key invalid or expired. Re-authenticate: kimi login",)
+
+        return explain_cli_failure(
+            exit_label="kimi",
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+            extra_messages=extra,
+        )

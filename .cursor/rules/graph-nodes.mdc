@@ -4,7 +4,6 @@ globs:
     - app/pipeline/**
     - app/agent/**
     - app/state/**
-    - app/delivery/**
 ---
 
 # Investigation pipeline
@@ -17,8 +16,8 @@ globs:
 
 ## Key packages
 
-- `app/agent/context.py`, `extract.py`, `investigation.py`, `chat.py`
-- `app/delivery/` for publishing and integrations
+- `app/agent/stages/` for pipeline stages (extract, investigate, diagnose, publish findings)
+- `app/agent/chat/`, `app/agent/tool_loop/`
 - `app/state/agent_state.py` for `AgentState` / `InvestigationState`
 
 ## Conventions

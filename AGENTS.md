@@ -6,30 +6,14 @@
 - Run **`uv run opensre …`** from the repo root while developing — preferred approach, uses this checkout even if another `opensre` is on your `PATH`.
 - Use **`uv run python …`** for any Python commands.
 
-## Lint & Format
-
-- Lint: `make lint` (or fix: `ruff check app/ tests/ --fix`)
-- Format check: `make format-check`
-- Auto-format locally: `make format`
-- Type check: `make typecheck`
-- One-shot quality gate: `make check`
-
-## Testing
-
-- Test: `make test-cov`
-- Test real alerts: `make test-rca`
-
 ## Code Style
 
 - Use strict typing, follow DRY principle
 - One clear purpose per file (separation of concerns)
+- Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
+  are migrated, remove the old module path in the same change and use one canonical import path.
 
-### Before Push
-
-Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md).
-
-- `CI.md` is the source of truth for push/PR readiness.
-- Do not skip required checks.
+Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typecheck, and test commands all live there.
 
 ## 1. Repo Map
 
@@ -47,6 +31,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 | `docs/investigation-tool-calling.md` | Investigation ReAct tool schemas, LLM invoke payloads, and message shapes (all providers). |
 | `SETUP.md`            | Machine setup (all platforms, Windows, MCP/OpenClaw, troubleshooting).                             |
 | `CI.md`               | Mandatory pre-push checklist: lint, format, typecheck, tests — agents MUST follow before pushing. |
+| `TESTING.md`          | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                    |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
 `app/` one level deeper:
@@ -61,6 +46,7 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 - `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
 - `app/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
+- `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
 - `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `app/pipeline/` — Investigation orchestration and runner helpers (`run_investigation`, `run_chat`).
@@ -73,18 +59,6 @@ Before any push or PR creation, follow the mandatory checklist in [CI.md](CI.md)
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
 - `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.
-
-`tests/` is organized by capability boundary rather than by framework:
-
-- `tests/tools/` — Tool behavior, registry, and helper coverage.
-- `tests/integrations/` — Integration config, verification, store, selector, and client tests.
-- `tests/e2e/` — Live end-to-end scenarios against real services and infrastructure.
-- `tests/synthetic/` — Fixture-driven synthetic RCA scenarios with no live infrastructure.
-- `tests/deployment/` — Deployment validation and infrastructure lifecycle tests.
-- `tests/chaos_engineering/` — Chaos lab and experiment orchestration tests and assets.
-- `tests/cli/` — CLI-specific behavior, smoke tests, and command wiring.
-- `tests/utils/` — Shared test utilities, fixtures, and local helpers.
-- `tests/nodes/`, `tests/services/`, `tests/remote/`, `tests/sandbox/`, `tests/guardrails/`, `tests/entrypoints/` — Feature-specific coverage for the corresponding app layers.
 
 ## 2. Entry Points
 
@@ -108,12 +82,13 @@ Steps:
 3. Keep the tool self-contained. Put reusable transport or parsing code in `app/services/` or `app/tools/utils/` rather than copying it into the tool body.
 4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
+6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
 
 ### Changing the investigation pipeline
 
 Investigations are coordinated in `app/pipeline/pipeline.py` and exposed via
-`app/pipeline/runners.py`. Agent logic lives under `app/agent/`; publishing
-under `app/delivery/`.
+`app/pipeline/runners.py`. Agent logic lives under `app/agent/stages/`; publishing
+under `app/agent/stages/publish_findings/`.
 
 Files to touch:
 
@@ -149,6 +124,7 @@ Examples from the repo:
 
 - Datadog: `app/services/datadog/client.py`, `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
 - Grafana: `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/Grafana*`, `app/cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Hermes: `app/integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `app/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
@@ -157,6 +133,7 @@ Basic steps:
 3. Wire the tool layer after the config path is stable.
 4. Add docs and tests together so the integration is understandable and verifiable.
 5. Run `make verify-integrations` before treating the integration as complete.
+6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for integration completeness, investigation wiring, docs, and demo/test requirements.
 
 ## 3. Rules (if X -> do Y)
 
@@ -164,37 +141,24 @@ Basic steps:
 - If a new feature is shipped (tool, CLI command, pipeline behavior, integration) -> add a `docs/` page or section covering usage, configuration, and examples before the PR is opened.
 - If a new `docs/` page is added or renamed -> register it in `docs/docs.json` under the correct `pages` array in the same PR (path without `.mdx`, e.g. `messaging/whatsapp` for `docs/messaging/whatsapp.mdx`).
 - If an existing feature changes behavior, flags, or config shape -> update the relevant `docs/` page in the same PR; docs and code must stay in sync.
+- When writing or editing a `docs/` page -> write for **users, not contributors**. Open with a command quick-reference table (command | what it does) if the page covers CLI commands. Follow with brief practical examples. Keep internal file formats, JSONL schemas, and implementation details out of user-facing pages — move those to `docs/DEVELOPMENT.md` or a contributor-only reference file if truly needed.
 - If a tool's API or schema changes -> update docs in `docs/` and update the related unit tests, usually under `tests/tools/`. For investigation LLM tool-calling (any provider), follow [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
-- If adding a new integration -> follow the New Integration Checklist below before opening the PR for review.
+- If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
+- If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
 - If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
 ## 4. Testing
 
-### Commands
-
-- Unit tests: `make test-cov`
-- Integration tests: `make verify-integrations`
-- E2E tests: `make test-rca` or `make test-full`
-- Synthetic (no live infra): `make test-synthetic`
-- Single RCA test: `make test-rca FILE=<name>`
-- Lint: `make lint`
-- Type check: `make typecheck`
-- Routing live tests: always run with live coverage enabled by default. Do not use deselection
-  filters like `-k "not live_llm"` for routing scenario runs.
-- Do not make routing scenario tests pass by forcing deterministic shortcuts or bypassing live
-  planner behavior. Fix failures by improving planner/tool correctness or updating fixtures only
-  when behavior changes are explicitly intended and approved.
-
-### Fast Local Testing
-
-The fastest local loop is `make test-cov`, which exercises the non-live unit suite and skips the heavier live-infra paths. When you need a specific RCA scenario, use `make test-rca FILE=<fixture>` with one of the bundled alert fixtures under `tests/e2e/rca/`.
+Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
 
 ## 5. Footguns (common mistakes to avoid)
 
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `app/cli/interactive_shell/routing/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`orchestration/execution_policy.py`), not the planner.
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
@@ -202,16 +166,9 @@ The fastest local loop is `make test-cov`, which exercises the non-live unit sui
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
+  location. Update callers to the canonical module and delete the old path.
 
 ## 6. New Integration Checklist
 
-When adding a new integration, a PR is only ready when:
-
-- Integration code added under `app/integrations/<name>/`
-- Tool(s) added under `app/tools/` with proper typing
-- Unit/mock tests added under `tests/integrations/`
-- Docs added under `docs/` and registered in `docs/docs.json` `pages`
-- Screenshot or demo GIF showing the integration working
-- E2E or synthetic test added
-- `make verify-integrations` passes
-- `make lint` and `make typecheck` pass
+Follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) — it is the single definition of done for all tool and integration work.

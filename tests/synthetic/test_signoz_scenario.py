@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES
+from app.agent.utils.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
 from app.tools.SignozLogsTool import query_signoz_logs
 from app.tools.SignozMetricsTool import query_signoz_metrics
 from app.tools.SignozTracesTool import query_signoz_traces
@@ -137,8 +137,8 @@ class _FixtureSigNozBackend:
 
 def test_signoz_alert_source_maps_to_tools() -> None:
     """SigNoz alert source seeds signoz tools before the ReAct loop."""
-    assert "signoz" in _ALERT_SOURCE_TO_TOOL_SOURCES
-    assert _ALERT_SOURCE_TO_TOOL_SOURCES["signoz"] == ["signoz"]
+    assert "signoz" in ALERT_SOURCE_TO_SEED_TOOL_SOURCES
+    assert ALERT_SOURCE_TO_SEED_TOOL_SOURCES["signoz"] == ("signoz",)
 
 
 def test_signoz_logs_synthetic_scenario() -> None:

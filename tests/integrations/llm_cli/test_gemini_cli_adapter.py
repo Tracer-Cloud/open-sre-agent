@@ -368,3 +368,15 @@ def test_detect_auth_probe_uses_filtered_subprocess_env(
     assert env["GOOGLE_CLOUD_PROJECT"] == "proj-x"
     assert env["GEMINI_API_KEY"] == "gk-test"
     assert "RANDOM_SECRET" not in env
+
+
+def test_parse_raises_on_empty_stdout() -> None:
+    adapter = GeminiCLIAdapter()
+    with pytest.raises(RuntimeError, match="empty output"):
+        adapter.parse(stdout="  ", stderr="", returncode=0)
+
+
+def test_parse_raises_on_empty_stdout_surfaces_stderr() -> None:
+    adapter = GeminiCLIAdapter()
+    with pytest.raises(RuntimeError, match="some stderr detail"):
+        adapter.parse(stdout="", stderr="some stderr detail", returncode=0)

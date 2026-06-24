@@ -20,9 +20,12 @@ from dotenv import load_dotenv
 from app.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from app.analytics.provider import Properties, capture_first_run_if_needed, shutdown_analytics
 from app.cli.commands import register_commands
-from app.cli.support.exception_reporting import report_exception, should_report_exception
-from app.cli.support.layout import RichGroup, render_landing
-from app.cli.support.prompt_support import (
+from app.cli.interactive_shell.error_handling.exception_reporting import (
+    report_exception,
+    should_report_exception,
+)
+from app.cli.interactive_shell.ui.layout import RichGroup, render_landing
+from app.cli.interactive_shell.ui.prompt_support import (
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
@@ -174,7 +177,7 @@ def cli(
             if config.enabled:
                 raise SystemExit(run_repl(config=config))
         click.echo("🚧 OpenSRE is in Public Beta — features may change.", err=True)
-        render_landing()
+        render_landing(cli)
         raise SystemExit(0)
 
 

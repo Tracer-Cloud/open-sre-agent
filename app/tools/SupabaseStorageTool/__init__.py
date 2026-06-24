@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Listing all buckets to identify orphaned or misconfigured storage resources",
     ],
     is_available=supabase_is_available,
+    injected_params=("project_url",),
     extract_params=supabase_extract_params,
 )
 def get_supabase_storage_buckets(

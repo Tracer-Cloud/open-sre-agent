@@ -105,9 +105,13 @@ def build_cache_key(tool_name: str, params: dict[str, Any]) -> str:
 
 
 class CloudOpsBenchReplayBackend:
-    """Replay Cloud-OpsBench tool outputs from the official per-case cache."""
+    """Replay Cloud-OpsBench tool outputs from the official per-case cache.
 
-    is_cloudopsbench_backend = True
+    Lives in a dedicated source slot — ``sources["eks"]["_bench_backend"]``
+    rather than ``_backend`` — so production tool availability checks
+    (which read ``_backend``) stay completely unaware of bench backends.
+    No marker attribute needed; the slot IS the identification.
+    """
 
     def __init__(self, case: CloudOpsCase) -> None:
         self.case = case

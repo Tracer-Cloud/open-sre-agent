@@ -16,14 +16,17 @@ from app.integrations._verification_adapters import (
     _verify_bitbucket,
     _verify_clickhouse,
     _verify_coralogix,
+    _verify_dagster,
     _verify_datadog,
     _verify_discord,
     _verify_github,
     _verify_google_docs,
     _verify_grafana,
+    _verify_groundcover,
     _verify_helm,
     _verify_honeycomb,
     _verify_incident_io,
+    _verify_jenkins,
     _verify_kafka,
     _verify_mariadb,
     _verify_mongodb,
@@ -33,9 +36,13 @@ from app.integrations._verification_adapters import (
     _verify_openobserve,
     _verify_opensearch,
     _verify_opsgenie,
+    _verify_pagerduty,
     _verify_postgresql,
+    _verify_posthog_mcp,
     _verify_rabbitmq,
+    _verify_redis,
     _verify_sentry,
+    _verify_sentry_mcp,
     _verify_signoz,
     _verify_slack_without_test,
     _verify_smtp,
@@ -43,6 +50,7 @@ from app.integrations._verification_adapters import (
     _verify_splunk,
     _verify_supabase,
     _verify_telegram,
+    _verify_tempo,
     _verify_tracer,
     _verify_twilio,
     _verify_vercel,
@@ -97,6 +105,15 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=3,
     ),
     IntegrationSpec(
+        service="groundcover",
+        aliases=("gc",),
+        verifier=_verify_groundcover,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=35,
+        verify_order=46,
+    ),
+    IntegrationSpec(
         service="honeycomb",
         verifier=_verify_honeycomb,
         direct_effective=True,
@@ -136,6 +153,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=None,
     ),
     IntegrationSpec(
+        service="jenkins",
+        verifier=_verify_jenkins,
+        direct_effective=True,
+        setup_order=24,
+        verify_order=36,
+    ),
+    IntegrationSpec(
         service="mongodb",
         aliases=("mongo",),
         verifier=_verify_mongodb,
@@ -172,6 +196,21 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_rabbitmq,
         direct_effective=True,
         verify_order=17,
+    ),
+    IntegrationSpec(
+        service="dagster",
+        verifier=_verify_dagster,
+        direct_effective=True,
+        setup_order=29,
+        verify_order=40,
+    ),
+    IntegrationSpec(
+        service="redis",
+        aliases=("valkey",),
+        verifier=_verify_redis,
+        direct_effective=True,
+        setup_order=30,
+        verify_order=41,
     ),
     IntegrationSpec(
         service="betterstack",
@@ -219,14 +258,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="telegram",
         verifier=_verify_telegram,
         direct_effective=True,
-        setup_order=19,
+        setup_order=26,
         verify_order=26,
     ),
     IntegrationSpec(
         service="whatsapp",
         verifier=_verify_whatsapp,
         direct_effective=True,
-        setup_order=19,
+        setup_order=27,
         verify_order=27,
     ),
     IntegrationSpec(
@@ -241,14 +280,30 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verifier=_verify_openclaw,
         direct_effective=True,
         setup_order=12,
-        verify_order=28,
+        verify_order=39,
+    ),
+    IntegrationSpec(
+        service="posthog_mcp",
+        aliases=("posthog mcp", "posthog-mcp"),
+        verifier=_verify_posthog_mcp,
+        direct_effective=True,
+        setup_order=33,
+        verify_order=44,
+    ),
+    IntegrationSpec(
+        service="sentry_mcp",
+        aliases=("sentry mcp", "sentry-mcp"),
+        verifier=_verify_sentry_mcp,
+        direct_effective=True,
+        setup_order=34,
+        verify_order=45,
     ),
     IntegrationSpec(
         service="mysql",
         verifier=_verify_mysql,
         direct_effective=True,
-        setup_order=20,
-        verify_order=27,
+        setup_order=28,
+        verify_order=38,
     ),
     IntegrationSpec(
         service="azure_sql",
@@ -323,7 +378,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         aliases=("victorialogs",),
         verifier=_verify_victoria_logs,
         direct_effective=True,
-        verify_order=2,
+        verify_order=6,
     ),
     IntegrationSpec(
         service="slack",
@@ -342,11 +397,11 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(
         service="tracer",
         verifier=_verify_tracer,
-        setup_order=12,
-        verify_order=10,
+        setup_order=25,
+        verify_order=9,
     ),
     IntegrationSpec(service="google_docs", verifier=_verify_google_docs, verify_order=19),
-    IntegrationSpec(service="kafka", verifier=_verify_kafka, verify_order=22),
+    IntegrationSpec(service="kafka", verifier=_verify_kafka, verify_order=37),
     IntegrationSpec(service="clickhouse", verifier=_verify_clickhouse, verify_order=23),
     IntegrationSpec(service="alicloud", direct_effective=True),
     IntegrationSpec(service="notion"),
@@ -365,6 +420,20 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=23,
         verify_order=35,
+    ),
+    IntegrationSpec(
+        service="tempo",
+        verifier=_verify_tempo,
+        direct_effective=True,
+        setup_order=32,
+        verify_order=43,
+    ),
+    IntegrationSpec(
+        service="pagerduty",
+        verifier=_verify_pagerduty,
+        direct_effective=True,
+        setup_order=31,
+        verify_order=42,
     ),
 )
 
@@ -420,3 +489,29 @@ def service_key(service_name: str) -> str:
     """Normalize an incoming service label to its canonical registry key."""
     lowered = service_name.strip().lower()
     return SERVICE_KEY_MAP.get(lowered, lowered)
+
+
+# Aliases that apply only to the integration-management commands (setup, verify,
+# show, remove). These intentionally diverge from `service_key` / `SERVICE_KEY_MAP`,
+# which must keep `posthog` distinct from `posthog_mcp` for classification: the
+# bare `posthog` integration is env-configured analytics with no interactive
+# setup/verify flow of its own, so when a user (or the action planner) asks to
+# *manage* "posthog" the only real target is the PostHog MCP integration.
+MANAGEMENT_SERVICE_ALIASES: dict[str, str] = {
+    "posthog": "posthog_mcp",
+}
+
+
+def resolve_management_service(service_name: str) -> str:
+    """Resolve a service token for the integration-management CLI commands.
+
+    Layers management-only aliases on top of the global `service_key`
+    normalization so commands like ``integrations setup posthog`` resolve to the
+    canonical ``posthog_mcp`` flow instead of failing the ``click.Choice`` enum
+    check before the handler ever runs.
+    """
+    lowered = service_name.strip().lower()
+    aliased = MANAGEMENT_SERVICE_ALIASES.get(lowered)
+    if aliased is not None:
+        return aliased
+    return service_key(lowered)

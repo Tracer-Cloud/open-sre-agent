@@ -141,6 +141,38 @@ def _emit_usage(model: str, tokens_in: int | None, tokens_out: int | None) -> No
     hook(model, int(tokens_in or 0), int(tokens_out or 0))
 
 
+def _coerce_usage_tokens(
+    usage: Any,
+    *,
+    input_key: str,
+    output_key: str,
+) -> tuple[int | None, int | None]:
+    if usage is None:
+        return None, None
+    if isinstance(usage, dict):
+        raw_in = usage.get(input_key)
+        raw_out = usage.get(output_key)
+    else:
+        raw_in = getattr(usage, input_key, None)
+        raw_out = getattr(usage, output_key, None)
+    inp = int(raw_in) if isinstance(raw_in, (int, float)) else None
+    out = int(raw_out) if isinstance(raw_out, (int, float)) else None
+    return inp, out
+
+
+def _llm_response_with_usage(
+    content: str,
+    model: str,
+    usage: Any,
+    *,
+    input_key: str,
+    output_key: str,
+) -> LLMResponse:
+    inp, out = _coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
+    _emit_usage(model, inp, out)
+    return LLMResponse(content=content, input_tokens=inp, output_tokens=out)
+
+
 @dataclass(frozen=True)
 class RootCauseResult:
     root_cause: str
@@ -154,6 +186,8 @@ class RootCauseResult:
 @dataclass(frozen=True)
 class LLMResponse:
     content: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class LLMClient:
@@ -197,14 +231,9 @@ class LLMClient:
         self._ensure_client()
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -275,12 +304,13 @@ class LLMClient:
         else:
             content = _extract_text(response)
         usage = getattr(response, "usage", None)
-        _emit_usage(
+        return _llm_response_with_usage(
+            content,
             self._model,
-            getattr(usage, "input_tokens", None) if usage else None,
-            getattr(usage, "output_tokens", None) if usage else None,
+            usage,
+            input_key="input_tokens",
+            output_key="output_tokens",
         )
-        return LLMResponse(content=content)
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
         """Yield text chunks as the model emits them.
@@ -395,14 +425,10 @@ class BedrockLLMClient:
         assert self._anthropic_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import GuardrailBlockedError, get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
+        from app.guardrails.engine import GuardrailBlockedError
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -492,26 +518,23 @@ class BedrockLLMClient:
         else:
             content = _extract_text(response)
         usage = getattr(response, "usage", None)
-        _emit_usage(
+        return _llm_response_with_usage(
+            content,
             self._model,
-            getattr(usage, "input_tokens", None) if usage else None,
-            getattr(usage, "output_tokens", None) if usage else None,
+            usage,
+            input_key="input_tokens",
+            output_key="output_tokens",
         )
-        return LLMResponse(content=content)
 
     def _invoke_converse(self, prompt_or_messages: Any) -> LLMResponse:
         """Invoke via boto3 converse API (works with all Bedrock models)."""
         assert self._boto3_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.engine import GuardrailBlockedError, get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
+        from app.guardrails.engine import GuardrailBlockedError
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
-            if system:
-                system = engine.apply(system)
+        messages, system = apply_guardrails_to_messages(messages, system)
 
         # Convert to converse API message format ({ "text": "..." } blocks only).
         converse_messages = [
@@ -614,13 +637,13 @@ class BedrockLLMClient:
                 f"Bedrock converse returned no text content (stopReason={stop_reason!r})"
             )
         usage_dict = response.get("usage") if isinstance(response, dict) else None
-        if isinstance(usage_dict, dict):
-            _emit_usage(
-                self._model,
-                usage_dict.get("inputTokens"),
-                usage_dict.get("outputTokens"),
-            )
-        return LLMResponse(content=content)
+        return _llm_response_with_usage(
+            content,
+            self._model,
+            usage_dict,
+            input_key="inputTokens",
+            output_key="outputTokens",
+        )
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
         if self._use_anthropic:
@@ -836,12 +859,9 @@ class OpenAILLMClient:
         self._ensure_client()
         messages = _normalize_messages_openai(prompt_or_messages)
 
-        from app.guardrails.engine import get_guardrail_engine
+        from app.guardrails.apply import apply_guardrails_to_messages
 
-        engine = get_guardrail_engine()
-        if engine.is_active:
-            for msg in messages:
-                msg["content"] = engine.apply(msg["content"])
+        messages, _ = apply_guardrails_to_messages(messages)
 
         token_param = (
             "max_completion_tokens" if _uses_max_completion_tokens(self._model) else "max_tokens"
@@ -971,12 +991,13 @@ class OpenAILLMClient:
         else:
             content = message.content or ""
         usage = getattr(response, "usage", None)
-        _emit_usage(
+        return _llm_response_with_usage(
+            content.strip(),
             self._model,
-            getattr(usage, "prompt_tokens", None) if usage else None,
-            getattr(usage, "completion_tokens", None) if usage else None,
+            usage,
+            input_key="prompt_tokens",
+            output_key="completion_tokens",
         )
-        return LLMResponse(content=content.strip())
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
         """Yield text chunks as the model emits them.

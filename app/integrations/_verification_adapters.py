@@ -25,26 +25,40 @@ from app.integrations.config_models import (
     SMTPIntegrationConfig,
     TracerIntegrationConfig,
 )
+from app.integrations.dagster import build_dagster_config, validate_dagster_config
 from app.integrations.github_mcp import build_github_mcp_config, validate_github_mcp_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.mariadb import build_mariadb_config, validate_mariadb_config
 from app.integrations.mongodb import build_mongodb_config, validate_mongodb_config
 from app.integrations.mongodb_atlas import build_mongodb_atlas_config, validate_mongodb_atlas_config
 from app.integrations.mysql import build_mysql_config, validate_mysql_config
 from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
 from app.integrations.postgresql import build_postgresql_config, validate_postgresql_config
+from app.integrations.posthog_mcp import (
+    build_posthog_mcp_config,
+    validate_posthog_mcp_config,
+)
 from app.integrations.rabbitmq import build_rabbitmq_config, validate_rabbitmq_config
+from app.integrations.redis import build_redis_config, validate_redis_config
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.sentry_mcp import (
+    build_sentry_mcp_config,
+    validate_sentry_mcp_config,
+)
 from app.integrations.signoz import build_signoz_config, validate_signoz_config
 from app.integrations.supabase import build_supabase_config, validate_supabase_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import AlertmanagerClient, AlertmanagerConfig
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 from app.services.coralogix import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig
 from app.services.google_docs import GoogleDocsClient
+from app.services.groundcover.client import GroundcoverClient, GroundcoverConfig
 from app.services.helm import HelmClient
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.pagerduty import PagerDutyClient, PagerDutyConfig
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.tracer_client.client import TracerClient
 from app.services.vercel.client import VercelClient, VercelConfig
@@ -496,11 +510,24 @@ def _verify_opensearch(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
-_verify_github = build_validation_verifier(
-    "github",
-    build_config=build_github_mcp_config,
-    validate_config=validate_github_mcp_config,
-)
+def _verify_github(source: str, config: dict[str, Any]) -> dict[str, str]:
+    """Verify GitHub MCP, reporting credential-less records as ``missing``.
+
+    A stale store entry with no auth token cannot reach the hosted Copilot
+    endpoint; surface it as not-configured rather than a confusing 401 failure.
+    """
+    normalized_config = build_github_mcp_config(config)
+    validation_result = validate_github_mcp_config(normalized_config)
+    if not validation_result.ok and validation_result.failure_category == "not_configured":
+        return result("github", source, "missing", validation_result.detail)
+    return result(
+        "github",
+        source,
+        "passed" if validation_result.ok else "failed",
+        validation_result.detail,
+    )
+
+
 _verify_sentry = build_validation_verifier(
     "sentry",
     build_config=build_sentry_config,
@@ -536,6 +563,16 @@ _verify_rabbitmq = build_validation_verifier(
     build_config=build_rabbitmq_config,
     validate_config=validate_rabbitmq_config,
 )
+_verify_dagster = build_validation_verifier(
+    "dagster",
+    build_config=build_dagster_config,
+    validate_config=validate_dagster_config,
+)
+_verify_redis = build_validation_verifier(
+    "redis",
+    build_config=build_redis_config,
+    validate_config=validate_redis_config,
+)
 _verify_betterstack = build_validation_verifier(
     "betterstack",
     build_config=build_betterstack_config,
@@ -551,10 +588,25 @@ _verify_openclaw = build_validation_verifier(
     build_config=build_openclaw_config,
     validate_config=validate_openclaw_config,
 )
+_verify_posthog_mcp = build_validation_verifier(
+    "posthog_mcp",
+    build_config=build_posthog_mcp_config,
+    validate_config=validate_posthog_mcp_config,
+)
+_verify_sentry_mcp = build_validation_verifier(
+    "sentry_mcp",
+    build_config=build_sentry_mcp_config,
+    validate_config=validate_sentry_mcp_config,
+)
 _verify_signoz = build_validation_verifier(
     "signoz",
     build_config=build_signoz_config,
     validate_config=validate_signoz_config,
+)
+_verify_tempo = build_validation_verifier(
+    "tempo",
+    build_config=build_tempo_config,
+    validate_config=validate_tempo_config,
 )
 
 
@@ -609,11 +661,21 @@ _verify_bitbucket = build_validation_verifier(
     build_config=_build_bitbucket_config,
     validate_config=_validate_bitbucket_config,
 )
+_verify_jenkins = build_validation_verifier(
+    "jenkins",
+    build_config=build_jenkins_config,
+    validate_config=validate_jenkins_config,
+)
 
 _verify_datadog = build_probe_verifier(
     "datadog",
     build_config=DatadogConfig.model_validate,
     client_factory=DatadogClient,
+)
+_verify_groundcover = build_probe_verifier(
+    "groundcover",
+    build_config=GroundcoverConfig.model_validate,
+    client_factory=GroundcoverClient,
 )
 _verify_honeycomb = build_probe_verifier(
     "honeycomb",
@@ -639,6 +701,11 @@ _verify_opsgenie = build_probe_verifier(
     "opsgenie",
     build_config=OpsGenieConfig.model_validate,
     client_factory=OpsGenieClient,
+)
+_verify_pagerduty = build_probe_verifier(
+    "pagerduty",
+    build_config=PagerDutyConfig.model_validate,
+    client_factory=PagerDutyClient,
 )
 _verify_incident_io = build_probe_verifier(
     "incident_io",
@@ -702,22 +769,30 @@ __all__ = [
     "_verify_github",
     "_verify_google_docs",
     "_verify_grafana",
+    "_verify_groundcover",
     "_verify_honeycomb",
     "_verify_helm",
     "_verify_incident_io",
+    "_verify_jenkins",
     "_verify_kafka",
     "_verify_mariadb",
     "_verify_mongodb",
     "_verify_mongodb_atlas",
     "_verify_mysql",
     "_verify_openclaw",
+    "_verify_posthog_mcp",
     "_verify_openobserve",
     "_verify_opensearch",
     "_verify_opsgenie",
+    "_verify_pagerduty",
     "_verify_postgresql",
+    "_verify_dagster",
     "_verify_rabbitmq",
+    "_verify_redis",
     "_verify_sentry",
+    "_verify_sentry_mcp",
     "_verify_signoz",
+    "_verify_tempo",
     "_verify_slack",
     "_verify_slack_without_test",
     "_verify_smtp",

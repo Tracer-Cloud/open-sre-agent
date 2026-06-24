@@ -4,26 +4,26 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.correlation.upstream import UpstreamEvidenceBundle
-from app.pipeline.pipeline import (
-    _build_correlation_config,
-    _candidate_services_from_state,
-    _datadog_avg_query,
-    _target_resource_from_state,
+from app.agent.correlation import (
+    candidate_services_from_state,
+    target_resource_from_state,
 )
+from app.agent.correlation.datadog_factory import datadog_avg_query
+from app.agent.correlation.upstream import UpstreamEvidenceBundle
+from app.pipeline.pipeline import _build_correlation_config
 
 
 def test_datadog_avg_query_preserves_existing_scope() -> None:
-    assert _datadog_avg_query("system.cpu.user{service:orders}") == (
+    assert datadog_avg_query("system.cpu.user{service:orders}") == (
         "avg:system.cpu.user{service:orders}"
     )
-    assert _datadog_avg_query("aws.rds.cpuutilization") == "avg:aws.rds.cpuutilization{*}"
-    assert _datadog_avg_query("avg:custom.metric{env:prod}") == "avg:custom.metric{env:prod}"
+    assert datadog_avg_query("aws.rds.cpuutilization") == "avg:aws.rds.cpuutilization{*}"
+    assert datadog_avg_query("avg:custom.metric{env:prod}") == "avg:custom.metric{env:prod}"
 
 
 def test_correlation_config_state_helpers_use_compatible_fallbacks() -> None:
-    assert _target_resource_from_state({}) == "unknown-rds"
-    assert _candidate_services_from_state({"raw_alert": {"upstream_services": "api, worker"}}) == (
+    assert target_resource_from_state({}) == "unknown-rds"
+    assert candidate_services_from_state({"raw_alert": {"upstream_services": "api, worker"}}) == (
         "api",
         "worker",
     )

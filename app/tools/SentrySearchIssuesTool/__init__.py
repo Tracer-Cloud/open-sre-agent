@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.integrations.sentry import (
+    DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
     build_sentry_config,
     list_sentry_issues,
@@ -39,10 +40,15 @@ def _sentry_available(sources: dict[str, dict]) -> bool:
 
 
 def _sentry_creds(sentry: dict[str, Any]) -> dict[str, Any]:
+    # The resolved ``sentry`` source dict is a ``SentryConfig`` dump, so the
+    # credential keys are ``auth_token`` / ``base_url`` — NOT ``sentry_token`` /
+    # ``sentry_url`` (the tool's public param names). Map both with safe lookups
+    # so a config that uses either shape works and a missing key can never raise
+    # a KeyError that aborts the whole gather/investigation loop.
     return {
-        "organization_slug": sentry["organization_slug"],
-        "sentry_token": sentry["sentry_token"],
-        "sentry_url": sentry.get("sentry_url", "https://sentry.io"),
+        "organization_slug": sentry.get("organization_slug", ""),
+        "sentry_token": sentry.get("sentry_token") or sentry.get("auth_token", ""),
+        "sentry_url": sentry.get("sentry_url") or sentry.get("base_url") or "https://sentry.io",
         "project_slug": sentry.get("project_slug", ""),
     }
 
@@ -52,7 +58,8 @@ def _search_issues_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return {
         **_sentry_creds(sentry),
         "query": sentry.get("query", ""),
-        "limit": 10,
+        "limit": sentry.get("limit", DEFAULT_SENTRY_ISSUE_LIMIT),
+        "stats_period": sentry.get("stats_period", ""),
     }
 
 
@@ -74,10 +81,12 @@ def _search_issues_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
             "query": {"type": "string", "default": ""},
             "sentry_url": {"type": "string", "default": ""},
             "project_slug": {"type": "string", "default": ""},
-            "limit": {"type": "integer", "default": 10},
+            "limit": {"type": "integer", "default": DEFAULT_SENTRY_ISSUE_LIMIT},
+            "stats_period": {"type": "string", "default": ""},
         },
         "required": ["organization_slug", "sentry_token"],
     },
+    injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_sentry_available,
     extract_params=_search_issues_extract_params,
     surfaces=("investigation", "chat"),
@@ -88,7 +97,8 @@ def search_sentry_issues(
     query: str = "",
     sentry_url: str = "",
     project_slug: str = "",
-    limit: int = 10,
+    limit: int = DEFAULT_SENTRY_ISSUE_LIMIT,
+    stats_period: str = "",
 ) -> dict[str, Any]:
     """Search Sentry issues related to an incident or failure signature."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
@@ -100,5 +110,7 @@ def search_sentry_issues(
             "issues": [],
         }
 
-    issues = list_sentry_issues(config=config, query=query, limit=limit)
+    issues = list_sentry_issues(
+        config=config, query=query, limit=limit, stats_period=stats_period or None
+    )
     return {"source": "sentry", "available": True, "issues": issues, "query": query}

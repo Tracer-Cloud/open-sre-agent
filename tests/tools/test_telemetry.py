@@ -586,6 +586,142 @@ def _openclaw_call_tool_case() -> ToolFailureCase:
     )
 
 
+def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
+    """Shared patches for PostHog MCP cases — bypass the config/runtime guards."""
+    from app.tools import PostHogMCPTool as mod
+
+    mp.setattr(
+        mod,
+        "posthog_mcp_config_from_env",
+        MagicMock(
+            return_value=SimpleNamespace(
+                mode="streamable-http",
+                command="",
+                url="https://mcp.posthog.com/mcp",
+                auth_token="phx_secret",
+                args=(),
+                headers={},
+                organization_id="",
+                project_id="",
+                features=(),
+                read_only=True,
+            )
+        ),
+    )
+    mp.setattr(mod, "posthog_mcp_runtime_unavailable_reason", MagicMock(return_value=None))
+    mp.setattr(mod, "describe_posthog_mcp_error", MagicMock(return_value="mocked error"))
+
+
+def _posthog_mcp_list_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import PostHogMCPTool as mod
+
+        _patch_posthog_mcp_runtime(mp)
+        mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.PostHogMCPTool import list_posthog_tools
+
+        return list_posthog_tools()
+
+    return ToolFailureCase(
+        "posthog_mcp_list_tools",
+        patch,
+        invoke,
+        "list_posthog_tools",
+        "posthog_mcp",
+    )
+
+
+def _posthog_mcp_call_tool_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import PostHogMCPTool as mod
+
+        _patch_posthog_mcp_runtime(mp)
+        mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.PostHogMCPTool import call_posthog_tool
+
+        return call_posthog_tool(tool_name="query-run", arguments={})
+
+    return ToolFailureCase(
+        "posthog_mcp_call_tool",
+        patch,
+        invoke,
+        "call_posthog_tool",
+        "posthog_mcp",
+    )
+
+
+def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
+    """Shared patches for Sentry MCP cases — bypass the config/runtime guards."""
+    from app.tools import SentryMCPTool as mod
+
+    mp.setattr(
+        mod,
+        "sentry_mcp_config_from_env",
+        MagicMock(
+            return_value=SimpleNamespace(
+                mode="streamable-http",
+                command="",
+                url="https://mcp.sentry.dev/mcp",
+                auth_token="sntrytok_secret",
+                args=(),
+                headers={},
+                host="",
+                organization_slug="",
+                project_slug="",
+                skills=(),
+            )
+        ),
+    )
+    mp.setattr(mod, "sentry_mcp_runtime_unavailable_reason", MagicMock(return_value=None))
+    mp.setattr(mod, "describe_sentry_mcp_error", MagicMock(return_value="mocked error"))
+
+
+def _sentry_mcp_list_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import SentryMCPTool as mod
+
+        _patch_sentry_mcp_runtime(mp)
+        mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.SentryMCPTool import list_sentry_tools
+
+        return list_sentry_tools()
+
+    return ToolFailureCase(
+        "sentry_mcp_list_tools",
+        patch,
+        invoke,
+        "list_sentry_tools",
+        "sentry_mcp",
+    )
+
+
+def _sentry_mcp_call_tool_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from app.tools import SentryMCPTool as mod
+
+        _patch_sentry_mcp_runtime(mp)
+        mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
+
+    def invoke() -> dict[str, Any]:
+        from app.tools.SentryMCPTool import call_sentry_tool
+
+        return call_sentry_tool(tool_name="get_issue_details", arguments={})
+
+    return ToolFailureCase(
+        "sentry_mcp_call_tool",
+        patch,
+        invoke,
+        "call_sentry_tool",
+        "sentry_mcp",
+    )
+
+
 _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _azure_case(),
     _openobserve_case(),
@@ -607,6 +743,10 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _openclaw_search_case(),
     _openclaw_get_conversation_case(),
     _openclaw_call_tool_case(),
+    _posthog_mcp_list_case(),
+    _posthog_mcp_call_tool_case(),
+    _sentry_mcp_list_case(),
+    _sentry_mcp_call_tool_case(),
 ]
 
 
@@ -798,6 +938,12 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_openclaw_conversation",
         "send_openclaw_message",
         "call_openclaw_tool",
+        # PostHog MCP — both swallow sites in PostHogMCPTool/__init__.py.
+        "list_posthog_tools",
+        "call_posthog_tool",
+        # Sentry MCP — both swallow sites in SentryMCPTool/__init__.py.
+        "list_sentry_tools",
+        "call_sentry_tool",
     }
 )
 
@@ -807,16 +953,12 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
 # wrapper from #1476, or (b) have no observed swallow pattern. Keep alphabetised.
 _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
     {
-        "CheckNodeServiceStatus",
-        "CheckServiceConnectivity",
-        "DescribeResource",
-        "GetAlerts",
-        "GetAppYAML",
-        "GetClusterConfiguration",
-        "GetErrorLogs",
-        "GetRecentLogs",
-        "GetResources",
-        "GetServiceDependencies",
+        # CloudOpsBench replay tools (CheckNodeServiceStatus, GetResources, ...)
+        # were removed from this list when the bench tool module moved out of
+        # app/tools/ into tests/benchmarks/cloudopsbench/tools/k8s/. They live
+        # there as an external registry package and are only loaded when the
+        # bench is actively imported, so they don't appear in the production
+        # registry that this test enumerates.
         "alertmanager_alerts",
         "alertmanager_silences",
         "argocd_application_diff",
@@ -839,6 +981,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_bitbucket_file_contents",
         "get_clickhouse_query_activity",
         "get_clickhouse_system_health",
+        "get_dagster_run_logs",
         "get_eks_deployment_status",
         "get_elb_target_health",
         "get_error_logs",
@@ -848,7 +991,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_github_file_contents",
         "get_github_repository_tree",
         "get_gitlab_file",
+        "get_groundcover_query_reference",
+        "get_hermes_adapter_catalog",
+        "get_hermes_approval_events",
+        "get_hermes_audit_trail",
         "get_hermes_config",
+        "get_hermes_credential_state",
         "get_hermes_cron_state",
         "get_hermes_filesystem_state",
         "get_hermes_kv_cache_state",
@@ -857,11 +1005,15 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_hermes_message_history",
         "get_hermes_orchestration_state",
         "get_hermes_provider_traffic",
+        "get_hermes_rbac_state",
         "get_hermes_routing_decisions",
         "get_hermes_runtime_state",
         "get_hermes_session_log",
         "get_hermes_session_topology",
+        "get_hermes_workflow_run",
         "get_host_metrics",
+        "get_jenkins_build_log",
+        "get_jenkins_pipeline_stages",
         "get_kafka_consumer_group_lag",
         "get_kafka_topic_health",
         "get_lambda_configuration",
@@ -889,6 +1041,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_mysql_table_stats",
         "get_pods_on_node",
         "get_postgresql_current_queries",
+        "get_postgresql_lock_status",
         "get_postgresql_replication_status",
         "get_postgresql_server_status",
         "get_postgresql_slow_queries",
@@ -899,6 +1052,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_rabbitmq_node_health",
         "get_rabbitmq_queue_backlog",
         "get_recent_airflow_failures",
+        "get_redis_client_list",
+        "get_redis_latency_doctor",
+        "get_redis_list_depth",
+        "get_redis_replication",
+        "get_redis_server_info",
+        "get_redis_slowlog",
         "get_s3_object",
         "get_sentry_issue_details",
         "get_sre_guidance",
@@ -919,14 +1078,30 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "jira_issue_detail",
         "jira_search_issues",
         "list_bitbucket_commits",
+        "list_dagster_assets",
+        "list_dagster_runs",
+        "list_dagster_schedule_ticks",
+        "list_dagster_sensor_ticks",
         "list_github_commits",
         "list_gitlab_commits",
         "list_gitlab_mrs",
         "list_gitlab_pipelines",
+        "get_github_actions_step_log",
+        "list_github_actions_active_runs",
+        "list_github_actions_run_jobs",
+        "list_github_actions_workflow_runs",
+        "list_jenkins_builds",
+        "list_jenkins_jobs",
+        "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
+        "pagerduty_incident_detail",
+        "pagerduty_incidents",
+        "pagerduty_oncall",
+        "pagerduty_services",
         "prefect_flow_runs",
         "prefect_worker_health",
         "query_betterstack_logs",
@@ -936,8 +1111,11 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_datadog_logs",
         "query_datadog_metrics",
         "query_datadog_monitors",
+        "query_groundcover_logs",
+        "query_groundcover_traces",
         "query_elasticsearch_logs",
         "query_grafana_alert_rules",
+        "query_grafana_annotations",
         "query_grafana_logs",
         "query_grafana_metrics",
         "query_grafana_service_names",
@@ -948,9 +1126,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_metrics",
         "query_signoz_traces",
         "query_splunk_logs",
+        "query_tempo",
         "run_diagnostic_code",
+        "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",
+        "search_github_issues",
         "search_sentry_issues",
         "twilio_notify",
         "vercel_deployment_logs",
@@ -970,7 +1151,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from app.tools.registry import get_registered_tool_map
 
-    registered = set(get_registered_tool_map().keys())
+    # Limit the audit to PRODUCTION tools (those defined in ``app.tools.*``).
+    # External packages registered via ``register_external_tool_package``
+    # (e.g. bench-only tools that live under ``tests/benchmarks/``) have
+    # their own classification expectations and aren't part of this
+    # production-telemetry contract. Filtering by ``origin_module`` keeps
+    # this test stable regardless of test order — whether the bench package
+    # has been imported earlier in the session is no longer relevant.
+    registered = {
+        name
+        for name, tool in get_registered_tool_map().items()
+        if tool.origin_module.startswith("app.tools.")
+    }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 
     unclassified = registered - classified

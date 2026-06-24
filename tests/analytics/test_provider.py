@@ -282,6 +282,47 @@ def test_analytics_events_from_same_instance_share_exact_distinct_id(
     assert f'distinct_id="{analytics._anonymous_id}"' in log_lines[0]
 
 
+def test_set_persistent_property_merges_into_subsequent_captures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    analytics = provider.Analytics()
+    analytics.capture(Event.CLI_INVOKED)
+    analytics.set_persistent_property("github_username", "octocat")
+    analytics.capture(Event.ONBOARD_STARTED, {"entrypoint": "cli"})
+    analytics.capture(Event.INTERACTIVE_SHELL_ROUTE_DECISION, {"route": "agent"})
+    analytics.shutdown(flush=True)
+
+    assert len(posted_payloads) == 3
+    props_before = posted_payloads[0]["json"]["properties"]
+    props_after_1 = posted_payloads[1]["json"]["properties"]
+    props_after_2 = posted_payloads[2]["json"]["properties"]
+
+    assert "github_username" not in props_before
+    assert props_after_1["github_username"] == "octocat"
+    assert props_after_2["github_username"] == "octocat"
+    assert props_after_2["route"] == "agent"
+
+
+def test_set_persistent_property_noop_when_telemetry_disabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OPENSRE_NO_TELEMETRY", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+
+    analytics = provider.Analytics()
+    analytics.set_persistent_property("github_username", "octocat")
+
+    assert analytics._persistent_properties == {}
+
+
 def test_existing_install_missing_anonymous_id_captures_posthog_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -963,3 +1004,55 @@ def test_capture_coerces_invalid_property_values(
     invalid = [line for line in failure_lines if line.startswith("invalid_property")]
     assert any("drop_object" in line for line in invalid)
     assert all("drop_none" not in line for line in invalid)
+
+
+def test_identify_sends_set_with_person_profile_enabled(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    analytics = provider.Analytics()
+    analytics.identify({"github_username": "octocat"})
+    analytics.shutdown(flush=True)
+
+    identify_payloads = [
+        payload["json"] for payload in posted_payloads if payload["json"]["event"] == "$identify"
+    ]
+    assert len(identify_payloads) == 1
+    properties = identify_payloads[0]["properties"]
+    assert properties["$set"] == {"github_username": "octocat"}
+    assert properties["$process_person_profile"] is True
+    assert properties["distinct_id"]
+
+
+def test_identify_is_noop_when_opted_out(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("OPENSRE_NO_TELEMETRY", "1")
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    analytics = provider.Analytics()
+    analytics.identify({"github_username": "octocat"})
+    analytics.shutdown(flush=True)
+
+    assert posted_payloads == []
+
+
+def test_identify_drops_empty_set(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPENSRE_ANALYTICS_DISABLED", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    monkeypatch.setattr(provider, "_CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(provider, "_ANONYMOUS_ID_PATH", tmp_path / "anonymous_id")
+    monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
+    posted_payloads = _stub_httpx_client(monkeypatch)
+
+    analytics = provider.Analytics()
+    analytics.identify({})
+    analytics.shutdown(flush=True)
+
+    assert posted_payloads == []

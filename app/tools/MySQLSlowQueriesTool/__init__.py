@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Finding poorly optimized queries with high execution times or full-table scans",
     ],
     is_available=mysql_is_available,
+    injected_params=("host",),
     extract_params=mysql_extract_params,
 )
 def get_mysql_slow_queries(

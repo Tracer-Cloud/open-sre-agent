@@ -1,0 +1,70 @@
+name: Auto-merge
+
+# Opt-in squash merge once all PR checks are green. Add the `automerge` label when the PR
+# is ready (Greptile 5/5, review done, etc.). Uses pull_request_target so fork PRs can merge
+# via GITHUB_TOKEN; the job only calls gh APIs and never executes PR head code.
+on:
+  pull_request_target:
+    types: [labeled, synchronize, reopened]
+    branches: [main]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: automerge-${{ github.event.pull_request.number || github.event.check_suite.pull_requests[0].number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    name: Merge when CI is green
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'check_suite' &&
+        contains(fromJSON('["success", "neutral"]'), github.event.check_suite.conclusion) &&
+        github.event.check_suite.name != 'Auto-merge') ||
+      (github.event_name == 'pull_request_target' &&
+        (github.event.action != 'labeled' || github.event.label.name == 'automerge'))
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve pull request number
+        id: pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CHECK_SUITE_PRS: ${{ toJson(github.event.check_suite.pull_requests) }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then
+            if [ -z "$PR_NUMBER" ]; then
+              echo "No pull request number on event."
+              exit 0
+            fi
+            echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          pr="$(CHECK_SUITE_PRS="$CHECK_SUITE_PRS" python3 - <<'PY'
+          import json
+          import os
+
+          prs = json.loads(os.environ["CHECK_SUITE_PRS"])
+          print(prs[0]["number"] if prs else "")
+          PY
+          )"
+          if [ -z "$pr" ]; then
+            echo "No pull request linked to completed check suite."
+            exit 0
+          fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Merge labeled PR when checks pass
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: python3 .github/scripts/automerge_pr.py

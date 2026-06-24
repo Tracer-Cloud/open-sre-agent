@@ -7,6 +7,13 @@ from typing import Any
 
 import click
 
+from app.agent.correlation.runtime import build_runtime_correlation
+from app.agent.correlation.upstream import (
+    LogSignal,
+    MetricSeries,
+    TopologyHint,
+    UpstreamEvidenceBundle,
+)
 from app.analytics.cli import (
     capture_test_run_completed,
     capture_test_run_failed,
@@ -17,15 +24,8 @@ from app.analytics.cli import (
     capture_tests_listed,
     capture_tests_picker_opened,
 )
-from app.cli.support.context import is_json_output, is_yes
-from app.cli.support.errors import OpenSREError
-from app.correlation.runtime import build_runtime_correlation
-from app.correlation.upstream import (
-    LogSignal,
-    MetricSeries,
-    TopologyHint,
-    UpstreamEvidenceBundle,
-)
+from app.cli.interactive_shell.data_store.context import is_json_output, is_yes
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 
 _TEST_CATEGORIES: tuple[str, ...] = (
     "all",

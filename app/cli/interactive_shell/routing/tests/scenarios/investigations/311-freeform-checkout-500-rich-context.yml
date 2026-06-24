@@ -1,7 +1,6 @@
 id: 311-freeform-checkout-500-rich-context
 title: Rich multi-line checkout API 500 incident with service, region, deploy context
 intent_class: investigation
-risk_level: medium
 input:
   prompt: |
     Checkout API is returning HTTP 500s for 30% of requests since 14:05 UTC.
@@ -9,15 +8,12 @@ input:
     Region: us-east-1
     Recent deploy at 14:00 UTC.
     Logs mention database connection timeout and pool exhausted.
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
-available_capabilities:
-  slash_commands: []
-  cli_commands: []
-  synthetic_suites: []
+  # Force an empty resolved store so the gather loop has no tools regardless of
+  # the developer's local ~/.opensre integrations.
+  resolved_integrations: {}
 notes:
 - "Reproduces the core paste-incident-description flow: rich multi-line alert with\
   \ service name, region, deploy time, and log symptoms. Without configured integrations\
@@ -26,13 +22,10 @@ notes:
 - "Complements 307-new-alert-checkout-502 (single-line) by covering the structured\
   \ multi-line format users naturally paste from incident dashboards."
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
   content: incident_description:checkout_api_500_db_timeout
@@ -42,8 +35,13 @@ response_contract:
   must_contain_any: []
   must_not_contain:
   - $ /
+gathered_tools_contract:
+  # No integrations are resolved, so no remote-integration tool may fire.
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
-tier: full
 runs: 3

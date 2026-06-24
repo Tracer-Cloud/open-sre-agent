@@ -1,28 +1,21 @@
 id: 500-connect-local-llama-fail-closed
 title: Connect local llama fail-closed
 intent_class: remote
-risk_level: medium
 input:
   prompt: please connect to local llama
-  surface: interactive_cli
 session:
   has_prior_state: false
-  remote_connected: false
   configured_integrations: []
-available_capabilities:
-  slash_commands: []
-  cli_commands: []
-  synthetic_suites: []
+  # Pin an empty resolved store so the vague provider request hands off and the
+  # gather loop has no tools regardless of the developer's local ~/.opensre integrations.
+  resolved_integrations: {}
 notes: []
 
 route:
-  expected_kind: cli_agent
-  expected_signals: []
+  expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
-  should_execute: false
-  has_unhandled_clause: true
-  fail_closed: true
+  executes_terminal_action: false
 planned_actions: []
 executed_actions: []
 response_contract:
@@ -33,9 +26,14 @@ response_contract:
   - local-model connection tool
   must_not_contain:
   - $ /
+gathered_tools_contract:
+  # No integrations are resolved, so no remote-integration tool may fire.
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
-tier: critical
 runs: 3

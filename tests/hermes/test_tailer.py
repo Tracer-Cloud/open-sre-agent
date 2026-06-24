@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.hermes.tailer`."""
+"""Tests for :mod:`app.integrations.hermes.tailer`."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.hermes.tailer import FileTailer
+from app.integrations.hermes.tailer import FileTailer
 
 
 def _drain_for(tailer: FileTailer, *, max_lines: int, timeout_s: float = 2.0) -> list[str]:

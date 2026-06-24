@@ -9,13 +9,19 @@ import queue
 import threading
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.types.config import NodeConfig
 from app.utils.errors import report_and_reraise
 from app.utils.sentry_sdk import init_sentry
+
+if TYPE_CHECKING:
+    # Type-only — avoids paying the agent module's heavy import cost at
+    # runner load while still letting static type-checkers validate
+    # ``agent_class`` injections.
+    from app.agent.stages.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +83,7 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str, str] | None = None,
+    agent_class: type[ConnectedInvestigationAgent] | None = None,
 ) -> AgentState:
     """Run the investigation from a raw alert payload. Pure function: inputs in, state out.
 
@@ -87,6 +94,10 @@ def run_investigation(
             FixtureGrafanaBackend should be injected without real credential resolution.
         investigation_metadata: Optional ``(alert_name, pipeline_name, severity)`` for
             initial state; avoids copying those fields onto ``raw_alert``.
+        agent_class: Optional override for the investigation agent class. Defaults
+            to ``ConnectedInvestigationAgent``. Callers that need a custom
+            termination policy, structured-stage progression, or other
+            agent-level extensions can pass a subclass instead.
     """
     init_sentry(entrypoint="pipeline")
     from app.pipeline.pipeline import run_connected_investigation as _run
@@ -106,7 +117,7 @@ def run_investigation(
         message="run_investigation failed",
         tags={"surface": "pipeline", "component": "app.pipeline.runners"},
     ):
-        return _run(initial)
+        return _run(initial, agent_class=agent_class)
 
 
 def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:
@@ -127,7 +138,6 @@ async def astream_investigation(
     *,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str, str] | None = None,
-    suppress_editor: bool = False,
 ) -> AsyncIterator[Any]:
     """Stream investigation events in real time.
 
@@ -146,7 +156,7 @@ async def astream_investigation(
     # Silence the global ProgressTracker before starting the background thread
     # so pipeline internals (extract_alert, resolve_integrations, etc.) don't
     # open their own Rich Live display — the StreamRenderer drives it instead.
-    from app.cli.support.output import set_silent_tracker
+    from app.cli.interactive_shell.ui.output import set_silent_tracker
 
     set_silent_tracker()
 
@@ -188,6 +198,10 @@ async def astream_investigation(
             _put(_make_tool_event("on_tool_start", data.get("name", "tool"), data))
         elif event_kind == "tool_end":
             _put(_make_tool_event("on_tool_end", data.get("name", "tool"), data))
+        elif event_kind == "llm_start":
+            # Forward LLM iterations so the renderer can print "analyzing…" hints
+            # during the silent gap between tool batches and during synthesis.
+            _put(_make_tool_event("on_llm_start", "investigation_agent", data))
         elif event_kind == "agent_end":
             _put(
                 _make_node_event(
@@ -199,10 +213,12 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from app.agent.context import resolve_integrations
-            from app.agent.extract import extract_alert
-            from app.agent.investigation import ConnectedInvestigationAgent
-            from app.delivery.publish_findings.node import generate_report
+            from app.agent.stages.diagnose import diagnose
+            from app.agent.stages.extract_alert import extract_alert
+            from app.agent.stages.investigate import ConnectedInvestigationAgent
+            from app.agent.stages.plan_actions import plan_actions
+            from app.agent.stages.publish_findings.node import generate_report
+            from app.agent.stages.resolve_integrations import resolve_integrations
             from app.pipeline.pipeline import _merge
 
             state_any = cast(dict[str, Any], initial)
@@ -245,6 +261,26 @@ async def astream_investigation(
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
                 return
 
+            # --- plan_actions ---
+            _put(_make_node_event("on_chain_start", "plan_actions", {}))
+            _merge(
+                state_any,
+                _traced_node("plan_actions", plan_actions, cast("AgentState", state_any)),
+            )
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "plan_actions",
+                    {
+                        "output": {
+                            "planned_actions": state_any.get("planned_actions", []),
+                            "plan_rationale": state_any.get("plan_rationale", ""),
+                            "plan_audit": state_any.get("plan_audit", {}),
+                        }
+                    },
+                )
+            )
+
             # --- investigation agent (with real tool events) ---
             _merge(
                 state_any,
@@ -256,8 +292,27 @@ async def astream_investigation(
                 ),
             )
 
+            # --- diagnose ---
+            _put(_make_node_event("on_chain_start", "diagnose", {}))
+            _merge(state_any, _traced_node("diagnose", diagnose, state_any))
+            _put(
+                _make_node_event(
+                    "on_chain_end",
+                    "diagnose",
+                    {
+                        "output": {
+                            "root_cause": state_any.get("root_cause", ""),
+                            "root_cause_category": state_any.get("root_cause_category", ""),
+                            "validity_score": state_any.get("validity_score"),
+                            "validated_claims": state_any.get("validated_claims", []),
+                            "remediation_steps": state_any.get("remediation_steps", []),
+                        }
+                    },
+                )
+            )
+
             # --- upstream correlation ---
-            from app.correlation.node import node_correlate_upstream
+            from app.agent.correlation.node import node_correlate_upstream
             from app.pipeline.pipeline import _build_correlation_config
 
             _put(
@@ -290,17 +345,16 @@ async def astream_investigation(
                 )
             )
 
-            # --- deliver / publish (skip terminal render — StreamRenderer owns it) ---
+            # --- deliver / publish (skip terminal/editor render; StreamRenderer owns output) ---
             _put(_make_node_event("on_chain_start", "publish_findings", {}))
-
             _merge(
                 state_any,
                 _traced_node(
                     "publish_findings",
                     generate_report,
                     cast("Any", state_any),
-                    render_to_terminal=False,
-                    open_report_in_editor=not suppress_editor,
+                    render_terminal=False,
+                    open_editor=False,
                 ),
             )
 

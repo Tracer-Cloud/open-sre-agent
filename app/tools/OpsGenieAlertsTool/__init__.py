@@ -26,6 +26,7 @@ class OpsGenieAlertsTool(BaseTool):
         "Checking recent alert history for a service or tag",
     ]
     requires = ["api_key"]
+    injected_params = ["api_key"]
     input_schema = {
         "type": "object",
         "properties": {

@@ -16,9 +16,9 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
+from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.runtime import TaskRecord
 from app.cli.interactive_shell.ui import DIM, ERROR
-from app.cli.support.exception_reporting import report_exception
 
 # Full dotted name of the ``action_executor`` package. Submodules use this to
 # look up patchable names from the parent namespace at call time so that tests
@@ -77,11 +77,30 @@ def terminate_child_process(proc: subprocess.Popen[Any]) -> None:
             proc.wait(timeout=5)
 
 
+def read_task_output(
+    buf: tempfile.SpooledTemporaryFile[bytes] | None,  # type: ignore[type-arg]
+    *,
+    limit: int,
+) -> str:
+    """Read up to ``limit`` bytes from a captured output buffer, ANSI-stripped.
+
+    Tolerates a ``None`` buffer (e.g. the PTY path has no separate stdout
+    capture) and a closed/failed buffer, returning an empty string instead of
+    raising so callers in cleanup paths stay safe.
+    """
+    if buf is None:
+        return ""
+    try:
+        buf.seek(0)
+        raw = buf.read(limit).decode("utf-8", errors="replace").strip()
+    except (OSError, ValueError):
+        return ""
+    return _ANSI_ESCAPE.sub("", raw)
+
+
 def read_diag(buf: tempfile.SpooledTemporaryFile[bytes]) -> str:  # type: ignore[type-arg]
     """Read up to ``_SYNTHETIC_DIAG_CHARS`` bytes from a captured stderr buffer."""
-    buf.seek(0)
-    raw = buf.read(_SYNTHETIC_DIAG_CHARS).decode("utf-8", errors="replace").strip()
-    return _ANSI_ESCAPE.sub("", raw)
+    return read_task_output(buf, limit=_SYNTHETIC_DIAG_CHARS)
 
 
 def _print_task_output_line(
@@ -237,6 +256,7 @@ __all__ = [
     "_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS",
     "terminate_child_process",
     "read_diag",
+    "read_task_output",
     "_print_task_output_line",
     "_subprocess_env_with_aligned_width",
     "_pump_task_stream",

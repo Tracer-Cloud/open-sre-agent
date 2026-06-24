@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
         "required": ["cluster_name", "namespace", "role_arn"],
     },
     is_available=eks_available_or_backend,
+    injected_params=("credentials", "external_id", "role_arn"),
     extract_params=extract_workload_params,
 )
 def list_eks_deployments(

@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
+from app.integrations.config_models import PagerDutyIntegrationConfig
+from app.integrations.dagster import build_dagster_config, validate_dagster_config
 from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -15,6 +18,7 @@ from app.integrations.models import (
     IncidentIoIntegrationConfig,
 )
 from app.integrations.sentry import build_sentry_config, validate_sentry_config
+from app.integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig
@@ -23,6 +27,7 @@ from app.services.grafana import get_grafana_client_from_credentials
 from app.services.honeycomb import HoneycombClient
 from app.services.incident_io import IncidentIoClient
 from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
+from app.services.pagerduty import PagerDutyClient
 from app.services.splunk import SplunkClient, SplunkConfig
 from app.services.vercel import VercelClient, VercelConfig
 
@@ -314,6 +319,31 @@ def validate_gitlab_integration(
     return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
+def validate_dagster_integration(
+    *,
+    endpoint: str,
+    api_token: str = "",
+) -> IntegrationHealthResult:
+    """Validate Dagster connectivity via a GraphQL version probe."""
+    config = build_dagster_config({"endpoint": endpoint, "api_token": api_token})
+    result = validate_dagster_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
+
+
+def validate_jenkins_integration(
+    *,
+    base_url: str,
+    username: str,
+    api_token: str,
+) -> IntegrationHealthResult:
+    """Validate Jenkins connectivity with a server-info query."""
+    config = build_jenkins_config(
+        {"base_url": base_url, "username": username, "api_token": api_token}
+    )
+    result = validate_jenkins_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
+
+
 def validate_betterstack_integration(
     *,
     query_endpoint: str,
@@ -425,6 +455,34 @@ def validate_opsgenie_integration(
         )
 
 
+def validate_pagerduty_integration(
+    *,
+    api_key: str,
+    base_url: str,
+) -> IntegrationHealthResult:
+    """Validate Pagerduty connectivity by listing alerts."""
+    if not api_key:
+        return IntegrationHealthResult(ok=False, detail="PagerDuty API key is required.")
+    try:
+        config = PagerDutyIntegrationConfig(api_key=api_key, base_url=base_url)
+        with PagerDutyClient(config) as client:
+            result = client.list_incidents(limit=1)
+        if result.get("success"):
+            return IntegrationHealthResult(
+                ok=True,
+                detail="Connected to PagerDuty; API key accepted.",
+            )
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"PagerDuty validation failed: {result.get('error', 'unknown error')}",
+        )
+    except Exception as err:
+        return IntegrationHealthResult(
+            ok=False,
+            detail=f"PagerDuty validation failed: {str(err).replace(api_key, '[REDACTED]')}",
+        )
+
+
 def validate_incident_io_integration(
     *,
     api_key: str,
@@ -478,6 +536,31 @@ def validate_splunk_integration(
         ok=False,
         detail=f"Splunk validation failed: {result.get('error', 'unknown error')}",
     )
+
+
+def validate_tempo_integration(
+    *,
+    url: str,
+    api_key: str = "",
+    username: str = "",
+    password: str = "",
+    org_id: str = "",
+) -> IntegrationHealthResult:
+    """Validate Tempo connectivity via the tag-search endpoint."""
+    try:
+        config = build_tempo_config(
+            {
+                "url": url,
+                "api_key": api_key,
+                "username": username,
+                "password": password,
+                "org_id": org_id,
+            }
+        )
+    except Exception as err:
+        return IntegrationHealthResult(ok=False, detail=f"Tempo config invalid: {err}")
+    result = validate_tempo_config(config)
+    return IntegrationHealthResult(ok=result.ok, detail=result.detail)
 
 
 def validate_opensearch_integration(

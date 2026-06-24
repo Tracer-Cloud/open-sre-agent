@@ -91,11 +91,16 @@ jobs:
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime
+            # Live planner/routing contracts (tests/cli/.../test_llm_action_planner.py)
+            # are validated on openai, matching routing-live.yml. The
+            # default anthropic tool-call model (haiku) cannot reliably perform
+            # compound action routing, so pin this shard to openai.
+            llm_provider: openai
             pytest_paths: >-
               tests/cli
               tests/remote
               tests/agent
-              tests/agents
+              tests/fleet_monitoring
               tests/app
               tests/analytics
               tests/nodes
@@ -165,6 +170,8 @@ jobs:
     timeout-minutes: 30
 
     env:
+      # Per-shard LLM provider for live_llm contracts; defaults to anthropic.
+      LLM_PROVIDER: ${{ matrix.llm_provider || 'anthropic' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
@@ -367,6 +374,11 @@ jobs:
     name: test-thorough (${{ matrix.name }})
 
     env:
+      # Thorough e2e suites make live LLM calls; run them on openai because the
+      # default anthropic account is credit-exhausted. Requires a valid, funded
+      # OPENAI_API_KEY secret.
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JWT_TOKEN: ${{ secrets.JWT_TOKEN }}
       TRACER_API_URL: ${{ secrets.TRACER_API_URL }}

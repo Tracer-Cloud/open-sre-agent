@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.cli.support.errors import OpenSREError
+from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.cli.wizard.store import load_named_remotes, load_remote_ops_config
 from app.deployment.operations.health import poll_deployment_health
 from app.remote.ops import (
@@ -90,7 +90,7 @@ def build_runtime_alert_payload(
             f"No remote named '{name}' is configured.",
             suggestion=(
                 f"Configured remotes: {available}. "
-                f"Deploy with 'opensre deploy' or add one with 'opensre remote'."
+                "Register one with 'opensre remote --url <url> health' or run 'opensre remote'."
             ),
         )
 

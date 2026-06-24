@@ -37,7 +37,16 @@ def execute_sample_alert_action(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 TOOL_ENTRY = ToolEntry(
     name="alert_sample",
-    description="Run a sample alert template.",
+    description=(
+        "Run the built-in synthetic sample alert end-to-end (read alert → "
+        "investigate → diagnose). Use for any request to run/try/start/launch/"
+        "fire/trigger/investigate/look at a 'sample alert', 'test alert', or "
+        "'demo alert' (e.g. 'investigate a sample test alert?', 'kick off a "
+        "sample alert'). These requests carry NO real pasted alert text — that "
+        "is what separates them from investigation_start. Prefer this over "
+        "investigation_start and assistant_handoff for sample/test/demo alerts, "
+        "regardless of the verb or a trailing '?'."
+    ),
     input_schema=object_schema(
         properties={
             "template": string_property(

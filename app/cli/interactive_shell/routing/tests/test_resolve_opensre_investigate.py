@@ -1,11 +1,9 @@
-"""Deterministic routing for ``opensre investigate -i <file>`` quick-start input."""
+"""Deterministic detection for ``opensre investigate -i <file>`` quick-start input."""
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.routing.resolve_cli_command.evaluator import (
-    resolve_cli_command,
-)
-from app.cli.interactive_shell.routing.resolve_cli_command.matcher import (
+from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+    deterministic_command_text,
     opensre_investigate_slash_text,
 )
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
@@ -35,16 +33,15 @@ def test_opensre_investigate_without_path_defaults_to_demo_alert() -> None:
     assert opensre_investigate_slash_text("opensre investigate") == "/investigate alert.json"
 
 
-def test_resolve_cli_command_routes_opensre_investigate_as_slash() -> None:
-    session = ReplSession()
-    decision = resolve_cli_command("opensre investigate -i alert.json", session)
-    assert decision is not None
-    assert decision.route_kind == RouteKind.SLASH
-    assert decision.command_text == "/investigate alert.json"
-    assert "opensre_investigate" in decision.matched_signals
+def test_deterministic_command_text_maps_opensre_investigate() -> None:
+    assert (
+        deterministic_command_text("opensre investigate -i alert.json") == "/investigate alert.json"
+    )
 
 
-def test_route_input_does_not_send_opensre_investigate_to_llm_planner() -> None:
+def test_route_input_keeps_opensre_investigate_on_agent_fast_path() -> None:
     decision = route_input("opensre investigate -i alert.json", ReplSession())
-    assert decision.route_kind == RouteKind.SLASH
-    assert decision.command_text == "/investigate alert.json"
+    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
+    assert (
+        deterministic_command_text("opensre investigate -i alert.json") == "/investigate alert.json"
+    )

@@ -5,7 +5,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
-from app.cli.support.constants import SETUP_SERVICES, VERIFY_SERVICES
+from app.cli.interactive_shell.data_store.constants import SETUP_SERVICES, VERIFY_SERVICES
 from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 
 
@@ -112,7 +112,7 @@ def test_setup_vercel_saves_credentials(monkeypatch) -> None:
 
 
 def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
-    answers = iter(["1", "openclaw", "mcp serve"])
+    answers = iter(["openclaw", "mcp serve"])
 
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)

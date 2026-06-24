@@ -22,6 +22,7 @@ from app.tools.tool_decorator import tool
         "Understanding resource governance limits on Azure SQL",
     ],
     is_available=azure_sql_is_available,
+    injected_params=("server",),
     extract_params=azure_sql_extract_params,
 )
 def get_azure_sql_wait_stats(
