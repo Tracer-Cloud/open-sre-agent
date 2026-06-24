@@ -42,6 +42,49 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
     assert session.configured_integrations == ()
 
 
+def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
+    resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        lambda _state: {"resolved_integrations": resolved},
+    )
+    session = ReplSession()
+    session.warm_resolved_integrations()
+    assert session.resolved_integrations_cache == resolved
+
+
+def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+        calls.append("resolve")
+        return {"resolved_integrations": {"github": {}}}
+
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        _resolve,
+    )
+    session = ReplSession()
+    session.warm_resolved_integrations()
+    session.warm_resolved_integrations()
+    assert calls == ["resolve"]
+
+
+def test_hydrate_entrypoint_also_warms_resolved_integrations(monkeypatch: Any) -> None:
+    monkeypatch.setattr(
+        "app.integrations.verify.resolve_effective_integrations",
+        lambda: {"datadog": {}},
+    )
+    resolved = {"datadog": {"site": "datadoghq.com"}}
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        lambda _state: {"resolved_integrations": resolved},
+    )
+    session = ReplSession()
+    entrypoint._hydrate_configured_integrations(session)
+    assert session.resolved_integrations_cache == resolved
+
+
 def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
     def _boom() -> dict[str, Any]:
         raise RuntimeError("catalog blew up")

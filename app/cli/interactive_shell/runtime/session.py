@@ -97,12 +97,13 @@ class ReplSession:
     configured_integrations_known: bool = False
     """Whether configured_integrations reflects known state (vs default unknown)."""
     resolved_integrations_cache: dict[str, Any] | None = None
-    """Lazily-resolved integration configs (env/store) shared across turns.
+    """Resolved integration configs (env/store) shared across turns.
 
-    Populated on first use by the tool-gathering pass so the conversational
-    assistant can call the same registered tools the investigation uses without
-    re-resolving (and re-rendering progress) every turn. Cleared by
-    ``refresh_integration_state`` when integrations change."""
+    Populated silently at REPL boot and again after integration mutations so the
+    conversational assistant and investigations can call registered tools without
+    waiting for the first user message to trigger a visible "Loading
+    integrations" pass. Cleared by ``refresh_integration_state`` when
+    integrations change."""
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
@@ -401,6 +402,30 @@ class ReplSession:
             # Best-effort: keep whatever state we already had (default unknown).
             pass
 
+    def warm_resolved_integrations(self) -> None:
+        """Resolve full integration configs once, without progress UI.
+
+        The banner already shows configured integration names from
+        :meth:`hydrate_configured_integrations`; this loads the classified configs
+        the tool-gathering pass and investigation pipeline need so the first
+        conversational turn does not pay resolve cost or emit READ progress.
+        """
+        if self.resolved_integrations_cache is not None:
+            return
+        try:
+            from app.agent.stages.resolve_integrations import resolve_integrations
+            from app.cli.interactive_shell.ui.output import reset_tracker, set_silent_tracker
+
+            set_silent_tracker()
+            try:
+                updates = resolve_integrations({})  # type: ignore[arg-type]
+                self.resolved_integrations_cache = dict(updates.get("resolved_integrations") or {})
+            finally:
+                reset_tracker()
+        except Exception:
+            # Best-effort: tool-gathering will retry on first use if needed.
+            pass
+
     def refresh_integration_state(self) -> None:
         """Re-resolve integration state after the local store changes.
 
@@ -413,6 +438,7 @@ class ReplSession:
         """
         self.resolved_integrations_cache = None
         self.hydrate_configured_integrations()
+        self.warm_resolved_integrations()
 
     def apply_investigation_result(self, state: dict[str, Any]) -> None:
         """Record a completed investigation result and reset follow-up context.

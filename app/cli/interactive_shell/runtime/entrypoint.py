@@ -34,6 +34,7 @@ def _hydrate_configured_integrations(session: ReplSession) -> None:
     Best-effort: any failure leaves the session in its default "unknown" state.
     """
     session.hydrate_configured_integrations()
+    session.warm_resolved_integrations()
 
 
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
