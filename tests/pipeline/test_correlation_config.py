@@ -4,13 +4,13 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.agent.correlation.upstream import UpstreamEvidenceBundle
-from app.pipeline.pipeline import (
-    _build_correlation_config,
-    _candidate_services_from_state,
+from app.agent.correlation.datadog_factory import (
     _datadog_avg_query,
-    _target_resource_from_state,
+    candidate_services_from_state,
+    target_resource_from_state,
 )
+from app.agent.correlation.upstream import UpstreamEvidenceBundle
+from app.pipeline.pipeline import _build_correlation_config
 
 
 def test_datadog_avg_query_preserves_existing_scope() -> None:
@@ -22,8 +22,8 @@ def test_datadog_avg_query_preserves_existing_scope() -> None:
 
 
 def test_correlation_config_state_helpers_use_compatible_fallbacks() -> None:
-    assert _target_resource_from_state({}) == "unknown-rds"
-    assert _candidate_services_from_state({"raw_alert": {"upstream_services": "api, worker"}}) == (
+    assert target_resource_from_state({}) == "unknown-rds"
+    assert candidate_services_from_state({"raw_alert": {"upstream_services": "api, worker"}}) == (
         "api",
         "worker",
     )
