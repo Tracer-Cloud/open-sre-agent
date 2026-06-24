@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from app.cli.interactive_shell.ui.output import boundary as output_boundary
@@ -11,7 +13,17 @@ from app.services.tracer_client.integrations_adapter import fetch_tracer_remote_
 
 
 @pytest.fixture(autouse=True)
-def _reset_integrations_port() -> None:
+def _reset_integrations_port() -> Iterator[None]:
+    """Reset the integrations-port fetcher before AND after every test.
+
+    The teardown matters: without it, the final test in this file
+    leaks its registered fetcher (e.g. ``_fake_fetcher`` from
+    ``test_registered_fetcher_is_invoked``) into the rest of the
+    pytest session, polluting any later test that touches
+    ``fetch_remote_integrations``.
+    """
+    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    yield
     set_remote_integrations_fetcher(integrations_port._default_fetcher)
 
 

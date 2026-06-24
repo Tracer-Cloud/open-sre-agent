@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from app.cli.interactive_shell.ui.output import boundary as output_boundary
@@ -12,6 +14,8 @@ from app.cli.interactive_shell.ui.output.renderers import (
     render_investigation_header,
 )
 from app.cli.interactive_shell.ui.output.tracker import ProgressTracker, get_tracker
+from app.integrations import port as integrations_port
+from app.integrations.port import set_remote_integrations_fetcher
 from app.observability import NoopProgressTracker, get_progress_tracker, silence_progress_tracker
 from app.observability import debug as obs_debug
 from app.observability import display as obs_display
@@ -27,18 +31,35 @@ from app.observability.progress import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _reset_observability_ports(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give each test a clean observability port state and tracker singleton."""
-    for name in ("TRACER_OUTPUT_FORMAT", "NO_COLOR", "SLACK_WEBHOOK_URL", "TRACER_VERBOSE"):
-        monkeypatch.delenv(name, raising=False)
+def _reset_all_ports() -> None:
+    """Restore every port + global to its no-op / default state."""
     set_progress_tracker(NoopProgressTracker())
     set_progress_tracker_factory(None)
     obs_progress._silenced = False
     set_debug_printer(obs_debug._default_debug_printer)
     set_investigation_header_renderer(obs_display._default_header_renderer)
     set_investigation_footer_renderer(obs_display._default_footer_renderer)
+    # ``install_product_adapters`` now also wires the integrations
+    # fetcher; reset it here so this file's tests don't leak the
+    # Tracer adapter into other tests in the session.
+    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+
+
+@pytest.fixture(autouse=True)
+def _reset_observability_ports(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Give each test a clean port state — setup AND teardown.
+
+    The teardown matters: without it, the final test in this file
+    leaves whatever adapters ``install_product_adapters()`` registered
+    in place for the rest of the pytest session, polluting any later
+    test that touches the observability or integrations ports.
+    """
+    for name in ("TRACER_OUTPUT_FORMAT", "NO_COLOR", "SLACK_WEBHOOK_URL", "TRACER_VERBOSE"):
+        monkeypatch.delenv(name, raising=False)
+    _reset_all_ports()
     monkeypatch.setattr(output_tracker, "_tracker", None)
+    yield
+    _reset_all_ports()
 
 
 def test_ports_default_to_noop_before_cli_install() -> None:
