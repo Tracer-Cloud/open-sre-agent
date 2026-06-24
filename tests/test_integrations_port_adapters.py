@@ -9,22 +9,50 @@ import pytest
 from app.cli.interactive_shell.ui.output import boundary as output_boundary
 from app.integrations import port as integrations_port
 from app.integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
+from app.observability import NoopProgressTracker
+from app.observability import debug as obs_debug
+from app.observability import display as obs_display
+from app.observability import progress as obs_progress
+from app.observability.debug import set_debug_printer
+from app.observability.display import (
+    set_investigation_footer_renderer,
+    set_investigation_header_renderer,
+)
+from app.observability.progress import set_progress_tracker, set_progress_tracker_factory
 from app.services.tracer_client.integrations_adapter import fetch_tracer_remote_integrations
+
+
+def _reset_all_ports() -> None:
+    """Restore every port + global to its no-op / default state.
+
+    ``install_product_adapters`` wires four observability ports in
+    addition to the integrations fetcher; resetting only the
+    integrations fetcher would leave the other four registered for
+    the rest of the pytest session. Symmetric with the helper in
+    :mod:`tests.test_observability_adapters`.
+    """
+    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    set_progress_tracker(NoopProgressTracker())
+    set_progress_tracker_factory(None)
+    obs_progress._silenced = False
+    set_debug_printer(obs_debug._default_debug_printer)
+    set_investigation_header_renderer(obs_display._default_header_renderer)
+    set_investigation_footer_renderer(obs_display._default_footer_renderer)
 
 
 @pytest.fixture(autouse=True)
 def _reset_integrations_port() -> Iterator[None]:
-    """Reset the integrations-port fetcher before AND after every test.
+    """Reset every port the boundary wires before AND after each test.
 
-    The teardown matters: without it, the final test in this file
-    leaks its registered fetcher (e.g. ``_fake_fetcher`` from
-    ``test_registered_fetcher_is_invoked``) into the rest of the
-    pytest session, polluting any later test that touches
-    ``fetch_remote_integrations``.
+    The teardown matters: without it, the final test that calls
+    ``install_product_adapters`` (e.g.
+    ``test_install_product_adapters_wires_tracer_fetcher``) leaks the
+    CLI debug printer, Rich header/footer renderers, and progress-tracker
+    factory into the rest of the pytest session.
     """
-    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    _reset_all_ports()
     yield
-    set_remote_integrations_fetcher(integrations_port._default_fetcher)
+    _reset_all_ports()
 
 
 def test_port_defaults_to_empty_before_boundary_install() -> None:
