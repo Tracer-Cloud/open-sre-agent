@@ -37,7 +37,7 @@ def _window_minutes(start: str, end: str) -> int:
         return 60
 
 
-def _datadog_avg_query(metric_name: str) -> str:
+def datadog_avg_query(metric_name: str) -> str:
     metric = metric_name.strip()
     if metric.startswith(("avg:", "sum:", "min:", "max:", "count:")):
         return metric
@@ -80,7 +80,7 @@ def build_datadog_provider(
         end = str(window.get("to") or "")
         if not start or not end:
             return {"timestamps": [], "values": []}
-        query = _datadog_avg_query(metric_name)
+        query = datadog_avg_query(metric_name)
         result = client.query_metrics(query, start=_parse_iso8601(start), end=_parse_iso8601(end))
         if not result.get("success"):
             return {"timestamps": [], "values": []}

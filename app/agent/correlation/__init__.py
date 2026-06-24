@@ -97,6 +97,13 @@ def build_upstream_evidence_provider(state: dict[str, Any]) -> UpstreamEvidenceP
     return None
 
 
+# Note: ``build_datadog_provider`` is intentionally NOT exported here.
+# Callers must go through the vendor-agnostic
+# :func:`build_upstream_evidence_provider`; exposing the concrete
+# Datadog factory invites bypassing the abstraction. The function is
+# still importable as
+# ``from app.agent.correlation.datadog_factory import build_datadog_provider``
+# for internal use within the correlation package.
 __all__ = [
     "DatadogCorrelationAdapter",
     "DatadogCorrelationQueries",
@@ -108,7 +115,6 @@ __all__ = [
     "TopologyHint",
     "UpstreamEvidenceBundle",
     "UpstreamEvidenceProvider",
-    "build_datadog_provider",
     "build_upstream_evidence_provider",
     "candidate_services_from_state",
     "target_resource_from_state",

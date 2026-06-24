@@ -21,7 +21,12 @@ from pathlib import Path
 import pytest
 
 _PIPELINE_DIR = Path("app/pipeline")
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services.datadog",)
+# Block *all* vendor service modules, not just Datadog. The whole pattern
+# is that ``app/pipeline/`` routes vendor wiring through a factory in
+# ``app/agent/correlation/`` (or analogous), so reaching directly into
+# ``app.services.<anything>`` is a layering violation regardless of vendor.
+# This guards against future Grafana/AWS/etc. imports without manual edits.
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services",)
 
 
 def _pipeline_modules() -> list[Path]:
@@ -44,7 +49,7 @@ def _imported_modules(source: str) -> set[str]:
     return names
 
 
-@pytest.mark.parametrize("module_path", _pipeline_modules(), ids=lambda p: str(p))
+@pytest.mark.parametrize("module_path", _pipeline_modules(), ids=str)
 def test_pipeline_module_does_not_import_forbidden_layer(module_path: Path) -> None:
     """Every module under ``app/pipeline/`` must avoid forbidden vendor imports."""
     source = module_path.read_text(encoding="utf-8")
@@ -56,5 +61,5 @@ def test_pipeline_module_does_not_import_forbidden_layer(module_path: Path) -> N
     }
     assert not leaks, (
         f"{module_path} imports vendor service module(s) {sorted(leaks)} — route through "
-        "``app.agent.correlation.build_upstream_evidence_provider`` instead."
+        "an abstraction (e.g. ``app.agent.correlation.build_upstream_evidence_provider``) instead."
     )
