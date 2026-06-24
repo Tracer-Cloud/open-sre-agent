@@ -2,6 +2,7 @@
 description: Investigation pipeline architecture and stage development
 globs:
     - app/core/orchestration/**
+    - app/core/runtime/**
     - app/agent/**
     - app/state/**
 ---
@@ -17,7 +18,7 @@ globs:
 ## Key packages
 
 - `app/core/orchestration/node/` for pipeline stages (extract, investigate, diagnose, publish findings)
-- `app/agent/tool_loop/` for shared LLM tool-calling runtime primitives
+- `app/core/runtime/` for shared LLM tool-calling runtime primitives
 - `app/cli/interactive_shell/chat/` for live REPL conversational assistant
 - `app/state/agent_state.py` for `AgentState` / `InvestigationState`
 

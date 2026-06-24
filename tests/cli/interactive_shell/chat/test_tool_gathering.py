@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.console import Console
 
-import app.agent.tool_loop as tool_loop
 import app.core.orchestration.node.investigate.tools as investigate_tools
+import app.core.runtime as runtime_module
 import app.services.agent_llm_client as agent_llm_client
 from app.cli.interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
@@ -82,10 +82,10 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
         )
     ]
 
-    def _fake_loop(**_kwargs: Any) -> tool_loop.ToolLoopResult:
-        return tool_loop.ToolLoopResult(messages=[], final_text="", executed=executed)
+    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=executed)
 
-    monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
+    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
 
     observation = gather_tool_evidence("any open issues?", session, _console())
 
@@ -106,10 +106,10 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**_kwargs: Any) -> tool_loop.ToolLoopResult:
-        return tool_loop.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
+    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+        return runtime_module.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
 
-    monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
+    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
 
     assert gather_tool_evidence("any question", session, _console()) is None
 
@@ -189,7 +189,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**kwargs: Any) -> tool_loop.ToolLoopResult:
+    def _fake_loop(**kwargs: Any) -> runtime_module.ToolLoopResult:
         on_event = kwargs.get("on_event")
         if on_event is not None:
             on_event(
@@ -208,9 +208,9 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
                     "input": {"metric_name": "http_errors_total"},
                 },
             )
-        return tool_loop.ToolLoopResult(messages=[], final_text="", executed=[])
+        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
+    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
 
     gather_tool_evidence("check metrics", session, console)
     output = console.file.getvalue()

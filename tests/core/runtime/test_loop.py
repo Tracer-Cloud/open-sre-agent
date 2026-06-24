@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, cast
 
-from app.agent.tool_loop import ToolLoopResult, run_tool_calling_loop
+from app.core.runtime import ToolLoopResult, run_tool_calling_loop
 from app.services.agent_llm_client import AgentLLMResponse, ToolCall
 from app.tools.registered_tool import RegisteredTool
 
@@ -12,7 +12,7 @@ class FakeLLM:
     """Duck-typed agent LLM client driving a scripted response sequence.
 
     Deliberately NOT a subclass of any real provider client so that the
-    isinstance branches in ``_build_assistant_msg`` / ``_build_tool_result_messages``
+    isinstance branches in ``build_assistant_message`` / ``build_tool_result_messages``
     fall through to the generic ``build_assistant_message`` /
     ``build_tool_result_message`` path.
     """
@@ -57,7 +57,7 @@ class FakeLLM:
 
 
 class FakeTool:
-    """Minimal stand-in exposing only what ``_run_parallel`` touches."""
+    """Minimal stand-in exposing only what ``execute_tools`` touches."""
 
     def __init__(self, name: str, output: dict[str, Any] | None = None) -> None:
         self.name = name

@@ -1,4 +1,4 @@
-"""Provider-specific message shaping for shared agent tool loops."""
+"""Provider-specific message shaping for the shared LLM tool-calling runtime."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 from app.services.agent_llm_client import ToolCall
 
 
-def _build_synthetic_assistant_tool_call_msg(
+def build_synthetic_assistant_tool_call_message(
     llm: Any,
     tool_calls: list[ToolCall],
 ) -> dict[str, Any]:
@@ -63,7 +63,7 @@ def _build_synthetic_assistant_tool_call_msg(
     return {"role": "assistant", "content": f"I will start by querying: {names}"}
 
 
-def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
+def build_assistant_message(llm: Any, response: Any) -> dict[str, Any]:
     from app.services.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
@@ -76,7 +76,7 @@ def _build_assistant_msg(llm: Any, response: Any) -> dict[str, Any]:
     return result
 
 
-def _build_tool_result_messages(
+def build_tool_result_messages(
     llm: Any,
     tool_calls: list[ToolCall],
     results: list[Any],

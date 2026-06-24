@@ -1,4 +1,4 @@
-"""Tool execution helpers for shared agent tool loops."""
+"""Tool execution helpers for the shared LLM tool-calling runtime."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()  # sentinel distinguishing "not yet started" from a None tool result
 
 
-def _run_parallel(
+def execute_tools(
     tool_calls: list[ToolCall],
     tools: list[RegisteredTool],
     resolved_integrations: dict[str, Any],
@@ -57,7 +57,7 @@ def _run_parallel(
                     results[submitted[fut]] = {"error": str(fut_exc)}
     except RuntimeError as exc:
         # interpreter is shutting down; executor.__exit__ has already waited for submitted futures
-        logger.warning("[_run_parallel] RuntimeError – falling back to sequential: %s", exc)
+        logger.warning("[execute_tools] RuntimeError – falling back to sequential: %s", exc)
         for fut, i in submitted.items():
             if results[i] is _UNSET and fut.done():
                 try:
@@ -70,7 +70,7 @@ def _run_parallel(
     return results
 
 
-def _public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
+def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     redacted = redact_sensitive(value)
     return {
         key: item
@@ -79,14 +79,14 @@ def _public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _tool_source(tools: list[RegisteredTool], tool_name: str) -> str:
+def tool_source(tools: list[RegisteredTool], tool_name: str) -> str:
     for tool in tools:
         if tool.name == tool_name:
             return str(tool.source)
     return "unknown"
 
 
-def _summarise(output: Any) -> str:
+def summarise(output: Any) -> str:
     if isinstance(output, dict) and "error" in output:
         return f"error: {output['error']}"
     text = json.dumps(output, default=str)

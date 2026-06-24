@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.tool_loop import _public_tool_input
 from app.agent.utils.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES, resolve_alert_source
+from app.core.runtime import public_tool_input
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
@@ -119,7 +119,7 @@ def build_seed_calls(
         except Exception:
             injected = {}
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
-        calls.append(ToolCall(id=tool_id, name=tool.name, input=_public_tool_input(injected)))
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(injected)))
 
     return calls
 

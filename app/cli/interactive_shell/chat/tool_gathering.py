@@ -4,7 +4,7 @@ The REPL's conversational assistant (:func:`app.cli.interactive_shell.chat.cli_a
 is grounded text generation — it cannot reach integrations on its own. This
 module gives a free-form turn access to the **same registered tools the
 investigation pipeline uses**: it runs a bounded think → call-tools → observe
-loop (:func:`app.agent.tool_loop.run_tool_calling_loop`) over the available
+loop (:func:`app.core.runtime.run_tool_calling_loop`) over the available
 ``"investigation"`` surface tools, then hands the collected tool outputs back to
 ``answer_cli_agent`` as an observation block so it can compose a grounded answer.
 
@@ -215,8 +215,8 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from app.agent.tool_loop import run_tool_calling_loop
         from app.core.orchestration.node.investigate.tools import get_available_tools
+        from app.core.runtime import run_tool_calling_loop
         from app.services.agent_llm_client import get_agent_llm
 
         resolved = _resolve_session_integrations(session)

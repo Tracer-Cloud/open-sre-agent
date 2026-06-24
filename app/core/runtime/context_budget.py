@@ -82,7 +82,7 @@ def _candidate_exchange(
     return _ToolExchange(
         start=start,
         end=end,
-        token_estimate=_estimate_message_tokens(exchange_messages),
+        token_estimate=estimate_message_tokens(exchange_messages),
         duplicate_only=duplicate_only,
     )
 
@@ -129,7 +129,7 @@ def _eviction_priority(exchange: _ToolExchange) -> tuple[int, int, int]:
     return (duplicate_rank, -exchange.token_estimate, exchange.start)
 
 
-def _context_budget_ceiling_for_model(model: str | None) -> int:
+def context_budget_ceiling_for_model(model: str | None) -> int:
     """Trim ceiling for the active model = its context window − response headroom.
 
     Substring match (case-insensitive) so dated snapshots and provider prefixes
@@ -146,7 +146,7 @@ def _context_budget_ceiling_for_model(model: str | None) -> int:
     return max(window - _RESPONSE_HEADROOM_TOKENS, _RESPONSE_HEADROOM_TOKENS)
 
 
-def _estimate_message_tokens(
+def estimate_message_tokens(
     messages: list[dict[str, Any]],
     *,
     system: str | None = None,
@@ -178,7 +178,7 @@ def _estimate_message_tokens(
     return total
 
 
-def _trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> bool:
+def trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> bool:
     """Drop one non-pinned tool exchange using the eviction heuristic."""
     candidates = _tool_exchange_candidates(messages)
     if not candidates:
@@ -187,11 +187,6 @@ def _trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> bool:
     selected = min(candidates, key=_eviction_priority)
     del messages[selected.start : selected.end]
     return True
-
-
-def _trim_oldest_tool_pair(messages: list[dict[str, Any]]) -> bool:
-    """Compatibility wrapper for older tests/imports."""
-    return _trim_lowest_value_tool_pair(messages)
 
 
 def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
@@ -250,7 +245,7 @@ def _apply_text_factor(node: Any, factor: float) -> bool:
     return changed
 
 
-def _truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
+def truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
     """Shrink a message's ``content`` so its char length is ~``max_chars``.
 
     String content is cut directly. List content (Anthropic block lists) is
@@ -287,23 +282,23 @@ def _truncate_largest_message(
     """
     order = sorted(
         range(len(messages)),
-        key=lambda i: _estimate_message_tokens([messages[i]]),
+        key=lambda i: estimate_message_tokens([messages[i]]),
         reverse=True,
     )
     for idx in order:
-        overhead = _estimate_message_tokens(
+        overhead = estimate_message_tokens(
             [m for i, m in enumerate(messages) if i != idx], system=system, tools=tools
         )
         budget_tokens = max(ceiling - overhead - _TRUNCATION_SAFETY_TOKENS, _TRUNCATION_MIN_TOKENS)
         max_chars = int(budget_tokens / _TOKENS_PER_CHAR)
-        new_content, changed = _truncate_content(messages[idx].get("content"), max_chars)
+        new_content, changed = truncate_content(messages[idx].get("content"), max_chars)
         if changed:
             messages[idx]["content"] = new_content
             return True
     return False
 
 
-def _enforce_context_budget(
+def enforce_context_budget(
     messages: list[dict[str, Any]],
     *,
     system: str | None = None,
@@ -311,8 +306,8 @@ def _enforce_context_budget(
     ceiling: int = _TOKEN_BUDGET_CEILING,
 ) -> None:
     """Trim low-value tool exchanges until the prompt fits under ``ceiling``."""
-    while _estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
-        if not _trim_lowest_value_tool_pair(messages):
+    while estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
+        if not trim_lowest_value_tool_pair(messages):
             if not _truncate_largest_message(messages, system=system, tools=tools, ceiling=ceiling):
                 logger.warning(
                     "[agent] context still over budget after trimming + truncation "

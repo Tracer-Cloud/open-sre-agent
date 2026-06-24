@@ -1,1 +1,1 @@
-"""Agent runtime primitives (tool loop, shared utilities)."""
+"""Agent utilities shared across orchestration and CLI surfaces."""

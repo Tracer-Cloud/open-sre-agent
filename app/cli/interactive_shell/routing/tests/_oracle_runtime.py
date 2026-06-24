@@ -334,13 +334,13 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
 
     # Record which registered tools fire during the conversational
     # gather_tool_evidence pass. gather_tool_evidence imports
-    # run_tool_calling_loop lazily from app.agent.tool_loop, so patch the name on
+    # run_tool_calling_loop lazily from app.core.runtime, so patch the name on
     # that source module (the local import re-binds from there at call time).
-    import app.agent.tool_loop as _tool_loop_mod
+    import app.core.runtime as _runtime_mod
 
     gathered_tool_calls: list[str] = []
     gathered_valid_data: set[str] = set()
-    _original_tool_loop = _tool_loop_mod.run_tool_calling_loop
+    _original_tool_loop = _runtime_mod.run_tool_calling_loop
 
     def _recording_tool_loop(*args: Any, **kwargs: Any) -> Any:
         result = _original_tool_loop(*args, **kwargs)
@@ -350,7 +350,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
                 gathered_valid_data.add(tc.name)
         return result
 
-    monkeypatch.setattr(_tool_loop_mod, "run_tool_calling_loop", _recording_tool_loop)
+    monkeypatch.setattr(_runtime_mod, "run_tool_calling_loop", _recording_tool_loop)
 
     console_buffer = io.StringIO()
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)

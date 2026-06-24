@@ -6,17 +6,6 @@ import contextlib
 import logging
 from typing import Any, cast
 
-from app.agent.tool_loop import (
-    AgentEventCallback,
-    _build_assistant_msg,
-    _build_synthetic_assistant_tool_call_msg,
-    _build_tool_result_messages,
-    _context_budget_ceiling_for_model,
-    _enforce_context_budget,
-    _run_parallel,
-    _summarise,
-    _tool_source,
-)
 from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.core.orchestration.node.investigate.loop import (
@@ -34,6 +23,17 @@ from app.core.orchestration.node.investigate.tools import (
     get_available_tools,
     merge_tool_evidence,
     tool_event_payload,
+)
+from app.core.runtime import (
+    LoopEventCallback,
+    build_assistant_message,
+    build_synthetic_assistant_tool_call_message,
+    build_tool_result_messages,
+    context_budget_ceiling_for_model,
+    enforce_context_budget,
+    execute_tools,
+    summarise,
+    tool_source,
 )
 from app.observability import debug_print
 from app.observability import get_progress_tracker as get_tracker
@@ -91,7 +91,7 @@ class ConnectedInvestigationAgent:
     def run(
         self,
         state: InvestigationState,
-        on_event: AgentEventCallback | None = None,
+        on_event: LoopEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
         tracker = get_tracker()
@@ -158,10 +158,10 @@ class ConnectedInvestigationAgent:
                     "loop_iteration": -1,
                 }
             )
-            seed_results = _run_parallel(seed_calls, tools, resolved)
-            seed_msgs = _build_tool_result_messages(llm, seed_calls, seed_results)
+            seed_results = execute_tools(seed_calls, tools, resolved)
+            seed_msgs = build_tool_result_messages(llm, seed_calls, seed_results)
 
-            seed_assistant_msg = _build_synthetic_assistant_tool_call_msg(llm, seed_calls)
+            seed_assistant_msg = build_synthetic_assistant_tool_call_message(llm, seed_calls)
             _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
             messages.append(seed_assistant_msg)
             messages.extend(seed_msgs)
@@ -175,21 +175,21 @@ class ConnectedInvestigationAgent:
                         data=redact_sensitive(output),
                         tool_name=tc.name,
                         tool_args=redact_sensitive(tc.input),
-                        source=_tool_source(tools, tc.name),
+                        source=tool_source(tools, tc.name),
                         loop_iteration=-1,
                     )
                 )
                 _record_tool_end(tc, output)
-                debug_print(f"[seed:{tc.name}] → {_summarise(output)}")
+                debug_print(f"[seed:{tc.name}] → {summarise(output)}")
 
-        context_ceiling = _context_budget_ceiling_for_model(getattr(llm, "_model", None))
+        context_ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
         stagnant_iterations = 0
         force_conclusion = False
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             _emit("llm_start", {"iteration": iteration})
             active_tool_schemas: list[dict[str, Any]] = [] if force_conclusion else tool_schemas
-            _enforce_context_budget(
+            enforce_context_budget(
                 messages, system=system, tools=active_tool_schemas, ceiling=context_ceiling
             )
             try:
@@ -211,7 +211,7 @@ class ConnectedInvestigationAgent:
                     tool_context=tool_context,
                 )
 
-            messages.append(_build_assistant_msg(llm, response))
+            messages.append(build_assistant_message(llm, response))
 
             if not response.has_tool_calls:
                 accept, nudge = self._should_accept_conclusion(
@@ -251,7 +251,7 @@ class ConnectedInvestigationAgent:
                 }
             )
 
-            fresh_results = iter(_run_parallel(fresh_calls, tools, resolved) if fresh_calls else [])
+            fresh_results = iter(execute_tools(fresh_calls, tools, resolved) if fresh_calls else [])
             results: list[Any] = []
             for tc, cached_entry in zip(response.tool_calls, cached_entries, strict=True):
                 if cached_entry is not None:
@@ -261,7 +261,7 @@ class ConnectedInvestigationAgent:
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
                 results.append(output)
 
-            tool_result_messages = _build_tool_result_messages(llm, response.tool_calls, results)
+            tool_result_messages = build_tool_result_messages(llm, response.tool_calls, results)
             if duplicate_flags and all(duplicate_flags):
                 _mark_messages([messages[-1], *tool_result_messages], "_opensre_duplicate_result")
             messages.extend(tool_result_messages)
@@ -277,12 +277,12 @@ class ConnectedInvestigationAgent:
                         data=redact_sensitive(output),
                         tool_name=tc.name,
                         tool_args=redact_sensitive(tc.input),
-                        source=_tool_source(tools, tc.name),
+                        source=tool_source(tools, tc.name),
                         loop_iteration=iteration,
                     )
                 )
                 _record_tool_end(tc, output)
-                debug_print(f"[{tc.name}] → {_summarise(output)}")
+                debug_print(f"[{tc.name}] → {summarise(output)}")
 
             if fresh_calls:
                 stagnant_iterations = 0

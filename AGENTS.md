@@ -50,6 +50,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
 - `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `app/core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
+- `app/core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
 - `app/remote/` — Remote-hosted runtime operations and integration points.
 - `app/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
@@ -94,7 +95,7 @@ Investigations are coordinated in `app/core/orchestration/pipeline.py` and expos
 Files to touch:
 
 - `app/core/orchestration/pipeline.py` for high-level stage ordering.
-- `app/agent/` for extract, context, investigation, or chat behavior.
+- `app/agent/` for shared agent utilities (alert source mapping, LLM invoke error classification).
 - `app/state/*.py` when adding or renaming persisted investigation fields.
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.

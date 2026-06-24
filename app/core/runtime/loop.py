@@ -7,12 +7,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.agent.tool_loop.context_budget import (
-    _context_budget_ceiling_for_model,
-    _enforce_context_budget,
+from app.core.runtime.context_budget import (
+    context_budget_ceiling_for_model,
+    enforce_context_budget,
 )
-from app.agent.tool_loop.execution import _public_tool_input, _run_parallel
-from app.agent.tool_loop.messages import _build_assistant_msg, _build_tool_result_messages
+from app.core.runtime.execution import execute_tools, public_tool_input
+from app.core.runtime.messages import build_assistant_message, build_tool_result_messages
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
 from app.utils.tool_trace import redact_sensitive
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Callback type: called with (event_kind, data_dict) during the agent loop.
 # event_kind values: "tool_start", "tool_end", "llm_start", "agent_start", "agent_end"
-AgentEventCallback = Callable[[str, dict[str, Any]], None]
+LoopEventCallback = Callable[[str, dict[str, Any]], None]
 
 
 @dataclass
@@ -49,7 +49,7 @@ def run_tool_calling_loop(
     tools: list[RegisteredTool],
     resolved_integrations: dict[str, Any],
     max_iterations: int,
-    on_event: AgentEventCallback | None = None,
+    on_event: LoopEventCallback | None = None,
 ) -> ToolLoopResult:
     """Run a generic think → call-tools → observe loop and return its outcome.
 
@@ -69,19 +69,19 @@ def run_tool_calling_loop(
             try:
                 on_event(kind, data)
             except Exception:  # noqa: BLE001 — event rendering must never break the loop
-                logger.debug("[tool_loop] on_event(%s) raised; ignoring", kind, exc_info=True)
+                logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)
 
     tool_schemas = llm.tool_schemas(tools)
-    ceiling = _context_budget_ceiling_for_model(getattr(llm, "_model", None))
+    ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
     executed: list[tuple[ToolCall, Any]] = []
     final_text = ""
     hit_cap = True
 
     for iteration in range(max_iterations):
         _emit("llm_start", {"iteration": iteration})
-        _enforce_context_budget(messages, system=system, tools=tool_schemas, ceiling=ceiling)
+        enforce_context_budget(messages, system=system, tools=tool_schemas, ceiling=ceiling)
         response = llm.invoke(messages, system=system, tools=tool_schemas)
-        messages.append(_build_assistant_msg(llm, response))
+        messages.append(build_assistant_message(llm, response))
 
         if not response.has_tool_calls:
             final_text = response.content or ""
@@ -90,11 +90,11 @@ def run_tool_calling_loop(
 
         for tc in response.tool_calls:
             _emit(
-                "tool_start", {"id": tc.id, "name": tc.name, "input": _public_tool_input(tc.input)}
+                "tool_start", {"id": tc.id, "name": tc.name, "input": public_tool_input(tc.input)}
             )
 
-        results = _run_parallel(response.tool_calls, tools, resolved_integrations)
-        messages.extend(_build_tool_result_messages(llm, response.tool_calls, results))
+        results = execute_tools(response.tool_calls, tools, resolved_integrations)
+        messages.extend(build_tool_result_messages(llm, response.tool_calls, results))
 
         for tc, output in zip(response.tool_calls, results):
             executed.append((tc, output))
