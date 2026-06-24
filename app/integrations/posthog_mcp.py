@@ -29,7 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import httpx
@@ -39,7 +39,7 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
 
@@ -537,3 +537,31 @@ def validate_posthog_mcp_config(config: PostHogMCPConfig) -> PostHogMCPValidatio
             ok=False,
             detail=f"PostHog MCP validation failed: {describe_posthog_mcp_error(err, config)}",
         )
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_posthog_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "organization_id": credentials.get("organization_id", ""),
+                "project_id": credentials.get("project_id", ""),
+                "features": credentials.get("features", []),
+                "read_only": credentials.get("read_only", True),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="posthog_mcp", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        config_dict = cfg.model_dump()
+        config_dict["connection_verified"] = True
+        return config_dict, "posthog_mcp"
+    return None, None

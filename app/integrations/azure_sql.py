@@ -19,7 +19,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 from app.utils.truncation import truncate
 
@@ -654,3 +654,26 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
             method="get_wait_stats",
         )
         return {"source": "azure_sql", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_azure_sql_config(
+            {
+                "server": credentials.get("server", ""),
+                "port": credentials.get("port", 1433),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "driver": credentials.get("driver", "ODBC Driver 18 for SQL Server"),
+                "encrypt": credentials.get("encrypt", True),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="azure_sql", record_id=record_id)
+        return None, None
+    if cfg.server and cfg.database:
+        return cfg.model_dump(), "azure_sql"
+    return None, None

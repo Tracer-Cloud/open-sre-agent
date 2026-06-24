@@ -59,3 +59,26 @@ def report_validation_failure(
         extras=extras,
         include_traceback=include_traceback,
     )
+
+
+def report_classify_failure(
+    exc: BaseException,
+    *,
+    logger: logging.Logger,
+    integration: str,
+    record_id: str,
+) -> None:
+    """Log + Sentry-capture a classify failure for an integration record."""
+    report_exception(
+        exc,
+        logger=logger,
+        message=f"classify_failed: integration={integration} record_id={record_id}",
+        severity="warning",
+        tags={
+            "surface": "integration",
+            "component": "app.integrations",
+            "integration": integration,
+            "event": "classify_failed",
+        },
+        extras={"record_id": record_id},
+    )

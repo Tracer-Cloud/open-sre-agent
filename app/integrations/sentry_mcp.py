@@ -29,7 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
@@ -38,7 +38,7 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
 
@@ -503,3 +503,31 @@ def validate_sentry_mcp_config(config: SentryMCPConfig) -> SentryMCPValidationRe
             ok=False,
             detail=f"Sentry MCP validation failed: {describe_sentry_mcp_error(err, config)}",
         )
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_sentry_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "host": credentials.get("host", ""),
+                "organization_slug": credentials.get("organization_slug", ""),
+                "project_slug": credentials.get("project_slug", ""),
+                "skills": credentials.get("skills", []),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="sentry_mcp", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        config_dict = cfg.model_dump()
+        config_dict["connection_verified"] = True
+        return config_dict, "sentry_mcp"
+    return None, None

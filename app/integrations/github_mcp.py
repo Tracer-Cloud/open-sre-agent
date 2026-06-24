@@ -27,7 +27,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.integrations.mcp_streamable_http_compat import streamable_http_client
 from app.strict_config import StrictConfigModel
 
@@ -1334,3 +1334,24 @@ def build_github_issue_search_query(owner: str, repo: str, query: str, state: st
     if query:
         parts.append(query)
     return " ".join(parts).strip()
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_github_mcp_config(
+            {
+                "url": credentials.get("url", ""),
+                "mode": credentials.get("mode", "streamable-http"),
+                "command": credentials.get("command", ""),
+                "args": credentials.get("args", []),
+                "auth_token": credentials.get("auth_token", ""),
+                "toolsets": credentials.get("toolsets", []),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="github", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "github"

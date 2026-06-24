@@ -391,8 +391,8 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="smtp",
         verifier=_verify_smtp,
         direct_effective=True,
-        setup_order=10,
-        verify_order=9,
+        setup_order=36,
+        verify_order=47,
     ),
     IntegrationSpec(
         service="tracer",

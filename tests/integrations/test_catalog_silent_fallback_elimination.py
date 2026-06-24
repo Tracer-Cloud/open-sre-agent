@@ -10,11 +10,12 @@ or ``logger.debug(..., exc_info=True)`` with no Sentry trace:
      openclaw, mariadb, rabbitmq, rds, betterstack, alertmanager,
      victoria_logs, supabase).
 
-After the fix every site routes through ``_report_classify_failure`` or
-``_report_env_loader_failure``, which call ``report_exception`` with
-``surface=integration``, ``component=app.integrations._catalog_impl``,
-``event=classify_failed`` / ``event=env_loader_failed``, and the vendor
-tag — preserving the historic "skip the integration" caller contract.
+After the fix every site routes through ``report_classify_failure`` (in
+``app.integrations._validation_helpers``) or ``_report_env_loader_failure``
+(in ``app.integrations._catalog_impl``), which call ``report_exception`` with
+``surface=integration``, ``event=classify_failed`` / ``event=env_loader_failed``,
+and the vendor tag — preserving the historic "skip the integration" caller
+contract.
 """
 
 from __future__ import annotations
@@ -27,10 +28,10 @@ import pytest
 
 from app.integrations._catalog_impl import (
     _classify_service_instance,
-    _report_classify_failure,
     _report_env_loader_failure,
     load_env_integrations,
 )
+from app.integrations._validation_helpers import report_classify_failure
 
 
 @pytest.fixture(autouse=True)
@@ -45,14 +46,19 @@ def _quiet_sentry(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_report_classify_failure_forwards_tags() -> None:
     exc = ValueError("bad config")
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
-        _report_classify_failure(exc, integration="datadog", record_id="rec-1")
+    with patch("app.integrations._validation_helpers.report_exception") as mock_report:
+        report_classify_failure(
+            exc,
+            logger=__import__("logging").getLogger(__name__),
+            integration="datadog",
+            record_id="rec-1",
+        )
     mock_report.assert_called_once()
     kwargs = mock_report.call_args.kwargs
     assert kwargs["severity"] == "warning"
     assert kwargs["tags"] == {
         "surface": "integration",
-        "component": "app.integrations._catalog_impl",
+        "component": "app.integrations",
         "integration": "datadog",
         "event": "classify_failed",
     }
@@ -79,49 +85,48 @@ def test_report_env_loader_failure_forwards_tags() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Per-vendor: the symbol inside ``app.integrations._catalog_impl`` whose
-# constructor we force to raise, so we can prove the surrounding try/except
-# now routes the failure through ``report_exception`` instead of returning
-# ``(None, None)`` silently. Patching is more reliable than crafting bad
-# credentials, since validator strictness drifts per integration.
-_CLASSIFY_PATCH_TARGETS: list[tuple[str, str]] = [
-    ("grafana", "GrafanaIntegrationConfig"),
-    ("aws", "AWSIntegrationConfig"),
-    ("datadog", "DatadogIntegrationConfig"),
-    ("honeycomb", "HoneycombIntegrationConfig"),
-    ("coralogix", "CoralogixIntegrationConfig"),
-    ("github", "build_github_mcp_config"),
-    ("sentry", "build_sentry_config"),
-    ("gitlab", "build_gitlab_config"),
-    ("mongodb", "build_mongodb_config"),
-    ("postgresql", "build_postgresql_config"),
-    ("mongodb_atlas", "build_mongodb_atlas_config"),
-    ("mariadb", "build_mariadb_config"),
-    ("vercel", "VercelConfig"),
-    ("opsgenie", "OpsGenieIntegrationConfig"),
-    ("incident_io", "IncidentIoIntegrationConfig"),
-    ("jira", "JiraIntegrationConfig"),
-    ("discord", "DiscordBotConfig"),
-    ("telegram", "TelegramBotConfig"),
-    ("openclaw", "build_openclaw_config"),
-    ("mysql", "build_mysql_config"),
-    ("rabbitmq", "build_rabbitmq_config"),
-    ("rds", "build_rds_config"),
-    ("airflow", "build_airflow_config"),
-    ("betterstack", "build_betterstack_config"),
-    ("azure_sql", "build_azure_sql_config"),
-    ("alertmanager", "AlertmanagerIntegrationConfig"),
-    ("argocd", "ArgoCDIntegrationConfig"),
-    ("helm", "HelmIntegrationConfig"),
-    ("victoria_logs", "VictoriaLogsIntegrationConfig"),
-    ("splunk", "SplunkIntegrationConfig"),
-    ("supabase", "build_supabase_config"),
+# Per-vendor: the module path and symbol whose constructor we force to raise,
+# so we can prove the surrounding try/except now routes the failure through
+# ``report_exception`` instead of returning ``(None, None)`` silently.
+_CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
+    ("grafana", "app.integrations.grafana", "GrafanaIntegrationConfig"),
+    ("aws", "app.integrations.aws", "AWSIntegrationConfig"),
+    ("datadog", "app.integrations.datadog", "DatadogIntegrationConfig"),
+    ("honeycomb", "app.integrations.honeycomb", "HoneycombIntegrationConfig"),
+    ("coralogix", "app.integrations.coralogix", "CoralogixIntegrationConfig"),
+    ("github", "app.integrations.github_mcp", "build_github_mcp_config"),
+    ("sentry", "app.integrations.sentry", "build_sentry_config"),
+    ("gitlab", "app.integrations.gitlab", "build_gitlab_config"),
+    ("mongodb", "app.integrations.mongodb", "build_mongodb_config"),
+    ("postgresql", "app.integrations.postgresql", "build_postgresql_config"),
+    ("mongodb_atlas", "app.integrations.mongodb_atlas", "build_mongodb_atlas_config"),
+    ("mariadb", "app.integrations.mariadb", "build_mariadb_config"),
+    ("vercel", "app.integrations.vercel", "VercelConfig"),
+    ("opsgenie", "app.integrations.opsgenie", "OpsGenieIntegrationConfig"),
+    ("incident_io", "app.integrations.incident_io", "IncidentIoIntegrationConfig"),
+    ("jira", "app.integrations.jira", "JiraIntegrationConfig"),
+    ("discord", "app.integrations.discord", "DiscordBotConfig"),
+    ("telegram", "app.integrations.telegram", "TelegramBotConfig"),
+    ("openclaw", "app.integrations.openclaw", "build_openclaw_config"),
+    ("mysql", "app.integrations.mysql", "build_mysql_config"),
+    ("rabbitmq", "app.integrations.rabbitmq", "build_rabbitmq_config"),
+    ("rds", "app.integrations.rds", "build_rds_config"),
+    ("airflow", "app.integrations.airflow", "build_airflow_config"),
+    ("betterstack", "app.integrations.betterstack", "build_betterstack_config"),
+    ("azure_sql", "app.integrations.azure_sql", "build_azure_sql_config"),
+    ("alertmanager", "app.integrations.alertmanager", "AlertmanagerIntegrationConfig"),
+    ("argocd", "app.integrations.argocd", "ArgoCDIntegrationConfig"),
+    ("helm", "app.integrations.helm", "HelmIntegrationConfig"),
+    ("victoria_logs", "app.integrations.victoria_logs", "VictoriaLogsIntegrationConfig"),
+    ("splunk", "app.integrations.splunk", "SplunkIntegrationConfig"),
+    ("supabase", "app.integrations.supabase", "build_supabase_config"),
 ]
 
 
-@pytest.mark.parametrize(("integration", "patch_symbol"), _CLASSIFY_PATCH_TARGETS)
+@pytest.mark.parametrize(("integration", "patch_module", "patch_symbol"), _CLASSIFY_PATCH_TARGETS)
 def test_classify_failure_skips_integration_and_reports(
     integration: str,
+    patch_module: str,
     patch_symbol: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -132,9 +137,9 @@ def test_classify_failure_skips_integration_and_reports(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError(f"forced {integration} failure")
 
-    monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
+    monkeypatch.setattr(f"{patch_module}.{patch_symbol}", _boom)
 
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("app.integrations._validation_helpers.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
             {"endpoint": "https://x", "api_key": "k", "bot_token": "fake-token"},
@@ -167,7 +172,7 @@ def test_classify_empty_bot_token_silently_skips(
     if bot_token is not None:
         credentials["bot_token"] = bot_token
 
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("app.integrations._validation_helpers.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
             credentials,

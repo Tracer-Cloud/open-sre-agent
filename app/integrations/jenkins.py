@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -126,3 +126,23 @@ def validate_jenkins_config(config: JenkinsConfig) -> JenkinsValidationResult:
             method="validate_jenkins_config",
         )
         return JenkinsValidationResult(ok=False, detail=f"Jenkins validation failed: {err}")
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_jenkins_config(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "username": credentials.get("username", ""),
+                "api_token": credentials.get("api_token", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="jenkins", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "jenkins"
+    return None, None

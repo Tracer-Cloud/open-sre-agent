@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -559,3 +559,31 @@ def get_cluster_events(
             method="get_cluster_events",
         )
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mongodb_atlas_config(
+            {
+                "api_public_key": credentials.get("api_public_key", ""),
+                "api_private_key": credentials.get("api_private_key", ""),
+                "project_id": credentials.get("project_id", ""),
+                "base_url": credentials.get("base_url", "https://cloud.mongodb.com/api/atlas/v2"),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(
+            exc, logger=logger, integration="mongodb_atlas", record_id=record_id
+        )
+        return None, None
+    if cfg.api_public_key and cfg.api_private_key and cfg.project_id:
+        return {
+            "api_public_key": cfg.api_public_key,
+            "api_private_key": cfg.api_private_key,
+            "project_id": cfg.project_id,
+            "base_url": cfg.base_url,
+            "integration_id": record_id,
+        }, "mongodb_atlas"
+    return None, None

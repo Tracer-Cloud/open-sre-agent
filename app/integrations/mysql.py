@@ -20,7 +20,7 @@ from app.integrations._relational import (
     env_str,
     resolve_stored_or_env_config,
 )
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
@@ -634,3 +634,33 @@ def get_table_stats(
             method="get_table_stats",
         )
         return {"source": "mysql", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mysql_config(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 3306),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", "root"),
+                "password": credentials.get("password", ""),
+                "ssl_mode": credentials.get("ssl_mode", "preferred"),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="mysql", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.database:
+        return {
+            "host": cfg.host,
+            "port": cfg.port,
+            "database": cfg.database,
+            "username": cfg.username,
+            "password": cfg.password,
+            "ssl_mode": cfg.ssl_mode,
+            "integration_id": record_id,
+        }, "mysql"
+    return None, None

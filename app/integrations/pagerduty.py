@@ -1,0 +1,30 @@
+"""PagerDuty integration classifier."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from app.integrations._validation_helpers import report_classify_failure
+from app.integrations.config_models import PagerDutyIntegrationConfig
+
+logger = logging.getLogger(__name__)
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        raw: dict[str, Any] = {
+            "api_key": credentials.get("api_key", ""),
+            "integration_id": record_id,
+        }
+        if credentials.get("base_url"):
+            raw["base_url"] = credentials["base_url"]
+        cfg = PagerDutyIntegrationConfig.model_validate(raw)
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="pagerduty", record_id=record_id)
+        return None, None
+    if cfg.api_key:
+        return cfg.model_dump(), "pagerduty"
+    return None, None

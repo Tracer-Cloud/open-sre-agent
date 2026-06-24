@@ -216,15 +216,15 @@ def test_generate_report_can_skip_terminal_render_and_editor(
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.delivery.publish_findings.node.render_report", mock_render_report),
-        patch("app.delivery.publish_findings.node.open_in_editor", mock_open_in_editor),
+        patch("app.agent.stages.publish_findings.node.render_report", mock_render_report),
+        patch("app.agent.stages.publish_findings.node.open_in_editor", mock_open_in_editor),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from app.agent.stages.publish_findings.node import generate_report
 
         generate_report(
             _make_state(),  # type: ignore[arg-type]
-            render_to_terminal=False,
-            open_report_in_editor=False,
+            render_terminal=False,
+            open_editor=False,
         )
 
     mock_render_report.assert_not_called()

@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 from app.utils.coercion import safe_int
 
@@ -554,3 +554,35 @@ __all__ = [
     "rabbitmq_is_available",
     "validate_rabbitmq_config",
 ]
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_rabbitmq_config(
+            {
+                "host": credentials.get("host", ""),
+                "management_port": credentials.get("management_port", 15672),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "vhost": credentials.get("vhost", "/"),
+                "ssl": credentials.get("ssl", False),
+                "verify_ssl": credentials.get("verify_ssl", True),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="rabbitmq", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.username:
+        return {
+            "host": cfg.host,
+            "management_port": cfg.management_port,
+            "username": cfg.username,
+            "password": cfg.password,
+            "vhost": cfg.vhost,
+            "ssl": cfg.ssl,
+            "verify_ssl": cfg.verify_ssl,
+            "integration_id": record_id,
+        }, "rabbitmq"
+    return None, None

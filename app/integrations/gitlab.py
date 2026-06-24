@@ -11,7 +11,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -244,3 +244,19 @@ def post_gitlab_mr_note(
         json=json_body,
     )
     return payload if isinstance(payload, dict) else {}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_gitlab_config(
+            {
+                "base_url": credentials.get("base_url", ""),
+                "auth_token": credentials.get("auth_token", ""),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="gitlab", record_id=record_id)
+        return None, None
+    return cfg.model_dump(), "gitlab"

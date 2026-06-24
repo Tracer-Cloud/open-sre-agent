@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
+from app.integrations._validation_helpers import report_classify_failure
 from app.services.supabase.client import supabase_http_get
 from app.strict_config import StrictConfigModel
 
@@ -301,3 +302,21 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
         }
     except Exception as err:
         return {"source": "supabase", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_supabase_config(
+            {
+                "url": credentials.get("url", ""),
+                "service_key": credentials.get("service_key", ""),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="supabase", record_id=record_id)
+        return None, None
+    if cfg.is_configured:
+        return {"project_url": cfg.url, "integration_id": record_id}, "supabase"
+    return None, None

@@ -467,7 +467,8 @@ class ReplSession:
         self.last_synthetic_observation_path = None
         self.background_mode_enabled = False
         self.background_investigations.clear()
-        self.background_notification_preferences = BackgroundNotificationPreferences()
+        # Preserve notification channel prefs across /new like trust_mode.
+        # Only reset when the user explicitly changes them via /background notify.
         with self._background_notices_lock:
             self.background_notices.clear()
         # trust_mode and reasoning_effort are intentionally preserved across /new

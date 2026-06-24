@@ -13,6 +13,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+from app.integrations._validation_helpers import report_classify_failure
 from app.services.dagster import DagsterClient
 from app.strict_config import StrictConfigModel
 
@@ -300,3 +301,25 @@ def list_schedule_ticks(
             schedule_name=schedule_name,
             limit=limit,
         )
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_dagster_config(
+            {
+                "endpoint": credentials.get("endpoint", ""),
+                "api_token": credentials.get("api_token", ""),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="dagster", record_id=record_id)
+        return None, None
+    if cfg.endpoint:
+        return {
+            "endpoint": cfg.endpoint,
+            "api_token": cfg.api_token,
+            "integration_id": record_id,
+        }, "dagster"
+    return None, None

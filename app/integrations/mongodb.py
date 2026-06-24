@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -463,3 +463,23 @@ def get_collection_stats(
             method="get_collection_stats",
         )
         return {"source": "mongodb", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_mongodb_config(
+            {
+                "connection_string": credentials.get("connection_string", ""),
+                "database": credentials.get("database", ""),
+                "auth_source": credentials.get("auth_source", "admin"),
+                "tls": credentials.get("tls", True),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="mongodb", record_id=record_id)
+        return None, None
+    if cfg.connection_string:
+        return cfg.model_dump(), "mongodb"
+    return None, None

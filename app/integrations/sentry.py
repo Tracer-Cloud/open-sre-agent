@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -259,3 +259,24 @@ def list_sentry_issue_events(
         params=[("limit", str(limit))],
     )
     return payload if isinstance(payload, list) else []
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_sentry_config(
+            {
+                "base_url": credentials.get("base_url", "https://sentry.io"),
+                "organization_slug": credentials.get("organization_slug", ""),
+                "auth_token": credentials.get("auth_token", ""),
+                "project_slug": credentials.get("project_slug", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="sentry", record_id=record_id)
+        return None, None
+    if cfg.organization_slug and cfg.auth_token:
+        return cfg.model_dump(), "sentry"
+    return None, None

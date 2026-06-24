@@ -20,7 +20,7 @@ from app.integrations._relational import (
     env_str,
     resolve_stored_or_env_config,
 )
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
 
@@ -804,3 +804,25 @@ def get_table_stats(
             method="get_table_stats",
         )
         return {"source": "postgresql", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_postgresql_config(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 5432),
+                "database": credentials.get("database", ""),
+                "username": credentials.get("username", "postgres"),
+                "password": credentials.get("password", ""),
+                "ssl_mode": credentials.get("ssl_mode", "prefer"),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="postgresql", record_id=record_id)
+        return None, None
+    if cfg.host and cfg.database:
+        return cfg.model_dump(), "postgresql"
+    return None, None

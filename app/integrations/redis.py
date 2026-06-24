@@ -15,7 +15,8 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
+from app.integrations.config_models import RedisIntegrationConfig
 from app.strict_config import StrictConfigModel
 from app.utils.coercion import safe_int
 
@@ -683,3 +684,26 @@ def _redis_error(err: Exception, method: str) -> dict[str, Any]:
         method=method,
     )
     return {"source": "redis", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = RedisIntegrationConfig.model_validate(
+            {
+                "host": credentials.get("host", ""),
+                "port": credentials.get("port", 6379),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "db": credentials.get("db", 0),
+                "ssl": credentials.get("ssl", False),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="redis", record_id=record_id)
+        return None, None
+    if cfg.host:
+        return cfg.model_dump(), "redis"
+    return None, None

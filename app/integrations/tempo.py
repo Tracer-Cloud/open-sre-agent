@@ -148,3 +148,24 @@ def tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "password": str(tempo.get("password", "")).strip(),
         "org_id": str(tempo.get("org_id", "")).strip(),
     }
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_tempo_config(
+            {
+                "url": credentials.get("url", ""),
+                "api_key": credentials.get("api_key", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "org_id": credentials.get("org_id", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "tempo"
+    return None, None

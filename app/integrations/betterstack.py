@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from app.integrations._validation_helpers import report_validation_failure
+from app.integrations._validation_helpers import report_classify_failure, report_validation_failure
 from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
@@ -447,3 +447,29 @@ __all__ = [
     "query_logs",
     "validate_betterstack_config",
 ]
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_betterstack_config(
+            {
+                "query_endpoint": credentials.get("query_endpoint", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "sources": credentials.get("sources", []),
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="betterstack", record_id=record_id)
+        return None, None
+    if cfg.query_endpoint and cfg.username:
+        return {
+            "query_endpoint": cfg.query_endpoint,
+            "username": cfg.username,
+            "password": cfg.password,
+            "sources": list(cfg.sources),
+            "integration_id": record_id,
+        }, "betterstack"
+    return None, None

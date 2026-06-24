@@ -137,3 +137,21 @@ def signoz_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "url": str(sz.get("url", "")).strip(),
         "api_key": str(sz.get("api_key", "")).strip(),
     }
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        cfg = build_signoz_config(
+            {
+                "url": credentials.get("url", ""),
+                "api_key": credentials.get("api_key", ""),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
+        return None, None
+    if cfg.is_configured:
+        return cfg.model_dump(), "signoz"
+    return None, None

@@ -17,6 +17,7 @@ from pydantic import Field, field_validator
 
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
+from app.utils.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 
@@ -272,3 +273,23 @@ def search_code(
             method="search_code",
         )
         return {"source": "bitbucket", "available": False, "error": str(err)}
+
+
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    workspace = str(credentials.get("workspace", "")).strip()
+    if not workspace:
+        return None, None
+    base_url = (
+        str(credentials.get("base_url", "https://api.bitbucket.org/2.0")).strip()
+        or "https://api.bitbucket.org/2.0"
+    )
+    return {
+        "workspace": workspace,
+        "username": str(credentials.get("username", "")).strip(),
+        "app_password": str(credentials.get("app_password", "")).strip(),
+        "base_url": base_url,
+        "max_results": max(1, min(safe_int(credentials.get("max_results", 25), 25), 100)),
+        "integration_id": record_id,
+    }, "bitbucket"
