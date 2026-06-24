@@ -402,9 +402,18 @@ def test_every_migrated_module_imports_the_helper() -> None:
     seen_modules = {case.module_path for case in CASES}
     for module_path in seen_modules:
         source = (_REPO_ROOT / module_path).read_text(encoding="utf-8")
-        assert (
+        # Accept both a standalone import line and a combined import that also
+        # brings in other helpers (e.g. report_classify_failure).
+        imported = (
             "from app.integrations._validation_helpers import report_validation_failure" in source
-        ), f"{module_path} migration is incomplete: missing import of report_validation_failure"
+            or (
+                "from app.integrations._validation_helpers import" in source
+                and "report_validation_failure" in source
+            )
+        )
+        assert imported, (
+            f"{module_path} migration is incomplete: missing import of report_validation_failure"
+        )
 
 
 def test_broad_except_handlers_skips_nested_handlers() -> None:
