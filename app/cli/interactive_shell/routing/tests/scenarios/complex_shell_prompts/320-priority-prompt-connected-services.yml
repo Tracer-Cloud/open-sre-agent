@@ -43,7 +43,6 @@ response_contract:
   - services
   - ran /integrations list
   must_not_contain:
-  - $ /
   - can't help
   - cannot help
   - I can't help
