@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the LangGraph runtime config carrying the upstream-evidence provider.
+    """Return the runtime config carrying the upstream-evidence provider.
 
     The vendor-specific provider construction lives in
     :mod:`app.agent.correlation`; this function only wraps the result
     in the ``{"configurable": ...}`` shape the correlation node expects.
     Keeping the wrapping here (and not in the correlation package)
-    means correlation stays decoupled from the LangGraph runtime
+    means correlation stays decoupled from the pipeline's runtime
     contract.
     """
     provider = build_upstream_evidence_provider(state)
