@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from app.agent.correlation import build_upstream_evidence_provider
 from app.state import AgentState
 
 if TYPE_CHECKING:
@@ -15,22 +14,6 @@ if TYPE_CHECKING:
     from app.agent.stages.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
-
-
-def _build_correlation_config(state: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the runtime config carrying the upstream-evidence provider.
-
-    The vendor-specific provider construction lives in
-    :mod:`app.agent.correlation`; this function only wraps the result
-    in the ``{"configurable": ...}`` shape the correlation node expects.
-    Keeping the wrapping here (and not in the correlation package)
-    means correlation stays decoupled from the pipeline's runtime
-    contract.
-    """
-    provider = build_upstream_evidence_provider(state)
-    if provider is None:
-        return None
-    return {"configurable": {"upstream_evidence_provider": provider}}
 
 
 def run_connected_investigation(
@@ -48,7 +31,6 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from app.agent.correlation.node import node_correlate_upstream
     from app.agent.stages.diagnose import diagnose
     from app.agent.stages.extract_alert import extract_alert
     from app.agent.stages.investigate import ConnectedInvestigationAgent
@@ -70,13 +52,6 @@ def run_connected_investigation(
         _merge(state_any, plan_actions(cast(AgentState, state_any)))
         _merge(state_any, agent_class().run(cast(AgentState, state_any)))
         _merge(state_any, diagnose(cast(AgentState, state_any)))
-        _merge(
-            state_any,
-            node_correlate_upstream(
-                cast(AgentState, state_any),
-                _build_correlation_config(state_any),
-            ),
-        )
 
         _merge(state_any, deliver(state))
     except Exception as exc:

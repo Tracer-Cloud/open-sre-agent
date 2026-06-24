@@ -64,7 +64,10 @@ def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
         ),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
-        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
+        patch(
+            "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            return_value={},
+        ),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_SentinelAgent)
@@ -91,7 +94,10 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
         patch(
             "app.agent.stages.investigate.agent.ConnectedInvestigationAgent.run", return_value={}
         ) as mock_run,
-        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
+        patch(
+            "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            return_value={},
+        ),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state)  # no agent_class kwarg
@@ -117,7 +123,10 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
         ),
         patch("app.agent.stages.extract_alert.extract_alert", return_value={"is_noise": False}),
         patch("app.agent.stages.plan_actions.plan_actions", return_value={}),
-        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
+        patch(
+            "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            return_value={},
+        ),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_investigation(raw_alert={"alert": "test"}, agent_class=_SentinelAgent)
@@ -163,7 +172,10 @@ def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
             "app.agent.stages.diagnose.diagnose",
             side_effect=lambda _state: calls.append("diagnose") or {},
         ),
-        patch("app.agent.correlation.node.node_correlate_upstream", return_value={}),
+        patch(
+            "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            return_value={},
+        ),
         patch("app.agent.stages.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_OrderAgent)

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.agent.correlation.models import UpstreamCandidate
-from app.agent.correlation.upstream import MetricSeries
+from app.agent.stages.publish_findings.upstream_correlation.models import UpstreamCandidate
+from app.agent.stages.publish_findings.upstream_correlation.upstream import MetricSeries
 
 
 @dataclass(frozen=True)

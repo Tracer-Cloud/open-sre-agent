@@ -44,7 +44,10 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
         "app.agent.stages.diagnose.diagnose",
         lambda _state: {"root_cause": "unknown", "validity_score": 0.0},
     )
-    monkeypatch.setattr("app.agent.correlation.node.node_correlate_upstream", lambda *_a: {})
+    monkeypatch.setattr(
+        "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+        lambda *_a: {},
+    )
     monkeypatch.setattr(
         "app.agent.stages.publish_findings.node.generate_report",
         lambda _state, **_kwargs: {"report": "done"},

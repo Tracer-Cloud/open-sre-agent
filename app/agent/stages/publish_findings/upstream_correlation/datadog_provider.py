@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
-from app.agent.correlation.upstream import (
+from app.agent.stages.publish_findings.upstream_correlation.datadog_adapter import (
+    DatadogCorrelationAdapter,
+)
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )

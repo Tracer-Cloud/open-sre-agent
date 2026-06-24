@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.agent.correlation.upstream import MetricSeries, UpstreamEvidenceBundle
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
+    MetricSeries,
+    UpstreamEvidenceBundle,
+)
 from tests.synthetic.rds_postgres.correlation.candidate_scoring import (
     score_candidate_correlation,
 )

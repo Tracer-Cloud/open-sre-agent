@@ -22,6 +22,7 @@ from app.agent.stages.publish_findings.formatters.messages import (
 )
 from app.agent.stages.publish_findings.renderers.editor import open_in_editor
 from app.agent.stages.publish_findings.renderers.terminal import render_report
+from app.agent.stages.publish_findings.upstream_correlation import enrich_upstream_correlation
 from app.masking import MaskingContext
 from app.state import InvestigationState
 from app.utils.ingest_delivery import create_investigation_and_attach_url
@@ -44,6 +45,8 @@ def generate_report(
     open_editor: bool = True,
 ) -> dict[str, Any]:
     """Generate and publish the final RCA report."""
+    correlation_updates = enrich_upstream_correlation(state)
+    state = {**dict(state), **correlation_updates}
     ctx = build_report_context(state)
     short_summary = state.get("problem_md")
     messages = build_report_messages(ctx)
@@ -78,4 +81,8 @@ def generate_report(
         investigation_url=investigation_url,
     )
 
-    return {"slack_message": messages.slack_text, "report": messages.slack_text}
+    return {
+        **correlation_updates,
+        "slack_message": messages.slack_text,
+        "report": messages.slack_text,
+    }

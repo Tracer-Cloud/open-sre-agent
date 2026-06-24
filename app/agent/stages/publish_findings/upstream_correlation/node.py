@@ -3,9 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, cast
 
-from app.agent.correlation.providers import NoopUpstreamEvidenceProvider
-from app.agent.correlation.runtime import build_runtime_correlation
-from app.agent.correlation.upstream import UpstreamEvidenceBundle
+from app.agent.stages.publish_findings.upstream_correlation.providers import (
+    NoopUpstreamEvidenceProvider,
+)
+from app.agent.stages.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
+)
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
+    UpstreamEvidenceBundle,
+)
 from app.observability import get_progress_tracker as get_tracker
 from app.state import InvestigationState
 from app.utils.tracing import traceable
