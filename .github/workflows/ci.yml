@@ -104,7 +104,7 @@ jobs:
               tests/app
               tests/analytics
               tests/nodes
-              tests/pipeline
+              tests/core/orchestration
               tests/delivery
               tests/entrypoints
               tests/sandbox

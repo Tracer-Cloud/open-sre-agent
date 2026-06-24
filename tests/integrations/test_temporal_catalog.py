@@ -9,7 +9,7 @@ records fell through the generic passthrough, leaving ``base_url`` nested under
 
 from __future__ import annotations
 
-from app.agent.stages.investigate.tools import availability_view
+from app.core.orchestration.node.investigate.tools import availability_view
 from app.integrations.catalog import classify_integrations
 from app.integrations.temporal import classify
 from app.services.temporal import TemporalConfig
