@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     # Type-only import — avoids paying the agent module's heavy import cost
     # at pipeline load while still letting static type-checkers validate
     # ``agent_class`` injections.
-    from app.agent.stages.investigate import ConnectedInvestigationAgent
+    from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,12 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from app.agent.stages.diagnose import diagnose
-    from app.agent.stages.extract_alert import extract_alert
-    from app.agent.stages.investigate import ConnectedInvestigationAgent
-    from app.agent.stages.plan_actions import plan_actions
-    from app.agent.stages.publish_findings import deliver
-    from app.agent.stages.resolve_integrations import resolve_integrations
+    from app.core.orchestration.node.diagnose import diagnose
+    from app.core.orchestration.node.extract_alert import extract_alert
+    from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
+    from app.core.orchestration.node.plan_actions import plan_actions
+    from app.core.orchestration.node.publish_findings import deliver
+    from app.core.orchestration.node.resolve_integrations import resolve_integrations
     from app.utils.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
     # runner load while still letting static type-checkers validate
     # ``agent_class`` injections.
-    from app.agent.stages.investigate import ConnectedInvestigationAgent
+    from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -201,12 +201,12 @@ async def astream_investigation(
 
     def _run_pipeline() -> None:
         try:
-            from app.agent.stages.diagnose import diagnose
-            from app.agent.stages.extract_alert import extract_alert
-            from app.agent.stages.investigate import ConnectedInvestigationAgent
-            from app.agent.stages.plan_actions import plan_actions
-            from app.agent.stages.publish_findings.node import generate_report
-            from app.agent.stages.resolve_integrations import resolve_integrations
+            from app.core.orchestration.node.diagnose import diagnose
+            from app.core.orchestration.node.extract_alert import extract_alert
+            from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
+            from app.core.orchestration.node.plan_actions import plan_actions
+            from app.core.orchestration.node.publish_findings.node import generate_report
+            from app.core.orchestration.node.resolve_integrations import resolve_integrations
             from app.pipeline.state_updates import apply_state_updates
 
             state = initial
@@ -299,7 +299,7 @@ async def astream_investigation(
             )
 
             # --- upstream correlation ---
-            from app.agent.stages.publish_findings.upstream_correlation import (
+            from app.core.orchestration.node.publish_findings.upstream_correlation import (
                 enrich_upstream_correlation,
             )
 

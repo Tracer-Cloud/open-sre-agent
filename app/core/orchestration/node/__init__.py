@@ -1,0 +1,1 @@
+"""Investigation pipeline stage nodes."""

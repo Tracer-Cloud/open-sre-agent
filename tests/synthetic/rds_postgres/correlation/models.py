@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.stages.publish_findings.upstream_correlation.models import (
+from app.core.orchestration.node.publish_findings.upstream_correlation.models import (
     CorrelatedSignal,
     UpstreamCandidate,
 )

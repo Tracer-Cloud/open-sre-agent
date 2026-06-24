@@ -12,10 +12,10 @@ Source files:
 - app/pipeline/pipeline.py coordinates resolve → extract → investigate → deliver.
 - app/pipeline/runners.py exposes run_investigation / run_chat for CLI and tests.
 - app/agent/context.py resolves integrations from local configuration.
-- app/agent/stages/extract_alert/node.py parses the raw alert into structured state.
-- app/agent/stages/investigate/agent.py runs the connected investigation agent (tools + LLM).
-- app/agent/stages/diagnose/node.py parses the agent conclusion into structured RCA fields.
-- app/agent/stages/publish_findings/ publishes findings (terminal, Slack, GitLab writeback, etc.).
+- app/core/orchestration/node/extract_alert/node.py parses the raw alert into structured state.
+- app/core/orchestration/node/investigate/agent.py runs the connected investigation agent (tools + LLM).
+- app/core/orchestration/node/diagnose/node.py parses the agent conclusion into structured RCA fields.
+- app/core/orchestration/node/publish_findings/ publishes findings (terminal, Slack, GitLab writeback, etc.).
 - app/state/agent_state.py defines AgentState / InvestigationState.
 
 Entry:

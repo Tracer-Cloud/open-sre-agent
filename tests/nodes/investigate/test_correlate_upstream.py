@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from app.agent.stages.publish_findings.upstream_correlation.node import node_correlate_upstream
-from app.agent.stages.publish_findings.upstream_correlation.upstream import (
+from app.core.orchestration.node.publish_findings.upstream_correlation.node import (
+    node_correlate_upstream,
+)
+from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
     MetricSeries,
     UpstreamEvidenceBundle,
 )

@@ -87,8 +87,8 @@ Steps:
 ### Changing the investigation pipeline
 
 Investigations are coordinated in `app/pipeline/pipeline.py` and exposed via
-`app/pipeline/runners.py`. Agent logic lives under `app/agent/stages/`; publishing
-under `app/agent/stages/publish_findings/`.
+`app/pipeline/runners.py`. Investigation orchestration lives under `app/core/orchestration/node/`; publishing
+under `app/core/orchestration/node/publish_findings/`.
 
 Files to touch:
 

@@ -26,7 +26,7 @@ class PathRule:
 RULES: tuple[PathRule, ...] = (
     # Shared core (always escalate)
     PathRule("app/pipeline/", (), always_escalate=True),
-    PathRule("app/agent/stages/", (), always_escalate=True),
+    PathRule("app/core/orchestration/node/", (), always_escalate=True),
     PathRule("app/types/", (), always_escalate=True),
     PathRule("app/state/", (), always_escalate=True),
     PathRule("app/utils/", (), always_escalate=True),
@@ -47,7 +47,7 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/remote/", ("tests/remote/",)),
     PathRule("app/sandbox/", ("tests/sandbox/",)),
     PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
-    PathRule("app/agent/stages/publish_findings/", ("tests/delivery/",)),
+    PathRule("app/core/orchestration/node/publish_findings/", ("tests/delivery/",)),
     PathRule("app/auth/", ("tests/app/auth/",)),
     PathRule("app/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/webapp.py", ("tests/test_webapp.py",)),

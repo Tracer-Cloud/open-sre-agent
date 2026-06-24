@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.stages.publish_findings.upstream_correlation.scoring import (
+from app.core.orchestration.node.publish_findings.upstream_correlation.scoring import (
     PeriodicityScore,
     score_periodic_spikes,
 )

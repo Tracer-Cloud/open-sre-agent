@@ -53,7 +53,7 @@ def run_tool_calling_loop(
 ) -> ToolLoopResult:
     """Run a generic think → call-tools → observe loop and return its outcome.
 
-    Unlike :class:`app.agent.stages.investigate.ConnectedInvestigationAgent`, this is
+    Unlike :class:`app.core.orchestration.node.investigate.ConnectedInvestigationAgent`, this is
     a plain conversational loop: it does not seed tool calls, collect evidence,
     or parse a diagnosis. It exists so non-investigation surfaces (currently the
     interactive shell's tool-gathering pass) can call the *same* registered tools

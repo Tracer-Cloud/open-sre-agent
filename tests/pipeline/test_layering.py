@@ -2,7 +2,7 @@
 
 The pipeline orchestrator coordinates stages; it must not import from
 vendor service modules. Vendor wiring lives behind the
-``app.agent.stages.publish_findings.upstream_correlation`` factory (and
+``app.core.orchestration.node.publish_findings.upstream_correlation`` factory (and
 similar factories for future correlation sources).
 
 Without this guard the dependency drift is easy:
@@ -62,6 +62,6 @@ def test_pipeline_module_does_not_import_forbidden_layer(module_path: Path) -> N
     assert not leaks, (
         f"{module_path} imports vendor service module(s) {sorted(leaks)} — route through "
         "an abstraction (e.g. "
-        "``app.agent.stages.publish_findings.upstream_correlation."
+        "``app.core.orchestration.node.publish_findings.upstream_correlation."
         "build_upstream_evidence_provider``) instead."
     )

@@ -7,15 +7,6 @@ from typing import Any
 
 import click
 
-from app.agent.stages.publish_findings.upstream_correlation.runtime import (
-    build_runtime_correlation,
-)
-from app.agent.stages.publish_findings.upstream_correlation.upstream import (
-    LogSignal,
-    MetricSeries,
-    TopologyHint,
-    UpstreamEvidenceBundle,
-)
 from app.analytics.cli import (
     capture_test_run_completed,
     capture_test_run_failed,
@@ -28,6 +19,15 @@ from app.analytics.cli import (
 )
 from app.cli.interactive_shell.data_store.context import is_json_output, is_yes
 from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from app.core.orchestration.node.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
+)
+from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+    LogSignal,
+    MetricSeries,
+    TopologyHint,
+    UpstreamEvidenceBundle,
+)
 
 _TEST_CATEGORIES: tuple[str, ...] = (
     "all",

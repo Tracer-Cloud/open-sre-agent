@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.stages.investigate.tools import availability_view
+from app.core.orchestration.node.investigate.tools import availability_view
 from app.tools.registry import get_registered_tools
 
 

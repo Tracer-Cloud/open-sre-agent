@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent.stages.investigate import ConnectedInvestigationAgent
+from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
 from app.tools.registered_tool import RegisteredTool
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
@@ -218,7 +218,7 @@ def test_pure_baseline_agent_overrides_system_prompt() -> None:
     opensre's. Pin that the override returns a string distinct from the
     default ``build_system_prompt`` so a future hook removal can't
     silently turn this back into a flavor of BaselineLLMAloneAgent."""
-    from app.agent.stages.investigate.prompt import build_system_prompt
+    from app.core.orchestration.node.investigate.prompt import build_system_prompt
     from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
 
     agent = PureBaselineAgent()

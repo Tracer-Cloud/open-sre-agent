@@ -7,7 +7,7 @@ budget enforcement that keeps long loops under each model's prompt limit.
 
 Two consumers build on top of it:
 
-* :mod:`app.agent.stages.investigate` — the investigation agent layers evidence
+* :mod:`app.core.orchestration.node.investigate` — the investigation agent layers evidence
   collection, seed calls, and diagnosis parsing on top of these helpers and its
   own loop orchestration.
 * the interactive shell's tool-gathering pass — uses :func:`run_tool_calling_loop`

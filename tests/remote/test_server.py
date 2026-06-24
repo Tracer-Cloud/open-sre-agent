@@ -857,12 +857,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.stages.resolve_integrations.resolve_integrations",
+        "app.core.orchestration.node.resolve_integrations.resolve_integrations",
         lambda _state: {"resolved_integrations": {}},
     )
 
     monkeypatch.setattr(
-        "app.agent.stages.extract_alert.extract_alert",
+        "app.core.orchestration.node.extract_alert.extract_alert",
         lambda _state: {
             "raw_alert": {
                 "alert_name": "PayloadAlert",
@@ -880,12 +880,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.stages.investigate.agent.ConnectedInvestigationAgent.run",
+        "app.core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
         fake_investigation_run,
     )
 
     monkeypatch.setattr(
-        "app.agent.stages.publish_findings.upstream_correlation.node.node_correlate_upstream",
+        "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
         lambda _state, _config=None: {
             "correlation": {
                 "correlated_signals": [
@@ -907,7 +907,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.agent.stages.publish_findings.node.generate_report",
+        "app.core.orchestration.node.publish_findings.node.generate_report",
         lambda _state: {
             "root_cause": "RDS CPU spike",
             "report": "Correlation attached",
