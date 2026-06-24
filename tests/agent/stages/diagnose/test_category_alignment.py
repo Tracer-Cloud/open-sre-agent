@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent.category_alignment import (
+from app.agent.stages.diagnose.category_alignment import (
     apply_category_alignment_adjustments,
     detect_category_text_mismatch,
 )

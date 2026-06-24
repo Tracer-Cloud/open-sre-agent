@@ -8,7 +8,7 @@ from typing import Any, NamedTuple, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
-from app.agent.category_alignment import apply_category_alignment_adjustments
+from app.agent.stages.diagnose.category_alignment import apply_category_alignment_adjustments
 from app.agent.utils.alert_source import resolve_alert_source
 from app.state import InvestigationState
 from app.types.root_cause_categories import (
