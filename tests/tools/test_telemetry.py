@@ -1133,6 +1133,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_code",
         "search_github_issues",
         "search_sentry_issues",
+        # Temporal tools use try/finally only (to close the client); the client
+        # returns structured error dicts for handled HTTP failures, and any
+        # unexpected exception escapes to the #1476 global wrapper.
+        "temporal_namespace_info",
+        "temporal_task_queue",
+        "temporal_workflow_history",
+        "temporal_workflows",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",

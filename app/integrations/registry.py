@@ -51,6 +51,7 @@ from app.integrations._verification_adapters import (
     _verify_supabase,
     _verify_telegram,
     _verify_tempo,
+    _verify_temporal,
     _verify_tracer,
     _verify_twilio,
     _verify_vercel,
@@ -434,6 +435,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         direct_effective=True,
         setup_order=31,
         verify_order=42,
+    ),
+    IntegrationSpec(
+        service="temporal",
+        verifier=_verify_temporal,
+        direct_effective=True,
+        setup_order=37,
+        verify_order=48,
     ),
 )
 

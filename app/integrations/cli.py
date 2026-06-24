@@ -1241,6 +1241,30 @@ def _setup_dagster() -> None:
 _HANDLERS["dagster"] = _setup_dagster
 
 
+def _setup_temporal() -> None:
+    base_url = _p("Temporal HTTP API base URL (e.g. http://localhost:7243)")
+    if not base_url:
+        _die("base_url is required.")
+    namespace = _p("Temporal namespace", default="default")
+    api_key = _p(
+        "Temporal API key (leave empty for unauthenticated self-hosted clusters)",
+        secret=True,
+    )
+    upsert_integration(
+        "temporal",
+        {
+            "credentials": {
+                "base_url": base_url,
+                "namespace": namespace or "default",
+                "api_key": api_key,
+            }
+        },
+    )
+
+
+_HANDLERS["temporal"] = _setup_temporal
+
+
 def _setup_azure_sql() -> None:
     server = _p("Server (e.g. myserver.database.windows.net)")
     database = _p("Database name")

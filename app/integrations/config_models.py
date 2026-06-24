@@ -1164,3 +1164,25 @@ class PrefectIntegrationConfig(StrictConfigModel):
     _normalize_strs = field_validator("api_key", "account_id", "workspace_id", mode="before")(
         normalize_str()
     )
+
+
+class TemporalIntegrationConfig(StrictConfigModel):
+    base_url: str = ""
+    namespace: str = "default"
+    api_key: str = ""
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(normalize_url(""))
+    _normalize_strs = field_validator("api_key", "namespace", mode="before")(normalize_str())
+
+    @property
+    def headers(self) -> dict[str, str]:
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        return headers

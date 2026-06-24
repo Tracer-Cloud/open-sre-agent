@@ -106,11 +106,13 @@ from app.integrations.supabase import classify as _classify_supabase
 from app.integrations.telegram import classify as _classify_telegram
 from app.integrations.tempo import classify as _classify_tempo
 from app.integrations.tempo import tempo_config_from_env
+from app.integrations.temporal import classify as _classify_temporal
 from app.integrations.twilio import classify as _classify_twilio
 from app.integrations.vercel import classify as _classify_vercel
 from app.integrations.victoria_logs import classify as _classify_victoria_logs
 from app.integrations.whatsapp import classify as _classify_whatsapp
 from app.llm_credentials import resolve_env_credential
+from app.services.temporal import TemporalConfig
 from app.services.vercel import VercelConfig
 from app.utils.coercion import safe_int
 from app.utils.errors import report_exception
@@ -274,6 +276,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "supabase": _classify_supabase,
     "signoz": _classify_signoz,
     "tempo": _classify_tempo,
+    "temporal": _classify_temporal,
     "smtp": _classify_smtp,
 }
 
@@ -1410,6 +1413,27 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load Tempo config from env", exc_info=True)
+
+    temporal_url = os.getenv("TEMPORAL_API_URL", "").strip()
+    temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default").strip()
+    if temporal_url and temporal_namespace:
+        try:
+            temporal_config = TemporalConfig.model_validate(
+                {
+                    "base_url": temporal_url,
+                    "api_key": os.getenv("TEMPORAL_API_KEY", "").strip(),
+                    "namespace": temporal_namespace,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="temporal")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "temporal",
+                    temporal_config.model_dump(),
+                )
+            )
 
     return integrations
 

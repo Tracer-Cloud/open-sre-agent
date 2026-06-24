@@ -41,6 +41,7 @@ ALERT_SOURCE_TO_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
     "signoz": ("signoz",),
     "jenkins": ("jenkins",),
     "tempo": ("tempo",),
+    "temporal": ("temporal",),
 }
 
 # Auto-called before the LLM loop starts. Keep this narrower than
@@ -75,6 +76,7 @@ ALERT_SOURCE_TO_SEED_TOOL_SOURCES: dict[str, tuple[str, ...]] = {
     "signoz": ("signoz",),
     "jenkins": ("jenkins",),
     "tempo": ("tempo",),
+    "temporal": ("temporal",),
 }
 
 # Generic fallback sources: useful, but never primary when incident-specific
@@ -116,6 +118,7 @@ SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
     "signoz": ("signoz",),
     "jenkins": ("jenkins",),
     "tempo": ("tempo",),
+    "temporal": ("temporal", "temporal workflow", "task queue"),
 }
 
 

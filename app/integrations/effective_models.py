@@ -108,3 +108,4 @@ class EffectiveIntegrations(StrictConfigModel):
     signoz: EffectiveIntegrationEntry | None = None
     jenkins: EffectiveIntegrationEntry | None = None
     tempo: EffectiveIntegrationEntry | None = None
+    temporal: EffectiveIntegrationEntry | None = None
