@@ -1,10 +1,36 @@
-"""Ensure AgentState (TypedDict) and AgentStateModel (Pydantic) stay in sync.
+"""Ensure AgentState slices and AgentStateModel stay in sync.
 
 If this test fails, a field was added/removed in one definition but not the other.
-Fix the drift by updating both classes in app/state/agent_state.py.
+Fix drift by updating ``AgentStateModel`` and the matching slice in
+``app/state/slices.py``.
 """
 
 from app.state.agent_state import AgentState, AgentStateModel
+from app.state.slices import (
+    AlertInputSlice,
+    ChatStateSlice,
+    DeliveryContextSlice,
+    DeliveryOutputSlice,
+    DiagnosisSlice,
+    EvalHarnessSlice,
+    InvestigationPlanSlice,
+    InvestigationRuntimeSlice,
+    MaskingSlice,
+    SessionContext,
+)
+
+_SLICE_TYPES: tuple[type, ...] = (
+    SessionContext,
+    ChatStateSlice,
+    AlertInputSlice,
+    InvestigationPlanSlice,
+    InvestigationRuntimeSlice,
+    DiagnosisSlice,
+    MaskingSlice,
+    DeliveryContextSlice,
+    DeliveryOutputSlice,
+    EvalHarnessSlice,
+)
 
 
 def _typed_dict_keys(td: type) -> set[str]:
@@ -24,6 +50,29 @@ def _pydantic_keys(model: type) -> set[str]:
     return keys
 
 
+def _slice_keys() -> set[str]:
+    keys: set[str] = set()
+    for slice_type in _SLICE_TYPES:
+        keys.update(_typed_dict_keys(slice_type))
+    return keys
+
+
+def test_slices_cover_agent_state_keys() -> None:
+    """Every AgentState key must be declared on exactly one slice TypedDict."""
+    agent_keys = _typed_dict_keys(AgentState)
+    slice_keys = _slice_keys()
+
+    only_in_agent = agent_keys - slice_keys
+    only_in_slices = slice_keys - agent_keys
+
+    assert not only_in_agent, (
+        f"Fields on AgentState but missing from slice TypedDicts: {sorted(only_in_agent)}"
+    )
+    assert not only_in_slices, (
+        f"Fields on slice TypedDicts but missing from AgentState: {sorted(only_in_slices)}"
+    )
+
+
 def test_agent_state_and_model_share_same_keys() -> None:
     """AgentState and AgentStateModel must declare exactly the same set of field keys."""
     typed_dict_keys = _typed_dict_keys(AgentState)
@@ -40,3 +89,17 @@ def test_agent_state_and_model_share_same_keys() -> None:
         f"Fields present in AgentStateModel (Pydantic) but missing from AgentState: "
         f"{sorted(only_in_pydantic)}"
     )
+
+
+def test_slice_types_do_not_duplicate_keys() -> None:
+    """Each field belongs to one slice — no duplicate declarations across slices."""
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    for slice_type in _SLICE_TYPES:
+        for key in _typed_dict_keys(slice_type):
+            if key in seen:
+                duplicates.append(f"{key!r} on {slice_type.__name__} and {seen[key]}")
+            else:
+                seen[key] = slice_type.__name__
+
+    assert not duplicates, "Duplicate slice keys: " + "; ".join(duplicates)

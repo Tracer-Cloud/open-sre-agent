@@ -9,53 +9,9 @@ from app.integrations.opensre.hf_remote import (
     extract_openrca_scoring_points,
     strip_scoring_points_from_alert,
 )
-from app.state.agent_state import AgentState, AgentStateModel
+from app.state.agent_state import AgentState, AgentStateModel, model_default_payload
 from app.state.types import ChatMessage
 from app.utils.alert_normalization import normalize_alert_payload
-
-STATE_DEFAULTS: dict[str, Any] = {
-    "mode": "chat",
-    "route": "",
-    "is_noise": False,
-    "org_id": "",
-    "user_id": "",
-    "user_email": "",
-    "user_name": "",
-    "organization_slug": "",
-    "messages": [],
-    "planned_actions": [],
-    "plan_rationale": "",
-    "resolved_integrations": {},
-    "available_sources": {},
-    "available_action_names": [],
-    "context": {},
-    "evidence": {},
-    "correlation": {},
-    "root_cause": "",
-    "root_cause_category": "",
-    "validated_claims": [],
-    "non_validated_claims": [],
-    "validity_score": 0.0,
-    "investigation_recommendations": [],
-    "remediation_steps": [],
-    "investigation_loop_count": 0,
-    "hypotheses": [],
-    "executed_hypotheses": [],
-    "evidence_entries": [],
-    "masking_map": {},
-    "slack_context": {},
-    "discord_context": {},
-    "telegram_context": {},
-    "whatsapp_context": {},
-    "twilio_sms_context": {},
-    "openclaw_context": {},
-    "thread_id": "",
-    "run_id": "",
-    "_auth_token": "",
-    "slack_message": "",
-    "problem_md": "",
-    "report": "",
-}
 
 
 def make_initial_state(
@@ -92,6 +48,7 @@ def make_initial_state(
 
     state = AgentStateModel.model_validate(
         {
+            **model_default_payload("mode", "messages"),
             "mode": "investigation",
             "alert_name": alert_name,
             "pipeline_name": pipeline_name,
@@ -100,7 +57,6 @@ def make_initial_state(
             "investigation_started_at": time.monotonic(),
             "opensre_evaluate": opensre_evaluate,
             "opensre_eval_rubric": rubric,
-            **{k: v for k, v in STATE_DEFAULTS.items() if k not in ("mode", "messages")},
         }
     )
     return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
@@ -183,12 +139,12 @@ def make_agent_incident_state(
     }
     state = AgentStateModel.model_validate(
         {
+            **model_default_payload("mode", "messages", "context"),
             "mode": "agent_incident",
             "raw_alert": {},
             "context": {"agent_incident": payload},
             "investigation_started_at": time.monotonic(),
             "opensre_evaluate": opensre_evaluate,
-            **{k: v for k, v in STATE_DEFAULTS.items() if k not in ("mode", "messages", "context")},
         }
     )
     return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))

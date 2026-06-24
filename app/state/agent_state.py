@@ -1,9 +1,12 @@
 """AgentState TypedDict and its Pydantic validator model.
 
-WARNING — drift risk: AgentState (TypedDict) and AgentStateModel (Pydantic) must
-stay in sync.  Whenever you add or remove a field in one, do the same in the other.
-The test in tests/app/test_agent_state_sync.py asserts that both definitions share
-the same set of keys and will fail if they diverge.
+``AgentStateModel`` is the single source of truth for field defaults and
+validation. ``AgentState`` composes slice TypedDicts from :mod:`app.state.slices`
+for documentation and stage-level typing; the runtime dict remains flat.
+
+Whenever you add or remove a field, update ``AgentStateModel`` and the
+appropriate slice in ``slices.py``. ``tests/app/test_agent_state_sync.py``
+asserts slice keys and Pydantic fields stay aligned with ``AgentState``.
 """
 
 from __future__ import annotations
@@ -11,138 +14,43 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import ConfigDict, Field
-from typing_extensions import TypedDict
 
+from app.state.slices import (
+    AlertInputSlice,
+    ChatStateSlice,
+    DeliveryContextSlice,
+    DeliveryOutputSlice,
+    DiagnosisSlice,
+    EvalHarnessSlice,
+    InvestigationPlanSlice,
+    InvestigationRuntimeSlice,
+    MaskingSlice,
+    SessionContext,
+)
 from app.state.types import AgentMode, ChatMessageModel
 from app.strict_config import StrictConfigModel
 from app.types.retrieval import RetrievalControlsMap
 
 
-class AgentState(TypedDict, total=False):
-    """Unified state for chat and investigation modes.
+class AgentState(
+    SessionContext,
+    ChatStateSlice,
+    AlertInputSlice,
+    InvestigationPlanSlice,
+    InvestigationRuntimeSlice,
+    DiagnosisSlice,
+    MaskingSlice,
+    DeliveryContextSlice,
+    DeliveryOutputSlice,
+    EvalHarnessSlice,
+    total=False,
+):
+    """Unified flat state for chat and investigation modes.
 
-    Chat mode: Uses messages for conversation with tools
-    Investigation mode: Uses alert info for automated RCA
+    Chat mode primarily uses ``ChatStateSlice`` + ``SessionContext``.
+    Investigation mode uses alert, plan, runtime, diagnosis, and delivery slices.
+    See :mod:`app.state.slices` for field groupings and stage ownership.
     """
-
-    # Mode selection
-    mode: AgentMode
-    route: str
-
-    # Auth context (from JWT)
-    org_id: str
-    user_id: str
-    user_email: str
-    user_name: str
-    organization_slug: str
-
-    # Chat mode — conversation history
-    messages: list
-
-    # Alert classification
-    is_noise: bool
-
-    # Investigation mode — alert input
-    alert_name: str
-    pipeline_name: str
-    severity: str
-    alert_source: str
-    raw_alert: str | dict[str, Any]
-    alert_json: dict[str, Any]
-
-    # Investigation planning
-    planned_actions: list[str]
-    plan_rationale: str
-    retrieval_controls: RetrievalControlsMap | None
-    available_sources: dict[str, dict]
-    available_action_names: list[str]
-
-    # Tool budget enforcement - caps the number of tools per investigation step
-    tool_budget: int  # Maximum tools to select per step (default: 10)
-
-    # Audit trail for each planning step - records rerouting and budget decisions
-    plan_audit: dict[str, Any]  # Audit data with loop, budget, reroute_reason, etc
-
-    # Resolved integrations (from resolve_integrations node)
-    resolved_integrations: dict[str, Any]
-
-    # Shared context/evidence
-    context: dict[str, Any]
-    evidence: dict[str, Any]
-    correlation: dict[str, Any]
-
-    # Investigation analysis
-    root_cause: str
-    root_cause_category: str
-    validated_claims: list[dict[str, Any]]
-    non_validated_claims: list[dict[str, Any]]
-    validity_score: float
-    investigation_recommendations: list[str]
-    remediation_steps: list[str]
-    investigation_loop_count: int
-    hypotheses: list[str]
-    executed_hypotheses: list[dict[str, Any]]
-    evidence_entries: list[dict[str, Any]]
-    hypothesis_results: list[dict[str, Any]]
-    action_to_run: str
-    investigation_started_at: float
-
-    # Resolved [since, until) time window for the current incident.
-    # Populated by extract_alert from the alert's own timestamps via
-    # ``app.incident_window.resolve_incident_window``. Time-aware tools will
-    # read from this in a follow-up PR; in this PR the field is wired through
-    # state but not yet consumed. ``None`` means extract_alert has not run yet.
-    # Shape: {"_schema_version": int, "since": iso8601, "until": iso8601,
-    #         "source": str, "confidence": float}.
-    incident_window: dict[str, Any] | None
-
-    # Append-only audit trail of windows replaced by ``adapt_window``. Each
-    # entry is the OLD window dict at the moment of replacement, plus
-    # ``replaced_at`` (ISO-8601) and ``replaced_reason`` (e.g.
-    # "expanded:empty_deploy_timeline"). Bounded by
-    # ``app.constants.investigation.MAX_EXPANSIONS`` in the adapt_window rule
-    # layer; the field itself imposes no cap.
-    # ``None`` until the first expansion. Diagnose narratives may cite
-    # this to explain "we tried 120m, found no deploys, widened to 240m".
-    incident_window_history: list[dict[str, Any]] | None
-
-    # Placeholder→original map for reversible infrastructure identifier masking
-    masking_map: dict[str, str]
-
-    # Slack context (when triggered from Slack message)
-    slack_context: dict[str, Any]
-
-    # Discord context (when triggered from Discord interaction)
-    discord_context: dict[str, Any]
-
-    # Telegram context (when triggered from Telegram message)
-    telegram_context: dict[str, Any]
-
-    # WhatsApp context (when triggered from WhatsApp message or override)
-    whatsapp_context: dict[str, Any]
-
-    # Twilio SMS context (recipient override, e.g. {"to": "+1..."})
-    twilio_sms_context: dict[str, Any]
-
-    # OpenClaw context (for write-back targeting / transport overrides)
-    openclaw_context: dict[str, Any]
-
-    # Runtime context (injected from config by inject_auth_node)
-    thread_id: str
-    run_id: str
-    _auth_token: str
-
-    # Outputs
-    slack_message: str
-    problem_md: str
-    summary: str
-    problem_report: dict[str, Any]
-    report: str
-
-    # OpenRCA offline rubric eval (``opensre investigate --evaluate``)
-    opensre_evaluate: bool
-    opensre_eval_rubric: str
-    opensre_llm_eval: dict[str, Any]
 
 
 InvestigationState = AgentState
@@ -217,3 +125,19 @@ class AgentStateModel(StrictConfigModel):
     opensre_evaluate: bool = False
     opensre_eval_rubric: str = ""
     opensre_llm_eval: dict[str, Any] = Field(default_factory=dict)
+
+
+def model_default_payload(*exclude: str) -> dict[str, Any]:
+    """Return default field values from ``AgentStateModel``, omitting ``exclude`` keys."""
+    skip = frozenset(exclude)
+    model = AgentStateModel()
+    dumped = model.model_dump(mode="python", by_alias=True, exclude_none=True)
+    return {key: value for key, value in dumped.items() if key not in skip}
+
+
+__all__ = [
+    "AgentState",
+    "AgentStateModel",
+    "InvestigationState",
+    "model_default_payload",
+]
