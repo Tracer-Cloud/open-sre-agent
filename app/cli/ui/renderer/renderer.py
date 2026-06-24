@@ -28,7 +28,7 @@ from app.cli.ui.renderer.constants import (
     _render_source,
 )
 from app.cli.ui.renderer.diagnose import _DiagnoseStreamRenderer
-from app.cli.ui.renderer.formatting import _validity_score_percent
+from app.cli.ui.renderer.formatting import _validity_score_percent, investigation_llm_progress_hint
 from app.cli.ui.renderer.terminal import _print_connection_banner, _print_info
 from app.cli.ui.renderer.tools import (
     _tool_event_key,
@@ -75,6 +75,7 @@ class StreamRenderer:
         self._printed_tool_detail_ids: set[int] = set()
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
+        self._prior_lap_tools: list[str] = []
         self._toggle_watcher: CtrlOToggleWatcher | None = None
         self._toggle_unregister: Callable[[], None] | None = None
 
@@ -282,8 +283,10 @@ class StreamRenderer:
                 self._mark_node_seen(canonical)
                 self._tracker.start(canonical)
                 if canonical == "investigation_agent":
+                    self._prior_lap_tools = []
                     # Prime the Live spinner subtext; hint line printed on first llm_start.
-                    self._tracker.update_subtext(canonical, "analyzing alert ·", duration=300.0)
+                    primed = investigation_llm_progress_hint(0)
+                    self._tracker.update_subtext(canonical, f"{primed} ·", duration=300.0)
             return
 
         if kind in _NODE_END_KINDS and self._is_graph_node_event(event):
@@ -340,13 +343,22 @@ class StreamRenderer:
             print_tool_call_line = getattr(self._tracker, "print_tool_call_line", None)
             if callable(print_tool_call_line):
                 print_tool_call_line(name, elapsed_ms)
+        if self._active_node == "investigation_agent":
+            self._prior_lap_tools.append(display)
 
     def _handle_llm_start(self, event: StreamEvent) -> None:
         if self._active_node != "investigation_agent":
             return
         iteration = event.data.get("iteration", 0)
+        if not isinstance(iteration, int):
+            iteration = 0
+        base = investigation_llm_progress_hint(
+            iteration,
+            prior_tools=self._prior_lap_tools,
+        )
+        self._prior_lap_tools = []
         dots = "·" * ((iteration % 3) + 1)
-        hint = f"analyzing alert {dots}" if iteration == 0 else f"analyzing results {dots}"
+        hint = f"{base} {dots}"
         self._tracker.update_subtext(self._active_node, hint, duration=300.0)
         self._tracker.print_status_hint(hint)
 
