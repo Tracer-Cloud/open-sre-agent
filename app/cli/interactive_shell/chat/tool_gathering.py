@@ -106,10 +106,11 @@ def _format_gathering_progress_line(
     call_display = f"{source} · {label}" if label else source
     if repeat_index > 1:
         call_display = f"{call_display} ({repeat_index})"
+    safe_display = escape(call_display)
     hint = _tool_input_hint(tool_input)
     if hint:
-        return f"· gathering via {call_display} — {escape(hint)}…"
-    return f"· gathering via {call_display}…"
+        return f"· gathering via {safe_display} — {escape(hint)}…"
+    return f"· gathering via {safe_display}…"
 
 
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:

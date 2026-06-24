@@ -152,6 +152,31 @@ def test_format_gathering_progress_line_shows_repeat_index_and_hint() -> None:
     assert line.startswith("· gathering via Grafana · Mimir (2) — pipeline_runs_total…")
 
 
+def test_format_gathering_progress_line_escapes_display_and_hint_markup(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.chat.tool_gathering.tool_source_label",
+        lambda _name: "Grafana [prod]",
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.chat.tool_gathering.tool_short_label",
+        lambda _name, _source: "Mimir",
+    )
+
+    line = _format_gathering_progress_line(
+        "query_grafana_metrics",
+        {"metric_name": "[critical] rate[5m]"},
+        repeat_index=1,
+    )
+    console = _console()
+    console.print(f"[dim]{line}[/]")
+
+    output = console.file.getvalue()
+    assert "Grafana [prod]" in output
+    assert "[critical] rate[5m]" in output
+
+
 def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     session = ReplSession()
     session.resolved_integrations_cache = {}
