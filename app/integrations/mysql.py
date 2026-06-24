@@ -636,8 +636,9 @@ def get_table_stats(
         return {"source": "mysql", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_mysql_config(
             {

@@ -1336,8 +1336,9 @@ def build_github_issue_search_query(owner: str, repo: str, query: str, state: st
     return " ".join(parts).strip()
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_github_mcp_config(
             {

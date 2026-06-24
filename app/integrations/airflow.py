@@ -319,8 +319,9 @@ def get_recent_airflow_failures(
     return evidence
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_airflow_config(
             {

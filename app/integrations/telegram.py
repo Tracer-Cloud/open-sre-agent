@@ -11,7 +11,9 @@ from app.integrations.config_models import TelegramBotConfig
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     if not (credentials.get("bot_token") or "").strip():
         return None, None
     try:

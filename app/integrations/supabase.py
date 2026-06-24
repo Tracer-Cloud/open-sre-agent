@@ -304,8 +304,9 @@ def get_storage_buckets(config: SupabaseConfig) -> dict[str, Any]:
         return {"source": "supabase", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_supabase_config(
             {

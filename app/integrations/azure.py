@@ -10,7 +10,9 @@ from app.utils.coercion import safe_int
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     workspace_id = str(credentials.get("workspace_id", "")).strip()
     access_token = str(credentials.get("access_token", "")).strip()
     if not (workspace_id and access_token):

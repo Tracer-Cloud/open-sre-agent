@@ -465,8 +465,9 @@ def get_collection_stats(
         return {"source": "mongodb", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_mongodb_config(
             {

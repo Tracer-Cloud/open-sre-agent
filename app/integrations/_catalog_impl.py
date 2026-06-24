@@ -223,7 +223,6 @@ def classify_integrations(integrations: list[dict[str, Any]]) -> dict[str, Any]:
 _ClassifyFn = Callable[[dict[str, Any], str], tuple[dict[str, Any] | None, str | None]]
 
 
-
 _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "grafana": _classify_grafana,
     "grafana_local": _classify_grafana,

@@ -128,8 +128,9 @@ def validate_jenkins_config(config: JenkinsConfig) -> JenkinsValidationResult:
         return JenkinsValidationResult(ok=False, detail=f"Jenkins validation failed: {err}")
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_jenkins_config(
             {

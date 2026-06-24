@@ -10,7 +10,9 @@ from app.utils.coercion import safe_int
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     account_identifier = str(
         credentials.get("account_identifier", credentials.get("account", ""))
     ).strip()

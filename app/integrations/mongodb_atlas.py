@@ -561,8 +561,9 @@ def get_cluster_events(
         return {"source": "mongodb_atlas", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_mongodb_atlas_config(
             {
@@ -573,7 +574,9 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any
             }
         )
     except Exception as exc:
-        report_classify_failure(exc, logger=logger, integration="mongodb_atlas", record_id=record_id)
+        report_classify_failure(
+            exc, logger=logger, integration="mongodb_atlas", record_id=record_id
+        )
         return None, None
     if cfg.api_public_key and cfg.api_private_key and cfg.project_id:
         return {

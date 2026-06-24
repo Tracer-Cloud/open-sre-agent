@@ -11,7 +11,9 @@ from app.integrations.config_models import PagerDutyIntegrationConfig
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         raw: dict[str, Any] = {
             "api_key": credentials.get("api_key", ""),

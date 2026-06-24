@@ -11,7 +11,9 @@ from app.integrations.config_models import VictoriaLogsIntegrationConfig
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = VictoriaLogsIntegrationConfig.model_validate(
             {
@@ -21,7 +23,9 @@ def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any
             }
         )
     except Exception as exc:
-        report_classify_failure(exc, logger=logger, integration="victoria_logs", record_id=record_id)
+        report_classify_failure(
+            exc, logger=logger, integration="victoria_logs", record_id=record_id
+        )
         return None, None
     if cfg.base_url:
         return cfg.model_dump(), "victoria_logs"

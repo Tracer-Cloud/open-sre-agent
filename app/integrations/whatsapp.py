@@ -10,7 +10,9 @@ from app.integrations.config_models import WhatsAppConfig
 logger = logging.getLogger(__name__)
 
 
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:  # noqa: ARG001
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:  # noqa: ARG001
     try:
         cfg = WhatsAppConfig.model_validate(
             {

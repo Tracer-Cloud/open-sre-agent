@@ -275,8 +275,9 @@ def search_code(
         return {"source": "bitbucket", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     workspace = str(credentials.get("workspace", "")).strip()
     if not workspace:
         return None, None

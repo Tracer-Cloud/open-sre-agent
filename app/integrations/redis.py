@@ -686,8 +686,9 @@ def _redis_error(err: Exception, method: str) -> dict[str, Any]:
     return {"source": "redis", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = RedisIntegrationConfig.model_validate(
             {

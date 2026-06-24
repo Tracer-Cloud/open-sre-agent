@@ -246,8 +246,9 @@ def post_gitlab_mr_note(
     return payload if isinstance(payload, dict) else {}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_gitlab_config(
             {

@@ -459,8 +459,9 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
         return {"source": "mariadb", "available": False, "error": str(err)}
 
 
-
-def classify(credentials: dict[str, Any], record_id: str) -> tuple[dict[str, Any] | None, str | None]:
+def classify(
+    credentials: dict[str, Any], record_id: str
+) -> tuple[dict[str, Any] | None, str | None]:
     try:
         cfg = build_mariadb_config(
             {
