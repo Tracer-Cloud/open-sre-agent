@@ -58,33 +58,9 @@ def debug_print(message: str) -> None:
         print(f"DEBUG: {message}")
 
 
-def install_cli_observability_adapters() -> None:
-    """Wire CLI implementations into the observability ports.
-
-    Call once from the CLI boundary (typically the REPL/CLI start-up).
-    Idempotent — re-registers the same callables so calling it twice
-    is a no-op.
-
-    Wires:
-    - debug_print: stderr default → Rich-aware CLI version
-    - render_investigation_header: no-op default → Rich panel
-    - progress tracker: Noop default → Rich-backed CLI singleton
-    """
-    from app.cli.interactive_shell.ui.output.renderers import (
-        render_completed_investigation_footer,
-        render_investigation_header,
-    )
-    from app.cli.interactive_shell.ui.output.tracker import get_tracker
-    from app.observability.debug import set_debug_printer
-    from app.observability.display import (
-        set_investigation_footer_renderer,
-        set_investigation_header_renderer,
-    )
-    from app.observability.progress import set_progress_tracker_factory
-
-    set_debug_printer(debug_print)
-    set_investigation_header_renderer(render_investigation_header)
-    set_investigation_footer_renderer(render_completed_investigation_footer)
-    # Lazy: first core ``get_progress_tracker()`` call constructs the CLI
-    # tracker after REPL boot so ``_repl_progress_active()`` is accurate.
-    set_progress_tracker_factory(get_tracker)
+# ``install_cli_observability_adapters`` lives in
+# :mod:`app.cli.interactive_shell.ui.output.boundary`, not here. Putting
+# it in this module would re-introduce a static import cycle:
+# ``renderers`` and ``tracker`` already import from this module for
+# utility plumbing, and the install function imports them back. Moving
+# the wiring into a leaf module keeps the static graph acyclic.

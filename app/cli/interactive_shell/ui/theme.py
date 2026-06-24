@@ -32,7 +32,10 @@ from rich.theme import Theme
 # modules (e.g. the publish_findings terminal renderer) can read the
 # same hex values without depending on the CLI layer. CLI-only tokens
 # (TEXT, SECONDARY, ERROR, BG) stay here.
-from app.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING  # noqa: F401 — re-exported
+from app.ui_theme import BRAND as BRAND
+from app.ui_theme import DIM as DIM
+from app.ui_theme import HIGHLIGHT as HIGHLIGHT
+from app.ui_theme import WARNING as WARNING
 
 TEXT = "#E0E0E0"
 SECONDARY = "#888888"

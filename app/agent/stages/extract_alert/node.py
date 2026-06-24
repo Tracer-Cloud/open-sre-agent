@@ -15,7 +15,9 @@ from app.observability import (
     debug_print,
     render_investigation_header,
 )
-from app.observability import get_progress_tracker as get_tracker
+from app.observability import (
+    get_progress_tracker as get_tracker,
+)
 from app.services import get_llm_for_reasoning
 from app.state import InvestigationState
 

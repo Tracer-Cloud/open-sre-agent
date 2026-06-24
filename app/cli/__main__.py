@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     # (ProgressTracker, debug_print) so any core code under app/agent,
     # app/pipeline, app/utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
-    from app.cli.interactive_shell.ui.output.environment import (
+    from app.cli.interactive_shell.ui.output.boundary import (
         install_cli_observability_adapters,
     )
 
