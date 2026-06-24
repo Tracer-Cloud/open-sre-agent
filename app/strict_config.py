@@ -13,6 +13,18 @@ class StrictConfigModel(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    def __getitem__(self, key: str) -> Any:
+        """Return a field value with dict-style access for migration callers."""
+        if key not in self.model_fields:
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return a field value or ``default`` with dict-style access."""
+        if key not in self.model_fields:
+            return default
+        return getattr(self, key)
+
     @field_validator("*", mode="before")
     @classmethod
     def _strip_string_values(cls, value: Any) -> Any:

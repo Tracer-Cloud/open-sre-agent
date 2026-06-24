@@ -89,6 +89,7 @@ class OpenClawConfig(StrictConfigModel):
     headers: dict[str, str] = Field(default_factory=dict)
     timeout_seconds: float = Field(default=15.0, gt=0)
     integration_id: str = ""
+    connection_verified: bool = True
 
     @field_validator("url", mode="before")
     @classmethod
