@@ -32,6 +32,11 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
         "app.integrations.verify.resolve_effective_integrations",
         lambda: {"gitlab": {}, "sentry": {}},
     )
+    refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
+    monkeypatch.setattr(
+        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: refreshed,
+    )
     session = ReplSession()
     # Stale boot-time snapshot + a cached resolution from an earlier turn.
     session.configured_integrations = ("gitlab",)
@@ -40,7 +45,7 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
 
     session.refresh_integration_state()
 
-    assert session.resolved_integrations_cache is None
+    assert session.resolved_integrations_cache == refreshed
     assert session.configured_integrations_known is True
     assert session.configured_integrations == ("gitlab", "sentry")
 

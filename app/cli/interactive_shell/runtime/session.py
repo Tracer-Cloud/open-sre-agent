@@ -97,12 +97,20 @@ class ReplSession:
     configured_integrations_known: bool = False
     """Whether configured_integrations reflects known state (vs default unknown)."""
     resolved_integrations_cache: dict[str, Any] | None = None
-    """Lazily-resolved integration configs (env/store) shared across turns.
+    """Resolved integration configs (env/store) shared across turns.
 
-    Populated on first use by the tool-gathering pass so the conversational
-    assistant can call the same registered tools the investigation uses without
-    re-resolving (and re-rendering progress) every turn. Cleared by
-    ``refresh_integration_state`` when integrations change."""
+    Populated silently at REPL boot and again after integration mutations so the
+    conversational assistant and investigations can call registered tools without
+    waiting for the first user message to trigger a visible "Loading
+    integrations" pass. Cleared by ``refresh_integration_state`` when
+    integrations change."""
+    _integration_warm_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        repr=False,
+        compare=False,
+    )
+    _integration_warm_generation: int = field(default=0, repr=False, compare=False)
+    _integration_warm_task: Any = field(default=None, repr=False, compare=False)
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
@@ -401,6 +409,73 @@ class ReplSession:
             # Best-effort: keep whatever state we already had (default unknown).
             pass
 
+    def warm_resolved_integrations(self, *, generation: int | None = None) -> None:
+        """Resolve full integration configs once, without progress UI.
+
+        The banner already shows configured integration names from
+        :meth:`hydrate_configured_integrations`; this loads the classified configs
+        the tool-gathering pass and investigation pipeline need so the first
+        conversational turn does not pay resolve cost or emit READ progress.
+
+        Empty resolves are not cached so a later turn can retry if boot-time
+        resolution raced store/env hydration. Failures leave the cache unset for
+        the same reason.
+        """
+        if self.resolved_integrations_cache is not None:
+            return
+        if generation is None:
+            with self._integration_warm_lock:
+                generation = self._integration_warm_generation
+
+        try:
+            from app.core.orchestration.node.resolve_integrations import resolve_integrations_quiet
+
+            resolved = resolve_integrations_quiet({})  # type: ignore[arg-type]
+        except Exception:
+            # Best-effort warmup: leave cache unset so later turns can retry.
+            return
+
+        self._store_warm_cache(resolved, generation=generation)
+
+    def _store_warm_cache(self, resolved: dict[str, Any], *, generation: int) -> None:
+        if not resolved:
+            return
+        with self._integration_warm_lock:
+            if generation != self._integration_warm_generation:
+                return
+            if self.resolved_integrations_cache is not None:
+                return
+            self.resolved_integrations_cache = dict(resolved)
+
+    def schedule_warm_resolved_integrations(self) -> None:
+        """Warm integration configs off the interactive prompt critical path."""
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.warm_resolved_integrations()
+            return
+
+        with self._integration_warm_lock:
+            if self._integration_warm_task is not None and not self._integration_warm_task.done():
+                return
+            generation = self._integration_warm_generation
+
+        async def _run_warm() -> None:
+            await asyncio.to_thread(self.warm_resolved_integrations, generation=generation)
+
+        task = loop.create_task(_run_warm())
+        with self._integration_warm_lock:
+            self._integration_warm_task = task
+
+        def _clear_warm_task(done_task: asyncio.Task[None]) -> None:
+            with self._integration_warm_lock:
+                if self._integration_warm_task is done_task:
+                    self._integration_warm_task = None
+
+        task.add_done_callback(_clear_warm_task)
+
     def refresh_integration_state(self) -> None:
         """Re-resolve integration state after the local store changes.
 
@@ -411,8 +486,15 @@ class ReplSession:
         session immediately reflects the change instead of answering from the
         boot-time snapshot.
         """
-        self.resolved_integrations_cache = None
+        with self._integration_warm_lock:
+            self._integration_warm_generation += 1
+            pending = self._integration_warm_task
+            self._integration_warm_task = None
+            self.resolved_integrations_cache = None
+        if pending is not None and not pending.done():
+            pending.cancel()
         self.hydrate_configured_integrations()
+        self.warm_resolved_integrations()
 
     def apply_investigation_result(self, state: dict[str, Any]) -> None:
         """Record a completed investigation result and reset follow-up context.
@@ -437,7 +519,13 @@ class ReplSession:
         self.last_assistant_intent = None
         self.configured_integrations = ()
         self.configured_integrations_known = False
-        self.resolved_integrations_cache = None
+        with self._integration_warm_lock:
+            self._integration_warm_generation += 1
+            pending = self._integration_warm_task
+            self._integration_warm_task = None
+            self.resolved_integrations_cache = None
+        if pending is not None and not pending.done():
+            pending.cancel()
         self.available_capabilities.clear()
         self.accumulated_context.clear()
         self.token_usage.clear()

@@ -32,16 +32,22 @@ def resolve_integrations(state: InvestigationState) -> dict[str, Any]:
     Reads  : _auth_token, org_id, resolved_integrations (idempotency guard)
     Writes : resolved_integrations
     """
-    return {"resolved_integrations": _resolve(state)}
+    return {"resolved_integrations": _resolve(state, emit_progress=True)}
 
 
-def _resolve(state: InvestigationState) -> dict[str, Any]:
+def resolve_integrations_quiet(state: InvestigationState) -> dict[str, Any]:
+    """Like :func:`resolve_integrations` but without progress-tracker UI."""
+    return _resolve(state, emit_progress=False)
+
+
+def _resolve(state: InvestigationState, *, emit_progress: bool) -> dict[str, Any]:
     """Return the raw integrations dict (keyed by vendor name)."""
     if state.get("resolved_integrations"):
         return dict(state["resolved_integrations"])
 
-    tracker = get_tracker()
-    tracker.start("resolve_integrations", "Fetching org integrations")
+    tracker = get_tracker() if emit_progress else None
+    if tracker is not None:
+        tracker.start("resolve_integrations", "Fetching org integrations")
 
     org_id = state.get("org_id", "")
     auth_token = _strip_bearer((state.get("_auth_token", "") or "").strip())
@@ -51,7 +57,11 @@ def _resolve(state: InvestigationState) -> dict[str, Any]:
             org_id = _decode_org_id_from_token(auth_token)
         if not org_id:
             logger.warning("_auth_token present but could not decode org_id")
-            tracker.complete("resolve_integrations", fields_updated=["resolved_integrations"])
+            _complete_tracker(
+                tracker,
+                "resolve_integrations",
+                fields_updated=["resolved_integrations"],
+            )
             return {}
         try:
             from app.integrations.port import fetch_remote_integrations
@@ -59,7 +69,11 @@ def _resolve(state: InvestigationState) -> dict[str, Any]:
             all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=auth_token)
         except Exception as exc:
             logger.warning("Remote integrations fetch failed: %s", exc)
-            tracker.complete("resolve_integrations", fields_updated=["resolved_integrations"])
+            _complete_tracker(
+                tracker,
+                "resolve_integrations",
+                fields_updated=["resolved_integrations"],
+            )
             return {}
         resolved = _classify_integrations(all_integrations)
         _log_resolved(tracker, resolved)
@@ -87,9 +101,15 @@ def _resolve(state: InvestigationState) -> dict[str, Any]:
     return _resolve_from_local_sources(tracker)
 
 
-def _log_resolved(tracker: Any, resolved: dict[str, Any]) -> None:
+def _complete_tracker(tracker: Any | None, node_name: str, **kwargs: Any) -> None:
+    if tracker is not None:
+        tracker.complete(node_name, **kwargs)
+
+
+def _log_resolved(tracker: Any | None, resolved: dict[str, Any]) -> None:
     services = [s for s in resolved if s != "_all"]
-    tracker.complete(
+    _complete_tracker(
+        tracker,
         "resolve_integrations",
         fields_updated=["resolved_integrations"],
         message=f"Resolved integrations: {services}"
@@ -98,14 +118,15 @@ def _log_resolved(tracker: Any, resolved: dict[str, Any]) -> None:
     )
 
 
-def _resolve_from_local_sources(tracker: Any) -> dict[str, Any]:
+def _resolve_from_local_sources(tracker: Any | None) -> dict[str, Any]:
     from app.integrations.store import STORE_PATH, load_integrations
 
     store_integrations = load_integrations()
     env_integrations = _load_env_integrations() if not store_integrations else []
     integrations = _merge_local_integrations(store_integrations, env_integrations)
     if not integrations:
-        tracker.complete(
+        _complete_tracker(
+            tracker,
             "resolve_integrations",
             fields_updated=["resolved_integrations"],
             message=(
@@ -122,7 +143,8 @@ def _resolve_from_local_sources(tracker: Any) -> dict[str, Any]:
         source_labels.append("store")
     if env_integrations:
         source_labels.append("env")
-    tracker.complete(
+    _complete_tracker(
+        tracker,
         "resolve_integrations",
         fields_updated=["resolved_integrations"],
         message=(
@@ -136,7 +158,7 @@ def _resolve_from_local_sources(tracker: Any) -> dict[str, Any]:
 
 def _resolve_remote_with_local_fallback(
     remote_integrations: list[dict[str, Any]],
-    tracker: Any,
+    tracker: Any | None,
 ) -> dict[str, Any]:
     from app.integrations.store import load_integrations
 
@@ -156,7 +178,8 @@ def _resolve_remote_with_local_fallback(
     if env_integrations:
         source_labels.append("env")
 
-    tracker.complete(
+    _complete_tracker(
+        tracker,
         "resolve_integrations",
         fields_updated=["resolved_integrations"],
         message=(
