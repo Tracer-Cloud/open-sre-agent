@@ -1,0 +1,44 @@
+id: 328-priority-prompt-sniffdog-investigate-service
+title: Priority prompt — sniffdog investigate service (CLI-shaped)
+intent_class: complex_shell_prompts
+input:
+  prompt: sniffdog investigate --service myportfolio
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes:
+- P0 priority prompt (kubernetes_workload_health #2) from OpenSRE analytics priority-prompts report.
+- Prompt is sent verbatim (sniffdog is intentional non-canonical CLI phrasing).
+- Planner routing is non-deterministic (shell vs cli_command vs assistant_handoff). Empty planned_actions accepts handoff-only plans; execution oracle validates a helpful non-refusal response.
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: false
+planned_actions: []
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - investigat
+  - sniffdog
+  - myportfolio
+  - service
+  must_not_contain:
+  - $ /
+  - can't help
+  - cannot help
+  - I can't help
+  - I cannot help
+  forbidden_actions:
+  - investigation
+gathered_tools_contract:
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+runs: 3
