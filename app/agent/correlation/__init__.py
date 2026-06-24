@@ -21,23 +21,79 @@ from app.agent.correlation.upstream import (
 )
 
 
+def target_resource_from_state(state: dict[str, Any]) -> str:
+    """Pull the correlation target resource (e.g. RDS DB identifier) from a raw alert.
+
+    Vendor-neutral: any correlation source that needs an alert target
+    reads from the same keys. Defaults to ``"unknown-rds"`` when no
+    relevant field is present.
+    """
+    raw_alert = state.get("raw_alert") or {}
+    if not isinstance(raw_alert, dict):
+        return "unknown-rds"
+    return str(
+        raw_alert.get("resource")
+        or raw_alert.get("resource_name")
+        or raw_alert.get("db_instance")
+        or raw_alert.get("db_instance_identifier")
+        or "unknown-rds"
+    )
+
+
+def candidate_services_from_state(state: dict[str, Any]) -> tuple[str, ...]:
+    """Pull upstream-service candidate names from a raw alert.
+
+    Accepts a comma-separated string or a list/tuple under one of
+    ``upstream_services`` / ``candidate_services`` / ``related_services``.
+    Empty tuple when nothing relevant is present. Vendor-neutral.
+    """
+    raw_alert = state.get("raw_alert") or {}
+    if not isinstance(raw_alert, dict):
+        return ()
+
+    raw_candidates = (
+        raw_alert.get("upstream_services")
+        or raw_alert.get("candidate_services")
+        or raw_alert.get("related_services")
+    )
+    if isinstance(raw_candidates, str):
+        return tuple(item.strip() for item in raw_candidates.split(",") if item.strip())
+    if isinstance(raw_candidates, list | tuple):
+        return tuple(str(item).strip() for item in raw_candidates if str(item).strip())
+    return ()
+
+
 def build_upstream_evidence_provider(state: dict[str, Any]) -> UpstreamEvidenceProvider | None:
     """Vendor-agnostic factory: pick a correlation provider for ``state``.
 
-    Inspects the agent state's ``resolved_integrations`` and delegates to
-    the matching vendor factory. Returns ``None`` when no integration
-    can serve correlation evidence — the caller treats that as "skip
-    upstream correlation for this run".
+    Owns the agent-state shape: extracts the integration config, target
+    resource, and candidate services here, then hands clean values to
+    each vendor factory. Vendor factories don't know about state.
+
+    Returns ``None`` when no integration can serve correlation evidence
+    — the caller (typically :mod:`app.pipeline.pipeline`) treats that
+    as "skip upstream correlation for this run".
 
     Adding a new correlation source is a single new factory module
-    + an ``elif`` branch here. Callers (specifically
-    :mod:`app.pipeline.pipeline`) must not import from
+    + an ``elif`` branch here. Callers must not import from
     ``app.services.<vendor>`` directly — that's a layering violation
     enforced by ``tests/pipeline/test_layering.py``.
     """
-    provider = build_datadog_provider(state)
-    if provider is not None:
-        return provider
+    resolved = state.get("resolved_integrations") or {}
+    if not isinstance(resolved, dict):
+        return None
+    target_resource = target_resource_from_state(state)
+    candidate_services = candidate_services_from_state(state)
+
+    datadog_cfg_raw = resolved.get("datadog")
+    datadog_provider = build_datadog_provider(
+        datadog_config=datadog_cfg_raw if isinstance(datadog_cfg_raw, dict) else None,
+        target_resource=target_resource,
+        candidate_services=candidate_services,
+    )
+    if datadog_provider is not None:
+        return datadog_provider
+
     return None
 
 
@@ -54,4 +110,6 @@ __all__ = [
     "UpstreamEvidenceProvider",
     "build_datadog_provider",
     "build_upstream_evidence_provider",
+    "candidate_services_from_state",
+    "target_resource_from_state",
 ]

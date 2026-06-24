@@ -9,8 +9,11 @@ plus a registration in :mod:`app.agent.correlation.__init__`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from pydantic import ValidationError
 
 from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
 from app.agent.correlation.datadog_provider import (
@@ -43,68 +46,31 @@ def _datadog_avg_query(metric_name: str) -> str:
     return f"avg:{metric}{{*}}"
 
 
-def target_resource_from_state(state: dict[str, Any]) -> str:
-    """Extract the Datadog ``target_resource`` (RDS DB identifier) from an
-    investigation state's raw alert. Defaults to ``"unknown-rds"``.
-
-    Public because the same key set is exercised by tests outside this
-    module.
-    """
-    raw_alert = state.get("raw_alert") or {}
-    if not isinstance(raw_alert, dict):
-        return "unknown-rds"
-    return str(
-        raw_alert.get("resource")
-        or raw_alert.get("resource_name")
-        or raw_alert.get("db_instance")
-        or raw_alert.get("db_instance_identifier")
-        or "unknown-rds"
-    )
-
-
-def candidate_services_from_state(state: dict[str, Any]) -> tuple[str, ...]:
-    """Extract upstream-service candidate names from a raw alert.
-
-    Accepts a comma-separated string or a list/tuple under one of
-    ``upstream_services`` / ``candidate_services`` / ``related_services``.
-    Empty tuple when nothing relevant is present.
-    """
-    raw_alert = state.get("raw_alert") or {}
-    if not isinstance(raw_alert, dict):
-        return ()
-
-    raw_candidates = (
-        raw_alert.get("upstream_services")
-        or raw_alert.get("candidate_services")
-        or raw_alert.get("related_services")
-    )
-    if isinstance(raw_candidates, str):
-        return tuple(item.strip() for item in raw_candidates.split(",") if item.strip())
-    if isinstance(raw_candidates, list | tuple):
-        return tuple(str(item).strip() for item in raw_candidates if str(item).strip())
-    return ()
-
-
-def build_datadog_provider(state: dict[str, Any]) -> UpstreamEvidenceProvider | None:
+def build_datadog_provider(
+    *,
+    datadog_config: Mapping[str, Any] | None,
+    target_resource: str = "unknown-rds",
+    candidate_services: tuple[str, ...] = (),
+) -> UpstreamEvidenceProvider | None:
     """Return a Datadog-backed upstream-evidence provider, or ``None``.
 
-    Returns ``None`` when the agent state has no resolved Datadog
-    integration config (or a malformed one). Callers can treat that as
-    "no Datadog correlation available for this run" — the top-level
-    factory in :mod:`app.agent.correlation` is responsible for picking
-    a different vendor or short-circuiting.
+    Callers pass the integration config and the alert-derived knobs
+    directly; the factory does **not** know about agent state shape.
+    State extraction lives in :mod:`app.agent.correlation.__init__`.
+
+    Returns ``None`` when ``datadog_config`` is empty/missing or fails
+    Pydantic validation — both signal "no Datadog correlation available
+    for this run".
     """
     from app.integrations.config_models import DatadogIntegrationConfig
     from app.services.datadog import DatadogClient
 
-    resolved = state.get("resolved_integrations") or {}
-    datadog_cfg_raw = resolved.get("datadog")
-    if not isinstance(datadog_cfg_raw, dict) or not datadog_cfg_raw:
+    if not datadog_config:
         return None
 
     try:
-        datadog_cfg = DatadogIntegrationConfig.model_validate(datadog_cfg_raw)
-    except Exception:
+        datadog_cfg = DatadogIntegrationConfig.model_validate(datadog_config)
+    except ValidationError:
         return None
 
     client = DatadogClient(datadog_cfg)
@@ -152,7 +118,7 @@ def build_datadog_provider(state: dict[str, Any]) -> UpstreamEvidenceProvider | 
             log_query_fn=log_query,
         ),
         queries=DatadogCorrelationQueries(
-            upstream_service_names=candidate_services_from_state(state),
+            upstream_service_names=candidate_services,
         ),
-        target_resource=target_resource_from_state(state),
+        target_resource=target_resource,
     )

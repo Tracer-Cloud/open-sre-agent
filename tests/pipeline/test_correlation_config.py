@@ -4,11 +4,11 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.agent.correlation.datadog_factory import (
-    _datadog_avg_query,
+from app.agent.correlation import (
     candidate_services_from_state,
     target_resource_from_state,
 )
+from app.agent.correlation.datadog_factory import _datadog_avg_query
 from app.agent.correlation.upstream import UpstreamEvidenceBundle
 from app.pipeline.pipeline import _build_correlation_config
 
