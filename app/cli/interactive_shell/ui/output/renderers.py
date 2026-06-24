@@ -12,7 +12,6 @@ from app.cli.interactive_shell.ui.output.environment import (
     get_output_format,
 )
 from app.cli.interactive_shell.ui.output.labels import BADGE_STYLES
-from app.cli.interactive_shell.ui.time_format import _elapsed_hms
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -22,6 +21,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms
 
 
 def render_divider(width: int = 80) -> None:

@@ -19,8 +19,8 @@ from app.cli.interactive_shell.ui.output.labels import (
     _node_phase_label,
     build_progress_step_text,
 )
-from app.cli.interactive_shell.ui.time_format import _elapsed_hms
 from app.cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
 _REPL_ANIM_INTERVAL = 0.35

@@ -32,10 +32,7 @@ from rich.theme import Theme
 # modules (e.g. the publish_findings terminal renderer) can read the
 # same hex values without depending on the CLI layer. CLI-only tokens
 # (TEXT, SECONDARY, ERROR, BG) stay here.
-from app.ui_theme import BRAND as BRAND
-from app.ui_theme import DIM as DIM
-from app.ui_theme import HIGHLIGHT as HIGHLIGHT
-from app.ui_theme import WARNING as WARNING
+from app.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING
 
 TEXT = "#E0E0E0"
 SECONDARY = "#888888"
@@ -55,6 +52,47 @@ DEVICE_CODE = BOLD_HIGHLIGHT
 
 # Distinct accent for incoming alerts (visually distinct from BOLD_BRAND used for assistant)
 INCOMING_ALERT_ACCENT = BOLD_WARNING
+
+__all__ = [
+    "ANSI_BOLD",
+    "ANSI_DIM",
+    "ANSI_RESET",
+    "BG",
+    "BOLD_BRAND",
+    "BOLD_BRAND_ANSI",
+    "BOLD_ERROR",
+    "BOLD_HIGHLIGHT",
+    "BOLD_TEXT",
+    "BOLD_WARNING",
+    "BRAND",
+    "BRAND_ANSI",
+    "DEVICE_CODE",
+    "DEVICE_CODE_ANSI",
+    "DIM",
+    "DIM_ANSI",
+    "DIM_COUNTER_ANSI",
+    "ERROR",
+    "GLYPH_ACTIVE",
+    "GLYPH_BULLET",
+    "GLYPH_ERROR",
+    "GLYPH_PROMPT",
+    "GLYPH_SUCCESS",
+    "GLYPH_WARNING",
+    "HIGHLIGHT",
+    "HIGHLIGHT_ANSI",
+    "INCOMING_ALERT_ACCENT",
+    "INPUT_SURFACE",
+    "INPUT_SURFACE_BG_ANSI",
+    "MARKDOWN_THEME",
+    "MENU_SELECTION_ROW_ANSI",
+    "PROMPT_ACCENT_ANSI",
+    "PROMPT_FRAME_ANSI",
+    "SECONDARY",
+    "SURFACE_BG_ANSI",
+    "TEXT",
+    "TEXT_ANSI",
+    "WARNING",
+]
 
 # ── Semantic glyphs ────────────────────────────────────────────────────────
 

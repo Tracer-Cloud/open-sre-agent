@@ -22,7 +22,6 @@ from app.cli.interactive_shell.ui.output.labels import (
     _node_label,
     _node_phase_label,
 )
-from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -32,6 +31,7 @@ from app.cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from app.cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.utils.tool_trace import format_json_preview
 
 _SPINNER_FRAMES = ("·  ", "·· ", "···", "·· ")

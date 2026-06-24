@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.ui.output import environment as output_environment
+from app.cli.interactive_shell.ui.output import boundary as output_boundary
 from app.cli.interactive_shell.ui.output import tracker as output_tracker
+from app.cli.interactive_shell.ui.output.environment import debug_print
 from app.cli.interactive_shell.ui.output.renderers import (
     render_completed_investigation_footer,
     render_investigation_header,
@@ -45,7 +46,7 @@ def test_ports_default_to_noop_before_cli_install() -> None:
 
 
 def test_install_cli_observability_adapters_wires_progress_tracker() -> None:
-    output_environment.install_cli_observability_adapters()
+    output_boundary.install_cli_observability_adapters()
 
     tracker = get_progress_tracker()
     assert isinstance(tracker, ProgressTracker)
@@ -53,9 +54,9 @@ def test_install_cli_observability_adapters_wires_progress_tracker() -> None:
 
 
 def test_install_cli_observability_adapters_wires_debug_and_display() -> None:
-    output_environment.install_cli_observability_adapters()
+    output_boundary.install_cli_observability_adapters()
 
-    assert obs_debug._printer is output_environment.debug_print
+    assert obs_debug._printer is debug_print
     assert obs_display._header_renderer is render_investigation_header
     assert obs_display._footer_renderer is render_completed_investigation_footer
 
@@ -65,7 +66,7 @@ def test_sync_pipeline_path_records_progress_after_install(
 ) -> None:
     """Core ``get_progress_tracker()`` must drive the CLI tracker in sync runs."""
     monkeypatch.setenv("TRACER_OUTPUT_FORMAT", "text")
-    output_environment.install_cli_observability_adapters()
+    output_boundary.install_cli_observability_adapters()
 
     tracker = get_progress_tracker()
     tracker.start("extract_alert", "Parsing alert payload")
@@ -81,7 +82,7 @@ def test_silence_progress_tracker_blocks_lazy_factory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("TRACER_OUTPUT_FORMAT", "text")
-    output_environment.install_cli_observability_adapters()
+    output_boundary.install_cli_observability_adapters()
 
     silence_progress_tracker()
     tracker = get_progress_tracker()
