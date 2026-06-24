@@ -17,6 +17,7 @@ from app.cli.interactive_shell.ui import (
     HIGHLIGHT,
     WARNING,
     print_repl_table,
+    refresh_welcome_poster,
     repl_table,
 )
 from app.cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
@@ -24,10 +25,7 @@ from app.cli.interactive_shell.ui.time_format import format_repl_duration, forma
 
 
 def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.ui import render_ready_box
-
-    console.clear()
-    render_ready_box(console, session=session)
+    refresh_welcome_poster(console, session=session)
     return True
 
 
