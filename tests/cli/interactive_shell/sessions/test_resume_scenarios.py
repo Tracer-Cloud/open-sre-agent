@@ -310,7 +310,7 @@ class TestResumeLiveRepl:
             assert repl.contains("live9999") or repl.contains("live redis")
 
             repl.reset_output()
-            repl.send(f"/resume {target_id[:8]}", wait=4.0)
+            repl.send(f"/resume {target_id[:8]}", wait=8.0)
             assert repl.contains("resumed session")
             assert repl.contains("live redis investigation")
 

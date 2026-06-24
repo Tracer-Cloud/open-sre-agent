@@ -409,22 +409,29 @@ class ReplSession:
         :meth:`hydrate_configured_integrations`; this loads the classified configs
         the tool-gathering pass and investigation pipeline need so the first
         conversational turn does not pay resolve cost or emit READ progress.
+
+        Empty resolves are not cached so a later turn can retry if boot-time
+        resolution raced store/env hydration. Failures leave the cache unset for
+        the same reason.
         """
         if self.resolved_integrations_cache is not None:
             return
         try:
             from app.agent.stages.resolve_integrations import resolve_integrations
             from app.cli.interactive_shell.ui.output import reset_tracker, set_silent_tracker
-
-            set_silent_tracker()
-            try:
-                updates = resolve_integrations({})  # type: ignore[arg-type]
-                self.resolved_integrations_cache = dict(updates.get("resolved_integrations") or {})
-            finally:
-                reset_tracker()
         except Exception:
-            # Best-effort: tool-gathering will retry on first use if needed.
+            return
+
+        try:
+            set_silent_tracker()
+            updates = resolve_integrations({})  # type: ignore[arg-type]
+            resolved = dict(updates.get("resolved_integrations") or {})
+            if resolved:
+                self.resolved_integrations_cache = resolved
+        except Exception:
             pass
+        finally:
+            reset_tracker()
 
     def refresh_integration_state(self) -> None:
         """Re-resolve integration state after the local store changes.

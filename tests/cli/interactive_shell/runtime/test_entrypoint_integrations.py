@@ -70,6 +70,52 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
     assert calls == ["resolve"]
 
 
+def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+        calls.append("resolve")
+        return {"resolved_integrations": {}}
+
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        _resolve,
+    )
+    session = ReplSession()
+    session.warm_resolved_integrations()
+    assert session.resolved_integrations_cache is None
+    session.warm_resolved_integrations()
+    assert calls == ["resolve", "resolve"]
+
+
+def test_warm_resolved_integrations_resets_tracker_on_resolve_failure(
+    monkeypatch: Any,
+) -> None:
+    resets: list[str] = []
+
+    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("resolve failed")
+
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        _resolve,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.output.set_silent_tracker",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.output.reset_tracker",
+        lambda: resets.append("reset"),
+    )
+
+    session = ReplSession()
+    session.warm_resolved_integrations()
+
+    assert session.resolved_integrations_cache is None
+    assert resets == ["reset"]
+
+
 def test_hydrate_entrypoint_also_warms_resolved_integrations(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         "app.integrations.verify.resolve_effective_integrations",

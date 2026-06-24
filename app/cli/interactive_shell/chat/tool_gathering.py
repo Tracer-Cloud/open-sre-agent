@@ -120,8 +120,10 @@ def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
 
     from app.agent.stages.resolve_integrations import resolve_integrations
 
-    resolved = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
-    session.resolved_integrations_cache = resolved
+    updates = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
+    resolved = dict(updates.get("resolved_integrations") or {})
+    if resolved:
+        session.resolved_integrations_cache = resolved
     return resolved
 
 
