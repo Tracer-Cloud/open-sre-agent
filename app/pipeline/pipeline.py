@@ -68,8 +68,8 @@ def run_connected_investigation(
             return cast(AgentState, state_any)
 
         _merge(state_any, plan_actions(cast(AgentState, state_any)))
-        _merge(state_any, agent_class().run(state_any))
-        _merge(state_any, diagnose(state_any))
+        _merge(state_any, agent_class().run(cast(AgentState, state_any)))
+        _merge(state_any, diagnose(cast(AgentState, state_any)))
         _merge(
             state_any,
             node_correlate_upstream(
