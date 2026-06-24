@@ -190,8 +190,12 @@ def test_classify_sentry_mcp_credentials() -> None:
             },
         }
     ]
+    from app.agent.stages.investigate.tools import availability_view
+
     resolved = _classify_integrations(records)
     assert "sentry_mcp" in resolved
-    assert resolved["sentry_mcp"]["connection_verified"] is True
-    assert resolved["sentry_mcp"]["auth_token"] == "sntrytok_secret"
-    assert resolved["sentry_mcp"]["organization_slug"] == "my-org"
+    assert resolved["sentry_mcp"].auth_token == "sntrytok_secret"
+    assert resolved["sentry_mcp"].organization_slug == "my-org"
+    # connection_verified is set at the tool-availability boundary
+    view = availability_view(resolved)
+    assert view["sentry_mcp"]["connection_verified"] is True

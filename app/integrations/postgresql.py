@@ -808,7 +808,7 @@ def get_table_stats(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[PostgreSQLConfig | None, str | None]:
     try:
         cfg = build_postgresql_config(
             {
@@ -824,5 +824,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="postgresql", record_id=record_id)
         return None, None
     if cfg.host and cfg.database:
-        return cfg.model_dump(), "postgresql"
+        return cfg, "postgresql"
     return None, None

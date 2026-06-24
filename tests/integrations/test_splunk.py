@@ -423,8 +423,8 @@ def test_catalog_classifies_splunk_from_store() -> None:
     ]
     resolved = classify_integrations(integrations)
     assert "splunk" in resolved
-    assert resolved["splunk"]["base_url"] == "https://splunk.corp.com:8089"
-    assert resolved["splunk"]["index"] == "main"
+    assert resolved["splunk"].base_url == "https://splunk.corp.com:8089"
+    assert resolved["splunk"].index == "main"
 
 
 def test_catalog_classifies_splunk_v1_flat_credentials() -> None:
@@ -444,7 +444,7 @@ def test_catalog_classifies_splunk_v1_flat_credentials() -> None:
     ]
     resolved = classify_integrations(integrations)
     assert "splunk" in resolved
-    assert resolved["splunk"]["index"] == "prod"
+    assert resolved["splunk"].index == "prod"
 
 
 def test_catalog_ignores_splunk_without_base_url() -> None:

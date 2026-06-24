@@ -177,9 +177,9 @@ class TestResolveIntegrations:
         ]
         resolved = _classify_integrations(integrations)
         assert "mariadb" in resolved
-        assert resolved["mariadb"]["host"] == "db.example.com"
-        assert resolved["mariadb"]["database"] == "prod"
-        assert resolved["mariadb"]["port"] == 3306
+        assert resolved["mariadb"].host == "db.example.com"
+        assert resolved["mariadb"].database == "prod"
+        assert resolved["mariadb"].port == 3306
 
     def test_classify_mariadb_skipped_without_host(self):
         integrations = [

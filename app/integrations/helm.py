@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[HelmIntegrationConfig | None, str | None]:
     try:
         cfg = HelmIntegrationConfig.model_validate(
             {
@@ -31,4 +31,4 @@ def classify(
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="helm", record_id=record_id)
         return None, None
-    return cfg.model_dump(), "helm"
+    return cfg, "helm"

@@ -11,9 +11,7 @@ from app.services.vercel import VercelConfig
 logger = logging.getLogger(__name__)
 
 
-def classify(
-    credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+def classify(credentials: dict[str, Any], record_id: str) -> tuple[VercelConfig | None, str | None]:
     try:
         cfg = VercelConfig.model_validate(
             {
@@ -26,5 +24,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="vercel", record_id=record_id)
         return None, None
     if cfg.api_token:
-        return cfg.model_dump(), "vercel"
+        return cfg, "vercel"
     return None, None

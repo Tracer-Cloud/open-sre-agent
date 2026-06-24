@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[AlertmanagerIntegrationConfig | None, str | None]:
     try:
         cfg = AlertmanagerIntegrationConfig.model_validate(
             {
@@ -28,5 +28,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="alertmanager", record_id=record_id)
         return None, None
     if cfg.base_url:
-        return cfg.model_dump(), "alertmanager"
+        return cfg, "alertmanager"
     return None, None

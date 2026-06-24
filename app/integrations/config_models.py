@@ -999,6 +999,131 @@ class SMTPIntegrationConfig(StrictConfigModel):
 
 
 # ---------------------------------------------------------------------------
+# Cloud Observability Platforms
+# ---------------------------------------------------------------------------
+
+
+class SnowflakeIntegrationConfig(StrictConfigModel):
+    """Normalized Snowflake credentials used by resolution and tool flows."""
+
+    account_identifier: str
+    token: str
+    user: str = ""
+    password: str = ""
+    warehouse: str = ""
+    role: str = ""
+    database: str = ""
+    schema: str = ""  # type: ignore[assignment]  # "schema" shadows BaseModel.schema classmethod
+    max_results: int = 50
+    integration_id: str = ""
+
+    _normalize_strs = field_validator(
+        "user",
+        "password",
+        "warehouse",
+        "role",
+        "database",
+        "schema",
+        "integration_id",
+        mode="before",
+    )(normalize_str())
+
+    @field_validator("max_results", mode="before")
+    @classmethod
+    def _clamp_max_results(cls, value: object) -> int:
+        try:
+            v: int = int(value)  # type: ignore[arg-type,call-overload]
+        except (TypeError, ValueError):
+            return 50
+        return max(1, min(v, 200))
+
+
+class AzureIntegrationConfig(StrictConfigModel):
+    """Normalized Azure Monitor Log Analytics credentials."""
+
+    workspace_id: str
+    access_token: str
+    endpoint: str = "https://api.loganalytics.io"
+    tenant_id: str = ""
+    subscription_id: str = ""
+    max_results: int = 100
+    integration_id: str = ""
+
+    _normalize_endpoint = field_validator("endpoint", mode="before")(
+        normalize_url("https://api.loganalytics.io")
+    )
+    _normalize_strs = field_validator(
+        "tenant_id", "subscription_id", "integration_id", mode="before"
+    )(normalize_str())
+
+    @field_validator("max_results", mode="before")
+    @classmethod
+    def _clamp_max_results(cls, value: object) -> int:
+        try:
+            v: int = int(value)  # type: ignore[arg-type,call-overload]
+        except (TypeError, ValueError):
+            return 100
+        return max(1, min(v, 500))
+
+
+class OpenObserveIntegrationConfig(StrictConfigModel):
+    """Normalized OpenObserve credentials used by resolution and tool flows."""
+
+    base_url: str
+    org: str = "default"
+    api_token: str = ""
+    username: str = ""
+    password: str = ""
+    stream: str = ""
+    max_results: int = 100
+    integration_id: str = ""
+
+    _normalize_base_url = field_validator("base_url", mode="before")(normalize_url())
+    _normalize_org = field_validator("org", mode="before")(normalize_with_default("default"))
+    _normalize_strs = field_validator(
+        "api_token", "username", "password", "stream", "integration_id", mode="before"
+    )(normalize_str())
+
+    @field_validator("max_results", mode="before")
+    @classmethod
+    def _clamp_max_results(cls, value: object) -> int:
+        try:
+            v: int = int(value)  # type: ignore[arg-type,call-overload]
+        except (TypeError, ValueError):
+            return 100
+        return max(1, min(v, 500))
+
+
+class OpenSearchIntegrationConfig(StrictConfigModel):
+    """Normalized OpenSearch credentials used by resolution and tool flows."""
+
+    url: str
+    api_key: str = ""
+    username: str = ""
+    password: str = ""
+    index_pattern: str = "*"
+    max_results: int = 100
+    integration_id: str = ""
+
+    _normalize_url = field_validator("url", mode="before")(normalize_url())
+    _normalize_index_pattern = field_validator("index_pattern", mode="before")(
+        normalize_with_default("*")
+    )
+    _normalize_strs = field_validator(
+        "api_key", "username", "password", "integration_id", mode="before"
+    )(normalize_str())
+
+    @field_validator("max_results", mode="before")
+    @classmethod
+    def _clamp_max_results(cls, value: object) -> int:
+        try:
+            v: int = int(value)  # type: ignore[arg-type,call-overload]
+        except (TypeError, ValueError):
+            return 100
+        return max(1, min(v, 500))
+
+
+# ---------------------------------------------------------------------------
 # Tracer internal
 # ---------------------------------------------------------------------------
 

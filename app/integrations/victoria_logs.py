@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[VictoriaLogsIntegrationConfig | None, str | None]:
     try:
         cfg = VictoriaLogsIntegrationConfig.model_validate(
             {
@@ -28,5 +28,5 @@ def classify(
         )
         return None, None
     if cfg.base_url:
-        return cfg.model_dump(), "victoria_logs"
+        return cfg, "victoria_logs"
     return None, None

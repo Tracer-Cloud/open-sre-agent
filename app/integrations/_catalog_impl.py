@@ -222,7 +222,7 @@ def classify_integrations(integrations: list[dict[str, Any]]) -> dict[str, Any]:
     return resolved
 
 
-_ClassifyFn = Callable[[dict[str, Any], str], tuple[dict[str, Any] | None, str | None]]
+_ClassifyFn = Callable[[dict[str, Any], str], tuple[Any | None, str | None]]
 
 
 _CLASSIFIERS: dict[str, _ClassifyFn] = {
@@ -280,7 +280,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
 
 def _classify_service_instance(
     key: str, credentials: dict[str, Any], *, record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[Any | None, str | None]:
     """Classify one instance into (flat_view, resolved_key).
 
     Returns ``(None, None)`` when the instance is invalid or should be skipped
@@ -1439,6 +1439,17 @@ def _effective_entry(source: str, config: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "config": config}
 
 
+def _config_as_dict(config: Any) -> dict[str, Any] | None:
+    """Normalize a classified config (BaseModel or dict) to a plain dict."""
+    from pydantic import BaseModel
+
+    if isinstance(config, BaseModel):
+        return config.model_dump(exclude_none=True)
+    if isinstance(config, dict) and config:
+        return config
+    return None
+
+
 def _publish_classified_effective_service(
     effective: dict[str, dict[str, Any]],
     classified_integrations: dict[str, Any],
@@ -1447,16 +1458,24 @@ def _publish_classified_effective_service(
 ) -> None:
     """Copy a directly classified service into the effective view."""
     resolved_integration = classified_integrations.get(service)
-    if not isinstance(resolved_integration, dict):
+    config_dict = _config_as_dict(resolved_integration)
+    if config_dict is None:
         return
 
     effective[service] = _effective_entry(
         source_by_service.get(service, "local env"),
-        resolved_integration,
+        config_dict,
     )
     all_instances = classified_integrations.get(f"_all_{service}_instances")
-    if _should_publish_instance_siblings(all_instances):
-        effective[service]["instances"] = all_instances
+    if _should_publish_instance_siblings(all_instances) and isinstance(all_instances, list):
+        # Convert any BaseModel configs to dicts in the instances list
+        normalized_instances = [
+            {**inst, "config": _config_as_dict(inst.get("config")) or {}}
+            if isinstance(inst, dict)
+            else inst
+            for inst in all_instances
+        ]
+        effective[service]["instances"] = normalized_instances
 
 
 def _service_metadata(

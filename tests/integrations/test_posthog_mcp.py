@@ -210,8 +210,12 @@ def test_classify_posthog_mcp_credentials() -> None:
             },
         }
     ]
+    from app.agent.stages.investigate.tools import availability_view
+
     resolved = _classify_integrations(records)
     assert "posthog_mcp" in resolved
-    assert resolved["posthog_mcp"]["connection_verified"] is True
-    assert resolved["posthog_mcp"]["auth_token"] == "phx_secret"
-    assert resolved["posthog_mcp"]["project_id"] == "12345"
+    assert resolved["posthog_mcp"].auth_token == "phx_secret"
+    assert resolved["posthog_mcp"].project_id == "12345"
+    # connection_verified is set at the tool-availability boundary
+    view = availability_view(resolved)
+    assert view["posthog_mcp"]["connection_verified"] is True

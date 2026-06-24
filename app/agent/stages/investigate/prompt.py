@@ -326,10 +326,13 @@ def _format_connected_integrations(
     resolved_integrations: dict[str, Any],
     tools_by_source: dict[str, list[Any]],
 ) -> str:
+    from pydantic import BaseModel
+
     connected = sorted(
         key
         for key, value in resolved_integrations.items()
-        if not key.startswith("_") and isinstance(value, dict) and value
+        if not key.startswith("_")
+        and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
     if not connected and not tools_by_source:
         return "No connected integrations were found."

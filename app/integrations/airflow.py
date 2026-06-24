@@ -31,6 +31,7 @@ class AirflowConfig(StrictConfigModel):
     timeout_seconds: float = Field(default=DEFAULT_AIRFLOW_TIMEOUT_SECONDS, gt=0)
     verify_ssl: bool = True
     max_results: int = Field(default=DEFAULT_AIRFLOW_MAX_RESULTS, gt=0, le=200)
+    integration_id: str = ""
 
     @field_validator("base_url", mode="before")
     @classmethod
@@ -321,7 +322,7 @@ def get_recent_airflow_failures(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[AirflowConfig | None, str | None]:
     try:
         cfg = build_airflow_config(
             {
@@ -332,11 +333,12 @@ def classify(
                 "timeout_seconds": credentials.get("timeout_seconds", 15.0),
                 "verify_ssl": credentials.get("verify_ssl", True),
                 "max_results": credentials.get("max_results", 50),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="airflow", record_id=record_id)
         return None, None
     if cfg.is_configured:
-        return {**cfg.model_dump(), "integration_id": record_id}, "airflow"
+        return cfg, "airflow"
     return None, None

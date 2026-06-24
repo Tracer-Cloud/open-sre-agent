@@ -17,7 +17,6 @@ from pydantic import Field, field_validator
 
 from app.integrations._validation_helpers import report_validation_failure
 from app.strict_config import StrictConfigModel
-from app.utils.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 
@@ -277,19 +276,20 @@ def search_code(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
-    workspace = str(credentials.get("workspace", "")).strip()
-    if not workspace:
+) -> tuple[BitbucketConfig | None, str | None]:
+    try:
+        cfg = BitbucketConfig.model_validate(
+            {
+                "workspace": credentials.get("workspace", ""),
+                "username": credentials.get("username", ""),
+                "app_password": credentials.get("app_password", ""),
+                "base_url": credentials.get("base_url", DEFAULT_BITBUCKET_BASE_URL),
+                "max_results": credentials.get("max_results", DEFAULT_BITBUCKET_MAX_RESULTS),
+                "integration_id": record_id,
+            }
+        )
+    except Exception:
         return None, None
-    base_url = (
-        str(credentials.get("base_url", "https://api.bitbucket.org/2.0")).strip()
-        or "https://api.bitbucket.org/2.0"
-    )
-    return {
-        "workspace": workspace,
-        "username": str(credentials.get("username", "")).strip(),
-        "app_password": str(credentials.get("app_password", "")).strip(),
-        "base_url": base_url,
-        "max_results": max(1, min(safe_int(credentials.get("max_results", 25), 25), 100)),
-        "integration_id": record_id,
-    }, "bitbucket"
+    if cfg.workspace:
+        return cfg, "bitbucket"
+    return None, None

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[IncidentIoIntegrationConfig | None, str | None]:
     try:
         cfg = IncidentIoIntegrationConfig.model_validate(
             {
@@ -26,5 +26,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="incident_io", record_id=record_id)
         return None, None
     if cfg.api_key:
-        return cfg.model_dump(), "incident_io"
+        return cfg, "incident_io"
     return None, None

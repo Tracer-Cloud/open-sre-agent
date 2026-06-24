@@ -563,14 +563,15 @@ def get_cluster_events(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[MongoDBAtlasConfig | None, str | None]:
     try:
         cfg = build_mongodb_atlas_config(
             {
                 "api_public_key": credentials.get("api_public_key", ""),
                 "api_private_key": credentials.get("api_private_key", ""),
                 "project_id": credentials.get("project_id", ""),
-                "base_url": credentials.get("base_url", "https://cloud.mongodb.com/api/atlas/v2"),
+                "base_url": credentials.get("base_url", DEFAULT_ATLAS_BASE_URL),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
@@ -579,11 +580,5 @@ def classify(
         )
         return None, None
     if cfg.api_public_key and cfg.api_private_key and cfg.project_id:
-        return {
-            "api_public_key": cfg.api_public_key,
-            "api_private_key": cfg.api_private_key,
-            "project_id": cfg.project_id,
-            "base_url": cfg.base_url,
-            "integration_id": record_id,
-        }, "mongodb_atlas"
+        return cfg, "mongodb_atlas"
     return None, None

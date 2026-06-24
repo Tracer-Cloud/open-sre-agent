@@ -9,7 +9,7 @@ from app.integrations.config_models import SMTPIntegrationConfig
 
 def classify(
     credentials: dict[str, Any], _record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[SMTPIntegrationConfig | None, str | None]:
     try:
         cfg = SMTPIntegrationConfig.model_validate(
             {
@@ -24,4 +24,4 @@ def classify(
         )
     except Exception:
         return None, None
-    return cfg.model_dump(), "smtp"
+    return cfg, "smtp"

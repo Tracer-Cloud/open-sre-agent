@@ -1338,7 +1338,7 @@ def build_github_issue_search_query(owner: str, repo: str, query: str, state: st
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[GitHubMCPConfig | None, str | None]:
     try:
         cfg = build_github_mcp_config(
             {
@@ -1354,4 +1354,4 @@ def classify(
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="github", record_id=record_id)
         return None, None
-    return cfg.model_dump(), "github"
+    return cfg, "github"

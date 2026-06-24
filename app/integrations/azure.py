@@ -5,28 +5,30 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.utils.coercion import safe_int
+from app.integrations._validation_helpers import report_classify_failure
+from app.integrations.config_models import AzureIntegrationConfig
 
 logger = logging.getLogger(__name__)
 
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
-    workspace_id = str(credentials.get("workspace_id", "")).strip()
-    access_token = str(credentials.get("access_token", "")).strip()
-    if not (workspace_id and access_token):
+) -> tuple[AzureIntegrationConfig | None, str | None]:
+    try:
+        cfg = AzureIntegrationConfig.model_validate(
+            {
+                "workspace_id": credentials.get("workspace_id", ""),
+                "access_token": credentials.get("access_token", ""),
+                "endpoint": credentials.get("endpoint", "https://api.loganalytics.io"),
+                "tenant_id": credentials.get("tenant_id", ""),
+                "subscription_id": credentials.get("subscription_id", ""),
+                "max_results": credentials.get("max_results", 100),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="azure", record_id=record_id)
         return None, None
-    endpoint = (
-        str(credentials.get("endpoint", "https://api.loganalytics.io")).strip()
-        or "https://api.loganalytics.io"
-    )
-    return {
-        "workspace_id": workspace_id,
-        "access_token": access_token,
-        "endpoint": endpoint,
-        "tenant_id": str(credentials.get("tenant_id", "")).strip(),
-        "subscription_id": str(credentials.get("subscription_id", "")).strip(),
-        "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
-        "integration_id": record_id,
-    }, "azure"
+    if cfg.workspace_id and cfg.access_token:
+        return cfg, "azure"
+    return None, None

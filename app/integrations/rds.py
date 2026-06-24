@@ -85,19 +85,18 @@ def rds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
-def classify(
-    credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+def classify(credentials: dict[str, Any], record_id: str) -> tuple[RDSConfig | None, str | None]:
     try:
         cfg = build_rds_config(
             {
                 "db_instance_identifier": credentials.get("db_instance_identifier", ""),
                 "region": credentials.get("region", DEFAULT_RDS_REGION),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="rds", record_id=record_id)
         return None, None
     if cfg.is_configured:
-        return {**cfg.model_dump(), "integration_id": record_id}, "rds"
+        return cfg, "rds"
     return None, None

@@ -24,11 +24,11 @@ class TestClassifyOpensearch:
 
         assert key == "opensearch"
         assert flat_view is not None
-        assert flat_view["url"] == "https://my-cluster.com"
-        assert flat_view["api_key"] == "my-api-key"
-        assert flat_view["username"] == ""
-        assert flat_view["password"] == ""
-        assert flat_view["integration_id"] == "test-id"
+        assert flat_view.url == "https://my-cluster.com"
+        assert flat_view.api_key == "my-api-key"
+        assert flat_view.username == ""
+        assert flat_view.password == ""
+        assert flat_view.integration_id == "test-id"
 
     def test_classify_opensearch_with_basic_auth(self) -> None:
         """Basic Auth credentials are forwarded to the runtime config (NEW)."""
@@ -44,10 +44,10 @@ class TestClassifyOpensearch:
 
         assert key == "opensearch"
         assert flat_view is not None
-        assert flat_view["url"] == "https://my-cluster.com"
-        assert flat_view["api_key"] == ""
-        assert flat_view["username"] == "admin"
-        assert flat_view["password"] == "secret"
+        assert flat_view.url == "https://my-cluster.com"
+        assert flat_view.api_key == ""
+        assert flat_view.username == "admin"
+        assert flat_view.password == "secret"
 
     def test_classify_opensearch_with_no_auth(self) -> None:
         """URL alone is sufficient for clusters with security disabled."""
@@ -59,10 +59,10 @@ class TestClassifyOpensearch:
 
         assert key == "opensearch"
         assert flat_view is not None
-        assert flat_view["url"] == "https://my-cluster.com"
-        assert flat_view["api_key"] == ""
-        assert flat_view["username"] == ""
-        assert flat_view["password"] == ""
+        assert flat_view.url == "https://my-cluster.com"
+        assert flat_view.api_key == ""
+        assert flat_view.username == ""
+        assert flat_view.password == ""
 
     def test_classify_opensearch_rejects_missing_url(self) -> None:
         """Missing URL is the only hard requirement; record is filtered out."""
@@ -84,7 +84,7 @@ class TestClassifyOpensearch:
         )
 
         assert flat_view is not None
-        assert flat_view["url"] == "https://my-cluster.com"
+        assert flat_view.url == "https://my-cluster.com"
 
 
 class TestResolveEffectiveOpensearch:

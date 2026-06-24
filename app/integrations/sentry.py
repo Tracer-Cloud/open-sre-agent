@@ -261,9 +261,7 @@ def list_sentry_issue_events(
     return payload if isinstance(payload, list) else []
 
 
-def classify(
-    credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+def classify(credentials: dict[str, Any], record_id: str) -> tuple[SentryConfig | None, str | None]:
     try:
         cfg = build_sentry_config(
             {
@@ -278,5 +276,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="sentry", record_id=record_id)
         return None, None
     if cfg.organization_slug and cfg.auth_token:
-        return cfg.model_dump(), "sentry"
+        return cfg, "sentry"
     return None, None

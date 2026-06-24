@@ -33,14 +33,23 @@ def get_available_tools(resolved_integrations: dict[str, Any]) -> list[Registere
 
 def availability_view(resolved_integrations: dict[str, Any]) -> dict[str, Any]:
     """Adapt resolved integration configs to the legacy tool availability contract."""
+    from pydantic import BaseModel
+
     view: dict[str, Any] = {}
     for key, value in resolved_integrations.items():
-        if key.startswith("_") or not isinstance(value, dict) or not value:
+        if key.startswith("_"):
             view[key] = value
             continue
-        item = dict(value)
-        item.setdefault("connection_verified", True)
-        view[key] = item
+        if isinstance(value, BaseModel):
+            item = value.model_dump(exclude_none=True)
+            item.setdefault("connection_verified", True)
+            view[key] = item
+        elif isinstance(value, dict) and value:
+            item = dict(value)
+            item.setdefault("connection_verified", True)
+            view[key] = item
+        else:
+            view[key] = value
     return view
 
 
@@ -48,12 +57,15 @@ def build_connected_tool_context(
     resolved_integrations: dict[str, Any],
     tools: list[RegisteredTool],
 ) -> dict[str, Any]:
+    from pydantic import BaseModel
+
     from app.integrations.registry import family_key
 
     connected_integrations = sorted(
         key
         for key, value in resolved_integrations.items()
-        if not key.startswith("_") and isinstance(value, dict) and value
+        if not key.startswith("_")
+        and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
     connected_families = {family_key(key) for key in connected_integrations}
 

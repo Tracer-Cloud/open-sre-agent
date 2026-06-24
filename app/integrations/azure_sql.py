@@ -658,7 +658,7 @@ def get_wait_stats(config: AzureSQLConfig) -> dict[str, Any]:
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[AzureSQLConfig | None, str | None]:
     try:
         cfg = build_azure_sql_config(
             {
@@ -675,5 +675,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="azure_sql", record_id=record_id)
         return None, None
     if cfg.server and cfg.database:
-        return cfg.model_dump(), "azure_sql"
+        return cfg, "azure_sql"
     return None, None

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[GrafanaIntegrationConfig | None, str | None]:
     try:
         cfg = GrafanaIntegrationConfig.model_validate(
             {
@@ -30,13 +30,8 @@ def classify(
     if not cfg.endpoint:
         return None, None
     if cfg.is_local:
-        return {
-            "endpoint": cfg.endpoint,
-            "api_key": "",
-            "username": cfg.username,
-            "password": cfg.password,
-            "integration_id": cfg.integration_id,
-        }, "grafana_local"
+        # Clear api_key for local grafana — basic auth (username/password) is used instead.
+        return cfg.model_copy(update={"api_key": ""}), "grafana_local"
     if cfg.api_key and cfg.api_key != "local":
-        return cfg.model_dump(), "grafana"
+        return cfg, "grafana"
     return None, None

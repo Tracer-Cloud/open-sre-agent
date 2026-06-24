@@ -16,9 +16,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import BaseModel
+
 
 def _instances_key(service: str) -> str:
     return f"_all_{service}_instances"
+
+
+def _as_dict(config: Any) -> dict[str, Any] | None:
+    """Normalize a config value (dict or BaseModel) to a plain dict, or None."""
+    if isinstance(config, BaseModel):
+        return config.model_dump(exclude_none=True)
+    if isinstance(config, dict):
+        return config
+    return None
 
 
 def get_instances(resolved: dict[str, Any] | None, service: str) -> list[dict[str, Any]]:
@@ -35,13 +46,14 @@ def get_instances(resolved: dict[str, Any] | None, service: str) -> list[dict[st
     if isinstance(explicit, list):
         return [item for item in explicit if isinstance(item, dict)]
     flat = resolved.get(service)
-    if isinstance(flat, dict):
+    flat_dict = _as_dict(flat)
+    if flat_dict is not None:
         return [
             {
                 "name": "default",
                 "tags": {},
-                "config": flat,
-                "integration_id": str(flat.get("integration_id", "")),
+                "config": flat_dict,
+                "integration_id": str(flat_dict.get("integration_id", "")),
             }
         ]
     return []
@@ -52,7 +64,7 @@ def get_default_instance(resolved: dict[str, Any] | None, service: str) -> dict[
     if not resolved:
         return None
     flat = resolved.get(service)
-    return flat if isinstance(flat, dict) else None
+    return _as_dict(flat)
 
 
 def get_instance_by_name(
@@ -64,8 +76,7 @@ def get_instance_by_name(
         return None
     for inst in get_instances(resolved, service):
         if str(inst.get("name", "")).lower() == target:
-            config = inst.get("config")
-            return config if isinstance(config, dict) else None
+            return _as_dict(inst.get("config"))
     return None
 
 
@@ -81,8 +92,8 @@ def get_instances_by_tag(
     for inst in get_instances(resolved, service):
         tags = inst.get("tags", {}) if isinstance(inst.get("tags"), dict) else {}
         if tags.get(target_key) == target_value:
-            config = inst.get("config")
-            if isinstance(config, dict):
+            config = _as_dict(inst.get("config"))
+            if config is not None:
                 out.append(config)
     return out
 
@@ -109,9 +120,7 @@ def select_instance(
         for inst in get_instances(resolved, service):
             inst_tags = inst.get("tags", {}) if isinstance(inst.get("tags"), dict) else {}
             if all(inst_tags.get(k) == v for k, v in normalized.items()):
-                config = inst.get("config")
-                if isinstance(config, dict):
-                    return config
+                return _as_dict(inst.get("config"))
         return None
     return get_default_instance(resolved, service)
 

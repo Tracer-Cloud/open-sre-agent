@@ -492,16 +492,20 @@ class TestClassifyOpenClawIntegration:
                 "auth_token": "tok",
             }
         )
+        from app.agent.stages.investigate.tools import availability_view
+
         resolved = _classify_integrations([record])
         assert "openclaw" in resolved
-        assert resolved["openclaw"]["url"] == "https://openclaw.example.com/mcp"
-        assert resolved["openclaw"]["connection_verified"] is True
+        assert resolved["openclaw"].url == "https://openclaw.example.com/mcp"
+        # connection_verified is set at the tool-availability boundary
+        view = availability_view(resolved)
+        assert view["openclaw"]["connection_verified"] is True
 
     def test_stdio_classified(self) -> None:
         record = self._make_record({"mode": "stdio", "command": "openclaw-mcp"})
         resolved = _classify_integrations([record])
         assert "openclaw" in resolved
-        assert resolved["openclaw"]["command"] == "openclaw-mcp"
+        assert resolved["openclaw"].command == "openclaw-mcp"
 
     def test_invalid_config_skipped(self) -> None:
         # No url and non-stdio mode → ValidationError inside _classify_integrations → skipped
@@ -524,7 +528,7 @@ class TestClassifyOpenClawIntegration:
             {"url": "https://openclaw.example.com/mcp", "mode": "streamable-http"}
         )
         resolved = _classify_integrations([record])
-        assert resolved["openclaw"]["integration_id"] == "openclaw-1"
+        assert resolved["openclaw"].integration_id == "openclaw-1"
 
 
 class TestOpenClawExtractParams:

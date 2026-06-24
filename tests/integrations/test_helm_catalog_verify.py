@@ -39,11 +39,11 @@ def test_classify_helm_store_record() -> None:
     )
 
     cfg = resolved["helm"]
-    assert cfg["helm_path"] == "helm"
-    assert cfg["kube_context"] == "kind-demo"
-    assert cfg["kubeconfig"] == "~/.kube/config"
-    assert cfg["default_namespace"] == "tracer"
-    assert cfg["integration_id"] == "helm-store-1"
+    assert cfg.helm_path == "helm"
+    assert cfg.kube_context == "kind-demo"
+    assert cfg.kubeconfig == "~/.kube/config"
+    assert cfg.default_namespace == "tracer"
+    assert cfg.integration_id == "helm-store-1"
 
 
 def test_classify_helm_accepts_alternate_credential_keys() -> None:
@@ -61,9 +61,9 @@ def test_classify_helm_accepts_alternate_credential_keys() -> None:
             }
         ]
     )
-    assert resolved["helm"]["kube_context"] == "ctx-1"
-    assert resolved["helm"]["kubeconfig"] == "/tmp/kc"
-    assert resolved["helm"]["default_namespace"] == "prod"
+    assert resolved["helm"].kube_context == "ctx-1"
+    assert resolved["helm"].kubeconfig == "/tmp/kc"
+    assert resolved["helm"].default_namespace == "prod"
 
 
 def test_resolve_effective_integrations_includes_helm_from_env(

@@ -52,7 +52,7 @@ class TestCatalogClassify:
         )
         assert source == "pagerduty"
         assert config is not None
-        assert config["api_key"] == "pd-key"
+        assert config.api_key == "pd-key"
 
     def test_classify_missing_api_key_returns_none(self) -> None:
         from app.integrations._catalog_impl import _classify_service_instance
@@ -75,7 +75,7 @@ class TestCatalogClassify:
         )
         assert source == "pagerduty"
         assert config is not None
-        assert config["base_url"] == "https://api.pagerduty.com"
+        assert config.base_url == "https://api.pagerduty.com"
 
 
 class TestEnvLoader:

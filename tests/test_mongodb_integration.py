@@ -172,6 +172,6 @@ class TestResolveIntegrations:
         ]
         resolved = _classify_integrations(integrations)
         assert "mongodb" in resolved
-        assert resolved["mongodb"]["connection_string"] == "mongodb://host"
-        assert resolved["mongodb"]["database"] == "prod"
-        assert resolved["mongodb"]["auth_source"] == "admin"  # default
+        assert resolved["mongodb"].connection_string == "mongodb://host"
+        assert resolved["mongodb"].database == "prod"
+        assert resolved["mongodb"].auth_source == "admin"  # default

@@ -137,8 +137,8 @@ class TestResolveIntegrations:
         ]
         resolved = _classify_integrations(integrations)
         assert "mongodb_atlas" in resolved
-        assert resolved["mongodb_atlas"]["api_public_key"] == "pub"
-        assert resolved["mongodb_atlas"]["project_id"] == "proj"
+        assert resolved["mongodb_atlas"].api_public_key == "pub"
+        assert resolved["mongodb_atlas"].project_id == "proj"
 
     def test_classify_atlas_alias(self):
         integrations = [

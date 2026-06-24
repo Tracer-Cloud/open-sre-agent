@@ -5,23 +5,30 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.utils.coercion import safe_int
+from app.integrations._validation_helpers import report_classify_failure
+from app.integrations.config_models import OpenSearchIntegrationConfig
 
 logger = logging.getLogger(__name__)
 
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
-    url = str(credentials.get("url", "")).strip()
-    if not url:
+) -> tuple[OpenSearchIntegrationConfig | None, str | None]:
+    try:
+        cfg = OpenSearchIntegrationConfig.model_validate(
+            {
+                "url": credentials.get("url", ""),
+                "api_key": credentials.get("api_key", ""),
+                "username": credentials.get("username", ""),
+                "password": credentials.get("password", ""),
+                "index_pattern": credentials.get("index_pattern", "*"),
+                "max_results": credentials.get("max_results", 100),
+                "integration_id": record_id,
+            }
+        )
+    except Exception as exc:
+        report_classify_failure(exc, logger=logger, integration="opensearch", record_id=record_id)
         return None, None
-    return {
-        "url": url.rstrip("/"),
-        "api_key": str(credentials.get("api_key", "")).strip(),
-        "username": str(credentials.get("username", "")).strip(),
-        "password": str(credentials.get("password", "")).strip(),
-        "index_pattern": str(credentials.get("index_pattern", "*")).strip() or "*",
-        "max_results": max(1, min(safe_int(credentials.get("max_results", 100), 100), 500)),
-        "integration_id": record_id,
-    }, "opensearch"
+    if cfg.url:
+        return cfg, "opensearch"
+    return None, None

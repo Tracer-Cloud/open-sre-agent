@@ -150,9 +150,7 @@ def tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
-def classify(
-    credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+def classify(credentials: dict[str, Any], record_id: str) -> tuple[TempoConfig | None, str | None]:
     try:
         cfg = build_tempo_config(
             {
@@ -167,5 +165,5 @@ def classify(
     except Exception:
         return None, None
     if cfg.is_configured:
-        return cfg.model_dump(), "tempo"
+        return cfg, "tempo"
     return None, None

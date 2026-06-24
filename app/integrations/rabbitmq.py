@@ -558,7 +558,7 @@ __all__ = [
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[RabbitMQConfig | None, str | None]:
     try:
         cfg = build_rabbitmq_config(
             {
@@ -569,20 +569,12 @@ def classify(
                 "vhost": credentials.get("vhost", "/"),
                 "ssl": credentials.get("ssl", False),
                 "verify_ssl": credentials.get("verify_ssl", True),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="rabbitmq", record_id=record_id)
         return None, None
     if cfg.host and cfg.username:
-        return {
-            "host": cfg.host,
-            "management_port": cfg.management_port,
-            "username": cfg.username,
-            "password": cfg.password,
-            "vhost": cfg.vhost,
-            "ssl": cfg.ssl,
-            "verify_ssl": cfg.verify_ssl,
-            "integration_id": record_id,
-        }, "rabbitmq"
+        return cfg, "rabbitmq"
     return None, None

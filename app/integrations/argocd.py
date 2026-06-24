@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[ArgoCDIntegrationConfig | None, str | None]:
     try:
         cfg = ArgoCDIntegrationConfig.model_validate(
             {
@@ -33,5 +33,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="argocd", record_id=record_id)
         return None, None
     if cfg.base_url and (cfg.bearer_token or (cfg.username and cfg.password)):
-        return cfg.model_dump(), "argocd"
+        return cfg, "argocd"
     return None, None

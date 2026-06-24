@@ -507,7 +507,7 @@ def validate_sentry_mcp_config(config: SentryMCPConfig) -> SentryMCPValidationRe
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[SentryMCPConfig | None, str | None]:
     try:
         cfg = build_sentry_mcp_config(
             {
@@ -527,7 +527,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="sentry_mcp", record_id=record_id)
         return None, None
     if cfg.is_configured:
-        config_dict = cfg.model_dump()
-        config_dict["connection_verified"] = True
-        return config_dict, "sentry_mcp"
+        return cfg, "sentry_mcp"
     return None, None

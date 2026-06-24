@@ -461,7 +461,7 @@ def get_replication_status(config: MariaDBConfig) -> dict[str, Any]:
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[MariaDBConfig | None, str | None]:
     try:
         cfg = build_mariadb_config(
             {
@@ -471,19 +471,12 @@ def classify(
                 "username": credentials.get("username", ""),
                 "password": credentials.get("password", ""),
                 "ssl": credentials.get("ssl", True),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="mariadb", record_id=record_id)
         return None, None
     if cfg.host and cfg.database:
-        return {
-            "host": cfg.host,
-            "port": cfg.port,
-            "database": cfg.database,
-            "username": cfg.username,
-            "password": cfg.password,
-            "ssl": cfg.ssl,
-            "integration_id": record_id,
-        }, "mariadb"
+        return cfg, "mariadb"
     return None, None

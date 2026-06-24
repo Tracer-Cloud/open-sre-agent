@@ -234,7 +234,11 @@ async def astream_investigation(
                     {
                         "output": {
                             "resolved_integrations": {
-                                k: v for k, v in resolved.items() if k != "_all"
+                                k: v.model_dump(exclude_none=True)
+                                if hasattr(v, "model_dump")
+                                else v
+                                for k, v in resolved.items()
+                                if k != "_all"
                             }
                         }
                     },

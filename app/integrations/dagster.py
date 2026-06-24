@@ -305,21 +305,18 @@ def list_schedule_ticks(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[DagsterConfig | None, str | None]:
     try:
         cfg = build_dagster_config(
             {
                 "endpoint": credentials.get("endpoint", ""),
                 "api_token": credentials.get("api_token", ""),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="dagster", record_id=record_id)
         return None, None
     if cfg.endpoint:
-        return {
-            "endpoint": cfg.endpoint,
-            "api_token": cfg.api_token,
-            "integration_id": record_id,
-        }, "dagster"
+        return cfg, "dagster"
     return None, None

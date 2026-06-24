@@ -148,10 +148,10 @@ def test_classify_service_instance_rds_remote_store_returns_flat_shape() -> None
 
     assert resolved_key == "rds"
     assert flat is not None
-    assert flat["db_instance_identifier"] == "remote-db"
-    assert flat["region"] == "ap-southeast-2"
-    assert flat["integration_id"] == "store-record-42"
-    assert "credentials" not in flat, (
+    assert flat.db_instance_identifier == "remote-db"
+    assert flat.region == "ap-southeast-2"
+    assert flat.integration_id == "store-record-42"
+    assert not hasattr(flat, "credentials"), (
         "remote-store rds must NOT nest fields under 'credentials' — "
         "rds_is_available reads sources['rds']['db_instance_identifier'] directly"
     )

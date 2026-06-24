@@ -467,7 +467,7 @@ def get_collection_stats(
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[MongoDBConfig | None, str | None]:
     try:
         cfg = build_mongodb_config(
             {
@@ -481,5 +481,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="mongodb", record_id=record_id)
         return None, None
     if cfg.connection_string:
-        return cfg.model_dump(), "mongodb"
+        return cfg, "mongodb"
     return None, None

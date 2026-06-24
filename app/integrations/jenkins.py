@@ -130,7 +130,7 @@ def validate_jenkins_config(config: JenkinsConfig) -> JenkinsValidationResult:
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[JenkinsConfig | None, str | None]:
     try:
         cfg = build_jenkins_config(
             {
@@ -144,5 +144,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="jenkins", record_id=record_id)
         return None, None
     if cfg.is_configured:
-        return cfg.model_dump(), "jenkins"
+        return cfg, "jenkins"
     return None, None

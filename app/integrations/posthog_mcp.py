@@ -541,7 +541,7 @@ def validate_posthog_mcp_config(config: PostHogMCPConfig) -> PostHogMCPValidatio
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[PostHogMCPConfig | None, str | None]:
     try:
         cfg = build_posthog_mcp_config(
             {
@@ -561,7 +561,5 @@ def classify(
         report_classify_failure(exc, logger=logger, integration="posthog_mcp", record_id=record_id)
         return None, None
     if cfg.is_configured:
-        config_dict = cfg.model_dump()
-        config_dict["connection_verified"] = True
-        return config_dict, "posthog_mcp"
+        return cfg, "posthog_mcp"
     return None, None

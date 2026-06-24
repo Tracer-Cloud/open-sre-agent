@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[AWSIntegrationConfig | None, str | None]:
     raw: dict[str, Any] = {
         "region": credentials.get("region", "us-east-1"),
         "role_arn": credentials.get("role_arn", ""),
@@ -27,7 +27,7 @@ def classify(
             "session_token": credentials.get("session_token", ""),
         }
     try:
-        return AWSIntegrationConfig.model_validate(raw).model_dump(exclude_none=True), "aws"
+        return AWSIntegrationConfig.model_validate(raw), "aws"
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="aws", record_id=record_id)
         return None, None

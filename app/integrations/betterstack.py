@@ -451,7 +451,7 @@ __all__ = [
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[BetterStackConfig | None, str | None]:
     try:
         cfg = build_betterstack_config(
             {
@@ -459,17 +459,12 @@ def classify(
                 "username": credentials.get("username", ""),
                 "password": credentials.get("password", ""),
                 "sources": credentials.get("sources", []),
+                "integration_id": record_id,
             }
         )
     except Exception as exc:
         report_classify_failure(exc, logger=logger, integration="betterstack", record_id=record_id)
         return None, None
     if cfg.query_endpoint and cfg.username:
-        return {
-            "query_endpoint": cfg.query_endpoint,
-            "username": cfg.username,
-            "password": cfg.password,
-            "sources": list(cfg.sources),
-            "integration_id": record_id,
-        }, "betterstack"
+        return cfg, "betterstack"
     return None, None

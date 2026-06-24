@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def classify(
     credentials: dict[str, Any], record_id: str
-) -> tuple[dict[str, Any] | None, str | None]:
+) -> tuple[TwilioIntegrationConfig | None, str | None]:
     try:
         cfg = TwilioIntegrationConfig.model_validate(
             {
@@ -24,4 +24,4 @@ def classify(
         )
     except Exception:
         return None, None
-    return cfg.model_dump(), "twilio"
+    return cfg, "twilio"
