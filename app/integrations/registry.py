@@ -440,8 +440,8 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="temporal",
         verifier=_verify_temporal,
         direct_effective=True,
-        setup_order=36,
-        verify_order=47,
+        setup_order=37,
+        verify_order=48,
     ),
 )
 

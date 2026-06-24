@@ -106,6 +106,7 @@ from app.integrations.supabase import classify as _classify_supabase
 from app.integrations.telegram import classify as _classify_telegram
 from app.integrations.tempo import classify as _classify_tempo
 from app.integrations.tempo import tempo_config_from_env
+from app.integrations.temporal import classify as _classify_temporal
 from app.integrations.twilio import classify as _classify_twilio
 from app.integrations.vercel import classify as _classify_vercel
 from app.integrations.victoria_logs import classify as _classify_victoria_logs
@@ -275,6 +276,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "supabase": _classify_supabase,
     "signoz": _classify_signoz,
     "tempo": _classify_tempo,
+    "temporal": _classify_temporal,
     "smtp": _classify_smtp,
 }
 
