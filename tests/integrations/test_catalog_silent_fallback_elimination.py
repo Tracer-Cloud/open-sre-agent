@@ -47,7 +47,12 @@ def _quiet_sentry(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_report_classify_failure_forwards_tags() -> None:
     exc = ValueError("bad config")
     with patch("app.integrations._validation_helpers.report_exception") as mock_report:
-        report_classify_failure(exc, logger=__import__("logging").getLogger(__name__), integration="datadog", record_id="rec-1")
+        report_classify_failure(
+            exc,
+            logger=__import__("logging").getLogger(__name__),
+            integration="datadog",
+            record_id="rec-1",
+        )
     mock_report.assert_called_once()
     kwargs = mock_report.call_args.kwargs
     assert kwargs["severity"] == "warning"
