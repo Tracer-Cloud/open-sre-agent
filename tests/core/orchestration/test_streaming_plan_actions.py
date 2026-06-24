@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
+from app.core.orchestration.entrypoints import astream_investigation
 from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
+from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
 from app.integrations.config_models import RedisIntegrationConfig
-from app.pipeline.runners import astream_investigation
-from app.pipeline.stream_payloads import resolved_integrations_stream_payload
 
 
 def _agent_run_stub(

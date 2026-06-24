@@ -457,7 +457,7 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     """
     from app.cli.investigation import resolve_investigation_context
     from app.config import LLMSettings
-    from app.pipeline.runners import astream_investigation
+    from app.core.orchestration.entrypoints import astream_investigation
 
     LLMSettings.from_env()
     try:

@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from app.pipeline.runners import run_investigation
+from app.core.orchestration.entrypoints import run_investigation
 from tests.benchmarks.cloudopsbench.case_loader import (
     BENCHMARK_DIR,
     CLOUDOPSBENCH_HF_DATASET_ID,

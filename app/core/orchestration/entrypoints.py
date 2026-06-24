@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from app.pipeline.stream_payloads import resolved_integrations_stream_payload
+from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.types.config import NodeConfig
@@ -88,7 +88,7 @@ def run_investigation(
             agent-level extensions can pass a subclass instead.
     """
     init_sentry(entrypoint="pipeline")
-    from app.pipeline.pipeline import run_connected_investigation as _run
+    from app.core.orchestration.pipeline import run_connected_investigation as _run
 
     initial = make_initial_state(
         raw_alert=raw_alert,
@@ -103,7 +103,7 @@ def run_investigation(
     with report_and_reraise(
         logger=logger,
         message="run_investigation failed",
-        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+        tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
     ):
         return _run(initial, agent_class=agent_class)
 
@@ -111,12 +111,12 @@ def run_investigation(
 def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:
     """Run chat routing + response (for testing/CLI use)."""
     init_sentry(entrypoint="pipeline")
-    from app.pipeline.pipeline import run_chat as _run
+    from app.core.orchestration.pipeline import run_chat as _run
 
     with report_and_reraise(
         logger=logger,
         message="run_chat failed",
-        tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+        tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
     ):
         return _run(state)
 
@@ -207,7 +207,7 @@ async def astream_investigation(
             from app.core.orchestration.node.plan_actions import plan_actions
             from app.core.orchestration.node.publish_findings.node import generate_report
             from app.core.orchestration.node.resolve_integrations import resolve_integrations
-            from app.pipeline.state_updates import apply_state_updates
+            from app.core.orchestration.state_updates import apply_state_updates
 
             state = initial
 
@@ -396,11 +396,11 @@ async def astream_investigation(
 class SimpleAgent:
     def invoke(self, state: AgentState, _config: NodeConfig | None = None) -> AgentState:
         init_sentry(entrypoint="pipeline")
-        from app.pipeline.pipeline import run_connected_investigation as _run
+        from app.core.orchestration.pipeline import run_connected_investigation as _run
 
         with report_and_reraise(
             logger=logger,
             message="SimpleAgent.invoke failed",
-            tags={"surface": "pipeline", "component": "app.pipeline.runners"},
+            tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
         ):
             return _run(state)

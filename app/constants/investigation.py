@@ -1,6 +1,6 @@
-"""Constants shared between pipeline routing and investigation stages.
+"""Constants shared between orchestration routing and investigation stages.
 
-Lives under ``app.constants`` (not ``app.pipeline`` / ``app.agent``) to avoid
+Lives under ``app.constants`` (not ``app.core.orchestration`` / ``app.agent``) to avoid
 partial-initialization cycles between orchestration and agent packages.
 """
 

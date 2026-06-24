@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.pipeline.state_updates import apply_state_updates
+from app.core.orchestration.state_updates import apply_state_updates
 from app.state import AgentState
 
 

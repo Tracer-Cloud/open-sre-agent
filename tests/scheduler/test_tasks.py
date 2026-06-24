@@ -19,7 +19,7 @@ class TestMessageBuilders:
         )
         # Mock the pipeline so the test doesn't need live infra
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {},
         )
         msg = tasks_mod.build_message(task)
@@ -36,7 +36,7 @@ class TestMessageBuilders:
             window_hours=168,
         )
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {},
         )
         msg = tasks_mod.build_message(task)
@@ -51,7 +51,7 @@ class TestMessageBuilders:
             chat_id="123",
         )
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {},
         )
         msg = tasks_mod.build_message(task)
@@ -67,7 +67,7 @@ class TestMessageBuilders:
             window_hours=24,
         )
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {"report": "Real incident data from pipeline"},
         )
         msg = tasks_mod.build_message(task)
@@ -82,7 +82,7 @@ class TestMessageBuilders:
             window_hours=168,
         )
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {"report": "Weekly audit from real data"},
         )
         msg = tasks_mod.build_message(task)
@@ -96,7 +96,7 @@ class TestMessageBuilders:
             chat_id="123",
         )
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             lambda *_a, **_kw: {"report": "3/3 probes passed"},
         )
         msg = tasks_mod.build_message(task)
@@ -146,7 +146,7 @@ class TestMessageBuilders:
         def _raise(_payload: object, **_kwargs: object) -> dict[str, str]:
             raise RuntimeError("pipeline down")
 
-        monkeypatch.setattr("app.pipeline.runners.run_investigation", _raise)
+        monkeypatch.setattr("app.core.orchestration.entrypoints.run_investigation", _raise)
 
         with pytest.raises(RuntimeError, match="Daily summary failed"):
             tasks_mod.build_message(task)
@@ -163,7 +163,7 @@ class TestMessageBuilders:
         def _raise(_payload: object, **_kwargs: object) -> dict[str, str]:
             raise RuntimeError("pipeline down")
 
-        monkeypatch.setattr("app.pipeline.runners.run_investigation", _raise)
+        monkeypatch.setattr("app.core.orchestration.entrypoints.run_investigation", _raise)
 
         with pytest.raises(RuntimeError, match="Weekly audit failed"):
             tasks_mod.build_message(task)
@@ -185,7 +185,7 @@ class TestMessageBuilders:
             return {"report": "test report"}
 
         monkeypatch.setattr(
-            "app.pipeline.runners.run_investigation",
+            "app.core.orchestration.entrypoints.run_investigation",
             _mock_run_investigation,
         )
 

@@ -1,16 +1,16 @@
 """Static grounding for the OpenSRE investigation flow.
 
 The interactive-shell assistant does not run investigations itself, but users
-ask how alerts are processed. Keep this aligned with ``app/pipeline/pipeline.py``
-and the agent packages under ``app/agent/``.
+ask how alerts are processed. Keep this aligned with
+``app/core/orchestration/pipeline.py`` and the agent packages under ``app/agent/``.
 """
 
 from __future__ import annotations
 
 _INVESTIGATION_FLOW_REFERENCE = """\
 Source files:
-- app/pipeline/pipeline.py coordinates resolve → extract → investigate → deliver.
-- app/pipeline/runners.py exposes run_investigation / run_chat for CLI and tests.
+- app/core/orchestration/pipeline.py coordinates resolve → extract → investigate → deliver.
+- app/core/orchestration/entrypoints.py exposes run_investigation / run_chat for CLI and tests.
 - app/agent/context.py resolves integrations from local configuration.
 - app/core/orchestration/node/extract_alert/node.py parses the raw alert into structured state.
 - app/core/orchestration/node/investigate/agent.py runs the connected investigation agent (tools + LLM).

@@ -27,7 +27,7 @@ def test_run_investigation_wraps_runner_with_tracking(monkeypatch) -> None:
         return {"ok": True}
 
     monkeypatch.setattr("app.utils.sdk.track_investigation", fake_track_investigation)
-    monkeypatch.setattr("app.pipeline.runners.run_investigation", fake_runner)
+    monkeypatch.setattr("app.core.orchestration.entrypoints.run_investigation", fake_runner)
 
     from app.utils.sdk import run_investigation
 

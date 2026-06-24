@@ -1,6 +1,6 @@
 """Chat agent — conversational REPL and chat pipeline entrypoint."""
 
-from app.agent.chat.agent import (
+from app.core.orchestration.chat.agent import (
     ChatAgent,
     UnsupportedChatProviderError,
     execute_tool_calls,

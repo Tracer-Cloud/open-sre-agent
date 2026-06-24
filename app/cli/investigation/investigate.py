@@ -69,7 +69,7 @@ def _call_run_investigation(
     investigation_metadata: tuple[str, str, str] | None = None,
 ) -> AgentState:
     """Import the heavy investigation runner only when execution starts."""
-    from app.pipeline.runners import run_investigation
+    from app.core.orchestration.entrypoints import run_investigation
 
     return run_investigation(
         raw_alert,
@@ -181,7 +181,7 @@ def stream_investigation_cli(
     import queue
     import threading
 
-    from app.pipeline.runners import astream_investigation
+    from app.core.orchestration.entrypoints import astream_investigation
 
     _check_llm_settings()
 
@@ -292,7 +292,7 @@ def _run_session_alert_payload(
     import queue
 
     from app.cli.ui.renderer import StreamRenderer
-    from app.pipeline.runners import astream_investigation
+    from app.core.orchestration.entrypoints import astream_investigation
 
     _check_llm_settings()
     if context_overrides:

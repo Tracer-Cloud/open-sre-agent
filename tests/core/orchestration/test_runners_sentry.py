@@ -4,7 +4,7 @@ from typing import cast
 
 import pytest
 
-from app.pipeline import runners
+from app.core.orchestration import entrypoints as runners
 from app.state import AgentState
 from app.utils import errors
 
@@ -22,7 +22,7 @@ def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
     def capture_stub(exc: BaseException, **_kwargs: object) -> None:
         captured_errors.append(exc)
 
-    import app.pipeline.pipeline as pipeline_module
+    import app.core.orchestration.pipeline as pipeline_module
 
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
     monkeypatch.setattr(errors, "capture_exception", capture_stub)

@@ -22,8 +22,8 @@ def test_pipeline_does_not_import_runnable_config() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     targets = [
         repo_root / "app" / "agent",
-        repo_root / "app" / "pipeline" / "runners.py",
-        repo_root / "app" / "pipeline" / "pipeline.py",
+        repo_root / "app" / "core" / "orchestration" / "entrypoints.py",
+        repo_root / "app" / "core" / "orchestration" / "pipeline.py",
     ]
     banned = ("RunnableConfig",)
     offenders: list[str] = []

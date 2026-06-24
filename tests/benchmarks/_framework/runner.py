@@ -406,7 +406,7 @@ class BenchmarkRunner:
         """Execute one (case × mode × llm × run) cell."""
         # Late import — keeps the rest of the framework importable without
         # opensre's full dep tree loaded.
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         alert = self.adapter.build_alert(case)
         # Mode dispatch: opensre+llm uses the adapter's full integration setup

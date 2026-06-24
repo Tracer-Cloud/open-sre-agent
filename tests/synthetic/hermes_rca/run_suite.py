@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import has_credentials_for_active_llm_provider
-from app.pipeline.runners import run_investigation
+from app.core.orchestration.entrypoints import run_investigation
 from tests.synthetic.hermes_rca.scenario_loader import (
     SUITE_DIR,
     HermesScenarioFixture,

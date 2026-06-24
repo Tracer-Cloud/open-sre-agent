@@ -167,7 +167,7 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
 
     monkeypatch.setattr("app.cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
+        "app.core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
 
@@ -193,7 +193,7 @@ def test_stream_investigation_cli_closes_cleanly_on_generator_close(
 
     monkeypatch.setattr("app.cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
+        "app.core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
 
@@ -239,7 +239,7 @@ def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
 
     monkeypatch.setattr("app.cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
+        "app.core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
 

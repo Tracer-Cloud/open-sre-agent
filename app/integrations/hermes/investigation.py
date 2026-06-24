@@ -2,7 +2,7 @@
 
 The :func:`run_incident_investigation` helper turns a :class:`HermesIncident`
 into a Grafana-shaped alert payload, calls
-:func:`app.pipeline.runners.run_investigation`, and extracts a
+:func:`app.core.orchestration.entrypoints.run_investigation`, and extracts a
 human-readable summary from the resulting :class:`AgentState`.
 
 The investigation pipeline is heavy (LLM calls, integration
@@ -70,10 +70,10 @@ def run_incident_investigation(incident: HermesIncident) -> str | None:
     imports are deferred so the Hermes sink can be imported in environments
     where heavy dependencies are not installed (e.g. unit tests).
     """
-    # Imported lazily — pulling app.pipeline.runners at module import
+    # Imported lazily — pulling app.core.orchestration.entrypoints at module import
     # time would force every Hermes consumer to pay the pipeline import
     # cost even when no investigation ever runs.
-    from app.pipeline.runners import run_investigation
+    from app.core.orchestration.entrypoints import run_investigation
 
     alert = build_alert_from_incident(incident)
     state = run_investigation(alert)

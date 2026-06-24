@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             raise
     # Wire CLI-flavored implementations into the observability ports
     # (ProgressTracker, debug_print) so any core code under app/agent,
-    # app/pipeline, app/utils that calls into the abstractions routes
+    # app/core/orchestration, app/utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
     from app.cli.interactive_shell.ui.output.boundary import (
         install_product_adapters,

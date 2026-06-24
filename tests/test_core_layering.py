@@ -1,9 +1,9 @@
 """Layering boundary test: core packages must not import from ``app.cli``.
 
-Core (``app/agent/``, ``app/pipeline/``, ``app/utils/``) reports progress,
+Core (``app/agent/``, ``app/core/orchestration/``, ``app/utils/``) reports progress,
 prints debug output, and renders investigation headers/footers through
 the ports defined in :mod:`app.observability`. Reaching into
-``app.cli.*`` directly couples the agent/pipeline layer to the REPL's
+``app.cli.*`` directly couples the agent/orchestration layer to the REPL's
 specific renderer and breaks headless / non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
@@ -19,7 +19,7 @@ import pytest
 
 _CORE_PACKAGES: tuple[Path, ...] = (
     Path("app/agent"),
-    Path("app/pipeline"),
+    Path("app/core/orchestration"),
     Path("app/utils"),
 )
 # Anything imported from a forbidden prefix by a core module is a
@@ -66,7 +66,7 @@ def _imported_modules(source: str) -> set[str]:
 
 @pytest.mark.parametrize("module_path", _core_modules(), ids=str)
 def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
-    """Every module under ``app/agent/``, ``app/pipeline/``, ``app/utils/``
+    """Every module under ``app/agent/``, ``app/core/orchestration/``, ``app/utils/``
     must avoid imports from forbidden boundary packages (``app.cli.*``,
     ``app.services.tracer_client``).
 

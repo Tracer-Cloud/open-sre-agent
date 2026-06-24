@@ -3,8 +3,8 @@
 The investigation pipeline exposes an ``agent_class`` parameter at two
 public surfaces:
 
-  - :func:`app.pipeline.runners.run_investigation`
-  - :func:`app.pipeline.pipeline.run_connected_investigation`
+  - :func:`app.core.orchestration.entrypoints.run_investigation`
+  - :func:`app.core.orchestration.pipeline.run_connected_investigation`
 
 The parameter MUST thread cleanly from the outer ``run_investigation``
 all the way to where the agent is constructed, so callers (e.g. test
@@ -51,7 +51,7 @@ def _reset_sentinel() -> None:
 def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     """The pipeline must instantiate the override class, not the default."""
     _reset_sentinel()
-    from app.pipeline.pipeline import run_connected_investigation
+    from app.core.orchestration.pipeline import run_connected_investigation
     from app.state.factory import make_initial_state
 
     state = make_initial_state(raw_alert="alert text")
@@ -83,7 +83,7 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
     """Production behavior is unchanged: omitting ``agent_class`` constructs
     :class:`ConnectedInvestigationAgent` (the default)."""
     _reset_sentinel()
-    from app.pipeline.pipeline import run_connected_investigation
+    from app.core.orchestration.pipeline import run_connected_investigation
     from app.state.factory import make_initial_state
 
     state = make_initial_state(raw_alert="alert text")
@@ -121,7 +121,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     ``pipeline.run_connected_investigation`` → ``ConnectedInvestigationAgent``.
     """
     _reset_sentinel()
-    from app.pipeline.runners import run_investigation
+    from app.core.orchestration.entrypoints import run_investigation
 
     with (
         patch(
@@ -148,7 +148,7 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
 
 
 def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
-    from app.pipeline.pipeline import run_connected_investigation
+    from app.core.orchestration.pipeline import run_connected_investigation
     from app.state.factory import make_initial_state
 
     calls: list[str] = []

@@ -53,7 +53,7 @@ def _build_daily_summary(task: ScheduledTask) -> str:
     window_start = now - timedelta(hours=task.window_hours)
 
     try:
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         alert_payload = {
             "source": "scheduled_daily_summary",
@@ -94,7 +94,7 @@ def _build_weekly_audit(task: ScheduledTask) -> str:
     window_start = now - timedelta(hours=task.window_hours)
 
     try:
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         alert_payload = {
             "source": "scheduled_weekly_audit",
@@ -130,7 +130,7 @@ def _build_incident_window_replay(task: ScheduledTask) -> str:
     without leaking exception details to the chat.
     """
     try:
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         alert_payload = {
             "source": "scheduled_replay",
@@ -164,7 +164,7 @@ def _build_synthetic_run(task: ScheduledTask) -> str:
     now = datetime.now(UTC)
 
     try:
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         alert_payload = {
             "source": "scheduled_synthetic",
@@ -197,7 +197,7 @@ def _build_custom_investigation(task: ScheduledTask) -> str:
     without leaking exception details to the chat.
     """
     try:
-        from app.pipeline.runners import run_investigation
+        from app.core.orchestration.entrypoints import run_investigation
 
         # Strip credential keys before passing params to the pipeline
         safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}

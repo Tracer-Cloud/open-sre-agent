@@ -131,7 +131,7 @@ def test_run_one_cell_propagates_llm_credit_exhausted(tmp_path: Path) -> None:
     """
     runner = _runner(tmp_path)
     with (
-        patch("app.pipeline.runners.run_investigation", _raises_credit_exhausted),
+        patch("app.core.orchestration.entrypoints.run_investigation", _raises_credit_exhausted),
         pytest.raises(LLMCreditExhaustedError),
     ):
         _call_run_one_cell(runner, tmp_path)
@@ -146,10 +146,10 @@ def test_run_one_cell_propagates_cost_budget_exceeded(tmp_path: Path) -> None:
     """
     runner = _runner(tmp_path)
     # Patch on the source module — _run_one_cell does a late `from
-    # app.pipeline.runners import run_investigation`, which reads the
+    # app.core.orchestration.entrypoints import run_investigation`, which reads the
     # current attribute on that module at call time.
     with (
-        patch("app.pipeline.runners.run_investigation", _raises_budget),
+        patch("app.core.orchestration.entrypoints.run_investigation", _raises_budget),
         pytest.raises(CostBudgetExceeded),
     ):
         _call_run_one_cell(runner, tmp_path)
@@ -160,7 +160,7 @@ def test_run_one_cell_propagates_unknown_model(tmp_path: Path) -> None:
     should halt the run rather than mask it as a per-case failure."""
     runner = _runner(tmp_path)
     with (
-        patch("app.pipeline.runners.run_investigation", _raises_unknown_model),
+        patch("app.core.orchestration.entrypoints.run_investigation", _raises_unknown_model),
         pytest.raises(UnknownModel),
     ):
         _call_run_one_cell(runner, tmp_path)
@@ -171,6 +171,6 @@ def test_run_one_cell_catches_other_exceptions_as_cell_failure(tmp_path: Path) -
     a malformed alert) should NOT halt the run — only budget/unknown-model
     are run-fatal. One bad cell shouldn't kill a 5,000-cell grid."""
     runner = _runner(tmp_path)
-    with patch("app.pipeline.runners.run_investigation", _raises_runtime):
+    with patch("app.core.orchestration.entrypoints.run_investigation", _raises_runtime):
         # Should NOT raise — cell-level failure recorded in the _CellResult
         _call_run_one_cell(runner, tmp_path)

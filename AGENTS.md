@@ -49,7 +49,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
 - `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
-- `app/pipeline/` — Investigation orchestration and runner helpers (`run_investigation`, `run_chat`).
+- `app/core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
 - `app/remote/` — Remote-hosted runtime operations and integration points.
 - `app/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
@@ -86,13 +86,14 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `app/pipeline/pipeline.py` and exposed via
-`app/pipeline/runners.py`. Investigation orchestration lives under `app/core/orchestration/node/`; publishing
-under `app/core/orchestration/node/publish_findings/`.
+Investigations are coordinated in `app/core/orchestration/pipeline.py` and exposed via
+`app/core/orchestration/entrypoints.py`. Stage nodes live under
+`app/core/orchestration/node/`; publishing under
+`app/core/orchestration/node/publish_findings/`.
 
 Files to touch:
 
-- `app/pipeline/pipeline.py` for high-level stage ordering.
+- `app/core/orchestration/pipeline.py` for high-level stage ordering.
 - `app/agent/` for extract, context, investigation, or chat behavior.
 - `app/state/*.py` when adding or renaming persisted investigation fields.
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
@@ -148,7 +149,7 @@ Basic steps:
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
-- If investigation branching or loop behavior changes -> update `app/pipeline/pipeline.py` and the tests for that path.
+- If investigation branching or loop behavior changes -> update `app/core/orchestration/pipeline.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
 - If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 

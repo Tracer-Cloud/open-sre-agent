@@ -290,7 +290,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
+        "app.core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(
@@ -341,7 +341,7 @@ async def test_investigate_stream_captures_streaming_exception(
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "app.pipeline.runners.astream_investigation",
+        "app.core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)

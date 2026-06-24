@@ -107,8 +107,8 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
 ) -> Any:
-    """Lazy-import ``app.pipeline.runners.run_investigation`` (keeps monkeypatch target stable)."""
-    from app.pipeline.runners import run_investigation as _impl
+    """Lazy-import ``app.core.orchestration.entrypoints.run_investigation`` (keeps monkeypatch target stable)."""
+    from app.core.orchestration.entrypoints import run_investigation as _impl
 
     return _impl(
         raw_alert,

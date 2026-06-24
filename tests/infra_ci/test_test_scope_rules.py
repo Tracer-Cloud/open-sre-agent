@@ -47,7 +47,7 @@ def test_three_areas_escalates() -> None:
 
 def test_pipeline_always_escalates() -> None:
     rules = _rules_module()
-    escalate, _, _ = rules.classify(["app/pipeline/runner.py"])
+    escalate, _, _ = rules.classify(["app/core/orchestration/entrypoints.py"])
     assert escalate
 
 
