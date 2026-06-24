@@ -11,7 +11,7 @@ Stage ownership (typical read/write):
 - ``investigate`` → ``InvestigationRuntimeSlice`` (evidence, hypotheses, …)
 - ``diagnose`` → ``DiagnosisSlice``
 - ``deliver`` → ``DeliveryOutputSlice`` (+ reads diagnosis/runtime slices)
-- ``ChatAgent`` → ``ChatStateSlice``, ``SessionContext``
+- Chat-mode ``AgentState`` slices → ``ChatStateSlice``, ``SessionContext`` (live REPL chat uses ``ReplSession``)
 """
 
 from __future__ import annotations

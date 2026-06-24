@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
 
 from app.core.orchestration import entrypoints as runners
-from app.state import AgentState
 from app.utils import errors
 
 
-def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
+def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sentry_init_calls: list[None] = []
     captured_errors: list[BaseException] = []
-    expected_error = RuntimeError("chat failed")
+    expected_error = RuntimeError("investigation failed")
 
-    def failing_chat(_state: AgentState) -> AgentState:
+    def failing_run(*_args: object, **_kwargs: object) -> object:
         raise expected_error
 
     def capture_stub(exc: BaseException, **_kwargs: object) -> None:
@@ -26,10 +23,10 @@ def test_run_chat_initializes_sentry_and_captures_unhandled_errors(
 
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
     monkeypatch.setattr(errors, "capture_exception", capture_stub)
-    monkeypatch.setattr(pipeline_module, "run_chat", failing_chat)
+    monkeypatch.setattr(pipeline_module, "run_connected_investigation", failing_run)
 
-    with pytest.raises(RuntimeError, match="chat failed"):
-        runners.run_chat(cast(AgentState, {}))
+    with pytest.raises(RuntimeError, match="investigation failed"):
+        runners.run_investigation("cpu high on api")
 
     assert sentry_init_calls == [None]
     assert captured_errors == [expected_error]

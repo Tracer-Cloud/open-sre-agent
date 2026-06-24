@@ -54,16 +54,3 @@ def run_connected_investigation(
         raise
 
     return state
-
-
-def run_chat(state: AgentState) -> AgentState:
-    """Run a single chat turn via ChatAgent."""
-    from app.core.orchestration.chat import ChatAgent
-    from app.utils.sentry_sdk import capture_exception
-
-    try:
-        apply_state_updates(state, ChatAgent().run(state))
-    except Exception as exc:
-        capture_exception(exc)
-        raise
-    return state

@@ -12,12 +12,13 @@ globs:
 
 `app/core/orchestration/pipeline.py` runs **resolve integrations → extract alert → investigation agent → deliver**.
 
-`app/core/orchestration/entrypoints.py` exposes `run_investigation`, `run_chat`, and async streaming helpers.
+`app/core/orchestration/entrypoints.py` exposes `run_investigation` and async streaming helpers.
 
 ## Key packages
 
 - `app/core/orchestration/node/` for pipeline stages (extract, investigate, diagnose, publish findings)
-- `app/core/orchestration/chat/`, `app/agent/tool_loop/`
+- `app/agent/tool_loop/` for shared LLM tool-calling runtime primitives
+- `app/cli/interactive_shell/chat/` for live REPL conversational assistant
 - `app/state/agent_state.py` for `AgentState` / `InvestigationState`
 
 ## Conventions

@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, cast
 from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
 from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
-from app.types.config import NodeConfig
 from app.utils.errors import report_and_reraise
 from app.utils.sentry_sdk import init_sentry
 
@@ -105,19 +104,6 @@ def run_investigation(
         tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
     ):
         return _run(initial, agent_class=agent_class)
-
-
-def run_chat(state: AgentState, _config: NodeConfig | None = None) -> AgentState:
-    """Run chat routing + response (for testing/CLI use)."""
-    init_sentry(entrypoint="pipeline")
-    from app.core.orchestration.pipeline import run_chat as _run
-
-    with report_and_reraise(
-        logger=logger,
-        message="run_chat failed",
-        tags={"surface": "pipeline", "component": "app.core.orchestration.entrypoints"},
-    ):
-        return _run(state)
 
 
 async def astream_investigation(

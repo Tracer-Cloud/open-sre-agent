@@ -62,13 +62,11 @@ def _is_model_allowed(provider: object, model: str) -> bool:
 
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
-    from app.core.orchestration.chat import reset_chat_cache
     from app.services.agent_llm_client import reset_agent_client
     from app.services.llm_client import reset_llm_singletons
 
     reset_llm_singletons()
     reset_agent_client()
-    reset_chat_cache()
 
 
 def switch_llm_provider(
