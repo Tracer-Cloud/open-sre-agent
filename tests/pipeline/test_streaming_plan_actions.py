@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
 
 from app.agent.stages.investigate import ConnectedInvestigationAgent
+from app.integrations.config_models import RedisIntegrationConfig
 from app.pipeline.runners import astream_investigation
 
 
@@ -65,3 +67,50 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
     plan_event = chain_end_events[0]
     output = plan_event.data["data"]["output"]
     assert output["planned_actions"] == ["query_logs"]
+
+
+@pytest.mark.asyncio
+async def test_astream_investigation_normalizes_multi_instance_configs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    redis_config = RedisIntegrationConfig(host="cache.prod", port=6380, db=2)
+    monkeypatch.setattr(
+        "app.agent.stages.resolve_integrations.resolve_integrations",
+        lambda _state: {
+            "redis": redis_config,
+            "_all_redis_instances": [
+                {
+                    "name": "primary",
+                    "tags": {"role": "primary"},
+                    "config": redis_config,
+                    "integration_id": "redis-primary",
+                }
+            ],
+            "_all": [{"service": "redis"}],
+        },
+    )
+    monkeypatch.setattr(
+        "app.agent.stages.extract_alert.extract_alert",
+        lambda _state: {"alert_name": "test-alert", "is_noise": False},
+    )
+    monkeypatch.setattr("app.agent.stages.plan_actions.plan_actions", lambda _state: {})
+    monkeypatch.setattr(ConnectedInvestigationAgent, "run", _agent_run_stub)
+    monkeypatch.setattr("app.agent.stages.diagnose.diagnose", lambda _state: {})
+    monkeypatch.setattr("app.agent.correlation.node.node_correlate_upstream", lambda *_a: {})
+    monkeypatch.setattr(
+        "app.agent.stages.publish_findings.node.generate_report",
+        lambda _state, **_kwargs: {"report": "done"},
+    )
+
+    events = [event async for event in astream_investigation("alert text")]
+    resolve_end = next(
+        event
+        for event in events
+        if event.node_name == "resolve_integrations" and event.kind == "on_chain_end"
+    )
+    payload = resolve_end.data["data"]["output"]["resolved_integrations"]
+
+    assert payload["redis"]["host"] == "cache.prod"
+    assert payload["_all_redis_instances"][0]["config"]["db"] == 2
+    assert isinstance(payload["_all_redis_instances"][0]["config"], dict)
+    json.dumps(resolve_end.data)
