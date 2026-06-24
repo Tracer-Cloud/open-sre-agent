@@ -2,7 +2,7 @@ id: 320-priority-prompt-connected-services
 title: Priority prompt — show connected services
 intent_class: complex_shell_prompts
 input:
-  prompt: show me connected services
+  prompt: 'show me connected services'
 session:
   has_prior_state: false
   configured_integrations:
