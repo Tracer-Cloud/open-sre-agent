@@ -63,19 +63,6 @@ def _traced_node(node_name: str, fn: Callable[..., Any], *args: Any, **kwargs: A
         raise
 
 
-def _merge_state(state: AgentState, updates: dict[str, Any]) -> None:
-    if not updates:
-        return
-    state_any = cast(dict[str, Any], state)
-    for key, value in updates.items():
-        if key == "messages":
-            messages = list(state_any.get("messages", []))
-            messages.extend(value) if isinstance(value, list) else messages.append(value)
-            state_any["messages"] = messages
-            continue
-        state_any[key] = value
-
-
 def run_investigation(
     raw_alert: str | dict[str, Any],
     *,
@@ -219,14 +206,14 @@ async def astream_investigation(
             from app.agent.stages.plan_actions import plan_actions
             from app.agent.stages.publish_findings.node import generate_report
             from app.agent.stages.resolve_integrations import resolve_integrations
-            from app.pipeline.pipeline import _merge
+            from app.pipeline.state_updates import apply_state_updates
 
-            state_any = cast(dict[str, Any], initial)
+            state = initial
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
-            resolved_updates = _traced_node("resolve_integrations", resolve_integrations, initial)
-            _merge(state_any, resolved_updates)
+            resolved_updates = _traced_node("resolve_integrations", resolve_integrations, state)
+            apply_state_updates(state, resolved_updates)
             resolved = resolved_updates.get("resolved_integrations") or {}
             _put(
                 _make_node_event(
@@ -244,29 +231,29 @@ async def astream_investigation(
 
             # --- extract_alert ---
             _put(_make_node_event("on_chain_start", "extract_alert", {}))
-            _merge(state_any, _traced_node("extract_alert", extract_alert, initial))
+            apply_state_updates(state, _traced_node("extract_alert", extract_alert, state))
             _put(
                 _make_node_event(
                     "on_chain_end",
                     "extract_alert",
                     {
                         "output": {
-                            k: state_any.get(k) for k in ("alert_name", "pipeline_name", "severity")
+                            k: state.get(k) for k in ("alert_name", "pipeline_name", "severity")
                         }
                     },
                 )
             )
 
-            if state_any.get("is_noise"):
+            if state.get("is_noise"):
                 with contextlib.suppress(RuntimeError):  # loop closed (consumer cancelled)
                     loop.call_soon_threadsafe(event_queue.put_nowait, None)
                 return
 
             # --- plan_actions ---
             _put(_make_node_event("on_chain_start", "plan_actions", {}))
-            _merge(
-                state_any,
-                _traced_node("plan_actions", plan_actions, cast("AgentState", state_any)),
+            apply_state_updates(
+                state,
+                _traced_node("plan_actions", plan_actions, state),
             )
             _put(
                 _make_node_event(
@@ -274,39 +261,39 @@ async def astream_investigation(
                     "plan_actions",
                     {
                         "output": {
-                            "planned_actions": state_any.get("planned_actions", []),
-                            "plan_rationale": state_any.get("plan_rationale", ""),
-                            "plan_audit": state_any.get("plan_audit", {}),
+                            "planned_actions": state.get("planned_actions", []),
+                            "plan_rationale": state.get("plan_rationale", ""),
+                            "plan_audit": state.get("plan_audit", {}),
                         }
                     },
                 )
             )
 
             # --- investigation agent (with real tool events) ---
-            _merge(
-                state_any,
+            apply_state_updates(
+                state,
                 _traced_node(
                     "investigation_agent",
                     ConnectedInvestigationAgent().run,
-                    state_any,
+                    state,
                     on_event=_on_agent_event,
                 ),
             )
 
             # --- diagnose ---
             _put(_make_node_event("on_chain_start", "diagnose", {}))
-            _merge(state_any, _traced_node("diagnose", diagnose, state_any))
+            apply_state_updates(state, _traced_node("diagnose", diagnose, state))
             _put(
                 _make_node_event(
                     "on_chain_end",
                     "diagnose",
                     {
                         "output": {
-                            "root_cause": state_any.get("root_cause", ""),
-                            "root_cause_category": state_any.get("root_cause_category", ""),
-                            "validity_score": state_any.get("validity_score"),
-                            "validated_claims": state_any.get("validated_claims", []),
-                            "remediation_steps": state_any.get("remediation_steps", []),
+                            "root_cause": state.get("root_cause", ""),
+                            "root_cause_category": state.get("root_cause_category", ""),
+                            "validity_score": state.get("validity_score"),
+                            "validated_claims": state.get("validated_claims", []),
+                            "remediation_steps": state.get("remediation_steps", []),
                         }
                     },
                 )
@@ -325,12 +312,12 @@ async def astream_investigation(
                 )
             )
 
-            _merge(
-                state_any,
+            apply_state_updates(
+                state,
                 _traced_node(
                     "correlate_upstream",
                     enrich_upstream_correlation,
-                    cast("AgentState", state_any),
+                    state,
                 ),
             )
 
@@ -340,7 +327,7 @@ async def astream_investigation(
                     "correlate_upstream",
                     {
                         "output": {
-                            "correlation": state_any.get("correlation", {}),
+                            "correlation": state.get("correlation", {}),
                         }
                     },
                 )
@@ -348,12 +335,12 @@ async def astream_investigation(
 
             # --- deliver / publish (skip terminal/editor render; StreamRenderer owns output) ---
             _put(_make_node_event("on_chain_start", "publish_findings", {}))
-            _merge(
-                state_any,
+            apply_state_updates(
+                state,
                 _traced_node(
                     "publish_findings",
                     generate_report,
-                    cast("Any", state_any),
+                    state,
                     render_terminal=False,
                     open_editor=False,
                 ),
@@ -365,14 +352,14 @@ async def astream_investigation(
                     "publish_findings",
                     {
                         "output": {
-                            "root_cause": state_any.get("root_cause", ""),
-                            "root_cause_category": state_any.get("root_cause_category", ""),
-                            "validity_score": state_any.get("validity_score"),
-                            "report": state_any.get("report", ""),
-                            "slack_message": state_any.get("slack_message", ""),
-                            "problem_md": state_any.get("problem_md", ""),
-                            "validated_claims": state_any.get("validated_claims", []),
-                            "remediation_steps": state_any.get("remediation_steps", []),
+                            "root_cause": state.get("root_cause", ""),
+                            "root_cause_category": state.get("root_cause_category", ""),
+                            "validity_score": state.get("validity_score"),
+                            "report": state.get("report", ""),
+                            "slack_message": state.get("slack_message", ""),
+                            "problem_md": state.get("problem_md", ""),
+                            "validated_claims": state.get("validated_claims", []),
+                            "remediation_steps": state.get("remediation_steps", []),
                         }
                     },
                 )

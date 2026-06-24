@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
+from app.pipeline.state_updates import apply_state_updates
 from app.state import AgentState
 
 if TYPE_CHECKING:
@@ -40,25 +41,22 @@ def run_connected_investigation(
     from app.utils.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent
-    state_any = cast(dict[str, Any], state)
 
     try:
-        _merge(state_any, resolve_integrations(state))
+        apply_state_updates(state, resolve_integrations(state))
+        apply_state_updates(state, extract_alert(state))
+        if state.get("is_noise"):
+            return state
 
-        _merge(state_any, extract_alert(state))
-        if state_any.get("is_noise"):
-            return cast(AgentState, state_any)
-
-        _merge(state_any, plan_actions(cast(AgentState, state_any)))
-        _merge(state_any, agent_class().run(cast(AgentState, state_any)))
-        _merge(state_any, diagnose(cast(AgentState, state_any)))
-
-        _merge(state_any, deliver(state))
+        apply_state_updates(state, plan_actions(state))
+        apply_state_updates(state, agent_class().run(state))
+        apply_state_updates(state, diagnose(state))
+        apply_state_updates(state, deliver(state))
     except Exception as exc:
         capture_exception(exc)
         raise
 
-    return cast(AgentState, state_any)
+    return state
 
 
 def run_investigation(state: AgentState) -> AgentState:
@@ -71,26 +69,9 @@ def run_chat(state: AgentState) -> AgentState:
     from app.agent.chat import ChatAgent
     from app.utils.sentry_sdk import capture_exception
 
-    state_any = cast(dict[str, Any], state)
     try:
-        updates = ChatAgent().run(state)
-        _merge(state_any, updates)
+        apply_state_updates(state, ChatAgent().run(state))
     except Exception as exc:
         capture_exception(exc)
         raise
-    return cast(AgentState, state_any)
-
-
-def _merge(state: dict[str, Any], updates: dict[str, Any]) -> None:
-    if not updates:
-        return
-    for key, value in updates.items():
-        if key == "messages":
-            messages = list(state.get("messages") or [])
-            if isinstance(value, list):
-                messages.extend(value)
-            else:
-                messages.append(value)
-            state["messages"] = messages
-        else:
-            state[key] = value
+    return state
