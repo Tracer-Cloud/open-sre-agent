@@ -439,3 +439,8 @@
     - type: "cli_agent"
       text: "how do I measure latency with opensre?"
       ok: true
+
+# Priority prompt #12 ("sniffdog investigate --service myportfolio") is intentionally
+# omitted from routing scenarios: live planning may return cli_command while the
+# execution oracle usually handoffs with guidance, so no stable planned/executed
+# contract survives test_live_action_planning + test_live_turn_execution_oracle together.
