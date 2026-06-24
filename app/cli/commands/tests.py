@@ -7,8 +7,10 @@ from typing import Any
 
 import click
 
-from app.agent.correlation.runtime import build_runtime_correlation
-from app.agent.correlation.upstream import (
+from app.agent.stages.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
+)
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

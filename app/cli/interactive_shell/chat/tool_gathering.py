@@ -32,6 +32,7 @@ from app.agent.utils.alert_source import SECONDARY_TOOL_SOURCES
 from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui import DIM
+from app.cli.interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
 
 # Keep the gathering loop short: this runs inline on a REPL turn, so it must stay
 # responsive. A handful of iterations is enough to fetch the data needed to
@@ -42,6 +43,74 @@ _MAX_GATHER_ITERATIONS = 4
 # assistant must summarize.
 _MAX_OBSERVATION_CHARS = 12_000
 _MAX_PER_TOOL_CHARS = 4_000
+
+# Keys most likely to distinguish back-to-back calls to the same tool.
+_GATHER_INPUT_HINT_KEYS: tuple[str, ...] = (
+    "metric_name",
+    "query",
+    "search",
+    "filter",
+    "expression",
+    "promql",
+    "service_name",
+    "owner",
+    "repo",
+    "log_group",
+    "monitor_id",
+    "alert_id",
+    "issue_id",
+    "trace_id",
+    "span_id",
+    "dashboard_uid",
+    "panel_id",
+    "from",
+    "to",
+    "time_range",
+)
+
+
+def _truncate_hint(text: str, *, max_len: int = 48) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= max_len:
+        return compact
+    return f"{compact[: max_len - 1]}…"
+
+
+def _tool_input_hint(tool_input: Any) -> str:
+    if not isinstance(tool_input, dict):
+        return ""
+    hints: list[str] = []
+    seen: set[str] = set()
+    for key in _GATHER_INPUT_HINT_KEYS:
+        value = tool_input.get(key)
+        if value in (None, "", [], {}):
+            continue
+        rendered = _truncate_hint(str(value))
+        if not rendered or rendered in seen:
+            continue
+        seen.add(rendered)
+        hints.append(rendered)
+        if len(hints) >= 2:
+            break
+    return " · ".join(hints)
+
+
+def _format_gathering_progress_line(
+    tool_name: str,
+    tool_input: Any,
+    *,
+    repeat_index: int,
+) -> str:
+    source = tool_source_label(tool_name)
+    label = tool_short_label(tool_name, source)
+    call_display = f"{source} · {label}" if label else source
+    if repeat_index > 1:
+        call_display = f"{call_display} ({repeat_index})"
+    safe_display = escape(call_display)
+    hint = _tool_input_hint(tool_input)
+    if hint:
+        return f"· gathering via {safe_display} — {escape(hint)}…"
+    return f"· gathering via {safe_display}…"
 
 
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
@@ -163,11 +232,18 @@ def gather_tool_evidence(
             report_exception(exc, context="interactive_shell.tool_gathering.client", expected=True)
             return None
 
+        tool_call_counts: dict[str, int] = {}
+
         def _on_event(kind: str, data: dict[str, Any]) -> None:
             if kind == "tool_start":
-                console.print(
-                    f"[{DIM}]· gathering data via {escape(str(data.get('name', '')))}…[/]"
+                name = str(data.get("name", "")).strip() or "tool"
+                tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+                line = _format_gathering_progress_line(
+                    name,
+                    data.get("input"),
+                    repeat_index=tool_call_counts[name],
                 )
+                console.print(f"[{DIM}]{line}[/]")
 
         result = run_tool_calling_loop(
             llm=llm,

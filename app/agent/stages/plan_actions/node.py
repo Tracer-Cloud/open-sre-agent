@@ -12,7 +12,7 @@ from app.agent.stages.plan_actions.selectors import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
 )
-from app.state import AgentState
+from app.state import InvestigationState
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
@@ -21,7 +21,7 @@ FALLBACK_TOOL_NAMES: tuple[str, ...] = ("get_sre_guidance",)
 DEFAULT_RETRIEVAL_LIMIT = 100
 
 
-def plan_actions(state: AgentState) -> dict[str, Any]:
+def plan_actions(state: InvestigationState) -> dict[str, Any]:
     """Return a prioritized investigation tool plan as partial state updates."""
     if state.get("is_noise"):
         return {}

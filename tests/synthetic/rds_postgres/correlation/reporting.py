@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.correlation.reporting import (
+from app.agent.stages.publish_findings.upstream_correlation.reporting import (
     CorrelationReport,
     build_correlation_report,
     correlation_report_to_payload,

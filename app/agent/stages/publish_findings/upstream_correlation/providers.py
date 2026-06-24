@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from app.agent.correlation.upstream import (
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

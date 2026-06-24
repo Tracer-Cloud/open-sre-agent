@@ -1,11 +1,4 @@
-"""Datadog-backed upstream-evidence provider factory.
-
-Construction of a Datadog provider lives here, not in
-``app.pipeline.pipeline``, so the pipeline layer doesn't import from
-``app.services.datadog``. Adding a new correlation source (Grafana,
-AWS, …) follows the same shape: a sibling ``<vendor>_factory`` module
-plus a registration in :mod:`app.agent.correlation.__init__`.
-"""
+"""Datadog-backed upstream-evidence provider factory."""
 
 from __future__ import annotations
 
@@ -15,14 +8,16 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
-from app.agent.correlation.datadog_provider import (
+from app.integrations.datadog.correlation.adapter import DatadogCorrelationAdapter
+from app.integrations.datadog.correlation.provider import (
     DatadogCorrelationQueries,
     DatadogUpstreamEvidenceProvider,
 )
 
 if TYPE_CHECKING:
-    from app.agent.correlation.upstream import UpstreamEvidenceProvider
+    from app.agent.stages.publish_findings.upstream_correlation.upstream import (
+        UpstreamEvidenceProvider,
+    )
 
 
 def _parse_iso8601(value: str) -> datetime:
@@ -56,11 +51,6 @@ def build_datadog_provider(
 
     Callers pass the integration config and the alert-derived knobs
     directly; the factory does **not** know about agent state shape.
-    State extraction lives in :mod:`app.agent.correlation.__init__`.
-
-    Returns ``None`` when ``datadog_config`` is empty/missing or fails
-    Pydantic validation — both signal "no Datadog correlation available
-    for this run".
     """
     from app.integrations.config_models import DatadogIntegrationConfig
     from app.services.datadog import DatadogClient

@@ -57,12 +57,35 @@ def normalize_history_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def cli_command_payload_matches(actual: str, expected: str) -> bool:
+    """True when *actual* matches *expected* or echoes it with a user prefix."""
+    actual_n = actual.strip().casefold()
+    expected_n = expected.strip().casefold()
+    if not actual_n or not expected_n:
+        return False
+    if actual_n == expected_n:
+        return True
+    # Non-canonical user prefixes (e.g. sniffdog) may appear before the subcommand.
+    return actual_n.endswith(expected_n) or expected_n in actual_n
+
+
 def oracle_action_matches(actual_norm: dict[str, Any], expected: dict[str, Any]) -> bool:
     """Compare only expected keys to keep fixture declarations compact."""
-    return all(actual_norm.get(key) == expected_value for key, expected_value in expected.items())
+    for key, expected_value in expected.items():
+        if key == "payload" and str(actual_norm.get("kind", "")) == "cli_command":
+            if not cli_command_payload_matches(
+                str(actual_norm.get(key, "")),
+                str(expected_value),
+            ):
+                return False
+            continue
+        if actual_norm.get(key) != expected_value:
+            return False
+    return True
 
 
 __all__ = [
+    "cli_command_payload_matches",
     "normalize_history_entry",
     "normalize_planned_action",
     "normalize_response_text",

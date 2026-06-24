@@ -226,8 +226,9 @@ async def astream_investigation(
 
             # --- resolve_integrations ---
             _put(_make_node_event("on_chain_start", "resolve_integrations", {}))
-            resolved = _traced_node("resolve_integrations", resolve_integrations, initial)
-            _merge(state_any, {"resolved_integrations": resolved})
+            resolved_updates = _traced_node("resolve_integrations", resolve_integrations, initial)
+            _merge(state_any, resolved_updates)
+            resolved = resolved_updates.get("resolved_integrations") or {}
             _put(
                 _make_node_event(
                     "on_chain_end",
@@ -311,8 +312,9 @@ async def astream_investigation(
             )
 
             # --- upstream correlation ---
-            from app.agent.correlation.node import node_correlate_upstream
-            from app.pipeline.pipeline import _build_correlation_config
+            from app.agent.stages.publish_findings.upstream_correlation import (
+                enrich_upstream_correlation,
+            )
 
             _put(
                 _make_node_event(
@@ -326,9 +328,8 @@ async def astream_investigation(
                 state_any,
                 _traced_node(
                     "correlate_upstream",
-                    node_correlate_upstream,
+                    enrich_upstream_correlation,
                     cast("AgentState", state_any),
-                    _build_correlation_config(state_any),
                 ),
             )
 

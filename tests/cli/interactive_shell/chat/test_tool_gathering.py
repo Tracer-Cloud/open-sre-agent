@@ -17,7 +17,11 @@ from rich.console import Console
 import app.agent.stages.investigate.tools as investigate_tools
 import app.agent.tool_loop as tool_loop
 import app.services.agent_llm_client as agent_llm_client
-from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
+from app.cli.interactive_shell.chat.tool_gathering import (
+    _format_gathering_progress_line,
+    _tool_input_hint,
+    gather_tool_evidence,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 
@@ -126,3 +130,89 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", _boom)
 
     assert gather_tool_evidence("any question", session, _console()) is None
+
+
+def test_tool_input_hint_prefers_distinguishing_fields() -> None:
+    hint = _tool_input_hint(
+        {
+            "grafana_endpoint": "https://example.grafana.net",
+            "metric_name": "sum(rate(http_requests_total[5m]))",
+            "service_name": "checkout-api",
+        }
+    )
+    assert hint == "sum(rate(http_requests_total[5m])) · checkout-api"
+
+
+def test_format_gathering_progress_line_shows_repeat_index_and_hint() -> None:
+    line = _format_gathering_progress_line(
+        "query_grafana_metrics",
+        {"metric_name": "pipeline_runs_total"},
+        repeat_index=2,
+    )
+    assert line.startswith("· gathering via Grafana · Mimir (2) — pipeline_runs_total…")
+
+
+def test_format_gathering_progress_line_escapes_display_and_hint_markup(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.chat.tool_gathering.tool_source_label",
+        lambda _name: "Grafana [prod]",
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.chat.tool_gathering.tool_short_label",
+        lambda _name, _source: "Mimir",
+    )
+
+    line = _format_gathering_progress_line(
+        "query_grafana_metrics",
+        {"metric_name": "[critical] rate[5m]"},
+        repeat_index=1,
+    )
+    console = _console()
+    console.print(f"[dim]{line}[/]")
+
+    output = console.file.getvalue()
+    assert "Grafana [prod]" in output
+    assert "[critical] rate[5m]" in output
+
+
+def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {}
+    console = _console()
+
+    monkeypatch.setattr(
+        investigate_tools,
+        "get_available_tools",
+        lambda _resolved: [_DummyTool("query_grafana_metrics", source="grafana")],
+    )
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+
+    def _fake_loop(**kwargs: Any) -> tool_loop.ToolLoopResult:
+        on_event = kwargs.get("on_event")
+        if on_event is not None:
+            on_event(
+                "tool_start",
+                {
+                    "id": "t1",
+                    "name": "query_grafana_metrics",
+                    "input": {"metric_name": "pipeline_runs_total"},
+                },
+            )
+            on_event(
+                "tool_start",
+                {
+                    "id": "t2",
+                    "name": "query_grafana_metrics",
+                    "input": {"metric_name": "http_errors_total"},
+                },
+            )
+        return tool_loop.ToolLoopResult(messages=[], final_text="", executed=[])
+
+    monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _fake_loop)
+
+    gather_tool_evidence("check metrics", session, console)
+    output = console.file.getvalue()
+    assert "Grafana · Mimir — pipeline_runs_total" in output
+    assert "Grafana · Mimir (2) — http_errors_total" in output

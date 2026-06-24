@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.category_alignment import apply_category_alignment_adjustments
 from app.agent.utils.alert_source import resolve_alert_source
+from app.state import InvestigationState
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,
@@ -105,7 +106,7 @@ def parse_diagnosis(
         return _parse_via_legacy(last_text, evidence, alert_name)
 
 
-def diagnose(state: dict[str, Any]) -> dict[str, Any]:
+def diagnose(state: InvestigationState) -> dict[str, Any]:
     """Parse investigation output into structured RCA fields."""
     if str(state.get("root_cause") or "").strip():
         return {}
@@ -123,7 +124,7 @@ def diagnose(state: dict[str, Any]) -> dict[str, Any]:
         messages,
         evidence,
         str(state.get("alert_name") or ""),
-        alert_source=resolve_alert_source(state),
+        alert_source=resolve_alert_source(cast(dict[str, Any], state)),
     )
     result.evidence = evidence
     result.evidence_entries = _list_of_dicts(state.get("evidence_entries"))

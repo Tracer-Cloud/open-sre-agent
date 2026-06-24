@@ -144,7 +144,7 @@ def get_progress_tracker() -> ProgressTracker:
 def set_progress_tracker_factory(factory: Callable[[], ProgressTracker] | None) -> None:
     """Register a lazy factory for the CLI progress tracker.
 
-    Boundary code (typically ``install_cli_observability_adapters``)
+    Boundary code (typically ``install_product_adapters``)
     installs ``get_tracker`` here instead of constructing the Rich
     tracker eagerly at process start-up.
     """

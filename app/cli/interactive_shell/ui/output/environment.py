@@ -58,7 +58,7 @@ def debug_print(message: str) -> None:
         print(f"DEBUG: {message}")
 
 
-# ``install_cli_observability_adapters`` lives in
+# ``install_product_adapters`` lives in
 # :mod:`app.cli.interactive_shell.ui.output.boundary`, not here. Putting
 # it in this module would re-introduce a static import cycle:
 # ``renderers`` and ``tracker`` already import from this module for

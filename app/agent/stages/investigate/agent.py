@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 from app.agent.stages.investigate.loop import (
     InvestigationToolCallCache,
@@ -38,6 +38,7 @@ from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.observability import debug_print
 from app.observability import get_progress_tracker as get_tracker
 from app.services.agent_llm_client import ToolCall, get_agent_llm
+from app.state import InvestigationState
 from app.state.evidence import EvidenceEntry
 from app.tools.registered_tool import RegisteredTool
 from app.utils.tool_trace import redact_sensitive
@@ -89,7 +90,7 @@ class ConnectedInvestigationAgent:
 
     def run(
         self,
-        state: dict[str, Any],
+        state: InvestigationState,
         on_event: AgentEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
@@ -114,11 +115,10 @@ class ConnectedInvestigationAgent:
             )
             _emit("tool_end", tool_event_payload(tc, output=output))
 
+        state_dict = cast(dict[str, Any], state)
         resolved = state.get("resolved_integrations") or {}
-        tools = _tools_for_plan(self._filter_tools(get_available_tools(resolved)), state)
+        tools = _tools_for_plan(self._filter_tools(get_available_tools(resolved)), state_dict)
         tool_context = build_connected_tool_context(resolved, tools)
-        state["available_sources"] = tool_context["available_sources"]
-        state["available_action_names"] = tool_context["available_action_names"]
 
         if not tools:
             logger.warning("No tools available for investigation")
@@ -126,8 +126,10 @@ class ConnectedInvestigationAgent:
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
-        system = self._build_system_prompt(state)
-        alert_text = format_alert_context(state)
+        # Merge tool_context into a local view so the system prompt can read
+        # available_sources / available_action_names without mutating the caller's state.
+        system = self._build_system_prompt({**state_dict, **tool_context})
+        alert_text = format_alert_context(state_dict)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
 
         evidence: dict[str, Any] = {}
@@ -144,7 +146,7 @@ class ConnectedInvestigationAgent:
             },
         )
 
-        seed_calls = build_seed_calls(state, tools, llm)
+        seed_calls = build_seed_calls(state_dict, tools, llm)
         if seed_calls:
             logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
             for tc in seed_calls:

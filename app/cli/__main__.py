@@ -230,10 +230,10 @@ def main(argv: list[str] | None = None) -> int:
     # app/pipeline, app/utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
     from app.cli.interactive_shell.ui.output.boundary import (
-        install_cli_observability_adapters,
+        install_product_adapters,
     )
 
-    install_cli_observability_adapters()
+    install_product_adapters()
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()

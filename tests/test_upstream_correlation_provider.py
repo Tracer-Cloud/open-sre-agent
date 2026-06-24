@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.agent.correlation.providers import (
+from app.agent.stages.publish_findings.upstream_correlation.providers import (
     NoopUpstreamEvidenceProvider,
     QueryBackedUpstreamEvidenceProvider,
 )
-from app.agent.correlation.upstream import (
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

@@ -4,13 +4,15 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.agent.correlation import (
+from app.agent.stages.publish_findings.upstream_correlation import (
+    build_correlation_config,
     candidate_services_from_state,
     target_resource_from_state,
 )
-from app.agent.correlation.datadog_factory import datadog_avg_query
-from app.agent.correlation.upstream import UpstreamEvidenceBundle
-from app.pipeline.pipeline import _build_correlation_config
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
+    UpstreamEvidenceBundle,
+)
+from app.integrations.datadog.correlation.factory import datadog_avg_query
 
 
 def test_datadog_avg_query_preserves_existing_scope() -> None:
@@ -81,7 +83,7 @@ def test_correlation_config_uses_alert_resource_and_scoped_metric_query() -> Non
         patch("app.services.datadog.client.DatadogClient.query_metrics", query_metrics),
         patch("app.services.datadog.client.DatadogClient.search_logs", search_logs),
     ):
-        config = _build_correlation_config(state)
+        config = build_correlation_config(state)
         assert config is not None
         provider = config["configurable"]["upstream_evidence_provider"]
         bundle: UpstreamEvidenceBundle = provider.collect_upstream_evidence(

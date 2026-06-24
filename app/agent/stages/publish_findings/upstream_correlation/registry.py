@@ -2,23 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.correlation.datadog_adapter import DatadogCorrelationAdapter
-from app.agent.correlation.datadog_factory import build_datadog_provider
-from app.agent.correlation.datadog_provider import (
-    DatadogCorrelationQueries,
-    DatadogUpstreamEvidenceProvider,
-)
-from app.agent.correlation.providers import (
-    NoopUpstreamEvidenceProvider,
-    QueryBackedUpstreamEvidenceProvider,
-)
-from app.agent.correlation.upstream import (
-    LogSignal,
-    MetricSeries,
-    TopologyHint,
-    UpstreamEvidenceBundle,
+from app.agent.stages.publish_findings.upstream_correlation.upstream import (
     UpstreamEvidenceProvider,
 )
+from app.integrations.datadog.correlation import build_datadog_provider
 
 
 def target_resource_from_state(state: dict[str, Any]) -> str:
@@ -64,21 +51,7 @@ def candidate_services_from_state(state: dict[str, Any]) -> tuple[str, ...]:
 
 
 def build_upstream_evidence_provider(state: dict[str, Any]) -> UpstreamEvidenceProvider | None:
-    """Vendor-agnostic factory: pick a correlation provider for ``state``.
-
-    Owns the agent-state shape: extracts the integration config, target
-    resource, and candidate services here, then hands clean values to
-    each vendor factory. Vendor factories don't know about state.
-
-    Returns ``None`` when no integration can serve correlation evidence
-    — the caller (typically :mod:`app.pipeline.pipeline`) treats that
-    as "skip upstream correlation for this run".
-
-    Adding a new correlation source is a single new factory module
-    + an ``elif`` branch here. Callers must not import from
-    ``app.services.<vendor>`` directly — that's a layering violation
-    enforced by ``tests/pipeline/test_layering.py``.
-    """
+    """Vendor-agnostic factory: pick a correlation provider for ``state``."""
     resolved = state.get("resolved_integrations") or {}
     if not isinstance(resolved, dict):
         return None
@@ -95,27 +68,3 @@ def build_upstream_evidence_provider(state: dict[str, Any]) -> UpstreamEvidenceP
         return datadog_provider
 
     return None
-
-
-# Note: ``build_datadog_provider`` is intentionally NOT exported here.
-# Callers must go through the vendor-agnostic
-# :func:`build_upstream_evidence_provider`; exposing the concrete
-# Datadog factory invites bypassing the abstraction. The function is
-# still importable as
-# ``from app.agent.correlation.datadog_factory import build_datadog_provider``
-# for internal use within the correlation package.
-__all__ = [
-    "DatadogCorrelationAdapter",
-    "DatadogCorrelationQueries",
-    "DatadogUpstreamEvidenceProvider",
-    "LogSignal",
-    "MetricSeries",
-    "NoopUpstreamEvidenceProvider",
-    "QueryBackedUpstreamEvidenceProvider",
-    "TopologyHint",
-    "UpstreamEvidenceBundle",
-    "UpstreamEvidenceProvider",
-    "build_upstream_evidence_provider",
-    "candidate_services_from_state",
-    "target_resource_from_state",
-]

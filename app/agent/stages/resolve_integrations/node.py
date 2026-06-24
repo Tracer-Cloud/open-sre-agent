@@ -27,7 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_integrations(state: InvestigationState) -> dict[str, Any]:
-    """Fetch and classify all available integrations. Returns resolved_integrations dict."""
+    """Discover and classify all integrations available for this investigation.
+
+    Reads  : _auth_token, org_id, resolved_integrations (idempotency guard)
+    Writes : resolved_integrations
+    """
+    return {"resolved_integrations": _resolve(state)}
+
+
+def _resolve(state: InvestigationState) -> dict[str, Any]:
+    """Return the raw integrations dict (keyed by vendor name)."""
     if state.get("resolved_integrations"):
         return dict(state["resolved_integrations"])
 
@@ -45,9 +54,9 @@ def resolve_integrations(state: InvestigationState) -> dict[str, Any]:
             tracker.complete("resolve_integrations", fields_updated=["resolved_integrations"])
             return {}
         try:
-            from app.services.tracer_client import get_tracer_client_for_org
+            from app.integrations.port import fetch_remote_integrations
 
-            all_integrations = get_tracer_client_for_org(org_id, auth_token).get_all_integrations()
+            all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=auth_token)
         except Exception as exc:
             logger.warning("Remote integrations fetch failed: %s", exc)
             tracker.complete("resolve_integrations", fields_updated=["resolved_integrations"])
@@ -63,9 +72,9 @@ def resolve_integrations(state: InvestigationState) -> dict[str, Any]:
         if not org_id:
             return _resolve_from_local_sources(tracker)
         try:
-            from app.services.tracer_client import get_tracer_client_for_org
+            from app.integrations.port import fetch_remote_integrations
 
-            all_integrations = get_tracer_client_for_org(org_id, env_token).get_all_integrations()
+            all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=env_token)
         except Exception:
             logger.debug(
                 "Remote integrations fetch failed for org %s, falling back to local",
