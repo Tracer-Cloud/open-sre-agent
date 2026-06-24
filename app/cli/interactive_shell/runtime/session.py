@@ -138,22 +138,6 @@ class ReplSession:
     its ``paused`` flag (when it is a ``RedactingFileHistory``) without
     needing access to the ``PromptSession``."""
 
-    pt_style_app: Any = None
-    """The prompt-toolkit ``Application`` instance for this session.
-
-    Stored here (instead of accessed via ``get_app_or_none()``) so that
-    worker-thread slash commands (e.g. ``/theme``) can refresh styles via
-    ``call_soon_threadsafe`` on the main asyncio loop."""
-
-    main_loop: Any = None
-    """The asyncio event loop for the main REPL coroutine.
-
-    Set once in ``run_interactive`` so worker-thread code can schedule
-    prompt-toolkit updates on the main thread."""
-
-    active_theme_name: str = "green"
-    """Interactive shell palette name for this REPL session (``/theme``, prompts)."""
-
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
 

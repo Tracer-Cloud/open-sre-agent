@@ -68,16 +68,10 @@ class ReplConfig:
         is accepted and stored so the flag round-trips cleanly once P3 lands.
         Controlled by ``--layout`` CLI option, ``OPENSRE_LAYOUT`` env var, or
         ``interactive.layout`` in ``~/.opensre/config.yml``.
-
-    theme : str
-        Interactive shell color palette. Controlled by ``--theme`` CLI option,
-        ``OPENSRE_THEME`` env var, or ``interactive.theme`` in
-        ``~/.opensre/config.yml``.
     """
 
     enabled: bool = True
     layout: str = "classic"
-    theme: str = "green"
     alert_listener_enabled: bool = False
     alert_listener_host: str = "127.0.0.1"
     alert_listener_port: int = 0
@@ -97,7 +91,6 @@ class ReplConfig:
         *,
         cli_enabled: bool | None = None,
         cli_layout: str | None = None,
-        cli_theme: str | None = None,
     ) -> ReplConfig:
         """Resolve config from all three tiers.
 
@@ -127,38 +120,6 @@ class ReplConfig:
 
         if layout not in _VALID_LAYOUTS:
             layout = "classic"
-
-        # --- theme ---
-        from app.cli.interactive_shell.ui.theme import (
-            DEFAULT_THEME_NAME,
-            list_theme_names,
-            set_active_theme,
-        )
-
-        if cli_theme is not None:
-            theme = cli_theme.strip().lower()
-        elif (env_val := os.getenv("OPENSRE_THEME")) is not None:
-            theme = env_val.strip().lower()
-            if theme not in list_theme_names():
-                log.warning(
-                    "OPENSRE_THEME=%r is not a valid theme; defaulting to %r.",
-                    env_val,
-                    DEFAULT_THEME_NAME,
-                )
-                theme = DEFAULT_THEME_NAME
-        else:
-            raw_theme = file_conf.get("theme", DEFAULT_THEME_NAME)
-            theme = str(raw_theme).strip().lower()
-            if theme not in list_theme_names():
-                log.warning(
-                    "config.yml interactive.theme=%r is not a valid theme; defaulting to %r.",
-                    raw_theme,
-                    DEFAULT_THEME_NAME,
-                )
-                theme = DEFAULT_THEME_NAME
-
-        active_theme = set_active_theme(theme)
-        theme = active_theme.name
 
         # --- alert_listener_enabled ---
         if (env_val := os.getenv("OPENSRE_ALERT_LISTENER_ENABLED")) is not None:
@@ -203,7 +164,6 @@ class ReplConfig:
         return cls(
             enabled=enabled,
             layout=layout,
-            theme=theme,
             alert_listener_enabled=alert_listener_enabled,
             alert_listener_host=alert_listener_host,
             alert_listener_port=alert_listener_port,

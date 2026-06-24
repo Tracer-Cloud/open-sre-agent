@@ -73,10 +73,8 @@ def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/model", session) is True
-    assert loop_dispatch.dispatch_needs_exclusive_stdin("/theme", session) is True
 
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations list", session) is False
-    assert loop_dispatch.dispatch_needs_exclusive_stdin("/theme blue", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations list", session) is False
 
 

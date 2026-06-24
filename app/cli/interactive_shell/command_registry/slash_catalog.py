@@ -260,11 +260,6 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Browse and run inventoried tests from the terminal. Subcommands: list, run, synthetic.",
         "User asks to list or run bundled tests via /tests",
     ),
-    "/theme": _mcp(
-        "Choose and persist the interactive shell color palette (TTY picker or /theme <name>).",
-        "User asks to change the REPL color theme or palette",
-        anti_examples=("User asks about light/dark mode in a web UI",),
-    ),
     "/trust": _mcp(
         "Enable or disable trust mode (skip execution confirmation prompts). on | off.",
         "User asks to enable or disable trust mode or auto-approve",

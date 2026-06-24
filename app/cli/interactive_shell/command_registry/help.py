@@ -56,7 +56,6 @@ def _raw_help_sections() -> list[HelpSection]:
     )
     from app.cli.interactive_shell.command_registry.system import COMMANDS as SYS_CMDS
     from app.cli.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_CMDS
-    from app.cli.interactive_shell.command_registry.theme import COMMANDS as THEME_CMDS
     from app.cli.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_CMDS
     from app.cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_CMDS
 
@@ -68,7 +67,6 @@ def _raw_help_sections() -> list[HelpSection]:
         ("Investigation", list(INV_CMDS)),
         ("Privacy", list(PRIVACY_CMDS)),
         ("Tasks", list(TASK_CMDS) + list(WATCH_CMDS)),
-        ("Theme", list(THEME_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
         ("Alerts", list(ALERTS_CMDS)),
         ("CLI (parity)", list(PARITY_COMMANDS)),

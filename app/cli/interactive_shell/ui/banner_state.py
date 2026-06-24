@@ -73,17 +73,8 @@ def _is_alert_listener_active() -> bool:
     """Return True if the alert listener is enabled in config. Never raises."""
     try:
         from app.cli.interactive_shell.config import ReplConfig
-        from app.cli.interactive_shell.ui import theme as ui_theme
 
-        # ``ReplConfig.load()`` re-applies the configured palette as a side effect.
-        # This is a passive read while rendering the welcome panel, so preserve the
-        # caller's active theme (e.g. one set via ``/theme``) instead of snapping
-        # it back to the config default.
-        current_theme = ui_theme.get_active_theme_name()
-        try:
-            return ReplConfig.load().alert_listener_enabled
-        finally:
-            ui_theme.set_active_theme(current_theme)
+        return ReplConfig.load().alert_listener_enabled
     except Exception:
         return False
 

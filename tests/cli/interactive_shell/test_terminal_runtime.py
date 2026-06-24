@@ -20,7 +20,6 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.prompting import prompt_surface
 from app.cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
@@ -36,12 +35,7 @@ from app.cli.interactive_shell.runtime import loop as loop_module
 from app.cli.interactive_shell.runtime import state as loop_state
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from app.cli.interactive_shell.ui.theme import (
-    ANSI_RESET,
-    PROMPT_ACCENT_ANSI,
-    get_active_theme_name,
-    set_active_theme,
-)
+from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
 def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
@@ -315,22 +309,9 @@ def test_completion_includes_tab_navigation() -> None:
     assert (Keys.BackTab,) in keys
 
 
-def test_build_prompt_style_tracks_active_theme() -> None:
-    from app.cli.interactive_shell.ui.theme import set_active_theme
-
-    set_active_theme("amber")
-    amber_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
-    set_active_theme("teal")
-    teal_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
-    assert amber_attrs.color and amber_attrs.color.lower() == "f2d48a"
-    assert teal_attrs.color and teal_attrs.color.lower() == "8ae2d6"
-    assert amber_attrs.color != teal_attrs.color
-
-
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    from app.cli.interactive_shell.ui.theme import BG, HIGHLIGHT, set_active_theme
+    from app.cli.interactive_shell.ui.theme import BG, HIGHLIGHT
 
-    set_active_theme("green")
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
 
@@ -686,16 +667,6 @@ class TestSpinnerState:
         spinner = loop_state.SpinnerState()
         assert spinner.streaming is False
         assert spinner.inline_spinner_ansi() == ""
-
-    def test_inline_spinner_uses_active_theme_highlight(self) -> None:
-        from app.cli.interactive_shell.ui.theme import set_active_theme
-
-        set_active_theme("blue")
-        spinner = loop_state.SpinnerState()
-        spinner.start()
-        raw = spinner.inline_spinner_ansi()
-        assert "168;212;255" in raw
-        assert "185;237;175" not in raw
 
     def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
         spinner = loop_state.SpinnerState()
@@ -1502,110 +1473,3 @@ class TestExecutionAllowedRespectsDispatchCancelled:
             )
             is True
         )
-
-
-class TestThemeCommand:
-    @staticmethod
-    def _capture() -> tuple:
-        from rich.console import Console
-
-        buf = io.StringIO()
-        return Console(file=buf, force_terminal=False, highlight=False), buf
-
-    def test_theme_command_is_registered(self) -> None:
-        assert "/theme" in SLASH_COMMANDS
-
-    def test_theme_command_updates_active_theme_and_persists(self, monkeypatch) -> None:
-        from app.cli.interactive_shell.command_registry import theme as theme_cmd
-
-        saved_payloads: list[dict[str, object]] = []
-        monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
-        monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
-        monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("app.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr(
-            "app.cli.commands.config._save_config",
-            lambda data: saved_payloads.append(dict(data)),
-        )
-
-        set_active_theme("green")
-        session = ReplSession()
-        console, _buf = self._capture()
-
-        assert dispatch_slash("/theme", session, console) is True
-        assert get_active_theme_name() == "blue"
-        assert saved_payloads
-        interactive = saved_payloads[-1].get("interactive")
-        assert isinstance(interactive, dict)
-        assert interactive.get("theme") == "blue"
-
-    def test_theme_picker_uses_session_theme_as_current(self, monkeypatch) -> None:
-        from app.cli.interactive_shell.command_registry import theme as theme_cmd
-
-        monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
-        captured: dict[str, object] = {}
-
-        def _fake_choose_one(**kwargs: object) -> None:
-            captured.update(kwargs)
-            return None
-
-        monkeypatch.setattr(theme_cmd, "repl_choose_one", _fake_choose_one)
-
-        session = ReplSession()
-        session.active_theme_name = "pink"
-        set_active_theme("pink")
-        console, _buf = self._capture()
-
-        dispatch_slash("/theme", session, console)
-
-        assert captured.get("initial_value") == "pink"
-        choices = captured.get("choices")
-        assert isinstance(choices, list)
-        assert any("pink (current)" in label for _value, label in choices)
-
-    def test_theme_command_direct_arg_sets_theme(self, monkeypatch) -> None:
-        from app.cli.interactive_shell.command_registry import theme as theme_cmd
-
-        monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
-        monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("app.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("app.cli.commands.config._save_config", lambda _data: None)
-
-        set_active_theme("green")
-        session = ReplSession()
-        console, _buf = self._capture()
-
-        assert dispatch_slash("/theme amber", session, console) is True
-        assert get_active_theme_name() == "amber"
-
-    def test_theme_change_refreshes_welcome_poster(self, monkeypatch) -> None:
-        from app.cli.interactive_shell.command_registry import theme as theme_cmd
-
-        monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
-        monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
-        monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("app.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("app.cli.commands.config._save_config", lambda _data: None)
-
-        refreshed: list[dict[str, object | None]] = []
-
-        def _refresh(
-            console: object,
-            *,
-            session: object = None,
-            theme_notice: str | None = None,
-        ) -> None:
-            refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
-
-        monkeypatch.setattr(
-            "app.cli.interactive_shell.ui.rendering.refresh_welcome_poster",
-            _refresh,
-        )
-
-        session = ReplSession()
-        console, _buf = self._capture()
-
-        assert dispatch_slash("/theme", session, console) is True
-        assert len(refreshed) == 1
-        assert refreshed[0]["session"] is session
-        assert refreshed[0]["theme_notice"] == "blue"
