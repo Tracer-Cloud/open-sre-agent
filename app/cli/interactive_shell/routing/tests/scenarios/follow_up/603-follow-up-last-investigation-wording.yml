@@ -6,11 +6,8 @@ input:
 session:
   has_prior_state: true
   configured_integrations: []
-  # Pin an empty resolved store so the follow-up is answered from prior context
-  # only -- the gather loop has no tools regardless of local ~/.opensre integrations.
   resolved_integrations: {}
 notes: []
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -20,7 +17,6 @@ planned_actions:
 - kind: assistant_handoff
   content: follow_up:last_investigation_summary
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
   - investigation
@@ -28,14 +24,15 @@ response_contract:
   - alert text
   must_not_contain:
   - $ /
-gathered_tools_contract:
-  # No integrations are resolved, so no remote-integration tool may fire.
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

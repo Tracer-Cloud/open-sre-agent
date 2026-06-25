@@ -140,6 +140,13 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   `AnswerPolicy` docstrings in `tests/scenario_loader.py` for the two execution
   paths a turn can take (planner→dispatch vs conversational tool-gathering) and
   which fixture fields cover which.
+- Scenario fixtures use a single ``tool_actions`` list (not separate
+  ``executed_actions`` / ``gathered_tools_contract`` blocks). Each entry has
+  ``surface: dispatch`` (terminal action shape: slash, investigation, …) or
+  ``surface: gather`` with ``expect`` (``not_called``, ``called``, ``call_any``,
+  ``valid_data``, ``valid_data_any``). Handoff-only prompts live under
+  ``scenarios/chat_handoff/``; integration gather / live / terminal scenarios
+  stay in ``complex_shell_prompts/``.
 - Preserve routing decision observability contracts used in tests:
   `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
 

@@ -14,7 +14,6 @@ route:
 policy:
   executes_terminal_action: false
 planned_actions: []
-executed_actions: []
 response_contract:
   must_contain_any:
   - datadog integration details
@@ -32,3 +31,4 @@ history:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions: []

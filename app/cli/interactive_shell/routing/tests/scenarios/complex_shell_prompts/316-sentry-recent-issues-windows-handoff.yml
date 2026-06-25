@@ -2,52 +2,37 @@ id: 316-sentry-recent-issues-windows-handoff
 title: Sentry recent-issues lookup hands off and grounds the answer on valid live Sentry data
 intent_class: complex_shell_prompts
 input:
-  prompt: >-
-    can you query sentry if there are recent issues on windows?
+  prompt: can you query sentry if there are recent issues on windows?
 session:
   has_prior_state: false
   configured_integrations:
   - sentry
-  # Use the REAL, live-resolved Sentry integration (NOT a fake token). The "@live"
-  # sentinel tells the oracle to resolve Sentry from the local store / env (or CI
-  # secrets) and force connection_verified, so the gather loop makes an
-  # AUTHENTICATED call and gets a real 200 response back. The token never lives in
-  # the repo, and the scenario SKIPS (never fails) when no Sentry credential is
-  # available -- that is an environment gap, not a routing regression. CI provides
-  # SENTRY_AUTH_TOKEN / SENTRY_ORG_SLUG / SENTRY_PROJECT_SLUG as secrets.
   resolved_integrations:
-    sentry: "@live"
+    sentry: '@live'
 notes:
-- "Data-retrieval / analytics lookup, NOT an investigation. The prompt asks to\
-  \ search Sentry for recent issues on Windows -- it names no failure, crash,\
-  \ error, outage, or incident to root-cause (it asks IF there ARE issues, not\
-  \ WHY something is failing). The planner must NOT emit investigation_start\
-  \ (regression guard for the DATA-RETRIEVAL rule in the action-planner prompt,\
-  \ whose own example is 'list the open sentry issues for checkout'): it hands\
-  \ off and the conversational gather loop queries Sentry to ground the answer.\
-  \ Contrast with 314, where 'crashing on Windows' names a failure and DOES\
-  \ dispatch an investigation."
-- "Reproduces a real interactive-shell turn ('can you query sentry if there are\
-  \ recent issue on windows?') that routed to the gather loop and called\
-  \ search_sentry_issues. The earlier draft pinned a FAKE token, so the call\
-  \ 401'd yet still counted as 'called' (must_call_all) -- a hollow signal. This\
-  \ version resolves the REAL Sentry integration and asserts the tool returned\
-  \ VALID data via must_return_valid_data, so a credential 401, a malformed-param\
-  \ 400, a broken injected_params change, or the planner wrongly starting an\
-  \ investigation all fail instead of passing on hallucinated text."
-- "must_return_valid_data is satisfied by a successful, authenticated 200 response\
-  \ (available=true, no error) -- it does NOT require a non-empty issue list. A\
-  \ valid empty result ('no Windows issues in the window') still proves the\
-  \ integration path works end to end (resolution -> injected credentials -> live\
-  \ API -> parsed payload); the failure mode it catches is a broken/unauthenticated\
-  \ call, which is exactly the 401 the fake-token draft masked."
+- 'Data-retrieval / analytics lookup, NOT an investigation. The prompt asks to search Sentry for recent
+  issues on Windows -- it names no failure, crash, error, outage, or incident to root-cause (it asks IF
+  there ARE issues, not WHY something is failing). The planner must NOT emit investigation_start (regression
+  guard for the DATA-RETRIEVAL rule in the action-planner prompt, whose own example is ''list the open
+  sentry issues for checkout''): it hands off and the conversational gather loop queries Sentry to ground
+  the answer. Contrast with 314, where ''crashing on Windows'' names a failure and DOES dispatch an investigation.'
+- Reproduces a real interactive-shell turn ('can you query sentry if there are recent issue on windows?')
+  that routed to the gather loop and called search_sentry_issues. The earlier draft pinned a FAKE token,
+  so the call 401'd yet still counted as 'called' (must_call_all) -- a hollow signal. This version resolves
+  the REAL Sentry integration and asserts the tool returned VALID data via must_return_valid_data, so
+  a credential 401, a malformed-param 400, a broken injected_params change, or the planner wrongly starting
+  an investigation all fail instead of passing on hallucinated text.
+- must_return_valid_data is satisfied by a successful, authenticated 200 response (available=true, no
+  error) -- it does NOT require a non-empty issue list. A valid empty result ('no Windows issues in the
+  window') still proves the integration path works end to end (resolution -> injected credentials -> live
+  API -> parsed payload); the failure mode it catches is a broken/unauthenticated call, which is exactly
+  the 401 the fake-token draft masked.
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
   executes_terminal_action: false
 planned_actions: []
-executed_actions: []
 response_contract:
   must_contain_any:
   - sentry
@@ -58,16 +43,12 @@ response_contract:
   forbidden_actions:
   - investigation
   - shell
-gathered_tools_contract:
-  # Sentry is the only connected source and issue_id is unknown, so
-  # search_sentry_issues is the single Sentry tool the gather loop can engage.
-  # must_return_valid_data is strictly stronger than must_call_all: the tool must
-  # be invoked AND return a successful integration response (not a 401/400/error),
-  # proving the lookup reached live Sentry and produced valid data.
-  must_return_valid_data:
-  - search_sentry_issues
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tool: search_sentry_issues
+  expect: valid_data

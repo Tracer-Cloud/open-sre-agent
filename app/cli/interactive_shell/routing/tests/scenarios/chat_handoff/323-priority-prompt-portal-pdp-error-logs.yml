@@ -1,14 +1,14 @@
-id: 321-priority-prompt-database-slow
-title: Priority prompt — why is the database slow
-intent_class: complex_shell_prompts
+id: 323-priority-prompt-portal-pdp-error-logs
+title: Priority prompt — portal-pdp error logs 7 days
+intent_class: chat_handoff
 input:
-  prompt: 'why is the database slow?'
+  prompt: View the error logs of portal-pdp from the past 7 days.
 session:
   has_prior_state: false
   configured_integrations: []
   resolved_integrations: {}
 notes:
-- P0 priority prompt (misc_real_investigation #1) from OpenSRE analytics priority-prompts report.
+- 'P0 priority prompt (logs_metrics_traces_query #1) from OpenSRE analytics priority-prompts report.'
 - Prompt is sent verbatim; do not normalize typos or mixed language.
 route:
   expected_kind: handle_message_with_agent
@@ -17,27 +17,28 @@ policy:
   executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
-  content: diagnostic_question:database_slow
+  content: logs_query:portal_pdp_error_logs_7d
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
-  - database
-  - slow
-  - incident
+  - portal
+  - log
+  - error
   must_not_contain:
   - $ /
   - can't help
   - cannot help
   - I can't help
   - I cannot help
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

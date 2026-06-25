@@ -6,8 +6,6 @@ input:
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store for environment isolation so the planned/executed
-  # action sequence does not depend on the developer's local ~/.opensre integrations.
   resolved_integrations: {}
 available_capabilities:
   slash_commands:
@@ -15,7 +13,6 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes: []
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -32,13 +29,6 @@ planned_actions:
   content: hello world
   source: llm
   target_surface: investigation
-executed_actions:
-- kind: slash
-  command: /remote
-  args: *id001
-  content: /remote
-- kind: investigation
-  content: hello world
 response_contract:
   must_contain_any:
   - ran /remote
@@ -52,3 +42,12 @@ history:
   - type: alert
     ok: true
 runs: 3
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /remote
+  args: *id001
+  content: /remote
+- surface: dispatch
+  kind: investigation
+  content: hello world

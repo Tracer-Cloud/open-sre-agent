@@ -24,10 +24,6 @@ planned_actions:
   source: llm
   target_surface: terminal
   payload: integrations verify --dry-run
-executed_actions:
-- kind: cli_command
-  payload: integrations verify --dry-run
-  content: integrations verify --dry-run
 response_contract:
   must_contain_any:
   - opensre integrations verify --dry-run
@@ -39,3 +35,8 @@ history:
   - type: cli_command
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: cli_command
+  payload: integrations verify --dry-run
+  content: integrations verify --dry-run

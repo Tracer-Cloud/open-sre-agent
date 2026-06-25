@@ -1,6 +1,6 @@
 id: 105-docs-verify-dry-run-no-execute
 title: How to run verify dry-run
-intent_class: docs_no_execute
+intent_class: chat_handoff
 input:
   prompt: how do I run opensre integrations verify --dry-run?
 session:
@@ -14,7 +14,6 @@ route:
 policy:
   executes_terminal_action: false
 planned_actions: []
-executed_actions: []
 response_contract:
   must_contain_any:
   - verify --dry-run
@@ -22,13 +21,15 @@ response_contract:
   - --help
   must_not_contain:
   - $ /
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 1
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

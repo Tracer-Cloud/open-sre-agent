@@ -2,51 +2,37 @@ id: 700-pasted-self-improvement-offer
 title: User pastes assistant-style self-improvement offer
 intent_class: non_actionable
 input:
-  prompt: If you want, I can patch the action planner so phrases like "switch my model
-    to gpt-5.5" infer both provider+model automatically instead of misclassifying
-    the model as a provider.
+  prompt: If you want, I can patch the action planner so phrases like "switch my model to gpt-5.5" infer
+    both provider+model automatically instead of misclassifying the model as a provider.
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store so the pasted blob hands off and the gather loop
-  # has no tools regardless of the developer's local ~/.opensre integrations.
   resolved_integrations: {}
 available_capabilities:
-  # Intentional surface constraint (not boilerplate): the pasted meta-text quotes
-  # an example command ('switch my model to gpt-5.5'). With the action-command
-  # surfaces enabled (the production default), the live assistant is baited into
-  # actuating that quoted EXAMPLE as a real provider switch (switch_llm_provider /
-  # /model set), which mutates .env and breaks the non-actionable contract. The
-  # turn correctly hands off, but the conversational answer surface would still
-  # run the switch. Pinning the action surfaces off keeps this scenario focused on
-  # what it verifies -- pasted assistant-style meta-content is answered
-  # conversationally, never actuated. synthetic_suites is left enabled (omitted),
-  # so this is not an all-disabled boilerplate block.
   slash_commands: []
   cli_commands: []
   llm_provider: []
 notes:
 - Prompt reads like the assistant offering a code change; nothing to execute.
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
   executes_terminal_action: false
 planned_actions: []
-executed_actions: []
 response_contract:
   must_contain_any: []
   must_not_contain:
   - $ /
-gathered_tools_contract:
-  # No integrations are resolved, so no remote-integration tool may fire.
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

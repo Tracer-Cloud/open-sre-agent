@@ -1,6 +1,6 @@
 id: 101-docs-datadog-setup
 title: How to configure Datadog
-intent_class: docs_no_execute
+intent_class: chat_handoff
 input:
   prompt: how do I configure datadog?
 session:
@@ -17,19 +17,20 @@ planned_actions:
 - kind: assistant_handoff
   content: docs:datadog_setup
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
   - datadog
   must_not_contain:
   - $ /
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 1
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

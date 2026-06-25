@@ -2,7 +2,7 @@ id: 320-priority-prompt-connected-services
 title: Priority prompt — show connected services
 intent_class: complex_shell_prompts
 input:
-  prompt: 'show me connected services'
+  prompt: show me connected services
 session:
   has_prior_state: false
   configured_integrations:
@@ -15,7 +15,7 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes:
-- P0 priority prompt (misc_capability_question #2) from OpenSRE analytics priority-prompts report.
+- 'P0 priority prompt (misc_capability_question #2) from OpenSRE analytics priority-prompts report.'
 - Prompt is sent verbatim; planner should map to /integrations list.
 route:
   expected_kind: handle_message_with_agent
@@ -30,12 +30,6 @@ planned_actions:
   command: /integrations
   args:
   - list
-executed_actions:
-- kind: slash
-  command: /integrations
-  args:
-  - list
-  content: /integrations list
 response_contract:
   must_contain_any:
   - connected services
@@ -47,11 +41,6 @@ response_contract:
   - cannot help
   - I can't help
   - I cannot help
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
@@ -59,3 +48,16 @@ history:
   - type: slash
     ok: true
 runs: 3
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /integrations
+  args:
+  - list
+  content: /integrations list
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

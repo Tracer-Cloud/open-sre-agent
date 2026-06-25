@@ -2,17 +2,17 @@ id: 335-priority-prompt-k8s-cpu-spike-live-gather
 title: Priority prompt — Kubernetes CPU spike (live Datadog gather)
 intent_class: complex_shell_prompts
 input:
-  prompt: 'High CPU spike in Kubernetes cluster'
+  prompt: High CPU spike in Kubernetes cluster
 session:
   has_prior_state: false
   configured_integrations:
   - datadog
   resolved_integrations:
-    datadog: "@live"
+    datadog: '@live'
 notes:
 - Live-gather counterpart to 327-priority-prompt-k8s-cpu-spike.
 - Asserts a live Datadog gather tool returns valid data (empty results OK).
-- P0 priority prompt (kubernetes_workload_health #1).
+- 'P0 priority prompt (kubernetes_workload_health #1).'
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -22,7 +22,6 @@ planned_actions:
 - kind: assistant_handoff
   content: incident_description:k8s_cpu_spike
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
   - cpu
@@ -36,16 +35,20 @@ response_contract:
   - I cannot help
   forbidden_actions:
   - investigation
-gathered_tools_contract:
-  must_return_valid_data_any:
-  - query_datadog_logs
-  - query_datadog_all
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called
+- surface: gather
+  tools:
+  - query_datadog_logs
+  - query_datadog_all
+  expect: valid_data_any

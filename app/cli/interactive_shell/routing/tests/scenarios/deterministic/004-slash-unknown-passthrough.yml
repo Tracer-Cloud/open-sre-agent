@@ -8,7 +8,6 @@ session:
   configured_integrations: []
   resolved_integrations: {}
 notes: []
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: /definitely-not-a-command
@@ -21,11 +20,6 @@ planned_actions:
   command: /definitely-not-a-command
   args: []
   content: /definitely-not-a-command
-executed_actions:
-- kind: slash
-  command: /definitely-not-a-command
-  args: []
-  content: /definitely-not-a-command
 response_contract:
   must_contain_any:
   - ran /definitely-not-a-command
@@ -35,3 +29,9 @@ history:
   - type: slash
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /definitely-not-a-command
+  args: []
+  content: /definitely-not-a-command

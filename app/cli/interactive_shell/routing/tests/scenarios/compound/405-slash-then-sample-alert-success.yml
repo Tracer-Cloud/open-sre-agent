@@ -6,8 +6,6 @@ input:
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store for environment isolation so the planned/executed
-  # action sequence does not depend on the developer's local ~/.opensre integrations.
   resolved_integrations: {}
 available_capabilities:
   slash_commands:
@@ -15,9 +13,8 @@ available_capabilities:
   cli_commands: []
   synthetic_suites: []
 notes:
-- Both actions are valid and of compatible kinds. Verifies that a compound request
-  with two supported sequential actions executes successfully without fail-closing.
-
+- Both actions are valid and of compatible kinds. Verifies that a compound request with two supported
+  sequential actions executes successfully without fail-closing.
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -35,14 +32,6 @@ planned_actions:
   source: llm
   target_surface: investigation
   template: generic
-executed_actions:
-- kind: slash
-  command: /health
-  args: []
-  content: /health
-- kind: sample_alert
-  template: generic
-  content: generic
 response_contract:
   must_contain_any:
   - ran /health
@@ -56,3 +45,13 @@ history:
   - type: alert
     ok: true
 runs: 3
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /health
+  args: []
+  content: /health
+- surface: dispatch
+  kind: sample_alert
+  template: generic
+  content: generic

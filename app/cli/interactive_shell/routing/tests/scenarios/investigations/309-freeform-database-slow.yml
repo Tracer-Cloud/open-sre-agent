@@ -7,11 +7,6 @@ session:
   has_prior_state: false
   configured_integrations:
   - datadog
-  # Pin a fixture-owned Datadog config so the planner sees >=1 connected
-  # integration and DISPATCHES an investigation for this diagnostic question
-  # (the connected-integration gate). Tokens are fake; no real investigation
-  # runs because the oracle stubs the dispatch boundary (REGISTRY.dispatch), so
-  # the call is recorded without remote I/O.
   resolved_integrations:
     datadog:
       connection_verified: true
@@ -26,15 +21,9 @@ route:
 policy:
   executes_terminal_action: true
 planned_actions:
-# Diagnostic question ("why is the database slow?") with Datadog connected, so
-# the planner dispatches an investigation with synthesized alert_text. The
-# alert_text varies per run, so content is omitted: the planning test asserts an
-# investigation with non-empty alert_text rather than an exact string.
 - kind: investigation
   source: llm
   target_surface: investigation
-executed_actions:
-- kind: investigation
 response_contract:
   must_contain_any:
   - investigat
@@ -50,3 +39,6 @@ history:
   - type: alert
     ok: true
 runs: 3
+tool_actions:
+- surface: dispatch
+  kind: investigation

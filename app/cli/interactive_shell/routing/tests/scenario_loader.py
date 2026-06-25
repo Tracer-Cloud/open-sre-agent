@@ -23,7 +23,7 @@ SCENARIOS_DIR = TESTS_DIR / "scenarios"
 INTENT_CLASSES = frozenset(
     {
         "deterministic",
-        "docs_no_execute",
+        "chat_handoff",
         "local_execution",
         "investigation",
         "complex_shell_prompts",
@@ -31,6 +31,16 @@ INTENT_CLASSES = frozenset(
         "remote",
         "follow_up",
         "non_actionable",
+    }
+)
+VALID_TOOL_ACTION_SURFACES = frozenset({"dispatch", "gather"})
+VALID_GATHER_EXPECTS = frozenset(
+    {
+        "not_called",
+        "called",
+        "call_any",
+        "valid_data",
+        "valid_data_any",
     }
 )
 VALID_ACTION_KINDS = frozenset(
@@ -52,7 +62,7 @@ VALID_TARGET_SURFACES = frozenset({"slash", "terminal", "investigation", "implem
 
 INTENT_TO_BEHAVIOR_CLASS: dict[str, str] = {
     "deterministic": "deterministic",
-    "docs_no_execute": "docs_no_execute",
+    "chat_handoff": "chat_handoff",
     "local_execution": "local_execution",
     "investigation": "investigations",
     "complex_shell_prompts": "complex_shell_prompts",
@@ -181,17 +191,15 @@ class Answer:
 
     1. Planner -> terminal action -> ``REGISTRY.dispatch`` (the "execution"
        path). Covered by ``policy.executes_terminal_action``,
-       ``planned_actions``, and ``executed_actions``. An empty ``planned_actions``
-       means the planner is expected to hand the turn to the conversational
-       assistant (an ``assistant_handoff``), i.e. no terminal action runs.
+       ``planned_actions``, and dispatch entries in ``tool_actions`` (``surface:
+       dispatch``). An empty ``planned_actions`` means the planner is expected to
+       hand the turn to the conversational assistant (an ``assistant_handoff``),
+       i.e. no terminal action runs.
 
     2. Conversational answer + ``gather_tool_evidence`` tool loop (the "chat"
-       path). This is where the assistant answers in prose and may query
-       configured integrations to ground that answer. It is NOT represented as
-       planned/executed actions; the only assertions available here are the
-       ``response_contract`` text checks. Deeper "did it actually query the
-       integration?" assertions belong in execution-layer tests, not these
-       routing fixtures.
+       path). Assert gather behaviour via ``tool_actions`` entries with
+       ``surface: gather`` and an ``expect`` mode (``not_called``, ``called``,
+       ``valid_data``, etc.). ``response_contract`` still covers reply text.
     """
 
     route: AnswerRoute
@@ -232,30 +240,102 @@ def _optional_mapping(raw: object, *, label: str) -> dict[str, Any] | None:
     return cast(dict[str, Any], raw)
 
 
-def _parse_gathered_tools_contract(raw: object, *, label: str) -> GatheredToolsContract | None:
-    """Parse the optional ``gathered_tools_contract`` block.
+def _gather_tool_names(entry: dict[str, Any], *, label: str) -> tuple[str, ...]:
+    tool = entry.get("tool")
+    tools = entry.get("tools")
+    if tool is not None and tools is not None:
+        msg = f"{label}: set either 'tool' or 'tools', not both."
+        raise ValueError(msg)
+    if isinstance(tool, str) and tool.strip():
+        return (tool.strip(),)
+    if tools is not None:
+        return _string_list(tools, label=f"{label}.tools")
+    msg = f"{label}: gather action requires 'tool' or 'tools'."
+    raise ValueError(msg)
 
-    Returns ``None`` when absent. Each of ``must_call_any``, ``must_call_all``,
-    ``must_not_call``, ``must_return_valid_data``, and ``must_return_valid_data_any``
-    are optional lists of
-    non-empty tool-name strings. Registry membership of those names is enforced
-    separately by ``test_routing_fixture_integrity`` so the loader stays free of
-    a heavy tool registry import.
+
+def _parse_tool_actions(
+    raw: object,
+    *,
+    label: str,
+    scenario_id: str,
+    executes_terminal_action: bool,
+) -> tuple[tuple[dict[str, Any], ...], GatheredToolsContract | None]:
+    """Parse unified ``tool_actions`` into dispatch + gather contract views.
+
+    ``surface: dispatch`` entries become ``executed_actions`` shapes. ``surface:
+    gather`` entries aggregate into a :class:`GatheredToolsContract` by
+    ``expect`` mode.
     """
     if raw is None:
-        return None
-    mapping = _require_mapping(raw, label=label)
+        return (), None
+    if not isinstance(raw, list):
+        msg = f"{label} must be a list, got {type(raw).__name__}."
+        raise ValueError(msg)
+
+    executed: list[dict[str, Any]] = []
+    must_call_any: list[str] = []
+    must_call_all: list[str] = []
+    must_not_call: list[str] = []
+    must_return_valid_data: list[str] = []
+    must_return_valid_data_any: list[str] = []
+
+    for index, item in enumerate(raw):
+        entry_label = f"{label}[{index}]"
+        if not isinstance(item, dict):
+            msg = f"{entry_label} must be a mapping."
+            raise ValueError(msg)
+        entry = cast(dict[str, Any], item)
+        surface = str(entry.get("surface", "")).strip()
+        if surface not in VALID_TOOL_ACTION_SURFACES:
+            msg = (
+                f"{entry_label}: surface must be one of "
+                f"{sorted(VALID_TOOL_ACTION_SURFACES)!r}, got {surface!r}."
+            )
+            raise ValueError(msg)
+
+        if surface == "dispatch":
+            if "expect" in entry:
+                msg = f"{entry_label}: dispatch actions must not set 'expect'."
+                raise ValueError(msg)
+            dispatch_action = {key: value for key, value in entry.items() if key != "surface"}
+            validate_action_shape(
+                dispatch_action,
+                prefix=f"{scenario_id} tool_actions[{index}]",
+                require_source=False,
+            )
+            executed.append(dispatch_action)
+            continue
+
+        expect = str(entry.get("expect", "")).strip()
+        if expect not in VALID_GATHER_EXPECTS:
+            msg = (
+                f"{entry_label}: expect must be one of {sorted(VALID_GATHER_EXPECTS)!r}, "
+                f"got {expect!r}."
+            )
+            raise ValueError(msg)
+        tool_names = _gather_tool_names(entry, label=entry_label)
+        if expect == "not_called":
+            must_not_call.extend(tool_names)
+        elif expect == "called":
+            must_call_all.extend(tool_names)
+        elif expect == "call_any":
+            must_call_any.extend(tool_names)
+        elif expect == "valid_data":
+            must_return_valid_data.extend(tool_names)
+        else:
+            must_return_valid_data_any.extend(tool_names)
+
+    if not executes_terminal_action and executed:
+        msg = f"{label}: executes_terminal_action=false requires no dispatch tool_actions."
+        raise ValueError(msg)
+
     contract = GatheredToolsContract(
-        must_call_any=_string_list(mapping.get("must_call_any"), label=f"{label}.must_call_any"),
-        must_call_all=_string_list(mapping.get("must_call_all"), label=f"{label}.must_call_all"),
-        must_not_call=_string_list(mapping.get("must_not_call"), label=f"{label}.must_not_call"),
-        must_return_valid_data=_string_list(
-            mapping.get("must_return_valid_data"), label=f"{label}.must_return_valid_data"
-        ),
-        must_return_valid_data_any=_string_list(
-            mapping.get("must_return_valid_data_any"),
-            label=f"{label}.must_return_valid_data_any",
-        ),
+        must_call_any=tuple(must_call_any),
+        must_call_all=tuple(must_call_all),
+        must_not_call=tuple(must_not_call),
+        must_return_valid_data=tuple(must_return_valid_data),
+        must_return_valid_data_any=tuple(must_return_valid_data_any),
     )
     if not (
         contract.must_call_any
@@ -264,13 +344,8 @@ def _parse_gathered_tools_contract(raw: object, *, label: str) -> GatheredToolsC
         or contract.must_return_valid_data
         or contract.must_return_valid_data_any
     ):
-        msg = (
-            f"{label} must define at least one of "
-            "must_call_any/must_call_all/must_not_call/"
-            "must_return_valid_data/must_return_valid_data_any."
-        )
-        raise ValueError(msg)
-    return contract
+        return tuple(executed), None
+    return tuple(executed), contract
 
 
 def _string_list(raw: object, *, label: str) -> tuple[str, ...]:
@@ -526,15 +601,18 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
             raise ValueError(msg)
     executes_terminal_action = bool(policy_raw.get("executes_terminal_action", False))
 
+    if "executed_actions" in data or "gathered_tools_contract" in data:
+        msg = (
+            f"{answer_path}: executed_actions and gathered_tools_contract were removed; "
+            "use tool_actions with surface dispatch|gather instead."
+        )
+        raise ValueError(msg)
+
     planned_actions = tuple(
         _normalize_planned_action(dict(item))
         for item in _action_list(
             data.get("planned_actions"), label=f"{answer_path} planned_actions"
         )
-    )
-    executed_actions = _action_list(
-        data.get("executed_actions"),
-        label=f"{answer_path} executed_actions",
     )
 
     for index, action in enumerate(planned_actions):
@@ -543,12 +621,13 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
             prefix=f"{scenario_id} planned_actions[{index}]",
             require_source=True,
         )
-    for index, action in enumerate(executed_actions):
-        validate_action_shape(
-            action,
-            prefix=f"{scenario_id} executed_actions[{index}]",
-            require_source=False,
-        )
+
+    executed_actions, gathered_tools_contract = _parse_tool_actions(
+        data.get("tool_actions"),
+        label=f"{answer_path} tool_actions",
+        scenario_id=scenario_id,
+        executes_terminal_action=executes_terminal_action,
+    )
 
     must_contain_any = list(
         _string_list(
@@ -583,10 +662,6 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     if not executes_terminal_action and "$ /" not in must_not_contain:
         must_not_contain.append("$ /")
 
-    if not executes_terminal_action and executed_actions:
-        msg = f"{answer_path}: executes_terminal_action=false requires executed_actions=[]."
-        raise ValueError(msg)
-
     runs_raw = data.get("runs", 1)
     runs = int(runs_raw) if isinstance(runs_raw, int | str) else 1
     if runs < 1:
@@ -603,11 +678,6 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
         str(command_text).strip()
         if isinstance(command_text, str) and command_text.strip()
         else None
-    )
-
-    gathered_tools_contract = _parse_gathered_tools_contract(
-        data.get("gathered_tools_contract"),
-        label=f"{answer_path} gathered_tools_contract",
     )
 
     return Answer(

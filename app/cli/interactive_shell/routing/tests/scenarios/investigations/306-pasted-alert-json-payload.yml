@@ -6,8 +6,6 @@ input:
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store so this scenario is isolated from the developer's
-  # local ~/.opensre integrations.
   resolved_integrations: {}
 notes: []
 route:
@@ -20,8 +18,6 @@ planned_actions:
   content: '{"alertname": "HighCPU", "severity": "critical"}'
   source: llm
   target_surface: investigation
-executed_actions:
-- kind: investigation
 response_contract:
   must_contain_any:
   - alert payload
@@ -38,3 +34,6 @@ history:
   - type: alert
     ok: true
 runs: 3
+tool_actions:
+- surface: dispatch
+  kind: investigation

@@ -6,8 +6,6 @@ input:
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store so this scenario is isolated from the developer's
-  # local ~/.opensre integrations.
   resolved_integrations: {}
 notes: []
 route:
@@ -21,10 +19,6 @@ planned_actions:
   source: llm
   target_surface: investigation
   template: generic
-executed_actions:
-- kind: sample_alert
-  template: generic
-  content: generic
 response_contract:
   must_contain_any:
   - sample alert generic
@@ -36,3 +30,8 @@ history:
   - type: alert
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: sample_alert
+  template: generic
+  content: generic

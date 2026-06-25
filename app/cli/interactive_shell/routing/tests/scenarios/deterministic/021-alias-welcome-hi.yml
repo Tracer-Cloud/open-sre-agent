@@ -8,7 +8,6 @@ session:
   configured_integrations: []
   resolved_integrations: {}
 notes: []
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: /welcome
@@ -21,11 +20,6 @@ planned_actions:
   command: /welcome
   args: []
   content: /welcome
-executed_actions:
-- kind: slash
-  command: /welcome
-  args: []
-  content: /welcome
 response_contract:
   must_contain_any:
   - ran /welcome
@@ -35,3 +29,9 @@ history:
   - type: slash
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /welcome
+  args: []
+  content: /welcome

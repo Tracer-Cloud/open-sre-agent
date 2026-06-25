@@ -6,8 +6,6 @@ input:
 session:
   has_prior_state: false
   configured_integrations: []
-  # Pin an empty resolved store so this scenario is isolated from the developer's
-  # local ~/.opensre integrations.
   resolved_integrations: {}
 available_capabilities:
   slash_commands: []
@@ -27,11 +25,6 @@ planned_actions:
   target_surface: investigation
   suite: rds_postgres
   scenario: 002-connection-exhaustion
-executed_actions:
-- kind: synthetic_test
-  suite: rds_postgres
-  scenario: 002-connection-exhaustion
-  content: rds_postgres:002-connection-exhaustion
 response_contract:
   must_contain_any:
   - synthetic test rds_postgres:002-connection-exhaustion
@@ -43,3 +36,9 @@ history:
   - type: synthetic_test
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: synthetic_test
+  suite: rds_postgres
+  scenario: 002-connection-exhaustion
+  content: rds_postgres:002-connection-exhaustion

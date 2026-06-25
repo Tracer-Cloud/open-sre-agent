@@ -8,7 +8,6 @@ session:
   configured_integrations: []
   resolved_integrations: {}
 notes: []
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: /integrations show datadog
@@ -23,13 +22,6 @@ planned_actions:
   - show
   - datadog
   content: /integrations show datadog
-executed_actions:
-- kind: slash
-  command: /integrations
-  args:
-  - show
-  - datadog
-  content: /integrations show datadog
 response_contract:
   must_contain_any:
   - ran /integrations show datadog
@@ -39,3 +31,11 @@ history:
   - type: slash
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /integrations
+  args:
+  - show
+  - datadog
+  content: /integrations show datadog

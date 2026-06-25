@@ -1,14 +1,15 @@
 id: 332-priority-prompt-mysql-active-connections
 title: Priority prompt — MySQL active connections query
-intent_class: complex_shell_prompts
+intent_class: chat_handoff
 input:
-  prompt: "Use the MySQL tool (ID: mysql-fcf94503) to query the current number of active connections."
+  prompt: 'Use the MySQL tool (ID: mysql-fcf94503) to query the current number of active connections.'
 session:
   has_prior_state: false
   configured_integrations: []
   resolved_integrations: {}
 notes:
-- P0 priority prompt (database_connection_or_query_errors #2) from OpenSRE analytics priority-prompts report.
+- 'P0 priority prompt (database_connection_or_query_errors #2) from OpenSRE analytics priority-prompts
+  report.'
 - Prompt is sent verbatim; do not normalize typos or mixed language.
 route:
   expected_kind: handle_message_with_agent
@@ -19,7 +20,6 @@ planned_actions:
 - kind: assistant_handoff
   content: database_query:mysql_active_connections
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
   - mysql
@@ -31,13 +31,15 @@ response_contract:
   - cannot help
   - I can't help
   - I cannot help
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

@@ -2,19 +2,14 @@ id: 314-windows-crash-multisource-query
 title: Windows crash epic dispatches an investigation across Sentry, GitHub, and PostHog
 intent_class: complex_shell_prompts
 input:
-  prompt: >-
-    Hey OpenSRE figure out why our OpenSRE agent is crashing on Windows machines
-    by querying (a) sentry, (b) github issues, (c) posthog
+  prompt: Hey OpenSRE figure out why our OpenSRE agent is crashing on Windows machines by querying (a)
+    sentry, (b) github issues, (c) posthog
 session:
   has_prior_state: false
   configured_integrations:
   - sentry
   - github
   - posthog_mcp
-  # Pin fixture-owned integration configs so the planner sees >=1 connected
-  # integration and dispatches an investigation (the Option A gate). Tokens are
-  # fake; no real investigation runs because the oracle stubs the dispatch
-  # boundary (REGISTRY.dispatch), so the call is recorded without remote I/O.
   resolved_integrations:
     sentry:
       connection_verified: true
@@ -35,14 +30,12 @@ session:
       url: https://mcp.posthog.com/mcp
       auth_token: fixture-token
 notes:
-- "Multi-source investigation request with Sentry, GitHub, and PostHog connected.\
-  \ Because at least one integration is connected, the planner DISPATCHES an\
-  \ investigation (investigation_start) with synthesized alert_text instead of\
-  \ handing off. This is the dispatch counterpart to 313 (no integrations ->\
-  \ handoff)."
-- "The investigation alert_text is synthesized from the prompt and varies per\
-  \ run, so planned_actions leaves content empty: the planning test asserts an\
-  \ investigation with non-empty alert_text rather than an exact string."
+- Multi-source investigation request with Sentry, GitHub, and PostHog connected. Because at least one
+  integration is connected, the planner DISPATCHES an investigation (investigation_start) with synthesized
+  alert_text instead of handing off. This is the dispatch counterpart to 313 (no integrations -> handoff).
+- 'The investigation alert_text is synthesized from the prompt and varies per run, so planned_actions
+  leaves content empty: the planning test asserts an investigation with non-empty alert_text rather than
+  an exact string.'
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -52,8 +45,6 @@ planned_actions:
 - kind: investigation
   source: llm
   target_surface: investigation
-executed_actions:
-- kind: investigation
 response_contract:
   must_contain_any:
   - investigat
@@ -71,3 +62,6 @@ history:
   - type: alert
     ok: true
 runs: 5
+tool_actions:
+- surface: dispatch
+  kind: investigation

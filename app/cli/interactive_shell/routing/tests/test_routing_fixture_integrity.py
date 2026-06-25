@@ -6,6 +6,8 @@ import ast
 from pathlib import Path
 from typing import cast
 
+import yaml
+
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     ActionKind,
 )
@@ -177,6 +179,20 @@ def test_available_capabilities_blocks_are_not_redundant_boilerplate() -> None:
         "all-empty available_capabilities block; omit the block to use the "
         "production default (all tools enabled) instead:\n" + "\n".join(offenders)
     )
+
+
+def test_scenarios_use_tool_actions_not_legacy_fields() -> None:
+    violations: list[str] = []
+    for scenario_file in sorted(SCENARIOS_DIR.rglob("*.yml")):
+        raw = yaml.safe_load(scenario_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            continue
+        if "executed_actions" in raw or "gathered_tools_contract" in raw:
+            violations.append(
+                f"{scenario_file.name}: remove executed_actions/gathered_tools_contract; "
+                "use tool_actions."
+            )
+    assert not violations, "legacy routing action fields found:\n" + "\n".join(violations)
 
 
 def test_gathered_tools_contract_names_are_registered() -> None:

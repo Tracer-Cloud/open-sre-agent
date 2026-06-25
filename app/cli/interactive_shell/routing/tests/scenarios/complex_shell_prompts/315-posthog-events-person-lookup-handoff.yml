@@ -2,20 +2,11 @@ id: 315-posthog-events-person-lookup-handoff
 title: PostHog person-events lookup hands off and grounds the answer via PostHog (not an investigation)
 intent_class: complex_shell_prompts
 input:
-  prompt: >-
-    events for the person whose github_username is davincios in posthog mcp
+  prompt: events for the person whose github_username is davincios in posthog mcp
 session:
   has_prior_state: false
   configured_integrations:
   - posthog_mcp
-  # PostHog is the ONLY connected source, so the gather loop has exactly one real
-  # integration to call. This is the crux of the regression: even WITH an
-  # observability source connected, a plain data-retrieval query ("events for
-  # person X") is NOT an incident root-cause, so the planner must HAND OFF (no
-  # investigation_start) and let the conversational gather loop query PostHog.
-  # The token is fake, so list_posthog_tools reaches the live endpoint and 401s;
-  # the oracle records the tool as "called" regardless of the auth error, which
-  # is the deterministic, credential-independent signal the contract asserts.
   resolved_integrations:
     posthog_mcp:
       connection_verified: true
@@ -23,39 +14,31 @@ session:
       url: https://mcp.posthog.com/mcp
       auth_token: fixture-token
 notes:
-- "Data-retrieval / analytics lookup, NOT an investigation. The prompt asks to\
-  \ fetch events for a named person in PostHog -- it names no failure, crash,\
-  \ error, outage, or incident to root-cause. The planner must NOT emit\
-  \ investigation_start (regression guard for the DATA-RETRIEVAL rule in the\
-  \ action-planner prompt): it hands off and the conversational gather loop\
-  \ queries PostHog to ground the answer. Contrast with 314, where 'crashing on\
-  \ Windows' names a failure and DOES dispatch an investigation."
-- "Grounded against the live PostHog MCP (project 'Tracer Cloud Production',\
-  \ id 196678) on 2026-06-18. The person whose github_username is 'davincios'\
-  \ exists (person id bed2a68f-ce46-5d68-9835-537389f3e317, distinct_id\
-  \ fb70eccb-ba6d-46a3-b9ba-7cf67dbc9d9a, $lib opensre-cli). They carry two\
-  \ $identify events (17:05:49Z and 17:25:05Z) plus a rich history (~21 event\
-  \ types incl. interactive_shell_route_decision, $ai_generation, cli_invoked),\
-  \ so this is a legitimate, reproducible lookup -- not a contrived prompt."
-- "Solidity contract: because PostHog is the only resolved integration, the\
-  \ gather loop MUST engage the PostHog tool surface on every run --\
-  \ list_posthog_tools is asserted via must_call_all (strictly stronger than\
-  \ must_call_any), so a silently-dropped PostHog tool registration, a broken\
-  \ is_available check, or the planner wrongly starting an investigation instead\
-  \ of handing off all fail this scenario instead of passing on hallucinated\
-  \ text. call_posthog_tool is intentionally NOT required: it only fires after\
-  \ list_posthog_tools authenticates against the live endpoint, which the fake\
-  \ fixture token cannot do (it 401s), so requiring it would make the fixture\
-  \ fail in every credential-less environment (CI included). list_posthog_tools\
-  \ firing is the deterministic, auth-independent proof that the gather loop\
-  \ routed this lookup to PostHog."
+- 'Data-retrieval / analytics lookup, NOT an investigation. The prompt asks to fetch events for a named
+  person in PostHog -- it names no failure, crash, error, outage, or incident to root-cause. The planner
+  must NOT emit investigation_start (regression guard for the DATA-RETRIEVAL rule in the action-planner
+  prompt): it hands off and the conversational gather loop queries PostHog to ground the answer. Contrast
+  with 314, where ''crashing on Windows'' names a failure and DOES dispatch an investigation.'
+- Grounded against the live PostHog MCP (project 'Tracer Cloud Production', id 196678) on 2026-06-18.
+  The person whose github_username is 'davincios' exists (person id bed2a68f-ce46-5d68-9835-537389f3e317,
+  distinct_id fb70eccb-ba6d-46a3-b9ba-7cf67dbc9d9a, $lib opensre-cli). They carry two $identify events
+  (17:05:49Z and 17:25:05Z) plus a rich history (~21 event types incl. interactive_shell_route_decision,
+  $ai_generation, cli_invoked), so this is a legitimate, reproducible lookup -- not a contrived prompt.
+- 'Solidity contract: because PostHog is the only resolved integration, the gather loop MUST engage the
+  PostHog tool surface on every run -- list_posthog_tools is asserted via must_call_all (strictly stronger
+  than must_call_any), so a silently-dropped PostHog tool registration, a broken is_available check, or
+  the planner wrongly starting an investigation instead of handing off all fail this scenario instead
+  of passing on hallucinated text. call_posthog_tool is intentionally NOT required: it only fires after
+  list_posthog_tools authenticates against the live endpoint, which the fake fixture token cannot do (it
+  401s), so requiring it would make the fixture fail in every credential-less environment (CI included).
+  list_posthog_tools firing is the deterministic, auth-independent proof that the gather loop routed this
+  lookup to PostHog.'
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
 policy:
   executes_terminal_action: false
 planned_actions: []
-executed_actions: []
 response_contract:
   must_contain_any:
   - posthog
@@ -66,18 +49,12 @@ response_contract:
   forbidden_actions:
   - investigation
   - shell
-gathered_tools_contract:
-  # A PostHog data lookup with ONLY PostHog connected must drive the gather loop
-  # to engage the PostHog tool surface -- list_posthog_tools is the entry tool
-  # the loop always hits when PostHog is the resolved integration. must_call_all
-  # (not must_call_any) makes this the strong, grounded signal: it fails if the
-  # assistant answers from training data without querying PostHog, if the tool
-  # is deregistered, or if the planner wrongly dispatches an investigation. The
-  # investigation action is guarded separately via response_contract.forbidden_actions.
-  must_call_all:
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tool: list_posthog_tools
+  expect: called

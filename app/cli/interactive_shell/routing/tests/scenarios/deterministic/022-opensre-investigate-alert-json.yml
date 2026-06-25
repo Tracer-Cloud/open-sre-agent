@@ -10,7 +10,6 @@ session:
 notes:
 - Quick-start demo command must resolve deterministically (not cli_agent fail-closed).
 - Execution uses /investigate (SAFE tier) so no Proceed? confirmation prompt.
-
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: /investigate alert.json
@@ -24,23 +23,24 @@ planned_actions:
   args:
   - alert.json
   content: /investigate alert.json
-executed_actions:
-- kind: slash
-  command: /investigate
-  args:
-  - alert.json
-  content: /investigate alert.json
 response_contract:
   must_contain_any:
   - ran /investigate alert.json
   must_not_contain:
-  - "Proceed?"
-  - "Confirm:"
-  - "couldn't safely decide actions"
-  - ";57R"
-  - "ctrl+o tool details"
+  - Proceed?
+  - 'Confirm:'
+  - couldn't safely decide actions
+  - ;57R
+  - ctrl+o tool details
 history:
   expected:
   - type: slash
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /investigate
+  args:
+  - alert.json
+  content: /investigate alert.json

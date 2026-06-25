@@ -1,14 +1,14 @@
-id: 322-priority-prompt-orders-cpu-spike
-title: Priority prompt — orders-api CPU spike
-intent_class: complex_shell_prompts
+id: 330-priority-prompt-update-opensre-version
+title: Priority prompt — update opensre to newest version
+intent_class: chat_handoff
 input:
-  prompt: 'CPU is spiking to 99% on the orders-api pods'
+  prompt: how do I update my opensre to the newest version
 session:
   has_prior_state: false
   configured_integrations: []
   resolved_integrations: {}
 notes:
-- P0 priority prompt (misc_real_investigation #2) from OpenSRE analytics priority-prompts report.
+- 'P0 priority prompt (misc_setup_or_onboarding #2) from OpenSRE analytics priority-prompts report.'
 - Prompt is sent verbatim; do not normalize typos or mixed language.
 route:
   expected_kind: handle_message_with_agent
@@ -17,27 +17,28 @@ policy:
   executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
-  content: incident_description:orders_cpu_99
+  content: docs:update_opensre_version
   source: llm
-executed_actions: []
 response_contract:
   must_contain_any:
-  - orders
-  - cpu
-  - incident
+  - update
+  - version
+  - opensre
   must_not_contain:
   - $ /
   - can't help
   - cannot help
   - I can't help
   - I cannot help
-gathered_tools_contract:
-  must_not_call:
-  - search_sentry_issues
-  - search_github_issues
-  - list_posthog_tools
 history:
   expected:
   - type: cli_agent
     ok: true
 runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

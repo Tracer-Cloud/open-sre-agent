@@ -33,16 +33,6 @@ planned_actions:
   command: /integrations
   args:
   - list
-executed_actions:
-- kind: slash
-  command: /health
-  args: []
-  content: /health
-- kind: slash
-  command: /integrations
-  args:
-  - list
-  content: /integrations list
 response_contract:
   must_contain_any:
   - health
@@ -60,3 +50,15 @@ history:
   - type: slash
     ok: true
 runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /health
+  args: []
+  content: /health
+- surface: dispatch
+  kind: slash
+  command: /integrations
+  args:
+  - list
+  content: /integrations list
