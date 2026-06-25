@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import io
+import os
 
+import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.ui.feedback import _format_root_cause_lines, _print_context
+
+
+def _fixed_terminal_size(*_args: object, **_kwargs: object) -> os.terminal_size:
+    return os.terminal_size((60, 24))
 
 
 def test_format_root_cause_lines_wraps_long_text_without_truncation() -> None:
@@ -37,3 +43,39 @@ def test_print_context_shows_full_root_cause_in_rich_path() -> None:
     output = buf.getvalue()
     assert root in output
     assert "…" not in output
+
+
+def test_print_context_escapes_rich_markup_in_root() -> None:
+    root = "Pod restart [1/3] failed because schema validation requires 'payment_method'."
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=80)
+
+    _print_context({"root_cause": root}, console=console)
+
+    output = buf.getvalue()
+    assert "[1/3]" in output
+    assert "…" not in output
+
+
+def test_print_context_shows_full_root_cause_in_stdout_path(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("shutil.get_terminal_size", _fixed_terminal_size)
+    root = (
+        "The Kubernetes job 'etl-transform-error' for pipeline "
+        "'kubernetes_etl_pipeline' failed because schema validation requires "
+        "'payment_method'."
+    )
+
+    _print_context({"root_cause": root}, console=None)
+
+    captured = capsys.readouterr().out
+    assert "…" not in captured
+    assert " ".join(captured.split()) == (
+        "─" * 60
+        + " Root cause: "
+        + root
+        + " "
+        + "─" * 60
+    )

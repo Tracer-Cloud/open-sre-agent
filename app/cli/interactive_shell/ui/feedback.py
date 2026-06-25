@@ -155,13 +155,15 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
 
     cols = min(88, max(40, shutil.get_terminal_size((80, 24)).columns))
 
+    from rich.markup import escape
+
     from app.cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
 
     if console is not None:
         console.print()
         console.rule(characters="─", style=DIM)
         console.print(
-            f"[{SECONDARY}]Root cause:[/] [{BRAND}]{root}[/]",
+            f"[{SECONDARY}]Root cause:[/] [{BRAND}]{escape(root)}[/]",
             soft_wrap=True,
             width=cols,
         )
