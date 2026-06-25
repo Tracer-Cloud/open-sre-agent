@@ -155,6 +155,9 @@ class GatheredToolsContract:
       ``must_call_all``: it fails on a credential 401, a malformed-param 400, or
       any other errored call, so it can only pass when the tool actually reached
       the live integration and got valid data back.
+    * ``must_return_valid_data_any`` — at least one of these tool names must be
+      invoked AND return valid data (same success criteria as
+      ``must_return_valid_data``).
 
     For ``must_call_any``, ``must_call_all``, and ``must_not_call`` a tool counts
     as "called" when it appears in ``ToolLoopResult.executed`` regardless of
@@ -166,6 +169,7 @@ class GatheredToolsContract:
     must_call_all: tuple[str, ...]
     must_not_call: tuple[str, ...]
     must_return_valid_data: tuple[str, ...]
+    must_return_valid_data_any: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -232,7 +236,8 @@ def _parse_gathered_tools_contract(raw: object, *, label: str) -> GatheredToolsC
     """Parse the optional ``gathered_tools_contract`` block.
 
     Returns ``None`` when absent. Each of ``must_call_any``, ``must_call_all``,
-    ``must_not_call``, and ``must_return_valid_data`` is an optional list of
+    ``must_not_call``, ``must_return_valid_data``, and ``must_return_valid_data_any``
+    are optional lists of
     non-empty tool-name strings. Registry membership of those names is enforced
     separately by ``test_routing_fixture_integrity`` so the loader stays free of
     a heavy tool registry import.
@@ -247,16 +252,22 @@ def _parse_gathered_tools_contract(raw: object, *, label: str) -> GatheredToolsC
         must_return_valid_data=_string_list(
             mapping.get("must_return_valid_data"), label=f"{label}.must_return_valid_data"
         ),
+        must_return_valid_data_any=_string_list(
+            mapping.get("must_return_valid_data_any"),
+            label=f"{label}.must_return_valid_data_any",
+        ),
     )
     if not (
         contract.must_call_any
         or contract.must_call_all
         or contract.must_not_call
         or contract.must_return_valid_data
+        or contract.must_return_valid_data_any
     ):
         msg = (
             f"{label} must define at least one of "
-            "must_call_any/must_call_all/must_not_call/must_return_valid_data."
+            "must_call_any/must_call_all/must_not_call/"
+            "must_return_valid_data/must_return_valid_data_any."
         )
         raise ValueError(msg)
     return contract

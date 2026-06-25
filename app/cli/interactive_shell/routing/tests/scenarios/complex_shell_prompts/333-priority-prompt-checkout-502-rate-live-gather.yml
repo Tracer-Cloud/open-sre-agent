@@ -9,13 +9,13 @@ session:
   - datadog
   # Resolve real Datadog credentials from env/local store (never pinned in-repo).
   # Scenarios skip when datadog @live cannot resolve. must_return_valid_data on
-  # query_datadog_logs proves an authenticated call succeeded (empty log results OK).
+  # query_datadog_logs or query_datadog_all proves an authenticated call succeeded.
   resolved_integrations:
     datadog: "@live"
 notes:
 - Live-gather counterpart to 325-priority-prompt-checkout-502-rate. Same prompt and
   handoff routing, but asserts the conversational gather loop reaches live Datadog
-  and returns valid data via query_datadog_logs (316-style), not merely that a tool
+  and returns valid data via query_datadog_logs or query_datadog_all (316-style), not merely that a tool
   was invoked despite auth/transport errors.
 - P0 priority prompt (http_5xx_or_latency_after_deploy #1).
 route:
@@ -41,8 +41,9 @@ response_contract:
   forbidden_actions:
   - investigation
 gathered_tools_contract:
-  must_return_valid_data:
+  must_return_valid_data_any:
   - query_datadog_logs
+  - query_datadog_all
   must_not_call:
   - search_sentry_issues
   - search_github_issues

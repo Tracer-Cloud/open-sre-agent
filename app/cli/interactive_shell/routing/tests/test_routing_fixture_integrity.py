@@ -195,6 +195,7 @@ def test_gathered_tools_contract_names_are_registered() -> None:
             *contract.must_call_all,
             *contract.must_not_call,
             *contract.must_return_valid_data,
+            *contract.must_return_valid_data_any,
         )
         for name in names:
             if name not in registered:

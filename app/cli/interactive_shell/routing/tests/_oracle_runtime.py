@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from rich.console import Console
@@ -63,7 +63,7 @@ def _integration_config_mapping(config: Any) -> dict[str, Any]:
         return config
     model_dump = getattr(config, "model_dump", None)
     if callable(model_dump):
-        return model_dump(exclude_none=True)
+        return cast(dict[str, Any], model_dump(exclude_none=True))
     return {}
 
 
@@ -264,6 +264,10 @@ def _gathered_contract_failures(
         failures.append("must_not_call")
     if any(name not in gathered_valid_data for name in contract.must_return_valid_data):
         failures.append("must_return_valid_data")
+    if contract.must_return_valid_data_any and not (
+        gathered_valid_data & set(contract.must_return_valid_data_any)
+    ):
+        failures.append("must_return_valid_data_any")
     return failures
 
 

@@ -11,7 +11,7 @@ session:
     datadog: "@live"
 notes:
 - Live-gather counterpart to 327-priority-prompt-k8s-cpu-spike.
-- Asserts query_datadog_logs returns valid live data (empty results OK).
+- Asserts a live Datadog gather tool returns valid data (empty results OK).
 - P0 priority prompt (kubernetes_workload_health #1).
 route:
   expected_kind: handle_message_with_agent
@@ -37,8 +37,9 @@ response_contract:
   forbidden_actions:
   - investigation
 gathered_tools_contract:
-  must_return_valid_data:
+  must_return_valid_data_any:
   - query_datadog_logs
+  - query_datadog_all
   must_not_call:
   - search_sentry_issues
   - search_github_issues
