@@ -99,17 +99,19 @@ def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)  # type: ignore[attr-defined]
 
 
-def read_key_windows() -> str:
+def read_key_windows(*, also_cancel: tuple[bytes, ...] = ()) -> str:
     """Read one logical keypress on Windows; return a normalised key name.
 
     Possible return values: ``"up"``, ``"down"``, ``"enter"``,
     ``"cancel"``, ``"tab"``, ``"right"``, ``"left"``, ``"eof"``,
     ``"ignore"``.
+
+    ``also_cancel`` treats additional single-byte keys as ``"cancel"``.
     """
     import msvcrt  # type: ignore[import,attr-defined]
 
     ch = msvcrt.getch()  # type: ignore[attr-defined]
-    if ch in (b"\x03", b"\x1b"):
+    if ch in (b"\x03", b"\x1b") or ch in also_cancel:
         return "cancel"
     if ch in (b"\r", b"\n", b" "):
         return "enter"

@@ -222,7 +222,11 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
     _draw(False)
 
     while True:
-        key = read_key_unix(also_cancel=_SKIP_KEYS) if is_unix else read_key_windows()
+        key = (
+            read_key_unix(also_cancel=_SKIP_KEYS)
+            if is_unix
+            else read_key_windows(also_cancel=_SKIP_KEYS)
+        )
 
         if key == "enter":
             _out(f"\x1b[{total_lines}A\r\x1b[J")
@@ -291,7 +295,9 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
             f"\n[{BRAND}]Was this RCA accurate?[/] [{DIM}]↑↓ · Enter · Esc or s to skip[/]"
         )
     else:
-        sys.stdout.write(f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc to skip{_R}\n\n")
+        sys.stdout.write(
+            f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc or s to skip{_R}\n\n"
+        )
         sys.stdout.flush()
 
     rating = _pick_rating(console=console)
