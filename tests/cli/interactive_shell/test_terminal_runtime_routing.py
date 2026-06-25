@@ -13,6 +13,9 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    LlmActionPlanResult,
+)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
     investigation_tool as _investigation_tool,
 )
@@ -250,14 +253,15 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        loop_execution._agent_actions,
-        "_plan_actions",
-        lambda _message, _session: (
-            [
+        "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration"
+        ".terminal_actions.planning.plan_actions_with_llm_result",
+        lambda _message, *, session=None: LlmActionPlanResult(  # noqa: ARG005
+            actions=(
                 PlannedAction(kind="slash", content="/remote", position=0),
                 PlannedAction(kind="investigation", content="hello world", position=1),
-            ],
-            False,
+            ),
+            has_unhandled_clause=False,
+            policy_trace=("fake_planner",),
         ),
     )
     monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)

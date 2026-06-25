@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import sys
 import threading
 
 import pytest
