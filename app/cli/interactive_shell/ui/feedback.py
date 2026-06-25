@@ -130,8 +130,23 @@ def _emit_analytics(record: dict[str, Any]) -> None:
 # ── context display ───────────────────────────────────────────────────────────
 
 
+def _format_root_cause_lines(root: str, *, cols: int) -> list[str]:
+    """Wrap root-cause text to terminal width with a hanging ``Root cause:`` prefix."""
+    import textwrap
+
+    prefix = "Root cause: "
+    content_width = max(20, cols - len(prefix))
+    wrapped = textwrap.wrap(root, width=content_width)
+    if not wrapped:
+        return []
+    lines = [prefix + wrapped[0]]
+    indent = " " * len(prefix)
+    lines.extend(indent + line for line in wrapped[1:])
+    return lines
+
+
 def _print_context(final_state: dict[str, Any], *, console: Console | None) -> None:
-    """Print a brief root-cause snippet above the rating prompt."""
+    """Print the root-cause summary above the rating prompt."""
     root = (final_state.get("root_cause") or "").strip()
     if not root:
         return
@@ -139,17 +154,21 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
     import shutil
 
     cols = min(88, max(40, shutil.get_terminal_size((80, 24)).columns))
-    snippet = root if len(root) <= cols - 14 else root[: cols - 17] + "…"
 
     from app.cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
 
     if console is not None:
         console.print()
         console.rule(characters="─", style=DIM)
-        console.print(f"[{SECONDARY}]Root cause:[/] [{BRAND}]{snippet}[/]")
+        console.print(
+            f"[{SECONDARY}]Root cause:[/] [{BRAND}]{root}[/]",
+            soft_wrap=True,
+            width=cols,
+        )
     else:
         rule = "─" * cols
-        sys.stdout.write(f"\n{rule}\nRoot cause: {snippet}\n{rule}\n")
+        body = "\n".join(_format_root_cause_lines(root, cols=cols))
+        sys.stdout.write(f"\n{rule}\n{body}\n{rule}\n")
         sys.stdout.flush()
 
 
