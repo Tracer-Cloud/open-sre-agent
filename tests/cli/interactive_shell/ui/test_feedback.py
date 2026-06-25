@@ -8,11 +8,41 @@ import os
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.ui.feedback import _format_root_cause_lines, _print_context
+from app.cli.interactive_shell.ui.feedback import (
+    _format_root_cause_lines,
+    _print_context,
+    _root_cause_width,
+)
 
 
 def _fixed_terminal_size(*_args: object, **_kwargs: object) -> os.terminal_size:
     return os.terminal_size((60, 24))
+
+
+def _wide_terminal_size(*_args: object, **_kwargs: object) -> os.terminal_size:
+    return os.terminal_size((160, 24))
+
+
+def test_root_cause_width_uses_full_terminal_not_capped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("shutil.get_terminal_size", _wide_terminal_size)
+
+    assert _root_cause_width(console=None) == 160
+
+
+def test_print_context_stdout_uses_full_terminal_width(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("shutil.get_terminal_size", _wide_terminal_size)
+    root = "Schema validation failed because payment_method is missing."
+
+    _print_context({"root_cause": root}, console=None)
+
+    captured = capsys.readouterr().out
+    assert captured.startswith("\n" + "─" * 160 + "\n")
+    assert captured.rstrip().endswith("─" * 160)
 
 
 def test_format_root_cause_lines_wraps_long_text_without_truncation() -> None:

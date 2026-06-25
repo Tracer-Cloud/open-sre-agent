@@ -145,15 +145,24 @@ def _format_root_cause_lines(root: str, *, cols: int) -> list[str]:
     return lines
 
 
+def _root_cause_width(*, console: Console | None) -> int:
+    """Best-effort terminal width for root-cause display (matches REPL tables)."""
+    import shutil
+
+    from app.cli.interactive_shell.ui.rendering import _repl_table_width
+
+    if console is not None:
+        return _repl_table_width(console)
+    return max(40, shutil.get_terminal_size(fallback=(80, 24)).columns)
+
+
 def _print_context(final_state: dict[str, Any], *, console: Console | None) -> None:
     """Print the root-cause summary above the rating prompt."""
     root = (final_state.get("root_cause") or "").strip()
     if not root:
         return
 
-    import shutil
-
-    cols = min(88, max(40, shutil.get_terminal_size((80, 24)).columns))
+    cols = _root_cause_width(console=console)
 
     from rich.markup import escape
 
