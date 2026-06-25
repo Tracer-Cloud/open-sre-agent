@@ -1,6 +1,9 @@
 """Terminal rendering for RCA reports — Claude-style output."""
 
+import io
 import re
+import shutil
+import sys
 
 from rich.console import Console
 from rich.text import Text
@@ -112,6 +115,27 @@ def _render_rich_evidence_item(console: Console, line: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _report_width() -> int:
+    """Best-effort terminal width for the buffered report render."""
+    return max(40, shutil.get_terminal_size(fallback=(80, 24)).columns)
+
+
+def _emit(rendered: str) -> None:
+    """Write a pre-rendered report in a single TTY-safe stdout call.
+
+    The report is built into one string and emitted with a single
+    ``sys.stdout.write``. When stdout is a TTY, line endings are normalised to
+    ``\\r\\n`` so that under prompt_toolkit's ``patch_stdout(raw=True)`` (the
+    interactive REPL) every line starts at column zero. Rendering line-by-line
+    through a fresh Rich Console there interleaves with the proxy and the report
+    body is dropped from scrollback; one normalised write avoids that.
+    """
+    if sys.stdout.isatty():
+        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n")
+    sys.stdout.write(rendered)
+    sys.stdout.flush()
+
+
 def render_report(slack_message: str) -> None:
     """Render the final RCA report to terminal."""
     from app.observability import (
@@ -124,25 +148,34 @@ def render_report(slack_message: str) -> None:
 
     if not slack_message:
         if fmt == "rich":
-            Console(highlight=False, force_terminal=True).print(
+            buf = io.StringIO()
+            Console(file=buf, highlight=False, force_terminal=True, width=_report_width()).print(
                 Text.assemble(("  ● ", f"bold {WARNING}"), ("No report generated.", DIM))
             )
+            _emit(buf.getvalue())
         else:
-            print("No report generated.")
+            _emit("No report generated.\n")
         return
 
     if fmt == "rich":
-        _render_rich_report(slack_message)
+        _emit(_render_rich_report(slack_message))
     else:
-        _render_plain_report(slack_message)
+        _emit(_render_plain_report(slack_message))
 
     # Print the investigation phase footer at the absolute bottom of the
     # RCA report (without "esc to cancel" — the investigation is complete).
     render_completed_investigation_footer()
 
 
-def _render_rich_report(slack_message: str) -> None:
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+def _render_rich_report(slack_message: str) -> str:
+    buf = io.StringIO()
+    console = Console(
+        file=buf,
+        highlight=False,
+        force_terminal=True,
+        color_system="truecolor",
+        width=_report_width(),
+    )
     console.print()
 
     lines = slack_message.splitlines()
@@ -205,9 +238,9 @@ def _render_rich_report(slack_message: str) -> None:
         console.print(t)
 
     console.print()
+    return buf.getvalue()
 
 
-def _render_plain_report(slack_message: str) -> None:
-    print()
+def _render_plain_report(slack_message: str) -> str:
     clean = _strip_slack_links(_strip_mrkdwn(slack_message))
-    print(clean)
+    return f"\n{clean}\n"

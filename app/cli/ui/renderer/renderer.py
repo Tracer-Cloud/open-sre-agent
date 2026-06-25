@@ -540,6 +540,19 @@ class StreamRenderer:
                 _print_info("Alert classified as noise — no investigation needed.")
             elif self._events_received == 0:
                 _print_info("No events received from the remote agent.")
+            else:
+                # Stream finished but no report was published — e.g. the pipeline
+                # raised after diagnosis, or publish_findings produced no message.
+                # Never go silently blank: surface whatever root cause we captured,
+                # then a clear notice so the user knows the run ended (and the UI
+                # did not just swallow the report).
+                root_cause = (self._final_state.get("root_cause") or "").strip()
+                if root_cause:
+                    _print_info(f"Root cause: {root_cause}")
+                _print_info(
+                    "Investigation finished without a full report. "
+                    "Re-run, or check the logs if this persists."
+                )
             return
 
         from app.core.orchestration.node.publish_findings.renderers.terminal import (

@@ -60,21 +60,24 @@ def _interactive_investigate_menu(session: ReplSession, console: Console) -> boo
     choices.append(("__browse__", "custom file path…"))
     choices.append(("done", "done"))
 
-    while True:
-        target = repl_choose_one(
-            title="investigate",
-            breadcrumb=root,
-            choices=choices,
-        )
-        if target is None or target == "done":
+    # Run the picker once, then return to the REPL prompt — re-opening the menu
+    # after each investigation buried the RCA report and felt like a loop the
+    # user could not escape. The standalone CLI runs a single investigation and
+    # returns; bare /investigate now matches that.
+    target = repl_choose_one(
+        title="investigate",
+        breadcrumb=root,
+        choices=choices,
+    )
+    if target is None or target == "done":
+        return True
+    if target == "__browse__":
+        custom_path = _prompt_investigate_path(console)
+        if custom_path is None:
             return True
-        if target == "__browse__":
-            custom_path = _prompt_investigate_path(console)
-            if custom_path is None:
-                continue
-            target = custom_path
-        _cmd_investigate_file(session, console, [target])
-        repl_section_break(console)
+        target = custom_path
+    _cmd_investigate_file(session, console, [target])
+    return True
 
 
 def _prompt_investigate_path(console: Console) -> str | None:

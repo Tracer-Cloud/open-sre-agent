@@ -51,6 +51,16 @@ def run_foreground_investigation(
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.apply_investigation_result(final_state)
+
+    # Mirror the standalone CLI (run_investigation_cli_streaming): show the
+    # blocking RCA-accuracy feedback menu after the report. Pass console=None so
+    # the cursor-safe _run_select (per-line erase) is used instead of
+    # repl_choose_one, whose block-erase is unstable after Rich Live streaming.
+    from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
+    from app.cli.interactive_shell.ui.key_reader import restore_stdin_terminal
+
+    restore_stdin_terminal()
+    prompt_investigation_feedback(final_state)
     return final_state
 
 
