@@ -10,8 +10,6 @@ from typing import Any
 
 import questionary
 
-from app.cli.interactive_shell.data_store.context import is_json_output
-from app.cli.investigation import run_investigation_cli, run_investigation_cli_streaming
 from app.integrations.store import STORE_PATH
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -20,6 +18,8 @@ from app.remote.vercel_poller import (
     resolve_vercel_config,
 )
 from app.services.vercel import make_vercel_client
+from cli.interactive_shell.data_store.context import is_json_output
+from cli.investigation import run_investigation_cli, run_investigation_cli_streaming
 
 _INCIDENT_CACHE_DIR: Path = STORE_PATH.parent / "investigations" / "vercel"
 

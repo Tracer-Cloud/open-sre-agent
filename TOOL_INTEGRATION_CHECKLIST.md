@@ -31,7 +31,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
 - [ ] Reusable transport/parsing logic lives in `app/services/` or `app/tools/utils/` rather than being copied into the tool body
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
-- [ ] Output that may contain secrets, tokens, or PII is run through `app/masking/` before being returned
+- [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
 
 ### Live payload parsing
 
@@ -84,9 +84,9 @@ Common failure modes to consider:
 
 If the tool/integration is relevant to investigations:
 
-- [ ] Review alert-source seeding in `app/core/domain/alerts/alert_source.py`
-- [ ] Review source-priority/prompt mapping in `app/core/orchestration/node/investigate/prompt.py`
-- [ ] Review evidence/source registration in `app/core/domain/types/` or related state models when relevant
+- [ ] Review alert-source seeding in `core/domain/alerts/alert_source.py`
+- [ ] Review source-priority/prompt mapping in `core/orchestration/node/investigate/prompt.py`
+- [ ] Review evidence/source registration in `core/domain/types/` or related state models when relevant
 - [ ] Add scenario coverage proving the tool surfaces useful RCA evidence
 
 If the integration is first-class for an `alert_source`, the source-to-tool maps must be reviewed explicitly.

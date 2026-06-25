@@ -1,4 +1,4 @@
-"""Tests for app/guardrails/stream.py.
+"""Tests for platform/guardrails/stream.py.
 
 The acceptance criteria from issue #1499 map onto these tests as follows:
 
@@ -19,14 +19,13 @@ The acceptance criteria from issue #1499 map onto these tests as follows:
 from __future__ import annotations
 
 import re
+from platform.guardrails.engine import GuardrailEngine
+from platform.guardrails.rules import GuardrailAction, GuardrailRule
+from platform.guardrails.stream import GuardrailStream
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from app.guardrails.engine import GuardrailEngine
-from app.guardrails.rules import GuardrailAction, GuardrailRule
-from app.guardrails.stream import GuardrailStream
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,7 +63,7 @@ def stub_capture(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     def _stub(*, rule_names: tuple[str, ...], count: int, blocked: bool) -> None:
         calls.append({"rule_names": rule_names, "count": count, "blocked": blocked})
 
-    monkeypatch.setattr("app.guardrails.stream.capture_agent_secret_detected", _stub)
+    monkeypatch.setattr("platform.guardrails.stream.capture_agent_secret_detected", _stub)
     return calls
 
 

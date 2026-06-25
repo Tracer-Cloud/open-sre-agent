@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.cli.interactive_shell.prompting.conversation_history import (
+from cli.interactive_shell.prompting.conversation_history import (
     MAX_CONVERSATION_MESSAGES,
     MAX_CONVERSATION_TURNS,
     NO_HISTORY_PLACEHOLDER,

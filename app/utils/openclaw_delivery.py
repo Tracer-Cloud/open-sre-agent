@@ -13,7 +13,7 @@ from app.integrations.openclaw import (
 )
 
 if TYPE_CHECKING:
-    from app.state import InvestigationState
+    from core.domain.state import InvestigationState
 
 logger = logging.getLogger(__name__)
 

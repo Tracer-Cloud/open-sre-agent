@@ -36,31 +36,30 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 `app/` one level deeper:
 
-- `app/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
-- `app/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `app/cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `app/cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
+- `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
+- `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
+- `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `app/constants/` — Shared prompt and other static constants.
 - `app/deployment/` — Single home for “deployment” code, split by concern:
     - `app/deployment/methods/` — _How_ you ship (Railway CLI, etc.).
     - `app/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
 - `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
-- `app/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
+- `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
 - `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
-- `app/masking/` — Masking utilities for redacting or normalizing sensitive content.
-- `app/core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
-- `app/core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
+- `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
+- `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
+- `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
 - `app/remote/` — Remote-hosted runtime operations and integration points.
-- `app/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
+- `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
-- `app/state/` — Shared agent runtime envelope (`AgentState`), chat slice, and state factories.
-- `app/core/domain/state/` — Investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
+- `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
-- `app/core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
+- `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
 - `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
-- `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.
+- `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `cli/__main__.py`.
 
 ## 2. Entry Points
 
@@ -88,20 +87,20 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `app/core/orchestration/pipeline.py` and exposed via
-`app/core/orchestration/entrypoints.py`. Stage nodes live under
-`app/core/orchestration/node/`; publishing under
-`app/core/orchestration/node/publish_findings/`.
+Investigations are coordinated in `core/orchestration/pipeline.py` and exposed via
+`core/orchestration/entrypoints.py`. Stage nodes live under
+`core/orchestration/node/`; publishing under
+`core/orchestration/node/publish_findings/`.
 
 Files to touch:
 
-- `app/core/orchestration/pipeline.py` for high-level stage ordering.
-- `app/core/domain/` for pure investigation rules (alert source mapping, tool planning,
+- `core/orchestration/pipeline.py` for high-level stage ordering.
+- `core/domain/` for pure investigation rules (alert source mapping, tool planning,
   category alignment, correlation scoring).
-- `app/core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
+- `core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
   classification).
-- `app/state/*.py` and `app/core/domain/state/runtime_slices.py` when adding or renaming persisted
-  investigation fields (update `AgentStateModel` and the matching slice).
+- `core/domain/state/*.py` when adding or renaming persisted investigation fields
+  (update `AgentStateModel` and the matching slice).
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.
 
@@ -130,8 +129,8 @@ Files to touch:
 Examples from the repo:
 
 - Datadog: `app/services/datadog/client.py`, `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
-- Grafana: `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/Grafana*`, `app/cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `app/integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `app/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Grafana: `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Hermes: `app/integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
@@ -155,7 +154,7 @@ Basic steps:
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
-- If investigation branching or loop behavior changes -> update `app/core/orchestration/pipeline.py` and the tests for that path.
+- If investigation branching or loop behavior changes -> update `core/orchestration/pipeline.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
 - If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 
@@ -165,7 +164,7 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 
 ## 5. Footguns (common mistakes to avoid)
 
-- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `app/cli/interactive_shell/routing/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`orchestration/execution_policy.py`), not the planner.
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `cli/interactive_shell/routing/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`orchestration/execution_policy.py`), not the planner.
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.

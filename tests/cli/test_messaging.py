@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from app.cli.commands.messaging import messaging
 from app.integrations.messaging_security import verify_pairing_code
+from cli.commands.messaging import messaging
 
 
 @pytest.fixture()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.shell.policy import (
+from cli.interactive_shell.shell.policy import (
     argv_for_repl_builtin_routing,
     classify_command,
     evaluate_policy,

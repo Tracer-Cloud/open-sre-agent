@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 import os
 import re
+from platform.observability import debug_print
 from typing import Any
 
 from app.config import SLACK_CHANNEL
-from app.observability import debug_print
 from app.utils.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)

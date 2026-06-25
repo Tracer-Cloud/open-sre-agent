@@ -210,7 +210,7 @@ def test_classify_posthog_mcp_credentials() -> None:
             },
         }
     ]
-    from app.core.orchestration.node.investigate.tools import availability_view
+    from core.orchestration.node.investigate.tools import availability_view
 
     resolved = _classify_integrations(records)
     assert "posthog_mcp" in resolved

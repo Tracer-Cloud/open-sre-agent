@@ -7,7 +7,7 @@ Two stages, exposed via flags:
    pipeline. Verifies the adapter wiring end-to-end.
 
 2. ``--run-investigation``: actually invoke ``run_investigation`` from
-   ``app.core.orchestration.entrypoints`` against the loaded case. Requires an LLM to
+   ``core.orchestration.entrypoints`` against the loaded case. Requires an LLM to
    be configured. Costs a few cents per case. Verifies the full chain.
 
 Usage::
@@ -69,7 +69,7 @@ def _real_run_result(case: BenchmarkCase, adapter: BenchmarkAdapter) -> RunResul
     """Invoke opensre's run_investigation for real. Requires LLM credentials."""
     # Late import — only needed in this branch, keeps adapter-only path
     # importable without the full opensre dep tree.
-    from app.core.orchestration.entrypoints import run_investigation
+    from core.orchestration.entrypoints import run_investigation
 
     alert = adapter.build_alert(case)
     integrations = adapter.build_opensre_integrations(case)

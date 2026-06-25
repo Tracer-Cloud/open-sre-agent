@@ -15,7 +15,7 @@ from app.integrations.datadog.correlation.provider import (
 )
 
 if TYPE_CHECKING:
-    from app.core.domain.types.upstream import (
+    from core.domain.types.upstream import (
         UpstreamEvidenceProvider,
     )
 

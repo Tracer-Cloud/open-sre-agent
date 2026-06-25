@@ -36,8 +36,8 @@ def _state_with_masking() -> dict[str, object]:
 
 
 def test_slack_message_is_unmasked_before_delivery() -> None:
-    from app.core.orchestration.node.publish_findings import node as pub_node
-    from app.core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+    from core.orchestration.node.publish_findings import node as pub_node
+    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
 
     masked_message = "Root cause: <POD_0> crashed in <NAMESPACE_0>. Impact: customer-facing."
 
@@ -67,8 +67,8 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
 
 
 def test_empty_masking_map_is_passthrough() -> None:
-    from app.core.orchestration.node.publish_findings import node as pub_node
-    from app.core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+    from core.orchestration.node.publish_findings import node as pub_node
+    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
 
     state = _state_with_masking()
     state["masking_map"] = {}

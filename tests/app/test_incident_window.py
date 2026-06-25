@@ -1,4 +1,4 @@
-"""Tests for app.core.domain.types.incident_window.
+"""Tests for core.domain.types.incident_window.
 
 Coverage strategy:
 1. ``IncidentWindow`` value object: construction validation, UTC
@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from app.core.domain.types.incident_window import (
+from core.domain.types.incident_window import (
     DEFAULT_LOOKBACK_MINUTES,
     MAX_LOOKBACK_MINUTES,
     SCHEMA_VERSION,

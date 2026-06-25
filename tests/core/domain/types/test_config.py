@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from app.core.domain.types.config import NodeConfig, get_configurable
+from core.domain.types.config import NodeConfig, get_configurable
 
 
 def test_get_configurable_returns_payload() -> None:

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from platform.guardrails.rules import GuardrailAction, load_rules
 
 import yaml
-
-from app.guardrails.rules import GuardrailAction, load_rules
 
 
 def _write_config(tmp_path: Path, data: dict) -> Path:

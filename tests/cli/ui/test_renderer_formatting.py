@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.cli.ui.renderer.formatting import (
+from cli.ui.renderer.formatting import (
     format_prior_tools_clause,
     investigation_llm_progress_hint,
 )

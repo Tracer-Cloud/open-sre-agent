@@ -16,7 +16,7 @@
 ## How to Run
 
 ```bash
-python -m app.cli tests synthetic --scenario 005-failover
+python -m cli tests synthetic --scenario 005-failover
 ```
 
 ---

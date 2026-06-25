@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.core.domain.types.retrieval import (
+from core.domain.types.retrieval import (
     AggregationSpec,
     RetrievalControlsMap,
     RetrievalIntent,

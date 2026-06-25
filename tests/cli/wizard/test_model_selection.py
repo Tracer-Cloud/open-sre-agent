@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.cli.wizard import _ui, flow
-from app.cli.wizard.config import PROVIDER_BY_VALUE
+from cli.wizard import _ui, flow
+from cli.wizard.config import PROVIDER_BY_VALUE
 
 
 def _wire_prompts(

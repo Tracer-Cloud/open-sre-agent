@@ -27,17 +27,17 @@ from typing import Any
 import httpx
 import pytest
 
-from app.core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
-)
-from app.core.domain.alerts.alert_source import (
-    ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
-)
 from app.services.temporal import TemporalClient, TemporalConfig
 from app.tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
 from app.tools.TemporalTaskQueueTool import TemporalTaskQueueTool
 from app.tools.TemporalWorkflowHistoryTool import TemporalWorkflowHistoryTool
 from app.tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from core.domain.alerts.alert_source import (
+    ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
+)
+from core.domain.alerts.alert_source import (
+    ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
+)
 
 pytestmark = pytest.mark.synthetic
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import click
 
-from app.cli.interactive_shell.data_store.context import (
+from cli.interactive_shell.data_store.context import (
     is_debug,
     is_json_output,
     is_verbose,

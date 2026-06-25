@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.orchestration import entrypoints as runners
 from app.utils import errors
+from core.orchestration import entrypoints as runners
 
 
 def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
@@ -19,7 +19,7 @@ def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
     def capture_stub(exc: BaseException, **_kwargs: object) -> None:
         captured_errors.append(exc)
 
-    import app.core.orchestration.pipeline as pipeline_module
+    import core.orchestration.pipeline as pipeline_module
 
     monkeypatch.setattr(runners, "init_sentry", lambda **_kw: sentry_init_calls.append(None))
     monkeypatch.setattr(errors, "capture_exception", capture_stub)

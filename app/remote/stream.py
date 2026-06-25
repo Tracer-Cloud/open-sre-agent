@@ -4,7 +4,7 @@ Supports both ``stream_mode: ["updates"]`` (node-level) and
 ``stream_mode: ["events"]`` (fine-grained tool/LLM/chain events).
 
 The event envelope itself (:class:`StreamEvent`) lives in
-``app.core.domain.stream`` so the orchestration core can produce
+``core.domain.stream`` so the orchestration core can produce
 events without importing from this transport-layer module.
 """
 
@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from app.core.domain.stream import StreamEvent
+from core.domain.stream import StreamEvent
 
 
 def parse_sse_stream(response: httpx.Response) -> Iterator[StreamEvent]:

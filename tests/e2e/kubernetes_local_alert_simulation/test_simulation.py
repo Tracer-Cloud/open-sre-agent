@@ -41,7 +41,7 @@ def test_kubernetes_local_alert_simulation() -> None:
       - root_cause is non-empty and references the missing field
       - slack_message is non-empty and contains a Root Cause section
     """
-    from app.core.orchestration.entrypoints import run_investigation
+    from core.orchestration.entrypoints import run_investigation
 
     fixture = _load_fixture()
     alert = fixture["alert"]

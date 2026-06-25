@@ -5,15 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
-from app.cli.investigation.payload import load_payload
+from cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
+from cli.investigation.payload import load_payload
 
 
 def test_load_payload_tty_guided_menu_template_choice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdout.isatty", lambda: False)
     answers = iter(["2"])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
 
@@ -26,13 +26,13 @@ def test_load_payload_tty_guided_menu_template_choice(
 def test_load_payload_tty_guided_menu_custom_file_choice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdout.isatty", lambda: False)
     custom_file_index = str(1 + len(SAMPLE_ALERT_OPTIONS) + 1)
     answers = iter([custom_file_index, "alerts/custom.json"])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
     monkeypatch.setattr(
-        "app.cli.investigation.payload.load_file",
+        "cli.investigation.payload.load_file",
         lambda path: {"loaded_from": path},
     )
 
@@ -44,9 +44,9 @@ def test_load_payload_tty_guided_menu_custom_file_choice(
 def test_load_payload_without_tty_uses_stdin_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: False)
     monkeypatch.setattr(
-        "app.cli.investigation.payload.load_stdin",
+        "cli.investigation.payload.load_stdin",
         lambda: {"alert_name": "from-stdin"},
     )
 
@@ -58,8 +58,8 @@ def test_load_payload_without_tty_uses_stdin_path(
 def test_load_payload_tty_guided_menu_cancel_exits_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdout.isatty", lambda: False)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdout.isatty", lambda: False)
     cancel_index = str(1 + len(SAMPLE_ALERT_OPTIONS) + 3)
     answers = iter([cancel_index])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
@@ -73,8 +73,8 @@ def test_load_payload_tty_guided_menu_cancel_exits_zero(
 def test_load_payload_tty_guided_menu_inline_picker_template_choice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdout.isatty", lambda: True)
 
     class _FakeQuestionary:
         class Choice:
@@ -101,7 +101,7 @@ def test_load_payload_input_json_empty_object_raises() -> None:
 def test_load_payload_interactive_tty_empty_payload_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
     answers = iter([""])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
 
@@ -112,7 +112,7 @@ def test_load_payload_interactive_tty_empty_payload_raises(
 def test_load_payload_interactive_tty_multiline_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
     answers = iter(['{"alert_name":"x",', '"severity":"critical"}'])
 
     def _fake_input(_prompt: str = "") -> str:
@@ -131,7 +131,7 @@ def test_load_payload_interactive_tty_multiline_json(
 def test_load_payload_interactive_tty_empty_object_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.investigation.payload.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.investigation.payload.sys.stdin.isatty", lambda: True)
     answers = iter(["{}"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
 

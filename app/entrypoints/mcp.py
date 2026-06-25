@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import contextlib
+from platform.analytics.cli import track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
-from app.analytics.cli import track_investigation
-from app.analytics.source import EntrypointSource, TriggerMode
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.interactive_shell.ui.output.boundary import install_product_adapters
-from app.cli.investigation import run_investigation_cli
 from app.utils.sentry_sdk import capture_exception, init_sentry
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.ui.output.boundary import install_product_adapters
+from cli.investigation import run_investigation_cli
 
 load_dotenv(override=False)
 init_sentry(entrypoint="mcp")

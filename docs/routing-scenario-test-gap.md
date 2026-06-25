@@ -10,7 +10,7 @@
 > non-empty = allowlist) instead of disabling slash/cli/synthetic by default, and
 > the dead `risk_level`/`tier`/`remote_connected`/`surface` fields were removed.
 > See the "Scenario schema and `available_capabilities` semantics" section of
-> `app/cli/interactive_shell/routing/AGENTS.md` for the canonical contract.
+> `cli/interactive_shell/routing/AGENTS.md` for the canonical contract.
 
 ---
 
@@ -51,7 +51,7 @@ copy and the REPL status bar. It does not control which integrations are
 entirely:
 
 ```python
-# app/cli/interactive_shell/chat/tool_gathering.py
+# cli/interactive_shell/chat/tool_gathering.py
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache

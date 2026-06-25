@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import integrations as _integrations
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.command_registry import integrations as _integrations
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _console() -> Console:
@@ -34,7 +34,7 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         lambda _state: refreshed,
     )
     session = ReplSession()

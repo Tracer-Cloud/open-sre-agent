@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.interactive_shell.history.policy import (
+from cli.interactive_shell.history.policy import (
     DEFAULT_MAX_ENTRIES,
     DEFAULT_REDACTION_RULES,
     HistoryPolicy,

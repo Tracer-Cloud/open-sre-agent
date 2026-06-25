@@ -2,11 +2,11 @@
 
 The pipeline orchestrator coordinates stages; it must not import from
 vendor service modules. Vendor wiring lives behind the
-``app.core.orchestration.node.publish_findings.upstream_correlation`` factory (and
+``core.orchestration.node.publish_findings.upstream_correlation`` factory (and
 similar factories for future correlation sources).
 
 Without this guard the dependency drift is easy:
-``app.core.orchestration.pipeline`` previously imported ``DatadogClient``
+``core.orchestration.pipeline`` previously imported ``DatadogClient``
 directly, coupling the orchestrator to one vendor and making "add a
 second correlation source" an edit-this-file change instead of a
 new-file change. See issue #34 and the refactor that introduced
@@ -21,10 +21,10 @@ from pathlib import Path
 import pytest
 
 _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
-    Path("app/core/orchestration/pipeline.py"),
-    Path("app/core/orchestration/entrypoints.py"),
-    Path("app/core/orchestration/state_updates.py"),
-    Path("app/core/orchestration/stream_payloads.py"),
+    Path("core/orchestration/pipeline.py"),
+    Path("core/orchestration/entrypoints.py"),
+    Path("core/orchestration/state_updates.py"),
+    Path("core/orchestration/stream_payloads.py"),
 )
 # Block *all* vendor service modules, not just Datadog. The whole pattern
 # is that orchestration entrypoints route vendor wiring through a stage-owned
@@ -34,9 +34,9 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
 #
 # ``app.remote`` is a transport-layer package (HTTP client, SSE parser). The
 # orchestration core must not depend on it — domain types it shares with
-# the remote runner live in ``app.core.domain`` (see ``StreamEvent``).
-# ``app.cli`` is the presentation layer; same rule.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services", "app.remote", "app.cli")
+# the remote runner live in ``core.domain`` (see ``StreamEvent``).
+# ``cli`` is the presentation layer; same rule.
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services", "app.remote", "cli")
 
 
 def _orchestration_pipeline_modules() -> list[Path]:
@@ -74,6 +74,6 @@ def test_orchestration_pipeline_module_does_not_import_forbidden_layer(
     assert not leaks, (
         f"{module_path} imports vendor service module(s) {sorted(leaks)} — route through "
         "an abstraction (e.g. "
-        "``app.core.orchestration.node.publish_findings.upstream_correlation."
+        "``core.orchestration.node.publish_findings.upstream_correlation."
         "build_upstream_evidence_provider``) instead."
     )

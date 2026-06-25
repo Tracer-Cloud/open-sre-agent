@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from app.cli.interactive_shell.ui.theme import (
+from cli.interactive_shell.ui.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,
@@ -732,7 +732,7 @@ def _setup_discord() -> None:
 
 
 def _setup_telegram() -> None:
-    from app.cli.wizard.integration_health import validate_telegram_bot
+    from cli.wizard.integration_health import validate_telegram_bot
 
     bot_token = _p("Telegram bot token", secret=True)
     if not bot_token:
@@ -1363,7 +1363,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from app.cli.interactive_shell.data_store.context import is_json_output
+    from cli.interactive_shell.data_store.context import is_json_output
 
     items = list_integrations()
 
@@ -1396,7 +1396,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from app.cli.interactive_shell.data_store.context import is_yes
+    from cli.interactive_shell.data_store.context import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -1417,7 +1417,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from app.cli.interactive_shell.data_store.context import is_json_output
+    from cli.interactive_shell.data_store.context import is_json_output
 
     if service:
         service = resolve_management_service(service)

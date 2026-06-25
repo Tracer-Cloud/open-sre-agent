@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
+from platform.masking.policy import ALL_KINDS, MaskingPolicy
 
-from app.masking.policy import ALL_KINDS, MaskingPolicy
+import pytest
 
 
 def test_default_policy_is_disabled() -> None:

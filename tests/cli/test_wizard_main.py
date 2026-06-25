@@ -1,11 +1,11 @@
-"""Coverage for the ``python -m app.cli.wizard`` entrypoint."""
+"""Coverage for the ``python -m cli.wizard`` entrypoint."""
 
 from __future__ import annotations
 
 import click
 import pytest
 
-from app.cli.wizard import __main__ as wizard_main
+from cli.wizard import __main__ as wizard_main
 
 
 def test_main_initialises_sentry_and_emits_cli_invoked(
@@ -36,8 +36,8 @@ def test_main_initialises_sentry_and_emits_cli_invoked(
     install_marker, properties = captured
     assert install_marker == {"_marker": "install"}
     assert properties is not None
-    assert properties["entrypoint"] == "python -m app.cli.wizard"
-    assert properties["command_path"] == "python -m app.cli.wizard wizard"
+    assert properties["entrypoint"] == "python -m cli.wizard"
+    assert properties["command_path"] == "python -m cli.wizard wizard"
     assert properties["command_family"] == "wizard"
 
 

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.interactive_shell.references import docs_reference
-from app.cli.interactive_shell.references.docs_reference import (
+from cli.interactive_shell.references import docs_reference
+from cli.interactive_shell.references.docs_reference import (
     DocPage,
     _excerpt,
     _query_tokens,

@@ -67,7 +67,7 @@ def test_cmd_vercel_incidents_json_outputs_incidents(monkeypatch, capsys) -> Non
         lambda **_kwargs: [_candidate()],
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": True}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": True}
     )
 
     vercel_incidents.cmd_vercel_incidents(limit=5)
@@ -91,7 +91,7 @@ def test_cmd_vercel_incidents_exits_on_api_error(monkeypatch, capsys) -> None:
         ),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
     )
     monkeypatch.setattr(
         vercel_incidents.questionary,
@@ -141,7 +141,7 @@ def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
     answers: list[object] = ["proj_123", "_exit"]
     captured: dict[str, Any] = {}
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
     )
     monkeypatch.setattr(
         vercel_incidents,

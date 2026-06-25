@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.wizard.store import load_named_remotes, load_remote_ops_config
 from app.deployment.operations.health import poll_deployment_health
 from app.remote.ops import (
     RemoteOpsError,
@@ -19,6 +17,8 @@ from app.remote.ops import (
     resolve_remote_ops_provider,
 )
 from app.remote.slack_context import fetch_slack_thread, parse_slack_thread_ref
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.wizard.store import load_named_remotes, load_remote_ops_config
 
 _DEFAULT_LOG_LINES = 100
 _HEALTH_MAX_ATTEMPTS = 2

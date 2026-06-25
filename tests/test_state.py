@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.state import AgentStateModel, make_chat_state, make_initial_state
+from core.domain.state import AgentStateModel, make_chat_state, make_initial_state
 
 
 def test_make_initial_state_validates_and_sets_defaults() -> None:

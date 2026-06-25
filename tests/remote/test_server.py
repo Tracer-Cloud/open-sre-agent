@@ -16,7 +16,6 @@ _DiskUsage = collections.namedtuple("usage", ["total", "used", "free"])
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.core.domain.stream import StreamEvent
 from app.remote import server as remote_server
 from app.remote.server import (
     DeepHealthCheck,
@@ -31,6 +30,7 @@ from app.remote.server import (
     investigate_stream,
 )
 from app.remote.vercel_poller import VercelResolutionError
+from core.domain.stream import StreamEvent
 
 
 class _UrlopenResponse:
@@ -192,7 +192,7 @@ def test_investigate_maps_runtime_failure_to_service_unavailable(
         raise expected_error
 
     def fake_reraise(_exc: BaseException) -> None:
-        from app.cli.interactive_shell.error_handling.errors import OpenSREError
+        from cli.interactive_shell.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "LLM invocation failed.",
@@ -232,7 +232,7 @@ def test_execute_investigation_tracks_remote_http_source(
 
     monkeypatch.setattr("app.remote.server.track_investigation", fake_track)
     monkeypatch.setattr(
-        "app.cli.investigation.resolve_investigation_context",
+        "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("alert-name", "pipeline-name", "critical"),
     )
     cli_calls: list[dict[str, Any]] = []
@@ -242,7 +242,7 @@ def test_execute_investigation_tracks_remote_http_source(
         return {"root_cause": "ok"}
 
     monkeypatch.setattr(
-        "app.cli.investigation.run_investigation_cli",
+        "cli.investigation.run_investigation_cli",
         fake_run_investigation_cli,
     )
 
@@ -286,11 +286,11 @@ async def test_investigate_stream_persists_state_on_disconnect(
 
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "app.cli.investigation.resolve_investigation_context",
+        "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "app.core.orchestration.entrypoints.astream_investigation",
+        "core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(
@@ -337,11 +337,11 @@ async def test_investigate_stream_captures_streaming_exception(
 
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "app.cli.investigation.resolve_investigation_context",
+        "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "app.core.orchestration.entrypoints.astream_investigation",
+        "core.orchestration.entrypoints.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
@@ -852,17 +852,17 @@ async def test_investigate_stream_emits_correlation_payload(
     monkeypatch.setattr("app.config.LLMSettings.from_env", object)
 
     monkeypatch.setattr(
-        "app.cli.investigation.resolve_investigation_context",
+        "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "orders-pipeline", "critical"),
     )
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+        "core.orchestration.node.resolve_integrations.resolve_integrations",
         lambda _state: {"resolved_integrations": {}},
     )
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.extract_alert.extract_alert",
+        "core.orchestration.node.extract_alert.extract_alert",
         lambda _state: {
             "raw_alert": {
                 "alert_name": "PayloadAlert",
@@ -880,12 +880,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
+        "core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
         fake_investigation_run,
     )
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+        "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
         lambda _state, _config=None: {
             "correlation": {
                 "correlated_signals": [
@@ -907,7 +907,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.publish_findings.node.generate_report",
+        "core.orchestration.node.publish_findings.node.generate_report",
         lambda _state: {
             "root_cause": "RDS CPU spike",
             "report": "Correlation attached",

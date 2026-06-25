@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from app.core.orchestration.node.publish_findings.urls.aws import (
+from core.orchestration.node.publish_findings.urls.aws import (
     _encode_aws_path,
     build_cloudwatch_url,
     build_datadog_logs_url,

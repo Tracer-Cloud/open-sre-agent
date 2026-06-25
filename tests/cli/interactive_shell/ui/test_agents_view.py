@@ -16,12 +16,12 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from app.cli.interactive_shell.ui import agents_view as agents_view_mod
-from app.cli.interactive_shell.ui.agents_view import _build_agents_table
 from app.fleet_monitoring import config as config_mod
 from app.fleet_monitoring.probe import ProcessSnapshot
 from app.fleet_monitoring.registry import AgentRecord
 from app.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
+from cli.interactive_shell.ui import agents_view as agents_view_mod
+from cli.interactive_shell.ui.agents_view import _build_agents_table
 
 
 @pytest.fixture(autouse=True)

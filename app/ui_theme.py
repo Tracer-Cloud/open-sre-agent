@@ -1,10 +1,10 @@
 """Shared UI theme constants (color hex codes).
 
-Lives at the top of ``app/`` rather than under ``app/cli/`` because
-core modules (e.g. ``app/core/orchestration/node/publish_findings/renderers/
+Lives at the top of ``app/`` rather than under ``cli/`` because
+core modules (e.g. ``core/orchestration/node/publish_findings/renderers/
 terminal.py``) need the same color values without depending on the
 CLI layer. The CLI's theme module re-exports these so existing
-``from app.cli.interactive_shell.ui.theme import BRAND, …`` imports
+``from cli.interactive_shell.ui.theme import BRAND, …`` imports
 keep working — the hex values stay in one place.
 """
 

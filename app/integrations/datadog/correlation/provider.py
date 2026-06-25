@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.core.domain.types.upstream import (
+from app.integrations.datadog.correlation.adapter import DatadogCorrelationAdapter
+from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from app.integrations.datadog.correlation.adapter import DatadogCorrelationAdapter
 
 
 @dataclass(frozen=True)

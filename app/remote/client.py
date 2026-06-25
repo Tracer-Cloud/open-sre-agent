@@ -10,9 +10,9 @@ from typing import Any
 
 import httpx
 
-from app.core.domain.stream import StreamEvent
 from app.remote.error_reporting import report_remote_exception
 from app.remote.stream import parse_sse_stream
+from core.domain.stream import StreamEvent
 
 logger = logging.getLogger(__name__)
 

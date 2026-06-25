@@ -16,12 +16,12 @@ drop one of the flags.
 from __future__ import annotations
 
 import sys
+from platform.analytics import provider
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
-from app.analytics import provider
 from app.utils import sentry_sdk as sentry_mod
 
 _ENV_VARS = (

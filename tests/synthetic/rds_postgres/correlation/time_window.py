@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.domain.correlation.scoring import (
+from core.domain.correlation.scoring import (
     TimeSeries,
     TimeWindowCorrelation,
     score_time_window_correlation,

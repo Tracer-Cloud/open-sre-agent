@@ -1,8 +1,8 @@
 """Unified Tracer API client module."""
 
 import os
+from platform.auth.jwt_auth import extract_org_id_from_jwt
 
-from app.auth.jwt_auth import extract_org_id_from_jwt
 from app.config import get_tracer_base_url
 from app.services.tracer_client.aws_batch_jobs import AWSBatchJobResult
 from app.services.tracer_client.client import TracerClient

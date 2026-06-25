@@ -123,7 +123,7 @@ class CLIBackedLLMClient:
         _ = self._max_tokens
         _ = self._model_type
 
-        from app.guardrails.apply import apply_guardrails_to_text
+        from platform.guardrails.apply import apply_guardrails_to_text
 
         flat = flatten_messages_to_prompt(prompt_or_messages)
         flat = apply_guardrails_to_text(flat)

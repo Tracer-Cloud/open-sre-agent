@@ -107,8 +107,8 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
 ) -> Any:
-    """Lazy-import ``app.core.orchestration.entrypoints.run_investigation`` (keeps monkeypatch target stable)."""
-    from app.core.orchestration.entrypoints import run_investigation as _impl
+    """Lazy-import ``core.orchestration.entrypoints.run_investigation`` (keeps monkeypatch target stable)."""
+    from core.orchestration.entrypoints import run_investigation as _impl
 
     return _impl(
         raw_alert,
@@ -475,7 +475,7 @@ def _suppress_investigation_rendering(enabled: bool) -> Iterator[None]:
     previous_output_format = os.environ.get("TRACER_OUTPUT_FORMAT")
     os.environ["TRACER_OUTPUT_FORMAT"] = "none"
 
-    from app.cli.interactive_shell.ui import output as output_module
+    from cli.interactive_shell.ui import output as output_module
 
     output_module.get_tracker(reset=True)
     try:

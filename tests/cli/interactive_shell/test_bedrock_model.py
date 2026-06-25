@@ -6,12 +6,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.cli.interactive_shell.command_registry.model.command import (
+from cli.interactive_shell.command_registry.model.command import (
     _prompt_custom_model_id,
     _reasoning_model_menu_choices,
     _toolcall_model_menu_choices,
 )
-from app.cli.interactive_shell.command_registry.model.switching import _is_model_allowed
+from cli.interactive_shell.command_registry.model.switching import _is_model_allowed
 
 
 @dataclass(frozen=True)
@@ -184,25 +184,25 @@ class TestBedrockProviderConfig:
     """Verify Bedrock is registered correctly in the wizard config."""
 
     def test_bedrock_in_supported_providers(self) -> None:
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         assert "bedrock" in PROVIDER_BY_VALUE
 
     def test_bedrock_credential_kind_is_none(self) -> None:
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.credential_kind == "none"
 
     def test_bedrock_has_curated_models(self) -> None:
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert len(provider.models) >= 10
 
     def test_bedrock_curated_models_use_inference_profiles(self) -> None:
         """All Claude models in the curated list must use us.* inference profile IDs."""
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         claude_models = [m for m in provider.models if "anthropic" in str(getattr(m, "value", ""))]
@@ -213,14 +213,14 @@ class TestBedrockProviderConfig:
             )
 
     def test_bedrock_has_toolcall_model_env(self) -> None:
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.toolcall_model_env == "BEDROCK_TOOLCALL_MODEL"
 
     def test_bedrock_api_key_env_is_empty(self) -> None:
         """api_key_env="" is intentional — Bedrock uses IAM auth, not an API key."""
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.api_key_env == ""
@@ -234,7 +234,7 @@ class TestBedrockProviderConfig:
         Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config, not from
         the wizard credential prompt (which is skipped for credential_kind="none").
         """
-        from app.cli.wizard.config import PROVIDER_BY_VALUE
+        from cli.wizard.config import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.credential_default == ""
@@ -256,7 +256,7 @@ class TestInteractiveSetToolcallCustom:
 
         from rich.console import Console
 
-        from app.cli.interactive_shell.command_registry.model import command as model_mod
+        from cli.interactive_shell.command_registry.model import command as model_mod
 
         console = Console(force_terminal=False)
         custom_id = "eu.anthropic.claude-sonnet-4-6"
@@ -276,7 +276,7 @@ class TestInteractiveSetToolcallCustom:
         """If user cancels the custom prompt, _interactive_set_toolcall returns None."""
         from rich.console import Console
 
-        from app.cli.interactive_shell.command_registry.model import command as model_mod
+        from cli.interactive_shell.command_registry.model import command as model_mod
 
         console = Console(force_terminal=False)
 

@@ -26,7 +26,7 @@ def test_cli_llm_spawn_log_redacts_prompt_in_argv(mock_run: MagicMock, caplog) -
     mock_adapter.parse.return_value = "answer"
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
@@ -54,7 +54,7 @@ def test_cli_llm_spawn_log_keeps_non_prompt_argv_args(mock_run: MagicMock, caplo
     mock_adapter.parse.return_value = "answer"
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
@@ -81,7 +81,7 @@ def test_cli_llm_spawn_log_redacts_prompt_equals_form(mock_run: MagicMock, caplo
     mock_adapter.parse.return_value = "answer"
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
@@ -118,7 +118,7 @@ def test_runner_uses_adapter_explain_failure_for_quota(mock_run: MagicMock) -> N
         returncode=1, stdout="", stderr="429 Too Many Requests: quota exceeded"
     )
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter)
         with pytest.raises(RuntimeError, match="quota or rate limit exceeded"):

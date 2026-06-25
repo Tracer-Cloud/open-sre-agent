@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
-from app.cli.interactive_shell.runtime.background_notifications import (
+from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
+from cli.interactive_shell.runtime.background_notifications import (
     deliver_background_notifications,
 )
 
@@ -36,7 +36,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
         return True, ""
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.runtime.background_notifications.send_smtp_report",
+        "cli.interactive_shell.runtime.background_notifications.send_smtp_report",
         _fake_send_smtp_report,
     )
 

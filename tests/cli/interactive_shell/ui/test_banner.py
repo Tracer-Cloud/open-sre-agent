@@ -6,8 +6,8 @@ import io
 
 from rich.console import Console
 
-from app.cli.interactive_shell.ui import banner as banner_module
-from app.cli.interactive_shell.ui import banner_state as banner_state_module
+from cli.interactive_shell.ui import banner as banner_module
+from cli.interactive_shell.ui import banner_state as banner_state_module
 
 
 def test_banner_shows_ollama_model(monkeypatch: object) -> None:

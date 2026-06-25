@@ -37,7 +37,7 @@ def test_three_areas_escalates() -> None:
     rules = _rules_module()
     changed = [
         "app/tools/a.py",
-        "app/cli/b.py",
+        "cli/b.py",
         "app/integrations/hermes/c.py",
     ]
     escalate, _, areas = rules.classify(changed)
@@ -47,7 +47,7 @@ def test_three_areas_escalates() -> None:
 
 def test_pipeline_always_escalates() -> None:
     rules = _rules_module()
-    escalate, _, _ = rules.classify(["app/core/orchestration/entrypoints.py"])
+    escalate, _, _ = rules.classify(["core/orchestration/entrypoints.py"])
     assert escalate
 
 

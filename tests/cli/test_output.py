@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from app.cli.interactive_shell.ui import output
-from app.cli.interactive_shell.ui.output import (
+from cli.interactive_shell.ui import output
+from cli.interactive_shell.ui.output import (
     ProgressEvent,
     ProgressTracker,
     _fmt_timing,
@@ -18,11 +18,11 @@ from app.cli.interactive_shell.ui.output import (
     suppress_stdin_watchers,
     toggle_active_tool_details,
 )
-from app.cli.interactive_shell.ui.output import environment as output_environment
-from app.cli.interactive_shell.ui.output import repl_display as output_repl
-from app.cli.interactive_shell.ui.output import toggles as output_toggles
-from app.cli.interactive_shell.ui.output import tracker as output_tracker
-from app.cli.interactive_shell.ui.output.labels import _humanise_message
+from cli.interactive_shell.ui.output import environment as output_environment
+from cli.interactive_shell.ui.output import repl_display as output_repl
+from cli.interactive_shell.ui.output import toggles as output_toggles
+from cli.interactive_shell.ui.output import tracker as output_tracker
+from cli.interactive_shell.ui.output.labels import _humanise_message
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -190,7 +190,7 @@ def test_tracker_uses_repl_append_display_under_repl_safe_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
-    from app.cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         tracker = ProgressTracker()
@@ -226,7 +226,7 @@ def test_repl_display_buffers_subtext_until_step_complete(
 
 @pytest.mark.asyncio
 async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
-    from app.cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         assert await asyncio.to_thread(output_environment._repl_progress_active) is True
@@ -527,7 +527,7 @@ def test_ctrl_o_watcher_stop_restores_canonical_echo(
         def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
             return [], [], []
 
-    from app.cli.interactive_shell.ui import key_reader
+    from cli.interactive_shell.ui import key_reader
 
     monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
     monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
@@ -744,7 +744,7 @@ def test_progress_event_independent_default_lists() -> None:
 
 
 def test_safe_print_passes_utf8_strings_unchanged(capsys: pytest.CaptureFixture[str]) -> None:
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     _safe_print("hello world")
     assert capsys.readouterr().out.strip() == "hello world"
@@ -754,7 +754,7 @@ def test_safe_print_survives_encode_error(monkeypatch: pytest.MonkeyPatch) -> No
     """Simulate Windows cp1252 stdout that can't encode ● (U+25CF)."""
     from io import StringIO
 
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     class _NarrowWriter(StringIO):
         encoding = "ascii"
@@ -776,7 +776,7 @@ def test_finish_text_mode_survives_non_ascii_mark(
     """Regression: _finish in text mode must not raise UnicodeEncodeError for ●."""
     from io import StringIO
 
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     # Verify _safe_print itself is robust; _finish delegates to it.
     class _AsciiWriter(StringIO):

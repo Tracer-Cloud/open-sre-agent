@@ -25,6 +25,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from platform.analytics.cli import capture_investigation_failed, track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
 
 from dotenv import load_dotenv
@@ -44,11 +46,6 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
-from app.analytics.cli import capture_investigation_failed, track_investigation
-from app.analytics.source import EntrypointSource, TriggerMode
-from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.interactive_shell.ui.output.boundary import install_product_adapters
 from app.remote.error_reporting import report_remote_exception
 from app.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -58,6 +55,9 @@ from app.remote.vercel_poller import (
 )
 from app.utils.sentry_sdk import capture_exception, init_sentry
 from app.version import get_version
+from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.ui.output.boundary import install_product_adapters
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
@@ -455,9 +455,9 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     as a ``.md`` file once the stream completes, matching the behaviour of
     the blocking ``/investigate`` endpoint.
     """
-    from app.cli.investigation import resolve_investigation_context
     from app.config import LLMSettings
-    from app.core.orchestration.entrypoints import astream_investigation
+    from cli.investigation import resolve_investigation_context
+    from core.orchestration.entrypoints import astream_investigation
 
     LLMSettings.from_env()
     try:
@@ -858,7 +858,7 @@ def _execute_investigation(
     severity: str | None,
 ) -> tuple[dict[str, Any], str, str, str]:
     """Run the RCA pipeline and return both the result and resolved metadata."""
-    from app.cli.investigation import resolve_investigation_context, run_investigation_cli
+    from cli.investigation import resolve_investigation_context, run_investigation_cli
 
     investigation_metadata = resolve_investigation_context(
         raw_alert=raw_alert,

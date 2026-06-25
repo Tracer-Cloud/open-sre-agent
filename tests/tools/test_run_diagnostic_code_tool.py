@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from platform.sandbox.runner import SandboxResult
 from unittest.mock import patch
 
-from app.sandbox.runner import SandboxResult
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from app.tools.run_diagnostic_code import run_diagnostic_code
 from tests.tools.conftest import BaseToolContract

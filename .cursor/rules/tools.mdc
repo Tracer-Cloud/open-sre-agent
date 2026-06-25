@@ -59,7 +59,7 @@ my_tool_name = MyToolName()
 
 ## Rules
 
-- `source` is **required** — must be a valid `EvidenceSource` literal from `app/state.py`
+- `source` is **required** — must be a valid `EvidenceSource` literal from `core/domain/types/evidence.py`
 - Tool directories use **PascalCase + `Tool`** suffix (`GrafanaLogsTool/`, `S3ListTool/`)
 - The registry in `app/tools/registry.py` auto-discovers via `pkgutil.iter_modules`
 - Do NOT add your module to `_SKIP_MODULE_NAMES` in `registry.py`

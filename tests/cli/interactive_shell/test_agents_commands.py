@@ -9,11 +9,6 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.command_registry.agents import core as agents_core
-from app.cli.interactive_shell.command_registry.agents import trace as agents_trace
-from app.cli.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
-from app.cli.interactive_shell.runtime.session import ReplSession
 from app.fleet_monitoring import config as config_mod
 from app.fleet_monitoring.conflicts import (
     DEFAULT_WINDOW_SECONDS,
@@ -22,6 +17,11 @@ from app.fleet_monitoring.conflicts import (
 )
 from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
 from app.fleet_monitoring.tail import AttachUnsupported, TailBuffer
+from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from cli.interactive_shell.command_registry.agents import core as agents_core
+from cli.interactive_shell.command_registry.agents import trace as agents_trace
+from cli.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

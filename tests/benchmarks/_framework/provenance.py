@@ -155,7 +155,7 @@ def _git_state() -> dict[str, Any]:
         branch = _run_git("rev-parse", "--abbrev-ref", "HEAD") or "(unknown)"
         # NB: fetch porcelain UNSTRIPPED. ``git status --porcelain`` emits
         # ``XY PATH`` where column 0 (X = index state) is a SIGNIFICANT space for
-        # unstaged-only changes (e.g. " M app/core/orchestration/node/investigate/agent.py"). The
+        # unstaged-only changes (e.g. " M core/orchestration/node/investigate/agent.py"). The
         # default strip in ``_run_git`` would eat that leading space on the first
         # line, shifting it left so ``line[3:]`` slices into the path and drops
         # its first character (" M app…" → "pp/agent/…"). Keep the raw spacing so

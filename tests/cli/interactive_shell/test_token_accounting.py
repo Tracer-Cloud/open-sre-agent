@@ -10,16 +10,16 @@ from unittest.mock import patch
 
 from rich.console import Console
 
-from app.cli.interactive_shell.chat.cli_agent import answer_cli_agent
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.token_accounting import (
+from app.services.llm_client import LLMResponse
+from cli.interactive_shell.chat.cli_agent import answer_cli_agent
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
     format_token_total,
     record_llm_turn,
 )
-from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from app.services.llm_client import LLMResponse
+from cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -137,7 +137,7 @@ class _FakeLLMClient:
 
 
 _PLANNER_LLM_CLIENT = (
-    "app.cli.interactive_shell.routing.handle_message_with_agent"
+    "cli.interactive_shell.routing.handle_message_with_agent"
     ".orchestration.llm_action_planner.llm_client"
 )
 
@@ -154,7 +154,7 @@ def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
 
 
 def test_planner_call_llm_records_provider_token_usage() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 
@@ -189,7 +189,7 @@ def test_planner_call_llm_records_provider_token_usage() -> None:
 
 
 def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 

@@ -1,4 +1,4 @@
-"""Tests for app/core/orchestration/node/publish_findings — LLM judge invocation path."""
+"""Tests for core/orchestration/node/publish_findings — LLM judge invocation path."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from app.core.orchestration.node.publish_findings import deliver
-from app.state import make_initial_state
+from core.domain.state import make_initial_state
+from core.orchestration.node.publish_findings import deliver
 
 
 def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:
@@ -21,7 +21,7 @@ def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:
 
 def _patch_generate_report(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.core.orchestration.node.publish_findings.generate_report",
+        "core.orchestration.node.publish_findings.generate_report",
         lambda _s: {"slack_message": "", "report": ""},
     )
 

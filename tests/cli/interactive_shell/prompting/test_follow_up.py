@@ -8,13 +8,13 @@ from collections.abc import Iterator
 
 from rich.console import Console
 
-from app.cli.interactive_shell.prompting.follow_up import (
+from cli.interactive_shell.prompting.follow_up import (
     _record_follow_up_turn,
     _summarize_evidence,
     _summarize_last_state,
     answer_follow_up,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 class _StreamingClient:
@@ -133,7 +133,7 @@ class TestAnswerFollowUpMarkupSafety:
             _boom,
         )
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 

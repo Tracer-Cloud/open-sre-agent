@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+from platform.analytics.cli import track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
-
-from app.analytics.cli import track_investigation
-from app.analytics.source import EntrypointSource, TriggerMode
 
 
 def run_investigation(*args: Any, **kwargs: Any) -> Any:
     """Lazily import the full runner stack to avoid optional dependency churn at import time."""
-    from app.core.orchestration.entrypoints import run_investigation as _run_investigation
+    from core.orchestration.entrypoints import run_investigation as _run_investigation
 
     with track_investigation(
         entrypoint=EntrypointSource.SDK,

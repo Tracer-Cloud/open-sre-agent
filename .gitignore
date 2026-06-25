@@ -116,9 +116,9 @@ Temporary Items
 .antigravitycli/
 output/
 # CLI terminal output package (must stay tracked; ``output/`` above ignores new files here)
-!app/cli/interactive_shell/ui/output/
-!app/cli/interactive_shell/ui/output/**
-app/cli/interactive_shell/ui/output/**/__pycache__/
+!cli/interactive_shell/ui/output/
+!cli/interactive_shell/ui/output/**
+cli/interactive_shell/ui/output/**/__pycache__/
 .cloudopsbench-results/
 .bench-results/
 tests/benchmarks/cloudopsbench/benchmark/

@@ -10,7 +10,7 @@ from collections.abc import Iterator
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.ui.streaming import (
+from cli.interactive_shell.ui.streaming import (
     format_token_count_short,
     render_response_header,
     stream_to_console,
@@ -136,7 +136,7 @@ class TestTtyParagraphRender:
         ``\\n\\n`` *inside* either chunk) and the boundary is missed
         until end-of-stream.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -177,7 +177,7 @@ class TestTtyParagraphRender:
         ``"{"``); main loop starts with ``"\\nworld"``. The seam should
         be detected — ``peeked[-1]`` is the initial ``prev_chunk``.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -242,7 +242,7 @@ class TestTtyParagraphRender:
         completed code-block paragraph flushes and any subsequent
         ``\\n\\n``-terminated paragraph flushes mid-stream too.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -290,7 +290,7 @@ class TestTtyParagraphRender:
         once when its fence closes. Exercises ``search_from`` advancing
         repeatedly within a single ``_flush_paragraphs`` call.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -340,7 +340,7 @@ class TestTtyParagraphRender:
         fence closes — ``search_from`` is reset to 0 after each render so
         the second block isn't blocked by stale state from the first.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -385,7 +385,7 @@ class TestTtyParagraphRender:
         rendering to EOS. Only line-start fences count, so two paragraphs
         each render incrementally as their ``\\n\\n`` arrives.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -435,7 +435,7 @@ class TestTtyParagraphRender:
         ``re.MULTILINE`` matches only line-start fences, so this
         scenario stays correct.
         """
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown
@@ -558,7 +558,7 @@ class TestMidStreamError:
 
         The double-press absorption logic that used to live here was moved
         to the prompt_toolkit cancel key bindings (see
-        :func:`app.cli.interactive_shell.runtime.dispatch.build_cancel_key_bindings`)
+        :func:`cli.interactive_shell.runtime.dispatch.build_cancel_key_bindings`)
         — the streaming code just lets ``KeyboardInterrupt`` propagate,
         and the ``finally`` block in :func:`stream_to_console` ensures
         the partial buffer is rendered.
@@ -791,7 +791,7 @@ class TestParagraphFlushThrottle:
 
     def _spy_markdown_parses(self, monkeypatch: pytest.MonkeyPatch) -> list[int]:
         """Wrap ``streaming.Markdown`` so each construction increments a counter."""
-        from app.cli.interactive_shell.ui import streaming as streaming_module
+        from cli.interactive_shell.ui import streaming as streaming_module
 
         parse_count = [0]
         real_markdown = streaming_module.Markdown

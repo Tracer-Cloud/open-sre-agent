@@ -14,10 +14,10 @@ import re
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
+from platform.analytics.events import Event
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from app.analytics.events import Event
 from app.constants import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
@@ -371,7 +371,7 @@ def _before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str
 
 def _capture_sentry_init_skipped(reason: str, *, error_type: str | None = None) -> None:
     # Local import to avoid an import cycle between Sentry and analytics modules.
-    from app.analytics.provider import Properties, get_analytics
+    from platform.analytics.provider import Properties, get_analytics
 
     properties: Properties = {"reason": reason}
     if error_type is not None:

@@ -9,10 +9,10 @@ import threading
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.runtime.state import SpinnerState
-from app.cli.interactive_shell.runtime.streaming_console import StreamingConsole
-from app.cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
-from app.cli.interactive_shell.ui.tables import (
+from cli.interactive_shell.runtime.state import SpinnerState
+from cli.interactive_shell.runtime.streaming_console import StreamingConsole
+from cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
+from cli.interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
     render_mcp_table,
@@ -62,7 +62,7 @@ def test_repl_print_resets_before_each_line(monkeypatch) -> None:
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        "cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -78,7 +78,7 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        "cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -114,7 +114,7 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive",
+        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive",
         lambda: True,
     )
 
@@ -193,7 +193,7 @@ def test_render_mcp_table_renders_content(
 
 
 def test_print_planned_actions_formats_kinds() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
         PlannedAction,
     )
 

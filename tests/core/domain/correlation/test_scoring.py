@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.domain.correlation.scoring import (
+from core.domain.correlation.scoring import (
     TimeSeries,
     TopologyNode,
     rank_upstream_candidates,
@@ -8,7 +8,7 @@ from app.core.domain.correlation.scoring import (
     score_time_window_correlation,
     score_topology_adjacency,
 )
-from app.core.domain.types.upstream import UpstreamCandidate
+from core.domain.types.upstream import UpstreamCandidate
 
 
 def test_score_time_window_correlation_scores_matching_trends() -> None:

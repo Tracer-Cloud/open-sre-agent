@@ -19,16 +19,16 @@ Primary reference for provider discovery:
 | `app/config.py`              | Declares `LLMProvider`, provider env vars, defaults, and validation requirements. |
 | `app/services/llm_client.py` | Routes `LLM_PROVIDER` to the runtime client implementation.                       |
 | `app/services/agent_llm_client.py` | Investigation ReAct loop: tool-calling clients (`get_agent_llm`).              |
-| `app/core/orchestration/node/investigate/` | Investigation agent, prompts, and seed tool calls.       |
-| `app/core/runtime/`         | Shared tool-loop and provider-specific assistant / tool-result messages.          |
-| `app/cli/wizard/config.py`   | Defines onboarding metadata (`SUPPORTED_PROVIDERS`) and model choices.            |
-| `app/cli/wizard/env_sync.py` | Keeps `.env` values in sync when provider/model changes.                          |
+| `core/orchestration/node/investigate/` | Investigation agent, prompts, and seed tool calls.       |
+| `core/runtime/`         | Shared tool-loop and provider-specific assistant / tool-result messages.          |
+| `cli/wizard/config.py`   | Defines onboarding metadata (`SUPPORTED_PROVIDERS`) and model choices.            |
+| `cli/wizard/env_sync.py` | Keeps `.env` values in sync when provider/model changes.                          |
 
 
 ## Adding a new API provider
 
 1. Add provider literal to `LLMProvider` and normalization/validation paths in `app/config.py`.
-2. Add provider metadata in `app/cli/wizard/config.py` (`ProviderOption`, model env vars, defaults).
+2. Add provider metadata in `cli/wizard/config.py` (`ProviderOption`, model env vars, defaults).
 3. Add runtime routing in `app/services/llm_client.py` and, for investigation tool calling,
    `app/services/agent_llm_client.py` (see [investigation-tool-calling.md](../../docs/investigation-tool-calling.md)).
 4. Update `.env` sync behavior if you introduce new model/API env keys.

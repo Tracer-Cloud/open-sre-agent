@@ -11,14 +11,14 @@ from http.client import HTTPConnection
 
 import pytest
 
-from app.cli.interactive_shell.alert_inbox import (
+from cli.interactive_shell.alert_inbox import (
     _MAX_BODY_BYTES,
     AlertInbox,
     AlertListenerHandle,
     IncomingAlert,
     start_alert_listener,
 )
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.error_handling.errors import OpenSREError
 
 # A Content-Length value guaranteed to trip the listener's pre-auth
 # body cap. Computed from the cap itself so the constant can't drift

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from app.cli.commands.cron import cron_command
+from cli.commands.cron import cron_command
 
 
 def test_cron_add_rejects_non_positive_window() -> None:

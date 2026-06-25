@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.cli.interactive_shell.source_store import (
+from cli.interactive_shell.source_store import (
     IncompatibleStoreError,
     SourceStore,
     StoredChunk,

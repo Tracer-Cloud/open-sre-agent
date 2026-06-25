@@ -8,18 +8,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.orchestration.node.investigate import (
+from app.integrations.llm_cli.errors import CLITimeoutError
+from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
+from app.tools.registered_tool import RegisteredTool
+from core.orchestration.node.investigate import (
     ConnectedInvestigationAgent,
 )
-from app.core.orchestration.node.investigate.agent import _tools_for_plan
-from app.core.orchestration.node.investigate.loop import (
+from core.orchestration.node.investigate.agent import _tools_for_plan
+from core.orchestration.node.investigate.loop import (
     CachedToolResult,
     InvestigationToolCallCache,
     duplicate_call_result,
     tool_call_signature,
 )
-from app.core.orchestration.node.investigate.tools import availability_view
-from app.core.runtime import (
+from core.orchestration.node.investigate.tools import availability_view
+from core.runtime import (
     build_synthetic_assistant_tool_call_message,
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -27,9 +30,6 @@ from app.core.runtime import (
     execute_tools,
     trim_lowest_value_tool_pair,
 )
-from app.integrations.llm_cli.errors import CLITimeoutError
-from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
-from app.tools.registered_tool import RegisteredTool
 
 
 def _registered_tool(name: str, source: str) -> RegisteredTool:
@@ -122,9 +122,9 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -156,9 +156,9 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -182,9 +182,9 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -215,9 +215,9 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -254,9 +254,9 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -291,9 +291,9 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
     ):
         agent = ConnectedInvestigationAgent()
@@ -364,7 +364,7 @@ def testexecute_tools_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("app.core.runtime.execution.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("core.runtime.execution.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
@@ -847,9 +847,9 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
         ),
         pytest.raises(ValueError, match="_should_accept_conclusion returned"),
     ):
@@ -1168,12 +1168,12 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch("app.core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_tracker", return_value=MagicMock()
+            "core.orchestration.node.investigate.agent.get_tracker", return_value=MagicMock()
         ),
         patch(
-            "app.core.orchestration.node.investigate.agent.get_available_tools", return_value=tools
+            "core.orchestration.node.investigate.agent.get_available_tools", return_value=tools
         ),
     ):
         result = ConnectedInvestigationAgent().run(state)
@@ -1252,7 +1252,7 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
     """List content with several text slots is shrunk proportionally so the whole
     message lands near the budget instead of zeroing the first slot only."""
-    from app.core.runtime import truncate_content
+    from core.runtime import truncate_content
 
     content = [
         {"type": "text", "text": "a" * 100_000},

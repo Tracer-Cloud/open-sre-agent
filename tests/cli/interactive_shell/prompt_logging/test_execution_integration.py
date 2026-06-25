@@ -4,13 +4,13 @@ import io
 
 from rich.console import Console
 
-from app.cli.interactive_shell.prompt_logging import LlmRunInfo
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.prompt_logging import LlmRunInfo
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from app.cli.interactive_shell.routing.types import RouteDecision, RouteKind
-from app.cli.interactive_shell.runtime import execution
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.routing.types import RouteDecision, RouteKind
+from cli.interactive_shell.runtime import execution
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 class _FakeRecorder:

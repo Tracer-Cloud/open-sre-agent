@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
     load_credentials_from_env,
 )
+from cli.interactive_shell.error_handling.errors import OpenSREError
 
 
 def _stub_telegram(

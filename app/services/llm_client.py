@@ -49,9 +49,9 @@ from app.config import (
     OPENROUTER_BASE_URL,
     resolve_llm_settings,
 )
-from app.core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 from app.llm_credentials import resolve_llm_api_key
 from app.llm_reasoning_effort import get_active_reasoning_effort
+from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 
 # The canonical taxonomy for root cause categories lives in
-# ``app.core.domain.types.root_cause_categories``. This module only consumes the
+# ``core.domain.types.root_cause_categories``. This module only consumes the
 # resulting set (``VALID_ROOT_CAUSE_CATEGORIES``) for membership checks
 # while parsing LLM responses; it does not own or extend the taxonomy.
 
@@ -231,7 +231,7 @@ class LLMClient:
         self._ensure_client()
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.apply import apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -249,7 +249,7 @@ class LLMClient:
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.engine import GuardrailBlockedError
 
         kwargs = self._build_request_kwargs(prompt_or_messages)
 
@@ -321,7 +321,7 @@ class LLMClient:
         so any post-emission failure propagates immediately. Auth and
         guardrail errors never retry.
         """
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.engine import GuardrailBlockedError
 
         kwargs = self._build_request_kwargs(prompt_or_messages)
 
@@ -425,8 +425,8 @@ class BedrockLLMClient:
         assert self._anthropic_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.apply import apply_guardrails_to_messages
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.apply import apply_guardrails_to_messages
+        from platform.guardrails.engine import GuardrailBlockedError
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -531,8 +531,8 @@ class BedrockLLMClient:
         assert self._boto3_client is not None
         system, messages = _normalize_messages(prompt_or_messages)
 
-        from app.guardrails.apply import apply_guardrails_to_messages
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.apply import apply_guardrails_to_messages
+        from platform.guardrails.engine import GuardrailBlockedError
 
         messages, system = apply_guardrails_to_messages(messages, system)
 
@@ -859,7 +859,7 @@ class OpenAILLMClient:
         self._ensure_client()
         messages = _normalize_messages_openai(prompt_or_messages)
 
-        from app.guardrails.apply import apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         messages, _ = apply_guardrails_to_messages(messages)
 
@@ -885,7 +885,7 @@ class OpenAILLMClient:
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.engine import GuardrailBlockedError
 
         # Build kwargs first (also calls _ensure_client internally) so the
         # captured client below reflects the latest key — guards against a
@@ -1007,7 +1007,7 @@ class OpenAILLMClient:
         retrying would duplicate visible output, so post-emission failures
         propagate. Auth and guardrail errors never retry.
         """
-        from app.guardrails.engine import GuardrailBlockedError
+        from platform.guardrails.engine import GuardrailBlockedError
 
         # Build kwargs first (also calls _ensure_client internally) so the
         # captured client below reflects the latest key — same rotation

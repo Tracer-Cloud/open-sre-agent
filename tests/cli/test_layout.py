@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import click
 
-from app.cli.__main__ import cli
-from app.cli.interactive_shell.ui.layout import (
+from cli.__main__ import cli
+from cli.interactive_shell.ui.layout import (
     RichGroup,
     _options_from_command,
     render_help,
@@ -16,7 +16,7 @@ def _normalized_output(output: str) -> str:
 
 
 def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("app.cli.interactive_shell.ui.banner._is_first_run", lambda: True)
+    monkeypatch.setattr("cli.interactive_shell.ui.banner._is_first_run", lambda: True)
     render_help(cli)
     output = _normalized_output(capsys.readouterr().out)
 
@@ -49,7 +49,7 @@ def test_render_help_command_list_matches_cli_registry(capsys) -> None:
 
 
 def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("app.cli.interactive_shell.ui.banner._is_first_run", lambda: True)
+    monkeypatch.setattr("cli.interactive_shell.ui.banner._is_first_run", lambda: True)
     render_landing(cli)
     output = _normalized_output(capsys.readouterr().out)
 
@@ -74,7 +74,7 @@ def test_rich_group_format_help_delegates_to_render_help(monkeypatch) -> None:
     def fake_render_help(group: click.Group) -> None:
         called_with.append(group)
 
-    monkeypatch.setattr("app.cli.interactive_shell.ui.layout.render_help", fake_render_help)
+    monkeypatch.setattr("cli.interactive_shell.ui.layout.render_help", fake_render_help)
 
     group = RichGroup(name="opensre")
     group.format_help(click.Context(group), click.HelpFormatter())

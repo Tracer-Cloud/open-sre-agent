@@ -61,12 +61,12 @@ class TestReportException:
                 exc,
                 logger=mock_log,
                 message="msg",
-                tags={"surface": "cli", "component": "app.cli"},
+                tags={"surface": "cli", "component": "cli"},
             )
         extra = mock_cap.call_args[1]["extra"]
         assert extra["tag.surface"] == "cli"
-        assert extra["tag.component"] == "app.cli"
-        assert mock_cap.call_args[1]["tags"] == {"surface": "cli", "component": "app.cli"}
+        assert extra["tag.component"] == "cli"
+        assert mock_cap.call_args[1]["tags"] == {"surface": "cli", "component": "cli"}
 
     def test_extras_are_merged(self) -> None:
         mock_log = _mock_logger()

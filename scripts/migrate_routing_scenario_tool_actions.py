@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-SCENARIOS_DIR = Path(__file__).resolve().parents[1] / "app/cli/interactive_shell/routing/tests/scenarios"
+SCENARIOS_DIR = Path(__file__).resolve().parents[1] / "cli/interactive_shell/routing/tests/scenarios"
 
 
 def _legacy_to_tool_actions(data: dict[str, Any]) -> list[dict[str, Any]]:

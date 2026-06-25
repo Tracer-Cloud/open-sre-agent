@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     # Type-only import — preserves the framework's "zero ``app.*`` imports"
     # constraint at runtime while still letting type-checkers validate
     # that adapter overrides return an investigation-agent subclass.
-    from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
+    from core.orchestration.node.investigate import ConnectedInvestigationAgent
 
 
 # --------------------------------------------------------------------------- #

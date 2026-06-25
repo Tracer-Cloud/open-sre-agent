@@ -10,9 +10,9 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import dispatch_slash
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.sessions.store import SessionStore
+from cli.interactive_shell.command_registry import dispatch_slash
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.sessions.store import SessionStore
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -70,7 +70,7 @@ def isolated_sessions(tmp_path: Path) -> Path:
     directory = tmp_path / "sessions"
     directory.mkdir()
     with patch(
-        "app.cli.interactive_shell.sessions.store._sessions_dir",
+        "cli.interactive_shell.sessions.store._sessions_dir",
         return_value=directory,
     ):
         yield directory

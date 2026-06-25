@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.references.grounding_diagnostics import (
+from cli.interactive_shell.references.grounding_diagnostics import (
     GroundingSource,
     iter_grounding_sources,
     log_grounding_cache_diagnostics,
@@ -20,7 +20,7 @@ def _make_source(name: str, hits: int = 0) -> GroundingSource:
 
 def test_register_and_iterate(tmp_path: object) -> None:
     """Registered sources appear in iter_grounding_sources."""
-    from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+    from cli.interactive_shell.references import grounding_diagnostics as _gd
 
     original = dict(_gd._registry)
     _gd._registry.clear()
@@ -36,7 +36,7 @@ def test_register_and_iterate(tmp_path: object) -> None:
 
 def test_idempotent_registration() -> None:
     """Registering the same name twice updates in place, no duplicates."""
-    from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+    from cli.interactive_shell.references import grounding_diagnostics as _gd
 
     original = dict(_gd._registry)
     _gd._registry.clear()
@@ -53,7 +53,7 @@ def test_idempotent_registration() -> None:
 
 def test_iteration_order() -> None:
     """Sources are returned in insertion order."""
-    from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+    from cli.interactive_shell.references import grounding_diagnostics as _gd
 
     original = dict(_gd._registry)
     _gd._registry.clear()
@@ -71,7 +71,7 @@ def test_log_grounding_uses_registry(monkeypatch: object) -> None:
     """log_grounding_cache_diagnostics iterates the registry when verbose."""
     import os
 
-    from app.cli.interactive_shell.references import grounding_diagnostics as _gd
+    from cli.interactive_shell.references import grounding_diagnostics as _gd
 
     original = dict(_gd._registry)
     _gd._registry.clear()

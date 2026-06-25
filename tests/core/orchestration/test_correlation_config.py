@@ -4,15 +4,15 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.core.domain.types.upstream import (
+from app.integrations.datadog.correlation.factory import datadog_avg_query
+from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
 )
-from app.core.orchestration.node.publish_findings.upstream_correlation import (
+from core.orchestration.node.publish_findings.upstream_correlation import (
     build_correlation_config,
     candidate_services_from_state,
     target_resource_from_state,
 )
-from app.integrations.datadog.correlation.factory import datadog_avg_query
 
 
 def test_datadog_avg_query_preserves_existing_scope() -> None:
