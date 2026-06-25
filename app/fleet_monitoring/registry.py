@@ -156,3 +156,51 @@ class AgentRegistry:
             tmp.replace(self._path)
         except OSError:
             logger.warning("Failed to rewrite agent registry at %s", self._path)
+
+
+class AgentResolveError(Exception):
+    """Raised when a PID or agent-name argument cannot be resolved uniquely."""
+
+    message: str
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+def resolve_agent_arg(arg: str, registry: AgentRegistry) -> int:
+    """Resolve a ``/fleet kill`` or ``/fleet trace`` target to a PID.
+
+    Resolution order:
+    1. Positive int that exists in the registry → that PID.
+    2. Exactly one registered agent name (case-sensitive) → that record's PID.
+    3. Positive int not in the registry → return the int (caller surfaces errors).
+    4. Multiple records share the name → :class:`AgentResolveError`.
+    5. Otherwise → :class:`AgentResolveError`.
+    """
+    stripped = arg.strip()
+    if not stripped:
+        raise AgentResolveError("invalid pid or unknown agent name")
+
+    parsed_pid: int | None = None
+    try:
+        candidate = int(stripped)
+        if candidate > 0:
+            parsed_pid = candidate
+    except ValueError:
+        pass
+
+    if parsed_pid is not None and registry.get(parsed_pid) is not None:
+        return parsed_pid
+
+    name_matches = [record for record in registry.list() if record.name == stripped]
+    if len(name_matches) == 1:
+        return name_matches[0].pid
+    if len(name_matches) > 1:
+        pids = ", ".join(str(record.pid) for record in name_matches)
+        raise AgentResolveError(f"ambiguous agent name '{stripped}': multiple PIDs ({pids})")
+
+    if parsed_pid is not None:
+        return parsed_pid
+
+    raise AgentResolveError("invalid pid or unknown agent name")

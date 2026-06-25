@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from app.fleet_monitoring.registry import (
+    AgentRecord,
+    AgentRegistry,
+    AgentResolveError,
+    resolve_agent_arg,
+)
 
 
 @pytest.fixture
@@ -256,3 +261,37 @@ class TestAgentRegistry:
         rehydrated = reg2.get(7702)
         assert rehydrated is not None
         assert rehydrated.waits_on == ()
+
+
+class TestResolveAgentArg:
+    def test_pid_hit_in_registry(self, registry: AgentRegistry, sample_record: AgentRecord) -> None:
+        registry.register(sample_record)
+        assert resolve_agent_arg("8421", registry) == 8421
+
+    def test_unique_name_returns_pid(
+        self, registry: AgentRegistry, sample_record: AgentRecord
+    ) -> None:
+        registry.register(sample_record)
+        assert resolve_agent_arg("claude-code", registry) == 8421
+
+    def test_integer_not_in_registry_fallthrough(self, registry: AgentRegistry) -> None:
+        assert resolve_agent_arg("99999", registry) == 99999
+
+    def test_ambiguous_name_raises_with_pids(self, registry: AgentRegistry) -> None:
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="claude-code", pid=9133, command="claude"))
+
+        with pytest.raises(AgentResolveError, match="ambiguous agent name") as exc_info:
+            resolve_agent_arg("claude-code", registry)
+
+        message = exc_info.value.message
+        assert "8421" in message
+        assert "9133" in message
+
+    def test_unknown_string_raises(self, registry: AgentRegistry) -> None:
+        with pytest.raises(AgentResolveError, match="invalid pid or unknown agent name"):
+            resolve_agent_arg("bogus-agent", registry)
+
+    def test_numeric_name_when_pid_missing_returns_name_pid(self, registry: AgentRegistry) -> None:
+        registry.register(AgentRecord(name="8421", pid=7702, command="claude"))
+        assert resolve_agent_arg("8421", registry) == 7702

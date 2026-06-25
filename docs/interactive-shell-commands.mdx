@@ -801,7 +801,9 @@ Fleet coordination is documented further on [Agents](/fleet). Register discovere
 /fleet conflicts
 /fleet kill 12345
 /fleet kill 12345 --force
+/fleet kill claude-code
 /fleet trace 12345
+/fleet trace claude-code
 /fleet wait 12345 --on 67890
 /fleet graph
 ```
@@ -815,8 +817,8 @@ Fleet coordination is documented further on [Agents](/fleet). Register discovere
 | `claim <branch> <agent>` | Exclusive branch claim (agent must be in registry) |
 | `release <branch>` | Release a claim |
 | `conflicts` | File-write conflict report between agents |
-| `kill <pid> [--force]` | SIGTERM → wait → SIGKILL **elevated**; refuses self-PID |
-| `trace <pid>` | Live stdout tail of agent process |
+| `kill <pid\|name> [--force]` | SIGTERM → wait → SIGKILL **elevated**; refuses self-PID |
+| `trace <pid\|name>` | Live stdout tail of agent process |
 | `wait <pid> --on <other-pid>` | Record wait dependency for graph |
 | `graph` | Tree of wait-on relationships |
 

@@ -19,6 +19,7 @@ from app.fleet_monitoring.conflicts import (
     FileWriteConflict,
     render_conflicts,
 )
+from app.fleet_monitoring.lifecycle import TerminateResult
 from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
 from app.fleet_monitoring.tail import AttachUnsupported, TailBuffer
 
@@ -502,7 +503,7 @@ class TestAgentsTrace:
         assert dispatch_slash("/fleet trace", sess_obj, console) is True
         out = buf.getvalue().lower()
         assert "usage" in out
-        assert "<pid>" in out
+        assert "<pid|name>" in out
         assert sess_obj.history[-1]["ok"] is False
 
     def test_non_numeric_pid_rejected(self) -> None:
@@ -510,7 +511,7 @@ class TestAgentsTrace:
         console, buf = _capture()
         assert dispatch_slash("/fleet trace abc", sess_obj, console) is True
         out = buf.getvalue().lower()
-        assert "invalid pid" in out
+        assert "invalid pid or unknown agent name" in out
         assert sess_obj.history[-1]["ok"] is False
 
     def test_too_many_args_rejected(self) -> None:
@@ -561,6 +562,45 @@ class TestAgentsTrace:
         out = buf.getvalue()
         assert "claude-code" in out
         assert "8421" in out
+
+    def test_trace_by_registered_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(chunks=[]))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet trace claude-code", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "claude-code" in out
+        assert "8421" in out
+        assert "trace ended" in out
+
+    def test_ambiguous_name_shows_error_with_pids(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="claude-code", pid=9133, command="claude"))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet trace claude-code", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "ambiguous agent name" in out
+        assert "8421" in out
+        assert "9133" in out
+        assert sess_obj.history[-1]["ok"] is False
+
+    def test_bogus_arg_shows_invalid_or_unknown_error(self) -> None:
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet trace bogus-agent", sess_obj, console) is True
+        out = buf.getvalue().lower()
+        assert "invalid pid or unknown agent name" in out
+        assert sess_obj.history[-1]["ok"] is False
 
     def test_renders_chunks_through_live(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Two chunks then StopIteration: the handler should append them
@@ -641,6 +681,84 @@ class TestAgentsTrace:
         out = buf.getvalue()
         assert "process exited" not in out
         assert "trace ended" in out
+
+
+class TestAgentsKill:
+    def test_kill_by_pid_with_force(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        registry_path = tmp_path / "agents.jsonl"
+        _isolate_registry(monkeypatch, registry_path)
+        AgentRegistry(path=registry_path).register(
+            AgentRecord(name="claude-code", pid=8421, command="claude")
+        )
+
+        def _fake_terminate(pid: int) -> TerminateResult:
+            return TerminateResult(
+                pid=pid,
+                exited=True,
+                signal_sent="SIGTERM",
+                elapsed_seconds=0.1,
+            )
+
+        monkeypatch.setattr(agents_mod, "terminate", _fake_terminate)
+        monkeypatch.setattr(
+            agents_mod,
+            "get_analytics",
+            lambda: type("A", (), {"capture": lambda *_a, **_k: None})(),
+        )
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet kill 8421 --force", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "SIGTERM" in out
+        assert AgentRegistry(path=registry_path).get(8421) is None
+
+    def test_kill_by_registered_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        registry_path = tmp_path / "agents.jsonl"
+        _isolate_registry(monkeypatch, registry_path)
+        AgentRegistry(path=registry_path).register(
+            AgentRecord(name="claude-code", pid=8421, command="claude")
+        )
+
+        killed: list[int] = []
+
+        def _fake_terminate(pid: int) -> TerminateResult:
+            killed.append(pid)
+            return TerminateResult(
+                pid=pid,
+                exited=True,
+                signal_sent="SIGTERM",
+                elapsed_seconds=0.1,
+            )
+
+        monkeypatch.setattr(agents_mod, "terminate", _fake_terminate)
+        monkeypatch.setattr(
+            agents_mod,
+            "get_analytics",
+            lambda: type("A", (), {"capture": lambda *_a, **_k: None})(),
+        )
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet kill claude-code --force", sess_obj, console) is True
+        assert killed == [8421]
+        assert AgentRegistry(path=registry_path).get(8421) is None
+
+    def test_ambiguous_name_shows_error_with_pids(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
+        registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
+        registry.register(AgentRecord(name="claude-code", pid=9133, command="claude"))
+
+        sess_obj = ReplSession()
+        console, buf = _capture()
+        assert dispatch_slash("/fleet kill claude-code --force", sess_obj, console) is True
+        out = buf.getvalue()
+        assert "ambiguous agent name" in out
+        assert "8421" in out
+        assert "9133" in out
+        assert sess_obj.history[-1]["ok"] is False
 
 
 class TestAgentsWait:
