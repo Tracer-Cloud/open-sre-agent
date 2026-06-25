@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 import threading
 
 import pytest
@@ -44,8 +45,9 @@ def test_print_repl_json_tty_uses_single_buffered_write(monkeypatch: pytest.Monk
     print_repl_json(console, '{"ok": true}')
 
     assert len(fake_stdout.writes) == 1
-    assert fake_stdout.writes[0].startswith("\r\n")
-    assert '"ok": true' in fake_stdout.writes[0]
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", fake_stdout.writes[0])
+    assert rendered.startswith("\r\n")
+    assert '"ok": true' in rendered
 
 
 def test_render_integrations_table_empty_shows_hint() -> None:
