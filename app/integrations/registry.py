@@ -372,6 +372,7 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         service="helm",
         verifier=_verify_helm,
         direct_effective=True,
+        setup_order=38,
         verify_order=34,
     ),
     IntegrationSpec(

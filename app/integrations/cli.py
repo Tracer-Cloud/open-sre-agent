@@ -1128,6 +1128,35 @@ def _setup_jenkins() -> None:
     )
 
 
+def _setup_helm() -> None:
+    helm_path = _p("Helm binary path or name", default="helm")
+    if not helm_path:
+        _die("helm_path is required.")
+    kube_context = _p(
+        "Kubernetes context (optional, passed as --kube-context)",
+        default="",
+    )
+    kubeconfig = _p(
+        "Kubeconfig file path (optional, passed as --kubeconfig)",
+        default="",
+    )
+    default_namespace = _p(
+        "Default namespace when alerts do not specify one (optional)",
+        default="",
+    )
+    upsert_integration(
+        "helm",
+        {
+            "credentials": {
+                "helm_path": helm_path,
+                "kube_context": kube_context,
+                "kubeconfig": kubeconfig,
+                "default_namespace": default_namespace,
+            }
+        },
+    )
+
+
 def _setup_tempo() -> None:
     from app.integrations.tempo import build_tempo_config, validate_tempo_config
 
@@ -1186,6 +1215,7 @@ _HANDLERS: dict[str, Any] = {
     "groundcover": _setup_groundcover,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
+    "helm": _setup_helm,
     "incident_io": _setup_incident_io,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,

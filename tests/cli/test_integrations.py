@@ -336,6 +336,27 @@ def test_integrations_verify_accepts_argocd() -> None:
     mock_capture.assert_called_once_with("argocd")
 
 
+def test_integrations_setup_accepts_helm() -> None:
+    # Regression test for #1973: helm had verify wired in the registry but no
+    # setup_order / _setup_helm handler, so Click rejected the positional arg.
+    runner = CliRunner()
+
+    with (
+        patch("app.cli.commands.integrations.capture_integration_setup_started"),
+        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
+        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("app.integrations.cli.cmd_setup") as mock_setup,
+        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+    ):
+        mock_setup.return_value = "helm"
+        result = runner.invoke(cli, ["integrations", "setup", "helm"])
+
+    assert result.exit_code == 0
+    mock_setup.assert_called_once_with("helm")
+    mock_verify.assert_called_once_with("helm")
+    mock_capture.assert_called_once_with("helm")
+
+
 def test_integrations_verify_accepts_helm() -> None:
     # Regression test for #1973: helm was registered in the runtime registry
     # but rejected by Click because the CLI's hardcoded VERIFY_SERVICES tuple
