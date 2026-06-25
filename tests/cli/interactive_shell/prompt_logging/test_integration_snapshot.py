@@ -96,3 +96,31 @@ def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
     assert snapshot["configured_integrations"] == ["datadog"]
     assert snapshot["connected_integrations"] == []
     assert snapshot["connected_integrations_count"] == 0
+
+
+def test_build_turn_integration_snapshot_survives_family_key_failure(
+    monkeypatch: Any,
+) -> None:
+    session = ReplSession()
+    session.configured_integrations_known = True
+    session.configured_integrations = ("datadog",)
+    session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.integration_snapshot.get_available_tools",
+        lambda _resolved: [MagicMock(source="datadog")],
+    )
+
+    def _boom(_service: str) -> str:
+        raise RuntimeError("family key blew up")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.integration_snapshot.family_key",
+        _boom,
+    )
+
+    snapshot = build_turn_integration_snapshot(session)
+
+    assert snapshot["configured_integrations"] == ["datadog"]
+    assert snapshot["connected_integrations"] == []
+    assert snapshot["connected_integrations_count"] == 0

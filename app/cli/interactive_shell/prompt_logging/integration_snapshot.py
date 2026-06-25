@@ -55,13 +55,13 @@ def _connected_slugs(configured: list[str], resolved: dict[str, Any]) -> list[st
         return []
     try:
         tools = get_available_tools(resolved)
+        active_families = {
+            family_key(str(tool.source))
+            for tool in tools
+            if str(tool.source) not in SECONDARY_TOOL_SOURCES
+        }
+        if not active_families:
+            return []
+        return sorted(svc for svc in configured if family_key(svc) in active_families)
     except Exception:
         return []
-    active_families = {
-        family_key(str(tool.source))
-        for tool in tools
-        if str(tool.source) not in SECONDARY_TOOL_SOURCES
-    }
-    if not active_families:
-        return []
-    return sorted(svc for svc in configured if family_key(svc) in active_families)
