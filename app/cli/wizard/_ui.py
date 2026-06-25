@@ -44,12 +44,18 @@ _STYLE = questionary.Style(
         ("pointer", f"fg:{HIGHLIGHT} bold"),
         ("highlighted", f"fg:{TEXT} bg:{HIGHLIGHT} bold"),
         ("selected", f"fg:{TEXT} bg:default bold"),
+        ("group-header", f"fg:{HIGHLIGHT} bold"),
         ("separator", f"fg:{DIM}"),
         ("text", f"fg:{TEXT} bg:default"),
         ("disabled", f"fg:{SECONDARY} bg:default italic"),
         ("instruction", f"fg:{SECONDARY} italic"),
     ]
 )
+
+
+def _group_header_label(group: str) -> str:
+    """Format a category label for grouped wizard pickers."""
+    return f"── {group} ──"
 
 
 @dataclass(frozen=True)
@@ -171,7 +177,7 @@ def _grouped_questionary_choices(
         group_choices = grouped[group]
         if not group_choices:
             continue
-        rendered.append(questionary.Separator(group))
+        rendered.append(questionary.Separator(_group_header_label(group)))
         rendered.extend(_questionary_choice(choice) for choice in group_choices)
 
     rendered.extend(_questionary_choice(choice) for choice in ungrouped)

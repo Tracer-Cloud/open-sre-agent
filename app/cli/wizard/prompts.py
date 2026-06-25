@@ -27,6 +27,107 @@ from app.cli.interactive_shell.ui.prompt_support import (
 from app.cli.interactive_shell.ui.theme import GLYPH_PROMPT
 
 
+class _SelectControl(InquirerControl):
+    """Single-select list with prominent category headers."""
+
+    def _append_separator_tokens(
+        self,
+        tokens: list[tuple[str, str]],
+        *,
+        title: str,
+        saw_group_header: bool,
+    ) -> bool:
+        label = title.strip()
+        pointer_length = len(self.pointer) if self.pointer is not None else 1
+        indent = " " * (2 + pointer_length)
+
+        if label.startswith("── ") and label.endswith(" ──"):
+            if saw_group_header:
+                tokens.append(("", "\n"))
+            tokens.append(("class:text", indent))
+            tokens.append(("class:group-header", label))
+            tokens.append(("", "\n"))
+            return True
+
+        if label:
+            tokens.append(("class:text", indent))
+            tokens.append(("class:separator", label))
+            tokens.append(("", "\n"))
+            return saw_group_header
+
+        tokens.append(("class:text", indent))
+        tokens.append(("class:separator", "─" * 36))
+        tokens.append(("", "\n"))
+        return saw_group_header
+
+    def _get_choice_tokens(self) -> list[tuple[str, str]]:  # type: ignore[override]
+        tokens: list[tuple[str, str]] = []
+        saw_group_header = False
+
+        for index, choice in enumerate(self.filtered_choices):
+            selected = choice.value in self.selected_options
+            is_pointed = index == self.pointed_at
+
+            if is_pointed:
+                if self.pointer is not None:
+                    tokens.append(("class:pointer", f" {self.pointer} "))
+                else:
+                    tokens.append(("class:text", " " * 3))
+                tokens.append(("[SetCursorPosition]", ""))
+            else:
+                pointer_length = len(self.pointer) if self.pointer is not None else 1
+                tokens.append(("class:text", " " * (2 + pointer_length)))
+
+            if isinstance(choice, Separator):
+                saw_group_header = self._append_separator_tokens(
+                    tokens,
+                    title=str(choice.title or ""),
+                    saw_group_header=saw_group_header,
+                )
+                continue
+
+            if choice.disabled:
+                disabled_class = "class:selected" if selected else "class:disabled"
+                if isinstance(choice.title, list):
+                    tokens.append((disabled_class, "- "))
+                    tokens.extend(choice.title)
+                else:
+                    tokens.append((disabled_class, f"- {choice.title}"))
+                if not isinstance(choice.disabled, bool):
+                    tokens.append((disabled_class, f" ({choice.disabled})"))
+                tokens.append(("", "\n"))
+                continue
+
+            shortcut = choice.get_shortcut_title() if self.use_shortcuts else ""
+            if selected:
+                indicator = f"{INDICATOR_SELECTED} " if self.use_indicator else ""
+                tokens.append(("class:selected", indicator))
+            else:
+                indicator = f"{INDICATOR_UNSELECTED} " if self.use_indicator else ""
+                tokens.append(("class:text", indicator))
+
+            if isinstance(choice.title, list):
+                text_class = (
+                    "class:highlighted"
+                    if is_pointed
+                    else ("class:selected" if selected else "class:text")
+                )
+                tokens.extend((text_class, text) for _style, text in choice.title)
+            elif selected:
+                tokens.append(("class:selected", f"{shortcut}{choice.title}"))
+            elif is_pointed:
+                tokens.append(("class:highlighted", f"{shortcut}{choice.title}"))
+            else:
+                tokens.append(("class:text", f"{shortcut}{choice.title}"))
+
+            tokens.append(("", "\n"))
+
+        if tokens and not (self.show_selected or self.show_description):
+            tokens.pop()
+
+        return tokens
+
+
 class _CheckboxControl(InquirerControl):
     """Render checked items neutrally unless they are the active row."""
 
@@ -192,7 +293,7 @@ def select(
     output: Any | None = None,
 ) -> Question:
     """Render a single-select prompt with navigation-only movement."""
-    ic = InquirerControl(
+    ic = _SelectControl(
         choices,
         None,
         pointer="❯",
