@@ -95,7 +95,10 @@ Investigations are coordinated in `app/core/orchestration/pipeline.py` and expos
 Files to touch:
 
 - `app/core/orchestration/pipeline.py` for high-level stage ordering.
-- `app/agent/` for shared agent utilities (alert source mapping, LLM invoke error classification).
+- `app/core/domain/` for pure investigation rules (alert source mapping, tool planning,
+  category alignment, correlation scoring).
+- `app/core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
+  classification).
 - `app/state/*.py` when adding or renaming persisted investigation fields.
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.

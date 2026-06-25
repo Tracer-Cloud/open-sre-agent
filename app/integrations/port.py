@@ -10,8 +10,9 @@ fetcher via :func:`set_remote_integrations_fetcher`. Headless
 contexts (tests, scripted invocations, alternate hosting) get the
 empty default and fall through to local-store integration sources.
 
-Same Ports & Adapters pattern as ``app/agent/correlation`` (see
-``build_upstream_evidence_provider``) and ``app/observability``: core
+Same Ports & Adapters pattern as
+``app.core.orchestration.node.publish_findings.upstream_correlation`` and
+``app/observability``: core
 depends on abstractions, vendor SDKs plug in as adapters at the
 boundary.
 """

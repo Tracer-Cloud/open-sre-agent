@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.agent.utils.llm_invoke_errors import LLMInvokeFailure
+from app.core.runtime.llm_invoke_errors import LLMInvokeFailure
 from app.services.agent_llm_client import ToolCall
 from app.state.evidence import EvidenceEntry
 from app.utils.truncation import truncate

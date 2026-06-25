@@ -25,7 +25,8 @@ class PathRule:
 # Matched in list order — more specific prefixes must appear before parents.
 RULES: tuple[PathRule, ...] = (
     # Shared core (always escalate)
-    PathRule("app/core/runtime/", ("tests/core/runtime/", "tests/agent/")),
+    PathRule("app/core/runtime/", ("tests/core/runtime/",)),
+    PathRule("app/core/domain/", (), always_escalate=True),
     PathRule("app/core/orchestration/", (), always_escalate=True),
     PathRule("app/types/", (), always_escalate=True),
     PathRule("app/state/", (), always_escalate=True),
@@ -35,7 +36,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/integrations/opensre/", ("tests/integrations/opensre/",)),
     PathRule("app/integrations/hermes/", ("tests/hermes/",)),
     PathRule("app/integrations/", ("tests/integrations/",)),
-    PathRule("app/agent/", ("tests/agent/", "tests/fleet_monitoring/")),
     PathRule("app/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
     PathRule("app/cli/", ("tests/cli/",)),
     PathRule("app/tools/", ("tests/tools/",)),

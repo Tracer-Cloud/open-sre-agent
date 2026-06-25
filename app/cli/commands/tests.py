@@ -19,14 +19,14 @@ from app.analytics.cli import (
 )
 from app.cli.interactive_shell.data_store.context import is_json_output, is_yes
 from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.core.orchestration.node.publish_findings.upstream_correlation.runtime import (
-    build_runtime_correlation,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,
     UpstreamEvidenceBundle,
+)
+from app.core.orchestration.node.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
 )
 
 _TEST_CATEGORIES: tuple[str, ...] = (

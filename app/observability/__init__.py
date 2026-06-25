@@ -7,8 +7,8 @@ tracker under ``app/cli/interactive_shell/ui/output/``). The boundary
 (typically the CLI entry point) registers the adapter via the
 ``set_progress_tracker`` / ``set_debug_printer`` injection helpers.
 
-This is the same Ports & Adapters pattern used by
-``app/agent/correlation/`` (see :func:`build_upstream_evidence_provider`):
+This is the same Ports & Adapters pattern used by upstream correlation
+provider wiring:
 high-level modules depend on abstractions, not concretions.
 """
 

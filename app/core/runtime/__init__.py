@@ -25,6 +25,7 @@ from app.core.runtime.execution import (
     summarise,
     tool_source,
 )
+from app.core.runtime.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
 from app.core.runtime.loop import LoopEventCallback, ToolLoopResult, run_tool_calling_loop
 from app.core.runtime.messages import (
     build_assistant_message,
@@ -34,10 +35,12 @@ from app.core.runtime.messages import (
 
 __all__ = [
     "LoopEventCallback",
+    "LLMInvokeFailure",
     "ToolLoopResult",
     "build_assistant_message",
     "build_synthetic_assistant_tool_call_message",
     "build_tool_result_messages",
+    "classify_llm_invoke_failure",
     "context_budget_ceiling_for_model",
     "enforce_context_budget",
     "estimate_message_tokens",

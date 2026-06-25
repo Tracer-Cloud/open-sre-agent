@@ -1,7 +1,7 @@
 """Constants shared between orchestration routing and investigation stages.
 
-Lives under ``app.constants`` (not ``app.core.orchestration`` / ``app.agent``) to avoid
-partial-initialization cycles between orchestration and agent packages.
+Lives under ``app.constants`` (not ``app.core.orchestration`` / ``app.core.domain``) to
+avoid partial-initialization cycles between orchestration and domain packages.
 """
 
 from __future__ import annotations

@@ -3,15 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.models import (
-    CorrelatedSignal,
-    UpstreamCandidate,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.reporting import (
-    build_correlation_report,
-    correlation_report_to_payload,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.scoring import (
+from app.core.domain.correlation.scoring import (
     TopologyNode,
     metric_to_time_series,
     rank_upstream_candidates,
@@ -20,8 +12,14 @@ from app.core.orchestration.node.publish_findings.upstream_correlation.scoring i
     score_time_window_correlation,
     score_topology_adjacency,
 )
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
+    CorrelatedSignal,
+    UpstreamCandidate,
     UpstreamEvidenceBundle,
+)
+from app.core.orchestration.node.publish_findings.upstream_correlation.reporting import (
+    build_correlation_report,
+    correlation_report_to_payload,
 )
 
 

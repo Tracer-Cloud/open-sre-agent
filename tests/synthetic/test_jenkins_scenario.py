@@ -82,10 +82,10 @@ def fixture_client(monkeypatch: pytest.MonkeyPatch) -> _FixtureJenkinsClient:
 
 def test_jenkins_alert_source_maps_to_tools() -> None:
     """A jenkins-sourced alert auto-seeds and prioritizes the jenkins tools."""
-    from app.agent.utils.alert_source import (
+    from app.core.domain.alerts.alert_source import (
         ALERT_SOURCE_TO_SEED_TOOL_SOURCES as seed_map,
     )
-    from app.agent.utils.alert_source import (
+    from app.core.domain.alerts.alert_source import (
         ALERT_SOURCE_TO_TOOL_SOURCES as priority_map,
     )
 

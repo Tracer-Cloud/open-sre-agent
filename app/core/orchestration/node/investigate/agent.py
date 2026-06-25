@@ -6,7 +6,6 @@ import contextlib
 import logging
 from typing import Any, cast
 
-from app.agent.utils.llm_invoke_errors import classify_llm_invoke_failure
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
 from app.core.orchestration.node.investigate.loop import (
     InvestigationToolCallCache,
@@ -35,6 +34,7 @@ from app.core.runtime import (
     summarise,
     tool_source,
 )
+from app.core.runtime.llm_invoke_errors import classify_llm_invoke_failure
 from app.observability import debug_print
 from app.observability import get_progress_tracker as get_tracker
 from app.services.agent_llm_client import ToolCall, get_agent_llm

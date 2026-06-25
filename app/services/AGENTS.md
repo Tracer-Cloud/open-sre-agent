@@ -19,7 +19,8 @@ Primary reference for provider discovery:
 | `app/config.py`              | Declares `LLMProvider`, provider env vars, defaults, and validation requirements. |
 | `app/services/llm_client.py` | Routes `LLM_PROVIDER` to the runtime client implementation.                       |
 | `app/services/agent_llm_client.py` | Investigation ReAct loop: tool-calling clients (`get_agent_llm`).              |
-| `app/agent/investigation.py` | Seed tool calls and provider-specific assistant / tool-result messages.           |
+| `app/core/orchestration/node/investigate/` | Investigation agent, prompts, and seed tool calls.       |
+| `app/core/runtime/`         | Shared tool-loop and provider-specific assistant / tool-result messages.          |
 | `app/cli/wizard/config.py`   | Defines onboarding metadata (`SUPPORTED_PROVIDERS`) and model choices.            |
 | `app/cli/wizard/env_sync.py` | Keeps `.env` values in sync when provider/model changes.                          |
 

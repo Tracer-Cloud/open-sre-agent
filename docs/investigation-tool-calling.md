@@ -14,10 +14,11 @@ The investigation agent does **not** call integration APIs through the LLM. The 
 3. **Invoke** — `llm.invoke(messages, system=..., tools=tool_schemas)`; the model returns tool calls.
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
 5. **Seed path** — Before the loop, `_build_seed_calls` may inject deterministic tool runs; synthetic
-   assistant + tool-result messages must match the active client (`app/agent/investigation.py`).
+   assistant + tool-result messages must match the active client
+   (`app/core/orchestration/node/investigate/agent.py`).
 
 ```text
-investigation.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
+investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
                     ↓
               app/tools/*  (input_schema, extract_params, run)
 ```
@@ -28,11 +29,11 @@ investigation.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
 | -------- | -------- |
 | Provider routing | `app/services/agent_llm_client.py` (`get_agent_llm`, client classes) |
 | Chat / non-agent LLM | `app/services/llm_client.py` (separate path—changes here do not fix investigation) |
-| Investigation loop & message dispatch | `app/agent/investigation.py` |
+| Investigation loop & message dispatch | `app/core/orchestration/node/investigate/` and `app/core/runtime/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
 | Tool definitions | `app/tools/` (`input_schema`, `public_input_schema`) |
 
-When adding a provider, implement **both** `tool_schemas()` and the message shapes `investigation.py`
+When adding a provider, implement **both** `tool_schemas()` and the message shapes the runtime loop
 already branches on (or extend those branches). Do not assume one vendor’s JSON tool format works elsewhere.
 
 ## Why bugs are easy to miss

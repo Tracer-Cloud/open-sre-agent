@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.models import (
+from app.core.domain.types.upstream import (
     CorrelatedSignal,
     UpstreamCandidate,
 )

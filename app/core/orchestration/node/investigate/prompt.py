@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.utils.alert_source import (
+from app.core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES,
     SECONDARY_TOOL_SOURCES,
     relevant_sources_for_alert,

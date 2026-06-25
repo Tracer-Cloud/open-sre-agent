@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
     UpstreamEvidenceProvider,
 )
 from app.integrations.datadog.correlation import build_datadog_provider

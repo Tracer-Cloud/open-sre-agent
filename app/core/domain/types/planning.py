@@ -1,4 +1,4 @@
-"""Typed planning records for the investigation action planning stage."""
+"""Typed planning records for investigation tool selection."""
 
 from __future__ import annotations
 

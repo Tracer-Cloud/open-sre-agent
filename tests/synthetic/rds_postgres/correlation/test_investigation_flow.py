@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

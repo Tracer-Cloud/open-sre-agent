@@ -1,7 +1,26 @@
+"""Domain entities for upstream-correlation evidence and results."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
+
+
+@dataclass(frozen=True)
+class CorrelatedSignal:
+    source: str
+    name: str
+    description: str
+    score: float
+
+
+@dataclass(frozen=True)
+class UpstreamCandidate:
+    name: str
+    tier: str
+    confidence: float
+    correlated_signals: tuple[CorrelatedSignal, ...]
+    rationale: str
 
 
 @dataclass(frozen=True)
@@ -47,3 +66,14 @@ class UpstreamEvidenceProvider(Protocol):
         window_end: str,
     ) -> UpstreamEvidenceBundle:
         """Collect evidence needed for symptom-first upstream correlation."""
+
+
+__all__ = [
+    "CorrelatedSignal",
+    "LogSignal",
+    "MetricSeries",
+    "TopologyHint",
+    "UpstreamCandidate",
+    "UpstreamEvidenceBundle",
+    "UpstreamEvidenceProvider",
+]

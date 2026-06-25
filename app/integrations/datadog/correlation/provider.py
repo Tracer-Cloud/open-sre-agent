@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )

@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.models import (
-    UpstreamCandidate,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import MetricSeries
+from app.core.domain.types.upstream import MetricSeries, UpstreamCandidate
 
 
 @dataclass(frozen=True)

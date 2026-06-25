@@ -226,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
             raise
     # Wire CLI-flavored implementations into the observability ports
-    # (ProgressTracker, debug_print) so any core code under app/agent,
+    # (ProgressTracker, debug_print) so any core code under app/core/domain,
     # app/core/orchestration, app/utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
     from app.cli.interactive_shell.ui.output.boundary import (

@@ -84,8 +84,8 @@ Common failure modes to consider:
 
 If the tool/integration is relevant to investigations:
 
-- [ ] Review alert-source seeding in `app/agent/investigation.py`
-- [ ] Review source-priority/prompt mapping in `app/agent/prompt.py`
+- [ ] Review alert-source seeding in `app/core/domain/alerts/alert_source.py`
+- [ ] Review source-priority/prompt mapping in `app/core/orchestration/node/investigate/prompt.py`
 - [ ] Review evidence/source registration in `app/types/` or related state models when relevant
 - [ ] Add scenario coverage proving the tool surfaces useful RCA evidence
 

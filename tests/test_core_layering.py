@@ -1,10 +1,10 @@
 """Layering boundary test: core packages must not import from ``app.cli``.
 
-Core (``app/agent/``, ``app/core/orchestration/``, ``app/utils/``) reports progress,
-prints debug output, and renders investigation headers/footers through
-the ports defined in :mod:`app.observability`. Reaching into
-``app.cli.*`` directly couples the agent/orchestration layer to the REPL's
-specific renderer and breaks headless / non-TTY callers.
+Core (``app/core/domain/``, ``app/core/orchestration/``, ``app/utils/``) reports
+progress, prints debug output, and renders investigation headers/footers through
+the ports defined in :mod:`app.observability`. Reaching into ``app.cli.*`` directly
+couples the domain/orchestration layer to the REPL's specific renderer and breaks
+headless / non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
 ``set_*`` injection helpers in ``app/observability/``.
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 _CORE_PACKAGES: tuple[Path, ...] = (
-    Path("app/agent"),
+    Path("app/core/domain"),
     Path("app/core/orchestration"),
     Path("app/utils"),
 )
@@ -66,9 +66,7 @@ def _imported_modules(source: str) -> set[str]:
 
 @pytest.mark.parametrize("module_path", _core_modules(), ids=str)
 def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
-    """Every module under ``app/agent/``, ``app/core/orchestration/``, ``app/utils/``
-    must avoid imports from forbidden boundary packages (``app.cli.*``,
-    ``app.services.tracer_client``).
+    """Core modules must avoid forbidden boundary packages.
 
     Use ports instead — ``app.observability`` for progress/debug/display,
     ``app.integrations.port`` for remote integrations — and register

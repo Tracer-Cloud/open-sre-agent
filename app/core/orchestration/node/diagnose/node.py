@@ -8,8 +8,8 @@ from typing import Any, NamedTuple, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
-from app.agent.utils.alert_source import resolve_alert_source
-from app.core.orchestration.node.diagnose.category_alignment import (
+from app.core.domain.alerts.alert_source import resolve_alert_source
+from app.core.domain.state.category_alignment import (
     apply_category_alignment_adjustments,
 )
 from app.state import InvestigationState

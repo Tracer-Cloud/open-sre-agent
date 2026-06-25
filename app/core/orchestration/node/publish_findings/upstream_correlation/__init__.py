@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from app.core.domain.types.upstream import (
+    LogSignal,
+    MetricSeries,
+    TopologyHint,
+    UpstreamEvidenceBundle,
+    UpstreamEvidenceProvider,
+)
 from app.core.orchestration.node.publish_findings.upstream_correlation.enrich import (
     build_correlation_config,
     enrich_upstream_correlation,
@@ -12,13 +19,6 @@ from app.core.orchestration.node.publish_findings.upstream_correlation.registry 
     build_upstream_evidence_provider,
     candidate_services_from_state,
     target_resource_from_state,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
-    LogSignal,
-    MetricSeries,
-    TopologyHint,
-    UpstreamEvidenceBundle,
-    UpstreamEvidenceProvider,
 )
 
 __all__ = [

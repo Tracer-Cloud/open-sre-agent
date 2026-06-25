@@ -4,25 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.utils.alert_source import (
-    SECONDARY_TOOL_SOURCES as SECONDARY_SOURCES,
-)
-from app.agent.utils.alert_source import (
-    collect_alert_text,
+from app.core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
 )
+from app.core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES, score_tools
+from app.core.domain.types.planning import PlannedInvestigationAction
 from app.core.orchestration.node.investigate.tools import (
     availability_view,
     build_connected_tool_context,
 )
-from app.core.orchestration.node.plan_actions.models import PlannedInvestigationAction
 from app.state import InvestigationState
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
 from app.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 
-FALLBACK_TOOL_NAMES: tuple[str, ...] = ("get_sre_guidance",)
 DEFAULT_RETRIEVAL_LIMIT = 100
 
 
@@ -52,7 +48,7 @@ def plan_actions(state: InvestigationState) -> dict[str, Any]:
             **tool_context,
         }
 
-    scored = _score_tools(state_any, available_tools)
+    scored = score_tools(state_any, available_tools)
     selected, excluded = _apply_budget(state_any, scored)
     retrieval_controls = _build_retrieval_controls(state_any, selected)
 
@@ -81,108 +77,6 @@ def _available_investigation_tools(resolved_integrations: dict[str, Any]) -> lis
         for tool in get_registered_tools("investigation")
         if tool.is_available(available_sources)
     ]
-
-
-def _score_tools(
-    state: dict[str, Any],
-    tools: list[RegisteredTool],
-) -> list[PlannedInvestigationAction]:
-    primary_sources = set(primary_sources_for_alert(state))
-    candidate_sources = {str(tool.source) for tool in tools}
-    relevant_sources = set(relevant_sources_for_alert(state, candidate_sources))
-    alert_text = collect_alert_text(state)
-    existing_evidence = state.get("evidence")
-    evidence_keys = set(existing_evidence) if isinstance(existing_evidence, dict) else set()
-
-    scored = [
-        _score_tool(
-            tool,
-            alert_text=alert_text,
-            primary_sources=primary_sources,
-            relevant_sources=relevant_sources,
-            evidence_keys=evidence_keys,
-        )
-        for tool in tools
-    ]
-    if scored and max(action.score for action in scored) <= 0:
-        scored = [_score_fallback_tool(action) for action in scored]
-
-    return sorted(
-        scored, key=lambda item: (-item.score, item.source in SECONDARY_SOURCES, item.name)
-    )
-
-
-def _score_tool(
-    tool: RegisteredTool,
-    *,
-    alert_text: str,
-    primary_sources: set[str],
-    relevant_sources: set[str],
-    evidence_keys: set[str],
-) -> PlannedInvestigationAction:
-    source = str(tool.source)
-    score = 0
-    reasons: list[str] = []
-
-    if source in primary_sources:
-        score += 100
-        reasons.append(f"source '{source}' matches alert source")
-    if source in relevant_sources:
-        score += 70
-        reasons.append(f"source '{source}' matches alert context")
-    if source in SECONDARY_SOURCES:
-        score -= 10
-        reasons.append("secondary source, used after integration-specific tools")
-
-    metadata_text = " ".join(
-        [
-            tool.description,
-            " ".join(tool.use_cases),
-            " ".join(tool.examples),
-            " ".join(tool.tags),
-            str(tool.evidence_type or ""),
-        ]
-    ).lower()
-    metadata_matches = _metadata_matches(alert_text, metadata_text)
-    if metadata_matches:
-        score += min(len(metadata_matches), 5) * 4
-        reasons.append(f"metadata matched alert terms: {', '.join(metadata_matches[:5])}")
-
-    if tool.name in evidence_keys:
-        score -= 25
-        reasons.append("tool already has evidence in state")
-
-    if not reasons:
-        reasons.append("no source or metadata match")
-
-    return PlannedInvestigationAction(
-        name=tool.name,
-        source=source,
-        score=score,
-        reasons=tuple(reasons),
-    )
-
-
-def _metadata_matches(alert_text: str, metadata_text: str) -> list[str]:
-    if not alert_text or not metadata_text:
-        return []
-    terms = {
-        term.strip(".,:;()[]{}").lower()
-        for term in alert_text.split()
-        if len(term.strip(".,:;()[]{}")) >= 4
-    }
-    return sorted(term for term in terms if term in metadata_text)
-
-
-def _score_fallback_tool(action: PlannedInvestigationAction) -> PlannedInvestigationAction:
-    if action.name not in FALLBACK_TOOL_NAMES:
-        return action
-    return PlannedInvestigationAction(
-        name=action.name,
-        source=action.source,
-        score=10,
-        reasons=(*action.reasons, "included as deterministic fallback"),
-    )
 
 
 def _apply_budget(

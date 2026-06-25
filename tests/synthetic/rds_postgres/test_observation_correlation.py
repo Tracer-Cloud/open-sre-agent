@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.core.orchestration.node.publish_findings.upstream_correlation.runtime import (
-    build_runtime_correlation,
-)
-from app.core.orchestration.node.publish_findings.upstream_correlation.upstream import (
+from app.core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,
     UpstreamEvidenceBundle,
+)
+from app.core.orchestration.node.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
 )
 from tests.synthetic.rds_postgres.observations import (
     build_observation,

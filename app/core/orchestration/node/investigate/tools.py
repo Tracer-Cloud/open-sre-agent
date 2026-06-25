@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.utils.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES, resolve_alert_source
+from app.core.domain.alerts.alert_source import (
+    ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
+    resolve_alert_source,
+)
 from app.core.runtime import public_tool_input
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
