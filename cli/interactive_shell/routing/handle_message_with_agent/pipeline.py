@@ -9,7 +9,6 @@ falls through to terminal-action planning and the conversational assistant.
 from __future__ import annotations
 
 from collections.abc import Callable
-from platform.analytics.cli import capture_terminal_turn_summarized
 
 from rich.console import Console
 from rich.markup import escape
@@ -25,6 +24,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent
 )
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR
+from platform_services.analytics.cli import capture_terminal_turn_summarized
 
 
 def _build_empty_response_fallback(text: str, session: ReplSession) -> str:

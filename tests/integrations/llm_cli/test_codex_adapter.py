@@ -255,7 +255,7 @@ def test_cli_backed_client_invoke(mock_run: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
     with (
-        patch("platform.guardrails.engine.get_guardrail_engine") as gr,
+        patch("platform_services.guardrails.engine.get_guardrail_engine") as gr,
         patch.dict(
             os.environ,
             {
@@ -304,7 +304,7 @@ def test_cli_backed_client_passes_reasoning_effort_to_adapter(mock_run: MagicMoc
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
     with (
-        patch("platform.guardrails.engine.get_guardrail_engine") as gr,
+        patch("platform_services.guardrails.engine.get_guardrail_engine") as gr,
         patch.dict(os.environ, {"OPENSRE_REASONING_EFFORT": "high"}, clear=False),
     ):
         gr.return_value.is_active = False
@@ -339,7 +339,7 @@ def test_cli_backed_client_codex_merge_openai_platform_env(
     mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
 
     with (
-        patch("platform.guardrails.engine.get_guardrail_engine") as gr,
+        patch("platform_services.guardrails.engine.get_guardrail_engine") as gr,
         patch.dict(
             os.environ,
             {
@@ -384,7 +384,7 @@ def test_cli_backed_client_caches_probe_between_invokes(mock_run: MagicMock) -> 
 
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="codex", max_tokens=256)
         client.invoke("a")
@@ -421,7 +421,7 @@ def test_cli_backed_client_failure_mentions_unclear_auth_probe(mock_run: MagicMo
 
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="unauthorized")
 
-    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="claude-code", max_tokens=256)
         import pytest
@@ -451,7 +451,7 @@ def test_cli_backed_client_invoke_raises_cli_authentication_required_when_logged
         detail="Not logged in.",
     )
 
-    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model=None, max_tokens=256)
         with pytest.raises(CLIAuthenticationRequired, match="not authenticated"):
@@ -494,7 +494,7 @@ def test_cli_backed_client_unclear_auth_no_double_period_when_explain_failure_tr
 
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
 
-    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="claude-code", max_tokens=256)
         import pytest

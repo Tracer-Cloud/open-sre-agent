@@ -9,6 +9,7 @@ from cli.interactive_shell.ui.output.environment import _safe_print
 
 if TYPE_CHECKING:
     from cli.interactive_shell.ui.output.events import DisplayProtocol
+from app.tools.registry import resolve_tool_display_name
 from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from cli.interactive_shell.ui.output.tool_details import (
     build_tool_call_line,
@@ -25,7 +26,6 @@ from cli.interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
 from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
-from app.tools.registry import resolve_tool_display_name
 
 
 @runtime_checkable

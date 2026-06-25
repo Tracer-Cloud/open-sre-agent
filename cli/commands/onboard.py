@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from platform.analytics.cli import (
+from typing import Any
+
+import click
+
+from platform_services.analytics.cli import (
     capture_onboard_completed,
     capture_onboard_failed,
     capture_onboard_started,
 )
-from typing import Any
-
-import click
 
 ConfigLoader = Callable[[], dict[str, Any]]
 RunCommand = Callable[[], int]

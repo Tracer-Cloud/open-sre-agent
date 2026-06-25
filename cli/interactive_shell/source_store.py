@@ -10,7 +10,7 @@ from typing import Any
 
 import numpy as np
 
-from app.constants import OPENSRE_HOME_DIR
+from config.constants import OPENSRE_HOME_DIR
 
 DEFAULT_STORE_PATH = OPENSRE_HOME_DIR / "source_index.sqlite"
 _SQLITE_VARIABLE_LIMIT = 999

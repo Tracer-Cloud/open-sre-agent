@@ -13,15 +13,15 @@ DEFAULT_SYNTHETIC_SCENARIO = "001-replication-lag"
 # "no such scenario" error rather than the wrong test getting launched.
 SYNTHETIC_UNKNOWN_PREFIX = "rds_postgres:unknown:"
 
-# ``parents[6]`` is the repo root. Counting parents from this file's current
-# location (routing/handle_message_with_agent/orchestration/):
-#   parents[0] orchestration          / parents[1] handle_message_with_agent
-#   parents[2] routing                / parents[3] interactive_shell
-#   parents[4] cli                    / parents[5] app
-#   parents[6] <repo root>
-_RDS_POSTGRES_SUITE_DIR = (
-    Path(__file__).resolve().parents[6] / "tests" / "synthetic" / "rds_postgres"
-)
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return Path(__file__).resolve().parents[4]
+
+
+_RDS_POSTGRES_SUITE_DIR = _repo_root() / "tests" / "synthetic" / "rds_postgres"
 
 
 @lru_cache(maxsize=1)

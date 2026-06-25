@@ -129,7 +129,7 @@ async def astream_investigation(
     # Silence the global ProgressTracker before starting the background thread
     # so pipeline internals (extract_alert, resolve_integrations, etc.) don't
     # open their own Rich Live display — the StreamRenderer drives it instead.
-    from platform.observability import silence_progress_tracker
+    from platform_services.observability import silence_progress_tracker
 
     silence_progress_tracker()
 

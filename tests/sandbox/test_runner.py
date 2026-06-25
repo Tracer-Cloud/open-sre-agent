@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import os
 import tempfile
-from platform.sandbox.runner import (
+
+from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+from platform_services.sandbox.runner import (
     MAX_TIMEOUT,
     SandboxResult,
     run_python_sandbox,
 )
-
-from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 
 
 class TestSandboxRunnerBasicExecution:

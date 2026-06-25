@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from platform.analytics import cli
-from platform.analytics.events import Event
-from platform.analytics.source import EntrypointSource, TriggerMode
-
 import pytest
+
+from platform_services.analytics import cli
+from platform_services.analytics.events import Event
+from platform_services.analytics.source import EntrypointSource, TriggerMode
 
 
 def _assert_investigation_events_have_source(

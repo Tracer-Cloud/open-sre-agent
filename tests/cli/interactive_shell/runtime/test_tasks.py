@@ -117,7 +117,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         reg = TaskRegistry.persistent()
@@ -137,7 +137,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         store_path = tmp_path / "interactive_tasks.json"
@@ -175,7 +175,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         calls: list[tuple[int, int]] = []
@@ -201,7 +201,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = ReplSession()

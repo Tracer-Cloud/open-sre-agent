@@ -19,8 +19,8 @@ import botocore.credentials
 import botocore.session
 from kubernetes import client as k8s_client
 
-from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from app.services.eks.utils import stored_credentials_to_aws_creds
+from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 
 logger = logging.getLogger(__name__)
 

@@ -129,7 +129,7 @@ def test_render_health_json(capsys) -> None:
     assert data["results"][1]["status"] == "failed"
 
 
-@patch("platform.guardrails.rules.get_default_rules_path")
+@patch("platform_services.guardrails.rules.get_default_rules_path")
 def test_render_health_report_action_messages(mock_rules_path: MagicMock) -> None:
     mock_rules_path.return_value = Path("/nonexistent/rules")
 

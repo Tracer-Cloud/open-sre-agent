@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from platform.auth.jwt_auth import extract_org_id_from_jwt
 from typing import Any
 
 from app.config import get_tracer_base_url
 from app.integrations.config_models import TracerIntegrationConfig
 from app.integrations.verification import register_verifier, result
 from app.services.tracer_client.client import TracerClient
+from platform_services.auth.jwt_auth import extract_org_id_from_jwt
 
 
 @register_verifier("tracer")

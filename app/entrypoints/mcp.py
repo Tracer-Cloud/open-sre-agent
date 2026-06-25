@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from platform.analytics.cli import track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
 
 from dotenv import load_dotenv
@@ -13,6 +11,8 @@ from app.utils.sentry_sdk import capture_exception, init_sentry
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from cli.investigation import run_investigation_cli
+from platform_services.analytics.cli import track_investigation
+from platform_services.analytics.source import EntrypointSource, TriggerMode
 
 load_dotenv(override=False)
 init_sentry(entrypoint="mcp")

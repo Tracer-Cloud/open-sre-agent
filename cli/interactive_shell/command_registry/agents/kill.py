@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
-from platform.analytics.events import Event
-from platform.analytics.provider import get_analytics
 
 from rich.console import Console
 from rich.markup import escape
@@ -14,6 +12,8 @@ from app.fleet_monitoring.lifecycle import TerminateResult, terminate
 from app.fleet_monitoring.registry import AgentRegistry
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
+from platform_services.analytics.events import Event
+from platform_services.analytics.provider import get_analytics
 
 # Type alias for the optional confirmation callback (used for testing).
 _ConfirmFn = Callable[[str], str]

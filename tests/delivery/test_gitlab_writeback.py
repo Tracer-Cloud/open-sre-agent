@@ -92,9 +92,7 @@ def test_failure_does_not_propagate(state_with_gitlab):
             "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
-        patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.logger"
-        ) as mock_logger,
+        patch("core.orchestration.node.publish_findings.gitlab_writeback.logger") as mock_logger,
     ):
         post_gitlab_mr_writeback(state_with_gitlab, "report")
         mock_logger.warning.assert_called_once()

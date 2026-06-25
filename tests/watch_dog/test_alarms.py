@@ -1,4 +1,4 @@
-"""Tests for app/watch_dog/alarms.py."""
+"""Tests for app/tools/watch_dog/alarms.py."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.watch_dog.alarms import (
+from app.tools.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
     load_credentials_from_env,
@@ -40,7 +40,7 @@ def _stub_telegram(
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
-        "app.watch_dog.alarms.post_telegram_message",
+        "app.tools.watch_dog.alarms.post_telegram_message",
         _fake_post,
     )
     return calls

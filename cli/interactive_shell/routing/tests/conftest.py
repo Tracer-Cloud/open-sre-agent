@@ -17,7 +17,15 @@ from app.config import (
 )
 from app.utils.config import load_env
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[5]
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return Path(__file__).resolve().parents[4]
+
+
+_PROJECT_ROOT = _repo_root()
 _ENV_PATH = _PROJECT_ROOT / ".env"
 _ROUTING_TEST_DEFAULT_ENV = {
     "OPENSRE_SENTRY_DISABLED": "1",

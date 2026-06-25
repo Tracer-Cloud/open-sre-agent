@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from platform.guardrails.audit import AuditLogger
+
+from platform_services.guardrails.audit import AuditLogger
 
 
 class TestAuditLogger:

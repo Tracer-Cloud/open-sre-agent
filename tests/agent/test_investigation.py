@@ -123,9 +123,7 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -157,9 +155,7 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -183,9 +179,7 @@ def test_run_gracefully_handles_cli_timeout() -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -216,9 +210,7 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -255,9 +247,7 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -292,9 +282,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -848,9 +836,7 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     agent = _BadAgent()
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
         pytest.raises(ValueError, match="_should_accept_conclusion returned"),
     ):
         agent.run(state)
@@ -1169,12 +1155,8 @@ def _run_agent_with_scripted_llm(
 
     with (
         patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch(
-            "core.orchestration.node.investigate.agent.get_tracker", return_value=MagicMock()
-        ),
-        patch(
-            "core.orchestration.node.investigate.agent.get_available_tools", return_value=tools
-        ),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=MagicMock()),
+        patch("core.orchestration.node.investigate.agent.get_available_tools", return_value=tools),
     ):
         result = ConnectedInvestigationAgent().run(state)
     return result, mock_llm

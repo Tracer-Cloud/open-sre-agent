@@ -48,8 +48,8 @@ def diagnose(state: InvestigationState) -> dict[str, Any]:
     if str(state.get("root_cause") or "").strip():
         return {}
 
-    from platform.analytics.cli import capture_diagnosis_category_mismatch
-    from platform.observability import get_progress_tracker
+    from platform_services.analytics.cli import capture_diagnosis_category_mismatch
+    from platform_services.observability import get_progress_tracker
 
     tracker = get_progress_tracker()
     tracker.start("diagnose_root_cause", "Parsing investigation conclusion")

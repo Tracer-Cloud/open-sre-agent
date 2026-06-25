@@ -92,7 +92,7 @@ class TestFileResolution:
         monkeypatch.delenv("OPENSRE_INTERACTIVE", raising=False)
         monkeypatch.delenv("OPENSRE_LAYOUT", raising=False)
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -114,7 +114,7 @@ class TestFileResolution:
         monkeypatch.delenv("OPENSRE_INTERACTIVE", raising=False)
         monkeypatch.delenv("OPENSRE_LAYOUT", raising=False)
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -136,7 +136,7 @@ class TestFileResolution:
         monkeypatch.setenv("OPENSRE_INTERACTIVE", "1")
         monkeypatch.setenv("OPENSRE_LAYOUT", "classic")
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -159,7 +159,7 @@ class TestFileResolution:
         monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
         monkeypatch.setenv("OPENSRE_LAYOUT", "pinned")
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -173,7 +173,7 @@ class TestFileResolution:
         monkeypatch.delenv("OPENSRE_INTERACTIVE", raising=False)
         monkeypatch.delenv("OPENSRE_LAYOUT", raising=False)
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -189,7 +189,7 @@ class TestFileResolution:
         monkeypatch.delenv("OPENSRE_INTERACTIVE", raising=False)
         monkeypatch.delenv("OPENSRE_LAYOUT", raising=False)
 
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 

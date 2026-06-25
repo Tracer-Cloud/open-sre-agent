@@ -135,7 +135,7 @@ azure_sql = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*", "cli*", "core*", "platform*", "tests*"]
+include = ["app*", "cli*", "config*", "core*", "platform_services*", "tests*"]
 
 [tool.setuptools.package-data]
 "cli" = ["fixtures/*.json"]

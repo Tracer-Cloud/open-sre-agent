@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.constants import OPENSRE_HOME_DIR
+from config.constants import OPENSRE_HOME_DIR
 
 logger = logging.getLogger(__name__)
 

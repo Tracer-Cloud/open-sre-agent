@@ -36,7 +36,7 @@ def tmp_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     on every call, so pointing it at a temp directory exercises the genuine
     filesystem path end to end.
     """
-    monkeypatch.setattr("app.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     return tmp_path
 
 

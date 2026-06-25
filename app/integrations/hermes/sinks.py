@@ -55,7 +55,7 @@ from typing import Final
 from app.integrations.hermes.agent import IncidentSink
 from app.integrations.hermes.errors import InvestigationOutcome
 from app.integrations.hermes.incident import HermesIncident, IncidentSeverity, LogRecord
-from app.watch_dog.alarms import AlarmDispatcher
+from app.tools.watch_dog.alarms import AlarmDispatcher
 
 logger = logging.getLogger(__name__)
 

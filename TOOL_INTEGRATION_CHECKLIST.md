@@ -31,7 +31,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
 - [ ] Reusable transport/parsing logic lives in `app/services/` or `app/tools/utils/` rather than being copied into the tool body
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
-- [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
+- [ ] Output that may contain secrets, tokens, or PII is run through `platform_services/masking/` before being returned
 
 ### Live payload parsing
 

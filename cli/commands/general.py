@@ -6,13 +6,6 @@ import json
 import platform
 import sys
 import time
-from platform.analytics.cli import (
-    capture_update_completed,
-    capture_update_failed,
-    capture_update_started,
-    track_investigation,
-)
-from platform.analytics.source import EntrypointSource, TriggerMode
 
 import click
 
@@ -20,6 +13,13 @@ from app.version import get_version
 from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
 from cli.interactive_shell.data_store.context import is_json_output, is_yes
 from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
+from platform_services.analytics.cli import (
+    capture_update_completed,
+    capture_update_failed,
+    capture_update_started,
+    track_investigation,
+)
+from platform_services.analytics.source import EntrypointSource, TriggerMode
 
 
 @click.command(name="uninstall")

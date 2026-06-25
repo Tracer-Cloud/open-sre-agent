@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import datetime
-from platform.guardrails.apply import apply_guardrails_to_converse_payload
 
 import pytest
 
@@ -20,6 +19,7 @@ from app.services.bedrock_converse import (
     sanitize_converse_schema,
     to_converse_messages,
 )
+from platform_services.guardrails.apply import apply_guardrails_to_converse_payload
 
 
 @pytest.fixture(autouse=True)
@@ -189,7 +189,7 @@ def test_apply_guardrails_wraps_string_content_in_text_blocks() -> None:
     engine.is_active = True
     engine.apply.side_effect = lambda text: f"guarded:{text}"
 
-    with patch("platform.guardrails.engine.get_guardrail_engine", return_value=engine):
+    with patch("platform_services.guardrails.engine.get_guardrail_engine", return_value=engine):
         messages, system = apply_guardrails_to_converse_payload(
             messages=[{"role": "user", "content": "hello"}],
             system="sys",

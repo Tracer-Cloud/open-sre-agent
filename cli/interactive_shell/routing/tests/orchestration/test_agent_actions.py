@@ -1265,13 +1265,13 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
     captured_executed: list[tuple[int, int, int]] = []
 
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_planned",
+        "platform_services.analytics.cli.capture_terminal_actions_planned",
         lambda *, planned_count, has_unhandled_clause: captured_planned.append(
             (planned_count, has_unhandled_clause)
         ),
     )
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_executed",
+        "platform_services.analytics.cli.capture_terminal_actions_executed",
         lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
             (planned_count, executed_count, executed_success_count)
         ),
@@ -1335,13 +1335,13 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     captured_planned: list[tuple[int, bool]] = []
     captured_executed: list[tuple[int, int, int]] = []
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_planned",
+        "platform_services.analytics.cli.capture_terminal_actions_planned",
         lambda *, planned_count, has_unhandled_clause: captured_planned.append(
             (planned_count, has_unhandled_clause)
         ),
     )
     monkeypatch.setattr(
-        "platform.analytics.cli.capture_terminal_actions_executed",
+        "platform_services.analytics.cli.capture_terminal_actions_executed",
         lambda *, planned_count, executed_count, executed_success_count: captured_executed.append(
             (planned_count, executed_count, executed_success_count)
         ),

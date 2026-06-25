@@ -24,7 +24,7 @@ import pytest
 from rich.console import Console
 
 from app.fleet_monitoring.probe import ProcessSnapshot
-from app.watch_dog.alarms import AlarmCredentials
+from app.tools.watch_dog.alarms import AlarmCredentials
 from cli.interactive_shell.command_registry import dispatch_slash
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
@@ -57,7 +57,7 @@ def test_repl_watchdog_end_to_end_demo_script(monkeypatch: pytest.MonkeyPatch) -
         status="running",
         started_at=started_at,
     )
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("app.tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     session = ReplSession()
     console, buf = _capture()

@@ -13,8 +13,6 @@ import os
 import signal
 import sys
 from contextlib import suppress
-from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
-from platform.analytics.provider import Properties, capture_first_run_if_needed, shutdown_analytics
 
 import click
 from dotenv import load_dotenv
@@ -31,6 +29,12 @@ from cli.interactive_shell.ui.prompt_support import (
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
+)
+from platform_services.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
+from platform_services.analytics.provider import (
+    Properties,
+    capture_first_run_if_needed,
+    shutdown_analytics,
 )
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"

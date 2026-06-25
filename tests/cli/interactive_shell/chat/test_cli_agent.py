@@ -633,9 +633,7 @@ def test_run_interactive_action_queues_setup_command(monkeypatch: Any) -> None:
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("can you configure sentry?", session, console)
@@ -651,9 +649,7 @@ def test_run_interactive_action_falls_back_to_guidance_without_tty(monkeypatch: 
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: False
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: False)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("can you configure sentry?", session, console)
@@ -667,9 +663,7 @@ def test_run_interactive_action_queues_any_registered_opensre_command(monkeypatc
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations remove github"}]}',
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("remove github connection", session, console)
@@ -683,9 +677,7 @@ def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) 
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/not-an-opensre-command now"}]}',
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("do a fake thing", session, console)

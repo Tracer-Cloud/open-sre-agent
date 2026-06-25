@@ -173,12 +173,12 @@ def _register_with_observability(tracker: ProgressTracker) -> None:
     """Tell the observability port which tracker core code should see.
 
     The Rich tracker structurally satisfies the
-    :class:`platform.observability.progress.ProgressTracker` Protocol;
+    :class:`platform_services.observability.progress.ProgressTracker` Protocol;
     registering it here means any module that imports
     ``get_progress_tracker`` from core gets the same instance the CLI
     is driving.
     """
-    from platform.observability.progress import set_progress_tracker
+    from platform_services.observability.progress import set_progress_tracker
 
     set_progress_tracker(tracker)
 

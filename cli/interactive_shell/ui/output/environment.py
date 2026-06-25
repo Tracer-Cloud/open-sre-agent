@@ -3,10 +3,10 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
-from platform.observability.output_format import get_output_format
 
 from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_requested
 from cli.interactive_shell.ui.theme import SECONDARY
+from platform_services.observability.output_format import get_output_format
 
 
 def _is_silent_output() -> bool:

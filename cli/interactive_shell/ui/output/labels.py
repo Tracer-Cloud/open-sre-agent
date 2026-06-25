@@ -4,6 +4,7 @@ import re
 
 from rich.text import Text
 
+from app.tools.registry import resolve_tool_display_name
 from cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -14,7 +15,6 @@ from cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
-from app.tools.registry import resolve_tool_display_name
 
 # (padded_label, text_color) -- all labels are 6 chars wide.
 BADGE_STYLES: dict[str, tuple[str, str]] = {

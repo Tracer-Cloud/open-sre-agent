@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 
-from app.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
+from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 
 REPORT_PATH = OPENSRE_TMP_DIR / "opensre_last_report.md"
 

@@ -383,9 +383,6 @@ class BedrockConverseAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from platform.guardrails.apply import apply_guardrails_to_converse_payload
-        from platform.guardrails.engine import GuardrailBlockedError
-
         import botocore.exceptions
 
         from app.services.bedrock_converse import (
@@ -394,6 +391,8 @@ class BedrockConverseAgentClient:
             parse_converse_output,
             to_converse_messages,
         )
+        from platform_services.guardrails.apply import apply_guardrails_to_converse_payload
+        from platform_services.guardrails.engine import GuardrailBlockedError
 
         converse_messages = to_converse_messages(messages)
         converse_messages, system = apply_guardrails_to_converse_payload(

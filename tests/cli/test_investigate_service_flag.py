@@ -207,9 +207,7 @@ def test_investigate_command_keyboard_interrupt_non_streaming(monkeypatch) -> No
         raise KeyboardInterrupt
 
     monkeypatch.setattr("cli.investigation.run_investigation_cli", fake_run)
-    monkeypatch.setattr(
-        "cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
-    )
+    monkeypatch.setattr("cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"})
     monkeypatch.setattr("cli.commands.general.is_json_output", lambda: True)
 
     result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
@@ -229,9 +227,7 @@ def test_investigate_command_keyboard_interrupt_streaming(monkeypatch) -> None:
         raise KeyboardInterrupt
 
     monkeypatch.setattr("cli.investigation.run_investigation_cli_streaming", fake_streaming)
-    monkeypatch.setattr(
-        "cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
-    )
+    monkeypatch.setattr("cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"})
     monkeypatch.setattr("cli.commands.general.is_json_output", lambda: False)
 
     # Click's CliRunner patches the real sys.stdout, but

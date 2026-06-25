@@ -14,17 +14,17 @@ import re
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
-from platform.analytics.events import Event
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from app.constants import (
+from config.constants import (
     SENTRY_DSN,
     SENTRY_ERROR_SAMPLE_RATE,
     SENTRY_IN_APP_INCLUDE,
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
+from platform_services.analytics.events import Event
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
 # Pydantic V2 ValidationError messages render ``input_value=<repr>`` (or
@@ -371,7 +371,7 @@ def _before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str
 
 def _capture_sentry_init_skipped(reason: str, *, error_type: str | None = None) -> None:
     # Local import to avoid an import cycle between Sentry and analytics modules.
-    from platform.analytics.provider import Properties, get_analytics
+    from platform_services.analytics.provider import Properties, get_analytics
 
     properties: Properties = {"reason": reason}
     if error_type is not None:
@@ -384,7 +384,7 @@ def _build_sentry_integrations() -> list[Any]:
     """Build the Sentry integrations list lazily.
 
     Importing ``sentry_sdk.integrations.*`` is deferred to the first init so
-    that ``app.constants.sentry`` does not pull in ``sentry_sdk`` at import
+    that ``config.constants.sentry`` does not pull in ``sentry_sdk`` at import
     time. The CLI bootstrap relies on a ``try: init_sentry() except
     ModuleNotFoundError`` guard to keep ``opensre update`` working when the
     SDK is missing — that guard only fires if the import happens inside

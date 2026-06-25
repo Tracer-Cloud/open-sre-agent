@@ -4,10 +4,10 @@ from typing import Any
 
 from rich.text import Text
 
-from cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
-from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
 from app.utils.tool_trace import format_json_preview
+from cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
+from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 
 
 def tool_source_label(tool_name: str) -> str:

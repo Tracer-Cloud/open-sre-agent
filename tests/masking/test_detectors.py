@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from platform.masking.detectors import find_identifiers
-from platform.masking.policy import ALL_KINDS, MaskingPolicy
-
 import pytest
+
+from platform_services.masking.detectors import find_identifiers
+from platform_services.masking.policy import ALL_KINDS, MaskingPolicy
 
 
 def _policy(kinds: tuple[str, ...] = ALL_KINDS) -> MaskingPolicy:

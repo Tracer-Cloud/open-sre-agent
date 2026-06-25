@@ -16,8 +16,8 @@ from pathlib import Path
 import yaml
 from pydantic import Field
 
-from app.constants import OPENSRE_HOME_DIR
 from app.strict_config import StrictConfigModel
+from config.constants import OPENSRE_HOME_DIR
 
 logger = logging.getLogger(__name__)
 

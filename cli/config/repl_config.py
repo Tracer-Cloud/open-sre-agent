@@ -32,7 +32,7 @@ def _read_config_file() -> dict[str, Any]:
     try:
         import yaml  # type: ignore[import-untyped]
 
-        from app.constants import OPENSRE_HOME_DIR
+        from config.constants import OPENSRE_HOME_DIR
 
         config_path = OPENSRE_HOME_DIR / "config.yml"
         if not config_path.exists():

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.constants import OPENSRE_HOME_DIR
+from config.constants import OPENSRE_HOME_DIR
 
 _VERSION = 1
 _EMPTY_CONFIG = {"version": _VERSION, "wizard": {}, "targets": {}, "probes": {}}

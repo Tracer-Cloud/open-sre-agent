@@ -8,9 +8,9 @@ from pathlib import Path
 
 from filelock import FileLock
 
-from app.constants import OPENSRE_HOME_DIR
 from app.scheduler.claim_store import _DB_FILENAME, delete_runs
 from app.scheduler.types import ScheduledTask
+from config.constants import OPENSRE_HOME_DIR
 
 logger = logging.getLogger(__name__)
 

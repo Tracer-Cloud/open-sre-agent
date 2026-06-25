@@ -287,7 +287,7 @@ class TestDispatchSlash:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
@@ -569,9 +569,8 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import platform.analytics.cli as analytics_cli
-
         import app.integrations.store as store
+        import platform_services.analytics.cli as analytics_cli
         from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -628,9 +627,8 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import platform.analytics.cli as analytics_cli
-
         import app.integrations.store as store
+        import platform_services.analytics.cli as analytics_cli
         from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -1239,7 +1237,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value, input_path))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("platform_services.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "cli.investigation.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
@@ -1378,7 +1376,7 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value))
             return _TrackContext()
 
-        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("platform_services.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
             "cli.investigation.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
@@ -1706,7 +1704,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
@@ -1718,7 +1716,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
@@ -1737,7 +1735,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = ReplSession()

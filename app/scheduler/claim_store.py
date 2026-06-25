@@ -10,8 +10,8 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.constants import OPENSRE_HOME_DIR
 from app.scheduler.types import TaskRun, TaskStatus
+from config.constants import OPENSRE_HOME_DIR
 
 _DB_FILENAME = "scheduler.db"
 

@@ -46,7 +46,7 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
-from app.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
+from config.constants import INTEGRATIONS_STORE_PATH, LEGACY_INTEGRATIONS_STORE_PATH
 
 logger = logging.getLogger(__name__)
 

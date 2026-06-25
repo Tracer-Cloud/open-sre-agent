@@ -155,9 +155,7 @@ def test_binary_install_upgrades_via_install_script(
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "1.2.3"
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.data_store.update._is_binary_install", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.data_store.update._is_binary_install", lambda: True)
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._upgrade_via_install_script", lambda _v: 0
     )
@@ -176,9 +174,7 @@ def test_editable_install_prints_warning(
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "1.2.3"
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.data_store.update._is_binary_install", lambda: False
-    )
+    monkeypatch.setattr("cli.interactive_shell.data_store.update._is_binary_install", lambda: False)
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._is_editable_install", lambda: True
     )
@@ -240,9 +236,7 @@ def test_update_prints_release_notes_url_after_success(
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "1.2.3"
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.data_store.update._is_binary_install", lambda: False
-    )
+    monkeypatch.setattr("cli.interactive_shell.data_store.update._is_binary_install", lambda: False)
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.update._upgrade_via_install_script", lambda _v: 0
     )

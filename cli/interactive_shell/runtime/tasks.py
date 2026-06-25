@@ -16,7 +16,7 @@ from pathlib import Path
 from subprocess import Popen
 from typing import Any
 
-import app.constants as const_module
+import config.constants as const_module
 
 _TASK_ID_BYTES = 4
 _MAX_REGISTRY = 100

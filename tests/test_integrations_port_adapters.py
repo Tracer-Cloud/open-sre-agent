@@ -3,16 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from platform.observability import NoopProgressTracker
-from platform.observability import debug as obs_debug
-from platform.observability import display as obs_display
-from platform.observability import progress as obs_progress
-from platform.observability.debug import set_debug_printer
-from platform.observability.display import (
-    set_investigation_footer_renderer,
-    set_investigation_header_renderer,
-)
-from platform.observability.progress import set_progress_tracker, set_progress_tracker_factory
 
 import pytest
 
@@ -20,6 +10,19 @@ from app.integrations import port as integrations_port
 from app.integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
 from app.services.tracer_client.integrations_adapter import fetch_tracer_remote_integrations
 from cli.interactive_shell.ui.output import boundary as output_boundary
+from platform_services.observability import NoopProgressTracker
+from platform_services.observability import debug as obs_debug
+from platform_services.observability import display as obs_display
+from platform_services.observability import progress as obs_progress
+from platform_services.observability.debug import set_debug_printer
+from platform_services.observability.display import (
+    set_investigation_footer_renderer,
+    set_investigation_header_renderer,
+)
+from platform_services.observability.progress import (
+    set_progress_tracker,
+    set_progress_tracker_factory,
+)
 
 
 def _reset_all_ports() -> None:

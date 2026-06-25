@@ -207,8 +207,8 @@ def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
 def _emit_analytics_started(task: ScheduledTask) -> None:
     """Emit SCHEDULED_TASK_STARTED event after a claim is won."""
     try:
-        from platform.analytics.events import Event
-        from platform.analytics.provider import Properties, get_analytics
+        from platform_services.analytics.events import Event
+        from platform_services.analytics.provider import Properties, get_analytics
 
         properties: Properties = {
             "task_id": task.id,
@@ -223,8 +223,8 @@ def _emit_analytics_started(task: ScheduledTask) -> None:
 def _emit_analytics(task: ScheduledTask, status: TaskStatus, error: str = "") -> None:
     """Emit analytics event for task execution completion."""
     try:
-        from platform.analytics.events import Event
-        from platform.analytics.provider import Properties, get_analytics
+        from platform_services.analytics.events import Event
+        from platform_services.analytics.provider import Properties, get_analytics
 
         event_name = (
             Event.SCHEDULED_TASK_COMPLETED

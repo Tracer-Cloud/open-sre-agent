@@ -76,7 +76,7 @@ def _write_raw(text: str) -> None:
 
 
 def _config_dir() -> Path:
-    from app.constants import OPENSRE_HOME_DIR
+    from config.constants import OPENSRE_HOME_DIR
 
     return OPENSRE_HOME_DIR
 
@@ -122,8 +122,8 @@ def _store(record: dict[str, Any]) -> None:
 
 
 def _emit_analytics(record: dict[str, Any]) -> None:
-    from platform.analytics.events import Event
-    from platform.analytics.provider import get_analytics
+    from platform_services.analytics.events import Event
+    from platform_services.analytics.provider import get_analytics
 
     with contextlib.suppress(Exception):
         props: dict[str, Any] = {

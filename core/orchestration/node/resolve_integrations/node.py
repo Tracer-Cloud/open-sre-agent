@@ -6,7 +6,6 @@ import base64
 import json
 import logging
 import os
-from platform.observability import get_progress_tracker as get_tracker
 from typing import Any
 
 from app.integrations.catalog import (
@@ -22,6 +21,7 @@ from app.integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
 from core.domain.state import InvestigationState
+from platform_services.observability import get_progress_tracker as get_tracker
 
 logger = logging.getLogger(__name__)
 

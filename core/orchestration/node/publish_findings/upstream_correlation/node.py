@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from platform.observability import get_progress_tracker as get_tracker
 from typing import Any, Protocol, cast
 
 from app.utils.tracing import traceable
@@ -15,6 +14,7 @@ from core.orchestration.node.publish_findings.upstream_correlation.providers imp
 from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
     build_runtime_correlation,
 )
+from platform_services.observability import get_progress_tracker as get_tracker
 
 logger = logging.getLogger(__name__)
 

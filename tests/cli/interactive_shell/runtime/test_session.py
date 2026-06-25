@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import app.constants as const_module
+import config.constants as const_module
 from cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,

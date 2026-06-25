@@ -11,7 +11,6 @@ Node contract:
 
 from __future__ import annotations
 
-from platform.masking import MaskingContext
 from typing import Any, cast
 
 from app.utils.ingest_delivery import create_investigation_and_attach_url
@@ -28,6 +27,7 @@ from core.orchestration.node.publish_findings.renderers.terminal import render_r
 from core.orchestration.node.publish_findings.upstream_correlation import (
     enrich_upstream_correlation,
 )
+from platform_services.masking import MaskingContext
 
 
 def deliver(state: InvestigationState) -> dict[str, Any]:

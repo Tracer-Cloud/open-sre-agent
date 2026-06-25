@@ -25,8 +25,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from platform.analytics.cli import capture_investigation_failed, track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
 
 from dotenv import load_dotenv
@@ -58,6 +56,8 @@ from app.version import get_version
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
+from platform_services.analytics.cli import capture_investigation_failed, track_investigation
+from platform_services.analytics.source import EntrypointSource, TriggerMode
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")

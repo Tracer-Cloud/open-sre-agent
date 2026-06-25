@@ -26,8 +26,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.constants import OPENSRE_HOME_DIR
 from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from config.constants import OPENSRE_HOME_DIR
 
 logger = logging.getLogger(__name__)
 

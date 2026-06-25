@@ -23,12 +23,19 @@ _DECISION_NODES = (
 )
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return Path(__file__).resolve().parents[4]
+
+
 def _complexity(node: ast.AST) -> int:
     return 1 + sum(1 for child in ast.walk(node) if isinstance(child, _DECISION_NODES))
 
 
 def test_routing_module_complexity_guardrails() -> None:
-    repo_root = Path(__file__).resolve().parents[5]
+    repo_root = _repo_root()
     violations: list[str] = []
 
     for rel_path, max_allowed in _COMPLEXITY_LIMITS.items():

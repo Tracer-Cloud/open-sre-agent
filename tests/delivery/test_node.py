@@ -219,12 +219,8 @@ def test_generate_report_can_skip_terminal_render_and_editor(
     with (
         patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
         patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch(
-            "core.orchestration.node.publish_findings.node.render_report", mock_render_report
-        ),
-        patch(
-            "core.orchestration.node.publish_findings.node.open_in_editor", mock_open_in_editor
-        ),
+        patch("core.orchestration.node.publish_findings.node.render_report", mock_render_report),
+        patch("core.orchestration.node.publish_findings.node.open_in_editor", mock_open_in_editor),
     ):
         from core.orchestration.node.publish_findings.node import generate_report
 

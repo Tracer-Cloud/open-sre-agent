@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.constants import OPENSRE_HOME_DIR
 from cli.config import read_prompt_log_settings
+from config.constants import OPENSRE_HOME_DIR
 
 _FALSE_VALUES = {"", "0", "false", "off", "no"}
 _DEFAULT_MAX_CHARS = 32_000

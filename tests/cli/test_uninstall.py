@@ -97,9 +97,7 @@ def test_run_uninstall_skips_missing_dirs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     missing = tmp_path / "does_not_exist"
-    monkeypatch.setattr(
-        "cli.interactive_shell.data_store.uninstall._data_dirs", lambda: [missing]
-    )
+    monkeypatch.setattr("cli.interactive_shell.data_store.uninstall._data_dirs", lambda: [missing])
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.uninstall._is_binary_install", lambda: False
     )
@@ -189,9 +187,7 @@ def test_run_uninstall_binary_removes_executable(
     monkeypatch.setattr(
         "cli.interactive_shell.data_store.uninstall._is_binary_install", lambda: True
     )
-    monkeypatch.setattr(
-        "cli.interactive_shell.data_store.uninstall.sys.executable", str(fake_exe)
-    )
+    monkeypatch.setattr("cli.interactive_shell.data_store.uninstall.sys.executable", str(fake_exe))
 
     rc = run_uninstall(yes=True)
 
@@ -234,9 +230,7 @@ def test_uninstall_command_yes_flag_skips_prompt() -> None:
 
     with (
         patch("cli.interactive_shell.data_store.uninstall._data_dirs", return_value=[]),
-        patch(
-            "cli.interactive_shell.data_store.uninstall._is_binary_install", return_value=False
-        ),
+        patch("cli.interactive_shell.data_store.uninstall._is_binary_install", return_value=False),
         patch("cli.interactive_shell.data_store.uninstall._pip_uninstall", return_value=0),
     ):
         result = runner.invoke(cli, ["uninstall", "--yes"])
@@ -250,9 +244,7 @@ def test_uninstall_command_short_yes_flag() -> None:
 
     with (
         patch("cli.interactive_shell.data_store.uninstall._data_dirs", return_value=[]),
-        patch(
-            "cli.interactive_shell.data_store.uninstall._is_binary_install", return_value=False
-        ),
+        patch("cli.interactive_shell.data_store.uninstall._is_binary_install", return_value=False),
         patch("cli.interactive_shell.data_store.uninstall._pip_uninstall", return_value=0),
     ):
         result = runner.invoke(cli, ["uninstall", "-y"])

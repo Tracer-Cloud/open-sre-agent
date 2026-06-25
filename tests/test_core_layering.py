@@ -2,12 +2,12 @@
 
 Core (``core/domain/``, ``core/orchestration/``, ``app/utils/``) reports
 progress, prints debug output, and renders investigation headers/footers through
-the ports defined in :mod:`platform.observability`. Reaching into ``cli.*`` directly
+the ports defined in :mod:`platform_services.observability`. Reaching into ``cli.*`` directly
 couples the domain/orchestration layer to the REPL's specific renderer and breaks
 headless / non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
-``set_*`` injection helpers in ``platform/observability/``.
+``set_*`` injection helpers in ``platform_services/observability/``.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ def _imported_modules(source: str) -> set[str]:
 def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
     """Core modules must avoid forbidden boundary packages.
 
-    Use ports instead — ``platform.observability`` for progress/debug/display,
+    Use ports instead — ``platform_services.observability`` for progress/debug/display,
     ``app.integrations.port`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
@@ -81,6 +81,6 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``platform.observability.*`` or ``app.integrations.port``) and register "
+        "port (``platform_services.observability.*`` or ``app.integrations.port``) and register "
         "adapters via ``install_product_adapters``."
     )

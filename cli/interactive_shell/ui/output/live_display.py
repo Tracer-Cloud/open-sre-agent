@@ -7,6 +7,7 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
+from app.utils.tool_trace import format_json_preview
 from cli.interactive_shell.ui.output.console_state import (
     _capture_footer_snapshot,
     clear_active_display,
@@ -32,7 +33,6 @@ from cli.interactive_shell.ui.theme import (
     WARNING,
 )
 from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
-from app.utils.tool_trace import format_json_preview
 
 _SPINNER_FRAMES = ("·  ", "·· ", "···", "·· ")
 _FRAME_SECS = 0.10

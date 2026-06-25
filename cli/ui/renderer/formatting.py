@@ -7,7 +7,7 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from app.constants.investigation import MAX_INVESTIGATION_LOOPS
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 
 
 def format_prior_tools_clause(

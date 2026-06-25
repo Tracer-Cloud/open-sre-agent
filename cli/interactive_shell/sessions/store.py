@@ -35,7 +35,7 @@ _CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "cli_help", "follo
 
 
 def _sessions_dir() -> Path:
-    from app.constants import OPENSRE_HOME_DIR
+    from config.constants import OPENSRE_HOME_DIR
 
     return OPENSRE_HOME_DIR / "sessions"
 

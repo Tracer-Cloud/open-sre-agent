@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from platform.sandbox.runner import SandboxResult
 from unittest.mock import patch
 
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from app.tools.run_diagnostic_code import run_diagnostic_code
+from platform_services.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
 
 

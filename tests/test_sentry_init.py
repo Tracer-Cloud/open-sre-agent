@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
 from app.utils import sentry_sdk as sentry_mod
+from config.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
 
 _REAL_BUILD_INTEGRATIONS = sentry_mod._build_sentry_integrations
 

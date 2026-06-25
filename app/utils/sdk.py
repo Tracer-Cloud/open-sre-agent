@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from platform.analytics.cli import track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
 from typing import Any
+
+from platform_services.analytics.cli import track_investigation
+from platform_services.analytics.source import EntrypointSource, TriggerMode
 
 
 def run_investigation(*args: Any, **kwargs: Any) -> Any:

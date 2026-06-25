@@ -6,7 +6,7 @@ import importlib.metadata
 import tomllib
 from pathlib import Path
 
-from app.constants.opensre import DEFAULT_RELEASE_VERSION
+from config.constants.opensre import DEFAULT_RELEASE_VERSION
 
 PACKAGE_NAME = "opensre"
 DEFAULT_VERSION = DEFAULT_RELEASE_VERSION

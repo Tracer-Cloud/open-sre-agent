@@ -24,7 +24,16 @@ from cli.interactive_shell.routing.tests.scenario_loader import (
 
 TESTS_DIR = Path(__file__).resolve().parent
 ROUTING_SCENARIOS_TEST = TESTS_DIR / "test_routing_scenarios.py"
-LEGACY_ROUTING_TESTS_DIR = TESTS_DIR.parents[4] / "tests" / "cli" / "interactive_shell" / "routing"
+
+
+def _repo_root() -> Path:
+    for parent in TESTS_DIR.parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return TESTS_DIR.parents[3]
+
+
+LEGACY_ROUTING_TESTS_DIR = _repo_root() / "tests" / "cli" / "interactive_shell" / "routing"
 ALLOWED_LEGACY_TESTS: set[str] = set()
 ORACLE_RUNTIME = TESTS_DIR / "_oracle_runtime.py"
 

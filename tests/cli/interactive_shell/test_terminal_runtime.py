@@ -93,7 +93,7 @@ def test_build_prompt_session_uses_persistent_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -113,7 +113,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     blocked_home = tmp_path / "not-a-directory"
     blocked_home.write_text("", encoding="utf-8")
@@ -129,7 +129,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
@@ -151,7 +151,7 @@ def test_shift_enter_inserts_newline_before_submit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 

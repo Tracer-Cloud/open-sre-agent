@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from app.watch_dog.config import WatchdogConfig
+from app.tools.watch_dog.config import WatchdogConfig
 from cli.__main__ import cli
 from cli.commands.watchdog import watchdog_command
 

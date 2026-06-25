@@ -9,7 +9,7 @@ from typing import Any
 
 import click
 
-from app.constants import OPENSRE_HOME_DIR
+from config.constants import OPENSRE_HOME_DIR
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
 _SUPPORTED_KEYS = ("interactive.enabled", "interactive.layout")
