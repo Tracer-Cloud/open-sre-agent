@@ -2,7 +2,7 @@ id: 337-datadog-monitors-lookup-live-gather
 title: Datadog monitor listing is a data lookup that hands off and grounds on live Datadog (not an investigation)
 intent_class: complex_shell_prompts
 input:
-  prompt: list the datadog monitors that are currently in an alerting state
+  prompt: 'list the datadog monitors that are currently in an alerting state'
 session:
   has_prior_state: false
   configured_integrations:

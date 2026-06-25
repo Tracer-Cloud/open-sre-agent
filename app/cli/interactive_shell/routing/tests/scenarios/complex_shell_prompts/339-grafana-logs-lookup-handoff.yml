@@ -2,7 +2,7 @@ id: 339-grafana-logs-lookup-handoff
 title: Grafana logs lookup hands off and routes the gather loop to query_grafana_logs
 intent_class: complex_shell_prompts
 input:
-  prompt: show me the most recent grafana logs for the payments service
+  prompt: 'show me the most recent grafana logs for the payments service'
 session:
   has_prior_state: false
   configured_integrations:

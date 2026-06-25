@@ -2,7 +2,7 @@ id: 338-compound-sentry-github-lookup-handoff
 title: Compound two-source lookup hands off and fans out across Sentry and GitHub without dispatching an investigation
 intent_class: complex_shell_prompts
 input:
-  prompt: list the open sentry issues for checkout and the latest github issues about login failures
+  prompt: 'list the open sentry issues for checkout and the latest github issues about login failures'
 session:
   has_prior_state: false
   configured_integrations:

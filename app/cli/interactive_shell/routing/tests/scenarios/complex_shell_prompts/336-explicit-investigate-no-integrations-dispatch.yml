@@ -2,7 +2,7 @@ id: 336-explicit-investigate-no-integrations-dispatch
 title: Explicit investigate verb dispatches an investigation even with zero integrations connected
 intent_class: complex_shell_prompts
 input:
-  prompt: investigate why the orders-api keeps OOM-killing its pods
+  prompt: 'investigate why the orders-api keeps OOM-killing its pods'
 session:
   has_prior_state: false
   configured_integrations: []
