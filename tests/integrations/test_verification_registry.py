@@ -221,6 +221,67 @@ class TestShorthandRegistration:
         assert fn("local store", {})["status"] == "passed"
 
 
+class TestLoaderAutoDiscovery:
+    """Pin the loader's contract: ``register_all_verifiers()`` populates
+    the registry from both vendor locations and is safe to call twice."""
+
+    def test_calling_register_all_verifiers_populates_the_registry(self) -> None:
+        register_all_verifiers()
+        # The catalog declares which services must have verifiers; auto-
+        # discovery's job is to make every one of them resolvable.
+        for service in SUPPORTED_VERIFY_SERVICES:
+            assert get_verifier(service) is not None, (
+                f"auto-discovery missed {service!r} — either the verifier "
+                "module is misnamed or the loader's walk excluded it"
+            )
+
+    def test_register_all_verifiers_is_idempotent(self, _isolated_registry: None) -> None:
+        """Re-registration must replace silently (no exception) so that
+        repeated calls from different entry points don't blow up."""
+        register_all_verifiers()
+        before = sorted(list_verifiers())
+        register_all_verifiers()  # second call must not raise
+        after = sorted(list_verifiers())
+        assert before == after
+
+
+class TestVerifyWithValidationResult:
+    """Direct tests for ``verify_with_validation_result`` — exercised
+    indirectly through ``build_validation_verifier`` elsewhere, but
+    worth pinning the contract directly so future refactors of the
+    factory don't quietly change the helper's behavior."""
+
+    def test_passes_when_validation_ok(self) -> None:
+        from app.integrations.verification import verify_with_validation_result
+
+        out = verify_with_validation_result(
+            "fake",
+            "local store",
+            {"raw": 1},
+            build_config=lambda raw: raw,
+            validate_config=lambda _cfg: SimpleNamespace(ok=True, detail="all good"),
+        )
+        assert out == {
+            "service": "fake",
+            "source": "local store",
+            "status": "passed",
+            "detail": "all good",
+        }
+
+    def test_fails_when_validation_not_ok(self) -> None:
+        from app.integrations.verification import verify_with_validation_result
+
+        out = verify_with_validation_result(
+            "fake",
+            "local env",
+            {},
+            build_config=lambda raw: raw,
+            validate_config=lambda _cfg: SimpleNamespace(ok=False, detail="bad token"),
+        )
+        assert out["status"] == "failed"
+        assert out["detail"] == "bad token"
+
+
 class TestAlertmanagerRegistration:
     def test_alertmanager_is_registered_via_canonical_name(self) -> None:
         """Import the vendor verifier module and check it's reachable

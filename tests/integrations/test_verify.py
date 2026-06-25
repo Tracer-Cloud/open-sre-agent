@@ -190,6 +190,102 @@ def test_verify_telegram_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "unauthorized" in result["detail"].lower()
 
 
+def test_verify_slack_send_test_posts_to_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end: ``verify_integrations("slack", send_slack_test=True)`` must
+    actually deliver the test message through the verifier's HTTP path.
+
+    Protects the cross-module ``RUNTIME_SEND_TEST_KEY`` plumbing: ``verify.py``
+    injects the key into config, ``verifiers/slack.py`` reads it, the
+    ``httpx.post`` call fires. If either side drifts (rename, typo,
+    silent fallthrough) this test fails — without it, ``--send-slack-test``
+    could silently stop delivering.
+    """
+    webhook_url = "https://hooks.slack.com/services/T000/B000/test"
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {"webhook_url": webhook_url},
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    posted: list[tuple[str, dict[str, Any]]] = []
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def _fake_post(url: str, *_args: Any, json: dict[str, Any], **_kwargs: Any) -> _FakeResponse:
+        posted.append((url, json))
+        return _FakeResponse()
+
+    monkeypatch.setattr("app.integrations.verifiers.slack.httpx.post", _fake_post)
+
+    results = verify_integrations("slack", send_slack_test=True)
+
+    assert len(posted) == 1, "send_slack_test=True must trigger exactly one POST"
+    posted_url, posted_payload = posted[0]
+    assert posted_url == webhook_url
+    assert "Tracer integration test" in posted_payload["text"]
+    assert results == [
+        {
+            "service": "slack",
+            "source": "local store",
+            "status": "passed",
+            "detail": "Webhook delivered test message successfully.",
+        }
+    ]
+
+
+def test_verify_slack_send_test_false_does_not_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default (``send_slack_test=False``) must NOT POST to the webhook.
+
+    Pins the inverse direction: a config-only slack verifier must remain
+    side-effect-free unless the runtime flag is explicitly set.
+    """
+    monkeypatch.setattr(
+        "app.integrations.catalog.load_integrations",
+        lambda: [
+            {
+                "id": "slack-local",
+                "service": "slack",
+                "status": "active",
+                "instances": [
+                    {
+                        "name": "default",
+                        "tags": {},
+                        "credentials": {
+                            "webhook_url": "https://hooks.slack.com/services/T000/B000/test"
+                        },
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+
+    def _fail_post(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("httpx.post must not be called when send_slack_test=False")
+
+    monkeypatch.setattr("app.integrations.verifiers.slack.httpx.post", _fail_post)
+
+    results = verify_integrations("slack")  # default: send_slack_test=False
+
+    assert results[0]["status"] == "passed"
+    assert "Use --send-slack-test" in results[0]["detail"]
+
+
 def test_verify_slack_uses_v2_store_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.integrations.catalog.load_integrations",
