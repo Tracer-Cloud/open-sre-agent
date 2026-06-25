@@ -7,9 +7,9 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.domain.types.evidence import EvidenceSource
+from app.core.domain.types.retrieval import RetrievalControls
 from app.strict_config import StrictConfigModel
-from app.types.evidence import EvidenceSource
-from app.types.retrieval import RetrievalControls
 
 EvidenceType = Literal[
     "logs",

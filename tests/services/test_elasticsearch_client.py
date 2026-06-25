@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from app.types.evidence import EvidenceSource
+from app.core.domain.types.evidence import EvidenceSource
 
 
 def test_evidence_source_includes_elasticsearch() -> None:

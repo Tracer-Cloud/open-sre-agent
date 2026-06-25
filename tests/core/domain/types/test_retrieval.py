@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.types.retrieval import (
+from app.core.domain.types.retrieval import (
     AggregationSpec,
     FieldSelection,
     FilterCondition,
@@ -280,8 +280,8 @@ class TestBaseToolRetrieval:
         """BaseTool subclasses default to no retrieval controls."""
         from typing import Any, ClassVar
 
+        from app.core.domain.types.evidence import EvidenceSource
         from app.tools.base import BaseTool
-        from app.types.evidence import EvidenceSource
 
         class SimpleTool(BaseTool):
             name: ClassVar[str] = "simple_tool"
@@ -300,8 +300,8 @@ class TestBaseToolRetrieval:
         """BaseTool subclass can declare supported retrieval controls."""
         from typing import Any, ClassVar
 
+        from app.core.domain.types.evidence import EvidenceSource
         from app.tools.base import BaseTool
-        from app.types.evidence import EvidenceSource
 
         class ControlledTool(BaseTool):
             name: ClassVar[str] = "controlled_tool"
@@ -326,8 +326,8 @@ class TestBaseToolRetrieval:
         """Retrieval controls are preserved through metadata() call."""
         from typing import Any, ClassVar
 
+        from app.core.domain.types.evidence import EvidenceSource
         from app.tools.base import BaseTool
-        from app.types.evidence import EvidenceSource
 
         class ParentTool(BaseTool):
             name: ClassVar[str] = "parent"

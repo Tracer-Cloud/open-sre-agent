@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.core.domain.state.diagnosis.alignment import apply_category_alignment_adjustments
-from app.types.root_cause_categories import (
+from app.core.domain.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,
     render_prompt_taxonomy,

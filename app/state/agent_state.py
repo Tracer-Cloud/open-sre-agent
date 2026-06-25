@@ -27,10 +27,10 @@ from app.core.domain.state.runtime_slices import (
     MaskingSlice,
     SessionContext,
 )
+from app.core.domain.types.retrieval import RetrievalControlsMap
 from app.state.slices import ChatStateSlice
 from app.state.types import AgentMode, ChatMessageModel
 from app.strict_config import StrictConfigModel
-from app.types.retrieval import RetrievalControlsMap
 
 
 class AgentState(

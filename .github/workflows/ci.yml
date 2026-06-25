@@ -87,7 +87,7 @@ jobs:
               tests/services
               tests/utils
               tests/masking
-              tests/types
+              tests/core/domain/types
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime

@@ -34,9 +34,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.core.domain.types.tools import ToolSurface
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
-from app.types.tools import ToolSurface
 
 
 def _detect_repo_root() -> Path:

@@ -7,7 +7,7 @@ from typing import Any, NotRequired
 
 from typing_extensions import TypedDict
 
-from app.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
+from app.core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 
 VALID_HERMES_FAILURE_MODES = frozenset(
     {

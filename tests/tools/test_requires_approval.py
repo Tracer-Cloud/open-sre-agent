@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.domain.types.evidence import EvidenceSource
 from app.tools.base import BaseTool
 from app.tools.registered_tool import RegisteredTool
-from app.types.evidence import EvidenceSource
 
 
 class _ReadOnlyTool(BaseTool):

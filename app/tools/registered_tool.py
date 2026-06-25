@@ -11,10 +11,10 @@ from typing import Any, Literal, cast, get_args, get_origin, get_type_hints
 
 from pydantic import BaseModel
 
+from app.core.domain.types.evidence import EvidenceSource
+from app.core.domain.types.retrieval import RetrievalControls
+from app.core.domain.types.tools import ToolSurface
 from app.tools.base import BaseTool, EvidenceType, SideEffectLevel, ToolMetadata
-from app.types.evidence import EvidenceSource
-from app.types.retrieval import RetrievalControls
-from app.types.tools import ToolSurface
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 

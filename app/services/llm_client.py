@@ -49,9 +49,9 @@ from app.config import (
     OPENROUTER_BASE_URL,
     resolve_llm_settings,
 )
+from app.core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 from app.llm_credentials import resolve_llm_api_key
 from app.llm_reasoning_effort import get_active_reasoning_effort
-from app.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 
 # The canonical taxonomy for root cause categories lives in
-# ``app.types.root_cause_categories``. This module only consumes the
+# ``app.core.domain.types.root_cause_categories``. This module only consumes the
 # resulting set (``VALID_ROOT_CAUSE_CATEGORIES``) for membership checks
 # while parsing LLM responses; it does not own or extend the taxonomy.
 

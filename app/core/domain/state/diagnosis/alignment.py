@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.types.root_cause_categories import (
+from app.core.domain.types.root_cause_categories import (
     GROUP_DATABASE,
     GROUP_KUBERNETES,
     GROUP_NETWORK,

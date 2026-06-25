@@ -28,7 +28,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/core/runtime/", ("tests/core/runtime/",)),
     PathRule("app/core/domain/", (), always_escalate=True),
     PathRule("app/core/orchestration/", (), always_escalate=True),
-    PathRule("app/types/", (), always_escalate=True),
     PathRule("app/state/", (), always_escalate=True),
     PathRule("app/utils/", (), always_escalate=True),
     # Specific sub-packages before their parent

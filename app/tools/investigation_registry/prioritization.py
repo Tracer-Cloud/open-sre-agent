@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.domain.types.evidence import EvidenceSource
 from app.tools.investigation_registry.actions import get_available_actions
 from app.tools.investigation_registry.models import InvestigationAction
-from app.types.evidence import EvidenceSource
 
 # Deterministic fallback set when no tools match detected sources.
 # These are low-cost, always-safe tools that provide broad coverage.

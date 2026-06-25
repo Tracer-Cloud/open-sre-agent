@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.types.retrieval import RetrievalIntent
+from app.core.domain.types.retrieval import RetrievalIntent
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from app.core.domain.alerts.alert_source import (
 )
 from app.core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES, score_tools
 from app.core.domain.types.planning import PlannedInvestigationAction
+from app.core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 from app.core.orchestration.node.investigate.tools import (
     availability_view,
     build_connected_tool_context,
@@ -17,7 +18,6 @@ from app.core.orchestration.node.investigate.tools import (
 from app.state import InvestigationState
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
-from app.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 
 DEFAULT_RETRIEVAL_LIMIT = 100
 

@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
+from app.core.domain.types.retrieval import RetrievalControls
 from app.tools import registry as registry_module
 from app.tools.base import BaseTool
 from app.tools.investigation_registry.actions import get_available_actions
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from app.tools.tool_decorator import tool
-from app.types.retrieval import RetrievalControls
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
     {

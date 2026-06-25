@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
-from app.types.retrieval import RetrievalControlsMap
+from app.core.domain.types.retrieval import RetrievalControlsMap
 
 AgentMode = Literal["chat", "investigation", "agent_incident"]
 

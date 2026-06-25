@@ -10,7 +10,10 @@ from app.core.domain.alerts.alert_source import (
     relevant_sources_for_alert,
     resolve_alert_source,
 )
-from app.types.root_cause_categories import HERMES_ROOT_CAUSE_CATEGORIES, render_prompt_taxonomy
+from app.core.domain.types.root_cause_categories import (
+    HERMES_ROOT_CAUSE_CATEGORIES,
+    render_prompt_taxonomy,
+)
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
 

@@ -57,7 +57,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/state/` — Shared agent runtime envelope (`AgentState`), chat slice, and state factories.
 - `app/core/domain/state/` — Investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
-- `app/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
+- `app/core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
 - `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `app/cli/__main__.py`.

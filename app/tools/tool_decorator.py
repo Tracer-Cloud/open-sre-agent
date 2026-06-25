@@ -7,10 +7,10 @@ from typing import Any, cast, overload
 
 from pydantic import BaseModel
 
+from app.core.domain.types.evidence import EvidenceSource
+from app.core.domain.types.retrieval import RetrievalControls
 from app.tools.base import BaseTool, EvidenceType, SideEffectLevel
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, CostTier, RegisteredTool
-from app.types.evidence import EvidenceSource
-from app.types.retrieval import RetrievalControls
 
 
 @overload

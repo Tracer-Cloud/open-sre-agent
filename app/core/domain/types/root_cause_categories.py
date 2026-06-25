@@ -3,13 +3,13 @@
 Single source of truth for ``ROOT_CAUSE_CATEGORY`` values emitted by the
 diagnosis node and validated by the response parser.
 
-Why this lives in ``app/types`` and not in ``app/services/llm_client.py`` or
-``app/nodes/root_cause_diagnosis/``:
+Why this lives in ``app/core/domain/types`` and not in ``app/services/llm_client.py``
+or ``app/nodes/root_cause_diagnosis/``:
 
 - The LLM transport layer must not own domain taxonomies; it ships strings.
 - The diagnosis node consumes the taxonomy but should not own it either —
   the prompt builder, the parser, and downstream renderers all need it.
-- ``app/types`` is the canonical home for shared, dependency-free contracts.
+- ``app/core/domain/types`` is the canonical home for shared domain contracts.
 
 A category is intentionally narrow. Operators investigating an incident
 need a label that points directly at the failing subsystem ("storage IOPS

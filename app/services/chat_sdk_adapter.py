@@ -9,13 +9,34 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
+from typing import Any, Protocol, Required, TypedDict
 
 from app.config import DEFAULT_MAX_TOKENS
 from app.llm_credentials import resolve_llm_api_key
 from app.tools.registered_tool import RegisteredTool
 from app.tools.registry import get_registered_tools
-from app.types.chat import AssistantTurn, BoundChatModel, ToolCallPayload
+
+
+class ToolCallPayload(TypedDict):
+    id: str
+    name: str
+    args: dict[str, Any]
+
+
+class AssistantTurn(TypedDict, total=False):
+    """One assistant generation: text content plus optional tool calls."""
+
+    content: Required[str]
+    tool_calls: list[ToolCallPayload]
+
+
+class BoundChatModel(Protocol):
+    """Tool-bound or plain chat model that returns neutral assistant turns."""
+
+    def invoke(self, messages: list[Any]) -> AssistantTurn:
+        """Run one model invocation and return a framework-neutral turn."""
+        raise NotImplementedError
+
 
 # ── Retry / timeout policy (mirror app/services/llm_client.py) ───────────────
 
