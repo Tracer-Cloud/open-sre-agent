@@ -56,6 +56,22 @@ _R = "\x1b[0m"  # reset
 _HINT = f"  {_D}↑↓ / j k  ·  Enter  ·  Esc / s to skip{_R}"
 
 
+def _write_raw(text: str) -> None:
+    """Write the console-less (CLI/REPL) feedback text in one TTY-safe call.
+
+    Normalises bare ``\\n`` to ``\\r\\n`` when stdout is a TTY so the context,
+    header, note and confirmation lines do not staircase under the REPL's
+    ``patch_stdout(raw=True)`` proxy, which passes raw-mode output through
+    verbatim. ``_run_select`` already emits ``\\r\\n`` for the menu rows; this
+    applies the same rule to the surrounding text. For non-TTY stdout
+    (piped/captured/tests) the text is written as-is.
+    """
+    if sys.stdout.isatty():
+        text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+    sys.stdout.write(text)
+    sys.stdout.flush()
+
+
 # ── persistence ───────────────────────────────────────────────────────────────
 
 
@@ -179,8 +195,7 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
     else:
         rule = "─" * cols
         body = "\n".join(_format_root_cause_lines(root, cols=cols))
-        sys.stdout.write(f"\n{rule}\n{body}\n{rule}\n")
-        sys.stdout.flush()
+        _write_raw(f"\n{rule}\n{body}\n{rule}\n")
 
 
 # ── self-contained select (CLI path) ─────────────────────────────────────────
@@ -256,8 +271,7 @@ def _read_note(*, console: Console | None) -> str:
             f"[{SECONDARY}]What was wrong or missing? [{DIM}](Enter to skip)[/]:[/] ", end=""
         )
     else:
-        sys.stdout.write("\nWhat was wrong or missing? (Enter to skip): ")
-        sys.stdout.flush()
+        _write_raw("\nWhat was wrong or missing? (Enter to skip): ")
     with contextlib.suppress(EOFError, KeyboardInterrupt):
         return input().strip()
     return ""
@@ -295,10 +309,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
             f"\n[{BRAND}]Was this RCA accurate?[/] [{DIM}]↑↓ · Enter · Esc or s to skip[/]"
         )
     else:
-        sys.stdout.write(
-            f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc or s to skip{_R}\n\n"
-        )
-        sys.stdout.flush()
+        _write_raw(f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc or s to skip{_R}\n\n")
 
     rating = _pick_rating(console=console)
     if not rating or rating == "skip":
@@ -313,8 +324,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
         if console is not None:
             console.print(f"[{DIM}]{msg}[/]")
         else:
-            sys.stdout.write(f"\n{_D}{msg}{_R}\n")
-            sys.stdout.flush()
+            _write_raw(f"\n{_D}{msg}{_R}\n")
         return
 
     note = ""
@@ -343,8 +353,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     if console is not None:
         console.print(f"[{BRAND}]✓ Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
     else:
-        sys.stdout.write(f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n\n")
-        sys.stdout.flush()
+        _write_raw(f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n\n")
 
 
 def prompt_investigation_feedback(
