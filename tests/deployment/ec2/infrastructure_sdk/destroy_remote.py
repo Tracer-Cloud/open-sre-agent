@@ -16,7 +16,7 @@ from tests.deployment.ec2.infrastructure_sdk.instance import (
 from tests.shared.infrastructure_sdk.deployer import DEFAULT_REGION
 from tests.shared.infrastructure_sdk.resources.vpc import delete_security_group
 
-STACK_NAME = "tracer-ec2-remote"
+STACK_NAME = "opensre-ec2-remote"
 REGION = DEFAULT_REGION
 
 

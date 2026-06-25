@@ -23,7 +23,7 @@ from tests.deployment.bedrock.infrastructure_sdk.agent import (
 from tests.deployment.bedrock.infrastructure_sdk.iam import create_bedrock_agent_role
 from tests.shared.infrastructure_sdk.config import save_outputs
 
-STACK_NAME = "tracer-bedrock"
+STACK_NAME = "opensre-bedrock"
 REGION = "us-east-1"
 
 

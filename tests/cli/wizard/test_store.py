@@ -116,7 +116,7 @@ def test_delete_named_remote_is_noop_when_name_missing(tmp_path) -> None:
 def test_deploy_destroy_lifecycle_updates_opensre_json(tmp_path) -> None:
     """Simulate deploy_remote + destroy_remote config-persistence without live AWS."""
     store_path = tmp_path / "opensre.json"
-    stack_name = "tracer-ec2-remote"
+    stack_name = "opensre-ec2-remote"
     remote_url = "http://54.0.0.1:8080"
 
     # --- deploy ---

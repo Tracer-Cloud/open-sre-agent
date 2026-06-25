@@ -21,7 +21,7 @@ from tests.deployment.vercel.infrastructure_sdk.client import (
 )
 from tests.shared.infrastructure_sdk.config import save_outputs
 
-STACK_NAME = "tracer-vercel"
+STACK_NAME = "opensre-vercel"
 
 
 def deploy() -> dict[str, str]:

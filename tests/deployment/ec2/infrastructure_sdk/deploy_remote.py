@@ -33,7 +33,7 @@ from tests.shared.infrastructure_sdk.resources.vpc import (
     get_public_subnets,
 )
 
-STACK_NAME = "tracer-ec2-remote"
+STACK_NAME = "opensre-ec2-remote"
 REGION = DEFAULT_REGION
 
 _DOTENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".env")

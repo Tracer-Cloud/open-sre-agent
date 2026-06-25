@@ -10,7 +10,7 @@ from typing import Any
 from app.constants import OPENSRE_HOME_DIR
 
 _REMOTE_OUTPUTS_DIR = OPENSRE_HOME_DIR / "deployments"
-_REMOTE_OUTPUTS_FILE = "tracer-ec2-remote.json"
+_REMOTE_OUTPUTS_FILE = "opensre-ec2-remote.json"
 
 
 def get_remote_outputs_path(path: Path | None = None) -> Path:
@@ -37,7 +37,7 @@ def load_remote_outputs(*, path: Path | None = None) -> dict[str, Any]:
     output_path = get_remote_outputs_path(path)
     if not output_path.exists():
         raise FileNotFoundError(
-            "No outputs found for stack 'tracer-ec2-remote'. Deploy the stack first."
+            "No outputs found for stack 'opensre-ec2-remote'. Deploy the stack first."
         )
     result = json.loads(output_path.read_text(encoding="utf-8"))
     if not isinstance(result, dict):

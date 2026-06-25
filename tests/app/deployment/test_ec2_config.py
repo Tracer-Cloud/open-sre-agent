@@ -10,7 +10,7 @@ from app.deployment.operations.ec2_config import (
 
 
 def test_remote_outputs_round_trip(tmp_path) -> None:
-    path = tmp_path / "tracer-ec2-remote.json"
+    path = tmp_path / "opensre-ec2-remote.json"
     outputs = {
         "InstanceId": "i-123",
         "PublicIpAddress": "18.233.154.38",
@@ -23,7 +23,7 @@ def test_remote_outputs_round_trip(tmp_path) -> None:
 
 
 def test_delete_remote_outputs_removes_saved_file(tmp_path) -> None:
-    path = tmp_path / "tracer-ec2-remote.json"
+    path = tmp_path / "opensre-ec2-remote.json"
     save_remote_outputs({"InstanceId": "i-123"}, path=path)
 
     delete_remote_outputs(path=path)
