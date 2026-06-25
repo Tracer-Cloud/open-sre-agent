@@ -1,0 +1,58 @@
+id: 334-priority-prompt-checkout-500-latency-deploy-live-gather
+title: Priority prompt — checkout 500s and latency after deploy (live gather)
+intent_class: complex_shell_prompts
+input:
+  prompt: 'checkout-api has elevated 500s and latency after deploy'
+session:
+  has_prior_state: false
+  configured_integrations:
+  - datadog
+  - grafana
+  resolved_integrations:
+    datadog: "@live"
+    grafana: "@live"
+notes:
+- Live-gather counterpart to 326-priority-prompt-checkout-500-latency-deploy.
+- P0 priority prompt (http_5xx_or_latency_after_deploy #2).
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: false
+planned_actions:
+- kind: assistant_handoff
+  content: incident_description:checkout_500_latency_deploy
+  source: llm
+executed_actions: []
+response_contract:
+  must_contain_any:
+  - checkout
+  - "500"
+  - latency
+  - deploy
+  must_not_contain:
+  - $ /
+  - can't help
+  - cannot help
+  - I can't help
+  - I cannot help
+  forbidden_actions:
+  - investigation
+gathered_tools_contract:
+  must_call_any:
+  - query_datadog_logs
+  - query_datadog_events
+  - query_datadog_metrics
+  - query_datadog_monitors
+  - query_grafana_logs
+  - query_grafana_metrics
+  - query_grafana_annotations
+  must_not_call:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+runs: 3

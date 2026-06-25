@@ -24,6 +24,7 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.l
 from app.cli.interactive_shell.routing.router import RouteKind, route_input
 from app.cli.interactive_shell.routing.tests._oracle_normalize import cli_command_payload_matches
 from app.cli.interactive_shell.routing.tests._oracle_runtime import (
+    LIVE_INTEGRATION_SENTINEL,
     OracleRunResult,
     fresh_session,
     resolve_live_integrations,
@@ -91,20 +92,28 @@ def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
 def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
     """Skip scenarios that need a real credentialed integration we can't resolve.
 
-    Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` (paired
-    with ``gathered_tools_contract.must_return_valid_data``) make a real call to
-    that integration during the gather loop. That only works when the integration
-    is configured locally (store/env) or via CI secrets. When the credential is
-    absent the scenario is skipped — it is an environment gap, not a regression —
-    rather than failing every credential-less run.
+    Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` make
+    real calls during the gather loop. That only works when at least one @live
+    service is configured locally (store/env) or via CI secrets. When **every**
+    @live service is unavailable the scenario is skipped — an environment gap,
+    not a routing regression. Partial resolution (e.g. Datadog only when both
+    Datadog and Grafana are @live) still runs.
     """
-    _expanded, unavailable = resolve_live_integrations(case.scenario.session.resolved_integrations)
-    if unavailable:
+    override = case.scenario.session.resolved_integrations
+    if not override:
+        return
+    live_services = [
+        service for service, config in override.items() if config == LIVE_INTEGRATION_SENTINEL
+    ]
+    if not live_services:
+        return
+    _expanded, unavailable = resolve_live_integrations(override)
+    if len(unavailable) >= len(live_services):
         pytest.skip(
-            "Live integration credentials unavailable for: "
-            + ", ".join(sorted(unavailable))
-            + ". Configure the integration in the local store/env or provide CI "
-            "secrets (e.g. SENTRY_AUTH_TOKEN, SENTRY_ORG_SLUG, SENTRY_PROJECT_SLUG) "
+            "Live integration credentials unavailable for all @live services: "
+            + ", ".join(sorted(live_services))
+            + ". Configure at least one integration in the local store/env or provide CI "
+            "secrets (e.g. DD_API_KEY/DD_APP_KEY, GRAFANA_READ_TOKEN, SENTRY_AUTH_TOKEN) "
             "to run this scenario."
         )
 

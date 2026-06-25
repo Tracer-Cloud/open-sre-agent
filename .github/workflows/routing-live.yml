@@ -108,6 +108,13 @@ jobs:
       SENTRY_ORG_SLUG: tracer-30
       SENTRY_PROJECT_SLUG: python
       SENTRY_URL: https://sentry.io
+      # Optional: live-gather incident scenarios (333–335) resolve real Datadog/Grafana
+      # credentials. When absent the scenarios skip if no local store creds exist.
+      DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+      DD_SITE: datadoghq.com
+      GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+      GRAFANA_INSTANCE_URL: ${{ secrets.GRAFANA_INSTANCE_URL }}
 
     steps:
       - uses: actions/checkout@v5
