@@ -59,6 +59,11 @@ def run_foreground_investigation(
     from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
     from app.cli.interactive_shell.ui.key_reader import restore_stdin_terminal
 
+    # The explicit pre-call (kept identical to the CLI path) primes the terminal
+    # out of the streaming watcher's no-echo/raw mode *before* the feedback
+    # helper prints its root-cause context and header. prompt_investigation_feedback
+    # restores again in its own finally; this pre-call covers the output it emits
+    # ahead of _run_select's own restore, so it is not redundant with that teardown.
     restore_stdin_terminal()
     prompt_investigation_feedback(final_state)
     return final_state

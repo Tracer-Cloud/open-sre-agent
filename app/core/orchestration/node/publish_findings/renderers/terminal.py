@@ -129,6 +129,15 @@ def _emit(rendered: str) -> None:
     interactive REPL) every line starts at column zero. Rendering line-by-line
     through a fresh Rich Console there interleaves with the proxy and the report
     body is dropped from scrollback; one normalised write avoids that.
+
+    The ``isatty()`` branch is intentional, not dead code. Under ``patch_stdout``
+    ``sys.stdout`` is prompt_toolkit's ``StdoutProxy``, whose ``isatty()``
+    delegates to the real underlying stdout — and the REPL only enables
+    ``patch_stdout`` when that is a TTY — so this returns ``True`` in the REPL.
+    In ``raw=True`` mode the proxy writes text verbatim (``write_raw``) without
+    converting bare ``\\n`` to ``\\r\\n``, so we must normalise here ourselves
+    (mirrors ``rendering._normalize_repl_line_endings``). For non-TTY stdout
+    (piped/captured/tests) the text is written as-is.
     """
     if sys.stdout.isatty():
         rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n")
