@@ -1,0 +1,63 @@
+id: 336-explicit-investigate-no-integrations-dispatch
+title: Explicit investigate verb dispatches an investigation even with zero integrations connected
+intent_class: complex_shell_prompts
+input:
+  prompt: investigate why the orders-api keeps OOM-killing its pods
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes:
+- 'Pins the EXPLICIT-INVESTIGATE rule that the diagnostic-question scenarios (313 handoff / 314 dispatch)
+  deliberately do NOT exercise. 313 and 314 use a bare diagnostic question ("figure out why X is crashing")
+  whose dispatch-vs-handoff outcome is GATED on the CONNECTED INTEGRATIONS line: no integrations -> handoff,
+  >=1 integration -> investigation_start. This scenario removes that gate: the prompt carries an explicit
+  "investigate" verb, which the planner system prompt says maps to investigation_start ALWAYS, regardless
+  of which integrations are connected ("EXPLICIT investigate instruction -> investigation_start, ALWAYS").'
+- 'Negative control on the gate itself: configured_integrations and resolved_integrations are BOTH empty,
+  so if the planner were (incorrectly) gating an explicit "investigate" on connected data sources it would
+  hand off here and the test would fail. A passing run proves the explicit verb overrides the gate -- the
+  planner dispatches investigation_start with synthesized alert_text even when a root-cause run would have
+  no live data source to read.'
+- 'The synthesized alert_text varies per run, so planned_actions leaves content empty: the planning test
+  asserts an investigation with non-empty alert_text rather than an exact string (same convention as 314).'
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: true
+planned_actions:
+- kind: investigation
+  source: llm
+  target_surface: investigation
+response_contract:
+  must_contain_any:
+  - investigat
+  - rca
+  - orders
+  - oom
+  - pod
+  must_not_contain:
+  - $ /
+  - can't help
+  - cannot help
+  - I can't help
+  - I cannot help
+  forbidden_actions:
+  - shell
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: alert
+    ok: true
+runs: 5
+tool_actions:
+- surface: dispatch
+  kind: investigation
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called
