@@ -96,7 +96,7 @@ def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
     real calls during the gather loop. When **every** @live service is
     unavailable the scenario is skipped — an environment gap, not a routing
     regression. Fixtures 333–335 pin Datadog @live and assert
-    ``must_return_valid_data`` on ``query_datadog_logs`` (316-style).
+    ``must_return_valid_data_any`` on a Datadog gather tool (316-style).
     """
     override = case.scenario.session.resolved_integrations
     if not override:
@@ -249,19 +249,18 @@ def test_help_route_decision_has_structured_shape() -> None:
     assert deterministic_command_text("/help") == "/help"
 
 
-@pytest.mark.integration
-@pytest.mark.live_llm
-def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
-    _skip_if_investigation_disabled(live_planning_case)
-    session = fresh_session(
-        with_prior_state=live_planning_case.scenario.session.has_prior_state,
-        configured_integrations=live_planning_case.scenario.session.configured_integrations,
-        available_capabilities=session_capabilities(
-            live_planning_case.scenario.available_capabilities
-        ),
+def _assert_live_action_planning_once(case: ScenarioCase) -> None:
+    resolved_override, _unavailable = resolve_live_integrations(
+        case.scenario.session.resolved_integrations
     )
-    prompt = live_planning_case.scenario.input.prompt
-    answer = live_planning_case.answer
+    session = fresh_session(
+        with_prior_state=case.scenario.session.has_prior_state,
+        configured_integrations=case.scenario.session.configured_integrations,
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+        resolved_integrations_override=resolved_override,
+    )
+    prompt = case.scenario.input.prompt
+    answer = case.answer
 
     decision = route_input(prompt, session)
     assert decision.route_kind.value == answer.route.expected_kind
@@ -297,14 +296,47 @@ def test_live_action_planning(live_planning_case: ScenarioCase) -> None:
     else:
         _assert_planned_actions_match(actual_actions, expected_actions)
 
-    # Response-contract assertions (``must_contain_any`` / ``must_not_contain``)
-    # are checked against the rendered terminal response in
-    # ``test_live_turn_execution_oracle``. They are intentionally not
-    # asserted here: the planner emits an *intent hint* in
-    # ``assistant_handoff.content`` which the assistant uses to ground its
-    # reply, not the reply itself, so applying the response contract to
-    # the planning hint over-constrains LLM phrasing without testing the
-    # user-visible behavior.
+
+@pytest.mark.integration
+@pytest.mark.live_llm
+def test_live_action_planning(
+    live_planning_case: ScenarioCase,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """Assert live LLM action plans match fixture expectations.
+
+    Response-contract assertions are checked in ``test_live_turn_execution_oracle``;
+    here we only validate the planner's action list, with majority voting when a
+    fixture sets ``runs > 1`` (same flake tolerance as the execution oracle).
+    """
+    _skip_if_investigation_disabled(live_planning_case)
+    runs = max(1, live_planning_case.answer.runs)
+    failures: list[str] = []
+    passed_count = 0
+
+    for _ in range(runs):
+        try:
+            _assert_live_action_planning_once(live_planning_case)
+        except AssertionError as exc:
+            failures.append(str(exc))
+        else:
+            passed_count += 1
+
+    required = (runs // 2) + 1
+    if passed_count >= required:
+        return
+
+    artifact_dir = tmp_path_factory.mktemp("router_live_action_planning")
+    artifact_file = Path(artifact_dir) / f"{live_planning_case.scenario.id}.json"
+    artifact_file.write_text(
+        json.dumps(failures, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    pytest.fail(
+        f"planning case {live_planning_case.scenario.id!r} failed "
+        f"{runs - passed_count}/{runs} runs; artifact: {artifact_file}; "
+        f"failures={json.dumps(failures, ensure_ascii=True)}"
+    )
 
 
 @pytest.mark.integration
