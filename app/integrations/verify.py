@@ -1,8 +1,8 @@
 """Verification facade: per-service verifiers and the top-level verify_integrations runner.
 
 Verifier callables are sourced from the central plugin registry
-(``app.integrations.verification``). Importing this module also pulls
-in ``_verifiers_loader``, which triggers every vendor's
+(``app.integrations.verification``). Importing this module triggers
+:func:`register_all_verifiers`, which pulls in every vendor's
 ``@register_verifier`` decorator so the registry is fully populated
 before any caller looks anything up.
 """
@@ -11,17 +11,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import app.integrations._verifiers_loader  # noqa: F401 — register all verifiers at import
+from app.integrations._verifiers_loader import register_all_verifiers
 from app.integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
 from app.integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
 from app.integrations.verification import VerifierFn, get_verifier, result
+from app.integrations.verifiers.slack import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 
-# Runtime-only config key used to plumb --send-slack-test into the slack
-# verifier without breaking the uniform ``VerifierFn`` shape. See
-# ``app/integrations/verifiers/slack.py``.
-_SLACK_RUNTIME_SEND_TEST_KEY = "_send_slack_test"
+register_all_verifiers()
 
 
 def resolve_effective_integrations() -> dict[str, dict[str, Any]]:
@@ -102,19 +100,9 @@ def verification_exit_code(
     return 0
 
 
-# ``VERIFIER_REGISTRY`` was a verify-time snapshot before the central
-# registry existed. It's preserved here for the (small) set of callers
-# that introspect it. Querying ``get_verifier(name)`` directly is the
-# preferred path for new code.
-VERIFIER_REGISTRY: dict[str, VerifierFn | None] = {
-    spec_service: get_verifier(spec_service) for spec_service in SUPPORTED_VERIFY_SERVICES
-}
-
-
 __all__ = [
     "CORE_VERIFY_SERVICES",
     "SUPPORTED_VERIFY_SERVICES",
-    "VERIFIER_REGISTRY",
     "VerifierFn",
     "format_verification_results",
     "resolve_effective_integrations",

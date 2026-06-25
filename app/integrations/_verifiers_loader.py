@@ -9,6 +9,11 @@ Two locations are scanned:
 
 Adding a new vendor is one new file in either location. No edits to a
 central import list are required — this loader walks both trees.
+
+Public surface: :func:`register_all_verifiers`. Callers invoke it once
+during startup (``app.integrations.verify`` and the test suite both do).
+Re-invocation is safe: the registry's ``register_verifier`` decorator
+replaces existing entries silently.
 """
 
 from __future__ import annotations
@@ -49,5 +54,9 @@ def _load_service_verifiers() -> None:
                 raise
 
 
-_load_integrations_verifiers()
-_load_service_verifiers()
+def register_all_verifiers() -> None:
+    """Import every vendor verifier module so its ``@register_verifier``
+    decorator fires. Idempotent.
+    """
+    _load_integrations_verifiers()
+    _load_service_verifiers()

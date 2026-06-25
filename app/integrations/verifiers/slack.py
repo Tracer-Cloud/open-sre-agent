@@ -16,14 +16,14 @@ import httpx
 from app.integrations.config_models import SlackWebhookConfig
 from app.integrations.verification import register_verifier, result
 
-_RUNTIME_SEND_TEST_KEY = "_send_slack_test"
+RUNTIME_SEND_TEST_KEY = "_send_slack_test"
 
 
 @register_verifier("slack")
 def verify_slack(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         slack_config = SlackWebhookConfig.model_validate(
-            {k: v for k, v in config.items() if k != _RUNTIME_SEND_TEST_KEY}
+            {k: v for k, v in config.items() if k != RUNTIME_SEND_TEST_KEY}
         )
     except Exception as err:
         return result("slack", source, "missing", str(err))
@@ -32,7 +32,7 @@ def verify_slack(source: str, config: dict[str, Any]) -> dict[str, str]:
     if not webhook_url:
         return result("slack", source, "missing", "SLACK_WEBHOOK_URL is not configured.")
 
-    if not config.get(_RUNTIME_SEND_TEST_KEY):
+    if not config.get(RUNTIME_SEND_TEST_KEY):
         return result(
             "slack", source, "passed", "Configured. Use --send-slack-test to validate delivery."
         )

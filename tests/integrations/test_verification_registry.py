@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-import app.integrations._verifiers_loader  # noqa: F401 — registers all verifiers
+from app.integrations._verifiers_loader import register_all_verifiers
 from app.integrations.registry import SUPPORTED_VERIFY_SERVICES
 from app.integrations.verification import (
     build_probe_verifier,
@@ -38,6 +38,13 @@ from app.integrations.verification.registry import (
     _restore_for_testing,
     _snapshot_for_testing,
 )
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _ensure_verifiers_registered() -> None:
+    """Trigger the loader once for the whole module so the test suite
+    runs against a populated registry regardless of import order."""
+    register_all_verifiers()
 
 
 @pytest.fixture

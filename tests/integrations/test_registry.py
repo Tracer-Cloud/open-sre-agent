@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.integrations._verifiers_loader import register_all_verifiers
 from app.integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     INTEGRATION_SPECS,
@@ -10,7 +11,9 @@ from app.integrations.registry import (
     resolve_management_service,
     service_key,
 )
-from app.integrations.verify import VERIFIER_REGISTRY
+from app.integrations.verification import list_verifiers
+
+register_all_verifiers()
 
 
 def test_registry_declares_each_service_once() -> None:
@@ -40,7 +43,7 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
 
     assert expected_verify == SUPPORTED_VERIFY_SERVICES
     assert expected_setup == SUPPORTED_SETUP_SERVICES
-    assert set(VERIFIER_REGISTRY) == set(SUPPORTED_VERIFY_SERVICES)
+    assert set(SUPPORTED_VERIFY_SERVICES).issubset(set(list_verifiers()))
 
 
 def test_every_setup_spec_has_handler() -> None:

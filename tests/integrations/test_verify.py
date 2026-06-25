@@ -418,11 +418,8 @@ def test_verify_github_passes_with_valid_streamable_http_config(
 ) -> None:
     from types import SimpleNamespace
 
-    import app.integrations.verifiers.github as _github_verifier
-
     monkeypatch.setattr(
-        _github_verifier,
-        "validate_github_mcp_config",
+        f"{_verify_github.__module__}.validate_github_mcp_config",
         lambda _config: SimpleNamespace(ok=True, detail="GitHub MCP ok", failure_category=""),
     )
 
@@ -450,11 +447,8 @@ def test_verify_github_reports_credential_less_store_record_as_missing() -> None
 
 
 def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    import app.integrations.verification.validation as _validation
-
     monkeypatch.setattr(
-        _validation,
-        "verify_with_validation_result",
+        "app.integrations.verification.validation.verify_with_validation_result",
         lambda service, source, _config, **_kw: {
             "service": service,
             "source": source,
