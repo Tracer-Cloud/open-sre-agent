@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from app.analytics.events import Event
 from app.analytics.provider import Properties, get_analytics
+from app.analytics.repl_context import get_cli_session_id
 from app.analytics.source import EntrypointSource, TriggerMode, build_source_properties
 from app.utils.sentry_sdk import capture_exception
 
@@ -214,6 +215,14 @@ def _capture(event: Event, properties: Properties | None = None) -> None:
         get_analytics().capture(event, properties)
     except Exception as exc:
         capture_exception(exc)
+
+
+def _integration_lifecycle_properties(service: str) -> Properties:
+    properties: Properties = {"service": service}
+    session_id = get_cli_session_id()
+    if session_id:
+        properties["cli_session_id"] = session_id
+    return properties
 
 
 def _bucket_duration_ms(duration_ms: float) -> str:
@@ -451,11 +460,11 @@ def track_investigation(
 
 
 def capture_integration_setup_started(service: str) -> None:
-    _capture(Event.INTEGRATION_SETUP_STARTED, {"service": service})
+    _capture(Event.INTEGRATION_SETUP_STARTED, _integration_lifecycle_properties(service))
 
 
 def capture_integration_setup_completed(service: str) -> None:
-    _capture(Event.INTEGRATION_SETUP_COMPLETED, {"service": service})
+    _capture(Event.INTEGRATION_SETUP_COMPLETED, _integration_lifecycle_properties(service))
 
 
 def capture_integrations_listed() -> None:
@@ -463,11 +472,11 @@ def capture_integrations_listed() -> None:
 
 
 def capture_integration_removed(service: str) -> None:
-    _capture(Event.INTEGRATION_REMOVED, {"service": service})
+    _capture(Event.INTEGRATION_REMOVED, _integration_lifecycle_properties(service))
 
 
 def capture_integration_verified(service: str) -> None:
-    _capture(Event.INTEGRATION_VERIFIED, {"service": service})
+    _capture(Event.INTEGRATION_VERIFIED, _integration_lifecycle_properties(service))
 
 
 def identify_github_username(username: str) -> None:
