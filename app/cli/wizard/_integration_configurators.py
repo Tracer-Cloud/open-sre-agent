@@ -57,6 +57,11 @@ from app.cli.wizard.integration_health import (
     validate_tempo_integration,
     validate_vercel_integration,
 )
+from app.cli.wizard.onboard_integrations import (
+    ONBOARD_INTEGRATION_CHOICES,
+    ONBOARD_INTEGRATION_GROUP_ORDER,
+    ONBOARD_SKIP_CHOICE,
+)
 from app.integrations.sentry import get_sentry_auth_recommendations
 from app.integrations.store import remove_integration, upsert_integration
 
@@ -1696,132 +1701,13 @@ def _configure_selected_integrations() -> tuple[list[str], str | None]:
     _console.print(
         f"[{SECONDARY}]Pick one integration to wire up now, or skip this step and come back later.[/]"
     )
-    integration_choices = [
-        Choice(
-            value="grafana_local",
-            label="Grafana Local (Docker)",
-            hint="Starts Grafana + Loki and seeds demo alerts",
-        ),
-        Choice(
-            value="grafana",
-            label="Grafana Cloud / self-hosted",
-            hint="Connect an existing Grafana instance",
-        ),
-        Choice(value="datadog", label="Datadog", hint="Logs, monitors, and Kubernetes context"),
-        Choice(value="honeycomb", label="Honeycomb", hint="Query traces and spans from Honeycomb"),
-        Choice(value="coralogix", label="Coralogix", hint="Query logs from Coralogix DataPrime"),
-        Choice(value="slack", label="Slack", hint="Send findings to a webhook or channel"),
-        Choice(
-            value="discord",
-            label="Discord",
-            hint="Trigger investigations via slash commands and post findings to threads",
-        ),
-        Choice(
-            value="telegram",
-            label="Telegram",
-            hint="Post findings to a Telegram chat",
-        ),
-        Choice(value="aws", label="AWS", hint="Inspect CloudWatch, EKS, and account resources"),
-        Choice(
-            value="github", label="GitHub MCP", hint="Let the agent inspect repos, PRs, and issues"
-        ),
-        Choice(
-            value="sentry", label="Sentry", hint="Investigate errors, events, and issue history"
-        ),
-        Choice(value="gitlab", label="Gitlab", hint="Let the agent inspect repos, PRs, and issues"),
-        Choice(
-            value="jenkins",
-            label="Jenkins",
-            hint="Correlate failed builds and deployments with incidents",
-        ),
-        Choice(
-            value="google_docs",
-            label="Google Docs",
-            hint="Create shareable incident postmortem reports",
-        ),
-        Choice(
-            value="vercel",
-            label="Vercel",
-            hint=(
-                "Deployments, build output, and logs tools; runtime-log API can lag the dashboard"
-            ),
-        ),
-        Choice(
-            value="dagster",
-            label="Dagster",
-            hint="Pipeline runs, asset materializations, and tick history",
-        ),
-        Choice(
-            value="betterstack",
-            label="Better Stack Telemetry",
-            hint="Query logs from Better Stack (ClickHouse SQL over HTTP)",
-        ),
-        Choice(
-            value="jira",
-            label="Jira",
-            hint="File and update incident tickets automatically",
-        ),
-        Choice(
-            value="alertmanager",
-            label="Alertmanager",
-            hint="Query firing alerts and silences from Prometheus Alertmanager",
-        ),
-        Choice(
-            value="opsgenie",
-            label="OpsGenie",
-            hint="Investigate alerts and triage state from OpsGenie",
-        ),
-        Choice(
-            value="pagerduty",
-            label="PagerDuty",
-            hint="Fetch incidents, on-call schedules, and service topology from PagerDuty",
-        ),
-        Choice(
-            value="incident_io",
-            label="incident.io",
-            hint="Read incident context and updates from incident.io",
-        ),
-        Choice(
-            value="notion",
-            label="Notion",
-            hint="Post investigation reports to a Notion database",
-        ),
-        Choice(
-            value="openclaw",
-            label="OpenClaw (recommended)",
-            hint="Connect OpenSRE to OpenClaw for editor-driven RCA, setup checks, and write-back",
-        ),
-        Choice(
-            value="posthog_mcp",
-            label="PostHog (MCP)",
-            hint="Query PostHog analytics, feature flags, error tracking, and HogQL via MCP",
-        ),
-        Choice(
-            value="sentry_mcp",
-            label="Sentry (MCP)",
-            hint="Query Sentry issues, events, traces, and Seer root-cause analysis via MCP",
-        ),
-        Choice(value="splunk", label="Splunk", hint="Query logs from Splunk"),
-        Choice(
-            value="opensearch",
-            label="OpenSearch / Elasticsearch",
-            hint="Query logs and indices from OpenSearch or Elasticsearch clusters",
-        ),
-        Choice(
-            value="tempo",
-            label="Grafana Tempo",
-            hint="Query distributed traces from a standalone Tempo backend",
-        ),
-        Choice(
-            value="skip",
-            label="Skip for now",
-            hint="Finish onboarding without configuring an integration",
-        ),
-    ]
+    integration_choices = list(ONBOARD_INTEGRATION_CHOICES)
     selected_service = _choose(
         "Choose an integration to configure",
         integration_choices,
         default="grafana_local",
+        group_order=ONBOARD_INTEGRATION_GROUP_ORDER,
+        trailing_choices=[ONBOARD_SKIP_CHOICE],
     )
     if selected_service == "skip":
         return configured, last_env_path
