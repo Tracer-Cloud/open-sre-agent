@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.watch_dog.alarms import AlarmCredentials
+from app.tools.watch_dog.alarms import AlarmCredentials
 from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from cli.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
@@ -147,7 +147,7 @@ def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
     from app.fleet_monitoring.probe import ProcessSnapshot
-    from app.watch_dog.monitor import run_watchdog
+    from app.tools.watch_dog.monitor import run_watchdog
     from cli.interactive_shell.runtime.tasks import TaskRegistry
 
     reg = TaskRegistry()
@@ -167,7 +167,7 @@ def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
         started_at=started_at,
     )
 
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("app.tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     thread = threading.Thread(
         target=run_watchdog,
@@ -196,7 +196,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     from datetime import UTC, datetime, timedelta
 
     from app.fleet_monitoring.probe import ProcessSnapshot
-    from app.watch_dog.monitor import run_watchdog
+    from app.tools.watch_dog.monitor import run_watchdog
     from cli.interactive_shell.runtime.tasks import TaskRegistry
 
     reg = TaskRegistry()
@@ -215,7 +215,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
         status="running",
         started_at=started_at,
     )
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("app.tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     run_watchdog(
         task=task,
