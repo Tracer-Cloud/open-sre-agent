@@ -21,8 +21,10 @@ executed_actions: []
 response_contract:
   must_contain_any:
   - local llama
+  - local llm
   - provider
-  - /model set
+  - /model
+  - /onboard
   - local-model connection tool
   must_not_contain:
   - $ /

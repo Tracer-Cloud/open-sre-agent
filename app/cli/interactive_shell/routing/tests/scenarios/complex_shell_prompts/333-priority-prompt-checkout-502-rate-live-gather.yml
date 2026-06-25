@@ -1,5 +1,5 @@
 id: 333-priority-prompt-checkout-502-rate-live-gather
-title: Priority prompt — checkout 502 error rate (live Datadog/Grafana gather)
+title: Priority prompt — checkout 502 error rate (live Datadog gather)
 intent_class: complex_shell_prompts
 input:
   prompt: 'the checkout service is returning 502 errors for 30% of requests'
@@ -7,17 +7,16 @@ session:
   has_prior_state: false
   configured_integrations:
   - datadog
-  - grafana
-  # Resolve real credentials from env/local store (never pinned in-repo). Scenarios
-  # skip when every @live service is unavailable; partial resolution (e.g. Datadog
-  # only) still runs and satisfies must_call_any via Datadog tools.
+  # Resolve real Datadog credentials from env/local store (never pinned in-repo).
+  # Scenarios skip when datadog @live cannot resolve. must_return_valid_data on
+  # query_datadog_logs proves an authenticated call succeeded (empty log results OK).
   resolved_integrations:
     datadog: "@live"
-    grafana: "@live"
 notes:
 - Live-gather counterpart to 325-priority-prompt-checkout-502-rate. Same prompt and
-  handoff routing, but asserts the conversational gather loop queries connected
-  Datadog/Grafana sources when credentials are available.
+  handoff routing, but asserts the conversational gather loop reaches live Datadog
+  and returns valid data via query_datadog_logs (316-style), not merely that a tool
+  was invoked despite auth/transport errors.
 - P0 priority prompt (http_5xx_or_latency_after_deploy #1).
 route:
   expected_kind: handle_message_with_agent
@@ -42,14 +41,8 @@ response_contract:
   forbidden_actions:
   - investigation
 gathered_tools_contract:
-  must_call_any:
+  must_return_valid_data:
   - query_datadog_logs
-  - query_datadog_events
-  - query_datadog_metrics
-  - query_datadog_monitors
-  - query_grafana_logs
-  - query_grafana_metrics
-  - query_grafana_annotations
   must_not_call:
   - search_sentry_issues
   - search_github_issues

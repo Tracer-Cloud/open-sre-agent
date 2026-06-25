@@ -93,11 +93,10 @@ def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
     """Skip scenarios that need a real credentialed integration we can't resolve.
 
     Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` make
-    real calls during the gather loop. That only works when at least one @live
-    service is configured locally (store/env) or via CI secrets. When **every**
-    @live service is unavailable the scenario is skipped — an environment gap,
-    not a routing regression. Partial resolution (e.g. Datadog only when both
-    Datadog and Grafana are @live) still runs.
+    real calls during the gather loop. When **every** @live service is
+    unavailable the scenario is skipped — an environment gap, not a routing
+    regression. Fixtures 333–335 pin Datadog @live and assert
+    ``must_return_valid_data`` on ``query_datadog_logs`` (316-style).
     """
     override = case.scenario.session.resolved_integrations
     if not override:
