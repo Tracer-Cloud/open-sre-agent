@@ -9,6 +9,7 @@ from typing import Any
 
 from app.services.agent_llm_client import ToolCall
 from app.tools.registered_tool import RegisteredTool
+from app.tools.utils.integration_sources import availability_view
 from app.utils.tool_trace import redact_sensitive
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,6 @@ def execute_tools(
     tools: list[RegisteredTool],
     resolved_integrations: dict[str, Any],
 ) -> list[Any]:
-    from app.core.orchestration.node.investigate.tools import availability_view
-
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
 

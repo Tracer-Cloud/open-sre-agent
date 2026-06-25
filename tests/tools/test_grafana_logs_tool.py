@@ -23,6 +23,23 @@ def test_is_available_requires_grafana_creds() -> None:
     assert rt.is_available({}) is False
 
 
+def test_is_available_accepts_classified_grafana_model() -> None:
+    from app.integrations.config_models import GrafanaIntegrationConfig
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    assert (
+        rt.is_available(
+            {
+                "grafana": GrafanaIntegrationConfig(
+                    endpoint="https://tracerbio.grafana.net",
+                    api_key="glsa_test",
+                )
+            }
+        )
+        is True
+    )
+
+
 def test_extract_params_maps_fields() -> None:
     rt = query_grafana_logs.__opensre_registered_tool__
     sources = mock_agent_state()

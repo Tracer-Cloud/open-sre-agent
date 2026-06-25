@@ -45,8 +45,16 @@ def _grafana_source(sources: dict) -> dict:
 
     grafana = sources.get("grafana") or sources.get("grafana_local") or {}
     if isinstance(grafana, BaseModel):
-        return grafana.model_dump(exclude_none=True)
-    return grafana if isinstance(grafana, dict) else {}
+        item = grafana.model_dump(exclude_none=True)
+        item.setdefault("connection_verified", True)
+        return item
+    if isinstance(grafana, dict):
+        if not grafana:
+            return {}
+        item = dict(grafana)
+        item.setdefault("connection_verified", True)
+        return item
+    return {}
 
 
 def _grafana_available(sources: dict) -> bool:
