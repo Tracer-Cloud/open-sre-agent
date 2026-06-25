@@ -47,6 +47,22 @@ def test_extract_params_accepts_catalog_grafana_shape() -> None:
     assert params["grafana_api_key"] == "glsa_test"
 
 
+def test_extract_params_accepts_classified_grafana_model() -> None:
+    from app.integrations.config_models import GrafanaIntegrationConfig
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    params = rt.extract_params(
+        {
+            "grafana": GrafanaIntegrationConfig(
+                endpoint="https://tracerbio.grafana.net",
+                api_key="glsa_test",
+            )
+        }
+    )
+    assert params["grafana_endpoint"] == "https://tracerbio.grafana.net"
+    assert params["grafana_api_key"] == "glsa_test"
+
+
 def test_run_with_backend_returns_logs() -> None:
     mock_backend = MagicMock()
     mock_backend.query_logs.return_value = {

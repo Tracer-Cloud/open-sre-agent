@@ -22,6 +22,9 @@ def execute_tools(
     tools: list[RegisteredTool],
     resolved_integrations: dict[str, Any],
 ) -> list[Any]:
+    from app.core.orchestration.node.investigate.tools import availability_view
+
+    tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
 
     def _call(tc: ToolCall) -> Any:
@@ -32,7 +35,7 @@ def execute_tools(
             validation_error = tool.validate_public_input(tc.input)
             if validation_error:
                 return {"error": validation_error}
-            injected = tool.extract_params(resolved_integrations)
+            injected = tool.extract_params(tool_sources)
             kwargs = {**injected, **tc.input}
             return tool.run(**kwargs)
         except Exception as exc:

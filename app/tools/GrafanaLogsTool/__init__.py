@@ -41,7 +41,11 @@ def _grafana_creds(grafana: dict) -> dict:
 
 
 def _grafana_source(sources: dict) -> dict:
+    from pydantic import BaseModel
+
     grafana = sources.get("grafana") or sources.get("grafana_local") or {}
+    if isinstance(grafana, BaseModel):
+        return grafana.model_dump(exclude_none=True)
     return grafana if isinstance(grafana, dict) else {}
 
 

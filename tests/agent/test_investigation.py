@@ -315,6 +315,39 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     assert result["causal_chain"]
 
 
+def test_execute_tools_uses_availability_view_for_classified_integrations() -> None:
+    from app.integrations.config_models import GrafanaIntegrationConfig
+    from app.tools.GrafanaLogsTool import query_grafana_logs
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.loki_datasource_uid = "loki-uid"
+    mock_client.query_loki.return_value = {"success": True, "logs": [], "total_logs": 0}
+
+    resolved = {
+        "grafana": GrafanaIntegrationConfig(
+            endpoint="https://tracerbio.grafana.net",
+            api_key="glsa_test",
+        )
+    }
+    tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
+
+    with patch(
+        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials",
+        return_value=mock_client,
+    ) as mock_factory:
+        results = execute_tools(tool_calls, [rt], resolved)
+
+    assert results[0]["available"] is True
+    mock_factory.assert_called_once_with(
+        endpoint="https://tracerbio.grafana.net",
+        api_key="glsa_test",
+        username="",
+        password="",
+    )
+
+
 def testexecute_tools_handles_interpreter_shutdown() -> None:
     """When pool.submit raises RuntimeError (interpreter shutdown), execute_tools
     must fall back to sequential execution and still return results for all slots."""

@@ -107,6 +107,7 @@ def build_seed_calls(
         return []
 
     resolved = state.get("resolved_integrations") or {}
+    tool_sources = availability_view(resolved)
     seed_tools = [t for t in tools if str(t.source) in target_sources]
     if not seed_tools:
         return []
@@ -118,7 +119,7 @@ def build_seed_calls(
     calls: list[ToolCall] = []
     for tool in seed_tools:
         try:
-            injected = tool.extract_params(resolved)
+            injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
