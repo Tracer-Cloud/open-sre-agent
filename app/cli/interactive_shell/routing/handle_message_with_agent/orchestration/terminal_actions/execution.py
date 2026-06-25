@@ -13,7 +13,7 @@ from app.cli.interactive_shell.runtime import ReplSession
 from .dispatch import execute_planned_actions
 from .feedback import persist_error_turn, render_planner_llm_error
 from .models import ActionExecutionDeps, ActionPlanningDecision, TerminalActionExecutionResult
-from .planning import coerce_action_plan_decision, normalize_terminal_plan
+from .planning import normalize_terminal_plan
 
 
 def _response_text_from_history_entries(entries: list[dict[str, Any]]) -> str:
@@ -35,12 +35,13 @@ def _resolve_plan(
 ) -> ActionPlanningDecision:
     if deps is not None and deps.planner is not None:
         planned = deps.planner(message, session=session)
-        return (
-            ActionPlanningDecision((), False, ("planner_unavailable",))
-            if planned is None
-            else coerce_action_plan_decision(planned)
-        )
-    return coerce_action_plan_decision(plan_actions_fn(message, session))
+        if planned is None:
+            return ActionPlanningDecision((), False, ("planner_unavailable",))
+        if not isinstance(planned, ActionPlanningDecision):
+            msg = "deps.planner must return ActionPlanningDecision or None"
+            raise TypeError(msg)
+        return planned
+    return plan_actions_fn(message, session)
 
 
 def execute_cli_actions(

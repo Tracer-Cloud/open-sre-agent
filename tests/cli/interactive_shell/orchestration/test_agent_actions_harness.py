@@ -7,13 +7,18 @@ from rich.console import Console
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
     execute_cli_actions,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.terminal_actions.models import (
+    ActionPlanningDecision,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
 
 from .routing_test_harness import FakeDispatcher, FakePlanner, RoutingHarness, planned_action
 
 
 def test_execute_with_harness_dispatches_slash_action() -> None:
-    planner = FakePlanner(result=([planned_action("slash", "/health")], False))
+    planner = FakePlanner(
+        result=ActionPlanningDecision((planned_action("slash", "/health"),), False, ())
+    )
     dispatcher = FakeDispatcher()
     harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
 
@@ -31,7 +36,13 @@ def test_execute_with_harness_dispatches_slash_action() -> None:
 
 
 def test_execute_with_harness_hands_off_handoff_only_plan() -> None:
-    planner = FakePlanner(result=([planned_action("assistant_handoff", "docs:help")], True))
+    planner = FakePlanner(
+        result=ActionPlanningDecision(
+            (planned_action("assistant_handoff", "docs:help"),),
+            True,
+            (),
+        )
+    )
     dispatcher = FakeDispatcher()
     harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
 

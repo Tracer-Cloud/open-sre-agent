@@ -10,29 +10,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
-    PlannedAction,
-)
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
     plan_actions_with_llm_result,
 )
 from app.cli.interactive_shell.runtime import ReplSession
 
 from .models import ActionPlanningDecision
-
-
-def coerce_action_plan_decision(
-    raw: ActionPlanningDecision | tuple[list[PlannedAction], bool],
-) -> ActionPlanningDecision:
-    """Back-compat adapter for tests that monkeypatch planning to tuple output."""
-    if isinstance(raw, ActionPlanningDecision):
-        return raw
-    actions, has_unhandled_clause = raw
-    return ActionPlanningDecision(
-        actions=tuple(actions),
-        has_unhandled_clause=bool(has_unhandled_clause),
-        policy_trace=(),
-    )
 
 
 def normalize_terminal_plan(plan: ActionPlanningDecision) -> ActionPlanningDecision:
@@ -80,19 +63,20 @@ def plan_actions(
         actions = list(llm_plan_result.actions)
         policy_trace = llm_plan_result.policy_trace
     else:
-        # Preserve existing monkeypatch seam used by unit tests and debug harnesses.
-        llm_plan_legacy = planner(message, session=session)
-        if llm_plan_legacy is None:
+        planned = planner(message, session=session)
+        if planned is None:
             return ActionPlanningDecision((), False, ("planner_unavailable",))
-        actions, _has_unhandled_clause = llm_plan_legacy
-        policy_trace = ()
+        if not isinstance(planned, ActionPlanningDecision):
+            msg = "planner must return ActionPlanningDecision or None"
+            raise TypeError(msg)
+        actions = list(planned.actions)
+        policy_trace = planned.policy_trace
 
     executable = [action for action in actions if action.kind != "assistant_handoff"]
     return ActionPlanningDecision(tuple(executable), False, policy_trace)
 
 
 __all__ = [
-    "coerce_action_plan_decision",
     "normalize_terminal_plan",
     "plan_actions",
 ]

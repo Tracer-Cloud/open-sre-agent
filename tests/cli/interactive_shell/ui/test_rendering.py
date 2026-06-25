@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import io
+import sys
 import threading
 
 import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.runtime import loop
-from app.cli.interactive_shell.ui.rendering import repl_print, repl_table
+from app.cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
 from app.cli.interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
@@ -20,6 +21,32 @@ from app.cli.interactive_shell.ui.tables import (
 def test_repl_table_minimal_box() -> None:
     t = repl_table(title="T")
     assert t.title == "T"
+
+
+def test_print_repl_json_tty_uses_single_buffered_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+
+    console = Console(file=fake_stdout, force_terminal=True, width=80)
+    print_repl_json(console, '{"ok": true}')
+
+    assert len(fake_stdout.writes) == 1
+    assert fake_stdout.writes[0].startswith("\r\n")
+    assert '"ok": true' in fake_stdout.writes[0]
 
 
 def test_render_integrations_table_empty_shows_hint() -> None:

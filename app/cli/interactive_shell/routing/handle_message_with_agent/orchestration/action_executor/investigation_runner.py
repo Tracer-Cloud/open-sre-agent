@@ -7,14 +7,13 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     execution_allowed,
     plan_investigation_execution,
 )
-from app.cli.interactive_shell.runtime import ReplSession, TaskKind
-from app.cli.interactive_shell.ui import ERROR, WARNING
+from app.cli.interactive_shell.runtime import ReplSession
+from app.cli.interactive_shell.runtime.foreground_investigation import run_foreground_investigation
+from app.cli.interactive_shell.runtime.tasks import TaskRecord
 
 
 def run_sample_alert(
@@ -56,38 +55,26 @@ def run_sample_alert(
         session.record("alert", f"sample:{template_name}")
         return
 
-    task = session.task_registry.create(
-        TaskKind.INVESTIGATION, command=f"sample alert:{template_name}"
-    )
-    task.mark_running()
-    try:
-        final_state = run_sample_alert_for_session(
+    def _run(task: TaskRecord) -> dict[str, object]:
+        return run_sample_alert_for_session(
             template_name=template_name,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
         )
-    except KeyboardInterrupt:
-        task.mark_cancelled()
-        console.print(f"[{WARNING}]investigation cancelled.[/]")
-        session.record("alert", f"sample:{template_name}", ok=False)
-        return
-    except OpenSREError as exc:
-        task.mark_failed(str(exc))
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-        if exc.suggestion:
-            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
-        session.record("alert", f"sample:{template_name}", ok=False)
-        return
-    except Exception as exc:
-        task.mark_failed(str(exc))
-        report_exception(exc, context="interactive_shell.sample_alert")
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+
+    if (
+        run_foreground_investigation(
+            session=session,
+            console=console,
+            task_command=f"sample alert:{template_name}",
+            run=_run,
+            exception_context="interactive_shell.sample_alert",
+        )
+        is None
+    ):
         session.record("alert", f"sample:{template_name}", ok=False)
         return
 
-    root = final_state.get("root_cause")
-    task.mark_completed(result=str(root) if root is not None else "")
-    session.apply_investigation_result(final_state)
     session.record("alert", f"sample:{template_name}")
 
 
@@ -130,34 +117,24 @@ def run_text_investigation(
         session.record("alert", alert_text)
         return
 
-    task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"investigate:{alert_text}")
-    task.mark_running()
-    try:
-        final_state = run_investigation_for_session(
+    def _run(task: TaskRecord) -> dict[str, object]:
+        return run_investigation_for_session(
             alert_text=alert_text,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
         )
-    except KeyboardInterrupt:
-        task.mark_cancelled()
-        console.print(f"[{WARNING}]investigation cancelled.[/]")
-        session.record("alert", alert_text, ok=False)
-        return
-    except OpenSREError as exc:
-        task.mark_failed(str(exc))
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-        if exc.suggestion:
-            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
-        session.record("alert", alert_text, ok=False)
-        return
-    except Exception as exc:
-        task.mark_failed(str(exc))
-        report_exception(exc, context="interactive_shell.text_investigation")
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+
+    if (
+        run_foreground_investigation(
+            session=session,
+            console=console,
+            task_command=f"investigate:{alert_text}",
+            run=_run,
+            exception_context="interactive_shell.text_investigation",
+        )
+        is None
+    ):
         session.record("alert", alert_text, ok=False)
         return
 
-    root = final_state.get("root_cause")
-    task.mark_completed(result=str(root) if root is not None else "")
-    session.apply_investigation_result(final_state)
     session.record("alert", alert_text)

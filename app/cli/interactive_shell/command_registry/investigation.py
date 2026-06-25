@@ -9,18 +9,18 @@ from rich.console import Console
 from rich.markup import escape
 
 from app.cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
 from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
-from app.cli.interactive_shell.runtime import ReplSession, TaskKind
+from app.cli.interactive_shell.runtime import ReplSession
 from app.cli.interactive_shell.runtime.background_runner import (
     start_background_template_investigation,
     start_background_text_investigation,
 )
+from app.cli.interactive_shell.runtime.foreground_investigation import run_foreground_investigation
+from app.cli.interactive_shell.runtime.tasks import TaskRecord
 from app.cli.interactive_shell.ui import (
     DIM,
     ERROR,
     HIGHLIGHT,
-    WARNING,
     print_repl_json,
 )
 from app.cli.interactive_shell.ui.choice_menu import (
@@ -174,11 +174,8 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             )
             session.record("alert", f"/investigate {template_name}")
             return True
-        task = session.task_registry.create(
-            TaskKind.INVESTIGATION, command=f"/investigate {template_name}"
-        )
-        task.mark_running()
-        try:
+
+        def _run_template(task: TaskRecord) -> dict[str, object]:
             with (
                 track_investigation(
                     entrypoint=EntrypointSource.CLI_REPL_FILE,
@@ -191,36 +188,24 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
                 suppress = getattr(console, "suppress_prompt_spinner", None)
                 if callable(suppress):
                     suppress()
-                final_state = run_sample_alert_for_session(
+                return run_sample_alert_for_session(
                     template_name=template_name,
                     context_overrides=session.accumulated_context or None,
                     cancel_requested=task.cancel_requested,
                 )
-        except KeyboardInterrupt:
-            task.mark_cancelled()
-            console.print(f"[{WARNING}]investigation cancelled.[/]")
-            session.record("alert", f"/investigate {template_name}", ok=False)
-            session.mark_latest(ok=False, kind="slash")
-            return True
-        except OpenSREError as exc:
-            task.mark_failed(str(exc))
-            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-            if exc.suggestion:
-                console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
-            session.record("alert", f"/investigate {template_name}", ok=False)
-            session.mark_latest(ok=False, kind="slash")
-            return True
-        except Exception as exc:
-            task.mark_failed(str(exc))
-            report_exception(exc, context="interactive_shell.investigate_template")
-            console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+
+        final_state = run_foreground_investigation(
+            session=session,
+            console=console,
+            task_command=f"/investigate {template_name}",
+            run=_run_template,
+            exception_context="interactive_shell.investigate_template",
+        )
+        if final_state is None:
             session.record("alert", f"/investigate {template_name}", ok=False)
             session.mark_latest(ok=False, kind="slash")
             return True
 
-        root = final_state.get("root_cause")
-        task.mark_completed(result=str(root) if root is not None else "")
-        session.apply_investigation_result(final_state)
         session.record("alert", f"/investigate {template_name}")
         return True
 
@@ -248,9 +233,7 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         session.record("alert", args[0])
         return True
 
-    task = session.task_registry.create(TaskKind.INVESTIGATION, command=f"/investigate {path}")
-    task.mark_running()
-    try:
+    def _run_file(task: TaskRecord) -> dict[str, object]:
         with (
             track_investigation(
                 entrypoint=EntrypointSource.CLI_REPL_FILE,
@@ -263,36 +246,24 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             suppress = getattr(console, "suppress_prompt_spinner", None)
             if callable(suppress):
                 suppress()
-            final_state = run_investigation_for_session(
+            return run_investigation_for_session(
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
                 cancel_requested=task.cancel_requested,
             )
-    except KeyboardInterrupt:
-        task.mark_cancelled()
-        console.print(f"[{WARNING}]investigation cancelled.[/]")
-        session.record("alert", args[0], ok=False)
-        session.mark_latest(ok=False, kind="slash")
-        return True
-    except OpenSREError as exc:
-        task.mark_failed(str(exc))
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
-        if exc.suggestion:
-            console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
-        session.record("alert", args[0], ok=False)
-        session.mark_latest(ok=False, kind="slash")
-        return True
-    except Exception as exc:
-        task.mark_failed(str(exc))
-        report_exception(exc, context="interactive_shell.investigate_file")
-        console.print(f"[{ERROR}]investigation failed:[/] {escape(str(exc))}")
+
+    final_state = run_foreground_investigation(
+        session=session,
+        console=console,
+        task_command=f"/investigate {path}",
+        run=_run_file,
+        exception_context="interactive_shell.investigate_file",
+    )
+    if final_state is None:
         session.record("alert", args[0], ok=False)
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    root = final_state.get("root_cause")
-    task.mark_completed(result=str(root) if root is not None else "")
-    session.apply_investigation_result(final_state)
     session.record("alert", f"/investigate {raw_target}")
     return True
 

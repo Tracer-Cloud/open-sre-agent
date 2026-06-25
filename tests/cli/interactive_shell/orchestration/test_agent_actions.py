@@ -33,9 +33,17 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.i
     PlannedAction,
     default_target_surface,
 )
+from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    LlmActionPlanResult,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from app.cli.interactive_shell.shell import execution as shell_execution
+
+_PLANNER_RESULT_PATCH = (
+    "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration"
+    ".terminal_actions.planning.plan_actions_with_llm_result"
+)
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -170,6 +178,28 @@ _FAKE_PLANS: dict[str, tuple[list[PlannedAction], bool]] = {
 }
 
 
+def _llm_plan_result(
+    actions: list[PlannedAction],
+    *,
+    has_unhandled: bool = False,
+    policy_trace: tuple[str, ...] = ("fake_planner",),
+) -> LlmActionPlanResult:
+    return LlmActionPlanResult(
+        actions=tuple(actions),
+        has_unhandled_clause=has_unhandled,
+        policy_trace=policy_trace,
+    )
+
+
+def _fake_planner_result(
+    message: str,
+    *,
+    session: ReplSession | None = None,  # noqa: ARG001
+) -> LlmActionPlanResult:
+    actions, has_unhandled = _FAKE_PLANS.get(message, ([], False))
+    return _llm_plan_result(list(actions), has_unhandled=has_unhandled)
+
+
 @pytest.fixture(autouse=True)
 def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     """Install a deterministic fake LLM planner for execution-mechanics tests.
@@ -180,19 +210,10 @@ def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     stable fake planner that looks up explicit ``PlannedAction`` plans by the
     exact message string. Unknown phrases fall through with ``([], False)``.
 
-    Per-test ``monkeypatch.setattr(agent_actions, "plan_actions_with_llm", ...)``
-    overrides run after this autouse fixture, so those tests still win.
+    Per-test overrides of ``plan_actions_with_llm_result`` run after this
+    autouse fixture, so those tests still win.
     """
-
-    def _fake_planner(
-        message: str,
-        *,
-        session: ReplSession | None = None,  # noqa: ARG001
-    ) -> tuple[list[PlannedAction], bool]:
-        actions, has_unhandled = _FAKE_PLANS.get(message, ([], False))
-        return list(actions), has_unhandled
-
-    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _fake_planner)
+    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _fake_planner_result)
 
 
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
@@ -390,9 +411,8 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
     reasoning_models: list[str] = []
 
     monkeypatch.setattr(
-        agent_actions,
-        "plan_actions_with_llm",
-        lambda _message, *, session=None: (  # noqa: ARG005
+        _PLANNER_RESULT_PATCH,
+        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
             [
                 PlannedAction(
                     kind="llm_provider",
@@ -401,8 +421,7 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
                     source="llm",
                     target_surface="slash",
                 )
-            ],
-            False,
+            ]
         ),
     )
     monkeypatch.setattr(
@@ -1274,8 +1293,7 @@ def test_execute_cli_actions_falls_through_when_llm_plan_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        agent_actions,
-        "plan_actions_with_llm",
+        _PLANNER_RESULT_PATCH,
         lambda _message, *, session=None: None,  # noqa: ARG005
     )
 
@@ -1295,11 +1313,10 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        agent_actions,
-        "plan_actions_with_llm",
-        lambda _message, *, session=None: (  # noqa: ARG005
+        _PLANNER_RESULT_PATCH,
+        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
             [_action("slash", "/health")],
-            True,
+            has_unhandled=True,
         ),
     )
 
@@ -1358,7 +1375,7 @@ def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
         llm_called.append(message)
         raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(agent_actions, "plan_actions_with_llm", _fail_if_called)
+    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _fail_if_called)
 
     calls: list[tuple[str, dict[str, object]]] = []
 
@@ -1417,17 +1434,15 @@ def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
     planner reasoning that should have been invisible.
     """
     monkeypatch.setattr(
-        agent_actions,
-        "plan_actions_with_llm",
-        lambda _message, *, session=None: (  # noqa: ARG005
+        _PLANNER_RESULT_PATCH,
+        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
             [
                 PlannedAction(
                     kind="assistant_handoff",
                     content="informational question about current model",
                     position=0,
                 )
-            ],
-            False,
+            ]
         ),
     )
 

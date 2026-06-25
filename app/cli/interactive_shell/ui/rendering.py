@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import shutil
 import sys
+from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
@@ -55,6 +56,37 @@ def _prepare_tty_for_rich(console: Console) -> int:
     return _repl_table_width(console)
 
 
+def _normalize_repl_line_endings(text: str) -> str:
+    """Convert Rich output to ``\\r\\n`` so each line starts at column zero."""
+    return text.replace("\r\n", "\n").replace("\n", "\r\n")
+
+
+def _write_repl_tty_buffered(
+    *,
+    width: int,
+    leading_blank: bool,
+    render_to_buffer: Callable[[Console], None],
+) -> None:
+    """Render Rich output to a buffer and write it in one TTY-safe stdout call."""
+    buf = io.StringIO()
+    buf_console = Console(
+        file=buf,
+        force_terminal=True,
+        highlight=False,
+        width=width,
+    )
+    render_to_buffer(buf_console)
+    rendered = _normalize_repl_line_endings(buf.getvalue())
+    if leading_blank:
+        rendered = "\r\n" + rendered
+    token = _REPL_OUTPUT_PREPARED.set(True)
+    try:
+        sys.stdout.write(rendered)
+        sys.stdout.flush()
+    finally:
+        _REPL_OUTPUT_PREPARED.reset(token)
+
+
 def print_repl_table(console: Console, table: Table, *, width: int | None = None) -> None:
     """Print a Rich table using REPL-safe TTY width.
 
@@ -73,31 +105,11 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     leading_blank = width is None
     width = width if width is not None else _prepare_tty_for_rich(console)
     if console.file is sys.stdout and sys.stdout.isatty():
-        buf = io.StringIO()
-        buf_console = Console(
-            file=buf,
-            force_terminal=True,
-            highlight=False,
+        _write_repl_tty_buffered(
             width=width,
+            leading_blank=leading_blank,
+            render_to_buffer=lambda buf_console: buf_console.print(table),
         )
-        buf_console.print(table)
-        rendered = buf.getvalue()
-        # Normalise to \r\n so each row starts at column zero even when ONLCR is
-        # disabled (raw-mode terminal under patch_stdout). Strip pre-existing \r\n
-        # first so partial Windows line-endings in cell content don't prevent the
-        # remaining bare \n chars from being converted.
-        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n")
-        # Prepend blank line as part of the same write to avoid a separate
-        # patch_stdout proxy flush that can trigger a toolbar DSR query and
-        # leave stale CPR bytes in stdin for the next prompt.
-        if leading_blank:
-            rendered = "\r\n" + rendered
-        token = _REPL_OUTPUT_PREPARED.set(True)
-        try:
-            sys.stdout.write(rendered)
-            sys.stdout.flush()
-        finally:
-            _REPL_OUTPUT_PREPARED.reset(token)
     else:
         if leading_blank:
             _console_print_prepared(console)
@@ -117,22 +129,11 @@ def print_repl_json(console: Console, json_str: str) -> None:
     """
     width = _prepare_tty_for_rich(console)
     if console.file is sys.stdout and sys.stdout.isatty():
-        buf = io.StringIO()
-        buf_console = Console(
-            file=buf,
-            force_terminal=True,
-            highlight=False,
+        _write_repl_tty_buffered(
             width=width,
+            leading_blank=True,
+            render_to_buffer=lambda buf_console: buf_console.print_json(json_str),
         )
-        buf_console.print_json(json_str)
-        rendered = buf.getvalue().replace("\r\n", "\n").replace("\n", "\r\n")
-        rendered = "\r\n" + rendered
-        token = _REPL_OUTPUT_PREPARED.set(True)
-        try:
-            sys.stdout.write(rendered)
-            sys.stdout.flush()
-        finally:
-            _REPL_OUTPUT_PREPARED.reset(token)
     else:
         token = _REPL_OUTPUT_PREPARED.set(True)
         try:
