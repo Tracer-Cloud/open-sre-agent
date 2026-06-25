@@ -1,0 +1,539 @@
+[
+  {
+    "credentials": {
+      "base_url": "https://am.example.com",
+      "bearer_token": "",
+      "password": "",
+      "username": ""
+    },
+    "id": "env-alertmanager",
+    "service": "alertmanager",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "app_namespace": "",
+      "base_url": "https://argocd.example.com",
+      "bearer_token": "argocd-token",
+      "password": "",
+      "project": "",
+      "username": "",
+      "verify_ssl": true
+    },
+    "id": "env-argocd",
+    "service": "argocd",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "region": "us-west-2"
+    },
+    "external_id": "ext-id",
+    "id": "env-aws",
+    "role_arn": "arn:aws:iam::123456789012:role/test",
+    "service": "aws",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "access_token": "azure-token",
+      "endpoint": "https://api.loganalytics.io",
+      "max_results": 100,
+      "subscription_id": "",
+      "tenant_id": "",
+      "workspace_id": "workspace-id"
+    },
+    "id": "env-azure",
+    "service": "azure",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "database": "appdb",
+      "driver": "ODBC Driver 18 for SQL Server",
+      "encrypt": true,
+      "max_results": 50,
+      "password": "pw",
+      "port": 1433,
+      "server": "server",
+      "timeout_seconds": 15.0,
+      "username": "user"
+    },
+    "id": "env-azure-sql",
+    "service": "azure_sql",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "max_rows": 500,
+      "password": "pw",
+      "query_endpoint": "https://bs.example.com",
+      "sources": [],
+      "timeout_seconds": 15,
+      "username": "user"
+    },
+    "id": "env-betterstack",
+    "service": "betterstack",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "app_password": "pw",
+      "base_url": "https://api.bitbucket.org/2.0",
+      "max_results": 25,
+      "username": "user",
+      "workspace": "workspace"
+    },
+    "id": "env-bitbucket",
+    "service": "bitbucket",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "cx-key",
+      "application_name": "app",
+      "base_url": "https://api.coralogix.com",
+      "subsystem_name": "sub"
+    },
+    "id": "env-coralogix",
+    "service": "coralogix",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_token": "dagster-token",
+      "endpoint": "https://dagster.example.com"
+    },
+    "id": "env-dagster",
+    "service": "dagster",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "dd-api-key",
+      "app_key": "dd-app-key",
+      "site": "datadoghq.eu"
+    },
+    "id": "env-datadog",
+    "service": "datadog",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "application_id": "app-id",
+      "bot_token": "discord-token",
+      "default_channel_id": null,
+      "identity_policy": null,
+      "public_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "id": "env-discord",
+    "service": "discord",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "args": [],
+      "auth_token": "gh-token",
+      "command": "",
+      "headers": {},
+      "mode": "streamable-http",
+      "timeout_seconds": 15.0,
+      "toolsets": [
+        "repos",
+        "issues",
+        "pull_requests",
+        "actions",
+        "search"
+      ],
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "id": "env-github",
+    "service": "github",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "auth_token": "gl-token",
+      "base_url": "https://gitlab.com",
+      "timeout_seconds": 15.0
+    },
+    "id": "env-gitlab",
+    "service": "gitlab",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "glsa_token",
+      "endpoint": "https://grafana.example.com"
+    },
+    "id": "env-grafana",
+    "service": "grafana",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "gc-key",
+      "backend_id": "backend-id",
+      "mcp_url": "https://mcp.groundcover.com",
+      "tenant_uuid": "tenant-uuid",
+      "timezone": "UTC"
+    },
+    "id": "env-groundcover",
+    "service": "groundcover",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "default_namespace": "",
+      "helm_path": "helm",
+      "kube_context": "",
+      "kubeconfig": ""
+    },
+    "id": "env-helm",
+    "service": "helm",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "hc-key",
+      "base_url": "https://api.honeycomb.io",
+      "dataset": "dataset"
+    },
+    "id": "env-honeycomb",
+    "service": "honeycomb",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "io-key",
+      "base_url": "https://api.incident.io"
+    },
+    "id": "env-incident-io",
+    "service": "incident_io",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_token": "jira-token",
+      "base_url": "https://x.atlassian.net",
+      "email": "a@b.com",
+      "project_key": "PK"
+    },
+    "id": "env-jira",
+    "service": "jira",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "database": "appdb",
+      "host": "localhost",
+      "max_results": 50,
+      "password": "pw",
+      "port": 3306,
+      "ssl": true,
+      "timeout_seconds": 5,
+      "username": "user"
+    },
+    "id": "env-mariadb",
+    "service": "mariadb",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "auth_source": "admin",
+      "connection_string": "mongodb://localhost:27017",
+      "database": "appdb",
+      "max_results": 50,
+      "timeout_seconds": 10.0,
+      "tls": true
+    },
+    "id": "env-mongodb",
+    "service": "mongodb",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_private_key": "atlas-priv",
+      "api_public_key": "atlas-pub",
+      "base_url": "https://cloud.mongodb.com/api/atlas/v2",
+      "max_results": 50,
+      "project_id": "atlas-project",
+      "timeout_seconds": 15.0
+    },
+    "id": "env-mongodb-atlas",
+    "service": "mongodb_atlas",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "database": "appdb",
+      "host": "localhost",
+      "max_results": 50,
+      "password": "pw",
+      "port": 3306,
+      "ssl_mode": "preferred",
+      "timeout_seconds": 10.0,
+      "username": "root"
+    },
+    "id": "env-mysql",
+    "service": "mysql",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "args": [],
+      "auth_token": "openclaw-token",
+      "command": "",
+      "connection_verified": true,
+      "headers": {},
+      "mode": "streamable-http",
+      "timeout_seconds": 15.0,
+      "url": "https://openclaw.example.com"
+    },
+    "id": "env-openclaw",
+    "service": "openclaw",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_token": "oo-token",
+      "base_url": "https://oo.example.com",
+      "max_results": 100,
+      "org": "default",
+      "password": "",
+      "stream": "",
+      "username": ""
+    },
+    "id": "env-openobserve",
+    "service": "openobserve",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "",
+      "index_pattern": "*",
+      "max_results": 100,
+      "password": "pw",
+      "url": "https://os.example.com",
+      "username": "user"
+    },
+    "id": "env-opensearch",
+    "service": "opensearch",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "og-key",
+      "region": "us"
+    },
+    "id": "env-opsgenie",
+    "service": "opsgenie",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "pd-key",
+      "base_url": "https://api.pagerduty.com"
+    },
+    "id": "env-pagerduty",
+    "service": "pagerduty",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "database": "appdb",
+      "host": "localhost",
+      "max_results": 50,
+      "password": "pw",
+      "port": 5432,
+      "ssl_mode": "prefer",
+      "timeout_seconds": 10.0,
+      "username": "postgres"
+    },
+    "id": "env-postgresql",
+    "service": "postgresql",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "args": [],
+      "auth_token": "posthog-token",
+      "command": "",
+      "connection_verified": true,
+      "features": [],
+      "headers": {},
+      "mode": "streamable-http",
+      "organization_id": "",
+      "project_id": "",
+      "read_only": true,
+      "timeout_seconds": 20.0,
+      "url": "https://mcp.posthog.com/mcp"
+    },
+    "id": "env-posthog-mcp",
+    "service": "posthog_mcp",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "host": "localhost",
+      "management_port": 15672,
+      "max_results": 50,
+      "password": "guest",
+      "ssl": false,
+      "timeout_seconds": 10,
+      "username": "guest",
+      "verify_ssl": true,
+      "vhost": "/"
+    },
+    "id": "env-rabbitmq",
+    "service": "rabbitmq",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "auth_token": "sentry-token",
+      "base_url": "https://sentry.io",
+      "organization_slug": "org",
+      "project_slug": "proj",
+      "timeout_seconds": 15.0
+    },
+    "id": "env-sentry",
+    "service": "sentry",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "args": [],
+      "auth_token": "sentry-mcp-token",
+      "command": "",
+      "connection_verified": true,
+      "headers": {},
+      "host": "",
+      "mode": "streamable-http",
+      "organization_slug": "",
+      "project_slug": "",
+      "skills": [],
+      "timeout_seconds": 20.0,
+      "url": "https://mcp.sentry.dev/mcp"
+    },
+    "id": "env-sentry-mcp",
+    "service": "sentry_mcp",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "default_to": "",
+      "from_address": "a@b.com",
+      "host": "smtp.example.com",
+      "password": "pw",
+      "port": 587,
+      "security": "starttls",
+      "username": "user"
+    },
+    "id": "env-smtp",
+    "service": "smtp",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "account_identifier": "acct",
+      "database": "",
+      "max_results": 50,
+      "password": "",
+      "role": "",
+      "schema": "",
+      "token": "snowflake-token",
+      "user": "user",
+      "warehouse": ""
+    },
+    "id": "env-snowflake",
+    "service": "snowflake",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "base_url": "https://splunk.example.com",
+      "ca_bundle": "",
+      "index": "main",
+      "token": "splunk-token",
+      "verify_ssl": true
+    },
+    "id": "env-splunk",
+    "service": "splunk",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "project_url": "https://x.supabase.co"
+    },
+    "id": "env-supabase",
+    "service": "supabase",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "bot_token": "telegram-token",
+      "default_chat_id": null,
+      "identity_policy": null
+    },
+    "id": "env-telegram",
+    "service": "telegram",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_key": "temporal-token",
+      "base_url": "https://temporal.example.com",
+      "integration_id": "",
+      "namespace": "default"
+    },
+    "id": "env-temporal",
+    "service": "temporal",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "account_sid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "auth_token": "twilio-token",
+      "sms": {
+        "default_to": null,
+        "enabled": true,
+        "from_number": "+10000000002",
+        "messaging_service_sid": ""
+      }
+    },
+    "id": "env-twilio",
+    "service": "twilio",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "api_token": "vercel-token",
+      "team_id": "team"
+    },
+    "id": "env-vercel",
+    "service": "vercel",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "base_url": "https://vl.example.com",
+      "tenant_id": null
+    },
+    "id": "env-victoria-logs",
+    "service": "victoria_logs",
+    "status": "active"
+  },
+  {
+    "credentials": {
+      "account_sid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "auth_token": "twilio-token",
+      "default_to": null,
+      "from_number": "+10000000001",
+      "identity_policy": null
+    },
+    "id": "env-whatsapp",
+    "service": "whatsapp",
+    "status": "active"
+  }
+]

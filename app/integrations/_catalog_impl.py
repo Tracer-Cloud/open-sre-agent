@@ -369,13 +369,11 @@ def _active_env_record(
     }
 
 
-def load_env_integrations() -> list[dict[str, Any]]:
-    """Build integration records from local environment variables."""
-    integrations: list[dict[str, Any]] = []
-
+def _load_grafana() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     grafana_multi = _parse_instances_env("GRAFANA_INSTANCES", "grafana")
     if grafana_multi is not None:
-        integrations.append(grafana_multi)
+        records.append(grafana_multi)
         grafana_endpoint = ""
         grafana_api_key = ""
     else:
@@ -388,7 +386,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "api_key": grafana_api_key,
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "grafana",
                 {
@@ -397,10 +395,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_datadog() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     datadog_multi = _parse_instances_env("DD_INSTANCES", "datadog")
     if datadog_multi is not None:
-        integrations.append(datadog_multi)
+        records.append(datadog_multi)
         datadog_api_key = ""
         datadog_app_key = ""
         datadog_site = ""
@@ -416,16 +418,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "site": datadog_site,
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "datadog",
                 datadog_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_groundcover() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     groundcover_multi = _parse_instances_env("GROUNDCOVER_INSTANCES", "groundcover")
     if groundcover_multi is not None:
-        integrations.append(groundcover_multi)
+        records.append(groundcover_multi)
         groundcover_api_key = ""
     else:
         groundcover_api_key = (
@@ -449,16 +455,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="groundcover")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "groundcover",
                     groundcover_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_honeycomb() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     honeycomb_multi = _parse_instances_env("HONEYCOMB_INSTANCES", "honeycomb")
     if honeycomb_multi is not None:
-        integrations.append(honeycomb_multi)
+        records.append(honeycomb_multi)
         honeycomb_api_key = ""
     else:
         honeycomb_api_key = os.getenv("HONEYCOMB_API_KEY", "").strip()
@@ -470,16 +480,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "base_url": os.getenv("HONEYCOMB_API_URL", "").strip(),
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "honeycomb",
                 honeycomb_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_coralogix() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     coralogix_multi = _parse_instances_env("CORALOGIX_INSTANCES", "coralogix")
     if coralogix_multi is not None:
-        integrations.append(coralogix_multi)
+        records.append(coralogix_multi)
         coralogix_api_key = ""
     else:
         coralogix_api_key = os.getenv("CORALOGIX_API_KEY", "").strip()
@@ -492,16 +506,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "subsystem_name": os.getenv("CORALOGIX_SUBSYSTEM_NAME", "").strip(),
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "coralogix",
                 coralogix_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_aws() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     aws_multi = _parse_instances_env("AWS_INSTANCES", "aws")
     if aws_multi is not None:
-        integrations.append(aws_multi)
+        records.append(aws_multi)
         aws_role_arn = ""
         aws_external_id = ""
         aws_region = "us-east-1"
@@ -523,7 +541,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "region": aws_region,
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "aws",
                 {"region": aws_config.region},
@@ -544,7 +562,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
         )
         aws_credentials = aws_config.credentials
         if aws_credentials is not None:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "aws",
                     {
@@ -555,7 +573,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     },
                 )
             )
+    return records
 
+
+def _load_github() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     github_mode = os.getenv("GITHUB_MCP_MODE", "streamable-http").strip() or "streamable-http"
     github_url = os.getenv("GITHUB_MCP_URL", "").strip()
     github_command = os.getenv("GITHUB_MCP_COMMAND", "").strip()
@@ -573,13 +595,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "toolsets": [part.strip() for part in github_toolsets.split(",") if part.strip()],
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "github",
                 github_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_sentry() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     sentry_org_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
     sentry_auth_token = os.getenv("SENTRY_AUTH_TOKEN", "").strip()
     if sentry_org_slug and sentry_auth_token:
@@ -592,13 +618,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "project_slug": os.getenv("SENTRY_PROJECT_SLUG", "").strip(),
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "sentry",
                 sentry_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_gitlab() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     gitlab_access_token = resolve_env_credential("GITLAB_ACCESS_TOKEN")
     if gitlab_access_token:
         gitlab_config = build_gitlab_config(
@@ -608,8 +638,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "auth_token": gitlab_access_token,
             }
         )
-        integrations.append(_active_env_record("gitlab", gitlab_config.model_dump()))
+        records.append(_active_env_record("gitlab", gitlab_config.model_dump()))
+    return records
 
+
+def _load_mongodb() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     mongodb_connection_string = os.getenv("MONGODB_CONNECTION_STRING", "").strip()
     if mongodb_connection_string:
         mongodb_config = build_mongodb_config(
@@ -620,22 +654,30 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "tls": os.getenv("MONGODB_TLS", "true").strip().lower() in ("true", "1", "yes"),
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "mongodb",
                 mongodb_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_redis() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     redis_config = redis_config_from_env()
     if redis_config:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "redis",
                 redis_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_postgresql() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     postgresql_host = os.getenv("POSTGRESQL_HOST", "").strip()
     postgresql_database = os.getenv("POSTGRESQL_DATABASE", "").strip()
     if postgresql_host and postgresql_database:
@@ -651,16 +693,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "ssl_mode": os.getenv("POSTGRESQL_SSL_MODE", "prefer").strip() or "prefer",
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "postgresql",
                 postgresql_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_argocd() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     argocd_multi = _parse_instances_env("ARGOCD_INSTANCES", "argocd")
     if argocd_multi is not None:
-        integrations.append(argocd_multi)
+        records.append(argocd_multi)
         argocd_base_url = ""
         argocd_auth_token = ""
         argocd_username = ""
@@ -688,13 +734,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
             # discovery, but report so operators can see the misconfig.
             _report_env_loader_failure(exc, integration="argocd")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "argocd",
                     argocd_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_helm() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     helm_env_enabled = os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {
         "1",
         "true",
@@ -713,13 +763,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="helm")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "helm",
                     helm_env_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_vercel() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     vercel_api_token = os.getenv("VERCEL_API_TOKEN", "").strip()
     if vercel_api_token:
         try:
@@ -732,13 +786,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="vercel")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "vercel",
                     vercel_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_opsgenie() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     opsgenie_api_key = os.getenv("OPSGENIE_API_KEY", "").strip()
     if opsgenie_api_key:
         try:
@@ -751,13 +809,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="opsgenie")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "opsgenie",
                     opsgenie_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_pagerduty() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     pagerduty_api_key = os.getenv("PAGERDUTY_API_KEY", "").strip()
     if pagerduty_api_key:
         try:
@@ -769,13 +831,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="pagerduty")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "pagerduty",
                     pagerduty_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_incident_io() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     incident_io_api_key = resolve_env_credential("INCIDENT_IO_API_KEY")
     if incident_io_api_key:
         try:
@@ -788,13 +854,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="incident_io")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "incident_io",
                     incident_io_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_jira() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     jira_base_url = os.getenv("JIRA_BASE_URL", "").strip()
     jira_email = os.getenv("JIRA_EMAIL", "").strip()
     jira_api_token = os.getenv("JIRA_API_TOKEN", "").strip()
@@ -812,13 +882,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="jira")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "jira",
                     jira_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_discord() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
     if discord_bot_token:
         try:
@@ -834,12 +908,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="discord")
         else:
-            integrations.append(_active_env_record("discord", discord_config.model_dump()))
+            records.append(_active_env_record("discord", discord_config.model_dump()))
+    return records
 
+
+def _load_airflow() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     airflow_config = airflow_config_from_env()
     if airflow_config is not None:
-        integrations.append(_active_env_record("airflow", airflow_config.model_dump()))
+        records.append(_active_env_record("airflow", airflow_config.model_dump()))
+    return records
 
+
+def _load_telegram() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if telegram_bot_token:
         try:
@@ -852,8 +934,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="telegram")
         else:
-            integrations.append(_active_env_record("telegram", tg_config.model_dump()))
+            records.append(_active_env_record("telegram", tg_config.model_dump()))
+    return records
 
+
+def _load_smtp() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     if smtp_host:
         try:
@@ -871,8 +957,12 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="smtp")
         else:
-            integrations.append(_active_env_record("smtp", smtp_config.model_dump()))
+            records.append(_active_env_record("smtp", smtp_config.model_dump()))
+    return records
 
+
+def _load_twilio_messaging() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     # Shared Twilio account credentials — consumed by both the WhatsApp and
     # the SMS env-bootstrap blocks below.
     twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
@@ -888,7 +978,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "default_to": os.getenv("WHATSAPP_DEFAULT_TO", "").strip() or None,
             }
         )
-        integrations.append(_active_env_record("whatsapp", wa_config.model_dump()))
+        records.append(_active_env_record("whatsapp", wa_config.model_dump()))
 
     # Twilio SMS integration — independent of the legacy WhatsApp record.
     # Hydrated when account+token are present AND an SMS sender is set
@@ -915,13 +1005,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception:
             twilio_config = None
         if twilio_config is not None:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "twilio",
                     twilio_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_mongodb_atlas() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     atlas_pub = os.getenv("MONGODB_ATLAS_PUBLIC_KEY", "").strip()
     atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()
     atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
@@ -940,13 +1034,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="mongodb_atlas")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "mongodb_atlas",
                     atlas_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_openclaw() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     openclaw_url = os.getenv("OPENCLAW_MCP_URL", "").strip()
     openclaw_command = os.getenv("OPENCLAW_MCP_COMMAND", "").strip()
     openclaw_mode = os.getenv("OPENCLAW_MCP_MODE", "streamable-http").strip().lower()
@@ -966,7 +1064,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "auth_token": resolve_env_credential("OPENCLAW_MCP_AUTH_TOKEN"),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "openclaw",
                     {
@@ -977,7 +1075,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="openclaw")
+    return records
 
+
+def _load_posthog_mcp() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     posthog_mcp_mode = os.getenv("POSTHOG_MCP_MODE", "streamable-http").strip().lower()
     posthog_mcp_mode = posthog_mcp_mode or "streamable-http"
     posthog_mcp_command = os.getenv("POSTHOG_MCP_COMMAND", "").strip()
@@ -1006,7 +1108,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "read_only": read_only,
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "posthog_mcp",
                     {
@@ -1017,7 +1119,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="posthog_mcp")
+    return records
 
+
+def _load_sentry_mcp() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     sentry_mcp_mode = os.getenv("SENTRY_MCP_MODE", "streamable-http").strip().lower()
     sentry_mcp_mode = sentry_mcp_mode or "streamable-http"
     sentry_mcp_command = os.getenv("SENTRY_MCP_COMMAND", "").strip()
@@ -1044,7 +1150,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "skills": os.getenv("SENTRY_MCP_SKILLS", "").strip(),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "sentry_mcp",
                     {
@@ -1055,7 +1161,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="sentry_mcp")
+    return records
 
+
+def _load_mariadb() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     mariadb_host = os.getenv("MARIADB_HOST", "").strip()
     mariadb_database = os.getenv("MARIADB_DATABASE", "").strip()
     if mariadb_host and mariadb_database:
@@ -1070,7 +1180,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "ssl": os.getenv("MARIADB_SSL", "true").strip().lower() in ("true", "1", "yes"),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "mariadb",
                     mariadb_config.model_dump(exclude={"integration_id"}),
@@ -1078,7 +1188,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="mariadb")
+    return records
 
+
+def _load_dagster() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     dagster_endpoint = os.getenv("DAGSTER_ENDPOINT", "").strip()
     if dagster_endpoint:
         try:
@@ -1088,7 +1202,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "api_token": os.getenv("DAGSTER_API_TOKEN", "").strip(),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "dagster",
                     dagster_config.model_dump(exclude={"integration_id"}),
@@ -1096,7 +1210,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="dagster")
+    return records
 
+
+def _load_rabbitmq() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     rabbitmq_host = os.getenv("RABBITMQ_HOST", "").strip()
     rabbitmq_username = os.getenv("RABBITMQ_USERNAME", "").strip()
     if rabbitmq_host and rabbitmq_username:
@@ -1114,7 +1232,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     in ("true", "1", "yes"),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "rabbitmq",
                     rabbitmq_config.model_dump(exclude={"integration_id"}),
@@ -1122,20 +1240,28 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="rabbitmq")
+    return records
 
+
+def _load_rds() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     try:
         rds_config = rds_config_from_env()
     except Exception as exc:
         rds_config = None
         _report_env_loader_failure(exc, integration="rds")
     if rds_config is not None and rds_config.is_configured:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "rds",
                 rds_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_betterstack() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     bs_endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
     bs_username = os.getenv("BETTERSTACK_USERNAME", "").strip()
     if bs_endpoint and bs_username:
@@ -1148,7 +1274,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "sources": os.getenv("BETTERSTACK_SOURCES", ""),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "betterstack",
                     bs_config.model_dump(exclude={"integration_id"}),
@@ -1156,7 +1282,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="betterstack")
+    return records
 
+
+def _load_mysql() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     mysql_host = os.getenv("MYSQL_HOST", "").strip()
     mysql_database = os.getenv("MYSQL_DATABASE", "").strip()
     if mysql_host and mysql_database:
@@ -1172,13 +1302,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 "ssl_mode": os.getenv("MYSQL_SSL_MODE", "preferred").strip() or "preferred",
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "mysql",
                 mysql_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_azure_sql() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     azure_sql_server = os.getenv("AZURE_SQL_SERVER", "").strip()
     azure_sql_database = os.getenv("AZURE_SQL_DATABASE", "").strip()
     if azure_sql_server and azure_sql_database:
@@ -1195,16 +1329,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 in ("true", "1", "yes"),
             }
         )
-        integrations.append(
+        records.append(
             _active_env_record(
                 "azure_sql",
                 azure_sql_config.model_dump(exclude={"integration_id"}),
             )
         )
+    return records
 
+
+def _load_bitbucket() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     bitbucket_workspace = os.getenv("BITBUCKET_WORKSPACE", "").strip()
     if bitbucket_workspace:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "bitbucket",
                 {
@@ -1219,14 +1357,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_snowflake() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     snowflake_account = (
         os.getenv("SNOWFLAKE_ACCOUNT_IDENTIFIER", "").strip()
         or os.getenv("SNOWFLAKE_ACCOUNT", "").strip()
     )
     snowflake_token = os.getenv("SNOWFLAKE_TOKEN", "").strip()
     if snowflake_account and snowflake_token:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "snowflake",
                 {
@@ -1242,11 +1384,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_azure() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     azure_workspace_id = os.getenv("AZURE_LOG_ANALYTICS_WORKSPACE_ID", "").strip()
     azure_access_token = os.getenv("AZURE_LOG_ANALYTICS_TOKEN", "").strip()
     if azure_workspace_id and azure_access_token:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "azure",
                 {
@@ -1264,13 +1410,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_openobserve() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     openobserve_url = os.getenv("OPENOBSERVE_URL", "").strip()
     openobserve_token = os.getenv("OPENOBSERVE_TOKEN", "").strip()
     openobserve_username = os.getenv("OPENOBSERVE_USERNAME", "").strip()
     openobserve_password = os.getenv("OPENOBSERVE_PASSWORD", "").strip()
     if openobserve_url and (openobserve_token or (openobserve_username and openobserve_password)):
-        integrations.append(
+        records.append(
             _active_env_record(
                 "openobserve",
                 {
@@ -1284,10 +1434,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_opensearch() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     opensearch_url = os.getenv("OPENSEARCH_URL", "").strip()
     if opensearch_url:
-        integrations.append(
+        records.append(
             _active_env_record(
                 "opensearch",
                 {
@@ -1300,7 +1454,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 },
             )
         )
+    return records
 
+
+def _load_alertmanager() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     alertmanager_url = os.getenv("ALERTMANAGER_URL", "").strip().rstrip("/")
     if alertmanager_url:
         try:
@@ -1312,7 +1470,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "password": os.getenv("ALERTMANAGER_PASSWORD", "").strip(),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "alertmanager",
                     alertmanager_config.model_dump(exclude={"integration_id"}),
@@ -1320,7 +1478,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="alertmanager")
+    return records
 
+
+def _load_victoria_logs() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
     if victoria_logs_url:
         try:
@@ -1330,7 +1492,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "tenant_id": os.getenv("VICTORIA_LOGS_TENANT_ID"),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "victoria_logs",
                     victoria_logs_config.model_dump(exclude={"integration_id"}),
@@ -1338,10 +1500,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="victoria_logs")
+    return records
 
+
+def _load_splunk() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     splunk_multi = _parse_instances_env("SPLUNK_INSTANCES", "splunk")
     if splunk_multi is not None:
-        integrations.append(splunk_multi)
+        records.append(splunk_multi)
     else:
         splunk_url = os.getenv("SPLUNK_URL", "").strip()
         splunk_token = os.getenv("SPLUNK_TOKEN", "").strip()
@@ -1355,13 +1521,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "ca_bundle": os.getenv("SPLUNK_CA_BUNDLE", "").strip(),
                 }
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "splunk",
                     splunk_config.model_dump(exclude={"integration_id"}),
                 )
             )
+    return records
 
+
+def _load_supabase() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
     supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
     if supabase_url and supabase_service_key:
@@ -1369,7 +1539,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             sb_config = build_supabase_config(
                 {"url": supabase_url, "service_key": supabase_service_key}
             )
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "supabase",
                     {"project_url": sb_config.url},
@@ -1377,11 +1547,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         except Exception as exc:
             _report_env_loader_failure(exc, integration="supabase")
+    return records
 
+
+def _load_signoz() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     try:
         signoz_config = signoz_config_from_env()
         if signoz_config is not None and signoz_config.is_configured:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "signoz",
                     signoz_config.model_dump(exclude={"integration_id"}),
@@ -1389,11 +1563,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load SigNoz config from env", exc_info=True)
+    return records
 
+
+def _load_jenkins() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     try:
         jenkins_config = jenkins_config_from_env()
         if jenkins_config is not None and jenkins_config.is_configured:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "jenkins",
                     jenkins_config.model_dump(exclude={"integration_id"}),
@@ -1401,11 +1579,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load Jenkins config from env", exc_info=True)
+    return records
 
+
+def _load_tempo() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     try:
         tempo_config = tempo_config_from_env()
         if tempo_config is not None and tempo_config.is_configured:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "tempo",
                     tempo_config.model_dump(exclude={"integration_id"}),
@@ -1413,7 +1595,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception:
         logger.debug("Failed to load Tempo config from env", exc_info=True)
+    return records
 
+
+def _load_temporal() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     temporal_url = os.getenv("TEMPORAL_API_URL", "").strip()
     temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default").strip()
     if temporal_url and temporal_namespace:
@@ -1428,13 +1614,76 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="temporal")
         else:
-            integrations.append(
+            records.append(
                 _active_env_record(
                     "temporal",
                     temporal_config.model_dump(),
                 )
             )
+    return records
 
+
+# Per-integration env loaders, in the order their records are emitted. Each
+# loader reads its own environment variables and returns the record(s) it
+# produces (usually zero or one). Add a new env integration by appending its
+# loader here.
+_ENV_INTEGRATION_LOADERS: tuple[Callable[[], list[dict[str, Any]]], ...] = (
+    _load_grafana,
+    _load_datadog,
+    _load_groundcover,
+    _load_honeycomb,
+    _load_coralogix,
+    _load_aws,
+    _load_github,
+    _load_sentry,
+    _load_gitlab,
+    _load_mongodb,
+    _load_redis,
+    _load_postgresql,
+    _load_argocd,
+    _load_helm,
+    _load_vercel,
+    _load_opsgenie,
+    _load_pagerduty,
+    _load_incident_io,
+    _load_jira,
+    _load_discord,
+    _load_airflow,
+    _load_telegram,
+    _load_smtp,
+    _load_twilio_messaging,
+    _load_mongodb_atlas,
+    _load_openclaw,
+    _load_posthog_mcp,
+    _load_sentry_mcp,
+    _load_mariadb,
+    _load_dagster,
+    _load_rabbitmq,
+    _load_rds,
+    _load_betterstack,
+    _load_mysql,
+    _load_azure_sql,
+    _load_bitbucket,
+    _load_snowflake,
+    _load_azure,
+    _load_openobserve,
+    _load_opensearch,
+    _load_alertmanager,
+    _load_victoria_logs,
+    _load_splunk,
+    _load_supabase,
+    _load_signoz,
+    _load_jenkins,
+    _load_tempo,
+    _load_temporal,
+)
+
+
+def load_env_integrations() -> list[dict[str, Any]]:
+    """Build integration records from local environment variables."""
+    integrations: list[dict[str, Any]] = []
+    for loader in _ENV_INTEGRATION_LOADERS:
+        integrations.extend(loader())
     return integrations
 
 
