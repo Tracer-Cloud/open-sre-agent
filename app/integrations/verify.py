@@ -1,74 +1,27 @@
-"""Verification facade: per-service verifiers and the top-level verify_integrations runner."""
+"""Verification facade: per-service verifiers and the top-level verify_integrations runner.
+
+Verifier callables are sourced from the central plugin registry
+(``app.integrations.verification``). Importing this module also pulls
+in ``_verifiers_loader``, which triggers every vendor's
+``@register_verifier`` decorator so the registry is fully populated
+before any caller looks anything up.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.integrations import _verification_adapters as _adapters
+import app.integrations._verifiers_loader  # noqa: F401 — register all verifiers at import
 from app.integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
 from app.integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
+from app.integrations.verification import VerifierFn, get_verifier, result
 
-# Re-export type and all verifiers so external callers keep working.
-VerifierFn = _adapters.VerifierFn
-
-_verify_alertmanager = _adapters._verify_alertmanager
-_verify_argocd = _adapters._verify_argocd
-_verify_aws = _adapters._verify_aws
-_verify_azure = _adapters._verify_azure
-_verify_azure_sql = _adapters._verify_azure_sql
-_verify_betterstack = _adapters._verify_betterstack
-_verify_bitbucket = _adapters._verify_bitbucket
-_verify_clickhouse = _adapters._verify_clickhouse
-_verify_coralogix = _adapters._verify_coralogix
-_verify_dagster = _adapters._verify_dagster
-_verify_datadog = _adapters._verify_datadog
-_verify_discord = _adapters._verify_discord
-_verify_github = _adapters._verify_github
-_verify_google_docs = _adapters._verify_google_docs
-_verify_grafana = _adapters._verify_grafana
-_verify_groundcover = _adapters._verify_groundcover
-_verify_helm = _adapters._verify_helm
-_verify_honeycomb = _adapters._verify_honeycomb
-_verify_incident_io = _adapters._verify_incident_io
-_verify_jenkins = _adapters._verify_jenkins
-_verify_kafka = _adapters._verify_kafka
-_verify_mariadb = _adapters._verify_mariadb
-_verify_mongodb = _adapters._verify_mongodb
-_verify_mongodb_atlas = _adapters._verify_mongodb_atlas
-_verify_mysql = _adapters._verify_mysql
-_verify_openclaw = _adapters._verify_openclaw
-_verify_openobserve = _adapters._verify_openobserve
-_verify_opensearch = _adapters._verify_opensearch
-_verify_opsgenie = _adapters._verify_opsgenie
-_verify_pagerduty = _adapters._verify_pagerduty
-_verify_postgresql = _adapters._verify_postgresql
-_verify_rabbitmq = _adapters._verify_rabbitmq
-_verify_redis = _adapters._verify_redis
-_verify_sentry = _adapters._verify_sentry
-_verify_signoz = _adapters._verify_signoz
-_verify_tempo = _adapters._verify_tempo
-_verify_slack = _adapters._verify_slack
-_verify_smtp = _adapters._verify_smtp
-_verify_snowflake = _adapters._verify_snowflake
-_verify_splunk = _adapters._verify_splunk
-_verify_telegram = _adapters._verify_telegram
-_verify_tracer = _adapters._verify_tracer
-_verify_whatsapp = _adapters._verify_whatsapp
-_verify_vercel = _adapters._verify_vercel
-_verify_temporal = _adapters._verify_temporal
-
-_result = _adapters.result
-
-VERIFIER_REGISTRY: dict[str, VerifierFn] = {
-    spec_service: (
-        (lambda s, c: _adapters._verify_slack(s, c, send_slack_test=False))
-        if spec_service == "slack"
-        else _adapters.__dict__[f"_verify_{spec_service}"]
-    )
-    for spec_service in SUPPORTED_VERIFY_SERVICES
-}
+# Runtime-only config key used to plumb --send-slack-test into the slack
+# verifier without breaking the uniform ``VerifierFn`` shape. See
+# ``app/integrations/verifiers/slack.py``.
+_SLACK_RUNTIME_SEND_TEST_KEY = "_send_slack_test"
 
 
 def resolve_effective_integrations() -> dict[str, dict[str, Any]]:
@@ -87,10 +40,10 @@ def verify_integrations(
     results: list[dict[str, str]] = []
 
     for current_service in services:
-        verifier = VERIFIER_REGISTRY.get(current_service)
+        verifier = get_verifier(current_service)
         if verifier is None:
             results.append(
-                _result(
+                result(
                     current_service,
                     "-",
                     "failed",
@@ -100,33 +53,21 @@ def verify_integrations(
             continue
 
         integration = effective_integrations.get(current_service)
-
-        if current_service == "slack":
-            if not integration:
-                results.append(
-                    _result("slack", "-", "missing", "SLACK_WEBHOOK_URL is not configured.")
-                )
-                continue
-            results.append(
-                _adapters._verify_slack(
-                    source=str(integration["source"]),
-                    config=dict(integration["config"]),
-                    send_slack_test=send_slack_test,
-                )
-            )
-            continue
-
         if not integration:
             results.append(
-                _result(current_service, "-", "missing", "Not configured in local store or env.")
+                result(current_service, "-", "missing", "Not configured in local store or env.")
             )
             continue
 
+        config = dict(integration["config"])
+        if current_service == "slack" and send_slack_test:
+            config[_SLACK_RUNTIME_SEND_TEST_KEY] = True
+
         try:
-            results.append(verifier(str(integration["source"]), dict(integration["config"])))
+            results.append(verifier(str(integration["source"]), config))
         except Exception as exc:
             results.append(
-                _result(current_service, str(integration.get("source", "-")), "failed", str(exc))
+                result(current_service, str(integration.get("source", "-")), "failed", str(exc))
             )
 
     return results
@@ -161,56 +102,20 @@ def verification_exit_code(
     return 0
 
 
+# ``VERIFIER_REGISTRY`` was a verify-time snapshot before the central
+# registry existed. It's preserved here for the (small) set of callers
+# that introspect it. Querying ``get_verifier(name)`` directly is the
+# preferred path for new code.
+VERIFIER_REGISTRY: dict[str, VerifierFn | None] = {
+    spec_service: get_verifier(spec_service) for spec_service in SUPPORTED_VERIFY_SERVICES
+}
+
+
 __all__ = [
     "CORE_VERIFY_SERVICES",
     "SUPPORTED_VERIFY_SERVICES",
     "VERIFIER_REGISTRY",
     "VerifierFn",
-    "_verify_alertmanager",
-    "_verify_argocd",
-    "_verify_aws",
-    "_verify_azure",
-    "_verify_azure_sql",
-    "_verify_betterstack",
-    "_verify_bitbucket",
-    "_verify_clickhouse",
-    "_verify_coralogix",
-    "_verify_dagster",
-    "_verify_datadog",
-    "_verify_discord",
-    "_verify_github",
-    "_verify_google_docs",
-    "_verify_grafana",
-    "_verify_groundcover",
-    "_verify_helm",
-    "_verify_honeycomb",
-    "_verify_incident_io",
-    "_verify_jenkins",
-    "_verify_kafka",
-    "_verify_mariadb",
-    "_verify_mongodb",
-    "_verify_mongodb_atlas",
-    "_verify_mysql",
-    "_verify_openclaw",
-    "_verify_openobserve",
-    "_verify_opensearch",
-    "_verify_opsgenie",
-    "_verify_pagerduty",
-    "_verify_postgresql",
-    "_verify_rabbitmq",
-    "_verify_redis",
-    "_verify_sentry",
-    "_verify_signoz",
-    "_verify_tempo",
-    "_verify_slack",
-    "_verify_smtp",
-    "_verify_snowflake",
-    "_verify_splunk",
-    "_verify_telegram",
-    "_verify_tracer",
-    "_verify_vercel",
-    "_verify_whatsapp",
-    "_verify_temporal",
     "format_verification_results",
     "resolve_effective_integrations",
     "verification_exit_code",

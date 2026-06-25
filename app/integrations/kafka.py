@@ -250,7 +250,9 @@ def get_consumer_group_lag(
 
     try:
         from confluent_kafka import TopicPartition
-        from confluent_kafka.admin import ConsumerGroupTopicPartitions
+        from confluent_kafka.admin import (  # type: ignore[attr-defined]
+            ConsumerGroupTopicPartitions,
+        )
 
         admin = _get_admin_client(config)
         consumer = _get_consumer(config)

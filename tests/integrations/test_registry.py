@@ -22,7 +22,7 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
     expected_verify = tuple(
         spec.service
         for spec in sorted(
-            (candidate for candidate in INTEGRATION_SPECS if candidate.verifier is not None),
+            (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
             key=lambda candidate: (
                 candidate.verify_order if candidate.verify_order is not None else 10_000
             ),

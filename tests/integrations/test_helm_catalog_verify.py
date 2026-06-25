@@ -6,7 +6,8 @@ import pytest
 
 from app.integrations.catalog import classify_integrations, resolve_effective_integrations
 from app.integrations.models import HelmIntegrationConfig
-from app.integrations.verify import _verify_helm, verify_integrations
+from app.integrations.verify import verify_integrations
+from app.services.helm.verifier import verify_helm as _verify_helm
 
 
 @pytest.fixture(autouse=True)

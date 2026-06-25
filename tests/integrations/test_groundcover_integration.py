@@ -7,7 +7,8 @@ from pydantic import ValidationError
 
 from app.integrations.config_models import GroundcoverIntegrationConfig
 from app.integrations.probes import ProbeResult
-from app.integrations.verify import _verify_groundcover, resolve_effective_integrations
+from app.integrations.verify import resolve_effective_integrations
+from app.services.groundcover.verifier import verify_groundcover as _verify_groundcover
 
 
 def test_config_defaults_and_normalization() -> None:

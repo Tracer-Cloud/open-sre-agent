@@ -6,7 +6,8 @@ import pytest
 
 from app.integrations.catalog import classify_integrations, resolve_effective_integrations
 from app.integrations.models import ArgoCDIntegrationConfig
-from app.integrations.verify import _verify_argocd, verify_integrations
+from app.integrations.verify import verify_integrations
+from app.services.argocd.verifier import verify_argocd as _verify_argocd
 
 
 @pytest.fixture(autouse=True)

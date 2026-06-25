@@ -67,9 +67,7 @@ def test_every_cli_handler_is_registered_in_registry() -> None:
 
 
 def test_every_verifier_has_a_verify_order() -> None:
-    orphans = [
-        s.service for s in INTEGRATION_SPECS if s.verifier is not None and s.verify_order is None
-    ]
+    orphans = [s.service for s in INTEGRATION_SPECS if s.has_verifier and s.verify_order is None]
     if orphans:
         raise AssertionError(
             f"Registry defines verifier but no verify_order for {orphans}. "

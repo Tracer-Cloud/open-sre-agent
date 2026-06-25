@@ -5,22 +5,22 @@ from typing import Any
 
 import pytest
 
+from app.integrations.verifiers.aws import verify_aws as _verify_aws
+from app.integrations.verifiers.github import verify_github as _verify_github
+from app.integrations.verifiers.grafana import verify_grafana as _verify_grafana
+from app.integrations.verifiers.sentry import verify_sentry as _verify_sentry
+from app.integrations.verifiers.snowflake import verify_snowflake as _verify_snowflake
+from app.integrations.verifiers.telegram import verify_telegram as _verify_telegram
+from app.integrations.verifiers.tracer import verify_tracer as _verify_tracer
 from app.integrations.verify import (
-    _verify_aws,
-    _verify_coralogix,
-    _verify_datadog,
-    _verify_github,
-    _verify_grafana,
-    _verify_honeycomb,
-    _verify_sentry,
-    _verify_snowflake,
-    _verify_telegram,
-    _verify_tracer,
-    _verify_vercel,
     resolve_effective_integrations,
     verification_exit_code,
     verify_integrations,
 )
+from app.services.coralogix.verifier import verify_coralogix as _verify_coralogix
+from app.services.datadog.verifier import verify_datadog as _verify_datadog
+from app.services.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
+from app.services.vercel.verifier import verify_vercel as _verify_vercel
 
 
 class _FakeResponse:
@@ -163,7 +163,7 @@ def test_verify_telegram_passes_with_get_me(monkeypatch: pytest.MonkeyPatch) -> 
         return _FakeResponse({"ok": True, "result": {"username": "opensre_bot"}})
 
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.requests.get",
+        "app.integrations.verifiers.telegram.requests.get",
         _fake_requests_get,
     )
     result = _verify_telegram(
@@ -182,7 +182,7 @@ def test_verify_telegram_missing_token() -> None:
 
 def test_verify_telegram_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.requests.get",
+        "app.integrations.verifiers.telegram.requests.get",
         lambda *_a, **_kw: _FakeResponse({"ok": False, "description": "Unauthorized"}),
     )
     result = _verify_telegram("local store", {"bot_token": "bad"})
@@ -234,7 +234,7 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.requests.get",
+        "app.integrations.verifiers.grafana.requests.get",
         _fake_requests_get,
     )
 
@@ -368,7 +368,7 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
             return _AssumedSTSClient()
         return _BaseSTSClient()
 
-    monkeypatch.setattr("app.integrations._verification_adapters.boto3.client", _fake_boto3_client)
+    monkeypatch.setattr("app.integrations.verifiers.aws.boto3.client", _fake_boto3_client)
 
     result = _verify_aws(
         "local store",
@@ -395,11 +395,11 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
             return [{"id": "int-1"}, {"id": "int-2"}]
 
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.extract_org_id_from_jwt",
+        "app.integrations.verifiers.tracer.extract_org_id_from_jwt",
         lambda _token: "org_123",
     )
     monkeypatch.setattr(
-        "app.integrations._verification_adapters.TracerClient",
+        "app.integrations.verifiers.tracer.TracerClient",
         _FakeTracerClient,
     )
 
@@ -418,10 +418,10 @@ def test_verify_github_passes_with_valid_streamable_http_config(
 ) -> None:
     from types import SimpleNamespace
 
-    import app.integrations._verification_adapters as _adapters
+    import app.integrations.verifiers.github as _github_verifier
 
     monkeypatch.setattr(
-        _adapters,
+        _github_verifier,
         "validate_github_mcp_config",
         lambda _config: SimpleNamespace(ok=True, detail="GitHub MCP ok", failure_category=""),
     )
@@ -450,11 +450,11 @@ def test_verify_github_reports_credential_less_store_record_as_missing() -> None
 
 
 def test_verify_sentry_passes_with_valid_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    import app.integrations._verification_adapters as _adapters
+    import app.integrations.verification.validation as _validation
 
     monkeypatch.setattr(
-        _adapters,
-        "_verify_with_validation_result",
+        _validation,
+        "verify_with_validation_result",
         lambda service, source, _config, **_kw: {
             "service": service,
             "source": source,
