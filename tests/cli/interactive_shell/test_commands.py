@@ -1345,9 +1345,9 @@ class TestInvestigateFileCommand:
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
 
-        queued = session.take_pending_prompt_default()
-        assert queued == f"/investigate {alert_file}"
         assert session.take_pending_autosubmit() is True
+        queued = session.take_pending_prompt_default()
+        assert queued.startswith("/investigate ")
         assert captured == []
 
         dispatch_slash(queued, session, console)

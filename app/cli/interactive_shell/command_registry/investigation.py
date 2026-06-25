@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shlex
 from pathlib import Path
 
 from rich.console import Console
@@ -57,7 +56,7 @@ def _queue_investigate_target(session: ReplSession, target: str) -> None:
     hold it — queue the resolved target so the loop auto-submits it on the next
     prompt iteration without ``queue.join()`` blocking.
     """
-    session.queue_auto_command(f"/investigate {shlex.quote(target)}")
+    session.queue_auto_command(f"/investigate {target}")
 
 
 def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
