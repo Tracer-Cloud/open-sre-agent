@@ -7,6 +7,7 @@ import logging
 from typing import Any, cast
 
 from app.constants.investigation import MAX_INVESTIGATION_LOOPS
+from app.core.domain.state.evidence import EvidenceEntry
 from app.core.orchestration.node.investigate.loop import (
     InvestigationToolCallCache,
     degraded_investigation_from_llm_failure,
@@ -39,7 +40,6 @@ from app.observability import debug_print
 from app.observability import get_progress_tracker as get_tracker
 from app.services.agent_llm_client import ToolCall, get_agent_llm
 from app.state import InvestigationState
-from app.state.evidence import EvidenceEntry
 from app.tools.registered_tool import RegisteredTool
 from app.utils.tool_trace import redact_sensitive
 

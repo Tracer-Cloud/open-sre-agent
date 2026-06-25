@@ -7,9 +7,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.domain.state.evidence import EvidenceEntry
 from app.core.runtime.llm_invoke_errors import LLMInvokeFailure
 from app.services.agent_llm_client import ToolCall
-from app.state.evidence import EvidenceEntry
 from app.utils.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000

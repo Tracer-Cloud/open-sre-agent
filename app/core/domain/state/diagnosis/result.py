@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.core.domain.state.category_alignment import apply_category_alignment_adjustments
+from app.core.domain.state.diagnosis.alignment import apply_category_alignment_adjustments
 from app.types.root_cause_categories import (
     HERMES_ROOT_CAUSE_CATEGORIES,
     VALID_ROOT_CAUSE_CATEGORIES,

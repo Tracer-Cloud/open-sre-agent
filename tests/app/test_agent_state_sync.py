@@ -2,13 +2,11 @@
 
 If this test fails, a field was added/removed in one definition but not the other.
 Fix drift by updating ``AgentStateModel`` and the matching slice in
-``app/state/slices.py``.
+``app/core/domain/state/runtime_slices.py`` or ``app/state/slices.py``.
 """
 
-from app.state.agent_state import AgentState, AgentStateModel
-from app.state.slices import (
+from app.core.domain.state.runtime_slices import (
     AlertInputSlice,
-    ChatStateSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -18,6 +16,8 @@ from app.state.slices import (
     MaskingSlice,
     SessionContext,
 )
+from app.state.agent_state import AgentState, AgentStateModel
+from app.state.slices import ChatStateSlice
 
 _SLICE_TYPES: tuple[type, ...] = (
     SessionContext,

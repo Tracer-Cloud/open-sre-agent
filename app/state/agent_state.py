@@ -1,12 +1,13 @@
 """AgentState TypedDict and its Pydantic validator model.
 
 ``AgentStateModel`` is the single source of truth for field defaults and
-validation. ``AgentState`` composes slice TypedDicts from :mod:`app.state.slices`
-for documentation and stage-level typing; the runtime dict remains flat.
+validation. ``AgentState`` composes investigation slices from :mod:`app.core.domain.state.runtime_slices`
+and chat slice from :mod:`app.state.slices`; the runtime dict remains flat.
 
 Whenever you add or remove a field, update ``AgentStateModel`` and the
-appropriate slice in ``slices.py``. ``tests/app/test_agent_state_sync.py``
-asserts slice keys and Pydantic fields stay aligned with ``AgentState``.
+appropriate slice in ``runtime_slices.py`` or ``slices.py``.
+``tests/app/test_agent_state_sync.py`` asserts slice keys and Pydantic fields
+stay aligned with ``AgentState``.
 """
 
 from __future__ import annotations
@@ -15,9 +16,8 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from app.state.slices import (
+from app.core.domain.state.runtime_slices import (
     AlertInputSlice,
-    ChatStateSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
     DiagnosisSlice,
@@ -27,6 +27,7 @@ from app.state.slices import (
     MaskingSlice,
     SessionContext,
 )
+from app.state.slices import ChatStateSlice
 from app.state.types import AgentMode, ChatMessageModel
 from app.strict_config import StrictConfigModel
 from app.types.retrieval import RetrievalControlsMap
@@ -49,7 +50,7 @@ class AgentState(
 
     Chat mode primarily uses ``ChatStateSlice`` + ``SessionContext``.
     Investigation mode uses alert, plan, runtime, diagnosis, and delivery slices.
-    See :mod:`app.state.slices` for field groupings and stage ownership.
+    See :mod:`app.core.domain.state.runtime_slices` for investigation field groupings.
     """
 
 

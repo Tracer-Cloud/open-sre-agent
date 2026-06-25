@@ -54,7 +54,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/remote/` — Remote-hosted runtime operations and integration points.
 - `app/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
-- `app/state/` — Shared agent and investigation state models plus state factories.
+- `app/state/` — Shared agent runtime envelope (`AgentState`), chat slice, and state factories.
+- `app/core/domain/state/` — Investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `app/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
@@ -99,7 +100,8 @@ Files to touch:
   category alignment, correlation scoring).
 - `app/core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
   classification).
-- `app/state/*.py` when adding or renaming persisted investigation fields.
+- `app/state/*.py` and `app/core/domain/state/runtime_slices.py` when adding or renaming persisted
+  investigation fields (update `AgentStateModel` and the matching slice).
 - `docs/` — update or add a page if the change introduces user-visible behavior or configuration.
 - `tests/` coverage for the affected CLI, synthetic, or integration paths.
 
