@@ -1,6 +1,6 @@
 """Progress-tracker port (Protocol) + Noop default + injection helpers.
 
-Core code (under ``core/domain/``, ``core/orchestration/``, ``app/utils/``)
+Core code (under ``core/domain/``, ``core/orchestration/``, ``utils/``)
 imports only from this module to report stage progress; the CLI
 surface implements the Protocol and registers its concrete tracker
 via :func:`set_progress_tracker` at boundary.

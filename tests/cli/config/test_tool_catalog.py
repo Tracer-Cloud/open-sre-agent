@@ -12,7 +12,6 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from app.tools.registered_tool import RegisteredTool
 from cli.config import tool_catalog
 from cli.config.tool_catalog import (
     ToolCatalogEntry,
@@ -22,6 +21,7 @@ from cli.config.tool_catalog import (
 )
 from cli.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
 from cli.interactive_shell.runtime.session import ReplSession
+from tools.registered_tool import RegisteredTool
 
 
 def _make_tool(
@@ -30,7 +30,7 @@ def _make_tool(
     description: str = "Tool description.",
     surfaces: tuple[str, ...] = ("investigation",),
     input_schema: dict[str, Any] | None = None,
-    origin_module: str = "app.tools.registry",
+    origin_module: str = "tools.registry",
 ) -> RegisteredTool:
     """Construct a minimal RegisteredTool stub for catalog rendering tests."""
     return RegisteredTool(
@@ -132,7 +132,7 @@ class TestBuildToolCatalog:
         assert entry.description == "Search GitHub code."
         assert entry.input_schema_summary == "query: string"
         # Source file for the registry module resolves to its repo-relative path.
-        assert entry.source_file == "app/tools/registry.py"
+        assert entry.source_file == "tools/registry.py"
 
     def test_filters_by_surface_when_provided(self, fake_registry: list[RegisteredTool]) -> None:
         fake_registry.extend(
@@ -179,14 +179,14 @@ class TestFormatToolCatalogText:
                 name="alpha",
                 surfaces=("investigation",),
                 description="alpha desc",
-                source_file="app/tools/alpha.py",
+                source_file="tools/alpha.py",
                 input_schema_summary="(no params)",
             ),
             ToolCatalogEntry(
                 name="beta",
                 surfaces=("chat",),
                 description="beta desc",
-                source_file="app/tools/beta.py",
+                source_file="tools/beta.py",
                 input_schema_summary="x: string",
             ),
         ]
@@ -204,7 +204,7 @@ class TestFormatToolCatalogText:
                 name="dual",
                 surfaces=("investigation", "chat"),
                 description="dual desc",
-                source_file="app/tools/dual.py",
+                source_file="tools/dual.py",
                 input_schema_summary="(no params)",
             )
         ]
@@ -246,7 +246,7 @@ class TestListToolsSlashCommand:
                 name="search_github",
                 surfaces=("investigation", "chat"),
                 description="Search GitHub code.",
-                source_file="app/tools/search_github.py",
+                source_file="tools/search_github.py",
                 input_schema_summary="query: string",
             )
         ]
@@ -269,7 +269,7 @@ class TestListToolsSlashCommand:
                 name="risky_tool",
                 surfaces=("investigation",),
                 description="Payload [bold]injection[/bold] attempt",
-                source_file="app/tools/risky.py",
+                source_file="tools/risky.py",
                 input_schema_summary="x: string",
             )
         ]

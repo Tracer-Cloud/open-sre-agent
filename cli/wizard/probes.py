@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from app.config import get_tracer_base_url
 from cli.wizard.config import PROJECT_ENV_PATH
+from config.config import get_tracer_base_url
 
 
 @dataclass(frozen=True)

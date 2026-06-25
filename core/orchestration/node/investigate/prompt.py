@@ -103,7 +103,7 @@ def build_system_prompt(state: dict[str, Any]) -> str:
 
 
 def format_alert_context(state: dict[str, Any]) -> str:
-    from app.tools.registry import get_registered_tools
+    from tools.registry import get_registered_tools
 
     alert_name = state.get("alert_name", "Unknown alert")
     pipeline_name = state.get("pipeline_name", "Unknown pipeline")

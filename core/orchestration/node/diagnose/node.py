@@ -97,7 +97,7 @@ def _parse_via_structured_output(
     *,
     alert_source: str = "",
 ) -> InvestigationResult:
-    from app.services import get_llm_for_reasoning
+    from services import get_llm_for_reasoning
 
     prompt = f"""Extract the structured diagnosis from this investigation conclusion.
 
@@ -142,7 +142,7 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
 def _parse_via_legacy(
     last_text: str, _evidence: dict[str, Any], alert_name: str
 ) -> InvestigationResult:
-    from app.services import parse_root_cause
+    from services import parse_root_cause
 
     try:
         rr = parse_root_cause(last_text)

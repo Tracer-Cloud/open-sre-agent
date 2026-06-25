@@ -76,7 +76,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
         CLIInterruptedError,
         CLITimeoutError,
     )
-    from app.utils.llm_retry import LLMCreditExhaustedError
+    from utils.llm_retry import LLMCreditExhaustedError
 
     # Fatal — propagate to the runner / operator. Do NOT wrap into the
     # generic "rate-limited" classification (which the text branch below

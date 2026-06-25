@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.config import (
+from config.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings,
 )
-from app.utils.config import load_env
+from utils.config import load_env
 
 
 def _repo_root() -> Path:
@@ -81,7 +81,7 @@ def _resolve_live_llm_configuration(
         # Live suites must run with real credentials and fail on misconfiguration.
         pytest.fail(f"Live LLM routing tests require usable LLM configuration:{hint}. {msg}")
 
-    from app.services.llm_client import reset_llm_singletons
+    from services.llm_client import reset_llm_singletons
 
     monkeypatch.setenv("LLM_PROVIDER", settings.provider)
     reset_llm_singletons()

@@ -2,9 +2,9 @@
 
 Use this checklist whenever you add or materially change:
 
-- a tool under `app/tools/`
+- a tool under `tools/`
 - an integration under `integrations/`
-- a service client under `app/services/` that changes investigation behavior
+- a service client under `services/` that changes investigation behavior
 - investigation source wiring for an existing tool/integration
 
 This file is the detailed definition of done for tool and integration work. Use it together with [AGENTS.md](AGENTS.md) and [CI.md](CI.md).
@@ -13,9 +13,9 @@ This file is the detailed definition of done for tool and integration work. Use 
 
 ### Files usually involved
 
-- `app/tools/<ToolName>/__init__.py` or `app/tools/<tool_file>.py`
-- `app/tools/utils/` for shared helpers
-- `app/services/<vendor>/client.py` if transport/parsing should live in a reusable client
+- `tools/<ToolName>/__init__.py` or `tools/<tool_file>.py`
+- `tools/utils/` for shared helpers
+- `services/<vendor>/client.py` if transport/parsing should live in a reusable client
 - `docs/<tool_name>.mdx`
 - `docs/docs.json`
 - `tests/tools/test_<tool_name>.py`
@@ -29,7 +29,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 - [ ] `extract_params` maps resolved integration state into tool args correctly
 - [ ] Failure responses have a stable, investigation-friendly shape
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
-- [ ] Reusable transport/parsing logic lives in `app/services/` or `app/tools/utils/` rather than being copied into the tool body
+- [ ] Reusable transport/parsing logic lives in `services/` or `tools/utils/` rather than being copied into the tool body
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
 - [ ] Output that may contain secrets, tokens, or PII is run through `platform_services/masking/` before being returned
 
@@ -59,8 +59,8 @@ Common failure modes to consider:
 - `integrations/<name>.py`
 - `integrations/catalog.py`
 - `integrations/verify.py`
-- `app/services/<name>/client.py`
-- `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py`
+- `services/<name>/client.py`
+- `tools/<Name>Tool/` or `tools/<tool_file>.py`
 - `docs/<name>.mdx`
 - `docs/docs.json`
 - `tests/integrations/test_<name>.py`
@@ -71,7 +71,7 @@ Common failure modes to consider:
 - [ ] Integration config, normalization, and validators are in place under `integrations/<name>.py`
 - [ ] Catalog resolution / env loading is wired correctly
 - [ ] Verification path is wired in `integrations/verify.py` and adapters/registry as needed
-- [ ] Service client is added under `app/services/<name>/client.py` (only if the integration needs direct remote calls)
+- [ ] Service client is added under `services/<name>/client.py` (only if the integration needs direct remote calls)
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
 - [ ] `opensre onboard` parity is added or intentionally documented as out of scope

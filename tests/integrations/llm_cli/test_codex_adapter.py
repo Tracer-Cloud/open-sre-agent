@@ -555,9 +555,7 @@ def test_detect_falls_back_when_codex_bin_invalid(
 
 @patch("integrations.llm_cli.codex.subprocess.run")
 @patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
-@patch(
-    "integrations.llm_cli.codex._fallback_codex_paths", return_value=["/x/codex", "/y/codex"]
-)
+@patch("integrations.llm_cli.codex._fallback_codex_paths", return_value=["/x/codex", "/y/codex"])
 @patch("integrations.llm_cli.binary_resolver.is_runnable_binary")
 def test_detect_uses_first_runnable_fallback_path(
     mock_is_runnable: MagicMock,

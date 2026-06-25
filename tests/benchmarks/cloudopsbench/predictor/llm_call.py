@@ -32,7 +32,6 @@ import logging
 import re
 from typing import Any
 
-from app.utils.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.predictor.snapping import _snap_fault_object, _snap_root_cause
 from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _FAULT_OBJECT_NAMESPACES,
@@ -42,6 +41,7 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _TAXONOMY_CATEGORIES,
 )
 from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
+from utils.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 
 logger = logging.getLogger(__name__)
 

@@ -21,8 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.utils import sentry_sdk as sentry_mod
 from platform_services.analytics import provider
+from utils import sentry_sdk as sentry_mod
 
 _ENV_VARS = (
     "OPENSRE_NO_TELEMETRY",

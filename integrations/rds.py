@@ -10,9 +10,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from config.strict_config import StrictConfigModel
 from integrations._relational import env_str
 from integrations._validation_helpers import report_classify_failure
-from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 

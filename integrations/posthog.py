@@ -12,14 +12,14 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
-from integrations._validation_helpers import report_validation_failure
-from app.strict_config import StrictConfigModel
 from config.constants.posthog import (
     DEFAULT_POSTHOG_BOUNCE_THRESHOLD,
     DEFAULT_POSTHOG_BOUNCE_WINDOW,
     DEFAULT_POSTHOG_TIMEOUT_SECONDS,
     DEFAULT_POSTHOG_URL,
 )
+from config.strict_config import StrictConfigModel
+from integrations._validation_helpers import report_validation_failure
 
 logger = logging.getLogger(__name__)
 

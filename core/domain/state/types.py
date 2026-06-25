@@ -7,7 +7,7 @@ from typing import Any, Literal
 from pydantic import Field
 from typing_extensions import TypedDict
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 
 AgentMode = Literal["chat", "investigation", "agent_incident"]
 

@@ -12,7 +12,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
@@ -34,6 +33,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.actio
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from cli.interactive_shell.shell.execution import ShellExecutionResult
+from integrations.llm_cli.base import CLIInvocation, CLIProbe
 
 
 class _ImmediateThread:

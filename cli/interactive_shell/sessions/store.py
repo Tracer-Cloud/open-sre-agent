@@ -23,8 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.version import get_version
 from cli.interactive_shell.sessions.protocol import SessionPersistenceSource
+from config.version import get_version
 
 _NAME_MAX_CHARS = 50
 

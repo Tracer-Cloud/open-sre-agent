@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.TracerFailedJobsTool import get_failed_jobs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TracerFailedJobsTool import get_failed_jobs
 
 
 class TestTracerFailedJobsToolContract(BaseToolContract):
@@ -45,7 +45,7 @@ def test_run_happy_path() -> None:
             {"jobName": "job-2", "status": "SUCCEEDED", "statusReason": "", "container": {}},
         ]
     }
-    with patch("app.tools.TracerFailedJobsTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.TracerFailedJobsTool.get_tracer_web_client", return_value=mock_client):
         result = get_failed_jobs(trace_id="trace-123")
     assert result["failed_count"] == 1
     assert result["total_jobs"] == 2

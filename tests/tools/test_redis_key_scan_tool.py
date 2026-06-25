@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.RedisKeyScanTool import scan_redis_keys
 from tests.tools.conftest import BaseToolContract
+from tools.RedisKeyScanTool import scan_redis_keys
 
 
 class TestRedisKeyScanToolContract(BaseToolContract):
@@ -21,7 +21,7 @@ def test_metadata() -> None:
 
 def test_run_happy_path() -> None:
     fake_result = {"source": "redis", "available": True, "matched_keys": 3, "pattern": "session:*"}
-    with patch("app.tools.RedisKeyScanTool.scan_keys", return_value=fake_result) as mock_fn:
+    with patch("tools.RedisKeyScanTool.scan_keys", return_value=fake_result) as mock_fn:
         result = scan_redis_keys(host="localhost", pattern="session:*")
     assert result["matched_keys"] == 3
     assert mock_fn.call_args.kwargs["pattern"] == "session:*"
@@ -29,7 +29,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.RedisKeyScanTool.scan_keys",
+        "tools.RedisKeyScanTool.scan_keys",
         return_value={"source": "redis", "available": False, "error": "boom"},
     ):
         result = scan_redis_keys(host="invalid")

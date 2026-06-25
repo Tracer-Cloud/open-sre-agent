@@ -7,8 +7,6 @@ from importlib import import_module
 import httpx
 import pytest
 
-from integrations.betterstack import BetterStackValidationResult
-from integrations.github_mcp import GitHubMCPValidationResult
 from cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
@@ -25,6 +23,8 @@ from cli.wizard.integration_health import (
     validate_telegram_bot,
     validate_vercel_integration,
 )
+from integrations.betterstack import BetterStackValidationResult
+from integrations.github_mcp import GitHubMCPValidationResult
 
 
 def test_legacy_integration_health_import_surface_still_exports_validators() -> None:

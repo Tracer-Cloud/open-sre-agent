@@ -62,7 +62,7 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
 def test_check_llm_provider_not_set(monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
@@ -73,7 +73,7 @@ def test_check_llm_provider_not_set(monkeypatch) -> None:
 def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
@@ -84,7 +84,7 @@ def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
 def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key",
+        "config.config.get_llm_provider_api_key",
         lambda _provider: ("GEMINI_API_KEY", "keyring-backed-key"),
     )
 
@@ -181,9 +181,7 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
 def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
     monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
-    monkeypatch.setattr(
-        "integrations.store.list_integrations", lambda: [{"service": "grafana"}]
-    )
+    monkeypatch.setattr("integrations.store.list_integrations", lambda: [{"service": "grafana"}])
 
     ok, detail = doctor._check_integrations()
 

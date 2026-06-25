@@ -9,7 +9,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.services.argocd import ArgoCDClient, ArgoCDConfig, make_argocd_client
+from services.argocd import ArgoCDClient, ArgoCDConfig, make_argocd_client
 
 
 def _application_payload(name: str = "payments-api") -> dict[str, Any]:
@@ -661,7 +661,7 @@ def test_verify_ssl_false_is_passed_to_http_client(monkeypatch: pytest.MonkeyPat
         def __init__(self, **kwargs: Any) -> None:
             captured.update(kwargs)
 
-    monkeypatch.setattr("app.services.argocd.client.httpx.Client", FakeClient)
+    monkeypatch.setattr("services.argocd.client.httpx.Client", FakeClient)
     client = ArgoCDClient(
         ArgoCDConfig(
             base_url="https://argocd.example.com",

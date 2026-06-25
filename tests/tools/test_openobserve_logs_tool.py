@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
-from app.tools.OpenObserveLogsTool import query_openobserve_logs
 from tests.tools.conftest import BaseToolContract, MockHttpxResponse
+from tools.OpenObserveLogsTool import query_openobserve_logs
 
 # ---------------------------------------------------------------------------
 # Contract — metadata, is_available, extract_params surface
@@ -180,7 +180,7 @@ def test_uses_bearer_authorization_when_api_token_present(
         captured["headers"] = headers
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -199,7 +199,7 @@ def test_uses_basic_authorization_when_only_username_password_present(
         captured["headers"] = headers
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -217,7 +217,7 @@ def test_bearer_takes_precedence_over_basic(monkeypatch: pytest.MonkeyPatch) -> 
         captured["headers"] = headers
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -241,7 +241,7 @@ def test_endpoint_uses_default_org_when_blank(monkeypatch: pytest.MonkeyPatch) -
         captured["url"] = url
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid/",  # trailing slash should be stripped
@@ -258,7 +258,7 @@ def test_endpoint_includes_provided_org(monkeypatch: pytest.MonkeyPatch) -> None
         captured["url"] = url
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -275,7 +275,7 @@ def test_default_sql_used_when_query_blank(monkeypatch: pytest.MonkeyPatch) -> N
         captured["payload"] = json
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -293,7 +293,7 @@ def test_provided_query_is_passed_through(monkeypatch: pytest.MonkeyPatch) -> No
         captured["payload"] = json
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -312,7 +312,7 @@ def test_payload_includes_size_and_time_window(monkeypatch: pytest.MonkeyPatch) 
         captured["payload"] = json
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -334,7 +334,7 @@ def test_stream_name_only_included_when_provided(monkeypatch: pytest.MonkeyPatch
         captured.append(json)
         return MockHttpxResponse({"hits": []})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     # Without stream
     query_openobserve_logs(
@@ -360,7 +360,7 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
         captured["size"] = json["size"]
         return MockHttpxResponse({"hits": [{"message": f"m{idx}"} for idx in range(50)]})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -383,7 +383,7 @@ def test_records_from_top_level_hits_list(monkeypatch: pytest.MonkeyPatch) -> No
     def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
         return MockHttpxResponse({"hits": [{"a": 1}, {"a": 2}]})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -405,7 +405,7 @@ def test_records_from_elastic_style_nested_hits(monkeypatch: pytest.MonkeyPatch)
             }
         )
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -418,7 +418,7 @@ def test_records_from_records_field(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
         return MockHttpxResponse({"records": [{"x": 1}, "ignore-me", {"x": 2}]})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -432,7 +432,7 @@ def test_records_from_data_field(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
         return MockHttpxResponse({"data": [{"y": 9}]})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -445,7 +445,7 @@ def test_records_empty_on_unrecognized_shape(monkeypatch: pytest.MonkeyPatch) ->
     def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
         return MockHttpxResponse({"unrelated": True})
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -467,7 +467,7 @@ def test_returns_unavailable_on_http_error_status(monkeypatch: pytest.MonkeyPatc
             raise_for_status_error=RuntimeError("HTTP 502 from OpenObserve"),
         )
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",
@@ -482,7 +482,7 @@ def test_returns_unavailable_on_request_exception(monkeypatch: pytest.MonkeyPatc
     def _raise(*_args: Any, **_kwargs: Any) -> None:
         raise ConnectionError("connection refused")
 
-    monkeypatch.setattr("app.tools.OpenObserveLogsTool.httpx.post", _raise)
+    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _raise)
 
     result = query_openobserve_logs(
         base_url="https://oo.example.invalid",

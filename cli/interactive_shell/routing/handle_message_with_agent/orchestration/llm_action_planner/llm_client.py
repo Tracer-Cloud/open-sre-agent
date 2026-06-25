@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _tool_specs_for_provider(session: Any) -> list[dict[str, Any]]:
-    from app.config import resolve_llm_settings
+    from config.config import resolve_llm_settings
     from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
         REGISTRY,
     )
@@ -39,7 +39,7 @@ def _tool_specs_for_provider(session: Any) -> list[dict[str, Any]]:
 
 def _call_llm(sanitised_text: str, session: Any) -> str | None:
     try:
-        from app.services.llm_client import get_llm_for_classification
+        from services.llm_client import get_llm_for_classification
     except Exception as exc:
         logger.warning(
             "llm_action_planner: LLM client import failed (%s): %s",
@@ -67,7 +67,7 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
         )
         # Raise a typed error so the caller can surface the reason in the
         # assistant block instead of printing a raw log warning above it.
-        from app.config import llm_provider_error_context
+        from config.config import llm_provider_error_context
         from cli.interactive_shell.routing.handle_message_with_agent.errors import (
             PlannerLLMError,
         )

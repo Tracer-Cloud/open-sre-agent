@@ -19,8 +19,8 @@ import pytest
 
 from integrations.catalog import classify_integrations
 from integrations.rabbitmq import RabbitMQConfig
-from app.tools.registry import get_registered_tools
 from tests.e2e.source_helpers import resolve_available_tool_sources
+from tools.registry import get_registered_tools
 
 ALERT_PATH = Path(__file__).parent / "rabbitmq_alert.json"
 
@@ -181,7 +181,7 @@ class TestRabbitMQPipelineFlow:
         API response and verify the evidence dict shape the pipeline expects."""
 
         from integrations import rabbitmq as rmq_module
-        from app.tools.RabbitMQQueueBacklogTool import get_rabbitmq_queue_backlog
+        from tools.RabbitMQQueueBacklogTool import get_rabbitmq_queue_backlog
 
         def fake_client(config: RabbitMQConfig) -> httpx.Client:
             queues_payload: list[dict[str, Any]] = [

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.tools.registry import get_registered_tool_map, resolve_tool_display_name
+from tools.registry import get_registered_tool_map, resolve_tool_display_name
 
 
 def _tool_event_key(data: dict[str, Any], name: str) -> str:

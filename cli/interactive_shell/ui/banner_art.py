@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 
-from app.utils.figlet import render_figlet
+from utils.figlet import render_figlet
 
 # Pre-rendered during development and checked into this module as a static string.
 # Colour codes are stripped; HIGHLIGHT is re-applied at render time.

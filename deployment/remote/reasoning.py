@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.tools.registry import resolve_tool_display_name
+from tools.registry import resolve_tool_display_name
 
 _NODE_VERB: dict[str, str] = {
     "extract_alert": "parsing",

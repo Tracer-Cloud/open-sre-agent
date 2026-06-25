@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 from cli.__main__ import cli
 from cli.interactive_shell.data_store.constants import SETUP_SERVICES, VERIFY_SERVICES
+from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 
 
 def test_integrations_show_redacts_api_token() -> None:

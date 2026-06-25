@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 import boto3
 import requests
 
-from app.utils.tracing import traceable
 from cli.investigation import run_investigation_cli
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
+from utils.tracing import traceable
 
 
 def _pick_field(payload: dict, keys: list[str]) -> str | None:

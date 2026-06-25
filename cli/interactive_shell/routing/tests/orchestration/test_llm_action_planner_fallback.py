@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-from integrations.llm_cli.failure_explain import is_context_length_overflow
 from cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.planner import (
     plan_actions_with_llm_result,
@@ -17,6 +16,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_a
 from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.system_prompt import (
     _SYSTEM_PROMPT_BASE,
 )
+from integrations.llm_cli.failure_explain import is_context_length_overflow
 
 
 def test_system_prompt_does_not_reference_removed_slash_catalog() -> None:
@@ -168,7 +168,7 @@ def _patch_planner_llm(monkeypatch, error: Exception) -> None:
         lambda _session: [],
     )
     monkeypatch.setattr(
-        "app.services.llm_client.get_llm_for_classification",
+        "services.llm_client.get_llm_for_classification",
         lambda: _RaisingClient(error),
     )
 
@@ -184,7 +184,7 @@ def test_call_llm_prefixes_fallback_provider_context(monkeypatch) -> None:
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setattr(
-        "app.config.resolve_llm_api_key",
+        "config.config.resolve_llm_api_key",
         lambda env_var: "sk-present" if env_var == "ANTHROPIC_API_KEY" else "",
     )
     _patch_planner_llm(
@@ -209,7 +209,7 @@ def test_call_llm_prefixes_active_provider_context_without_fallback(monkeypatch)
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setattr(
-        "app.config.resolve_llm_api_key",
+        "config.config.resolve_llm_api_key",
         lambda env_var: "sk-present" if env_var == "OPENAI_API_KEY" else "",
     )
     _patch_planner_llm(monkeypatch, RuntimeError("OpenAI billing quota exceeded."))

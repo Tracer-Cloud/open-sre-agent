@@ -13,8 +13,8 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
 from cli.__main__ import cli
+from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
 
 
 def test_setup_posthog_alias_resolves_to_posthog_mcp() -> None:

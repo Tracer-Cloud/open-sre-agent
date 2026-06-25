@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.notion.client import NotionClient, NotionConfig
+from services.notion.client import NotionClient, NotionConfig
 
 
 @pytest.fixture
@@ -71,9 +71,9 @@ def test_create_investigation_page_http_error(client: NotionClient) -> None:
 
 def test_notion_service_package_exports() -> None:
     """Verify the service package re-exports Notion client types."""
-    from app.services.notion import NotionClient as ExportedClient
-    from app.services.notion import NotionConfig as ExportedConfig
-    from app.services.notion.client import NotionClient, NotionConfig
+    from services.notion import NotionClient as ExportedClient
+    from services.notion import NotionConfig as ExportedConfig
+    from services.notion.client import NotionClient, NotionConfig
 
     assert ExportedClient is NotionClient
     assert ExportedConfig is NotionConfig

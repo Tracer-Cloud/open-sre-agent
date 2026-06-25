@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.services.datadog.client import DatadogAsyncClient, DatadogConfig
+from services.datadog.client import DatadogAsyncClient, DatadogConfig
 
 # -------------------------
 # fixtures
@@ -26,7 +26,7 @@ def async_client(config):
 
 @pytest.fixture
 def mock_async_httpx():
-    with patch("app.services.datadog.client.httpx.AsyncClient") as mock:
+    with patch("services.datadog.client.httpx.AsyncClient") as mock:
         yield mock
 
 

@@ -19,17 +19,17 @@ from integrations.models import (
 )
 from integrations.sentry import build_sentry_config, validate_sentry_config
 from integrations.tempo import build_tempo_config, validate_tempo_config
-from app.services.alertmanager import make_alertmanager_client
-from app.services.coralogix import CoralogixClient
-from app.services.datadog import DatadogClient, DatadogConfig
-from app.services.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
-from app.services.grafana import get_grafana_client_from_credentials
-from app.services.honeycomb import HoneycombClient
-from app.services.incident_io import IncidentIoClient
-from app.services.opsgenie import OpsGenieClient, OpsGenieConfig
-from app.services.pagerduty import PagerDutyClient
-from app.services.splunk import SplunkClient, SplunkConfig
-from app.services.vercel import VercelClient, VercelConfig
+from services.alertmanager import make_alertmanager_client
+from services.coralogix import CoralogixClient
+from services.datadog import DatadogClient, DatadogConfig
+from services.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
+from services.grafana import get_grafana_client_from_credentials
+from services.honeycomb import HoneycombClient
+from services.incident_io import IncidentIoClient
+from services.opsgenie import OpsGenieClient, OpsGenieConfig
+from services.pagerduty import PagerDutyClient
+from services.splunk import SplunkClient, SplunkConfig
+from services.vercel import VercelClient, VercelConfig
 
 from .shared import IntegrationHealthResult
 
@@ -172,7 +172,7 @@ def validate_google_docs_integration(
     folder_id: str,
 ) -> IntegrationHealthResult:
     """Validate Google Docs credentials and folder access."""
-    from app.services.google_docs import GoogleDocsClient
+    from services.google_docs import GoogleDocsClient
 
     try:
         config = GoogleDocsIntegrationConfig.model_validate(

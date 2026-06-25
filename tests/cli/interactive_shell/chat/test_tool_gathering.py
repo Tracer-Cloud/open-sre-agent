@@ -14,9 +14,9 @@ from typing import Any
 
 from rich.console import Console
 
-import app.services.agent_llm_client as agent_llm_client
 import core.orchestration.node.investigate.tools as investigate_tools
 import core.runtime as runtime_module
+import services.agent_llm_client as agent_llm_client
 from cli.interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
     _tool_input_hint,

@@ -7,7 +7,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from app.services.tracer_client.tracer_integrations import (
+from services.tracer_client.tracer_integrations import (
     GrafanaIntegrationCredentials,
     TracerIntegrationsMixin,
 )
@@ -106,7 +106,7 @@ def test_get_all_integrations_falls_back_to_empty_credentials_on_malformed_json(
 
     with caplog.at_level(
         logging.WARNING,
-        logger="app.services.tracer_client.tracer_integrations",
+        logger="services.tracer_client.tracer_integrations",
     ):
         result = client.get_all_integrations()
 

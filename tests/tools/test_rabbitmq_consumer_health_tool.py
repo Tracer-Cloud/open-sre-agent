@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.RabbitMQConsumerHealthTool import get_rabbitmq_consumer_health
 from tests.tools.conftest import BaseToolContract
+from tools.RabbitMQConsumerHealthTool import get_rabbitmq_consumer_health
 
 
 class TestRabbitMQConsumerHealthToolContract(BaseToolContract):
@@ -31,7 +31,7 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "app.tools.RabbitMQConsumerHealthTool.get_consumer_health",
+        "tools.RabbitMQConsumerHealthTool.get_consumer_health",
         return_value=fake_result,
     ):
         result = get_rabbitmq_consumer_health(host="rmq", username="admin")

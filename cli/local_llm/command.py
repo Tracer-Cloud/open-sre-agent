@@ -5,7 +5,6 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 
-from app.config import DEFAULT_OLLAMA_HOST
 from cli.interactive_shell.ui.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from cli.local_llm.hardware import detect_hardware, recommend_model
 from cli.local_llm.ollama import (
@@ -21,6 +20,7 @@ from cli.wizard.config import PROVIDER_BY_VALUE
 from cli.wizard.env_sync import sync_env_values, sync_provider_env
 from cli.wizard.store import get_store_path, save_local_config
 from cli.wizard.validation import _check_ollama
+from config.config import DEFAULT_OLLAMA_HOST
 
 _console = Console()
 

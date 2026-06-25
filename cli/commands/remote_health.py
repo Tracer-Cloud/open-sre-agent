@@ -117,7 +117,7 @@ def run_remote_health_check(
     import httpx
     from rich.console import Console
 
-    from app.version import get_version
+    from config.version import get_version
 
     resolved_client = client
     if resolved_client is None:

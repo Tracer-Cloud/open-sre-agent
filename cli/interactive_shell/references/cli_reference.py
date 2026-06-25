@@ -48,9 +48,9 @@ def _current_cli_signature() -> str:
     Bumps cache when subcommands change, slash-command metadata changes, or the
     installed package version changes.
     """
-    from app.version import get_version
     from cli.__main__ import cli
     from cli.interactive_shell.command_registry import SLASH_COMMANDS
+    from config.version import get_version
 
     cmd_names = ",".join(sorted(cli.commands.keys()))
     slash_names = ",".join(sorted(SLASH_COMMANDS.keys()))

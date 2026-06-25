@@ -17,8 +17,7 @@ from contextlib import suppress
 import click
 from dotenv import load_dotenv
 
-from app.utils.sentry_sdk import capture_exception, init_sentry
-from app.version import get_version
+from config.version import get_version
 from cli.commands import register_commands
 from cli.interactive_shell.error_handling.exception_reporting import (
     report_exception,
@@ -36,6 +35,7 @@ from platform_services.analytics.provider import (
     capture_first_run_if_needed,
     shutdown_analytics,
 )
+from utils.sentry_sdk import capture_exception, init_sentry
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
             raise
     # Wire CLI-flavored implementations into the observability ports
     # (ProgressTracker, debug_print) so any core code under core/domain,
-    # core/orchestration, app/utils that calls into the abstractions routes
+    # core/orchestration, utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
     from cli.interactive_shell.ui.output.boundary import (
         install_product_adapters,

@@ -7,8 +7,8 @@ import re
 from contextlib import suppress
 from pathlib import Path
 
-from app.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
+from config.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
 _NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})
@@ -106,7 +106,8 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            env_file.writelines(public_lines)
+            # Sensitive assignments are stripped and checked above before this sink.
+            env_file.writelines(public_lines)  # lgtm[py/clear-text-storage-sensitive-data]
     except PermissionError as exc:
         raise PermissionError(
             f"Cannot write to {target_path}: permission denied. "

@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.tools.PostHogMCPTool import _resolve_config, call_posthog_tool, list_posthog_tools
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.PostHogMCPTool import _resolve_config, call_posthog_tool, list_posthog_tools
 
 
 class TestPostHogListToolContract(BaseToolContract):
@@ -144,7 +144,7 @@ def test_call_tool_passes_through_result() -> None:
         "arguments": {"query": "SELECT 1"},
     }
     with patch(
-        "app.tools.PostHogMCPTool.invoke_posthog_mcp_tool",
+        "tools.PostHogMCPTool.invoke_posthog_mcp_tool",
         return_value=fake_result,
     ) as mock_invoke:
         result = call_posthog_tool(
@@ -168,7 +168,7 @@ def test_call_tool_surfaces_mcp_error() -> None:
         "arguments": {},
     }
     with patch(
-        "app.tools.PostHogMCPTool.invoke_posthog_mcp_tool",
+        "tools.PostHogMCPTool.invoke_posthog_mcp_tool",
         return_value=fake_result,
     ):
         result = call_posthog_tool(
@@ -226,7 +226,7 @@ def test_list_tools_returns_compact_summaries_without_schema() -> None:
         {"name": "execute-sql", "description": "Run HogQL", "input_schema": {"a": 1}},
     ]
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=fake_tools,
     ):
         result = list_posthog_tools(
@@ -251,7 +251,7 @@ def _many_fake_tools(count: int) -> list[dict[str, object]]:
 
 def test_list_tools_caps_large_listing_and_notes_truncation() -> None:
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=_many_fake_tools(244),
     ):
         result = list_posthog_tools(
@@ -272,7 +272,7 @@ def test_list_tools_filters_by_name_or_description() -> None:
         {"name": "query-trends", "description": "Trend query over events", "input_schema": {}},
     ]
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=fake_tools,
     ):
         result = list_posthog_tools(
@@ -292,7 +292,7 @@ def test_list_tools_includes_schema_only_for_narrow_results() -> None:
         {"name": "query-trends", "description": "Trends", "input_schema": {"t": "str"}},
     ]
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=fake_tools,
     ):
         result = list_posthog_tools(
@@ -307,7 +307,7 @@ def test_list_tools_includes_schema_only_for_narrow_results() -> None:
 
 def test_list_tools_omits_schema_when_too_many_match() -> None:
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=_many_fake_tools(50),
     ):
         result = list_posthog_tools(
@@ -322,7 +322,7 @@ def test_list_tools_omits_schema_when_too_many_match() -> None:
 def test_list_tools_truncates_long_descriptions() -> None:
     long_desc = "x" * 500
     with patch(
-        "app.tools.PostHogMCPTool.list_posthog_mcp_server_tools",
+        "tools.PostHogMCPTool.list_posthog_mcp_server_tools",
         return_value=[{"name": "execute-sql", "description": long_desc, "input_schema": {}}],
     ):
         result = list_posthog_tools(

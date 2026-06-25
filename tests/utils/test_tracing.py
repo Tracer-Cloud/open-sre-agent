@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.utils.tracing import traceable
+from utils.tracing import traceable
 
 
 def test_traceable_returns_identity_decorator() -> None:

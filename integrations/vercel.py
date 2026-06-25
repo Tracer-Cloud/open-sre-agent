@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
-from app.services.vercel import VercelConfig
+from services.vercel import VercelConfig
 
 logger = logging.getLogger(__name__)
 

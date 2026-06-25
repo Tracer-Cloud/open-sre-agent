@@ -451,7 +451,7 @@ class TestSpecificListCommands:
                     name="search_github",
                     surfaces=("investigation", "chat"),
                     description="Search GitHub code.",
-                    source_file="app/tools/search_github.py",
+                    source_file="tools/search_github.py",
                     input_schema_summary="query: string",
                 )
             ],
@@ -737,7 +737,7 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import cli.wizard.env_sync as env_sync
-        from app.services import llm_client
+        from services import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         reset_calls: list[str] = []
@@ -1041,7 +1041,7 @@ class TestModelCommand:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
         import cli.wizard.env_sync as env_sync
-        from app.services import llm_client
+        from services import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)

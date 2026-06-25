@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.agent_llm_client import ToolCall
-from app.tools.registered_tool import RegisteredTool
-from app.tools.registry import get_registered_tools
-from app.tools.utils.integration_sources import availability_view
-from app.utils.tool_trace import redact_sensitive
 from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
     resolve_alert_source,
 )
 from core.runtime import public_tool_input
+from services.agent_llm_client import ToolCall
+from tools.registered_tool import RegisteredTool
+from tools.registry import get_registered_tools
+from tools.utils.integration_sources import availability_view
+from utils.tool_trace import redact_sensitive
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
@@ -91,8 +91,8 @@ def build_seed_calls(
     if not seed_tools:
         return []
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
-    from app.services.bedrock_converse import new_tool_use_id
+    from services.agent_llm_client import BedrockConverseAgentClient
+    from services.bedrock_converse import new_tool_use_id
 
     use_converse_ids = isinstance(llm, BedrockConverseAgentClient)
     calls: list[ToolCall] = []

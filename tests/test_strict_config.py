@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 
 
 class ExampleConfig(StrictConfigModel):

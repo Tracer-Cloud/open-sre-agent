@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
+from config.version import get_version
 from integrations._validation_helpers import report_validation_failure
-from app.services.llm_client import get_llm_for_reasoning
-from app.version import get_version
+from services.llm_client import get_llm_for_reasoning
 
 logger = logging.getLogger(__name__)
 

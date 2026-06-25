@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.GrafanaLogsTool import query_grafana_logs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GrafanaLogsTool import query_grafana_logs
 
 
 class TestGrafanaLogsToolContract(BaseToolContract):
@@ -102,7 +102,7 @@ def test_run_returns_unavailable_when_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -115,7 +115,7 @@ def test_run_no_loki_datasource() -> None:
     mock_client.is_configured = True
     mock_client.loki_datasource_uid = None
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -135,7 +135,7 @@ def test_run_happy_path() -> None:
         "total_logs": 2,
     }
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -156,7 +156,7 @@ def test_run_fallback_to_pipeline_name() -> None:
         {"success": True, "logs": [{"message": "pipeline log"}], "total_logs": 1},
     ]
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc",

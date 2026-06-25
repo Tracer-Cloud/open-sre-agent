@@ -11,9 +11,6 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from integrations.store import get_integration
-from app.llm_credentials import get_keyring_setup_instructions, has_llm_api_key, save_llm_api_key
-from app.version import get_version
 from cli.interactive_shell.ui.theme import (
     BRAND,
     DIM,
@@ -31,6 +28,9 @@ from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
 from cli.wizard.prompts import select as select_prompt
 from cli.wizard.store import get_store_path, load_local_config
+from config.llm_credentials import get_keyring_setup_instructions, has_llm_api_key, save_llm_api_key
+from config.version import get_version
+from integrations.store import get_integration
 
 _console = Console(
     highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False

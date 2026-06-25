@@ -117,7 +117,6 @@ jobs:
               tests/deployment
               tests/benchmarks
               tests/chaos_engineering
-              tests/packaging
               tests/shared
               tests/test_guardrails
               tests/cli_smoke_test.py
@@ -340,8 +339,8 @@ jobs:
               - "deployment/**"
               - "integrations/**"
               - "app/pipeline/**"
-              - "app/services/**"
-              - "app/tools/**"
+              - "services/**"
+              - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"
               - "tests/e2e/upstream_prefect_ecs_fargate/**"

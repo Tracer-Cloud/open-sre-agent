@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from app.config import DEFAULT_OLLAMA_HOST
 from cli.interactive_shell.ui.theme import DIM, WARNING
+from config.config import DEFAULT_OLLAMA_HOST
 
 if TYPE_CHECKING:
     from rich.console import Console

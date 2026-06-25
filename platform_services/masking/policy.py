@@ -16,7 +16,7 @@ from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 

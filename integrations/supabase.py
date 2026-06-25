@@ -16,9 +16,9 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
+from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure
-from app.services.supabase.client import supabase_http_get
-from app.strict_config import StrictConfigModel
+from services.supabase.client import supabase_http_get
 
 logger = logging.getLogger(__name__)
 

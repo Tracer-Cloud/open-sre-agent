@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, cast
 
-from app.utils.tracing import traceable
 from core.domain.state import InvestigationState
 from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
@@ -15,6 +14,7 @@ from core.orchestration.node.publish_findings.upstream_correlation.runtime impor
     build_runtime_correlation,
 )
 from platform_services.observability import get_progress_tracker as get_tracker
+from utils.tracing import traceable
 
 logger = logging.getLogger(__name__)
 

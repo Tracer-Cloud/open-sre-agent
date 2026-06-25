@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 import jwt
 
-from app.config import (
+from config.config import (
     CLERK_CONFIG_DEV,
     CLERK_CONFIG_PROD,
     JWKS_CACHE_TTL_SECONDS,

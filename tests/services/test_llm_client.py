@@ -4,7 +4,7 @@ import pytest
 from anthropic import AuthenticationError, NotFoundError, PermissionDeniedError
 from anthropic import BadRequestError as AnthropicBadRequestError
 
-from app.services import llm_client
+from services import llm_client
 
 
 class _FakeAnthropicMessages:
@@ -1208,7 +1208,7 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
@@ -1223,7 +1223,7 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _env_var: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError) as exc_info:

@@ -61,8 +61,8 @@ def main(test_name: str = "demo-pipeline-empty-file-error") -> int:
             },
         )
 
-        from app.utils.tracing import traceable
         from cli.investigation import run_investigation_cli
+        from utils.tracing import traceable
 
         print("Running investigation...")
 

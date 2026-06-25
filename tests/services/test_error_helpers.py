@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.services._error_helpers import capture_service_error
+from services._error_helpers import capture_service_error
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def _make_http_status_error(status_code: int = 502, text: str = "error") -> http
 class TestCaptureServiceError:
     def test_server_error_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(502)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="jira", method="create_issue"
             )
@@ -33,7 +33,7 @@ class TestCaptureServiceError:
 
     def test_503_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(503)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="splunk", method="search_logs"
             )
@@ -41,7 +41,7 @@ class TestCaptureServiceError:
 
     def test_client_4xx_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(401)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="jira", method="create_issue"
             )
@@ -49,7 +49,7 @@ class TestCaptureServiceError:
 
     def test_403_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(403)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
@@ -57,7 +57,7 @@ class TestCaptureServiceError:
 
     def test_generic_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = ConnectionError("refused")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
@@ -65,7 +65,7 @@ class TestCaptureServiceError:
 
     def test_timeout_exception_uses_error_severity(self, mock_logger: logging.Logger) -> None:
         exc = httpx.ReadTimeout("timed out")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="splunk", method="search_logs"
             )
@@ -73,7 +73,7 @@ class TestCaptureServiceError:
 
     def test_tags_contain_surface_and_integration(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="honeycomb", method="run_query"
             )
@@ -82,7 +82,7 @@ class TestCaptureServiceError:
 
     def test_extras_contain_method(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="vercel", method="get_runtime_logs"
             )
@@ -91,7 +91,7 @@ class TestCaptureServiceError:
 
     def test_caller_extras_merged(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(502)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc,
                 logger=mock_logger,
@@ -108,13 +108,13 @@ class TestCaptureServiceError:
 
     def test_caller_extras_none_defaults_to_method_only(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(exc, logger=mock_logger, integration="jira", method="get_issue")
             assert mock_report.call_args.kwargs["extras"] == {"method": "get_issue"}
 
     def test_caller_extras_cannot_overwrite_method(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc,
                 logger=mock_logger,
@@ -128,7 +128,7 @@ class TestCaptureServiceError:
 
     def test_caller_extras_cannot_inject_surface(self, mock_logger: logging.Logger) -> None:
         exc = RuntimeError("boom")
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc,
                 logger=mock_logger,
@@ -143,7 +143,7 @@ class TestCaptureServiceError:
 
     def test_429_rate_limit_uses_warning_severity(self, mock_logger: logging.Logger) -> None:
         exc = _make_http_status_error(429)
-        with patch("app.services._error_helpers.report_exception") as mock_report:
+        with patch("services._error_helpers.report_exception") as mock_report:
             capture_service_error(
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )

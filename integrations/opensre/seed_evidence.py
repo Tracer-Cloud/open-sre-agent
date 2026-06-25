@@ -18,9 +18,9 @@ from integrations.opensre.inject import (
     inject_opensre_into_resolved_integrations,
     resolve_opensre_telemetry_dir,
 )
-from app.tools.GrafanaLogsTool import query_grafana_logs
-from app.tools.GrafanaMetricsTool import query_grafana_metrics
-from app.tools.GrafanaTracesTool import query_grafana_traces
+from tools.GrafanaLogsTool import query_grafana_logs
+from tools.GrafanaMetricsTool import query_grafana_metrics
+from tools.GrafanaTracesTool import query_grafana_traces
 
 
 def merge_opensre_seed_into_state(

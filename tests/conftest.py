@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.utils.config import load_env
+from utils.config import load_env
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _ENV_PATH = _PROJECT_ROOT / ".env"

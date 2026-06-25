@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.vercel import VercelConfig
 from deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
@@ -20,6 +19,7 @@ from deployment.remote.vercel_poller import (
     enrich_remote_alert_from_vercel,
     parse_vercel_url,
 )
+from services.vercel import VercelConfig
 
 
 class _FakeVercelClient:

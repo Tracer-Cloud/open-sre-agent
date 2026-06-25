@@ -7,8 +7,9 @@ from datetime import datetime
 
 import pytest
 
-from app.services.agent_llm_client import ToolCall
-from app.services.bedrock_converse import (
+from platform_services.guardrails.apply import apply_guardrails_to_converse_payload
+from services.agent_llm_client import ToolCall
+from services.bedrock_converse import (
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,
@@ -19,12 +20,11 @@ from app.services.bedrock_converse import (
     sanitize_converse_schema,
     to_converse_messages,
 )
-from platform_services.guardrails.apply import apply_guardrails_to_converse_payload
 
 
 @pytest.fixture(autouse=True)
 def _reset_tool_registry() -> Generator[None]:
-    from app.tools.registry import clear_tool_registry_cache
+    from tools.registry import clear_tool_registry_cache
 
     clear_tool_registry_cache()
     yield

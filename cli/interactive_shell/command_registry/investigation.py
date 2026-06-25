@@ -8,7 +8,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from app.llm_reasoning_effort import apply_reasoning_effort
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime import ReplSession
@@ -29,6 +28,7 @@ from cli.interactive_shell.ui.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
+from config.llm_reasoning_effort import apply_reasoning_effort
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:

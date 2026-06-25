@@ -29,13 +29,13 @@ def run_connected_investigation(
     custom termination policy, structured-stage progression, or other
     agent-level extensions can pass a subclass instead.
     """
-    from app.utils.sentry_sdk import capture_exception
     from core.orchestration.node.diagnose import diagnose
     from core.orchestration.node.extract_alert import extract_alert
     from core.orchestration.node.investigate import ConnectedInvestigationAgent
     from core.orchestration.node.plan_actions import plan_actions
     from core.orchestration.node.publish_findings import deliver
     from core.orchestration.node.resolve_integrations import resolve_integrations
+    from utils.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent
 

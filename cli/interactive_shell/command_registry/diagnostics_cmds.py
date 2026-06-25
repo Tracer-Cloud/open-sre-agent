@@ -5,7 +5,6 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from app.llm_reasoning_effort import display_reasoning_effort
 from cli.interactive_shell.command_registry.types import SlashCommand
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.token_accounting import format_token_total
@@ -15,11 +14,12 @@ from cli.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
+from config.llm_reasoning_effort import display_reasoning_effort
 
 
 def _status_provider_display() -> str:
     """Render the active LLM provider, flagging a fallback away from configured."""
-    from app.config import get_configured_llm_provider, resolve_llm_settings_verbose
+    from config.config import get_configured_llm_provider, resolve_llm_settings_verbose
 
     try:
         resolution = resolve_llm_settings_verbose()

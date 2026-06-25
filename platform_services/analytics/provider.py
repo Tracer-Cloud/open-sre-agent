@@ -22,7 +22,7 @@ from typing import Final
 
 import httpx
 
-from app.version import get_version
+from config.version import get_version
 from cli.wizard.store import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from platform_services.analytics.events import Event
@@ -582,7 +582,7 @@ def _log_failure(stage: str, error: BaseException, **extra: object) -> None:
 def _capture_sentry_failure(error: BaseException) -> None:
     """Report telemetry failures without making analytics depend on Sentry imports."""
     try:
-        from app.utils.sentry_sdk import capture_exception
+        from utils.sentry_sdk import capture_exception
     except Exception:
         return
     capture_exception(error)

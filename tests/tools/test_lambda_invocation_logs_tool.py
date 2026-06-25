@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.LambdaInvocationLogsTool import get_lambda_invocation_logs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.LambdaInvocationLogsTool import get_lambda_invocation_logs
 
 
 class TestLambdaInvocationLogsToolContract(BaseToolContract):
@@ -39,7 +39,7 @@ def test_run_by_request_id_happy_path() -> None:
         "logs": ["START", "END"],
     }
     with patch(
-        "app.tools.LambdaInvocationLogsTool.get_invocation_logs_by_request_id",
+        "tools.LambdaInvocationLogsTool.get_invocation_logs_by_request_id",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn", request_id="req-123")
@@ -50,7 +50,7 @@ def test_run_by_request_id_happy_path() -> None:
 
 def test_run_by_request_id_error() -> None:
     with patch(
-        "app.tools.LambdaInvocationLogsTool.get_invocation_logs_by_request_id",
+        "tools.LambdaInvocationLogsTool.get_invocation_logs_by_request_id",
         return_value={"success": False, "error": "Not found"},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn", request_id="req-999")
@@ -67,7 +67,7 @@ def test_run_recent_invocations_happy_path() -> None:
         ],
     }
     with patch(
-        "app.tools.LambdaInvocationLogsTool.get_recent_invocations",
+        "tools.LambdaInvocationLogsTool.get_recent_invocations",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn")
@@ -78,7 +78,7 @@ def test_run_recent_invocations_happy_path() -> None:
 
 def test_run_recent_invocations_error() -> None:
     with patch(
-        "app.tools.LambdaInvocationLogsTool.get_recent_invocations",
+        "tools.LambdaInvocationLogsTool.get_recent_invocations",
         return_value={"success": False, "error": "Permission denied"},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn")

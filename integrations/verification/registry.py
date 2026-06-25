@@ -3,7 +3,7 @@
 Each per-vendor verifier module decorates its verify function with
 ``@register_verifier("<service>")`` — either
 ``integrations/verifiers/<service>.py`` or
-``app/services/<vendor>/verifier.py``. The registry is a simple
+``services/<vendor>/verifier.py``. The registry is a simple
 module-level dict; lookup is ``get_verifier("<service>")``.
 
 Auto-discovery: the loader at

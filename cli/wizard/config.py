@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from app.config import (
+from config.config import (
     ANTHROPIC_REASONING_MODEL,
     BEDROCK_REASONING_MODEL,
     DEEPSEEK_REASONING_MODEL,

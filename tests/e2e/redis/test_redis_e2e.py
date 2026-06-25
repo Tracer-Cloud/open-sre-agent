@@ -160,7 +160,7 @@ class TestRedisToolsAvailability:
         """Force fresh tool discovery so registry assertions never depend on a
         cache populated by a prior test (per the ``tests/`` convention that any
         test calling ``get_registered_tools()`` clears the cache in a fixture)."""
-        from app.tools.registry import clear_tool_registry_cache
+        from tools.registry import clear_tool_registry_cache
 
         clear_tool_registry_cache()
         yield
@@ -170,7 +170,7 @@ class TestRedisToolsAvailability:
         """Redis tools modules exist and are properly structured."""
         try:
             # Tools are defined as decorated functions within __init__ modules
-            from app.tools import (
+            from tools import (
                 RedisClientListTool,
                 RedisKeyScanTool,
                 RedisLatencyDoctorTool,
@@ -193,7 +193,7 @@ class TestRedisToolsAvailability:
 
     def test_p1_tools_registered_on_investigation_surface(self):
         """The three new P1 tools are discoverable on the investigation and chat surfaces."""
-        from app.tools.registry import get_registered_tools
+        from tools.registry import get_registered_tools
 
         p1_tools = {
             "get_redis_client_list",
@@ -239,7 +239,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_client_list_tool_path(self, mock_get_client):
-        from app.tools.RedisClientListTool import get_redis_client_list
+        from tools.RedisClientListTool import get_redis_client_list
 
         mock_client = MagicMock()
         mock_client.client_list.return_value = [
@@ -257,7 +257,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_list_depth_tool_path(self, mock_get_client):
-        from app.tools.RedisListDepthTool import get_redis_list_depth
+        from tools.RedisListDepthTool import get_redis_list_depth
 
         mock_client = MagicMock()
         mock_client.type.return_value = "list"
@@ -278,7 +278,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_latency_doctor_tool_path(self, mock_get_client):
-        from app.tools.RedisLatencyDoctorTool import get_redis_latency_doctor
+        from tools.RedisLatencyDoctorTool import get_redis_latency_doctor
 
         mock_client = MagicMock()
         mock_client.execute_command.return_value = "I detected spikes caused by fork."

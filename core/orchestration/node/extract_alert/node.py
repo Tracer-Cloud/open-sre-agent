@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Any, cast
 
-from app.services import get_llm_for_reasoning
 from core.domain.alerts.extraction import (
     AlertDetails,
     enrich_raw_alert,
@@ -24,6 +23,7 @@ from platform_services.observability import (
 from platform_services.observability import (
     get_progress_tracker as get_tracker,
 )
+from services import get_llm_for_reasoning
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ def _handle_noise_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from app.utils.slack_delivery import swap_reaction
+    from utils.slack_delivery import swap_reaction
 
     swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
 
@@ -192,7 +192,7 @@ def _handle_start_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from app.utils.slack_delivery import add_reaction
+    from utils.slack_delivery import add_reaction
 
     add_reaction("eyes", channel, timestamp, token)
 

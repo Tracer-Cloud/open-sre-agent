@@ -8,7 +8,8 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from app.config import get_tracer_base_url
+from config.config import get_tracer_base_url
+from config.llm_credentials import resolve_env_credential
 from integrations.airflow import airflow_config_from_env
 from integrations.airflow import classify as _classify_airflow
 from integrations.alertmanager import classify as _classify_alertmanager
@@ -111,11 +112,10 @@ from integrations.twilio import classify as _classify_twilio
 from integrations.vercel import classify as _classify_vercel
 from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
-from app.llm_credentials import resolve_env_credential
-from app.services.temporal import TemporalConfig
-from app.services.vercel import VercelConfig
-from app.utils.coercion import safe_int
-from app.utils.errors import report_exception
+from services.temporal import TemporalConfig
+from services.vercel import VercelConfig
+from utils.coercion import safe_int
+from utils.errors import report_exception
 
 logger = logging.getLogger(__name__)
 

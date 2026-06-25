@@ -270,7 +270,7 @@ def test_stop_words_alone_dont_distinguish_two_predictions() -> None:
     ],
 )
 def test_prediction_tokens_strips_fault_object_prefix(raw_object: str, expected_token: str) -> None:
-    """The prefix (``app/`` etc.) is metadata, not a discriminator —
+    """The prefix (``config/`` etc.) is metadata, not a discriminator —
     every K8s diagnosis has one. Drop it before tokenizing so the
     rerank counts the name itself, not the prefix shared by all
     predictions."""

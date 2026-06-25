@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from app.utils.sentry_sdk import (
+from utils.sentry_sdk import (
     capture_exception,
     resolved_sentry_dsn_host,
     sentry_transport_enabled,

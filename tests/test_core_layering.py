@@ -1,6 +1,6 @@
 """Layering boundary test: core packages must not import from ``cli``.
 
-Core (``core/domain/``, ``core/orchestration/``, ``app/utils/``) reports
+Core (``core/domain/``, ``core/orchestration/``, ``utils/``) reports
 progress, prints debug output, and renders investigation headers/footers through
 the ports defined in :mod:`platform_services.observability`. Reaching into ``cli.*`` directly
 couples the domain/orchestration layer to the REPL's specific renderer and breaks
@@ -20,7 +20,7 @@ import pytest
 _CORE_PACKAGES: tuple[Path, ...] = (
     Path("core/domain"),
     Path("core/orchestration"),
-    Path("app/utils"),
+    Path("utils"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /
@@ -30,14 +30,14 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 # - ``cli`` — closed by #35 (observability ports). Core never
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
-# - ``app.services.tracer_client`` — closed by #36
+# - ``services.tracer_client`` — closed by #36
 #   (``integrations.port`` ``fetch_remote_integrations``). Other
-#   ``app.services.*`` modules (LLM client, chat SDK adapter,
+#   ``services.*`` modules (LLM client, chat SDK adapter,
 #   ``agent_llm_client``) stay allowed because they are core
 #   capability access, not vendor-coupled like ``tracer_client``.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "cli",
-    "app.services.tracer_client",
+    "services.tracer_client",
 )
 
 

@@ -10,9 +10,6 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
-from app.tools.fleet_monitoring.probe import pid_exists
-from app.tools.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
-from app.tools.watch_dog.monitor import start_watchdog_daemon_thread
 from cli.interactive_shell.command_registry.types import (
     ExecutionTier,
     SlashCommand,
@@ -29,6 +26,9 @@ from cli.interactive_shell.ui import (
     repl_table,
 )
 from cli.interactive_shell.ui.time_format import format_repl_timestamp
+from tools.fleet_monitoring.probe import pid_exists
+from tools.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
+from tools.watch_dog.monitor import start_watchdog_daemon_thread
 
 _PID_IN_COMMAND_RE = re.compile(r"pid=(\d+)")
 _CONSOLE_PRINT_LOCK = threading.Lock()

@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.tools.watch_dog.alarms import AlarmCredentials
 from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from cli.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
@@ -18,6 +17,7 @@ from cli.interactive_shell.command_registry.watch_cmds import (
 )
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from tools.watch_dog.alarms import AlarmCredentials
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -146,9 +146,9 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from app.tools.fleet_monitoring.probe import ProcessSnapshot
-    from app.tools.watch_dog.monitor import run_watchdog
     from cli.interactive_shell.runtime.tasks import TaskRegistry
+    from tools.fleet_monitoring.probe import ProcessSnapshot
+    from tools.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
     task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
@@ -167,7 +167,7 @@ def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
         started_at=started_at,
     )
 
-    monkeypatch.setattr("app.tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     thread = threading.Thread(
         target=run_watchdog,
@@ -195,9 +195,9 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from app.tools.fleet_monitoring.probe import ProcessSnapshot
-    from app.tools.watch_dog.monitor import run_watchdog
     from cli.interactive_shell.runtime.tasks import TaskRegistry
+    from tools.fleet_monitoring.probe import ProcessSnapshot
+    from tools.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
     task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
@@ -215,7 +215,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
         status="running",
         started_at=started_at,
     )
-    monkeypatch.setattr("app.tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     run_watchdog(
         task=task,

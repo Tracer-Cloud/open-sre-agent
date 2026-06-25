@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from app.version import PACKAGE_NAME, get_version
+from config.version import PACKAGE_NAME, get_version
 
 _RELEASES_API = "https://api.github.com/repos/Tracer-Cloud/opensre/releases/latest"
 _INSTALL_SCRIPT = "https://install.opensre.com"

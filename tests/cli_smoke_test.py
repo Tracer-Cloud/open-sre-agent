@@ -18,7 +18,7 @@ from threading import Thread
 
 import pytest
 
-from app.version import get_version
+from config.version import get_version
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"

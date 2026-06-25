@@ -25,7 +25,6 @@ from pathlib import Path
 
 project_root = Path(__file__).resolve().parents[3]
 
-from app.utils.config import load_env
 from tests.shared.infrastructure_sdk import save_outputs
 from tests.shared.infrastructure_sdk.resources import (
     api_gateway,
@@ -37,6 +36,7 @@ from tests.shared.infrastructure_sdk.resources import (
     s3,
     vpc,
 )
+from utils.config import load_env
 
 STACK_NAME = "tracer-prefect-ecs"
 REGION = "us-east-1"

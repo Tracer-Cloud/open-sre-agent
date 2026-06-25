@@ -36,7 +36,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch(
                 "platform_services.scheduler.executor.resolve_telegram_credentials"
             ) as mock_creds,
@@ -60,7 +63,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch(
                 "platform_services.scheduler.executor.resolve_telegram_credentials"
             ) as mock_creds,
@@ -80,7 +86,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch("platform_services.scheduler.executor._deliver_slack") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "ts_123")
@@ -99,7 +108,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch("platform_services.scheduler.executor._deliver_discord") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "msg_99")
@@ -118,7 +130,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch("platform_services.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "msg_1")
@@ -158,7 +173,10 @@ class TestExecutor:
         )
 
         with (
-            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
             patch("platform_services.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_deliver.return_value = (False, "Connection refused", "")

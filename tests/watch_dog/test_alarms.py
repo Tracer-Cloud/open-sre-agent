@@ -1,4 +1,4 @@
-"""Tests for app/tools/watch_dog/alarms.py."""
+"""Tests for tools/watch_dog/alarms.py."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from app.tools.watch_dog.alarms import (
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from tools.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
     load_credentials_from_env,
 )
-from cli.interactive_shell.error_handling.errors import OpenSREError
 
 
 def _stub_telegram(
@@ -40,7 +40,7 @@ def _stub_telegram(
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
-        "app.tools.watch_dog.alarms.post_telegram_message",
+        "tools.watch_dog.alarms.post_telegram_message",
         _fake_post,
     )
     return calls
@@ -238,7 +238,7 @@ def test_load_credentials_from_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "chat-1")
     monkeypatch.setattr(
-        "app.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_llm_api_key",
         lambda env_var: "keyring-tok" if env_var == "TELEGRAM_BOT_TOKEN" else "",
     )
 

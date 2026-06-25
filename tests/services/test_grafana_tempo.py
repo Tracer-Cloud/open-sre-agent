@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
-from app.services.grafana.tempo import TempoMixin
+from services.grafana.tempo import TempoMixin
 
 
 class FakeGrafanaClient(TempoMixin):
@@ -70,7 +70,7 @@ class TestTempoMixin:
         assert result["error"] == "Tempo query failed: 403"
         assert "Permission denied" in result["response"]
 
-    @patch("app.services.grafana.tempo.requests.get")
+    @patch("services.grafana.tempo.requests.get")
     def test_query_tempo_successful_trace_parsing(self, mock_requests_get):
         """Test a successful trace query and the subsequent span parsing."""
         client = FakeGrafanaClient()
@@ -139,7 +139,7 @@ class TestTempoMixin:
         assert span["attributes"]["db.system"] == "postgresql"
         assert span["attributes"]["http.status_code"] == 200
 
-    @patch("app.services.grafana.tempo.requests.get")
+    @patch("services.grafana.tempo.requests.get")
     def test_get_trace_details_network_failure(self, mock_requests_get):
         """Test _get_trace_details graceful degradation on network error."""
         client = FakeGrafanaClient()
@@ -174,7 +174,7 @@ class TestTempoMixin:
         assert "empty_value" not in attributes
         assert "" not in attributes
 
-    @patch("app.services.grafana.tempo.requests.get")
+    @patch("services.grafana.tempo.requests.get")
     def test_get_trace_details_non_200_status(self, mock_requests_get):
         """Test _get_trace_details when the API returns a non-200 status."""
         client = FakeGrafanaClient()

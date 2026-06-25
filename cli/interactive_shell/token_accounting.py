@@ -9,8 +9,8 @@ from cli.interactive_shell.prompt_logging import LlmRunInfo
 from cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 if TYPE_CHECKING:
-    from app.services.llm_client import LLMResponse
     from cli.interactive_shell.runtime.session import ReplSession
+    from services.llm_client import LLMResponse
 
 
 def estimate_tokens(text: str) -> int:

@@ -29,10 +29,10 @@ def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.config import get_environment
+    from cli.interactive_shell.ui.health_view import render_health_report
+    from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
-    from cli.interactive_shell.ui.health_view import render_health_report
 
     results = verify_integrations()
     environment = get_environment().value
@@ -72,7 +72,7 @@ def _cmd_doctor(_session: ReplSession, console: Console, _args: list[str]) -> bo
 
 
 def _cmd_version(_session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.version import get_version
+    from config.version import get_version
 
     table = repl_table(title="Version info\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")

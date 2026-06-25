@@ -7,9 +7,9 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
+from cli.__main__ import cli
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github_mcp import GitHubMCPValidationResult
-from cli.__main__ import cli
 
 
 def _upsert_should_not_run(*_a: object, **_k: object) -> None:
@@ -103,9 +103,7 @@ def test_setup_github_simple_path_uses_hosted_defaults(
 
     monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=False)
-    monkeypatch.setattr(
-        "integrations.cli._setup_github_auth_token", lambda _mode: "gho_browser"
-    )
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "gho_browser")
     monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", _no_level_prompt)
     monkeypatch.setattr(
         "integrations.github_mcp.validate_github_mcp_config",

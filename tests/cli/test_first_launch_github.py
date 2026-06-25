@@ -5,11 +5,11 @@ import io
 import pytest
 from rich.console import Console
 
+from cli import first_launch_github as flg
+from cli.interactive_shell.ui.theme import DEVICE_CODE_ANSI
 from integrations import github_login as github_login_mod
 from integrations.github_login import GitHubLoginResult
 from integrations.github_mcp_oauth import GitHubDeviceCode
-from cli import first_launch_github as flg
-from cli.interactive_shell.ui.theme import DEVICE_CODE_ANSI
 
 
 def _console() -> Console:

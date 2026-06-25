@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.utils.errors import report_exception
+from utils.errors import report_exception
 
 
 def report_validation_failure(

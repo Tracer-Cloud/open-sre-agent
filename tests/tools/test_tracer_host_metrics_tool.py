@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.TracerHostMetricsTool import get_host_metrics
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TracerHostMetricsTool import get_host_metrics
 
 
 class TestTracerHostMetricsToolContract(BaseToolContract):
@@ -37,8 +37,8 @@ def test_run_happy_path() -> None:
     raw_metrics = {"cpu": [{"timestamp": "2024-01-01", "value": 85.0}]}
     mock_client.get_host_metrics.return_value = raw_metrics
     with (
-        patch("app.tools.TracerHostMetricsTool.get_tracer_web_client", return_value=mock_client),
-        patch("app.tools.TracerHostMetricsTool.validate_host_metrics", return_value=raw_metrics),
+        patch("tools.TracerHostMetricsTool.get_tracer_web_client", return_value=mock_client),
+        patch("tools.TracerHostMetricsTool.validate_host_metrics", return_value=raw_metrics),
     ):
         result = get_host_metrics(trace_id="trace-123")
     assert "metrics" in result

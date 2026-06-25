@@ -22,14 +22,14 @@ import threading
 import time
 from pathlib import Path
 
-# ClaudeCodeAdapter is imported here so that the monkeypatch path
-# ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
-from integrations.llm_cli.claude_code import ClaudeCodeAdapter
-
 # execute_shell_command is imported here so that the monkeypatch path
 # ``"…action_executor.execute_shell_command"`` resolves in tests. The
 # actual call site in shell_runner.py uses ``_ae_resolve`` to pick up any patch.
 from cli.interactive_shell.shell import execute_shell_command
+
+# ClaudeCodeAdapter is imported here so that the monkeypatch path
+# ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
+from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
 from .background_tasks import start_background_cli_task
 from .implementation_runner import run_claude_code_implementation

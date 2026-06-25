@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
-from integrations.llm_cli.errors import CLITimeoutError
 from cli.interactive_shell.chat.action_plan import (
     _ALLOWED_SLASH_ACTIONS,
     _actions_allowed_by_capabilities,
@@ -54,6 +53,7 @@ from cli.interactive_shell.ui import (
     WARNING,
     stream_to_console,
 )
+from integrations.llm_cli.errors import CLITimeoutError
 
 
 def _execute_action_plan(
@@ -279,7 +279,7 @@ def answer_cli_agent(
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run)."""
     try:
-        from app.services.llm_client import get_llm_for_reasoning
+        from services.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")

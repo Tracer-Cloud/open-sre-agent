@@ -4,7 +4,7 @@
 Two locations are scanned:
 
 * ``integrations.verifiers.*`` — config-only integrations.
-* ``app.services.<vendor>.verifier`` — integrations with a dedicated
+* ``services.<vendor>.verifier`` — integrations with a dedicated
   vendor SDK client package.
 
 Adding a new vendor is one new file in either location. No edits to a
@@ -22,7 +22,7 @@ import importlib
 import pkgutil
 
 import integrations.verifiers as _verifiers_pkg
-import app.services as _services_pkg
+import services as _services_pkg
 
 _VERIFIER_SUBMODULE = "verifier"
 
@@ -34,9 +34,9 @@ def _load_integrations_verifiers() -> None:
 
 
 def _load_service_verifiers() -> None:
-    """Import every ``app.services.<vendor>.verifier`` module that exists.
+    """Import every ``services.<vendor>.verifier`` module that exists.
 
-    Iterates the ``app.services`` package one level deep, only attempting
+    Iterates the ``services`` package one level deep, only attempting
     ``<vendor>.verifier`` when ``<vendor>`` is itself a package. A
     ``ModuleNotFoundError`` for the ``verifier`` submodule is silently
     skipped — many service packages have no verifier.

@@ -9,7 +9,7 @@ from typing import Any
 
 import requests
 
-from app.utils.sentry_sdk import init_sentry
+from utils.sentry_sdk import init_sentry
 
 LOCAL_LOKI_URL = "http://localhost:3100"
 SERVICE_NAME = "prefect-etl-pipeline-local"

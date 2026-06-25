@@ -4,7 +4,6 @@ from typing import Any, NoReturn
 
 import pytest
 
-from integrations.llm_cli.errors import CLIAuthenticationRequired
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.investigation import (
@@ -13,6 +12,7 @@ from cli.investigation import (
     stream_investigation_cli,
 )
 from core.domain.stream import StreamEvent
+from integrations.llm_cli.errors import CLIAuthenticationRequired
 
 
 def test_resolve_investigation_context_prefers_cli_overrides() -> None:
@@ -148,7 +148,7 @@ def test_parse_args_evaluate_flag() -> None:
 def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("app.config.resolve_llm_api_key", lambda _: "")
+    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _: "")
     monkeypatch.setattr(
         "cli.investigation.investigate._call_run_investigation",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),

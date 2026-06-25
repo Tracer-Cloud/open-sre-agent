@@ -20,6 +20,8 @@ planned_actions:
 response_contract:
   must_contain_any:
   - why did it fail
+  - failed
+  - disk full
   - follow-up
   - alert text
   must_not_contain:

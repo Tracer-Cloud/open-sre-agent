@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
-from integrations.verify import resolve_effective_integrations
-from app.services.vercel import VercelClient, VercelConfig, make_vercel_client
 from deployment.remote.error_reporting import report_remote_exception
+from integrations.verify import resolve_effective_integrations
+from services.vercel import VercelClient, VercelConfig, make_vercel_client
 
 logger = logging.getLogger(__name__)
 
@@ -894,7 +894,7 @@ def collect_vercel_candidates(
 
     When ``include_runtime_logs`` is False, skip per-deployment runtime log HTTP calls.
     Uses ``list_deployments`` plus per-deployment events/runtime logs (parallel fetch when
-    using a real :class:`~app.services.vercel.client.VercelClient`).
+    using a real :class:`~services.vercel.client.VercelClient`).
     """
     config = resolve_vercel_config()
     if config is None:

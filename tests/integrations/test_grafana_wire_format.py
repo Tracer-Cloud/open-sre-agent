@@ -21,9 +21,7 @@ import pytest
 # Load the module directly, bypassing integrations/opensre/__init__.py
 # ---------------------------------------------------------------------------
 
-_MODULE_PATH = (
-    Path(__file__).parent.parent.parent / "integrations/opensre/grafana_wire_format.py"
-)
+_MODULE_PATH = Path(__file__).parent.parent.parent / "integrations/opensre/grafana_wire_format.py"
 _spec = importlib.util.spec_from_file_location(
     "integrations.opensre.grafana_wire_format", _MODULE_PATH
 )

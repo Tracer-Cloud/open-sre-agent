@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from app.tools.investigation_registry import prioritization
-from app.tools.registered_tool import RegisteredTool
+from tools.investigation_registry import prioritization
+from tools.registered_tool import RegisteredTool
 
 
 def _tool(name: str, source: str, use_cases: list[str] | None = None) -> RegisteredTool:

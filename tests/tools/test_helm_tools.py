@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.tools.HelmTools import (
+from tools.HelmTools import (
     HelmGetReleaseManifestTool,
     HelmGetReleaseValuesTool,
     HelmListReleasesTool,
@@ -74,7 +74,7 @@ _HELM_SOURCE = {
 def test_helm_list_tool_is_available_and_lists(monkeypatch: pytest.MonkeyPatch) -> None:
     # Patch where the name is used — HelmTools binds the import at load time.
     monkeypatch.setattr(
-        "app.tools.HelmTools.helm_client_for_run",
+        "tools.HelmTools.helm_client_for_run",
         lambda *_a, **_k: _FakeHelmClient(),
     )
     tool = HelmListReleasesTool()
@@ -93,7 +93,7 @@ def test_helm_release_tools_require_release_name() -> None:
 
 def test_helm_get_manifest_tool_returns_yaml(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.tools.HelmTools.helm_client_for_run",
+        "tools.HelmTools.helm_client_for_run",
         lambda *_a, **_k: _FakeHelmClient(),
     )
     tool = HelmGetReleaseManifestTool()

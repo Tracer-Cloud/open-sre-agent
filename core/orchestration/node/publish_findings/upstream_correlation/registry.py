@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.datadog.correlation import build_datadog_provider
 from core.domain.types.upstream import (
     UpstreamEvidenceProvider,
 )
+from integrations.datadog.correlation import build_datadog_provider
 
 
 def target_resource_from_state(state: dict[str, Any]) -> str:

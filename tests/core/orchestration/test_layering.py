@@ -28,7 +28,7 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
 )
 # Block *all* vendor service modules, not just Datadog. The whole pattern
 # is that orchestration entrypoints route vendor wiring through a stage-owned
-# factory, so reaching directly into ``app.services.<anything>`` is a
+# factory, so reaching directly into ``services.<anything>`` is a
 # layering violation regardless of vendor.
 # This guards against future Grafana/AWS/etc. imports without manual edits.
 #
@@ -36,7 +36,7 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
 # orchestration core must not depend on it — domain types it shares with
 # the remote runner live in ``core.domain`` (see ``StreamEvent``).
 # ``cli`` is the presentation layer; same rule.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services", "deployment.remote", "cli")
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("services", "deployment.remote", "cli")
 
 
 def _orchestration_pipeline_modules() -> list[Path]:

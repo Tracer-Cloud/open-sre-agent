@@ -1,8 +1,8 @@
 """Tool-registry catalog generator for the interactive shell.
 
-The OpenSRE tool registry (:mod:`app.tools.registry`) auto-discovers tools
-under ``app/tools/`` and exposes them via :func:`get_registered_tools`. Each
-:class:`~app.tools.registered_tool.RegisteredTool` carries rich metadata —
+The OpenSRE tool registry (:mod:`tools.registry`) auto-discovers tools
+under ``tools/`` and exposes them via :func:`get_registered_tools`. Each
+:class:`~tools.registered_tool.RegisteredTool` carries rich metadata —
 ``name``, ``description``, ``surfaces``, ``input_schema``, ``source``, and
 the module it was discovered in — but none of this is currently visible to
 the interactive-shell user.
@@ -34,9 +34,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.tools.registered_tool import RegisteredTool
-from app.tools.registry import get_registered_tools
 from core.domain.types.tools import ToolSurface
+from tools.registered_tool import RegisteredTool
+from tools.registry import get_registered_tools
 
 
 def _detect_repo_root() -> Path:

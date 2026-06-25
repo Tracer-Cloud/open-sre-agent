@@ -10,7 +10,6 @@ import sys
 
 from rich.console import Console
 
-from app.tools.fleet_monitoring.sweep import run_startup_sweep
 from cli.config import ReplConfig
 from cli.interactive_shell import alert_inbox as _alert_inbox
 from cli.interactive_shell.prompting import prompt_surface as _prompt_surface
@@ -20,6 +19,7 @@ from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskRegistry
 from cli.interactive_shell.sessions.store import SessionStore
 from cli.interactive_shell.ui import DIM, render_banner
+from tools.fleet_monitoring.sweep import run_startup_sweep
 
 log = logging.getLogger(__name__)
 

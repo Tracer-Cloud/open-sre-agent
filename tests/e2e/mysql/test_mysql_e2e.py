@@ -188,7 +188,7 @@ class TestMySQLToolsAvailability:
     def test_mysql_tools_exist_as_modules(self):
         """MySQL tools modules exist and are properly structured."""
         try:
-            from app.tools import (
+            from tools import (
                 MySQLCurrentProcessesTool,
                 MySQLReplicationStatusTool,
                 MySQLServerStatusTool,

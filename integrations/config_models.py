@@ -7,7 +7,8 @@ from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
-from app.config import get_tracer_base_url
+from config.config import get_tracer_base_url
+from config.strict_config import StrictConfigModel
 from integrations._validators import (
     normalize_bearer,
     normalize_bool_str,
@@ -15,8 +16,7 @@ from integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
-from app.strict_config import StrictConfigModel
-from app.utils.url_validation import validate_https_or_loopback_http_url
+from utils.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"

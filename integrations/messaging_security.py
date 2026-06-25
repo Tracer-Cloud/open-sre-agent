@@ -23,7 +23,7 @@ from enum import StrEnum
 
 from pydantic import Field
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 

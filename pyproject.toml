@@ -143,7 +143,10 @@ include = [
   "deployment*",
   "integrations*",
   "platform_services*",
+  "services*",
   "tests*",
+  "tools*",
+  "utils*",
 ]
 
 [tool.setuptools.package-data]
@@ -155,9 +158,9 @@ include = [
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app", "cli", "core", "deployment", "integrations", "platform"]
+paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools", "utils"]
 exclude = [
-  "app/tools/simple_tools.py",          # explicitly skipped by the registry
+  "tools/simple_tools.py",          # explicitly skipped by the registry
   "app/dockerfile_test.py",
   "app/**/*_test.py",                   # inline pytest modules
 ]
@@ -172,7 +175,7 @@ ignore_decorators = [
   "@validator",
   "@cache",
   "@lru_cache",
-  "@tool",               # @app.tools.tool_decorator.tool registrations
+  "@tool",               # @tools.tool_decorator.tool registrations
   "@mcp.tool",
   "@register*",
 ]

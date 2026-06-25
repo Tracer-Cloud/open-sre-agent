@@ -799,9 +799,7 @@ def test_anthropic_key_forwarded_via_build() -> None:
             },
             clear=False,
         ),
-        patch(
-            "integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude"
-        ),
+        patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude"),
     ):
         inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace="")
 

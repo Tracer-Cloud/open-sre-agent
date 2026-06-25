@@ -13,7 +13,6 @@ from collections.abc import Callable
 from rich.console import Console
 from rich.markup import escape
 
-from app.llm_reasoning_effort import apply_reasoning_effort
 from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.prompt_logging import LlmRunInfo, PromptRecorder
 from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
@@ -24,6 +23,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent
 )
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR
+from config.llm_reasoning_effort import apply_reasoning_effort
 from platform_services.analytics.cli import capture_terminal_turn_summarized
 
 

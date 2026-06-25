@@ -259,7 +259,7 @@ def run_synthetic_suite(
         if parallel_levels == 1:
             parallel_levels = 4
 
-    # ``packaging/opensre.spec`` only collects ``app/`` data files, so neither
+    # ``deployment/packaging/opensre.spec`` only collects ``config/`` data files, so neither
     # the synthetic Python package's submodules nor the per-scenario data
     # directories are reliably present in PyInstaller bundles. Two failure
     # modes can trip a bundled binary here:

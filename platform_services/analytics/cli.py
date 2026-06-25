@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Final
 from uuid import uuid4
 
-from app.utils.sentry_sdk import capture_exception
 from platform_services.analytics.events import Event
 from platform_services.analytics.provider import Properties, get_analytics
 from platform_services.analytics.repl_context import get_cli_session_id
@@ -19,6 +18,7 @@ from platform_services.analytics.source import (
     TriggerMode,
     build_source_properties,
 )
+from utils.sentry_sdk import capture_exception
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "eval_pass_rate": """

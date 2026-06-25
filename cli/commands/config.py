@@ -23,12 +23,12 @@ def _masked(value: str | None) -> str:
 
 def _emit_llm_config() -> None:
     """Print current LLM provider and model from environment (legacy `opensre config`)."""
-    from app.config import (
+    from cli.interactive_shell.data_store.context import is_json_output
+    from config.config import (
         get_configured_llm_provider,
         get_llm_provider_api_key,
         get_llm_provider_api_key_env,
     )
-    from cli.interactive_shell.data_store.context import is_json_output
 
     provider = get_configured_llm_provider()
 

@@ -17,8 +17,8 @@ from typing import Any
 import httpx
 from pydantic import Field
 
+from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_validation_failure
-from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 

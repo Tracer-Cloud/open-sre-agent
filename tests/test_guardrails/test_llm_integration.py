@@ -52,7 +52,7 @@ def anthropic_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
     class _FakeClient:
         messages = _FakeMessages()
 
-    from app.services.llm_client import LLMClient
+    from services.llm_client import LLMClient
 
     client = LLMClient(model="test", max_tokens=10)
     monkeypatch.setattr(client, "_client", _FakeClient())
@@ -79,7 +79,7 @@ def openai_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, Any]
     class _FakeClient:
         chat = _FakeChat()
 
-    from app.services.llm_client import OpenAILLMClient
+    from services.llm_client import OpenAILLMClient
 
     monkeypatch.setenv("TEST_KEY", "fake-key")
     client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
@@ -134,7 +134,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -160,7 +160,7 @@ class TestLLMClientGuardrails:
             "platform_services.guardrails.rules.get_default_rules_path", lambda: config
         )
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_ensure_client", lambda: None)
@@ -193,7 +193,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -248,7 +248,7 @@ class TestOpenAIClientGuardrails:
         class _FakeClient:
             chat = _FakeChat()
 
-        from app.services.llm_client import OpenAILLMClient
+        from services.llm_client import OpenAILLMClient
 
         monkeypatch.setenv("TEST_KEY", "fake-key")
         client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")

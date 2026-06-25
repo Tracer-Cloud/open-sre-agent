@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from app.version import get_version
 from cli.interactive_shell.history.policy import redact_text
 from cli.interactive_shell.prompt_logging.config import PromptLogConfig
 from cli.interactive_shell.prompt_logging.integration_snapshot import (
@@ -17,6 +16,7 @@ from cli.interactive_shell.prompt_logging.integration_snapshot import (
 )
 from cli.interactive_shell.prompt_logging.sinks.local_jsonl import append_prompt_log_record
 from cli.interactive_shell.prompt_logging.sinks.posthog_ai import capture_ai_generation
+from config.version import get_version
 
 _SUPPORTED_ROUTE_KINDS = frozenset(
     {"handle_message_with_agent", "cli_help", "follow_up", "new_alert", "background_task"}

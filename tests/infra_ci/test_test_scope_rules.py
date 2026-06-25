@@ -36,7 +36,7 @@ def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
 def test_three_areas_escalates() -> None:
     rules = _rules_module()
     changed = [
-        "app/tools/a.py",
+        "tools/a.py",
         "cli/b.py",
         "integrations/hermes/c.py",
     ]

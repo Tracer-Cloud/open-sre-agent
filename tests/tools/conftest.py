@@ -218,7 +218,7 @@ class MockHttpxResponse:
         def _fake_post(url, headers, json, timeout):
             return MockHttpxResponse({"data": []})
 
-        monkeypatch.setattr("app.tools.MyTool.httpx.post", _fake_post)
+        monkeypatch.setattr("tools.MyTool.httpx.post", _fake_post)
     """
 
     def __init__(
@@ -260,7 +260,7 @@ class BaseToolContract:
 
     Example for function-based tool::
 
-        from app.tools.MyTool import my_func
+        from tools.MyTool import my_func
 
         class TestMyTool(BaseToolContract):
             def get_tool_under_test(self):

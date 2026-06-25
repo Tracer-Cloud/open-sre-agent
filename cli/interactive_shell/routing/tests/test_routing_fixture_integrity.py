@@ -205,7 +205,7 @@ def test_scenarios_use_tool_actions_not_legacy_fields() -> None:
 
 
 def test_gathered_tools_contract_names_are_registered() -> None:
-    from app.tools.registry import clear_tool_registry_cache, get_registered_tools
+    from tools.registry import clear_tool_registry_cache, get_registered_tools
 
     clear_tool_registry_cache()
     registered = {tool.name for tool in get_registered_tools()}

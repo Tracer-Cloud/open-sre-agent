@@ -1,4 +1,4 @@
-"""Tests for ``app.services._streaming.StreamingParseStats``."""
+"""Tests for ``services._streaming.StreamingParseStats``."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services._streaming import DEFAULT_SKIP_THRESHOLD, StreamingParseStats
+from services._streaming import DEFAULT_SKIP_THRESHOLD, StreamingParseStats
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ class TestCounters:
 class TestReportIfUnhealthy:
     def test_empty_stream_is_silent(self, logger: logging.Logger) -> None:
         stats = StreamingParseStats()
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
         mock.assert_not_called()
 
@@ -62,7 +62,7 @@ class TestReportIfUnhealthy:
         stats = StreamingParseStats()
         for _ in range(50):
             stats.record_parsed()
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
         mock.assert_not_called()
 
@@ -73,7 +73,7 @@ class TestReportIfUnhealthy:
             stats.record_parsed()
         for _ in range(5):
             stats.record_error(json.JSONDecodeError("bad", "x", 0))
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
         mock.assert_not_called()
 
@@ -85,7 +85,7 @@ class TestReportIfUnhealthy:
         for _ in range(10):
             stats.record_error(json.JSONDecodeError("bad", "x", 0))
         assert stats.skip_ratio == pytest.approx(DEFAULT_SKIP_THRESHOLD)
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
         mock.assert_not_called()
 
@@ -95,7 +95,7 @@ class TestReportIfUnhealthy:
             stats.record_parsed()
         for _ in range(20):
             stats.record_error(json.JSONDecodeError("bad", "x", 0))
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="splunk", source="search/jobs")
         assert mock.call_count == 1
         kwargs = mock.call_args.kwargs
@@ -122,7 +122,7 @@ class TestReportIfUnhealthy:
         def _record(exc: BaseException, **_: object) -> None:
             sent.append(exc)
 
-        with patch("app.services._streaming.report_exception", side_effect=_record):
+        with patch("services._streaming.report_exception", side_effect=_record):
             a = StreamingParseStats()
             for _ in range(80):
                 a.record_parsed()
@@ -154,7 +154,7 @@ class TestReportIfUnhealthy:
             stats.record_error(ValueError("nope"))
         for _ in range(2):
             stats.record_error(TypeError("also nope"))
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(logger=logger, integration="coralogix", source="dataprime")
         mock.assert_called_once()
         extras = mock.call_args.kwargs["extras"]
@@ -172,7 +172,7 @@ class TestReportIfUnhealthy:
         for _ in range(5):
             stats.record_error(json.JSONDecodeError("bad", "x", 0))
 
-        with patch("app.services._streaming.report_exception") as mock:
+        with patch("services._streaming.report_exception") as mock:
             stats.report_if_unhealthy(
                 logger=logger, integration="vercel", source="logs/stream", threshold=0.01
             )

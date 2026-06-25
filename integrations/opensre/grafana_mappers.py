@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from app.tools.utils.metric_summary import summarize_prometheus_metrics
+from tools.utils.metric_summary import summarize_prometheus_metrics
 
 
 def _map_grafana_logs(data: dict[str, Any]) -> dict[str, Any]:

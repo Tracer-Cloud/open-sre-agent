@@ -9,10 +9,10 @@ import time
 
 import click
 
-from app.version import get_version
 from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
 from cli.interactive_shell.data_store.context import is_json_output, is_yes
 from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
+from config.version import get_version
 from platform_services.analytics.cli import (
     capture_update_completed,
     capture_update_failed,
@@ -84,10 +84,10 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from app.config import get_environment
+    from cli.interactive_shell.ui.health_view import render_health_json, render_health_report
+    from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
-    from cli.interactive_shell.ui.health_view import render_health_json, render_health_report
 
     def _run_once() -> int:
         results = verify_integrations()

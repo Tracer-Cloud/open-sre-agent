@@ -15,10 +15,10 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.config_models import RedisIntegrationConfig
-from app.strict_config import StrictConfigModel
-from app.utils.coercion import safe_int
+from utils.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

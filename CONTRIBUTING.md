@@ -71,12 +71,12 @@ Use `issue/` or `fix/` prefix. Branch names should be lowercase with hyphens.
 
 ### 2.1 Add a Tool (Fast Path: Single File)
 
-For simple tools, you do not need a class or `ClassVar` metadata. Add one file under `app/tools/` and register a function with `@tool`.
+For simple tools, you do not need a class or `ClassVar` metadata. Add one file under `tools/` and register a function with `@tool`.
 
-Example (`app/tools/example_status_tool.py`):
+Example (`tools/example_status_tool.py`):
 
 ```python
-from app.tools.tool_decorator import tool
+from tools.tool_decorator import tool
 
 
 @tool(source="knowledge")

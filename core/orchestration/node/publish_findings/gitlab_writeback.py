@@ -3,9 +3,9 @@
 import logging
 import os
 
-from integrations.gitlab import build_gitlab_config, post_gitlab_mr_note
-from app.utils.truncation import truncate
 from core.domain.state import InvestigationState
+from integrations.gitlab import build_gitlab_config, post_gitlab_mr_note
+from utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

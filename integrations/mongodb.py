@@ -14,8 +14,8 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from app.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 

@@ -51,23 +51,23 @@ class ValidationResult:
 def _get_provider_base_url(provider_value: str) -> str | None:
     """Get the base_url for OpenAI-compatible non-OpenAI providers, or None for native OpenAI."""
     if provider_value == "openrouter":
-        from app.config import OPENROUTER_BASE_URL
+        from config.config import OPENROUTER_BASE_URL
 
         return OPENROUTER_BASE_URL
     if provider_value == "deepseek":
-        from app.config import DEEPSEEK_BASE_URL
+        from config.config import DEEPSEEK_BASE_URL
 
         return DEEPSEEK_BASE_URL
     if provider_value == "gemini":
-        from app.config import GEMINI_BASE_URL
+        from config.config import GEMINI_BASE_URL
 
         return GEMINI_BASE_URL
     if provider_value == "nvidia":
-        from app.config import NVIDIA_BASE_URL
+        from config.config import NVIDIA_BASE_URL
 
         return NVIDIA_BASE_URL
     if provider_value == "groq":
-        from app.config import GROQ_BASE_URL
+        from config.config import GROQ_BASE_URL
 
         return GROQ_BASE_URL
     return None
@@ -182,6 +182,6 @@ def validate_provider_credentials(
 
 def build_demo_action_response() -> dict:
     """Return a safe built-in action response for onboarding."""
-    from app.tools.SREGuidanceTool import get_sre_guidance
+    from tools.SREGuidanceTool import get_sre_guidance
 
     return get_sre_guidance(topic="recovery_remediation", max_topics=1)

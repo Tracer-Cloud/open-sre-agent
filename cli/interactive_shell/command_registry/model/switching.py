@@ -52,8 +52,8 @@ def _is_model_allowed(provider: object, model: str) -> bool:
 
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
-    from app.services.agent_llm_client import reset_agent_client
-    from app.services.llm_client import reset_llm_singletons
+    from services.agent_llm_client import reset_agent_client
+    from services.llm_client import reset_llm_singletons
 
     reset_llm_singletons()
     reset_agent_client()
@@ -66,7 +66,7 @@ def switch_llm_provider(
     *,
     toolcall_model: str | None = None,
 ) -> bool:
-    from app.llm_credentials import has_llm_api_key
+    from config.llm_credentials import has_llm_api_key
     from cli.wizard.config import PROVIDER_BY_VALUE
     from cli.wizard.env_sync import sync_provider_env
 

@@ -53,34 +53,34 @@ Main packages one level deeper:
 - `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
 - `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
 - `platform_services/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
-- `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
+- `services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `services/AGENTS.md`.
 - `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
-- `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
+- `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
-- `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
-- `app/tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
-- `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `cli/__main__.py`.
+- `utils/` — Cross-cutting utility helpers used across the app and test harnesses.
+- `tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `utils/telegram_delivery.py`.
+- `config/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `cli/__main__.py`.
 
 ## 2. Entry Points
 
 ### Adding a Tool
 
-The tool registry auto-discovers modules under `app/tools/`, so the normal path is to add one module or package there and let discovery pick it up.
+The tool registry auto-discovers modules under `tools/`, so the normal path is to add one module or package there and let discovery pick it up.
 
 Files to touch:
 
-- `app/tools/<ToolName>/__init__.py` for the tool implementation, or `app/tools/<tool_file>.py` for a lighter-weight function tool.
-- `app/tools/utils/` if the tool needs shared helper code.
-- `app/services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
+- `tools/<ToolName>/__init__.py` for the tool implementation, or `tools/<tool_file>.py` for a lighter-weight function tool.
+- `tools/utils/` if the tool needs shared helper code.
+- `services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
 
 Steps:
 
-1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `app.tools.tool_decorator` for a lightweight function tool.
+1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Keep the tool self-contained. Put reusable transport or parsing code in `app/services/` or `app/tools/utils/` rather than copying it into the tool body.
+3. Keep the tool self-contained. Put reusable transport or parsing code in `services/` or `tools/utils/` rather than copying it into the tool body.
 4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
 6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
@@ -119,8 +119,8 @@ Files to touch:
 - `integrations/<name>.py` for config builders, validators, selectors, and normalization helpers.
 - `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
 - `integrations/verify.py` when the integration needs a local verification path.
-- `app/services/<name>/client.py` when the integration needs a dedicated API client.
-- `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py` for the user-facing tool layer.
+- `services/<name>/client.py` when the integration needs a dedicated API client.
+- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
@@ -128,9 +128,9 @@ Files to touch:
 
 Examples from the repo:
 
-- Datadog: `app/services/datadog/client.py`, `integrations/catalog.py`, `integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
-- Grafana: `integrations/catalog.py`, `integrations/verify.py`, `app/tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Datadog: `services/datadog/client.py`, `integrations/catalog.py`, `integrations/verify.py`, `tools/DataDog*`, and `tests/integrations/test_verify.py`.
+- Grafana: `integrations/catalog.py`, `integrations/verify.py`, `tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 

@@ -46,7 +46,7 @@ def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
 def detect_provider_model() -> tuple[str, str]:
     """Return (provider, model) for the active LLM config."""
     try:
-        from app.config import LLMSettings
+        from config.config import LLMSettings
 
         settings = LLMSettings.from_env()
     except Exception:

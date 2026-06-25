@@ -183,7 +183,7 @@ class TestPostgreSQLToolsAvailability:
         """PostgreSQL tools modules exist and are properly structured."""
         try:
             # Tools are defined as decorated functions within __init__ modules
-            from app.tools import (
+            from tools import (
                 PostgreSQLCurrentQueriesTool,
                 PostgreSQLReplicationStatusTool,
                 PostgreSQLServerStatusTool,

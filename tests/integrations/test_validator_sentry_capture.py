@@ -67,9 +67,7 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase(
         "integrations/clickhouse.py", "get_system_health", "clickhouse", "get_system_health"
     ),
-    MigrationCase(
-        "integrations/clickhouse.py", "get_table_stats", "clickhouse", "get_table_stats"
-    ),
+    MigrationCase("integrations/clickhouse.py", "get_table_stats", "clickhouse", "get_table_stats"),
     # github_mcp
     MigrationCase(
         "integrations/github_mcp.py",
@@ -113,9 +111,7 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase(
         "integrations/azure_sql.py", "get_resource_stats", "azure_sql", "get_resource_stats"
     ),
-    MigrationCase(
-        "integrations/azure_sql.py", "get_slow_queries", "azure_sql", "get_slow_queries"
-    ),
+    MigrationCase("integrations/azure_sql.py", "get_slow_queries", "azure_sql", "get_slow_queries"),
     MigrationCase("integrations/azure_sql.py", "get_wait_stats", "azure_sql", "get_wait_stats"),
     # openclaw
     MigrationCase(
@@ -155,14 +151,10 @@ CASES: tuple[MigrationCase, ...] = (
         "mongodb",
         "validate_mongodb_config",
     ),
-    MigrationCase(
-        "integrations/mongodb.py", "get_server_status", "mongodb", "get_server_status"
-    ),
+    MigrationCase("integrations/mongodb.py", "get_server_status", "mongodb", "get_server_status"),
     MigrationCase("integrations/mongodb.py", "get_current_ops", "mongodb", "get_current_ops"),
     MigrationCase("integrations/mongodb.py", "get_rs_status", "mongodb", "get_rs_status"),
-    MigrationCase(
-        "integrations/mongodb.py", "get_profiler_data", "mongodb", "get_profiler_data"
-    ),
+    MigrationCase("integrations/mongodb.py", "get_profiler_data", "mongodb", "get_profiler_data"),
     MigrationCase(
         "integrations/mongodb.py", "get_collection_stats", "mongodb", "get_collection_stats"
     ),
@@ -188,9 +180,7 @@ CASES: tuple[MigrationCase, ...] = (
     MigrationCase(
         "integrations/postgresql.py", "get_slow_queries", "postgresql", "get_slow_queries"
     ),
-    MigrationCase(
-        "integrations/postgresql.py", "get_table_stats", "postgresql", "get_table_stats"
-    ),
+    MigrationCase("integrations/postgresql.py", "get_table_stats", "postgresql", "get_table_stats"),
     # mysql
     MigrationCase(
         "integrations/mysql.py", "validate_mysql_config", "mysql", "validate_mysql_config"
@@ -212,12 +202,8 @@ CASES: tuple[MigrationCase, ...] = (
         "validate_mariadb_config",
     ),
     MigrationCase("integrations/mariadb.py", "get_process_list", "mariadb", "get_process_list"),
-    MigrationCase(
-        "integrations/mariadb.py", "get_global_status", "mariadb", "get_global_status"
-    ),
-    MigrationCase(
-        "integrations/mariadb.py", "get_innodb_status", "mariadb", "get_innodb_status"
-    ),
+    MigrationCase("integrations/mariadb.py", "get_global_status", "mariadb", "get_global_status"),
+    MigrationCase("integrations/mariadb.py", "get_innodb_status", "mariadb", "get_innodb_status"),
     MigrationCase("integrations/mariadb.py", "get_slow_queries", "mariadb", "get_slow_queries"),
     MigrationCase(
         "integrations/mariadb.py", "get_replication_status", "mariadb", "get_replication_status"
@@ -229,9 +215,7 @@ CASES: tuple[MigrationCase, ...] = (
         "rabbitmq",
         "validate_rabbitmq_config",
     ),
-    MigrationCase(
-        "integrations/rabbitmq.py", "get_queue_backlog", "rabbitmq", "get_queue_backlog"
-    ),
+    MigrationCase("integrations/rabbitmq.py", "get_queue_backlog", "rabbitmq", "get_queue_backlog"),
     MigrationCase(
         "integrations/rabbitmq.py", "get_consumer_health", "rabbitmq", "get_consumer_health"
     ),
@@ -249,9 +233,7 @@ CASES: tuple[MigrationCase, ...] = (
         "mongodb_atlas",
         "validate_mongodb_atlas_config",
     ),
-    MigrationCase(
-        "integrations/mongodb_atlas.py", "get_clusters", "mongodb_atlas", "get_clusters"
-    ),
+    MigrationCase("integrations/mongodb_atlas.py", "get_clusters", "mongodb_atlas", "get_clusters"),
     MigrationCase("integrations/mongodb_atlas.py", "get_alerts", "mongodb_atlas", "get_alerts"),
     MigrationCase(
         "integrations/mongodb_atlas.py",

@@ -9,7 +9,7 @@ CLI-backed, Bedrock, and future clients)—not one vendor.
 The investigation agent does **not** call integration APIs through the LLM. The flow is:
 
 1. **Tools** — `get_registered_tools("investigation")`, filtered with `tool.is_available(...)`.
-2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `app/services/agent_llm_client.py`.
+2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `services/agent_llm_client.py`.
    Each client class shapes schemas for its API (function definitions, tool specs, CLI prompt JSON, etc.).
 3. **Invoke** — `llm.invoke(messages, system=..., tools=tool_schemas)`; the model returns tool calls.
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
@@ -20,18 +20,18 @@ The investigation agent does **not** call integration APIs through the LLM. The 
 ```text
 investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
                     ↓
-              app/tools/*  (input_schema, extract_params, run)
+              tools/*  (input_schema, extract_params, run)
 ```
 
 ### Where code lives
 
 | Concern | Location |
 | -------- | -------- |
-| Provider routing | `app/services/agent_llm_client.py` (`get_agent_llm`, client classes) |
-| Chat / non-agent LLM | `app/services/llm_client.py` (separate path—changes here do not fix investigation) |
+| Provider routing | `services/agent_llm_client.py` (`get_agent_llm`, client classes) |
+| Chat / non-agent LLM | `services/llm_client.py` (separate path—changes here do not fix investigation) |
 | Investigation loop & message dispatch | `core/orchestration/node/investigate/` and `core/runtime/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
-| Tool definitions | `app/tools/` (`input_schema`, `public_input_schema`) |
+| Tool definitions | `tools/` (`input_schema`, `public_input_schema`) |
 
 When adding a provider, implement **both** `tool_schemas()` and the message shapes the runtime loop
 already branches on (or extend those branches). Do not assume one vendor’s JSON tool format works elsewhere.
@@ -53,7 +53,7 @@ already branches on (or extend those branches). Do not assume one vendor’s JSO
 
 ## Tool `input_schema` (authoring)
 
-When adding or changing tools under `app/tools/`:
+When adding or changing tools under `tools/`:
 
 - [ ] **Top-level** — Investigation tools use `type: object` with a `properties` dict.
 - [ ] **Single `type`** — Prefer one string per node (`"string"`, `"object"`, `"array"`). Avoid
@@ -131,6 +131,6 @@ adapter strictness gaps.
 
 ## Related docs
 
-- [app/services/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md) — API provider wiring and env keys
+- [services/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/services/AGENTS.md) — API provider wiring and env keys
 - [integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
 - [AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) — repo map and PR checklist

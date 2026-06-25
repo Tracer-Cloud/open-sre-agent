@@ -37,7 +37,7 @@ from cli.interactive_shell.ui.key_reader import (
 if TYPE_CHECKING:
     from rich.console import Console
 
-# Labels mirror the Slack feedback block in app/utils/slack_delivery.py.
+# Labels mirror the Slack feedback block in utils/slack_delivery.py.
 _CHOICES: list[tuple[str, str]] = [
     ("accurate", "Accurate — root cause identified correctly"),
     ("partial", "Partially accurate — missed some issues"),

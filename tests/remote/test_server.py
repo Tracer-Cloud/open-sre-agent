@@ -284,7 +284,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
     def fake_persist_streamed_result(**kwargs: Any) -> None:
         persisted.update(kwargs)
 
-    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+    monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
         "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
@@ -335,7 +335,7 @@ async def test_investigate_stream_captures_streaming_exception(
         raise expected_error
         yield StreamEvent("events", data={})
 
-    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+    monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
         "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
@@ -849,7 +849,7 @@ async def test_investigate_stream_emits_correlation_payload(
             "report": "Correlation attached",
         }
 
-    monkeypatch.setattr("app.config.LLMSettings.from_env", object)
+    monkeypatch.setattr("config.config.LLMSettings.from_env", object)
 
     monkeypatch.setattr(
         "cli.investigation.resolve_investigation_context",

@@ -153,8 +153,8 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     are redacted and bounded before writing; failures are swallowed so logging
     never breaks the turn.
     """
-    from app.utils.tool_trace import redact_sensitive
     from cli.interactive_shell.sessions.store import SessionStore
+    from utils.tool_trace import redact_sensitive
 
     for tc, output in executed:
         with contextlib.suppress(Exception):
@@ -215,9 +215,9 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from app.services.agent_llm_client import get_agent_llm
         from core.orchestration.node.investigate.tools import get_available_tools
         from core.runtime import run_tool_calling_loop
+        from services.agent_llm_client import get_agent_llm
 
         resolved = _resolve_session_integrations(session)
         tools = get_available_tools(resolved)

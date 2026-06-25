@@ -30,8 +30,8 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 **Before merging**, read **[Subprocess environment allowlist](#subprocess-environment-allowlist)** below: if your CLI reads vendor-specific env vars, you must extend `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py` or the subprocess will not see them (auth and config will break silently).
 
 1. **Adapter** — Implement `LLMCLIAdapter`: `detect()` must not raise; `build()` returns argv + optional stdin; `parse` / `explain_failure` for success and non-zero exits. Put prompt text on stdin and/or in argv as appropriate — the runner does not branch on a separate “delivery mode”; `CLIInvocation` carries what `build()` produced.
-2. **Registry** — Add an entry to `CLI_PROVIDER_REGISTRY` in `registry.py` (`adapter_factory`, `model_env_key`). The dict key must match `LLM_PROVIDER` / `ProviderOption.value` / `LLMProvider` in `app/config.py`. `_create_llm_client` picks up registered CLI providers automatically (no new `elif` in `llm_client.py` for normal cases).
-3. **Config** — Add the provider literal to `LLMProvider` and validators in `app/config.py` (same string as the registry key).
+2. **Registry** — Add an entry to `CLI_PROVIDER_REGISTRY` in `registry.py` (`adapter_factory`, `model_env_key`). The dict key must match `LLM_PROVIDER` / `ProviderOption.value` / `LLMProvider` in `config/config.py`. `_create_llm_client` picks up registered CLI providers automatically (no new `elif` in `llm_client.py` for normal cases).
+3. **Config** — Add the provider literal to `LLMProvider` and validators in `config/config.py` (same string as the registry key).
 4. **Wizard (optional)** — If onboarding should offer the CLI: add a `ProviderOption` in `cli/wizard/config.py` with `credential_kind="cli"` and `adapter_factory`. `flow.py` already runs `_run_cli_llm_onboarding` for CLI providers and builds the saved-summary credential line from `provider.label` + `adapter.auth_hint`.
 5. **Typing** — Prefer `adapter_factory: Callable[[], LLMCLIAdapter]` on `ProviderOption` so wizard and client stay aligned.
 
@@ -151,7 +151,7 @@ CODEX_BIN=
 - Implement `detect()` with `--version` + auth status checks; follow the three-state `logged_in` pattern above.
 - Write `_classify_<name>_auth` — test against a real logged-in **and** logged-out session before merging.
 - If the CLI reads custom env vars (e.g. `GEMINI_*`), add the prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`.
-- Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `app/config.py`.
+- Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `config/config.py`.
 - (Optional) Add wizard onboarding option in `cli/wizard/config.py`.
 - Add tests under `tests/integrations/llm_cli/` for detect/build/failure paths, including env forwarding.
 

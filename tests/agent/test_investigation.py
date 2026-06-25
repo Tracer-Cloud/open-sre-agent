@@ -8,9 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from integrations.llm_cli.errors import CLITimeoutError
-from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
-from app.tools.registered_tool import RegisteredTool
 from core.orchestration.node.investigate import (
     ConnectedInvestigationAgent,
 )
@@ -30,6 +27,9 @@ from core.runtime import (
     execute_tools,
     trim_lowest_value_tool_pair,
 )
+from integrations.llm_cli.errors import CLITimeoutError
+from services.agent_llm_client import CLIBackedAgentClient, ToolCall
+from tools.registered_tool import RegisteredTool
 
 
 def _registered_tool(name: str, source: str) -> RegisteredTool:
@@ -305,7 +305,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
 def test_execute_tools_uses_availability_view_for_classified_integrations() -> None:
     from integrations.config_models import GrafanaIntegrationConfig
-    from app.tools.GrafanaLogsTool import query_grafana_logs
+    from tools.GrafanaLogsTool import query_grafana_logs
 
     rt = query_grafana_logs.__opensre_registered_tool__
     mock_client = MagicMock()
@@ -322,7 +322,7 @@ def test_execute_tools_uses_availability_view_for_classified_integrations() -> N
     tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
 
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials",
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials",
         return_value=mock_client,
     ) as mock_factory:
         results = execute_tools(tool_calls, [rt], resolved)
@@ -379,7 +379,7 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
         ),
     )
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
     calls = [

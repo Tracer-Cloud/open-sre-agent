@@ -8,13 +8,6 @@ from rich.console import Console
 from rich.markup import escape
 
 import cli.interactive_shell.command_registry.repl_data as repl_data
-from app.llm_reasoning_effort import (
-    REASONING_EFFORT_OPTIONS,
-    describe_reasoning_effort_default,
-    display_reasoning_effort,
-    parse_reasoning_effort,
-    provider_supports_reasoning_effort,
-)
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import (
@@ -28,6 +21,13 @@ from cli.interactive_shell.ui.choice_menu import (
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
+)
+from config.llm_reasoning_effort import (
+    REASONING_EFFORT_OPTIONS,
+    describe_reasoning_effort_default,
+    display_reasoning_effort,
+    parse_reasoning_effort,
+    provider_supports_reasoning_effort,
 )
 
 _TRUST_FIRST_ARGS: tuple[tuple[str, str], ...] = (

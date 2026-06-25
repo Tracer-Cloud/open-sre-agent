@@ -509,9 +509,7 @@ def test_build_forwards_copilot_config_envs(
 def test_build_raises_when_binary_unresolved(monkeypatch: pytest.MonkeyPatch) -> None:
     _clean_copilot_env(monkeypatch)
     with (
-        patch(
-            "integrations.llm_cli.binary_resolver.shutil.which", return_value=None
-        ) as mock_which,
+        patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None) as mock_which,
         patch(
             "integrations.llm_cli.copilot._fallback_copilot_paths",
             return_value=[],

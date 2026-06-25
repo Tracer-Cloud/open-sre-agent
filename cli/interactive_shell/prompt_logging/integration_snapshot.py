@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from integrations.registry import family_key
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.orchestration.node.investigate.tools import get_available_tools
+from integrations.registry import family_key
 
 
 class _IntegrationSession(Protocol):

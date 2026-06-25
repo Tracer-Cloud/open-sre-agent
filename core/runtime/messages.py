@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.services.agent_llm_client import ToolCall
+from services.agent_llm_client import ToolCall
 
 
 def build_synthetic_assistant_tool_call_message(
@@ -17,7 +17,7 @@ def build_synthetic_assistant_tool_call_message(
     This lets us inject pre-seeded tool results into the conversation in a format
     the LLM client already understands, without adding special-case handling.
     """
-    from app.services.agent_llm_client import (
+    from services.agent_llm_client import (
         AnthropicAgentClient,
         BedrockConverseAgentClient,
         CLIBackedAgentClient,
@@ -25,7 +25,7 @@ def build_synthetic_assistant_tool_call_message(
     )
 
     if isinstance(llm, BedrockConverseAgentClient):
-        from app.services.bedrock_converse import build_assistant_tool_use_message
+        from services.bedrock_converse import build_assistant_tool_use_message
 
         return build_assistant_tool_use_message(tool_calls)
 
@@ -64,7 +64,7 @@ def build_synthetic_assistant_tool_call_message(
 
 
 def build_assistant_message(llm: Any, response: Any) -> dict[str, Any]:
-    from app.services.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
+    from services.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
         return llm.build_assistant_message(response.raw_content)
@@ -81,7 +81,7 @@ def build_tool_result_messages(
     tool_calls: list[ToolCall],
     results: list[Any],
 ) -> list[dict[str, Any]]:
-    from app.services.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
+    from services.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
 
     if isinstance(llm, AnthropicAgentClient):
         return [llm.build_tool_result_message(tool_calls, results)]

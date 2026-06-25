@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Any
 
+from core.domain.state import InvestigationState
 from integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
@@ -20,7 +21,6 @@ from integrations.catalog import (
 from integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
-from core.domain.state import InvestigationState
 from platform_services.observability import get_progress_tracker as get_tracker
 
 logger = logging.getLogger(__name__)

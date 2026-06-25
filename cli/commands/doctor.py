@@ -31,7 +31,6 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.version import get_version
 from cli.interactive_shell.data_store.context import is_json_output
 from cli.interactive_shell.error_handling.exit_codes import ERROR as EXIT_ERROR
 from cli.interactive_shell.error_handling.exit_codes import SUCCESS
@@ -46,6 +45,7 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from config.version import get_version
 
 
 def _check(name: str, fn: Any) -> dict[str, str]:
@@ -76,7 +76,7 @@ def _check_env_file() -> tuple[bool, str]:
 
 
 def _check_llm_provider() -> tuple[bool, str]:
-    from app.config import get_configured_llm_provider, get_llm_provider_api_key
+    from config.config import get_configured_llm_provider, get_llm_provider_api_key
 
     provider = get_configured_llm_provider()
     env_vars = {

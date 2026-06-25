@@ -17,21 +17,6 @@ from rich.console import Console
 from rich.markup import escape
 from rich.tree import Tree
 
-from app.tools.fleet_monitoring.bus import BusMessage, subscribe
-from app.tools.fleet_monitoring.config import (
-    agents_config_path,
-    load_agents_config,
-    set_agent_budget,
-)
-from app.tools.fleet_monitoring.conflicts import (
-    DEFAULT_WINDOW_SECONDS,
-    WriteEvent,
-    detect_conflicts,
-    render_conflicts,
-)
-from app.tools.fleet_monitoring.coordination import BranchClaims
-from app.tools.fleet_monitoring.discovery import registered_and_discovered_agents
-from app.tools.fleet_monitoring.registry import AgentRegistry
 from cli.interactive_shell.command_registry.agents.kill import _cmd_agents_kill
 from cli.interactive_shell.command_registry.agents.trace import _cmd_agents_trace
 from cli.interactive_shell.command_registry.types import SlashCommand
@@ -46,6 +31,21 @@ from cli.interactive_shell.ui import (
     render_agents_table,
     repl_table,
 )
+from tools.fleet_monitoring.bus import BusMessage, subscribe
+from tools.fleet_monitoring.config import (
+    agents_config_path,
+    load_agents_config,
+    set_agent_budget,
+)
+from tools.fleet_monitoring.conflicts import (
+    DEFAULT_WINDOW_SECONDS,
+    WriteEvent,
+    detect_conflicts,
+    render_conflicts,
+)
+from tools.fleet_monitoring.coordination import BranchClaims
+from tools.fleet_monitoring.discovery import registered_and_discovered_agents
+from tools.fleet_monitoring.registry import AgentRegistry
 
 _AGENTS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("budget", "view or edit per-agent hourly budgets"),

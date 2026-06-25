@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.config import has_credentials_for_active_llm_provider
+from config.config import has_credentials_for_active_llm_provider
 from core.orchestration.entrypoints import run_investigation
 from tests.synthetic.hermes_rca.scenario_loader import (
     SUITE_DIR,

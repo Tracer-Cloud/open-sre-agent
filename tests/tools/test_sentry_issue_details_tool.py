@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.SentryIssueDetailsTool import get_sentry_issue_details
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.SentryIssueDetailsTool import get_sentry_issue_details
 
 
 class TestSentryIssueDetailsToolContract(BaseToolContract):
@@ -36,8 +36,8 @@ def test_run_returns_unavailable_when_no_config() -> None:
 def test_run_happy_path() -> None:
     fake_issue = {"id": "123", "title": "TypeError", "culprit": "app/views.py"}
     with (
-        patch("app.tools.SentryIssueDetailsTool.get_sentry_issue", return_value=fake_issue),
-        patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
+        patch("tools.SentryIssueDetailsTool.get_sentry_issue", return_value=fake_issue),
+        patch("tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
     ):
         result = get_sentry_issue_details(
             organization_slug="my-org", sentry_token="tok_test", issue_id="123"

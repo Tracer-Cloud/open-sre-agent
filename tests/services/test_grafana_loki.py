@@ -1,4 +1,4 @@
-"""Direct unit tests for app.services.grafana.loki.LokiMixin.
+"""Direct unit tests for services.grafana.loki.LokiMixin.
 
 Exercise the Loki query path with a fake mixin host so we never hit a real
 Grafana datasource. Covers the happy path (stream flattening, metadata
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.grafana.loki import LokiMixin
+from services.grafana.loki import LokiMixin
 
 # ---------------------------------------------------------------------------
 # Test host
@@ -129,7 +129,7 @@ class TestQueryLokiSuccess:
         host.make_request_mock.return_value = _two_stream_response()
 
         fake_now_s = 1_700_000_000.0
-        with patch("app.services.grafana.loki.time.time", return_value=fake_now_s):
+        with patch("services.grafana.loki.time.time", return_value=fake_now_s):
             host.query_loki(_QUERY, time_range_minutes=5, limit=42)
 
         assert host.last_url is not None

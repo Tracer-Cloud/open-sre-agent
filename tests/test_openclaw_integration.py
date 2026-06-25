@@ -20,7 +20,7 @@ from integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.tools.OpenClawMCPTool import (
+from tools.OpenClawMCPTool import (
     call_openclaw_bridge_tool,
     search_openclaw_conversations,
 )
@@ -327,9 +327,7 @@ class TestValidateOpenClawConfig:
         )
 
         with (
-            patch(
-                "integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
-            ),
+            patch("integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"),
             patch("integrations.openclaw.subprocess.run", return_value=completed),
             patch("integrations.openclaw.list_openclaw_tools") as mock_list_tools,
         ):
@@ -432,9 +430,7 @@ class TestDescribeOpenClawError:
         )
 
         with (
-            patch(
-                "integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
-            ),
+            patch("integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"),
             patch("integrations.openclaw.subprocess.run", return_value=completed),
         ):
             detail = openclaw_runtime_unavailable_reason(config)

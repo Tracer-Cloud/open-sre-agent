@@ -13,9 +13,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure
-from app.services.dagster import DagsterClient
-from app.strict_config import StrictConfigModel
+from services.dagster import DagsterClient
 
 logger = logging.getLogger(__name__)
 

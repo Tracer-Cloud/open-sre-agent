@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import field_validator
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 
 _TRUE_ENV_VALUES = frozenset({"true", "1", "yes"})
 

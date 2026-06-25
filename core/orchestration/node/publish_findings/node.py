@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from app.utils.ingest_delivery import create_investigation_and_attach_url
 from core.domain.state import InvestigationState
 from core.orchestration.node.publish_findings.context import build_report_context
 from core.orchestration.node.publish_findings.delivery import dispatch_report
@@ -28,6 +27,7 @@ from core.orchestration.node.publish_findings.upstream_correlation import (
     enrich_upstream_correlation,
 )
 from platform_services.masking import MaskingContext
+from utils.ingest_delivery import create_investigation_and_attach_url
 
 
 def deliver(state: InvestigationState) -> dict[str, Any]:

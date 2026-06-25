@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 
     from cli.interactive_shell.alert_inbox import IncomingAlert
 
-from app.llm_reasoning_effort import ReasoningEffortChoice
 from cli.interactive_shell.runtime.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
 from cli.interactive_shell.runtime.tasks import TaskRegistry
+from config.llm_reasoning_effort import ReasoningEffortChoice
 
 InterventionKind = Literal["ctrl_c", "correction"]
 

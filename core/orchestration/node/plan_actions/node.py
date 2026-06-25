@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.tools.registered_tool import RegisteredTool
-from app.tools.registry import get_registered_tools
 from core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
@@ -18,6 +16,8 @@ from core.orchestration.node.investigate.tools import (
     availability_view,
     build_connected_tool_context,
 )
+from tools.registered_tool import RegisteredTool
+from tools.registry import get_registered_tools
 
 DEFAULT_RETRIEVAL_LIMIT = 100
 

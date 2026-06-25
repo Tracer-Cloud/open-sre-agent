@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from app.strict_config import StrictConfigModel
+from config.strict_config import StrictConfigModel
 from core.domain.state.runtime_slices import (
     AlertInputSlice,
     DeliveryContextSlice,

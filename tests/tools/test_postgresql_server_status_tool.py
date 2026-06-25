@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.PostgreSQLServerStatusTool import get_postgresql_server_status
 from tests.tools.conftest import BaseToolContract
+from tools.PostgreSQLServerStatusTool import get_postgresql_server_status
 
 
 class TestPostgreSQLServerStatusToolContract(BaseToolContract):
@@ -39,7 +39,7 @@ def test_run_happy_path() -> None:
             },
         },
     }
-    with patch("app.tools.PostgreSQLServerStatusTool.get_server_status", return_value=fake_result):
+    with patch("tools.PostgreSQLServerStatusTool.get_server_status", return_value=fake_result):
         result = get_postgresql_server_status(host="localhost", database="testdb")
     assert result["version"] == "16.1"
     assert result["connections"]["total"] == 25
@@ -48,7 +48,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.PostgreSQLServerStatusTool.get_server_status",
+        "tools.PostgreSQLServerStatusTool.get_server_status",
         return_value={"source": "postgresql", "available": False, "error": "connection timeout"},
     ):
         result = get_postgresql_server_status(host="invalid", database="testdb")

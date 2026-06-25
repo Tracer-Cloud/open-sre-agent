@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.EKSNodeHealthTool import get_eks_node_health
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.EKSNodeHealthTool import get_eks_node_health
 
 
 class TestEKSNodeHealthToolContract(BaseToolContract):
@@ -50,7 +50,7 @@ def test_run_happy_path() -> None:
         items=[_make_node("node-1"), _make_node("node-2")]
     )
     with patch(
-        "app.tools.EKSNodeHealthTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
+        "tools.EKSNodeHealthTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
     ):
         result = get_eks_node_health(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is True
@@ -64,16 +64,14 @@ def test_run_detects_not_ready_nodes() -> None:
         items=[_make_node("node-1", "True"), _make_node("node-2", "False")]
     )
     with patch(
-        "app.tools.EKSNodeHealthTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
+        "tools.EKSNodeHealthTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
     ):
         result = get_eks_node_health(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["not_ready_count"] == 1
 
 
 def test_run_handles_exception() -> None:
-    with patch(
-        "app.tools.EKSNodeHealthTool.build_k8s_clients", side_effect=Exception("auth error")
-    ):
+    with patch("tools.EKSNodeHealthTool.build_k8s_clients", side_effect=Exception("auth error")):
         result = get_eks_node_health(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False
     assert "auth error" in result["error"]

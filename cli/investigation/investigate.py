@@ -9,9 +9,9 @@ import threading
 from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from app.config import resolve_llm_settings
-from app.utils.tracing import traceable
+from config.config import resolve_llm_settings
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from utils.tracing import traceable
 
 if TYPE_CHECKING:
     from core.domain.state import AgentState

@@ -7,12 +7,12 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
-from app.utils.sentry_sdk import capture_exception, init_sentry
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from cli.investigation import run_investigation_cli
 from platform_services.analytics.cli import track_investigation
 from platform_services.analytics.source import EntrypointSource, TriggerMode
+from utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
 init_sentry(entrypoint="mcp")

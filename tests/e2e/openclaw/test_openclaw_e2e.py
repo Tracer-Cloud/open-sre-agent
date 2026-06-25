@@ -34,8 +34,8 @@ from integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.utils.openclaw_delivery import send_openclaw_report
 from tests.e2e.source_helpers import resolve_available_tool_sources
+from utils.openclaw_delivery import send_openclaw_report
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -407,13 +407,13 @@ class TestOpenClawWriteBackFailure:
         )
         creds = _openclaw_http_resolved()
 
-        with patch("app.utils.openclaw_delivery.call_openclaw_tool") as mock_call:
+        with patch("utils.openclaw_delivery.call_openclaw_tool") as mock_call:
             mock_call.return_value = {
                 "is_error": True,
                 "text": "OpenClaw tool call failed.",
             }
             with patch(
-                "app.utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
+                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
             ):
                 posted, error = send_openclaw_report(state, "RCA report body", creds)
 
@@ -431,10 +431,10 @@ class TestOpenClawWriteBackFailure:
         )
         creds = _openclaw_http_resolved()
 
-        with patch("app.utils.openclaw_delivery.call_openclaw_tool") as mock_call:
+        with patch("utils.openclaw_delivery.call_openclaw_tool") as mock_call:
             mock_call.return_value = {"is_error": False, "text": "ok"}
             with patch(
-                "app.utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
+                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
             ):
                 posted, error = send_openclaw_report(state, "RCA report body", creds)
 
@@ -456,9 +456,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("app.utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "app.utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):
@@ -484,9 +484,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("app.utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "app.utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):
@@ -512,9 +512,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("app.utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "app.utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):
@@ -601,7 +601,7 @@ class TestOpenClawConnectionVerifiedBug:
 
     def test_bridge_tools_available_when_connection_verified_present(self) -> None:
         """All three bridge tools report is_available=True when connection_verified=True."""
-        from app.tools.OpenClawMCPTool import (
+        from tools.OpenClawMCPTool import (
             call_openclaw_bridge_tool,
             list_openclaw_bridge_tools,
             search_openclaw_conversations,
@@ -617,7 +617,7 @@ class TestOpenClawConnectionVerifiedBug:
 
     def test_bridge_tools_unavailable_when_connection_verified_absent(self) -> None:
         """Without connection_verified, all bridge tools must report is_available=False."""
-        from app.tools.OpenClawMCPTool import (
+        from tools.OpenClawMCPTool import (
             call_openclaw_bridge_tool,
             list_openclaw_bridge_tools,
             search_openclaw_conversations,
@@ -643,7 +643,7 @@ class TestOpenClawConnectionVerifiedBug:
         Bug 2 regression: _openclaw_extract_params must read 'url' (model_dump() key),
         not 'openclaw_url' (the old incorrect key that caused all params to arrive as None).
         """
-        from app.tools.OpenClawMCPTool import call_openclaw_bridge_tool
+        from tools.OpenClawMCPTool import call_openclaw_bridge_tool
 
         params = call_openclaw_bridge_tool.__opensre_registered_tool__.extract_params(
             {

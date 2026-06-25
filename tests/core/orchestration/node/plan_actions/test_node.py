@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from app.tools.registered_tool import RegisteredTool
 from core.domain.state import AgentState
 from core.domain.types.retrieval import RetrievalControls
 from core.orchestration.node.plan_actions.node import plan_actions
+from tools.registered_tool import RegisteredTool
 
 
 def _tool(

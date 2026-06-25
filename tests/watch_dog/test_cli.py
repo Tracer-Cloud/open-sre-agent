@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from app.tools.watch_dog.config import WatchdogConfig
 from cli.__main__ import cli
 from cli.commands.watchdog import watchdog_command
+from tools.watch_dog.config import WatchdogConfig
 
 
 def test_watchdog_help_lists_expected_flags() -> None:

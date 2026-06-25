@@ -49,7 +49,7 @@ class _FakeLLMClient:
 
 def _patch_llm(monkeypatch: pytest.MonkeyPatch, content: str) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
-    import app.services.llm_client as llm_module
+    import services.llm_client as llm_module
 
     monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: client)
     return client
@@ -178,7 +178,7 @@ class TestAnswerCliHelp:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
-        import app.services.llm_client as llm_module
+        import services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
@@ -214,7 +214,7 @@ class TestAnswerCliHelp:
                 calls.append("invoke_stream")
                 yield "ok"
 
-        import app.services.llm_client as llm_module
+        import services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
 

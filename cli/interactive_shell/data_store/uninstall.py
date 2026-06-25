@@ -5,8 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.version import PACKAGE_NAME
 from config.constants import LEGACY_TRACER_HOME_DIR, OPENSRE_HOME_DIR
+from config.version import PACKAGE_NAME
 
 
 def _is_windows() -> bool:

@@ -2,7 +2,7 @@
 
 The Temporal connection config itself lives in
 ``integrations.config_models.TemporalIntegrationConfig`` (re-exported as
-``TemporalConfig`` from ``app.services.temporal``). This module provides the
+``TemporalConfig`` from ``services.temporal``). This module provides the
 ``classify`` entry point the catalog uses to turn a stored/remote integration
 record into a flat, typed config the Temporal tools can consume.
 """
@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
-from app.services.temporal import TemporalConfig
+from services.temporal import TemporalConfig
 
 logger = logging.getLogger(__name__)
 

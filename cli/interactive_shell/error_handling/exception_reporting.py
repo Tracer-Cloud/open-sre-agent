@@ -7,8 +7,8 @@ from typing import Any
 
 import click
 
-from app.utils.sentry_sdk import capture_exception
 from cli.interactive_shell.error_handling.errors import OpenSREError
+from utils.sentry_sdk import capture_exception
 
 
 def should_report_exception(exc: BaseException, *, expected: bool = False) -> bool:

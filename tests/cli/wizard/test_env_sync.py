@@ -6,7 +6,6 @@ import stat
 import keyring
 import pytest
 
-from app.llm_credentials import resolve_env_credential
 from cli.wizard.config import PROVIDER_BY_VALUE
 from cli.wizard.env_sync import (
     _is_sensitive_env_key,
@@ -14,6 +13,7 @@ from cli.wizard.env_sync import (
     sync_env_values,
     sync_provider_env,
 )
+from config.llm_credentials import resolve_env_credential
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0

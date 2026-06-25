@@ -44,8 +44,7 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
-from app.utils.sentry_sdk import capture_exception, init_sentry
-from app.version import get_version
+from config.version import get_version
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
@@ -58,6 +57,7 @@ from deployment.remote.vercel_poller import (
 )
 from platform_services.analytics.cli import capture_investigation_failed, track_investigation
 from platform_services.analytics.source import EntrypointSource, TriggerMode
+from utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
@@ -455,7 +455,7 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     as a ``.md`` file once the stream completes, matching the behaviour of
     the blocking ``/investigate`` endpoint.
     """
-    from app.config import LLMSettings
+    from config.config import LLMSettings
     from cli.investigation import resolve_investigation_context
     from core.orchestration.entrypoints import astream_investigation
 

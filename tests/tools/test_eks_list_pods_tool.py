@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.EKSListPodsTool import list_eks_pods
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.EKSListPodsTool import list_eks_pods
 
 
 class TestEKSListPodsToolContract(BaseToolContract):
@@ -53,9 +53,7 @@ def test_run_happy_path() -> None:
     mock_core_v1.list_namespaced_pod.return_value = MagicMock(
         items=[_make_pod("pod-1"), _make_pod("pod-2")]
     )
-    with patch(
-        "app.tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
-    ):
+    with patch("tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())):
         result = list_eks_pods(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )
@@ -69,9 +67,7 @@ def test_run_detects_crashing_pods() -> None:
     mock_core_v1.list_namespaced_pod.return_value = MagicMock(
         items=[_make_pod("pod-1", restart_count=10)]
     )
-    with patch(
-        "app.tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
-    ):
+    with patch("tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())):
         result = list_eks_pods(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )
@@ -81,9 +77,7 @@ def test_run_detects_crashing_pods() -> None:
 def test_run_all_namespaces() -> None:
     mock_core_v1 = MagicMock()
     mock_core_v1.list_pod_for_all_namespaces.return_value = MagicMock(items=[])
-    with patch(
-        "app.tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())
-    ):
+    with patch("tools.EKSListPodsTool.build_k8s_clients", return_value=(mock_core_v1, MagicMock())):
         result = list_eks_pods(
             cluster_name="c1", namespace="all", role_arn="arn:aws:iam::123:role/r"
         )
@@ -92,7 +86,7 @@ def test_run_all_namespaces() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("app.tools.EKSListPodsTool.build_k8s_clients", side_effect=Exception("auth error")):
+    with patch("tools.EKSListPodsTool.build_k8s_clients", side_effect=Exception("auth error")):
         result = list_eks_pods(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )

@@ -11,7 +11,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from app.config import (
+from config.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
@@ -128,7 +128,7 @@ def _require_default_llm_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
             "or unset LLM_PROVIDER to opt into default resolution."
         )
 
-    from app.services.llm_client import reset_llm_singletons
+    from services.llm_client import reset_llm_singletons
 
     monkeypatch.setenv("LLM_PROVIDER", resolution.resolved_provider)
     reset_llm_singletons()

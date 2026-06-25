@@ -9,7 +9,6 @@ from typing import Literal
 import questionary as questionary
 from rich.text import Text
 
-from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from cli.interactive_shell.ui.theme import (
     ERROR,
     GLYPH_ERROR,
@@ -49,6 +48,7 @@ from cli.wizard.integration_health import IntegrationHealthResult as Integration
 from cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from cli.wizard.store import get_store_path, save_local_config
 from cli.wizard.validation import build_demo_action_response as _build_demo_action_response
+from integrations.llm_cli.binary_resolver import diagnose_binary_path
 
 WIZARD_TOTAL_STEPS = 4
 

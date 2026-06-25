@@ -26,10 +26,10 @@ def test_run_investigation_wraps_runner_with_tracking(monkeypatch) -> None:
         captured_kwargs["kwargs"] = kwargs
         return {"ok": True}
 
-    monkeypatch.setattr("app.utils.sdk.track_investigation", fake_track_investigation)
+    monkeypatch.setattr("utils.sdk.track_investigation", fake_track_investigation)
     monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", fake_runner)
 
-    from app.utils.sdk import run_investigation
+    from utils.sdk import run_investigation
 
     result = run_investigation(raw_alert={"foo": "bar"})
 
