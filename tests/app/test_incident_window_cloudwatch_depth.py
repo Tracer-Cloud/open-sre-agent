@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.incident_window import (
+from app.core.domain.types.incident_window import (
     SOURCE_ACTIVATED_AT,
     SOURCE_DEFAULT,
     resolve_incident_window,

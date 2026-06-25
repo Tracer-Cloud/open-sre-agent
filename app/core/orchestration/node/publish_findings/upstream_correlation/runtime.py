@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from app.core.domain.correlation.scoring import (
@@ -8,6 +7,7 @@ from app.core.domain.correlation.scoring import (
     metric_to_time_series,
     rank_upstream_candidates,
     score_candidate_correlation,
+    score_operator_hint,
     score_periodic_spikes,
     score_time_window_correlation,
     score_topology_adjacency,
@@ -21,26 +21,6 @@ from app.core.orchestration.node.publish_findings.upstream_correlation.reporting
     build_correlation_report,
     correlation_report_to_payload,
 )
-
-
-@dataclass(frozen=True)
-class RuntimeOperatorHintScore:
-    score: float
-
-
-def _operator_hint_score(
-    *,
-    metric_name: str,
-    operator_hints: tuple[str, ...],
-) -> RuntimeOperatorHintScore:
-    normalized_metric_name = (
-        metric_name.lower().replace("{", " ").replace("}", " ").replace(":", " ").replace(",", " ")
-    )
-    tokens = tuple(token for token in normalized_metric_name.split() if len(token) > 2)
-
-    matched = any(token in hint.lower() for hint in operator_hints for token in tokens)
-
-    return RuntimeOperatorHintScore(score=1.0 if matched else 0.0)
 
 
 def _empty_correlation() -> dict[str, Any]:
@@ -91,7 +71,7 @@ def build_runtime_correlation(
             spike_threshold=75.0,
         )
 
-        operator_hint = _operator_hint_score(
+        operator_hint = score_operator_hint(
             metric_name=metric.name,
             operator_hints=evidence.operator_hints,
         )

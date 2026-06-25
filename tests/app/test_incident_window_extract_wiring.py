@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from app.incident_window import (
+from app.core.domain.types.incident_window import (
     SOURCE_DEFAULT,
     SOURCE_STARTS_AT,
     resolve_incident_window,

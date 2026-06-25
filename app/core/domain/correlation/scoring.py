@@ -47,6 +47,11 @@ class PeriodicityScore:
 
 
 @dataclass(frozen=True)
+class OperatorHintScore:
+    score: float
+
+
+@dataclass(frozen=True)
 class CandidateCorrelationScore:
     candidate_name: str
     time_window_score: float
@@ -183,16 +188,29 @@ def score_periodic_spikes(
     )
 
 
+def score_operator_hint(
+    *,
+    metric_name: str,
+    operator_hints: tuple[str, ...],
+) -> OperatorHintScore:
+    normalized_metric_name = (
+        metric_name.lower().replace("{", " ").replace("}", " ").replace(":", " ").replace(",", " ")
+    )
+    tokens = tuple(token for token in normalized_metric_name.split() if len(token) > 2)
+    matched = any(token in hint.lower() for hint in operator_hints for token in tokens)
+    return OperatorHintScore(score=1.0 if matched else 0.0)
+
+
 def score_candidate_correlation(
     *,
     candidate_name: str,
     time_window: TimeWindowCorrelation,
     topology: TopologyCorrelation,
     periodicity: PeriodicityScore | None = None,
-    operator_hint: object | None = None,
+    operator_hint: OperatorHintScore | None = None,
 ) -> CandidateCorrelationScore:
     periodicity_score = periodicity.score if periodicity is not None else 0.0
-    operator_hint_score = getattr(operator_hint, "score", 0.0) if operator_hint is not None else 0.0
+    operator_hint_score = operator_hint.score if operator_hint is not None else 0.0
 
     final_confidence = round(
         (

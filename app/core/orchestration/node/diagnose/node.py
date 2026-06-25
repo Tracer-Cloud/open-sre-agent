@@ -3,79 +3,22 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any, NamedTuple, TypedDict, cast
+from typing import Any, TypedDict, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.core.domain.alerts.alert_source import resolve_alert_source
-from app.core.domain.state.category_alignment import (
-    apply_category_alignment_adjustments,
+from app.core.domain.state.diagnosis import (
+    InvestigationResult,
+    build_diagnosis_schema,
+    build_investigation_result,
+    extract_last_assistant_text,
+    result_to_state,
+    taxonomy_categories_for_alert_source,
 )
 from app.state import InvestigationState
-from app.types.root_cause_categories import (
-    HERMES_ROOT_CAUSE_CATEGORIES,
-    VALID_ROOT_CAUSE_CATEGORIES,
-    render_prompt_taxonomy,
-)
 
 logger = logging.getLogger(__name__)
-
-
-class _CategoryAlignment(NamedTuple):
-    validity_score: float
-    investigation_recommendations: list[str]
-    category_text_mismatch: bool
-    category_text_mismatch_reason: str | None
-
-
-def _apply_category_alignment(
-    *,
-    root_cause: str,
-    root_cause_category: str,
-    validity_score: float,
-    investigation_recommendations: list[str] | None = None,
-) -> _CategoryAlignment:
-    score, recommendations, mismatch, reason = apply_category_alignment_adjustments(
-        root_cause=root_cause,
-        root_cause_category=root_cause_category,
-        validity_score=validity_score,
-        investigation_recommendations=list(investigation_recommendations or []),
-    )
-    if mismatch and reason:
-        logger.warning("Root cause category may not match explanation: %s", reason)
-    return _CategoryAlignment(score, recommendations, mismatch, reason)
-
-
-@dataclass
-class InvestigationResult:
-    root_cause: str
-    root_cause_category: str
-    causal_chain: list[str] = field(default_factory=list)
-    validated_claims: list[dict] = field(default_factory=list)
-    non_validated_claims: list[dict] = field(default_factory=list)
-    remediation_steps: list[str] = field(default_factory=list)
-    validity_score: float = 0.0
-    evidence: dict[str, Any] = field(default_factory=dict)
-    evidence_entries: list[dict] = field(default_factory=list)
-    agent_messages: list[dict] = field(default_factory=list)
-    investigation_recommendations: list[str] = field(default_factory=list)
-    category_text_mismatch: bool = False
-    category_text_mismatch_reason: str | None = None
-
-    @classmethod
-    def unknown(cls, alert_name: str = "Unknown alert") -> InvestigationResult:
-        return cls(
-            root_cause=f"{alert_name}: Unable to determine root cause — insufficient evidence.",
-            root_cause_category="unknown",
-            validity_score=0.0,
-            non_validated_claims=[
-                {
-                    "claim": "Insufficient evidence available",
-                    "validation_status": "not_validated",
-                }
-            ],
-        )
 
 
 def parse_diagnosis(
@@ -89,7 +32,7 @@ def parse_diagnosis(
     Uses structured output to extract root_cause, claims, remediation, etc.
     Falls back to parse_root_cause() if structured output fails.
     """
-    last_text = _extract_last_assistant_text(messages)
+    last_text = extract_last_assistant_text(messages)
     if not last_text:
         return InvestigationResult.unknown(alert_name)
 
@@ -129,6 +72,10 @@ def diagnose(state: InvestigationState) -> dict[str, Any]:
             root_cause_category=result.root_cause_category,
             mismatch_reason=result.category_text_mismatch_reason,
         )
+        logger.warning(
+            "Root cause category may not match explanation: %s",
+            result.category_text_mismatch_reason,
+        )
 
     tracker.complete(
         "diagnose_root_cause",
@@ -138,87 +85,10 @@ def diagnose(state: InvestigationState) -> dict[str, Any]:
     return result_to_state(result)
 
 
-def result_to_state(result: InvestigationResult) -> dict[str, Any]:
-    return {
-        "root_cause": result.root_cause,
-        "root_cause_category": result.root_cause_category,
-        "causal_chain": result.causal_chain,
-        "validated_claims": result.validated_claims,
-        "non_validated_claims": result.non_validated_claims,
-        "remediation_steps": result.remediation_steps,
-        "validity_score": result.validity_score,
-        "investigation_recommendations": result.investigation_recommendations,
-        "evidence": result.evidence,
-        "evidence_entries": result.evidence_entries,
-        "agent_messages": result.agent_messages,
-    }
-
-
 def _list_of_dicts(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
-
-
-def _extract_last_assistant_text(messages: list[dict[str, Any]]) -> str:
-    for msg in reversed(messages):
-        if msg.get("role") != "assistant":
-            continue
-        content = msg.get("content", "")
-        if isinstance(content, str) and content.strip():
-            return content.strip()
-        if isinstance(content, list):
-            parts: list[str] = []
-            for block in content:
-                if isinstance(block, str):
-                    parts.append(block)
-                    continue
-                if isinstance(block, dict):
-                    if block.get("type") == "text" and isinstance(block.get("text"), str):
-                        parts.append(block["text"])
-                    continue
-                block_type = getattr(block, "type", None)
-                block_text = getattr(block, "text", None)
-                if block_type == "text" and isinstance(block_text, str):
-                    parts.append(block_text)
-            text = " ".join(p for p in parts if p).strip()
-            if text:
-                return text
-    return ""
-
-
-def _taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
-    source = alert_source.strip().lower()
-    if source == "hermes":
-        return set(HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"})
-    return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
-
-
-def _build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
-    category_taxonomy = render_prompt_taxonomy(include_categories).strip()
-
-    class DiagnosisSchema(BaseModel):
-        root_cause: str = Field(description="Concise root cause statement (2-3 sentences max)")
-        root_cause_category: str = Field(
-            description=(f"Use exactly one category from this taxonomy:\n{category_taxonomy}")
-        )
-        causal_chain: list[str] = Field(
-            default_factory=list, description="Ordered steps leading to the failure"
-        )
-        validated_claims: list[str] = Field(
-            default_factory=list, description="Claims supported by tool evidence"
-        )
-        non_validated_claims: list[str] = Field(
-            default_factory=list, description="Claims not yet confirmed by evidence"
-        )
-        remediation_steps: list[str] = Field(
-            default_factory=list, description="Concrete remediation actions in order"
-        )
-        validity_score: float = Field(
-            default=0.0, description="0.0–1.0 confidence in the diagnosis"
-        )
-
-    return DiagnosisSchema
 
 
 def _parse_via_structured_output(
@@ -247,7 +117,7 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         validity_score: float
 
     llm = get_llm_for_reasoning()
-    schema_model = _build_diagnosis_schema(_taxonomy_categories_for_alert_source(alert_source))
+    schema_model = build_diagnosis_schema(taxonomy_categories_for_alert_source(alert_source))
     raw_schema = (
         llm.with_structured_output(schema_model)
         .with_config(run_name="LLM – Parse diagnosis")
@@ -258,26 +128,14 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
     )
     schema = cast(_DiagnosisPayload, schema_instance.model_dump())
 
-    def _to_claim_dicts(claims: list[str], status: str) -> list[dict]:
-        return [{"claim": c, "validation_status": status} for c in claims if c]
-
-    alignment = _apply_category_alignment(
-        root_cause=schema["root_cause"],
-        root_cause_category=schema["root_cause_category"],
-        validity_score=schema["validity_score"],
-    )
-
-    return InvestigationResult(
+    return build_investigation_result(
         root_cause=schema["root_cause"],
         root_cause_category=schema["root_cause_category"],
         causal_chain=schema["causal_chain"],
-        validated_claims=_to_claim_dicts(schema["validated_claims"], "validated"),
-        non_validated_claims=_to_claim_dicts(schema["non_validated_claims"], "not_validated"),
+        validated_claims=schema["validated_claims"],
+        non_validated_claims=schema["non_validated_claims"],
         remediation_steps=schema["remediation_steps"],
-        validity_score=alignment.validity_score,
-        investigation_recommendations=alignment.investigation_recommendations,
-        category_text_mismatch=alignment.category_text_mismatch,
-        category_text_mismatch_reason=alignment.category_text_mismatch_reason,
+        validity_score=schema["validity_score"],
     )
 
 
@@ -288,26 +146,14 @@ def _parse_via_legacy(
 
     try:
         rr = parse_root_cause(last_text)
-        alignment = _apply_category_alignment(
-            root_cause=rr.root_cause,
-            root_cause_category=rr.root_cause_category,
-            validity_score=0.5,
-        )
-        return InvestigationResult(
+        return build_investigation_result(
             root_cause=rr.root_cause,
             root_cause_category=rr.root_cause_category,
             causal_chain=rr.causal_chain,
-            validated_claims=[
-                {"claim": c, "validation_status": "validated"} for c in rr.validated_claims
-            ],
-            non_validated_claims=[
-                {"claim": c, "validation_status": "not_validated"} for c in rr.non_validated_claims
-            ],
+            validated_claims=rr.validated_claims,
+            non_validated_claims=rr.non_validated_claims,
             remediation_steps=rr.remediation_steps,
-            validity_score=alignment.validity_score,
-            investigation_recommendations=alignment.investigation_recommendations,
-            category_text_mismatch=alignment.category_text_mismatch,
-            category_text_mismatch_reason=alignment.category_text_mismatch_reason,
+            validity_score=0.5,
         )
     except Exception as err:
         logger.warning("Legacy parse_root_cause also failed: %s", err)

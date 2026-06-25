@@ -13,8 +13,8 @@ follow.
    the same incident answer questions about different windows.
 
 This module introduces a single ``IncidentWindow`` value object owned by
-``AgentState`` and populated from the alert's own timestamps in the
-``extract_alert`` step. Once tools start reading from it (deferred to a
+investigation state and populated from the alert's own timestamps in the
+``extract_alert`` orchestration step. Once tools start reading from it (deferred to a
 follow-up PR) every time-aware tool will agree on the same window.
 
 This file is pure foundation. It does not change any tool's behavior. It

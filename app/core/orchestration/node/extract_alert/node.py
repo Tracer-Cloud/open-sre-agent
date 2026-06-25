@@ -5,12 +5,16 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Mapping
 from typing import Any, cast
 
-from pydantic import BaseModel, Field
-
-from app.incident_window import resolve_incident_window
+from app.core.domain.alerts.extraction import (
+    AlertDetails,
+    enrich_raw_alert,
+    fallback_details,
+    format_raw_alert,
+    make_problem_md,
+)
+from app.core.domain.types.incident_window import resolve_incident_window
 from app.observability import (
     debug_print,
     render_investigation_header,
@@ -23,38 +27,7 @@ from app.state import InvestigationState
 
 logger = logging.getLogger(__name__)
 
-# Alert source values that must never be overwritten by the LLM classifier.
-_CANONICAL_ALERT_SOURCES = frozenset({"openrca_dataset", "opensre", "opensre_dataset"})
-
 _EXTRACTED_STATE_FIELDS = ["alert_name", "pipeline_name", "severity", "alert_source", "problem_md"]
-
-_RAW_ALERT_DETAIL_FIELDS = (
-    "kube_namespace",
-    "cloudwatch_log_group",
-    "error_message",
-    "log_query",
-    "eks_cluster",
-    "pod_name",
-    "deployment",
-)
-
-
-class AlertDetails(BaseModel):
-    is_noise: bool = Field(default=False)
-    alert_name: str = Field(default="unknown")
-    pipeline_name: str = Field(default="unknown")
-    severity: str = Field(default="unknown")
-    alert_source: str | None = Field(default=None)
-    environment: str | None = Field(default=None)
-    summary: str | None = Field(default=None)
-    kube_namespace: str | None = Field(default=None)
-    cloudwatch_log_group: str | None = Field(default=None)
-    error_message: str | None = Field(default=None)
-    log_query: str | None = Field(default=None)
-    eks_cluster: str | None = Field(default=None)
-    pod_name: str | None = Field(default=None)
-    deployment: str | None = Field(default=None)
-
 
 _EXTRACT_PROMPT = """Classify and extract fields from this alert message.
 
@@ -165,8 +138,8 @@ def _build_alert_updates(
         "pipeline_name": details.pipeline_name,
         "severity": details.severity,
         "alert_json": details.model_dump(),
-        "raw_alert": _enrich_raw_alert(raw_alert, details),
-        "problem_md": _make_problem_md(details),
+        "raw_alert": enrich_raw_alert(raw_alert, details),
+        "problem_md": make_problem_md(details),
         "incident_window": resolve_incident_window(raw_alert).to_dict(),
     }
     if details.alert_source:
@@ -181,7 +154,7 @@ def _extract_alert_details(state: InvestigationState) -> AlertDetails:
     if raw_alert is None:
         raise RuntimeError("raw_alert is required for alert extraction")
 
-    text = _format_raw_alert(raw_alert)
+    text = format_raw_alert(raw_alert)
     prompt = _EXTRACT_PROMPT.format(text=text)
 
     llm = get_llm_for_reasoning()
@@ -199,122 +172,7 @@ def _extract_alert_details(state: InvestigationState) -> AlertDetails:
         return details
     except Exception as err:
         debug_print(f"LLM alert extraction failed, using fallback: {err}")
-        return _fallback_details(state, raw_alert)
-
-
-def _format_raw_alert(raw_alert: Any) -> str:
-    if isinstance(raw_alert, str):
-        return raw_alert
-    if isinstance(raw_alert, dict):
-        if raw_alert.get("text") and not _needs_full_json_prompt(raw_alert):
-            return str(raw_alert["text"])
-        return json.dumps(raw_alert, indent=2, sort_keys=True)
-    return json.dumps(raw_alert, indent=2, sort_keys=True)
-
-
-def _needs_full_json_prompt(raw_alert: dict[str, Any]) -> bool:
-    src = str(raw_alert.get("alert_source", "")).lower()
-    if src in _CANONICAL_ALERT_SOURCES:
-        return True
-    if (
-        raw_alert.get("commonLabels")
-        or raw_alert.get("commonAnnotations")
-        or raw_alert.get("alerts")
-    ):
-        return True
-    for key in (
-        "opensre_telemetry_relative",
-        "openrca_telemetry_relative",
-        "opensre_dataset_root",
-        "openrca_dataset_root",
-    ):
-        if raw_alert.get(key):
-            return True
-        ann = raw_alert.get("commonAnnotations")
-        if isinstance(ann, dict) and ann.get(key):
-            return True
-    meta = raw_alert.get("_meta")
-    return bool(isinstance(meta, dict) and "openrca" in str(meta.get("purpose", "")).lower())
-
-
-def _fallback_details(state: InvestigationState, raw_alert: Any) -> AlertDetails:
-    alert_name = state.get("alert_name", "unknown")
-    pipeline_name = state.get("pipeline_name", "unknown")
-    severity = state.get("severity", "unknown")
-
-    if isinstance(raw_alert, dict):
-        labels = _dict_value(raw_alert, "commonLabels") or _dict_value(raw_alert, "labels")
-        annotations = _dict_value(raw_alert, "commonAnnotations") or _dict_value(
-            raw_alert, "annotations"
-        )
-        canonical = _dict_value(raw_alert, "canonical_alert")
-
-        alert_name = _first_value(
-            raw_alert.get("alert_name"),
-            canonical.get("alert_name"),
-            labels.get("alertname"),
-            labels.get("alert_name"),
-            alert_name,
-        )
-        pipeline_name = _first_value(
-            raw_alert.get("pipeline_name"),
-            canonical.get("pipeline_name"),
-            labels.get("pipeline_name"),
-            labels.get("pipeline"),
-            labels.get("service"),
-            annotations.get("pipeline_name"),
-            pipeline_name,
-        )
-        severity = _first_value(
-            raw_alert.get("severity"),
-            canonical.get("severity"),
-            labels.get("severity"),
-            severity,
-        )
-
-    return AlertDetails(
-        is_noise=False,
-        alert_name=alert_name or "unknown",
-        pipeline_name=pipeline_name or "unknown",
-        severity=severity or "unknown",
-    )
-
-
-def _dict_value(source: Mapping[str, Any], key: str) -> dict[str, Any]:
-    value = source.get(key)
-    return value if isinstance(value, dict) else {}
-
-
-def _first_value(*values: Any) -> Any:
-    return next((value for value in values if value), None)
-
-
-def _make_problem_md(details: AlertDetails) -> str:
-    parts = [
-        f"# {details.alert_name}",
-        f"Pipeline: {details.pipeline_name} | Severity: {details.severity}",
-    ]
-    if details.kube_namespace:
-        parts.append(f"Namespace: {details.kube_namespace}")
-    if details.error_message:
-        parts.append(f"\nError: {details.error_message}")
-    return "\n".join(parts)
-
-
-def _enrich_raw_alert(raw_alert: Any, details: AlertDetails) -> Any:
-    if not isinstance(raw_alert, dict):
-        raw_alert = {}
-    enriched = dict(raw_alert)
-    prior_source = str(raw_alert.get("alert_source", "")).lower()
-
-    for field_name in _RAW_ALERT_DETAIL_FIELDS:
-        value = getattr(details, field_name)
-        if value:
-            enriched[field_name] = value
-
-    if details.alert_source and prior_source not in _CANONICAL_ALERT_SOURCES:
-        enriched["alert_source"] = details.alert_source
-    return enriched
+        return fallback_details(state, raw_alert)
 
 
 def _handle_noise_reaction(state: InvestigationState) -> None:
