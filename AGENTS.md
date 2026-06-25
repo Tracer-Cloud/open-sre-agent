@@ -40,10 +40,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `platform_services/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `app/deployment/` — Single home for “deployment” code, split by concern:
-    - `app/deployment/methods/` — _How_ you ship (Railway CLI, etc.).
-    - `app/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
-- `app/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
+- `app/deployment/` — Deployment helpers for health polling, EC2 output state, and provider dry-run validation.
+- `app/entrypoints/` — High-level entrypoints exposed to external runtimes, including SDK and MCP boundaries.
 - `platform_services/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
 - `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
@@ -58,7 +56,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 - `app/tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `app/utils/` — Cross-cutting utility helpers used across the app and test harnesses.
-- `app/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
+- `app/tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `app/utils/telegram_delivery.py`.
 - `app/webapp.py` — Web-facing application entrypoint; the `opensre` CLI is `cli/__main__.py`.
 
 ## 2. Entry Points

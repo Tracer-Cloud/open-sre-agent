@@ -36,6 +36,7 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/integrations/", ("tests/integrations/",)),
     PathRule("app/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
     PathRule("cli/", ("tests/cli/",)),
+    PathRule("app/tools/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/tools/", ("tests/tools/",)),
     PathRule("app/services/", ("tests/services/", "tests/tools/")),
     PathRule("platform_services/analytics/", ("tests/analytics/",)),
@@ -47,7 +48,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
     PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
     PathRule("platform_services/auth/", ("tests/platform_services/auth/",)),
-    PathRule("app/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
