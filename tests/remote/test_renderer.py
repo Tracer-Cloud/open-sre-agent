@@ -483,6 +483,27 @@ class TestStreamRendererCleanupOnException:
         assert renderer.final_state.get("alert_name") == "interrupted-alert"
 
 
+class TestStreamRendererStdinWatcher:
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_starts_only_one_stdin_watcher(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.cli.interactive_shell.ui.output import toggles as toggles_module
+
+        starts = 0
+        original_start = toggles_module.CtrlOToggleWatcher.start
+
+        def counting_start(self: toggles_module.CtrlOToggleWatcher) -> None:
+            nonlocal starts
+            starts += 1
+            original_start(self)
+
+        monkeypatch.setattr(toggles_module.CtrlOToggleWatcher, "start", counting_start)
+
+        renderer = StreamRenderer(local=True)
+        renderer.render_stream(_investigation_events())
+
+        assert starts == 1
+
+
 def _diagnose_streaming_events() -> Iterator[StreamEvent]:
     """Simulate the diagnose node emitting token deltas before chain end."""
     yield _make_event("metadata", data={"run_id": "r-d"})
@@ -563,7 +584,7 @@ class TestStreamRendererDiagnoseStreaming:
         renderer.render_stream(_diagnose_streaming_events())
 
         assert renderer._diagnose._live is None
-        assert renderer._toggle_watcher is None
+        assert renderer._toggle_unregister is None
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_diagnose_text_mode_replays_buffer_at_finish(self, capfd) -> None:

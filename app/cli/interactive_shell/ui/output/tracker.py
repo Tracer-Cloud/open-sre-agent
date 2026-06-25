@@ -20,6 +20,7 @@ from app.cli.interactive_shell.ui.output.repl_display import _ReplEventLogDispla
 from app.cli.interactive_shell.ui.output.toggles import (
     CtrlOToggleWatcher,
     register_tool_detail_toggle,
+    toggle_active_tool_details,
 )
 from app.cli.interactive_shell.ui.output.tool_tracking import ToolTrackingMixin
 from app.cli.interactive_shell.ui.time_format import _fmt_timing
@@ -53,7 +54,7 @@ class ProgressTracker(ToolTrackingMixin):
             self._display = _make_event_log_display(t0=self._t0)
             self._toggle_unregister = register_tool_detail_toggle(self.toggle_tool_details)
             if not self._repl_append_only:
-                self._toggle_watcher = CtrlOToggleWatcher(self.toggle_tool_details)
+                self._toggle_watcher = CtrlOToggleWatcher(toggle_active_tool_details)
                 self._toggle_watcher.start()
 
     @property

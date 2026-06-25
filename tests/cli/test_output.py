@@ -486,6 +486,66 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     assert attrs[6][_Termios.VDISCARD] == b"\x00"
 
 
+def test_ctrl_o_watcher_stop_restores_canonical_echo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _TTY:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            return 0
+
+    class _Termios:
+        ICANON = 0x0002
+        ECHO = 0x0008
+        IEXTEN = 0x0400
+        VMIN = 6
+        VTIME = 5
+        VDISCARD = 13
+        TCSADRAIN = 1
+        TCIFLUSH = 0
+        final_attrs: list[int] | None = None
+
+        @classmethod
+        def tcgetattr(cls, _fd: int) -> list[Any]:
+            lflags = cls.ICANON | cls.ECHO | cls.IEXTEN
+            if cls.final_attrs is not None:
+                lflags = cls.final_attrs[3]
+            return [0, 0, 0, lflags, 0, 0, [0] * 20]
+
+        @classmethod
+        def tcsetattr(cls, _fd: int, _when: int, attrs: list[Any]) -> None:
+            cls.final_attrs = attrs[3]
+
+        @classmethod
+        def tcflush(cls, _fd: int, _queue: int) -> None:
+            return None
+
+    class _Select:
+        @staticmethod
+        def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
+            return [], [], []
+
+    from app.cli.interactive_shell.ui import key_reader
+
+    monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
+    monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
+    monkeypatch.setattr(output_toggles, "select", _Select)
+    monkeypatch.setattr(output_toggles, "termios", _Termios)
+    monkeypatch.setattr(output_toggles.os, "fpathconf", lambda _fd, _name: 0)
+    monkeypatch.setattr(key_reader, "termios", _Termios, raising=False)
+    monkeypatch.setattr(key_reader.sys, "stdin", _TTY())
+
+    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher.start()
+    watcher.stop()
+
+    assert _Termios.final_attrs is not None
+    assert _Termios.final_attrs & _Termios.ICANON
+    assert _Termios.final_attrs & _Termios.ECHO
+
+
 def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

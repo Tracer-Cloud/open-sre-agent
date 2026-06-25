@@ -24,12 +24,37 @@ def flush_stdin_unix() -> None:
         termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)  # type: ignore[attr-defined]
 
 
-def read_key_unix() -> str:
+def restore_stdin_terminal() -> None:
+    """Return stdin to canonical echo mode after Live/raw investigation UI.
+
+    Investigation progress uses a background Ctrl+O watcher that puts stdin in
+    non-canonical mode without echo. If nested watchers restore the wrong
+    snapshot, the shell prompt appears to accept input but characters are not
+    echoed. Call this after investigation UI teardown and before line prompts.
+    """
+    if os.name == "nt" or not sys.stdin.isatty():
+        return
+    import termios
+
+    with contextlib.suppress(Exception):
+        fd = sys.stdin.fileno()
+        attrs = termios.tcgetattr(fd)  # type: ignore[attr-defined]
+        attrs[3] |= termios.ICANON | termios.ECHO  # type: ignore[attr-defined]
+        if hasattr(termios, "IEXTEN"):
+            attrs[3] |= termios.IEXTEN  # type: ignore[attr-defined]
+        termios.tcsetattr(fd, termios.TCSADRAIN, attrs)  # type: ignore[attr-defined]
+        termios.tcflush(fd, termios.TCIFLUSH)  # type: ignore[attr-defined]
+
+
+def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
     """Read one logical keypress in raw mode; return a normalised key name.
 
     Possible return values: ``"up"``, ``"down"``, ``"enter"``,
     ``"cancel"``, ``"tab"``, ``"right"``, ``"left"``, ``"eof"``,
     ``"ignore"``.
+
+    ``also_cancel`` treats additional single-byte keys as ``"cancel"`` (e.g.
+    ``(b"s", b"S")`` for an explicit skip shortcut).
     """
     import select as _sel
     import termios
@@ -43,7 +68,7 @@ def read_key_unix() -> str:
         if not ch:
             return "eof"
         b = ch[0]
-        if b in (3, 4):  # Ctrl-C / Ctrl-D
+        if b in (3, 4) or ch in also_cancel:  # Ctrl-C / Ctrl-D / caller shortcuts
             return "cancel"
         if b in (10, 13, 32):  # LF / CR / Space
             return "enter"
@@ -110,4 +135,4 @@ def read_key_windows() -> str:
     return "ignore"
 
 
-__all__ = ["flush_stdin_unix", "read_key_unix", "read_key_windows"]
+__all__ = ["flush_stdin_unix", "read_key_unix", "read_key_windows", "restore_stdin_terminal"]

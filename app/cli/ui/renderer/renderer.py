@@ -12,7 +12,6 @@ from rich.text import Text
 from app.analytics.events import Event
 from app.analytics.provider import get_analytics
 from app.cli.interactive_shell.ui.output import (
-    CtrlOToggleWatcher,
     ProgressTracker,
     _fmt_timing,
     _repl_progress_active,
@@ -76,7 +75,6 @@ class StreamRenderer:
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
         self._prior_lap_tools: list[str] = []
-        self._toggle_watcher: CtrlOToggleWatcher | None = None
         self._toggle_unregister: Callable[[], None] | None = None
 
     def _print_above_renderable(self, renderable: Any) -> None:
@@ -111,14 +109,11 @@ class StreamRenderer:
     def _start_toggle_watcher(self) -> None:
         if get_output_format() != "rich" or _repl_progress_active():
             return
+        # ProgressTracker already owns the single Ctrl+O stdin watcher.
+        # Register our handler so toggle_active_tool_details() routes here.
         self._toggle_unregister = register_tool_detail_toggle(self._toggle_tool_details)
-        self._toggle_watcher = CtrlOToggleWatcher(self._toggle_tool_details)
-        self._toggle_watcher.start()
 
     def _stop_toggle_watcher(self) -> None:
-        if self._toggle_watcher is not None:
-            self._toggle_watcher.stop()
-            self._toggle_watcher = None
         if self._toggle_unregister is not None:
             self._toggle_unregister()
             self._toggle_unregister = None

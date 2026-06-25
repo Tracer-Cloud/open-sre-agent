@@ -270,7 +270,9 @@ def run_investigation_cli_streaming(
         raise
 
     from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
+    from app.cli.interactive_shell.ui.key_reader import restore_stdin_terminal
 
+    restore_stdin_terminal()
     prompt_investigation_feedback(final_state)
     return {
         "report": final_state.get("slack_message", final_state.get("report", "")),

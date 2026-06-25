@@ -1,39 +1,25 @@
 """Post-investigation accuracy feedback prompt.
 
 Shown after every investigation when stdin/stdout is a TTY.
-Silently skipped when: not a TTY, the user has opted out, or any exception
-occurs — feedback must never disrupt the CLI.
+Silently skipped when: not a TTY, the user has opted out via prefs, or any
+exception occurs — feedback must never disrupt the CLI.
 
-Why a custom select menu instead of repl_choose_one():
-  Rich's Live renderer (used by StreamRenderer) leaves the cursor at an
-  indeterminate row.  choice_menu._erase_menu_block() uses \x1b[{N}A to
-  move the cursor up by a fixed count, which assumes the cursor is still at
-  the bottom of the menu.  After Live ends that assumption breaks, so the
-  erase lands at the wrong row and redraws appear frozen.
-
-  The local _run_select() implementation erases line-by-line with \x1b[2K
-  (erase entire line, no cursor-position assumption) and is therefore robust
-  to any cursor state the streaming renderer leaves behind.  The REPL path
-  (console is not None) keeps repl_choose_one() which works correctly inside
-  the prompt_toolkit / patch_stdout context.
+The CLI ``opensre investigate`` path uses a plain line prompt (``input()``)
+after restoring canonical terminal mode.  The REPL path keeps
+:func:`repl_choose_one` inside prompt_toolkit's stdout patch context.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
-import os
 import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.cli.interactive_shell.ui.key_reader import (
-    flush_stdin_unix,
-    read_key_unix,
-    read_key_windows,
-)
+from app.cli.interactive_shell.ui.key_reader import restore_stdin_terminal
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -47,13 +33,30 @@ _CHOICES: list[tuple[str, str]] = [
     ("never", "Never ask again"),
 ]
 
+_CLI_CHOICE_BY_TOKEN: dict[str, str] = {
+    "1": "accurate",
+    "a": "accurate",
+    "accurate": "accurate",
+    "2": "partial",
+    "p": "partial",
+    "partial": "partial",
+    "3": "inaccurate",
+    "i": "inaccurate",
+    "inaccurate": "inaccurate",
+    "4": "skip",
+    "s": "skip",
+    "skip": "skip",
+    "5": "never",
+    "n": "never",
+    "never": "never",
+}
+
 _NEVER_AGAIN_KEY = "feedback_disabled"
 
 # ANSI helpers (theme colours inlined to avoid import at module level)
 _H = "\x1b[1;38;2;185;237;175m"  # HIGHLIGHT bold  (#B9EDAF)
 _D = "\x1b[2m"  # dim
 _R = "\x1b[0m"  # reset
-_HINT = f"  {_D}↑↓ / j k  ·  Space/Enter  ·  Esc to skip{_R}"
 
 
 # ── persistence ───────────────────────────────────────────────────────────────
@@ -183,62 +186,28 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
         sys.stdout.flush()
 
 
-# ── self-contained select (CLI path) ─────────────────────────────────────────
+# ── CLI line prompt ───────────────────────────────────────────────────────────
 
 
-def _run_select(choices: list[tuple[str, str]]) -> str | None:
-    """Arrow-key select menu that works in any TTY context after streaming output.
+def _parse_cli_choice(raw: str) -> str | None:
+    token = raw.strip().lower()
+    if not token:
+        return None
+    return _CLI_CHOICE_BY_TOKEN.get(token)
 
-    Uses per-line \x1b[2K (erase line) instead of a block cursor-position
-    assumption, so it redraws correctly regardless of where the streaming
-    renderer left the cursor.
 
-    Returns the selected key string, or None on Esc / Ctrl-C.
-    """
-    labels = [label for _, label in choices]
-    n = len(labels)
-    total_lines = n + 1  # n choice lines + 1 hint line
-    idx = 0
-    is_unix = os.name != "nt"
-
-    if is_unix:
-        flush_stdin_unix()
-
-    def _out(s: str) -> None:
-        sys.stdout.write(s)
-        sys.stdout.flush()
-
-    def _draw(redraw: bool) -> None:
-        if redraw:
-            # Move cursor up to start of the menu block
-            _out(f"\x1b[{total_lines}A")
-        for i, label in enumerate(labels):
-            if i == idx:
-                _out(f"\r\x1b[2K{_H}  > {label}{_R}\r\n")
-            else:
-                _out(f"\r\x1b[2K{_D}    {label}{_R}\r\n")
-        _out(f"\r\x1b[2K{_HINT}\r\n")
-
-    _draw(False)
-
-    while True:
-        key = read_key_unix() if is_unix else read_key_windows()
-
-        if key == "enter":
-            _out(f"\x1b[{total_lines}A\r\x1b[J")
-            return choices[idx][0]
-
-        if key in ("cancel", "eof"):
-            _out(f"\x1b[{total_lines}A\r\x1b[J")
-            return None
-
-        if key == "up":
-            idx = (idx - 1) % n
-            _draw(True)
-        elif key == "down":
-            idx = (idx + 1) % n
-            _draw(True)
-        # "ignore" → no redraw
+def _pick_rating_cli() -> str | None:
+    """Ask for feedback with a normal line prompt; returns choice key or None."""
+    restore_stdin_terminal()
+    for index, (_key, label) in enumerate(_CHOICES, start=1):
+        sys.stdout.write(f"  {index}. {label}\n")
+    sys.stdout.write(
+        f"\n  {_D}Enter 1-5, a/p/i/s/n, or press Enter to skip{_R}\n{_H}Choice{_R}: "
+    )
+    sys.stdout.flush()
+    with contextlib.suppress(EOFError, KeyboardInterrupt):
+        return _parse_cli_choice(input())
+    return None
 
 
 # ── note reader ───────────────────────────────────────────────────────────────
@@ -247,6 +216,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
 def _read_note(*, console: Console | None) -> str:
     from app.cli.interactive_shell.ui.theme import DIM, SECONDARY
 
+    restore_stdin_terminal()
     if console is not None:
         console.print(
             f"[{SECONDARY}]What was wrong or missing? [{DIM}](Enter to skip)[/]:[/] ", end=""
@@ -263,20 +233,17 @@ def _read_note(*, console: Console | None) -> str:
 
 
 def _pick_rating(*, console: Console | None) -> str | None:
-    """Show the rating select menu; returns key or None on cancel."""
+    """Show the rating prompt; returns key or None on cancel/skip."""
     if console is not None:
-        # REPL path: prompt_toolkit / patch_stdout context active.
-        # repl_choose_one() works correctly here.
         from app.cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
 
         if not repl_tty_interactive():
             return None
         return repl_choose_one(title="Was this RCA accurate?", choices=_CHOICES)
 
-    # CLI path: use the self-contained picker that is robust after streaming.
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return None
-    return _run_select(_CHOICES)
+    return _pick_rating_cli()
 
 
 def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
@@ -290,9 +257,12 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     from app.cli.interactive_shell.ui.theme import BRAND, DIM
 
     if console is not None:
-        console.print(f"\n[{BRAND}]Was this RCA accurate?[/] [{DIM}]↑↓ · Enter · Esc to skip[/]")
+        console.print(
+            f"\n[{BRAND}]Was this RCA accurate?[/] "
+            f"[{DIM}]↑↓ · Enter · Esc or s to skip[/]"
+        )
     else:
-        sys.stdout.write(f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc to skip{_R}\n\n")
+        sys.stdout.write(f"\n{_H}Was this RCA accurate?{_R}\n")
         sys.stdout.flush()
 
     rating = _pick_rating(console=console)
@@ -356,4 +326,7 @@ def prompt_investigation_feedback(
     the hosted/JWT path).
     """
     with contextlib.suppress(Exception):
-        _collect(final_state, console=console)
+        try:
+            _collect(final_state, console=console)
+        finally:
+            restore_stdin_terminal()
