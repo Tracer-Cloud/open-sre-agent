@@ -72,10 +72,4 @@ def test_print_context_shows_full_root_cause_in_stdout_path(
 
     captured = capsys.readouterr().out
     assert "…" not in captured
-    assert " ".join(captured.split()) == (
-        "─" * 60
-        + " Root cause: "
-        + root
-        + " "
-        + "─" * 60
-    )
+    assert " ".join(captured.split()) == ("─" * 60 + " Root cause: " + root + " " + "─" * 60)
