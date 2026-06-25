@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import questionary
 
-from app.cli.wizard._ui import _group_header_label, _grouped_questionary_choices
+from app.cli.wizard._ui import Choice, _group_header_label, _grouped_questionary_choices
 from app.cli.wizard.onboard_integrations import (
     ONBOARD_INTEGRATION_CHOICES,
     ONBOARD_INTEGRATION_GROUP_ORDER,
@@ -43,6 +43,26 @@ def test_onboard_integration_choices_have_unique_values_and_valid_groups() -> No
         assert choice.group in ONBOARD_INTEGRATION_GROUP_ORDER
 
 
+def _expected_grouped_choice_values(
+    choices: tuple[Choice, ...] | list[Choice],
+    *,
+    group_order: tuple[str, ...],
+    trailing_choices: list[Choice] | None = None,
+) -> list[str]:
+    """Build selectable values in the same order as ``_grouped_questionary_choices``."""
+    grouped_values: dict[str, list[str]] = {group: [] for group in group_order}
+    for choice in choices:
+        if choice.group in grouped_values:
+            grouped_values[choice.group].append(choice.value)
+
+    ordered_values: list[str] = []
+    for group in group_order:
+        ordered_values.extend(grouped_values[group])
+    if trailing_choices:
+        ordered_values.extend(choice.value for choice in trailing_choices)
+    return ordered_values
+
+
 def test_grouped_questionary_choices_renders_category_separators() -> None:
     rendered = _grouped_questionary_choices(
         list(ONBOARD_INTEGRATION_CHOICES),
@@ -61,7 +81,30 @@ def test_grouped_questionary_choices_renders_category_separators() -> None:
         for item in rendered
         if isinstance(item, questionary.Choice) and not isinstance(item, questionary.Separator)
     ]
-    assert selectable_values == [
-        *[choice.value for choice in ONBOARD_INTEGRATION_CHOICES],
-        ONBOARD_SKIP_CHOICE.value,
+    assert selectable_values == _expected_grouped_choice_values(
+        ONBOARD_INTEGRATION_CHOICES,
+        group_order=ONBOARD_INTEGRATION_GROUP_ORDER,
+        trailing_choices=[ONBOARD_SKIP_CHOICE],
+    )
+
+
+def test_grouped_questionary_choices_labels_unknown_groups_as_other() -> None:
+    rendered = _grouped_questionary_choices(
+        [
+            Choice(value="datadog", label="Datadog", group="Observability"),
+            Choice(value="custom", label="Custom", group="Unknown"),
+        ],
+        group_order=("Observability",),
+    )
+
+    separator_titles = [item.title for item in rendered if isinstance(item, questionary.Separator)]
+    assert separator_titles == [
+        _group_header_label("Observability"),
+        _group_header_label("Other"),
     ]
+    selectable_values = [
+        item.value
+        for item in rendered
+        if isinstance(item, questionary.Choice) and not isinstance(item, questionary.Separator)
+    ]
+    assert selectable_values == ["datadog", "custom"]

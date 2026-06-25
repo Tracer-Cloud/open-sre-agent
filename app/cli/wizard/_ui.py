@@ -180,7 +180,9 @@ def _grouped_questionary_choices(
         rendered.append(questionary.Separator(_group_header_label(group)))
         rendered.extend(_questionary_choice(choice) for choice in group_choices)
 
-    rendered.extend(_questionary_choice(choice) for choice in ungrouped)
+    if ungrouped:
+        rendered.append(questionary.Separator(_group_header_label("Other")))
+        rendered.extend(_questionary_choice(choice) for choice in ungrouped)
 
     if trailing_choices:
         rendered.append(questionary.Separator())
