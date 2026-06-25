@@ -11,8 +11,8 @@ from app.cli.investigation import (
     run_investigation_cli,
     stream_investigation_cli,
 )
+from app.core.domain.stream import StreamEvent
 from app.integrations.llm_cli.errors import CLIAuthenticationRequired
-from app.remote.stream import StreamEvent
 
 
 def test_resolve_investigation_context_prefers_cli_overrides() -> None:

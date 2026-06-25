@@ -31,7 +31,12 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
 # factory, so reaching directly into ``app.services.<anything>`` is a
 # layering violation regardless of vendor.
 # This guards against future Grafana/AWS/etc. imports without manual edits.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services",)
+#
+# ``app.remote`` is a transport-layer package (HTTP client, SSE parser). The
+# orchestration core must not depend on it — domain types it shares with
+# the remote runner live in ``app.core.domain`` (see ``StreamEvent``).
+# ``app.cli`` is the presentation layer; same rule.
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("app.services", "app.remote", "app.cli")
 
 
 def _orchestration_pipeline_modules() -> list[Path]:

@@ -37,8 +37,8 @@ from app.cli.ui.renderer.tools import (
     _tool_short_label,
     _tool_source_label,
 )
+from app.core.domain.stream import StreamEvent
 from app.remote.reasoning import reasoning_text
-from app.remote.stream import StreamEvent
 from app.tools.registry import resolve_tool_display_name
 from app.utils.tool_trace import format_json_preview
 

@@ -2,42 +2,21 @@
 
 Supports both ``stream_mode: ["updates"]`` (node-level) and
 ``stream_mode: ["events"]`` (fine-grained tool/LLM/chain events).
+
+The event envelope itself (:class:`StreamEvent`) lives in
+``app.core.domain.stream`` so the orchestration core can produce
+events without importing from this transport-layer module.
 """
 
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Iterator
-from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
-
-@dataclass
-class StreamEvent:
-    """A parsed event from an SSE stream.
-
-    Attributes:
-        event_type: The SSE event type (e.g. "events", "metadata", "end",
-            or legacy "updates").
-        node_name: The pipeline node that produced this event, if applicable.
-        data: The parsed JSON payload.
-        timestamp: Monotonic timestamp when this event was received.
-        kind: For ``events`` mode — the callback kind
-            (e.g. "on_tool_start", "on_chat_model_stream").
-        run_id: Run ID from event metadata.
-        tags: Tags attached to the event payload.
-    """
-
-    event_type: str
-    data: dict[str, Any] = field(default_factory=dict)
-    node_name: str = ""
-    timestamp: float = field(default_factory=time.monotonic)
-    kind: str = ""
-    run_id: str = ""
-    tags: list[str] = field(default_factory=list)
+from app.core.domain.stream import StreamEvent
 
 
 def parse_sse_stream(response: httpx.Response) -> Iterator[StreamEvent]:
@@ -125,3 +104,6 @@ def _extract_event_details(event_type: str, data: dict[str, Any]) -> tuple[str, 
     raw_tags = data.get("tags", [])
     tags: list[str] = list(raw_tags) if isinstance(raw_tags, list) else []
     return kind, run_id, tags
+
+
+__all__ = ["parse_sse_stream"]

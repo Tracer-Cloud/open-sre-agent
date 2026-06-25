@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from app.core.domain.stream import StreamEvent
 from app.remote.client import (
     DEFAULT_PORT,
     PreflightResult,
@@ -14,7 +15,6 @@ from app.remote.client import (
     _build_synthetic_payload,
     normalize_url,
 )
-from app.remote.stream import StreamEvent
 
 
 class TestNormalizeUrl:

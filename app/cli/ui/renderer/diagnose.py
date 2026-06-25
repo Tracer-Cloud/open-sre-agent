@@ -35,7 +35,7 @@ from app.cli.ui.renderer.constants import (
     _WHITE,
     _render_source,
 )
-from app.remote.stream import StreamEvent
+from app.core.domain.stream import StreamEvent
 
 
 class _DiagnoseStreamRenderer:

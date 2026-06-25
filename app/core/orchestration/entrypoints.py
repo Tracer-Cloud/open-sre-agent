@@ -10,8 +10,8 @@ import threading
 from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any, cast
 
+from app.core.domain.stream import StreamEvent
 from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
-from app.remote.stream import StreamEvent
 from app.state import AgentState, make_initial_state
 from app.utils.errors import report_and_reraise
 from app.utils.sentry_sdk import init_sentry

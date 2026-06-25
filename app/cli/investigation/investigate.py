@@ -14,7 +14,7 @@ from app.config import resolve_llm_settings
 from app.utils.tracing import traceable
 
 if TYPE_CHECKING:
-    from app.remote.stream import StreamEvent
+    from app.core.domain.stream import StreamEvent
     from app.state import AgentState
 
 _logger = logging.getLogger(__name__)

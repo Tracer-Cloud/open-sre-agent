@@ -7,8 +7,8 @@ import httpx
 from click.testing import CliRunner
 
 from app.cli.__main__ import cli
+from app.core.domain.stream import StreamEvent
 from app.remote.ops import RemoteOpsError, RestartResult, ServiceStatus
-from app.remote.stream import StreamEvent
 
 
 class _AnsweredPrompt:

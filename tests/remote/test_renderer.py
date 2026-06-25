@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from app.cli.ui.renderer import StreamRenderer, _canonical_node_name
-from app.remote.stream import StreamEvent
+from app.core.domain.stream import StreamEvent
 
 
 def _make_event(
@@ -1270,7 +1270,8 @@ class TestStreamRendererPrintAboveRenderable:
 
     def test_merge_chain_start_input_eagerly_updates_metadata(self) -> None:
         """_merge_chain_start_input should pull 'input' payload from data into _final_state."""
-        from app.cli.ui.renderer import StreamEvent, StreamRenderer
+        from app.cli.ui.renderer import StreamRenderer
+        from app.core.domain.stream import StreamEvent
 
         renderer = StreamRenderer()
         assert "alert_name" not in renderer._final_state

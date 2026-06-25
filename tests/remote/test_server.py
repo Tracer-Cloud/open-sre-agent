@@ -16,6 +16,7 @@ _DiskUsage = collections.namedtuple("usage", ["total", "used", "free"])
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.core.domain.stream import StreamEvent
 from app.remote import server as remote_server
 from app.remote.server import (
     DeepHealthCheck,
@@ -29,7 +30,6 @@ from app.remote.server import (
     investigate,
     investigate_stream,
 )
-from app.remote.stream import StreamEvent
 from app.remote.vercel_poller import VercelResolutionError
 
 
