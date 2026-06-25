@@ -1280,7 +1280,7 @@ class TestInvestigateFileCommand:
     ) -> None:
         from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
 
-        picks = iter(["generic", "done"])
+        picks = iter(["generic"])
         captured: list[str] = []
 
         def _fake_sample(
@@ -1301,6 +1301,13 @@ class TestInvestigateFileCommand:
         console, buf = _capture()
         dispatch_slash("/investigate", session, console)
 
+        assert session.pending_prompt_default == "/investigate generic"
+        assert session.pending_prompt_autosubmit is True
+        assert captured == []
+
+        dispatch_slash(session.take_pending_prompt_default(), session, console)
+        assert session.take_pending_autosubmit() is True
+
         assert captured == ["generic"]
         assert session.last_state == {"root_cause": "sample from menu"}
         assert "usage" not in buf.getvalue().lower()
@@ -1313,7 +1320,7 @@ class TestInvestigateFileCommand:
         alert_file = tmp_path / "custom_alert.json"
         alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")
 
-        picks = iter(["__browse__", "done"])
+        picks = iter(["__browse__"])
         captured: list[str] = []
 
         def _fake(
@@ -1337,6 +1344,13 @@ class TestInvestigateFileCommand:
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash("/investigate", session, console)
+
+        queued = session.take_pending_prompt_default()
+        assert queued == f"/investigate {alert_file}"
+        assert session.take_pending_autosubmit() is True
+        assert captured == []
+
+        dispatch_slash(queued, session, console)
 
         assert session.last_state == {"root_cause": "custom path run"}
         assert '"alert_name": "custom"' in captured[0]

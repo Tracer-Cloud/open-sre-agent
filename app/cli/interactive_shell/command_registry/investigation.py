@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 from rich.console import Console
@@ -49,6 +50,16 @@ def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
         repl_section_break(console)
 
 
+def _queue_investigate_target(session: ReplSession, target: str) -> None:
+    """Defer a menu selection to a normal ``/investigate <target>`` turn.
+
+    The interactive picker needs exclusive stdin, but long-running RCA must not
+    hold it — queue the resolved target so the loop auto-submits it on the next
+    prompt iteration without ``queue.join()`` blocking.
+    """
+    session.queue_auto_command(f"/investigate {shlex.quote(target)}")
+
+
 def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
     from app.cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
 
@@ -60,24 +71,21 @@ def _interactive_investigate_menu(session: ReplSession, console: Console) -> boo
     choices.append(("__browse__", "custom file path…"))
     choices.append(("done", "done"))
 
-    # Run the picker once, then return to the REPL prompt — re-opening the menu
-    # after each investigation buried the RCA report and felt like a loop the
-    # user could not escape. The standalone CLI runs a single investigation and
-    # returns; bare /investigate now matches that.
-    target = repl_choose_one(
-        title="investigate",
-        breadcrumb=root,
-        choices=choices,
-    )
-    if target is None or target == "done":
-        return True
-    if target == "__browse__":
-        custom_path = _prompt_investigate_path(console)
-        if custom_path is None:
+    while True:
+        target = repl_choose_one(
+            title="investigate",
+            breadcrumb=root,
+            choices=choices,
+        )
+        if target is None or target == "done":
             return True
-        target = custom_path
-    _cmd_investigate_file(session, console, [target])
-    return True
+        if target == "__browse__":
+            custom_path = _prompt_investigate_path(console)
+            if custom_path is None:
+                continue
+            target = custom_path
+        _queue_investigate_target(session, target)
+        return True
 
 
 def _prompt_investigate_path(console: Console) -> str | None:
@@ -372,7 +380,11 @@ COMMANDS: list[SlashCommand] = [
             "/investigate alert.json",
             "/investigate generic",
         ),
-        notes=("In a TTY, bare /investigate opens runnable demo/template options.",),
+        notes=(
+            "In a TTY, bare /investigate opens runnable demo/template options.",
+            "Menu selections queue a normal /investigate <target> turn so the prompt "
+            "stays free during RCA.",
+        ),
         first_arg_completions=_INVESTIGATE_FIRST_ARGS,
         execution_tier=ExecutionTier.SAFE,
         validate_args=_validate_investigate_args,

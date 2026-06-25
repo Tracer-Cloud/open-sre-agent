@@ -81,6 +81,18 @@ def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations list", session) is False
 
 
+def test_dispatch_needs_exclusive_stdin_false_for_investigate_with_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued menu selections run as ``/investigate <target>`` without blocking the prompt."""
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate generic", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate alert.json", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("investigate generic", session) is False
+
+
 def test_dispatch_needs_exclusive_stdin_for_exit_commands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
