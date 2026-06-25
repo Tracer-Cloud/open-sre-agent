@@ -586,23 +586,6 @@ class TestStreamRendererDiagnoseStreaming:
         assert renderer._diagnose._live is None
         assert renderer._toggle_unregister is None
 
-    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_diagnose_repl_safe_skips_finish_bullet_line(
-        self,
-        capfd: pytest.CaptureFixture[str],
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        from app.cli.ui.renderer import diagnose as diagnose_module
-        from app.cli.ui.renderer import renderer as renderer_module
-
-        monkeypatch.setattr(diagnose_module, "_repl_progress_active", lambda: True)
-        monkeypatch.setattr(renderer_module, "_repl_progress_active", lambda: True)
-        renderer = StreamRenderer(local=True)
-        renderer.render_stream(_diagnose_streaming_events())
-
-        out, _ = capfd.readouterr()
-        assert "● diagnose_root_cause" not in out
-
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_diagnose_text_mode_replays_buffer_at_finish(self, capfd) -> None:
         """In text mode the buffered token text is printed when the node ends."""

@@ -173,18 +173,6 @@ class _DiagnoseStreamRenderer:
         """
         elapsed = time.monotonic() - self._started
 
-        if _repl_progress_active():
-            # The graph node already drove ProgressTracker start/complete with
-            # the same event-log rows as READ/PLAN/INVEST. Avoid a second raw
-            # ``● diagnose_root_cause`` line or buffer dump on stdout.
-            if self._live is not None:
-                try:
-                    self._live.stop()
-                finally:
-                    self._live = None
-                    unregister_live_console(self._console)
-            return
-
         if self._live is not None:
             # Final flush: any chunks pending in the last throttle window
             # render here so the user sees the complete reasoning.
