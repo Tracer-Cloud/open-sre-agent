@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
+import platform.scheduler.tasks as tasks_mod
+from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
-import platform_services.scheduler.tasks as tasks_mod
-from platform_services.scheduler.types import Provider, ScheduledTask, TaskKind
+import pytest
 
 
 class TestMessageBuilders:

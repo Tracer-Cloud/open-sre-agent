@@ -13,7 +13,7 @@ def guardrails() -> None:
 @guardrails.command(name="init")
 def guardrails_init() -> None:
     """Create a starter guardrails config with common patterns."""
-    from platform_services.guardrails.cli import cmd_init
+    from platform.guardrails.cli import cmd_init
 
     cmd_init()
 
@@ -22,7 +22,7 @@ def guardrails_init() -> None:
 @click.argument("text")
 def guardrails_test(text: str) -> None:
     """Test guardrail rules against a text string."""
-    from platform_services.guardrails.cli import cmd_test
+    from platform.guardrails.cli import cmd_test
 
     cmd_test(text)
 
@@ -31,7 +31,7 @@ def guardrails_test(text: str) -> None:
 @click.option("--limit", "-n", default=50, help="Number of recent entries to show.")
 def audit(limit: int) -> None:
     """Show recent guardrail audit log entries."""
-    from platform_services.guardrails.cli import cmd_audit
+    from platform.guardrails.cli import cmd_audit
 
     cmd_audit(limit=limit)
 
@@ -39,6 +39,6 @@ def audit(limit: int) -> None:
 @guardrails.command(name="rules")
 def guardrails_rules() -> None:
     """List configured guardrail rules."""
-    from platform_services.guardrails.cli import cmd_rules
+    from platform.guardrails.cli import cmd_rules
 
     cmd_rules()

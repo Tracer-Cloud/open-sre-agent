@@ -20,8 +20,8 @@ from rich.markup import escape
 
 from cli.interactive_shell.ui import repl_tty_interactive
 from cli.interactive_shell.ui.theme import DEVICE_CODE
-from platform_services.analytics.cli import capture_github_login_completed, identify_github_username
-from platform_services.analytics.source import is_test_run
+from platform.analytics.cli import capture_github_login_completed, identify_github_username
+from platform.analytics.source import is_test_run
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _ELIGIBLE_OS = frozenset({"Darwin", "Windows"})

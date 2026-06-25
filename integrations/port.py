@@ -12,7 +12,7 @@ empty default and fall through to local-store integration sources.
 
 Same Ports & Adapters pattern as
 ``core.orchestration.node.publish_findings.upstream_correlation`` and
-``platform_services/observability``: core
+``platform/observability``: core
 depends on abstractions, vendor SDKs plug in as adapters at the
 boundary.
 """

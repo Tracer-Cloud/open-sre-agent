@@ -30,12 +30,12 @@ def install_product_adapters() -> None:
     )
     from cli.interactive_shell.ui.output.tracker import get_tracker
     from integrations.port import set_remote_integrations_fetcher
-    from platform_services.observability.debug import set_debug_printer
-    from platform_services.observability.display import (
+    from platform.observability.debug import set_debug_printer
+    from platform.observability.display import (
         set_investigation_footer_renderer,
         set_investigation_header_renderer,
     )
-    from platform_services.observability.progress import set_progress_tracker_factory
+    from platform.observability.progress import set_progress_tracker_factory
     from services.tracer_client.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )

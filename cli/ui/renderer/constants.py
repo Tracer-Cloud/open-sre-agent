@@ -10,7 +10,7 @@ from cli.interactive_shell.ui.theme import (
     HIGHLIGHT_ANSI,
     TEXT_ANSI,
 )
-from platform_services.analytics.source import EntrypointSource
+from platform.analytics.source import EntrypointSource
 
 _RESET = ANSI_RESET
 _DIM = ANSI_DIM

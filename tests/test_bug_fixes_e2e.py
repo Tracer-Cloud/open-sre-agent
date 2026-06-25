@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from platform_services.guardrails.engine import GuardrailEngine
-from platform_services.guardrails.rules import GuardrailAction, GuardrailRule
+from platform.guardrails.engine import GuardrailEngine
+from platform.guardrails.rules import GuardrailAction, GuardrailRule
 
 # ---------------------------------------------------------------------------
 # Helpers

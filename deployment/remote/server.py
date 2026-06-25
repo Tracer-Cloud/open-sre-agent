@@ -55,8 +55,8 @@ from deployment.remote.vercel_poller import (
     VercelResolutionError,
     enrich_remote_alert_from_vercel,
 )
-from platform_services.analytics.cli import capture_investigation_failed, track_investigation
-from platform_services.analytics.source import EntrypointSource, TriggerMode
+from platform.analytics.cli import capture_investigation_failed, track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)

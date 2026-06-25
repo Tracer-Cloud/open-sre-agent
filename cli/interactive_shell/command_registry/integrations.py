@@ -89,7 +89,7 @@ def _handle_remove(session: ReplSession, console: Console, service: str | None) 
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
     from integrations.registry import resolve_management_service
     from integrations.store import remove_integration
-    from platform_services.analytics.cli import capture_integration_removed
+    from platform.analytics.cli import capture_integration_removed
 
     svc = resolve_management_service(service) if service else service
     if not svc:

@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field, ValidationError
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from cli.investigation import run_investigation_cli
-from platform_services.analytics.cli import track_investigation
-from platform_services.analytics.source import EntrypointSource, TriggerMode
+from platform.analytics.cli import track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
 from utils.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)

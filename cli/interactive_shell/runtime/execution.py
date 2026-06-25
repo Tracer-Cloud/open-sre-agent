@@ -17,9 +17,9 @@ from cli.interactive_shell.routing.handle_message_with_agent.pipeline import (
 )
 from cli.interactive_shell.routing.types import RouteDecision
 from cli.interactive_shell.runtime.session import ReplSession
-from platform_services.analytics.events import Event
-from platform_services.analytics.provider import JsonValue, get_analytics
-from platform_services.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+from platform.analytics.events import Event
+from platform.analytics.provider import JsonValue, get_analytics
+from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 
 answer_cli_agent = _cli_agent.answer_cli_agent
 execute_cli_actions = _agent_actions.execute_cli_actions

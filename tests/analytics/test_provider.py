@@ -8,12 +8,11 @@ import time
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
+from platform.analytics import install, provider
+from platform.analytics.events import Event
 from typing import NoReturn
 
 import pytest
-
-from platform_services.analytics import install, provider
-from platform_services.analytics.events import Event
 
 
 @pytest.fixture(autouse=True)
@@ -435,7 +434,7 @@ import sys
 import time
 from pathlib import Path
 
-from platform_services.analytics import provider
+from platform.analytics import provider
 
 config_dir = Path(sys.argv[1])
 start_file = Path(sys.argv[2])

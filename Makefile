@@ -31,7 +31,7 @@ export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
 	uv sync --frozen --extra dev
-	uv run python -m platform_services.analytics.install
+	uv run python -m platform.analytics.install
 
 build:
 	$(PYTHON) -m build

@@ -37,22 +37,22 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 Main packages one level deeper:
 
-- `platform_services/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
-- `platform_services/auth/` — JWT and authentication helpers for local and hosted runtime access.
+- `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
+- `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `deployment/` — Single top-level home for deployment-facing code, split by concern:
     - `deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
     - `deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
     - `deployment/remote/` — Remote-hosted runtime operations and integration points.
-- `platform_services/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
+- `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
-- `platform_services/masking/` — Masking utilities for redacting or normalizing sensitive content.
+- `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
 - `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
-- `platform_services/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
+- `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `services/AGENTS.md`.
 - `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.

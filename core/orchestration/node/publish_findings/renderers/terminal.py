@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.text import Text
 
 from config.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING
-from platform_services.observability import get_output_format
+from platform.observability import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -147,7 +147,7 @@ def _emit(rendered: str) -> None:
 
 def render_report(slack_message: str) -> None:
     """Render the final RCA report to terminal."""
-    from platform_services.observability import (
+    from platform.observability import (
         get_progress_tracker,
         render_completed_investigation_footer,
     )

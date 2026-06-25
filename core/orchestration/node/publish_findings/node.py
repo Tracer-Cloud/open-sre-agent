@@ -26,7 +26,7 @@ from core.orchestration.node.publish_findings.renderers.terminal import render_r
 from core.orchestration.node.publish_findings.upstream_correlation import (
     enrich_upstream_correlation,
 )
-from platform_services.masking import MaskingContext
+from platform.masking import MaskingContext
 from utils.ingest_delivery import create_investigation_and_attach_url
 
 

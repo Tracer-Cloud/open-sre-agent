@@ -34,8 +34,8 @@ from cli.ui.renderer.constants import (
     _render_source,
 )
 from core.domain.stream import StreamEvent
-from platform_services.analytics.events import Event
-from platform_services.analytics.provider import get_analytics
+from platform.analytics.events import Event
+from platform.analytics.provider import get_analytics
 
 
 class _DiagnoseStreamRenderer:

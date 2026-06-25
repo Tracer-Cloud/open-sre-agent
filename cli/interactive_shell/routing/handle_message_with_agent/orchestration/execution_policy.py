@@ -48,8 +48,8 @@ from cli.interactive_shell.shell import (
     parse_shell_command,
 )
 from cli.interactive_shell.ui import DIM, WARNING
-from platform_services.analytics.cli import capture_repl_execution_policy_decision
-from platform_services.analytics.provider import Properties
+from platform.analytics.cli import capture_repl_execution_policy_decision
+from platform.analytics.provider import Properties
 
 ExecutionVerdict = Literal["allow", "ask", "deny"]
 

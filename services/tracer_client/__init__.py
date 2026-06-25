@@ -3,7 +3,7 @@
 import os
 
 from config.config import get_tracer_base_url
-from platform_services.auth.jwt_auth import extract_org_id_from_jwt
+from platform.auth.jwt_auth import extract_org_id_from_jwt
 from services.tracer_client.aws_batch_jobs import AWSBatchJobResult
 from services.tracer_client.client import TracerClient
 from services.tracer_client.tracer_integrations import (

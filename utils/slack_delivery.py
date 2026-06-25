@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from config.config import SLACK_CHANNEL
-from platform_services.observability import debug_print
+from platform.observability import debug_print
 from utils.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)

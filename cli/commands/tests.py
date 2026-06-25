@@ -18,7 +18,7 @@ from core.domain.types.upstream import (
 from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
     build_runtime_correlation,
 )
-from platform_services.analytics.cli import (
+from platform.analytics.cli import (
     capture_test_run_completed,
     capture_test_run_failed,
     capture_test_run_started,

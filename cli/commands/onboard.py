@@ -7,7 +7,7 @@ from typing import Any
 
 import click
 
-from platform_services.analytics.cli import (
+from platform.analytics.cli import (
     capture_onboard_completed,
     capture_onboard_failed,
     capture_onboard_started,

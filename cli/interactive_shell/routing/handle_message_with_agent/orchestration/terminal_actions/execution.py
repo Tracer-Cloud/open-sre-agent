@@ -55,7 +55,7 @@ def execute_cli_actions(
     deps: ActionExecutionDeps | None = None,
 ) -> TerminalActionExecutionResult:
     """Execute inferred second-phase actions and return per-turn action counters."""
-    from platform_services.analytics.cli import (
+    from platform.analytics.cli import (
         capture_repl_execution_policy_decision,
         capture_terminal_actions_executed,
         capture_terminal_actions_planned,

@@ -142,7 +142,7 @@ include = [
   "core*",
   "deployment*",
   "integrations*",
-  "platform_services*",
+  "platform*",
   "services*",
   "tests*",
   "tools*",

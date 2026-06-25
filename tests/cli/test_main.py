@@ -11,8 +11,8 @@ import pytest
 
 from cli.__main__ import _sentry_entrypoint_for_invocation, main
 from cli.config import ReplConfig
-from platform_services.analytics import provider
-from platform_services.analytics.events import Event
+from platform.analytics import provider
+from platform.analytics.events import Event
 
 
 class _EmptyCatalog:

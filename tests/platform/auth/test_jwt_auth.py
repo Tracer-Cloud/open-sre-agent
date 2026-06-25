@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import jwt as pyjwt
-import pytest
-
-from platform_services.auth.jwt_auth import (
+from platform.auth.jwt_auth import (
     AsyncJWKSCache,
     JWTVerificationError,
     get_signing_key_from_jwks,
 )
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import jwt as pyjwt
+import pytest
 
 
 @pytest.mark.asyncio
@@ -31,8 +30,8 @@ async def test_get_jwks_fetches_once_and_uses_cache_within_ttl() -> None:
     response.json.return_value = jwks_payload
 
     with (
-        patch("platform_services.auth.jwt_auth.time.time", side_effect=[1000.0, 1001.0]),
-        patch("platform_services.auth.jwt_auth.httpx.AsyncClient") as mock_async_client_cls,
+        patch("platform.auth.jwt_auth.time.time", side_effect=[1000.0, 1001.0]),
+        patch("platform.auth.jwt_auth.httpx.AsyncClient") as mock_async_client_cls,
     ):
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=response)

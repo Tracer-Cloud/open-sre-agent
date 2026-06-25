@@ -9,7 +9,7 @@ from cli.interactive_shell.data_store.constants import (
     SETUP_SERVICES,
     VERIFY_SERVICES,
 )
-from platform_services.analytics.cli import (
+from platform.analytics.cli import (
     capture_integration_removed,
     capture_integration_setup_completed,
     capture_integration_setup_started,

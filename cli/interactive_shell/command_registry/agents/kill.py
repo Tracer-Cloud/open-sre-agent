@@ -10,8 +10,8 @@ from rich.markup import escape
 
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from platform_services.analytics.events import Event
-from platform_services.analytics.provider import get_analytics
+from platform.analytics.events import Event
+from platform.analytics.provider import get_analytics
 from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
 from tools.fleet_monitoring.registry import AgentRegistry
 

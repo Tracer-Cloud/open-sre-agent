@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from platform_services.analytics import provider
+from platform.analytics import provider
 from utils import sentry_sdk as sentry_mod
 
 _ENV_VARS = (

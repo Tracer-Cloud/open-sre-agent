@@ -24,7 +24,7 @@ from config.constants import (
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
-from platform_services.analytics.events import Event
+from platform.analytics.events import Event
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
 # Pydantic V2 ValidationError messages render ``input_value=<repr>`` (or
@@ -371,7 +371,7 @@ def _before_breadcrumb(crumb: dict[str, Any], _hint: dict[str, Any]) -> dict[str
 
 def _capture_sentry_init_skipped(reason: str, *, error_type: str | None = None) -> None:
     # Local import to avoid an import cycle between Sentry and analytics modules.
-    from platform_services.analytics.provider import Properties, get_analytics
+    from platform.analytics.provider import Properties, get_analytics
 
     properties: Properties = {"reason": reason}
     if error_type is not None:

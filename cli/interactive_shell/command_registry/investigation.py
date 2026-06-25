@@ -148,8 +148,8 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
     from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
     from cli.investigation import run_investigation_for_session, run_sample_alert_for_session
     from cli.investigation.payload import resolve_alert_path
-    from platform_services.analytics.cli import track_investigation
-    from platform_services.analytics.source import EntrypointSource, TriggerMode
+    from platform.analytics.cli import track_investigation
+    from platform.analytics.source import EntrypointSource, TriggerMode
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)

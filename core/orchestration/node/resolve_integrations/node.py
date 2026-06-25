@@ -21,7 +21,7 @@ from integrations.catalog import (
 from integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
-from platform_services.observability import get_progress_tracker as get_tracker
+from platform.observability import get_progress_tracker as get_tracker
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from platform_services.guardrails.apply import apply_guardrails_to_converse_payload
+from platform.guardrails.apply import apply_guardrails_to_converse_payload
 from services.agent_llm_client import ToolCall
 from services.bedrock_converse import (
     build_assistant_tool_use_message,
@@ -189,7 +189,7 @@ def test_apply_guardrails_wraps_string_content_in_text_blocks() -> None:
     engine.is_active = True
     engine.apply.side_effect = lambda text: f"guarded:{text}"
 
-    with patch("platform_services.guardrails.engine.get_guardrail_engine", return_value=engine):
+    with patch("platform.guardrails.engine.get_guardrail_engine", return_value=engine):
         messages, system = apply_guardrails_to_converse_payload(
             messages=[{"role": "user", "content": "hello"}],
             system="sys",

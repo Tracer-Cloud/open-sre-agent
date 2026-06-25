@@ -24,7 +24,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR
 from config.llm_reasoning_effort import apply_reasoning_effort
-from platform_services.analytics.cli import capture_terminal_turn_summarized
+from platform.analytics.cli import capture_terminal_turn_summarized
 
 
 def _build_empty_response_fallback(text: str, session: ReplSession) -> str:
