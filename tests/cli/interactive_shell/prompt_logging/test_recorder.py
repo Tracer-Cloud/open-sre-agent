@@ -177,3 +177,49 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
     recorder.flush()
     assert captured[0]["connected_integrations"] == ["github"]
     assert captured[0]["connected_integrations_count"] == 1
+
+
+def test_prompt_recorder_still_captures_when_tool_resolution_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+
+    def _boom(_resolved: dict[str, object]) -> list[object]:
+        raise RuntimeError("tool registry blew up")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.integration_snapshot.get_available_tools",
+        _boom,
+    )
+
+    session = ReplSession()
+    session.configured_integrations_known = True
+    session.configured_integrations = ("datadog",)
+    session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
+    recorder = PromptRecorder.start(
+        session=session,
+        text="hello",
+        route_kind="handle_message_with_agent",
+    )
+    assert recorder is not None
+    recorder.set_response("world", LlmRunInfo(model="gpt-test", provider="openai", latency_ms=50))
+    recorder.flush()
+    assert captured
+    assert captured[0]["$ai_model"] == "gpt-test"
+    assert captured[0]["configured_integrations"] == ["datadog"]
+    assert captured[0]["connected_integrations"] == []

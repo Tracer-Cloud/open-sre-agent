@@ -53,7 +53,10 @@ def _resolved_integrations(session: _IntegrationSession | None) -> dict[str, Any
 def _connected_slugs(configured: list[str], resolved: dict[str, Any]) -> list[str]:
     if not configured or not resolved:
         return []
-    tools = get_available_tools(resolved)
+    try:
+        tools = get_available_tools(resolved)
+    except Exception:
+        return []
     active_families = {
         family_key(str(tool.source))
         for tool in tools

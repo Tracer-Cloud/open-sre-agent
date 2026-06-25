@@ -73,3 +73,26 @@ def test_build_turn_integration_snapshot_excludes_unavailable_tools(
     assert snapshot["configured_integrations"] == ["datadog", "grafana"]
     assert snapshot["connected_integrations"] == ["datadog"]
     assert snapshot["connected_integrations_count"] == 1
+
+
+def test_build_turn_integration_snapshot_survives_tool_resolution_failure(
+    monkeypatch: Any,
+) -> None:
+    session = ReplSession()
+    session.configured_integrations_known = True
+    session.configured_integrations = ("datadog",)
+    session.resolved_integrations_cache = {"datadog": {"api_key": "x", "app_key": "y"}}
+
+    def _boom(_resolved: dict[str, Any]) -> list[MagicMock]:
+        raise RuntimeError("tool registry blew up")
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.prompt_logging.integration_snapshot.get_available_tools",
+        _boom,
+    )
+
+    snapshot = build_turn_integration_snapshot(session)
+
+    assert snapshot["configured_integrations"] == ["datadog"]
+    assert snapshot["connected_integrations"] == []
+    assert snapshot["connected_integrations_count"] == 0
