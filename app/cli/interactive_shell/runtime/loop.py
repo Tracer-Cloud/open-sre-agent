@@ -334,4 +334,4 @@ async def run_interactive(
                 log.debug("%s task shutdown raised exception: %s", label, result)
 
 
-__all__ = ["StreamingConsole", "run_interactive"]
+__all__ = ["run_interactive"]
