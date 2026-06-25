@@ -437,6 +437,9 @@ def _load_groundcover(integrations: list[dict[str, Any]]) -> None:
             or os.getenv("GROUNDCOVER_MCP_TOKEN", "").strip()
         )
     if groundcover_api_key:
+        # The groundcover config validates the MCP URL (HTTPS-or-loopback), which
+        # can raise on a bad GROUNDCOVER_MCP_URL. Guard it so one malformed value
+        # cannot abort discovery of every other env integration.
         try:
             groundcover_config = GroundcoverIntegrationConfig.model_validate(
                 {
@@ -503,6 +506,7 @@ def _load_coralogix(integrations: list[dict[str, Any]]) -> None:
                 coralogix_config.model_dump(exclude={"integration_id"}),
             )
         )
+
 
 def _load_aws(integrations: list[dict[str, Any]]) -> None:
     aws_multi = _parse_instances_env("AWS_INSTANCES", "aws")
@@ -704,6 +708,8 @@ def _load_argocd(integrations: list[dict[str, Any]]) -> None:
                 }
             )
         except Exception as exc:
+            # Invalid env-derived config: skip ArgoCD entry rather than fail
+            # discovery, but report so operators can see the misconfig.
             _report_env_loader_failure(exc, integration="argocd")
         else:
             integrations.append(
@@ -849,6 +855,7 @@ def _load_jira(integrations: list[dict[str, Any]]) -> None:
                 )
             )
 
+
 def _load_discord(integrations: list[dict[str, Any]]) -> None:
     discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
     if discord_bot_token:
@@ -911,7 +918,7 @@ def _load_smtp(integrations: list[dict[str, Any]]) -> None:
             integrations.append(_active_env_record("smtp", smtp_config.model_dump()))
 
 
-def _load_twilio_and_whatsapp(integrations: list[dict[str, Any]]) -> None:
+def _load_twilio(integrations: list[dict[str, Any]]) -> None:
     twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
     twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 
@@ -1542,7 +1549,7 @@ _LOADERS: list[_LoaderFn] = [
     _load_airflow,
     _load_telegram,
     _load_smtp,
-    _load_twilio_and_whatsapp,
+    _load_twilio,
     _load_mongodb_atlas,
     _load_openclaw,
     _load_posthog_mcp,
@@ -1574,7 +1581,16 @@ def load_env_integrations() -> list[dict[str, Any]]:
     """Build integration records from local environment variables."""
     integrations: list[dict[str, Any]] = []
     for loader in _LOADERS:
-        loader(integrations)
+        try:
+            loader(integrations)
+        except Exception as exc:
+            _report_env_loader_failure(
+                exc,
+                integration=(
+                    getattr(loader, "__name__", "").removeprefix("_load_").replace("_", "-")
+                    or "unknown"
+                ),
+            )
     return integrations
 
 
