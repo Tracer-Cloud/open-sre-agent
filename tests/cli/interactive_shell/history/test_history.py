@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.command_registry import dispatch_slash
 from app.cli.interactive_shell.history import load_command_history_entries
 from app.cli.interactive_shell.runtime.session import ReplSession
 

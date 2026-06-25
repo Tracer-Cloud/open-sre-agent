@@ -366,7 +366,7 @@ def spec_from_command(command: SlashCommand) -> SlashCommandSpec:
 def build_slash_command_specs(
     commands: dict[str, SlashCommand] | None = None,
 ) -> list[SlashCommandSpec]:
-    from app.cli.interactive_shell.commands import SLASH_COMMANDS
+    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 
     source = commands if commands is not None else SLASH_COMMANDS
     return [spec_from_command(source[name]) for name in sorted(source.keys())]

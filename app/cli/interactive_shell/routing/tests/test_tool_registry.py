@@ -7,7 +7,7 @@ import re
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration import (
     feature_flags,
 )

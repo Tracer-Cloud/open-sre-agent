@@ -21,7 +21,7 @@ def _normalize_tool_args(
         if not command.startswith("/"):
             return None
 
-        from app.cli.interactive_shell.commands import SLASH_COMMANDS
+        from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 
         if command.split(maxsplit=1)[0].lower() not in SLASH_COMMANDS:
             return None

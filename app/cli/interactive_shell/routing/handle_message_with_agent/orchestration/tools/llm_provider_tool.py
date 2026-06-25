@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.markup import escape
 
-from app.cli.interactive_shell.commands import switch_llm_provider, switch_reasoning_model
+from app.cli.interactive_shell.command_registry import switch_llm_provider, switch_reasoning_model
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_llm_runtime_switch,
     execution_allowed,

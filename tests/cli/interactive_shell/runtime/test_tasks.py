@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.command_registry import dispatch_slash
 from app.cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,

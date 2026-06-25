@@ -6,11 +6,11 @@ from typing import Any
 
 from rich.markup import escape
 
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
     execution_allowed,
     plan_slash_execution,

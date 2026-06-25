@@ -17,7 +17,7 @@ should be predictable, interruptible, explainable, and safe by default.
 
 | Area | Owns | Keep out |
 | --- | --- | --- |
-| `loop.py` / `commands.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
+| `loop.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
 | `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |

@@ -10,9 +10,9 @@ from rich.console import Console
 import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as _agent_actions
 from app.analytics.events import Event
 from app.analytics.provider import JsonValue, get_analytics
-from app.cli.interactive_shell import commands as _commands
 from app.cli.interactive_shell.chat import cli_agent as _cli_agent
 from app.cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
+from app.cli.interactive_shell.command_registry import dispatch_slash
 from app.cli.interactive_shell.prompt_logging import LlmRunInfo, PromptRecorder
 from app.cli.interactive_shell.routing.handle_message_with_agent.pipeline import (
     handle_message_with_agent,
@@ -22,7 +22,6 @@ from app.cli.interactive_shell.runtime.session import ReplSession
 
 answer_cli_agent = _cli_agent.answer_cli_agent
 execute_cli_actions = _agent_actions.execute_cli_actions
-dispatch_slash = _commands.dispatch_slash
 
 
 def _answer_cli_agent_with_tools(

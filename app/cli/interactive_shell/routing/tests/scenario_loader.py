@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import yaml
 
-from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     default_target_surface,
 )

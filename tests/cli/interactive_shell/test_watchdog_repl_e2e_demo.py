@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.command_registry import dispatch_slash
 from app.cli.interactive_shell.runtime.session import ReplSession
 from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from app.fleet_monitoring.probe import ProcessSnapshot

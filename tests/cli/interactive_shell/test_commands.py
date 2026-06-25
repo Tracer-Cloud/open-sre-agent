@@ -12,6 +12,7 @@ from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
 from app.cli.interactive_shell import command_registry as registry_module
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
 from app.cli.interactive_shell.command_registry import types as command_types
 from app.cli.interactive_shell.command_registry.investigation import (
@@ -19,7 +20,6 @@ from app.cli.interactive_shell.command_registry.investigation import (
     _validate_save_args,
 )
 from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
-from app.cli.interactive_shell.commands import SLASH_COMMANDS, dispatch_slash
 from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
 from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from app.cli.interactive_shell.runtime.session import ReplSession
@@ -927,7 +927,7 @@ class TestModelCommand:
         normalized to ``gpt-5.5`` instead."""
         self._patch_llm(monkeypatch)
         import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.commands import switch_reasoning_model
+        from app.cli.interactive_shell.command_registry import switch_reasoning_model
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)

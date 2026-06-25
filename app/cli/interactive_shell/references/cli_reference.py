@@ -49,7 +49,7 @@ def _current_cli_signature() -> str:
     installed package version changes.
     """
     from app.cli.__main__ import cli
-    from app.cli.interactive_shell.commands import SLASH_COMMANDS
+    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
     from app.version import get_version
 
     cmd_names = ",".join(sorted(cli.commands.keys()))
@@ -156,7 +156,7 @@ def _build_cli_reference_text_uncached() -> str:
 
 
 def _interactive_shell_slash_hints() -> str:
-    from app.cli.interactive_shell.commands import SLASH_COMMANDS
+    from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 
     lines = [
         "In the interactive shell, describe an incident or paste alert JSON to run "

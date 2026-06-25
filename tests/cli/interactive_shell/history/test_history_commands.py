@@ -10,7 +10,7 @@ from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
 from app.cli.interactive_shell import history as history_module
-from app.cli.interactive_shell.commands import dispatch_slash
+from app.cli.interactive_shell.command_registry import dispatch_slash
 from app.cli.interactive_shell.history.policy import RedactingFileHistory
 from app.cli.interactive_shell.runtime.session import ReplSession
 

@@ -8,7 +8,7 @@ from typing import NotRequired, TypedDict, cast
 
 import pytest
 
-from app.cli.interactive_shell.commands import SLASH_COMMANDS
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
 )

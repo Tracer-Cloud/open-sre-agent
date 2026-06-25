@@ -19,9 +19,9 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.text import Text
 
+from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
 from app.cli.interactive_shell.command_registry.help import QUICK_ACCESS_COMMANDS
 from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.commands import SLASH_COMMANDS
 from app.cli.interactive_shell.history import load_prompt_history
 from app.cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.catalog import (
     BARE_COMMAND_ALIASES,

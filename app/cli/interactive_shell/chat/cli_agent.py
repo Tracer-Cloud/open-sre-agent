@@ -71,7 +71,7 @@ def _execute_action_plan(
     if not actions:
         return False
 
-    from app.cli.interactive_shell.commands import (
+    from app.cli.interactive_shell.command_registry import (
         SLASH_COMMANDS,
         dispatch_slash,
         switch_llm_provider,
