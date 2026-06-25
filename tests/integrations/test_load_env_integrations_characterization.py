@@ -140,7 +140,7 @@ _ENV: dict[str, str] = {
 
 
 def _capture(env: dict[str, str]) -> list[dict[str, Any]]:
-    """Run ``load_env_integrations`` under exactly ``env`` and normalize ordering."""
+    """Run ``load_env_integrations`` under exactly ``env`` in loader emission order."""
     saved = dict(os.environ)
     os.environ.clear()
     os.environ.update(env)
@@ -149,9 +149,10 @@ def _capture(env: dict[str, str]) -> list[dict[str, Any]]:
     finally:
         os.environ.clear()
         os.environ.update(saved)
-    # Sort only for stable comparison; the loader's own ordering is asserted
-    # separately below so the refactor cannot silently reshuffle records.
-    return sorted(result, key=lambda r: r["id"])
+    # Return records in the loader's own emission order (no sorting) so the
+    # golden comparison pins both content AND order — a registry reshuffle now
+    # fails the snapshot instead of slipping through.
+    return result
 
 
 def test_load_env_integrations_matches_golden() -> None:
@@ -164,16 +165,17 @@ def test_load_env_integrations_matches_golden() -> None:
     assert captured == expected
 
 
-def test_loader_record_order_is_stable() -> None:
-    saved = dict(os.environ)
-    os.environ.clear()
-    os.environ.update(_ENV)
-    try:
-        services = [r["service"] for r in load_env_integrations()]
-    finally:
-        os.environ.clear()
-        os.environ.update(saved)
-    # Grafana is the first block in the loader; assert it leads to catch an
-    # accidental reordering of the loader sequence.
-    assert services, "expected at least one integration from the env matrix"
-    assert services[0] == "grafana"
+def test_loader_record_emission_order_matches_golden() -> None:
+    if not _GOLDEN.exists():  # pragma: no cover - generation path
+        pytest.skip(f"golden snapshot missing: {_GOLDEN}")
+    captured_services = [r["service"] for r in _capture(_ENV)]
+    golden_services = [r["service"] for r in json.loads(_GOLDEN.read_text())]
+    # Full-sequence equality catches a registry reshuffle at any position, not
+    # just the first record.
+    assert captured_services == golden_services
+    # Structural anchors independent of the golden: grafana leads, and the
+    # shared Twilio loader emits the WhatsApp record immediately before the SMS
+    # (twilio) record.
+    assert captured_services[0] == "grafana"
+    whatsapp_index = captured_services.index("whatsapp")
+    assert captured_services[whatsapp_index + 1] == "twilio"
