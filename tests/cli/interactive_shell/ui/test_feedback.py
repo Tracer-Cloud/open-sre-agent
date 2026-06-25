@@ -9,10 +9,11 @@ import pytest
 from rich.console import Console
 
 from app.cli.interactive_shell.ui.feedback import (
+    _CHOICES,
     _format_root_cause_lines,
-    _parse_cli_choice,
     _print_context,
     _root_cause_width,
+    _run_select,
 )
 
 
@@ -106,32 +107,29 @@ def test_print_context_shows_full_root_cause_in_stdout_path(
     assert " ".join(captured.split()) == ("─" * 60 + " Root cause: " + root + " " + "─" * 60)
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("", None),
-        ("1", "accurate"),
-        ("a", "accurate"),
-        ("3", "inaccurate"),
-        ("s", "skip"),
-        ("n", "never"),
-        ("bogus", None),
-    ],
-)
-def test_parse_cli_choice(raw: str, expected: str | None) -> None:
-    assert _parse_cli_choice(raw) == expected
-
-
-def test_pick_rating_cli_uses_line_input(
+def test_run_select_returns_highlighted_choice_on_enter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
-    monkeypatch.setattr("builtins.input", lambda: "2")
-    from app.cli.interactive_shell.ui.feedback import _pick_rating_cli
+    calls = {"n": 0}
 
-    assert _pick_rating_cli() == "partial"
+    def read_then_enter(**_kwargs: object) -> str:
+        calls["n"] += 1
+        return "enter" if calls["n"] > 1 else "down"
+
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.feedback.read_key_unix",
+        read_then_enter,
+    )
+    monkeypatch.setattr("app.cli.interactive_shell.ui.feedback.flush_stdin_unix", lambda: None)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.feedback.restore_stdin_terminal",
+        lambda: None,
+    )
+
+    assert _run_select(_CHOICES) == "partial"
     captured = capsys.readouterr().out
-    assert "Choice" in captured
     assert "Partially accurate" in captured
+    assert "↑↓" in captured
