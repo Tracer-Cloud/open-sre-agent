@@ -51,6 +51,13 @@ def run_foreground_investigation(
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
     session.apply_investigation_result(final_state)
+
+    from app.cli.interactive_shell.ui.feedback import prompt_investigation_feedback
+    from app.cli.interactive_shell.ui.key_reader import restore_stdin_terminal
+
+    restore_stdin_terminal()
+    prompt_investigation_feedback(final_state, console=console, post_stream=True)
+
     return final_state
 
 

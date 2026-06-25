@@ -1280,7 +1280,7 @@ class TestInvestigateFileCommand:
     ) -> None:
         from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
 
-        picks = iter(["generic", "done"])
+        picks = iter(["generic"])
         captured: list[str] = []
 
         def _fake_sample(
@@ -1313,7 +1313,7 @@ class TestInvestigateFileCommand:
         alert_file = tmp_path / "custom_alert.json"
         alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")
 
-        picks = iter(["__browse__", "done"])
+        picks = iter(["__browse__"])
         captured: list[str] = []
 
         def _fake(

@@ -531,8 +531,11 @@ class StreamRenderer:
 
         stop_display()
 
-        slack_message = self._final_state.get("slack_message") or self._final_state.get(
-            "report", ""
+        slack_message = (
+            self._final_state.get("slack_message")
+            or self._final_state.get("report")
+            or self._final_state.get("problem_md")
+            or ""
         )
 
         if not slack_message:

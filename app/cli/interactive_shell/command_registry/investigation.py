@@ -74,7 +74,8 @@ def _interactive_investigate_menu(session: ReplSession, console: Console) -> boo
                 continue
             target = custom_path
         _cmd_investigate_file(session, console, [target])
-        repl_section_break(console)
+        # One picker selection → one investigation, then return to the REPL prompt.
+        return True
 
 
 def _prompt_investigate_path(console: Console) -> str | None:

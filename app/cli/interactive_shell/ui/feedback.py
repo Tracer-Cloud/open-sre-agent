@@ -266,31 +266,53 @@ def _read_note(*, console: Console | None) -> str:
 # ── core ──────────────────────────────────────────────────────────────────────
 
 
-def _pick_rating(*, console: Console | None) -> str | None:
+def _report_already_rendered(final_state: dict[str, Any]) -> bool:
+    report = final_state.get("slack_message") or final_state.get("report") or ""
+    return bool(str(report).strip())
+
+
+def _pick_rating(*, console: Console | None, post_stream: bool) -> str | None:
     """Show the rating prompt; returns key or None on cancel/skip."""
-    if console is not None:
-        from app.cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
-
-        if not repl_tty_interactive():
+    if post_stream or console is None:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
             return None
-        return repl_choose_one(title="Was this RCA accurate?", choices=_CHOICES)
+        return _run_select(_CHOICES)
 
-    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+    from app.cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
+
+    if not repl_tty_interactive():
         return None
-    return _run_select(_CHOICES)
+    return repl_choose_one(title="Was this RCA accurate?", choices=_CHOICES)
 
 
-def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
+def _collect(
+    final_state: dict[str, Any],
+    *,
+    console: Console | None,
+    post_stream: bool = False,
+) -> None:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return
     if _is_disabled():
         return
 
-    _print_context(final_state, console=console)
+    if not _report_already_rendered(final_state):
+        _print_context(final_state, console=console)
 
     from app.cli.interactive_shell.ui.theme import BRAND, DIM
 
-    if console is not None:
+    if post_stream or console is None:
+        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+
+        prepare_repl_output_line()
+        if console is not None:
+            console.print(f"\n[{BRAND}]Was this RCA accurate?[/]")
+        else:
+            sys.stdout.write(
+                f"\n{_H}Was this RCA accurate?{_R}  {_D}↑↓ · Enter · Esc or s to skip{_R}\n\n"
+            )
+            sys.stdout.flush()
+    elif console is not None:
         console.print(
             f"\n[{BRAND}]Was this RCA accurate?[/] [{DIM}]↑↓ · Enter · Esc or s to skip[/]"
         )
@@ -300,7 +322,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
         )
         sys.stdout.flush()
 
-    rating = _pick_rating(console=console)
+    rating = _pick_rating(console=console, post_stream=post_stream)
     if not rating or rating == "skip":
         return
 
@@ -351,6 +373,7 @@ def prompt_investigation_feedback(
     final_state: dict[str, Any],
     *,
     console: Console | None = None,
+    post_stream: bool = False,
 ) -> None:
     """Prompt for RCA accuracy feedback; never raises.
 
@@ -359,9 +382,14 @@ def prompt_investigation_feedback(
     provenance (run_id, alert_name, validity_score, root_cause_category, …)
     and user context (user_id, user_email, org_id when available on
     the hosted/JWT path).
+
+    Set ``post_stream=True`` after a streaming investigation in the REPL so the
+    cursor-safe :func:`_run_select` menu is used instead of
+    :func:`repl_choose_one`, and the root-cause recap is skipped when the full
+    report was already rendered.
     """
     with contextlib.suppress(Exception):
         try:
-            _collect(final_state, console=console)
+            _collect(final_state, console=console, post_stream=post_stream)
         finally:
             restore_stdin_terminal()

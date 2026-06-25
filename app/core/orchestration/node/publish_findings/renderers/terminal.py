@@ -1,6 +1,9 @@
 """Terminal rendering for RCA reports — Claude-style output."""
 
+from __future__ import annotations
+
 import re
+import sys
 
 from rich.console import Console
 from rich.text import Text
@@ -131,18 +134,49 @@ def render_report(slack_message: str) -> None:
             print("No report generated.")
         return
 
-    if fmt == "rich":
-        _render_rich_report(slack_message)
-    else:
-        _render_plain_report(slack_message)
+    from app.cli.interactive_shell.ui.output.environment import _repl_progress_active
 
-    # Print the investigation phase footer at the absolute bottom of the
-    # RCA report (without "esc to cancel" — the investigation is complete).
+    if _repl_progress_active() and sys.stdout.isatty():
+        from app.cli.interactive_shell.ui.choice_menu import prepare_repl_output_line
+        from app.cli.interactive_shell.ui.rendering import (
+            _prepare_tty_for_rich,
+            _write_repl_tty_buffered,
+        )
+
+        prepare_repl_output_line()
+        base = Console(highlight=False, force_terminal=True, color_system="truecolor")
+        width = _prepare_tty_for_rich(base)
+        _write_repl_tty_buffered(
+            width=width,
+            leading_blank=False,
+            render_to_buffer=lambda buf: _render_report_body(slack_message, console=buf),
+        )
+        render_completed_investigation_footer()
+        return
+
+    _render_report_body(slack_message, console=None)
     render_completed_investigation_footer()
 
 
-def _render_rich_report(slack_message: str) -> None:
-    console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+def _render_report_body(slack_message: str, *, console: Console | None) -> None:
+    fmt = get_output_format()
+    if fmt == "rich":
+        _render_rich_report(
+            slack_message,
+            console=console
+            or Console(highlight=False, force_terminal=True, color_system="truecolor"),
+        )
+        return
+    if console is not None:
+        console.print()
+        clean = _strip_slack_links(_strip_mrkdwn(slack_message))
+        for line in clean.splitlines():
+            console.print(line)
+        return
+    _render_plain_report(slack_message)
+
+
+def _render_rich_report(slack_message: str, *, console: Console) -> None:
     console.print()
 
     lines = slack_message.splitlines()

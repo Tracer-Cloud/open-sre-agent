@@ -10,8 +10,10 @@ from rich.console import Console
 
 from app.cli.interactive_shell.ui.feedback import (
     _CHOICES,
+    _collect,
     _format_root_cause_lines,
     _print_context,
+    _report_already_rendered,
     _root_cause_width,
     _run_select,
 )
@@ -133,3 +135,39 @@ def test_run_select_returns_highlighted_choice_on_enter(
     captured = capsys.readouterr().out
     assert "Partially accurate" in captured
     assert "↑↓" in captured
+
+
+def test_report_already_rendered_detects_slack_message() -> None:
+    assert _report_already_rendered({"slack_message": "Findings\n- item"})
+    assert not _report_already_rendered({"root_cause": "only root"})
+
+
+def test_collect_post_stream_skips_root_cause_recap_when_report_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("app.cli.interactive_shell.ui.feedback._is_disabled", lambda: False)
+    monkeypatch.setattr(
+        "app.cli.interactive_shell.ui.feedback._pick_rating",
+        lambda **_kwargs: "skip",
+    )
+    context_calls: list[dict[str, object]] = []
+
+    def _spy_context(final_state: dict[str, object], *, console: Console | None) -> None:
+        _ = console
+        context_calls.append(dict(final_state))
+
+    monkeypatch.setattr("app.cli.interactive_shell.ui.feedback._print_context", _spy_context)
+
+    _collect(
+        {
+            "root_cause": "db unreachable",
+            "slack_message": "## Findings\n- alert fired",
+        },
+        console=Console(file=io.StringIO(), force_terminal=False),
+        post_stream=True,
+    )
+
+    assert context_calls == []
+
