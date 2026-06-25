@@ -35,7 +35,7 @@ from integrations.openclaw import (
     validate_openclaw_config,
 )
 from tests.e2e.source_helpers import resolve_available_tool_sources
-from utils.openclaw_delivery import send_openclaw_report
+from platform.notifications.openclaw_delivery import send_openclaw_report
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -407,13 +407,13 @@ class TestOpenClawWriteBackFailure:
         )
         creds = _openclaw_http_resolved()
 
-        with patch("utils.openclaw_delivery.call_openclaw_tool") as mock_call:
+        with patch("platform.notifications.openclaw_delivery.call_openclaw_tool") as mock_call:
             mock_call.return_value = {
                 "is_error": True,
                 "text": "OpenClaw tool call failed.",
             }
             with patch(
-                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
+                "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
             ):
                 posted, error = send_openclaw_report(state, "RCA report body", creds)
 
@@ -431,10 +431,10 @@ class TestOpenClawWriteBackFailure:
         )
         creds = _openclaw_http_resolved()
 
-        with patch("utils.openclaw_delivery.call_openclaw_tool") as mock_call:
+        with patch("platform.notifications.openclaw_delivery.call_openclaw_tool") as mock_call:
             mock_call.return_value = {"is_error": False, "text": "ok"}
             with patch(
-                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
+                "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason", return_value=None
             ):
                 posted, error = send_openclaw_report(state, "RCA report body", creds)
 
@@ -456,9 +456,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("platform.notifications.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):
@@ -484,9 +484,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("platform.notifications.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):
@@ -512,9 +512,9 @@ class TestOpenClawWriteBackFailure:
             return {"is_error": False, "text": "ok"}
 
         with (
-            patch("utils.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
+            patch("platform.notifications.openclaw_delivery.call_openclaw_tool", side_effect=_capture),
             patch(
-                "utils.openclaw_delivery.openclaw_runtime_unavailable_reason",
+                "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):

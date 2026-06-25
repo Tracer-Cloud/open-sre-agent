@@ -15,7 +15,7 @@ from config.config import (
     get_llm_provider_api_key_env,
     resolve_llm_settings,
 )
-from utils.config import load_env
+from config.grafana_cloud import load_env
 
 
 def _repo_root() -> Path:

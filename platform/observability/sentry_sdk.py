@@ -14,6 +14,7 @@ import re
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager, suppress
 from functools import cache
+from platform.analytics.events import Event
 from typing import Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -24,7 +25,6 @@ from config.constants import (
     SENTRY_MAX_BREADCRUMBS,
     SENTRY_TRACES_SAMPLE_RATE,
 )
-from platform.analytics.events import Event
 
 _HOME_PATH_RE: re.Pattern[str] = re.compile(r"/(?:Users|home)/[^/\s]+")
 # Pydantic V2 ValidationError messages render ``input_value=<repr>`` (or

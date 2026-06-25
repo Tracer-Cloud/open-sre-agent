@@ -17,7 +17,7 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 
-from utils.errors import report_exception
+from platform.observability.errors import report_exception
 
 #: Default fraction of skipped lines tolerated before a stream is flagged.
 DEFAULT_SKIP_THRESHOLD: float = 0.10

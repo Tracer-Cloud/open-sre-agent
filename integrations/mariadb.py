@@ -16,8 +16,8 @@ from pydantic import Field, field_validator
 
 from integrations._relational import RelationalConfigBase, env_bool, env_str
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from utils.coercion import safe_int
-from utils.truncation import truncate
+from platform.common.coercion import safe_int
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

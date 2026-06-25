@@ -35,7 +35,7 @@ def run_connected_investigation(
     from core.orchestration.node.plan_actions import plan_actions
     from core.orchestration.node.publish_findings import deliver
     from core.orchestration.node.resolve_integrations import resolve_integrations
-    from utils.sentry_sdk import capture_exception
+    from platform.observability.sentry_sdk import capture_exception
 
     agent_class = agent_class or ConnectedInvestigationAgent
 

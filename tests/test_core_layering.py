@@ -1,10 +1,10 @@
-"""Layering boundary test: core packages must not import from ``cli``.
+"""Layering boundary test: core-facing packages must not import from ``cli``.
 
-Core (``core/domain/``, ``core/orchestration/``, ``utils/``) reports
-progress, prints debug output, and renders investigation headers/footers through
-the ports defined in :mod:`platform.observability`. Reaching into ``cli.*`` directly
-couples the domain/orchestration layer to the REPL's specific renderer and breaks
-headless / non-TTY callers.
+Core (``core/domain/``, ``core/orchestration/``) reports progress, prints debug
+output, and renders investigation headers/footers through the ports defined in
+:mod:`platform.observability`. Reaching into ``cli.*`` directly couples the
+domain/orchestration layer to the REPL's specific renderer and breaks headless /
+non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
 ``set_*`` injection helpers in ``platform/observability/``.
@@ -20,7 +20,7 @@ import pytest
 _CORE_PACKAGES: tuple[Path, ...] = (
     Path("core/domain"),
     Path("core/orchestration"),
-    Path("utils"),
+    Path("platform/observability"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /

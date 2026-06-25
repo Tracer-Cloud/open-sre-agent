@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from utils.errors import report_exception
+from platform.observability.errors import report_exception
 
 ToolErrorSeverity = Literal["error", "warning"]
 

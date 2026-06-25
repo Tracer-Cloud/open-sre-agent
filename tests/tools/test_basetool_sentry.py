@@ -7,7 +7,7 @@ import pytest
 from tools.base import BaseTool
 from tools.registered_tool import REGISTERED_TOOL_ATTR
 from tools.tool_decorator import tool
-from utils import sentry_sdk as sentry_mod
+from platform.observability import sentry_sdk as sentry_mod
 
 
 class ExplodingBaseTool(BaseTool):

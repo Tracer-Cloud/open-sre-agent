@@ -165,7 +165,7 @@ class BaseTool(ABC):
         try:
             return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
         except Exception as exc:
-            from utils.sentry_sdk import capture_exception
+            from platform.observability.sentry_sdk import capture_exception
 
             capture_exception(
                 exc,

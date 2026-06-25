@@ -25,7 +25,7 @@ from tests.shared.e2e_rca_checks import (
 )
 from tests.shared.stack_config import get_flink_config
 from tests.utils.alert_factory import create_alert
-from utils.tracing import traceable
+from platform.observability.tracing import traceable
 
 # Configuration loaded dynamically from CloudFormation
 CONFIG = get_flink_config()

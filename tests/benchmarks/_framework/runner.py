@@ -69,7 +69,7 @@ from tests.benchmarks._framework.llm_dispatch import (
 )
 from tests.benchmarks._framework.provenance import capture_provenance
 from tests.benchmarks._framework.reporting import render_report_dir
-from utils.llm_retry import LLMCreditExhaustedError
+from services.llm_retry import LLMCreditExhaustedError
 
 # --------------------------------------------------------------------------- #
 # Internal types                                                              #

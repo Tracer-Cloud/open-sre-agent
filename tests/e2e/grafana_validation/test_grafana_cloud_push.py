@@ -4,7 +4,7 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="outbound telemetry has been removed from this project")
 from tests.e2e.grafana_validation.env_requirements import require_grafana_cloud_env
-from utils.config import (
+from config.grafana_cloud import (
     configure_grafana_cloud,
     get_otlp_auth_header,
     get_otlp_endpoint,

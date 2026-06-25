@@ -13,7 +13,7 @@ from services.agent_llm_client import ToolCall
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 from tools.utils.integration_sources import availability_view
-from utils.tool_trace import redact_sensitive
+from platform.observability.tool_trace import redact_sensitive
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.

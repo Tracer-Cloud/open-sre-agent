@@ -1,12 +1,11 @@
-"""Tests for utils/twilio_delivery.py — Twilio SMS transport."""
+"""Tests for platform.notifications.twilio_delivery — Twilio SMS transport."""
 
 from __future__ import annotations
 
+from platform.notifications.twilio_delivery import post_twilio_sms, send_twilio_sms_report
 from typing import Any
 
 import pytest
-
-from utils.twilio_delivery import post_twilio_sms, send_twilio_sms_report
 
 
 class _Resp:
@@ -27,7 +26,7 @@ def _patch_post(monkeypatch: pytest.MonkeyPatch, response: _Resp) -> dict[str, A
         captured.update(kwargs)
         return response
 
-    monkeypatch.setattr("utils.twilio_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("platform.notifications.twilio_delivery.httpx.post", _fake_post)
     return captured
 
 
@@ -105,7 +104,7 @@ def test_post_twilio_sms_transport_failure_redacts_token(
     def _fake_post(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("auth header tok-leak failed")
 
-    monkeypatch.setattr("utils.twilio_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("platform.notifications.twilio_delivery.httpx.post", _fake_post)
 
     success, error, sid = post_twilio_sms(
         to="+14155550000",

@@ -13,13 +13,12 @@ and Telegram delivery helpers. These tests pin down the contract:
 
 from __future__ import annotations
 
+from platform.notifications.delivery_transport import DeliveryResponse, post_json
 from typing import Any
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
-
-from utils.delivery_transport import DeliveryResponse, post_json
 
 
 def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> MagicMock:
@@ -41,7 +40,7 @@ class TestPostJsonHappyPath:
     def test_returns_ok_with_status_data_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         body = {"ok": True, "id": "msg-1"}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, body, '{"ok":true,"id":"msg-1"}'),
         )
         result = post_json("https://example.test/api", {"hello": "world"})
@@ -57,7 +56,7 @@ class TestPostJsonHappyPath:
         """Provider-level errors return ``ok=True`` (the request succeeded
         at the transport layer); callers interpret status_code/data."""
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(403, {"error": "forbidden"}, "forbidden"),
         )
         result = post_json("https://example.test", {})
@@ -74,7 +73,7 @@ class TestPostJsonHappyPath:
             captured.update(kwargs)
             return _mock_response(200, {})
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
         post_json(
             "https://example.test/api",
             {"k": "v"},
@@ -90,7 +89,7 @@ class TestPostJsonHappyPath:
     def test_default_headers_are_empty_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **kw: captured.update(kw) or _mock_response(200, {}),
         )
         post_json("https://example.test", {})
@@ -99,7 +98,7 @@ class TestPostJsonHappyPath:
     def test_follow_redirects_can_be_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **kw: captured.update(kw) or _mock_response(200, {}),
         )
         post_json("https://example.test", {}, follow_redirects=True)
@@ -125,7 +124,7 @@ class TestPostJsonTransportFailures:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise exc
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         result = post_json("https://example.test", {})
         assert result.ok is False
         assert result.status_code == 0
@@ -141,7 +140,7 @@ class TestPostJsonResponseDecoding:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(
                 200, ValueError("not json"), text="<html>oops</html>"
             ),
@@ -158,7 +157,7 @@ class TestPostJsonResponseDecoding:
         """A JSON list at the top level isn't a provider-style envelope; we
         fall back to ``data={}`` so callers don't accidentally subscript a list."""
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, [1, 2, 3], text="[1,2,3]"),
         )
         result = post_json("https://example.test", {})
@@ -168,7 +167,7 @@ class TestPostJsonResponseDecoding:
 
     def test_empty_body_yields_empty_data_and_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(204, ValueError("empty"), text=""),
         )
         result = post_json("https://example.test", {})
@@ -241,7 +240,7 @@ class TestPostJsonErrorType:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise TimeoutError("read timeout")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         result = post_json("https://example.test", {})
         assert result.ok is False
         assert result.exc_type == "TimeoutError"
@@ -262,13 +261,13 @@ class TestPostJsonErrorType:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise exc
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         result = post_json("https://example.test", {})
         assert result.exc_type == expected_name
 
     def test_exc_type_empty_on_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": True}),
         )
         result = post_json("https://example.test", {})

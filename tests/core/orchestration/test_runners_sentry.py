@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from core.orchestration import entrypoints as runners
-from utils import errors
+from platform.observability import errors
 
 
 def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(
@@ -44,7 +44,7 @@ def test_traced_node_exception_is_captured_once_with_node_tag(
     def capture_stub(exc: BaseException, **kwargs: object) -> None:
         captured.append((exc, kwargs))
 
-    monkeypatch.setattr("utils.sentry_sdk.capture_exception", capture_stub)
+    monkeypatch.setattr("platform.observability.sentry_sdk.capture_exception", capture_stub)
 
     with pytest.raises(RuntimeError, match="node failed") as raised:
         runners._traced_node("extract_alert", failing_node)

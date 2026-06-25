@@ -110,7 +110,7 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
     if not bot_token or not task.chat_id:
         return False, "Missing bot_token or chat_id for Telegram", ""
 
-    from utils.telegram_delivery import post_telegram_message, truncate_for_telegram_html
+    from platform.notifications.telegram_delivery import post_telegram_message, truncate_for_telegram_html
 
     truncated = truncate_for_telegram_html(message, 4096, suffix="…")
     ok, error, msg_id = post_telegram_message(task.chat_id, truncated, bot_token, parse_mode="HTML")
@@ -133,7 +133,7 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
 
     if access_token and task.chat_id:
         # Direct API post as a new top-level message
-        from utils.delivery_transport import post_json
+        from platform.notifications.delivery_transport import post_json
 
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -176,7 +176,7 @@ def _deliver_discord(task: ScheduledTask, message: str) -> tuple[bool, str, str]
     if not bot_token or not task.chat_id:
         return False, "Missing bot_token or channel_id for Discord", ""
 
-    from utils.discord_delivery import send_discord_report
+    from platform.notifications.discord_delivery import send_discord_report
 
     # Strip HTML tags — Discord uses embeds, not HTML
     plain_message = _strip_html(message)

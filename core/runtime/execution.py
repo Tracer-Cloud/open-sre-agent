@@ -10,7 +10,7 @@ from typing import Any
 from services.agent_llm_client import ToolCall
 from tools.registered_tool import RegisteredTool
 from tools.utils.integration_sources import availability_view
-from utils.tool_trace import redact_sensitive
+from platform.observability.tool_trace import redact_sensitive
 
 logger = logging.getLogger(__name__)
 

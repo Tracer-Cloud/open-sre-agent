@@ -114,8 +114,8 @@ from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
 from services.temporal import TemporalConfig
 from services.vercel import VercelConfig
-from utils.coercion import safe_int
-from utils.errors import report_exception
+from platform.common.coercion import safe_int
+from platform.observability.errors import report_exception
 
 logger = logging.getLogger(__name__)
 

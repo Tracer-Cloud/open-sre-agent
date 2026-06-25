@@ -39,7 +39,7 @@ from deployment.remote.reasoning import reasoning_text
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from tools.registry import resolve_tool_display_name
-from utils.tool_trace import format_json_preview
+from platform.observability.tool_trace import format_json_preview
 
 
 class StreamRenderer:

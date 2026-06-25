@@ -41,7 +41,7 @@ from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from services.agent_llm_client import ToolCall, get_agent_llm
 from tools.registered_tool import RegisteredTool
-from utils.tool_trace import redact_sensitive
+from platform.observability.tool_trace import redact_sensitive
 
 logger = logging.getLogger(__name__)
 

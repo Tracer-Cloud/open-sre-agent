@@ -146,7 +146,6 @@ include = [
   "services*",
   "tests*",
   "tools*",
-  "utils*",
 ]
 
 [tool.setuptools.package-data]
@@ -158,7 +157,7 @@ include = [
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools", "utils"]
+paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools"]
 exclude = [
   "tools/simple_tools.py",          # explicitly skipped by the registry
   "app/dockerfile_test.py",

@@ -9,7 +9,7 @@ from typing import Any
 from zipfile import ZipFile
 
 from services.env import make_boto3_client, require_aws_credentials
-from utils.errors import report_exception
+from platform.observability.errors import report_exception
 
 logger = logging.getLogger(__name__)
 

@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, cast
 from core.domain.state import AgentState, make_initial_state
 from core.domain.stream import StreamEvent
 from core.orchestration.stream_payloads import resolved_integrations_stream_payload
-from utils.errors import report_and_reraise
-from utils.sentry_sdk import init_sentry
+from platform.observability.errors import report_and_reraise
+from platform.observability.sentry_sdk import init_sentry
 
 if TYPE_CHECKING:
     # Type-only — avoids paying the agent module's heavy import cost at
@@ -44,7 +44,7 @@ def _capture_exception_once(
 ) -> None:
     if _exception_was_captured(exc):
         return
-    from utils.sentry_sdk import capture_exception
+    from platform.observability.sentry_sdk import capture_exception
 
     capture_exception(exc, context=context, tags=tags)
     _mark_exception_captured(exc)

@@ -14,9 +14,9 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
+from config.grafana_cloud import load_env
 from config.llm_credentials import resolve_llm_api_key
 from config.strict_config import StrictConfigModel
-from utils.config import load_env
 
 logger = logging.getLogger(__name__)
 

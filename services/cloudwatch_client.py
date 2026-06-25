@@ -49,12 +49,12 @@ def get_metric_statistics(
     Returns:
         dict with metric data containing Datapoints or error info
     """
-    client = _get_cloudwatch_client()
-    if not client:
-        return {"success": False, "error": "boto3 not available"}
     credentials_error = require_aws_credentials(context="cloudwatch_client.get_metric_statistics")
     if credentials_error:
         return credentials_error
+    client = _get_cloudwatch_client()
+    if not client:
+        return {"success": False, "error": "boto3 not available"}
 
     if statistics is None:
         statistics = ["Average", "Maximum", "Minimum"]
@@ -98,12 +98,12 @@ def filter_log_events(
     Returns:
         dict with log events array or error info
     """
-    client = _get_cloudwatch_logs_client()
-    if not client:
-        return {"success": False, "error": "boto3 not available"}
     credentials_error = require_aws_credentials(context="cloudwatch_client.filter_log_events")
     if credentials_error:
         return credentials_error
+    client = _get_cloudwatch_logs_client()
+    if not client:
+        return {"success": False, "error": "boto3 not available"}
 
     try:
         kwargs = {
@@ -147,12 +147,12 @@ def get_log_events(
     Returns:
         dict with log events array or error info
     """
-    client = _get_cloudwatch_logs_client()
-    if not client:
-        return {"success": False, "error": "boto3 not available"}
     credentials_error = require_aws_credentials(context="cloudwatch_client.get_log_events")
     if credentials_error:
         return credentials_error
+    client = _get_cloudwatch_logs_client()
+    if not client:
+        return {"success": False, "error": "boto3 not available"}
 
     try:
         kwargs = {

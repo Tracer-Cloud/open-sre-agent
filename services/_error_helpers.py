@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from utils.errors import report_exception
+from platform.observability.errors import report_exception
 
 
 def _is_transient_vendor_error(exc: BaseException) -> bool:

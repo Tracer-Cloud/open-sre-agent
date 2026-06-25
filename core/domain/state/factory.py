@@ -11,7 +11,7 @@ from integrations.opensre.hf_remote import (
     extract_openrca_scoring_points,
     strip_scoring_points_from_alert,
 )
-from utils.alert_normalization import normalize_alert_payload
+from core.domain.alerts.normalization import normalize_alert_payload
 
 
 def make_initial_state(

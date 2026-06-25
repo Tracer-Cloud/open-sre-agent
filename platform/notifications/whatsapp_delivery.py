@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
+from platform.common.truncation import truncate
 from typing import Any
 
 import httpx
-
-from utils.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

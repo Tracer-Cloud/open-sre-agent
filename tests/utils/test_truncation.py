@@ -1,8 +1,8 @@
 """Tests for the shared truncation utility."""
 
-import pytest
+from platform.common.truncation import truncate
 
-from utils.truncation import truncate
+import pytest
 
 
 @pytest.mark.parametrize(

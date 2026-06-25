@@ -36,7 +36,7 @@ from tests.shared.infrastructure_sdk.resources import (
     s3,
     vpc,
 )
-from utils.config import load_env
+from config.grafana_cloud import load_env
 
 STACK_NAME = "tracer-prefect-ecs"
 REGION = "us-east-1"

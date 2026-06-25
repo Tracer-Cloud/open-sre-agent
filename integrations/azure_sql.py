@@ -21,7 +21,7 @@ from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from utils.truncation import truncate
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from config.config import resolve_llm_settings
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from utils.tracing import traceable
+from platform.observability.tracing import traceable
 
 if TYPE_CHECKING:
     from core.domain.state import AgentState

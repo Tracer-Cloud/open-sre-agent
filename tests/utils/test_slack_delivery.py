@@ -9,7 +9,7 @@ after the refactor onto the shared ``delivery_transport.post_json`` helper:
 - ``_post_via_incoming_webhook`` (standalone ``SLACK_WEBHOOK_URL``)
 - ``send_slack_report`` orchestration across direct / webapp / webhook
 
-All tests stub ``utils.delivery_transport.httpx.post`` so the real
+All tests stub ``platform.notifications.delivery_transport.httpx.post`` so the real
 network is never touched. Provider-specific success criteria
 (``data["ok"]``, status codes, etc.) are exercised explicitly.
 """
@@ -17,12 +17,11 @@ network is never touched. Provider-specific success criteria
 from __future__ import annotations
 
 import logging
+from platform.notifications import slack_delivery
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from utils import slack_delivery
 
 
 def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> MagicMock:
@@ -48,7 +47,7 @@ def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> M
 class TestCallReactionsApi:
     def test_add_reaction_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": True}),
         )
         ok = slack_delivery._call_reactions_api(
@@ -63,14 +62,14 @@ class TestCallReactionsApi:
         """``already_reacted`` and ``no_reaction`` are not real errors —
         they happen during normal swap_reaction flows and must not log."""
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": False, "error": err}),
         )
         assert slack_delivery._call_reactions_api("reactions.add", "tok", "C", "1.0", "x") is False
 
     def test_unexpected_error_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": False, "error": "channel_not_found"}),
         )
         assert slack_delivery._call_reactions_api("reactions.add", "tok", "C", "1.0", "x") is False
@@ -79,7 +78,7 @@ class TestCallReactionsApi:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise ConnectionError("dns failure")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         assert slack_delivery._call_reactions_api("reactions.add", "tok", "C", "1.0", "x") is False
 
     def test_sends_correct_url_and_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,7 +89,7 @@ class TestCallReactionsApi:
             captured.update(kwargs)
             return _mock_response(200, {"ok": True})
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
         slack_delivery._call_reactions_api(
             "reactions.remove", "my-token", "C9", "1.5", "thinking_face"
         )
@@ -113,7 +112,7 @@ class TestCallReactionsApi:
 class TestPostDirect:
     def test_success_returns_true_empty_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": True, "ts": "1.234"}),
         )
         ok, err = slack_delivery._post_direct("hello", "C1", "1.000", "tok")
@@ -122,7 +121,7 @@ class TestPostDirect:
 
     def test_slack_error_returned_with_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, {"ok": False, "error": "channel_not_found"}),
         )
         ok, err = slack_delivery._post_direct("hello", "C1", "1.000", "tok")
@@ -135,7 +134,7 @@ class TestPostDirect:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise TimeoutError("read timeout")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         ok, err = slack_delivery._post_direct("hello", "C1", "1.000", "tok")
         assert ok is False
         assert err.startswith("exception=")
@@ -149,7 +148,7 @@ class TestPostDirect:
             captured.update(kwargs)
             return _mock_response(200, {"ok": True})
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
         slack_delivery._post_direct("the body", "C42", "9.876", "secret-tok", blocks=[{"x": 1}])
         assert captured["url"] == "https://slack.com/api/chat.postMessage"
         assert captured["headers"]["Authorization"] == "Bearer secret-tok"
@@ -169,7 +168,7 @@ class TestPostDirect:
 class TestIncomingWebhook:
     def test_success_returns_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(200, None, "ok"),
         )
         assert (
@@ -181,7 +180,7 @@ class TestIncomingWebhook:
         self, status: int, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(status, None, f"err {status}"),
         )
         assert (
@@ -192,7 +191,7 @@ class TestIncomingWebhook:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise ConnectionError("refused")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
         assert (
             slack_delivery._post_via_incoming_webhook("hi", "https://hooks.slack.test/abc") is False
         )
@@ -200,7 +199,7 @@ class TestIncomingWebhook:
     def test_blocks_and_extra_merged_into_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **kw: captured.update(kw) or _mock_response(200, None, ""),
         )
         slack_delivery._post_via_incoming_webhook(
@@ -224,7 +223,7 @@ class TestPostViaWebapp:
         # httpx.post must NOT be called
         called = {"n": 0}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: (called.update(n=called["n"] + 1), _mock_response(200, None, ""))[1],
         )
         assert slack_delivery._post_via_webapp("hi", "C1", "1.0") is False
@@ -234,7 +233,7 @@ class TestPostViaWebapp:
         monkeypatch.setenv("TRACER_API_URL", "https://api.tracer.test")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda url, **kw: captured.update({"url": url}, **kw) or _mock_response(200, None, ""),
         )
         assert slack_delivery._post_via_webapp("hi", "C1", "1.0") is True
@@ -244,7 +243,7 @@ class TestPostViaWebapp:
     def test_5xx_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TRACER_API_URL", "https://api.tracer.test")
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda *_a, **_kw: _mock_response(500, None, "boom"),
         )
         assert slack_delivery._post_via_webapp("hi", "C1", "1.0") is False
@@ -267,7 +266,7 @@ class TestSendSlackReport:
         monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/abc")
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda url, **kw: captured.update({"url": url}, **kw) or _mock_response(200, None, ""),
         )
         ok, err = slack_delivery.send_slack_report("hi", channel="C1", thread_ts=None)
@@ -290,7 +289,7 @@ class TestSendSlackReport:
         )
         captured: dict[str, Any] = {}
         monkeypatch.setattr(
-            "utils.delivery_transport.httpx.post",
+            "platform.notifications.delivery_transport.httpx.post",
             lambda url, **kw: captured.update({"url": url}, **kw) or _mock_response(200, None, ""),
         )
 
@@ -307,7 +306,7 @@ class TestSendSlackReport:
             captured.append(url)
             return _mock_response(200, {"ok": True, "ts": "x"})
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
         ok, err = slack_delivery.send_slack_report(
             "hi", channel="C1", thread_ts="1.0", access_token="tok"
         )
@@ -325,7 +324,7 @@ class TestSendSlackReport:
                 return _mock_response(200, {"ok": False, "error": "channel_not_found"})
             return _mock_response(200, None, "")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _capture)
         ok, err = slack_delivery.send_slack_report(
             "hi", channel="C1", thread_ts="1.0", access_token="tok"
         )
@@ -356,8 +355,8 @@ class TestPostDirectExceptionLog:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise TimeoutError("read timeout")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
-        with caplog.at_level(logging.ERROR, logger="utils.slack_delivery"):
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
+        with caplog.at_level(logging.ERROR, logger="platform.notifications.slack_delivery"):
             slack_delivery._post_direct("hi", "C1", "1.0", "tok")
 
         joined = " ".join(rec.getMessage() for rec in caplog.records)
@@ -370,8 +369,8 @@ class TestPostDirectExceptionLog:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise ConnectionError("dns failure")
 
-        monkeypatch.setattr("utils.delivery_transport.httpx.post", _raise)
-        with caplog.at_level(logging.ERROR, logger="utils.slack_delivery"):
+        monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _raise)
+        with caplog.at_level(logging.ERROR, logger="platform.notifications.slack_delivery"):
             slack_delivery._post_direct("hi", "C1", "1.0", "tok")
 
         joined = " ".join(rec.getMessage() for rec in caplog.records)
@@ -392,7 +391,7 @@ class TestDelegatesToSharedTransport:
     and Telegram test files."""
 
     def test_module_does_not_import_httpx(self) -> None:
-        # Reuse the top-level ``from utils import slack_delivery`` to
+        # Reuse the top-level ``from platform.notifications import slack_delivery`` to
         # avoid importing the same module via both ``import`` and
         # ``from import`` styles (CodeQL py/import-and-import-from).
         assert not hasattr(slack_delivery, "httpx"), (
@@ -403,7 +402,7 @@ class TestDelegatesToSharedTransport:
     def test_call_reactions_api_uses_post_json_helper(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         captured: dict[str, Any] = {}
 
@@ -414,7 +413,7 @@ class TestDelegatesToSharedTransport:
             captured["timeout"] = kw.get("timeout")
             return DeliveryResponse(ok=True, status_code=200, data={"ok": True})
 
-        monkeypatch.setattr("utils.slack_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("platform.notifications.slack_delivery.post_json", _stub_post_json)
         ok = slack_delivery._call_reactions_api(
             "reactions.add", "tok", "C9", "1.5", "thinking_face"
         )
@@ -425,7 +424,7 @@ class TestDelegatesToSharedTransport:
         assert captured["timeout"] == 8.0
 
     def test_post_direct_uses_post_json_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         captured: dict[str, Any] = {}
 
@@ -435,7 +434,7 @@ class TestDelegatesToSharedTransport:
             captured["headers"] = kw.get("headers")
             return DeliveryResponse(ok=True, status_code=200, data={"ok": True, "ts": "1.234"})
 
-        monkeypatch.setattr("utils.slack_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("platform.notifications.slack_delivery.post_json", _stub_post_json)
         ok, err = slack_delivery._post_direct(
             "hello", "C1", "1.000", "secret-tok", blocks=[{"x": 1}]
         )
@@ -446,7 +445,7 @@ class TestDelegatesToSharedTransport:
         assert captured["payload"]["blocks"] == [{"x": 1}]
 
     def test_post_via_webapp_uses_post_json_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         monkeypatch.setenv("TRACER_API_URL", "https://api.tracer.test")
         captured: dict[str, Any] = {}
@@ -457,7 +456,7 @@ class TestDelegatesToSharedTransport:
             captured["follow_redirects"] = kw.get("follow_redirects")
             return DeliveryResponse(ok=True, status_code=200, data={}, text="")
 
-        monkeypatch.setattr("utils.slack_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("platform.notifications.slack_delivery.post_json", _stub_post_json)
         ok = slack_delivery._post_via_webapp("hi", "C1", "1.0")
         assert ok is True
         assert captured["url"] == "https://api.tracer.test/api/slack"
@@ -466,7 +465,7 @@ class TestDelegatesToSharedTransport:
     def test_post_via_incoming_webhook_uses_post_json_helper(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         captured: dict[str, Any] = {}
 
@@ -476,7 +475,7 @@ class TestDelegatesToSharedTransport:
             captured["follow_redirects"] = kw.get("follow_redirects")
             return DeliveryResponse(ok=True, status_code=200, data={}, text="ok")
 
-        monkeypatch.setattr("utils.slack_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("platform.notifications.slack_delivery.post_json", _stub_post_json)
         ok = slack_delivery._post_via_incoming_webhook(
             "hi", "https://hooks.slack.test/abc", blocks=[{"b": 1}]
         )
@@ -538,10 +537,10 @@ class TestExtractError:
 
 class TestNonJsonBody:
     def test_post_direct_handles_html_error_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         monkeypatch.setattr(
-            "utils.slack_delivery.post_json",
+            "platform.notifications.slack_delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(
                 ok=True,
                 status_code=502,
@@ -556,11 +555,11 @@ class TestNonJsonBody:
     def test_post_direct_redacts_token_from_html_error_body(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         token = "xoxb-1234567890-abcdefghij"
         monkeypatch.setattr(
-            "utils.slack_delivery.post_json",
+            "platform.notifications.slack_delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(
                 ok=True,
                 status_code=502,
@@ -569,7 +568,7 @@ class TestNonJsonBody:
             ),
         )
 
-        with caplog.at_level(logging.ERROR, logger="utils.slack_delivery"):
+        with caplog.at_level(logging.ERROR, logger="platform.notifications.slack_delivery"):
             ok, err = slack_delivery._post_direct("hi", "C1", "1.0", token)
 
         joined = " ".join(rec.getMessage() for rec in caplog.records)
@@ -582,13 +581,13 @@ class TestNonJsonBody:
 
 class TestExceptionRedaction:
     def test_exception_error_redacts_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         token = "xoxb-1234567890-abcdefghij"
         leak_msg = f"connect failed with {token}"
 
         monkeypatch.setattr(
-            "utils.slack_delivery.post_json",
+            "platform.notifications.slack_delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
         ok, err = slack_delivery._post_direct("hi", "C1", "1.0", token)
@@ -599,7 +598,7 @@ class TestExceptionRedaction:
     def test_send_slack_report_redacts_token_in_composed_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         token = "xoxb-1234567890-abcdefghij"
 
@@ -608,7 +607,7 @@ class TestExceptionRedaction:
                 return DeliveryResponse(ok=False, error=f"connect with {token}")
             return DeliveryResponse(ok=False, error="webapp down")
 
-        monkeypatch.setattr("utils.slack_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("platform.notifications.slack_delivery.post_json", _stub_post_json)
         ok, err = slack_delivery.send_slack_report(
             "hi", channel="C1", thread_ts="1.0", access_token=token
         )
@@ -621,16 +620,16 @@ class TestExceptionLogRedaction:
     def test_exception_log_redacts_token(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        from utils.delivery_transport import DeliveryResponse
+        from platform.notifications.delivery_transport import DeliveryResponse
 
         token = "xoxb-1234567890-abcdefghij"
         leak_msg = f"connect failed with {token}"
 
         monkeypatch.setattr(
-            "utils.slack_delivery.post_json",
+            "platform.notifications.slack_delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
-        with caplog.at_level(logging.ERROR, logger="utils.slack_delivery"):
+        with caplog.at_level(logging.ERROR, logger="platform.notifications.slack_delivery"):
             slack_delivery._post_direct("hi", "C1", "1.0", token)
 
         joined = " ".join(rec.getMessage() for rec in caplog.records)

@@ -18,7 +18,7 @@ from platform.analytics.source import (
 from typing import Final
 from uuid import uuid4
 
-from utils.sentry_sdk import capture_exception
+from platform.observability.sentry_sdk import capture_exception
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "eval_pass_rate": """

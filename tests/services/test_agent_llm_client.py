@@ -208,7 +208,7 @@ def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
     Distinguish billing exhaustion (fatal, no retry) from real schema errors
     so the bench runner halts on first occurrence instead of wrapping into
     a generic RuntimeError that the cell loop catches as a per-cell failure."""
-    from utils.llm_retry import LLMCreditExhaustedError
+    from services.llm_retry import LLMCreditExhaustedError
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -242,7 +242,7 @@ def test_openai_insufficient_quota_raises_LLMCreditExhaustedError(
     though it lands in our RateLimitError handler (which normally retries),
     the credit check must short-circuit to LLMCreditExhaustedError. This is
     the exact scenario that burned 1h42m on the June-3 run #2."""
-    from utils.llm_retry import LLMCreditExhaustedError
+    from services.llm_retry import LLMCreditExhaustedError
 
     fake_openai = _install_fake_openai(monkeypatch)
 

@@ -13,6 +13,8 @@ Initial areas:
 
 - `auth/` owns runtime authentication and identity checks.
 - `analytics/` owns product and runtime analytics.
+- `common/` owns small shared helpers that do not belong to a runtime subsystem.
+- `notifications/` owns notification delivery transports and channel-specific senders.
 - `observability/` owns logging, tracing, progress, debug output, and runtime
   display ports.
 - `masking/` owns reversible masking and identifier normalization.

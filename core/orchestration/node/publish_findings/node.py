@@ -27,7 +27,7 @@ from core.orchestration.node.publish_findings.upstream_correlation import (
     enrich_upstream_correlation,
 )
 from platform.masking import MaskingContext
-from utils.ingest_delivery import create_investigation_and_attach_url
+from platform.notifications.ingest_delivery import create_investigation_and_attach_url
 
 
 def deliver(state: InvestigationState) -> dict[str, Any]:

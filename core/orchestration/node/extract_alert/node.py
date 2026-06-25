@@ -181,7 +181,7 @@ def _handle_noise_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from utils.slack_delivery import swap_reaction
+    from platform.notifications.slack_delivery import swap_reaction
 
     swap_reaction("eyes", "white_check_mark", channel, timestamp, token)
 
@@ -192,7 +192,7 @@ def _handle_start_reaction(state: InvestigationState) -> None:
         return
 
     channel, timestamp, token = slack_context
-    from utils.slack_delivery import add_reaction
+    from platform.notifications.slack_delivery import add_reaction
 
     add_reaction("eyes", channel, timestamp, token)
 

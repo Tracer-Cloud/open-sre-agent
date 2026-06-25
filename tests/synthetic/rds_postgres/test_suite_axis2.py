@@ -28,12 +28,17 @@ from __future__ import annotations
 
 import pytest
 
+from config.config import has_credentials_for_active_llm_provider
 from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
 from tests.synthetic.rds_postgres.run_suite import run_scenario, score_reasoning
 from tests.synthetic.rds_postgres.scenario_loader import load_all_scenarios
 
 _ALL_SCENARIOS = load_all_scenarios()
 _LLM_ATTEMPTS = 2
+_SYNTHETIC_SKIP_LLM = (
+    "SKIPPED: missing API key for LLM_PROVIDER "
+    "(suite uses mock Grafana/RDS backends; configure the key for your selected provider)"
+)
 
 # Difficulty threshold above which the LLM is expected to struggle.
 # Failures at or above this difficulty are the gap signal —
@@ -80,6 +85,9 @@ def _should_assert_trajectory(fixture, actual_category: str) -> bool:
 
 def _run_axis2_scenario_test(fixture) -> None:
     """Run Axis 2 scenario with real LLM, SelectiveGrafanaBackend, and assert reasoning."""
+    if not has_credentials_for_active_llm_provider():
+        pytest.skip(_SYNTHETIC_SKIP_LLM)
+
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         backend = SelectiveGrafanaBackend(fixture)

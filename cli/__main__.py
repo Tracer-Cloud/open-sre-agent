@@ -35,7 +35,7 @@ from platform.analytics.provider import (
     capture_first_run_if_needed,
     shutdown_analytics,
 )
-from utils.sentry_sdk import capture_exception, init_sentry
+from platform.observability.sentry_sdk import capture_exception, init_sentry
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"

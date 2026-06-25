@@ -10,7 +10,7 @@ from core.orchestration.entrypoints import run_investigation
 from tests.synthetic.hermes_rca.scenario_loader import SUITE_DIR, load_scenario
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
 from tests.utils.alert_factory.factory import create_alert
-from utils.tracing import traceable
+from platform.observability.tracing import traceable
 
 
 def _build_annotations(scenario_id: str, scenario_alert: dict[str, Any]) -> dict[str, Any]:

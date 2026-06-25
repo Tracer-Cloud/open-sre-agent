@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from services.otlp_trace import extract_span_attributes, parse_otlp_trace
-from utils.errors import report_exception
+from platform.observability.errors import report_exception
 
 if TYPE_CHECKING:
     from services.grafana.base import GrafanaClientBase

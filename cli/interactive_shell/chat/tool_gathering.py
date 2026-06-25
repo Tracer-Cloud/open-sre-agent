@@ -154,7 +154,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     never breaks the turn.
     """
     from cli.interactive_shell.sessions.store import SessionStore
-    from utils.tool_trace import redact_sensitive
+    from platform.observability.tool_trace import redact_sensitive
 
     for tc, output in executed:
         with contextlib.suppress(Exception):

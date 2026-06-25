@@ -25,7 +25,7 @@ from integrations.mariadb import (
     mariadb_is_available,
     validate_mariadb_config,
 )
-from utils.truncation import truncate as _truncate_shared
+from platform.common.truncation import truncate as _truncate_shared
 
 
 def _truncate(text: str, max_len: int = _QUERY_TRUNCATE_LEN) -> str:

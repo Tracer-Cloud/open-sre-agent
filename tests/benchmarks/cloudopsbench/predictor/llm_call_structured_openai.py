@@ -71,7 +71,7 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _TAXONOMY_CATEGORIES,
 )
 from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
-from utils.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from services.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 
 logger = logging.getLogger(__name__)
 

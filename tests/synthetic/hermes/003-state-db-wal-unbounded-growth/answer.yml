@@ -10,5 +10,5 @@ expected_incidents:
 
 expected_incident_count:
   warning_burst: "==1"
-  error_severity: "==2"
+  error_severity: "==1"
   traceback: "==1"

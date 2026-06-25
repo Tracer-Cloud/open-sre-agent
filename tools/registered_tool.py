@@ -332,7 +332,7 @@ class RegisteredTool:
         try:
             return self.run(**kwargs)
         except Exception as exc:
-            from utils.sentry_sdk import capture_exception
+            from platform.observability.sentry_sdk import capture_exception
 
             capture_exception(
                 exc,

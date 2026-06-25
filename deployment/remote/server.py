@@ -57,7 +57,7 @@ from deployment.remote.vercel_poller import (
 )
 from platform.analytics.cli import capture_investigation_failed, track_investigation
 from platform.analytics.source import EntrypointSource, TriggerMode
-from utils.sentry_sdk import capture_exception, init_sentry
+from platform.observability.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
