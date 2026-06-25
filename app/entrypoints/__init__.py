@@ -1,1 +1,1 @@
-"""Application entry points — CLI and MCP server."""
+"""High-level application entrypoints exposed to external runtimes."""
