@@ -674,7 +674,7 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry import model as model_cmd
+        from app.cli.interactive_shell.command_registry.model import command as model_cmd
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -696,7 +696,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from app.cli.interactive_shell.command_registry import model as model_cmd
+        from app.cli.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         picks = iter(["show", "done"])
@@ -710,7 +710,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from app.cli.interactive_shell.command_registry import model as model_cmd
+        from app.cli.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(

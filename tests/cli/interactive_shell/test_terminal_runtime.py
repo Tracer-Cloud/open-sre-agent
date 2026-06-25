@@ -31,9 +31,10 @@ from app.cli.interactive_shell.prompting.prompt_surface import (
 )
 from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
 from app.cli.interactive_shell.runtime import execution as loop_execution
-from app.cli.interactive_shell.runtime import loop as loop_module
 from app.cli.interactive_shell.runtime import state as loop_state
+from app.cli.interactive_shell.runtime.cpr_stdin import strip_cpr_sequences
 from app.cli.interactive_shell.runtime.session import ReplSession
+from app.cli.interactive_shell.runtime.streaming_console import StreamingConsole
 from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
@@ -41,7 +42,7 @@ from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
     """Regression: overriding Console.print broke Rich's status spinner."""
     spinner = loop_state.SpinnerState()
-    console = loop_module.StreamingConsole(
+    console = StreamingConsole(
         spinner,
         threading.Event(),
         file=io.StringIO(),
@@ -68,7 +69,7 @@ def test_strip_cpr_sequences_removes_terminal_cursor_replies(
     text: str,
     expected: str,
 ) -> None:
-    assert loop_module._strip_cpr_sequences(text) == expected
+    assert strip_cpr_sequences(text) == expected
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
@@ -885,7 +886,7 @@ class TestStreamingConsole:
         spinner = loop_state.SpinnerState()
         spinner.start()
         cancel = _threading.Event()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             cancel,
             highlight=False,
@@ -900,7 +901,7 @@ class TestStreamingConsole:
 
         spinner = loop_state.SpinnerState()
         cancel = _threading.Event()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             cancel,
             highlight=False,
@@ -920,7 +921,7 @@ class TestStreamingConsole:
         import threading as _threading
 
         spinner = loop_state.SpinnerState()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             _threading.Event(),
             file=io.StringIO(),

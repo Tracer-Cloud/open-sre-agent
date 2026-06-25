@@ -10,9 +10,13 @@ from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.a
 from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.terminal_actions.models import (
     ActionPlanningDecision,
 )
+from app.cli.interactive_shell.routing.tests.orchestration.routing_test_harness import (
+    FakeDispatcher,
+    FakePlanner,
+    RoutingHarness,
+    planned_action,
+)
 from app.cli.interactive_shell.runtime.session import ReplSession
-
-from .routing_test_harness import FakeDispatcher, FakePlanner, RoutingHarness, planned_action
 
 
 def test_execute_with_harness_dispatches_slash_action() -> None:

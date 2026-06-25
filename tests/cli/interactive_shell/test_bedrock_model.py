@@ -6,12 +6,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.cli.interactive_shell.command_registry.model import (
-    _is_model_allowed,
+from app.cli.interactive_shell.command_registry.model.command import (
     _prompt_custom_model_id,
     _reasoning_model_menu_choices,
     _toolcall_model_menu_choices,
 )
+from app.cli.interactive_shell.command_registry.model.switching import _is_model_allowed
 
 
 @dataclass(frozen=True)
@@ -256,7 +256,7 @@ class TestInteractiveSetToolcallCustom:
 
         from rich.console import Console
 
-        from app.cli.interactive_shell.command_registry import model as model_mod
+        from app.cli.interactive_shell.command_registry.model import command as model_mod
 
         console = Console(force_terminal=False)
         custom_id = "eu.anthropic.claude-sonnet-4-6"
@@ -276,7 +276,7 @@ class TestInteractiveSetToolcallCustom:
         """If user cancels the custom prompt, _interactive_set_toolcall returns None."""
         from rich.console import Console
 
-        from app.cli.interactive_shell.command_registry import model as model_mod
+        from app.cli.interactive_shell.command_registry.model import command as model_mod
 
         console = Console(force_terminal=False)
 

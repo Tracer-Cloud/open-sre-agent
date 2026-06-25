@@ -9,7 +9,8 @@ import threading
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.runtime import loop
+from app.cli.interactive_shell.runtime.state import SpinnerState
+from app.cli.interactive_shell.runtime.streaming_console import StreamingConsole
 from app.cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
 from app.cli.interactive_shell.ui.tables import (
     print_planned_actions,
@@ -81,8 +82,8 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
         lambda: resets.append(True),
     )
 
-    console = loop.StreamingConsole(
-        loop.SpinnerState(),
+    console = StreamingConsole(
+        SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,
@@ -117,8 +118,8 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
         lambda: True,
     )
 
-    console = loop.StreamingConsole(
-        loop.SpinnerState(),
+    console = StreamingConsole(
+        SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,

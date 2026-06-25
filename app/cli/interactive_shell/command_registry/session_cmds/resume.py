@@ -1,4 +1,4 @@
-"""Slash commands: session lifecycle (/clear, /new, /sessions, /resume)."""
+"""Session resume slash command and helpers: /resume."""
 
 from __future__ import annotations
 
@@ -8,57 +8,10 @@ from collections import deque
 from rich.console import Console
 from rich.markup import escape
 
-from app.cli.interactive_shell.command_registry.types import SlashCommand
 from app.cli.interactive_shell.runtime import ReplSession
-from app.cli.interactive_shell.ui import (
-    BOLD_BRAND,
-    DIM,
-    ERROR,
-    HIGHLIGHT,
-    WARNING,
-    print_repl_table,
-    repl_table,
-)
+from app.cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from app.cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
-from app.cli.interactive_shell.ui.time_format import format_repl_duration, format_repl_timestamp
-
-
-def _cmd_clear(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from app.cli.interactive_shell.ui import render_ready_box
-
-    console.clear()
-    render_ready_box(console, session=session)
-    return True
-
-
-def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    """Start a new session while preserving the current LLM conversation context.
-
-    Unlike /clear (which only clears the screen), /new rotates the session ID
-    and resets all session state while keeping cli_agent_messages and
-    accumulated_context so a resumed or in-progress conversation continues
-    seamlessly in a fresh session file.
-    """
-    from app.cli.interactive_shell.sessions.store import SessionStore
-
-    saved_messages = list(session.cli_agent_messages)
-    saved_context = dict(session.accumulated_context)
-    saved_resumed_name = session.resumed_from_name
-
-    SessionStore.flush(session)
-    session.clear()
-
-    session.cli_agent_messages = saved_messages
-    session.accumulated_context = saved_context
-    session.resumed_from_name = saved_resumed_name
-
-    SessionStore.open_session(session)
-    console.print(
-        f"[{DIM}]new session started[/] [{HIGHLIGHT}]—[/] [{DIM}]conversation context carried forward.[/]"
-    )
-    if saved_messages:
-        console.print(f"[{DIM}]  {len(saved_messages)} messages in context · type to continue[/]")
-    return True
+from app.cli.interactive_shell.ui.time_format import format_repl_timestamp
 
 
 def _record_resume_slash(
@@ -76,67 +29,6 @@ def _record_resume_slash(
     else:
         text = "/resume"
     session.record("slash", text, ok=ok)
-
-
-def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    from datetime import UTC, datetime
-
-    from app.cli.interactive_shell.sessions.store import SessionStore
-
-    entries = SessionStore.load_recent(20)
-    if not entries:
-        console.print(f"[{DIM}]No sessions recorded yet.[/]")
-        return True
-
-    table = repl_table(title="Recent sessions\n", title_style=BOLD_BRAND)
-    table.add_column("#", style="bold", justify="right")
-    table.add_column("Session ID", style="bold")
-    table.add_column("Name")
-    table.add_column("Started")
-    table.add_column("Duration")
-    table.add_column("Turns", justify="right")
-    table.add_column("Investigations", justify="right")
-
-    for i, entry in enumerate(entries, start=1):
-        sid = entry["session_id"]
-        short_id = sid[:8] if len(sid) >= 8 else sid
-        is_current = sid == session.session_id
-
-        name = entry.get("name") or ""
-        if is_current and not name and session.resumed_from_name:
-            name = f"↩ {session.resumed_from_name}"
-        if is_current:
-            name_col = f"[{DIM}](current)[/]" if not name else f"{escape(name)} [{DIM}](current)[/]"
-        else:
-            name_col = escape(name) if name else f"[{DIM}]—[/]"
-
-        started_str = format_repl_timestamp(entry.get("started_at"), style="table")
-
-        duration_secs = entry.get("duration_secs")
-        if is_current:
-            with contextlib.suppress(OSError, OverflowError, ValueError):
-                elapsed = int(
-                    (
-                        datetime.now(UTC) - datetime.fromtimestamp(session.started_at, tz=UTC)
-                    ).total_seconds()
-                )
-                duration_secs = elapsed
-
-        total = entry.get("total_turns")
-        investigations = entry.get("investigation_turns")
-
-        table.add_row(
-            str(i),
-            short_id,
-            name_col,
-            started_str,
-            format_repl_duration(duration_secs),
-            str(total) if total is not None else "—",
-            str(investigations) if investigations is not None else "—",
-        )
-
-    print_repl_table(console, table)
-    return True
 
 
 def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
@@ -406,37 +298,3 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
     slash_command = f"/resume {' '.join(args)}" if args else "/resume"
     _apply_resume_data(data, session, console, slash_command=slash_command)
     return True
-
-
-COMMANDS: list[SlashCommand] = [
-    SlashCommand("/clear", "Clear the screen and re-render the banner.", _cmd_clear),
-    SlashCommand(
-        "/sessions",
-        "List recent REPL sessions.",
-        _cmd_sessions,
-        usage=("/sessions",),
-    ),
-    SlashCommand(
-        "/resume",
-        "Resume a previous session by restoring its conversation context.",
-        _cmd_resume,
-        usage=("/resume <session-id-prefix>",),
-        notes=(
-            "Restores cli_agent_messages and accumulated infra context from the chosen session.",
-            "Bare /resume opens an interactive session picker in a TTY.",
-            "Accepts a session ID prefix or a name substring (e.g. /resume redis).",
-            "Replaces the current session's LLM conversation context; warns if messages exist.",
-        ),
-    ),
-    SlashCommand(
-        "/new",
-        "Start a new session while keeping the current conversation context.",
-        _cmd_new,
-        notes=(
-            "Unlike /clear, /new rotates the session ID and resets state while keeping LLM context.",
-            "Use after /resume to continue a conversation in a clean session file.",
-        ),
-    ),
-]
-
-__all__ = ["COMMANDS", "_apply_resume_data"]

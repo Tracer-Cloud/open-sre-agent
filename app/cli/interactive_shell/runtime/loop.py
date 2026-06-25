@@ -5,19 +5,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
-import re
-import select
-import sys
 import threading
-from collections.abc import Callable
-from typing import Any
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
-from rich.file_proxy import FileProxy
 from rich.markup import escape
 
 from app.cli.interactive_shell import alert_inbox as _alert_inbox
@@ -25,6 +18,11 @@ from app.cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from app.cli.interactive_shell.error_handling.exception_reporting import report_exception
 from app.cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from app.cli.interactive_shell.runtime.background_runner import drain_background_notices
+from app.cli.interactive_shell.runtime.cpr_stdin import (
+    contains_cpr_sequence,
+    drain_stale_cpr_bytes,
+    strip_cpr_sequences,
+)
 from app.cli.interactive_shell.runtime.dispatch import (
     DispatchCancelled,
     build_cancel_key_bindings,
@@ -43,6 +41,7 @@ from app.cli.interactive_shell.runtime.state import (
     ReplState,
     SpinnerState,
 )
+from app.cli.interactive_shell.runtime.streaming_console import StreamingConsole
 from app.cli.interactive_shell.ui import ERROR, WARNING
 from app.cli.interactive_shell.ui.prompt_support import (
     repl_prompt_note_ctrl_c,
@@ -51,112 +50,6 @@ from app.cli.interactive_shell.ui.prompt_support import (
 from app.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)
-
-_CPR_SEQUENCE_RE = re.compile(
-    r"(?:\x1b\[|\x9b)\d{1,4};\d{1,4}R"  # ESC [ row ; col R
-    r"|\[\d{1,4};\d{1,4}R"  # [row;colR without ESC (leaked into input)
-    r"|\d{1,4};\d{1,4}R"  # row;colR without ESC or [
-    r"|\d{1,4}R(?=[\[\d])"  # trailing rowR before another CPR fragment
-)
-
-
-def _drain_stale_cpr_bytes() -> None:
-    """Discard any CPR escape-sequence bytes left in stdin after a prompt_async teardown.
-
-    When prompt_async returns (e.g. after the user types Y to confirm), the
-    prompt_toolkit Application tears down its input-reader thread.  CPR responses
-    (ESC[row;colR) that the bottom-toolbar refresh sent but that arrived just after
-    the reader stopped are left sitting in the OS stdin buffer.  The *next*
-    prompt_async call reads those bytes with a fresh vt100 parser, which has no
-    open escape-sequence context; the bytes then appear as literal keystrokes in
-    the input field.
-
-    This function does a non-blocking drain of stdin between prompt_async calls —
-    exactly when no Application is active and it is safe to read from stdin
-    directly.  Only called on TTY stdin on POSIX; silently skipped otherwise.
-    """
-    if os.name == "nt" or not sys.stdin.isatty():
-        return
-    try:
-        fd = sys.stdin.fileno()
-        while select.select([fd], [], [], 0)[0]:
-            chunk = os.read(fd, 256)
-            if not chunk:
-                break
-    except OSError:
-        # Draining stdin is best-effort; ignore when the fd is not readable.
-        pass
-
-
-def _strip_cpr_sequences(text: str | None) -> str:
-    """Remove terminal cursor-position replies that leaked into submitted text."""
-    if not text:
-        return ""
-    return _CPR_SEQUENCE_RE.sub("", text)
-
-
-def _contains_cpr_sequence(text: str | None) -> bool:
-    return bool(text and _CPR_SEQUENCE_RE.search(text))
-
-
-class StreamingConsole(Console):
-    """Console adapter for streaming progress + cancellation checks."""
-
-    def __init__(
-        self,
-        spinner: SpinnerState,
-        cancel_event: threading.Event,
-        *,
-        prompt_invalidator: Callable[[], None] | None = None,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(**kwargs)
-        self._spinner = spinner
-        self._cancel_event = cancel_event
-        self._prompt_invalidator = prompt_invalidator
-
-    def update_streaming_progress(self, bytes_received: int) -> None:
-        self._spinner.bytes_in = bytes_received
-
-    @property
-    def cancel_requested(self) -> bool:
-        return self._cancel_event.is_set()
-
-    def suppress_prompt_spinner(self) -> None:
-        """Stop the REPL spinner before another live renderer owns the footer."""
-        if not self._spinner.streaming:
-            return
-        self._spinner.stop()
-        if self._prompt_invalidator is not None:
-            self._prompt_invalidator()
-
-    def print(self, *args: Any, **kwargs: Any) -> None:
-        """Reset the TTY column before each print when not streaming.
-
-        Inline menus pad rows to the terminal width, leaving the cursor on a
-        high column. Rich output that follows (tables, follow-up status lines,
-        section rules) must start at column zero or lines appear broken.
-        """
-        if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):
-            from app.cli.interactive_shell.ui.choice_menu import (
-                ensure_tty_column_zero,
-                prepare_repl_output_line,
-            )
-            from app.cli.interactive_shell.ui.rendering import (
-                _repl_output_already_prepared,
-                _repl_table_width,
-            )
-
-            if not args and not kwargs:
-                # ``console.print()`` is used for intentional blank spacer lines.
-                # Only reset the column for those calls; do not prepend another
-                # line break or they expand into double blank lines.
-                ensure_tty_column_zero()
-            elif not _repl_output_already_prepared():
-                prepare_repl_output_line()
-            if sys.stdout.isatty() and "width" not in kwargs:
-                kwargs["width"] = _repl_table_width(self)
-        super().print(*args, **kwargs)
 
 
 async def run_interactive(
@@ -252,7 +145,7 @@ async def run_interactive(
             # Investigation Rich Live + bottom-toolbar CPR can leave bytes in stdin;
             # drain before the next prompt_async so they are not typed into the field.
             await asyncio.sleep(0.05)
-            _drain_stale_cpr_bytes()
+            drain_stale_cpr_bytes()
 
     async def _alert_watcher() -> None:
         if inbox is None:
@@ -347,7 +240,7 @@ async def run_interactive(
                 # The brief sleep lets in-transit terminal responses land in the
                 # buffer before the non-blocking select drain runs.
                 await asyncio.sleep(0.05)
-                _drain_stale_cpr_bytes()
+                drain_stale_cpr_bytes()
                 try:
                     prefilled = session.take_pending_prompt_default()
                     if prefilled and session.take_pending_autosubmit():
@@ -383,8 +276,8 @@ async def run_interactive(
                 else:
                     repl_reset_ctrl_c_gate()
                     raw_text = text
-                    text = _strip_cpr_sequences(text)
-                    if not text.strip() and _contains_cpr_sequence(raw_text):
+                    text = strip_cpr_sequences(text)
+                    if not text.strip() and contains_cpr_sequence(raw_text):
                         continue
 
                 if state.exit_requested:

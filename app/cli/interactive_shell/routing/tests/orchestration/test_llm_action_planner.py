@@ -30,10 +30,7 @@ from app.config import (
     resolve_llm_settings_verbose,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-PROMPT_TURN_CONTRACTS_DATASET = (
-    PROJECT_ROOT / "app/cli/interactive_shell/routing/tests/prompt_turn_contracts.yml"
-)
+PROMPT_TURN_CONTRACTS_DATASET = Path(__file__).resolve().parents[1] / "prompt_turn_contracts.yml"
 
 pytestmark = [pytest.mark.integration, pytest.mark.live_llm]
 

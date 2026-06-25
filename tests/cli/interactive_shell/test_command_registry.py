@@ -15,7 +15,7 @@ from app.cli.interactive_shell.command_registry.investigation import (
     _INVESTIGATE_FIRST_ARGS,
     _TEMPLATE_FIRST_ARGS,
 )
-from app.cli.interactive_shell.command_registry.model import _MODEL_FIRST_ARGS
+from app.cli.interactive_shell.command_registry.model.command import _MODEL_FIRST_ARGS
 from app.cli.interactive_shell.command_registry.settings_cmds import (
     _TRUST_FIRST_ARGS,
     _VERBOSE_FIRST_ARGS,
