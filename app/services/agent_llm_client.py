@@ -638,7 +638,7 @@ class OpenAIAgentClient:
 
 def _get_cli_provider_registration(provider: str) -> Any:
     """Return the CLI registry entry for *provider*, or None if not CLI-backed."""
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     return get_cli_provider_registration(provider)
 
@@ -662,7 +662,7 @@ class CLIBackedAgentClient:
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
-        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+        from integrations.llm_cli.runner import CLIBackedLLMClient
 
         self._adapter = adapter
         self._model = model
@@ -684,7 +684,7 @@ class CLIBackedAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from app.integrations.llm_cli.text import flatten_messages_to_prompt
+        from integrations.llm_cli.text import flatten_messages_to_prompt
 
         tool_block = ""
         if tools:

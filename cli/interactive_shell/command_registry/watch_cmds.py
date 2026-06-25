@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
-from app.fleet_monitoring.probe import pid_exists
+from app.tools.fleet_monitoring.probe import pid_exists
 from app.tools.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 from app.tools.watch_dog.monitor import start_watchdog_daemon_thread
 from cli.interactive_shell.command_registry.types import (

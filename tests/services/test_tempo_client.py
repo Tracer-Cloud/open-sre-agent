@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.integrations.tempo import TempoConfig
+from integrations.tempo import TempoConfig
 from app.services.tempo.client import TempoClient
 
 

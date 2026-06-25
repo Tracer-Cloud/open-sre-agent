@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations._catalog_impl import (
+from integrations._catalog_impl import (
     _classify_service_instance,
     resolve_effective_integrations,
 )

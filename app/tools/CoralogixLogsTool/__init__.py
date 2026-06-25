@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.models import CoralogixIntegrationConfig
+from integrations.models import CoralogixIntegrationConfig
 from app.services.coralogix import (
     CoralogixClient,
     build_coralogix_logs_query,

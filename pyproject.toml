@@ -135,7 +135,16 @@ azure_sql = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*", "cli*", "config*", "core*", "platform_services*", "tests*"]
+include = [
+  "app*",
+  "cli*",
+  "config*",
+  "core*",
+  "deployment*",
+  "integrations*",
+  "platform_services*",
+  "tests*",
+]
 
 [tool.setuptools.package-data]
 "cli" = ["fixtures/*.json"]
@@ -146,7 +155,7 @@ include = ["app*", "cli*", "config*", "core*", "platform_services*", "tests*"]
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app", "cli", "core", "platform"]
+paths = ["app", "cli", "core", "deployment", "integrations", "platform"]
 exclude = [
   "app/tools/simple_tools.py",          # explicitly skipped by the registry
   "app/dockerfile_test.py",

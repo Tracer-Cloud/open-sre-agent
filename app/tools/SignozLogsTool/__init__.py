@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from app.integrations.signoz import SigNozConfig, signoz_extract_params
+from integrations.signoz import SigNozConfig, signoz_extract_params
 from app.services.signoz.client import SigNozClient
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import signoz_available_or_backend

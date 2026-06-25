@@ -820,7 +820,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
 
     json_response = '{"tool_calls": [{"id": "c1", "name": "my_tool", "input": {"x": 1}}]}'
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=json_response),
     ):
         result = client.invoke([{"role": "user", "content": "investigate"}])
@@ -873,7 +873,7 @@ def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
     import types as _types
     import unittest.mock as mock
 
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from integrations.llm_cli.runner import CLIBackedLLMClient
     from app.services.agent_llm_client import CLIBackedAgentClient
     from app.services.llm_client import LLMResponse
 
@@ -936,7 +936,7 @@ def test_cli_backed_agent_client_plain_text_response() -> None:
     client = CLIBackedAgentClient(fake_adapter, model=None)
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content="The root cause is a memory leak."),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])
@@ -972,7 +972,7 @@ def test_cli_backed_agent_client_invalid_tool_json_falls_back_to_text_response()
     raw = '{"tool_calls":"not-a-list"}'
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=raw),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])
@@ -1008,7 +1008,7 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
     raw = '{"tool_calls":[{"id":"c1","name":"   ","input":{"x":1}}]}'
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=raw),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])

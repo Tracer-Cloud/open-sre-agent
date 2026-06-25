@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.store import (
+from integrations.store import (
     get_instance,
     get_instances,
     remove_instance,
@@ -19,7 +19,7 @@ from app.integrations.store import (
 @pytest.fixture
 def tmp_store(tmp_path: Path):
     store_file = tmp_path / "integrations.json"
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         yield store_file
 
 
@@ -196,7 +196,7 @@ def test_get_integration_provides_flat_credentials_view(tmp_store: Path) -> None
     """Backward compat: callers like azure_sql.py / mysql.py / postgresql.py
     read ``record['credentials']`` directly. get_integration must synthesise
     that view from ``instances[0].credentials`` so they keep working."""
-    from app.integrations.store import get_integration
+    from integrations.store import get_integration
 
     _seed(
         tmp_store,

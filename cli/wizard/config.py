@@ -20,7 +20,7 @@ from app.config import (
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
 )
-from app.integrations.llm_cli.base import LLMCLIAdapter
+from integrations.llm_cli.base import LLMCLIAdapter
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_ENV_PATH = Path(os.getenv("OPENSRE_PROJECT_ENV_PATH", PROJECT_ROOT / ".env"))
@@ -359,55 +359,55 @@ CURSOR_MODELS = (
 
 
 def _codex_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.codex import CodexAdapter
+    from integrations.llm_cli.codex import CodexAdapter
 
     return CodexAdapter()
 
 
 def _cursor_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.cursor import CursorAdapter
+    from integrations.llm_cli.cursor import CursorAdapter
 
     return CursorAdapter()
 
 
 def _claude_code_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
+    from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
     return ClaudeCodeAdapter()
 
 
 def _gemini_cli_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+    from integrations.llm_cli.gemini_cli import GeminiCLIAdapter
 
     return GeminiCLIAdapter()
 
 
 def _antigravity_cli_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
+    from integrations.llm_cli.antigravity_cli import AntigravityCLIAdapter
 
     return AntigravityCLIAdapter()
 
 
 def _opencode_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.opencode import OpenCodeAdapter
+    from integrations.llm_cli.opencode import OpenCodeAdapter
 
     return OpenCodeAdapter()
 
 
 def _kimi_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli.kimi import KimiAdapter
 
     return KimiAdapter()
 
 
 def _copilot_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.copilot import CopilotAdapter
+    from integrations.llm_cli.copilot import CopilotAdapter
 
     return CopilotAdapter()
 
 
 def _grok_cli_adapter_factory() -> LLMCLIAdapter:
-    from app.integrations.llm_cli.grok_cli import GrokCLIAdapter
+    from integrations.llm_cli.grok_cli import GrokCLIAdapter
 
     return GrokCLIAdapter()
 

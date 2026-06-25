@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import httpx
 
-from app.integrations.signoz import SigNozConfig
+from integrations.signoz import SigNozConfig
 
 logger = logging.getLogger(__name__)
 

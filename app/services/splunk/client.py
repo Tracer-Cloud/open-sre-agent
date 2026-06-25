@@ -9,8 +9,8 @@ from typing import Any
 
 import httpx
 
-from app.integrations.config_models import SplunkIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import SplunkIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 

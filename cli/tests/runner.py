@@ -22,8 +22,8 @@ def get_preflight_messages(item: TestCatalogItem) -> tuple[str, ...]:
         return ()
 
     try:
-        from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
-        from app.integrations.verify import resolve_effective_integrations
+        from integrations.openclaw import build_openclaw_config, validate_openclaw_config
+        from integrations.verify import resolve_effective_integrations
     except Exception:
         return ()
 

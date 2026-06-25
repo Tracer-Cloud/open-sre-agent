@@ -13,7 +13,7 @@ def deliver_background_notifications(
 ) -> dict[str, str]:
     """Send configured notifications for a completed background RCA."""
     results: dict[str, str] = {}
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     effective_integrations = resolve_effective_integrations()
 

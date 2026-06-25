@@ -16,8 +16,8 @@ from urllib.parse import quote
 
 import httpx
 
-from app.integrations.config_models import VercelIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import VercelIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 

@@ -280,7 +280,7 @@ class TestSendSlackReport:
     ) -> None:
         monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
         monkeypatch.setattr(
-            "app.integrations.catalog.resolve_effective_integrations",
+            "integrations.catalog.resolve_effective_integrations",
             lambda: {
                 "slack": {
                     "source": "local store",

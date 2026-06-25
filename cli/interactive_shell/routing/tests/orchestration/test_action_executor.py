@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.integrations.llm_cli.base import CLIInvocation, CLIProbe
+from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.integrations.gitlab import (
+from integrations.gitlab import (
     DEFAULT_GITLAB_BASE_URL,
     build_gitlab_config,
     get_gitlab_commits,

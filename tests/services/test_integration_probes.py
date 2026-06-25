@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.config_models import CoralogixIntegrationConfig
+from integrations.config_models import CoralogixIntegrationConfig
 from app.services.alertmanager.client import AlertmanagerClient, AlertmanagerConfig
 from app.services.coralogix.client import CoralogixClient
 from app.services.datadog.client import DatadogClient, DatadogConfig

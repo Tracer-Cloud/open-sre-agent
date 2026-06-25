@@ -279,7 +279,7 @@ class TestKafkaConsumerGroupRun:
         with patch(
             "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             wraps=__import__(
-                "app.integrations.kafka", fromlist=["get_consumer_group_lag"]
+                "integrations.kafka", fromlist=["get_consumer_group_lag"]
             ).get_consumer_group_lag,
         ) as mock_fn:
             result = get_kafka_consumer_group_lag(

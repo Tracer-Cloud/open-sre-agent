@@ -3,7 +3,7 @@
 Use this checklist whenever you add or materially change:
 
 - a tool under `app/tools/`
-- an integration under `app/integrations/`
+- an integration under `integrations/`
 - a service client under `app/services/` that changes investigation behavior
 - investigation source wiring for an existing tool/integration
 
@@ -56,9 +56,9 @@ Common failure modes to consider:
 
 ### Files usually involved
 
-- `app/integrations/<name>.py`
-- `app/integrations/catalog.py`
-- `app/integrations/verify.py`
+- `integrations/<name>.py`
+- `integrations/catalog.py`
+- `integrations/verify.py`
 - `app/services/<name>/client.py`
 - `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py`
 - `docs/<name>.mdx`
@@ -68,9 +68,9 @@ Common failure modes to consider:
 
 ### Core completeness
 
-- [ ] Integration config, normalization, and validators are in place under `app/integrations/<name>.py`
+- [ ] Integration config, normalization, and validators are in place under `integrations/<name>.py`
 - [ ] Catalog resolution / env loading is wired correctly
-- [ ] Verification path is wired in `app/integrations/verify.py` and adapters/registry as needed
+- [ ] Verification path is wired in `integrations/verify.py` and adapters/registry as needed
 - [ ] Service client is added under `app/services/<name>/client.py` (only if the integration needs direct remote calls)
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally

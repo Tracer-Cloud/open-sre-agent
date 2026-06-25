@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.mongodb import (
+from integrations.mongodb import (
     MongoDBConfig,
     get_current_ops,
     mongodb_extract_params,

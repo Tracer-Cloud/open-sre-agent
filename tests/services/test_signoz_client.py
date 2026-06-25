@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.integrations.signoz import SigNozConfig
+from integrations.signoz import SigNozConfig
 from app.services.signoz.client import SigNozClient
 
 

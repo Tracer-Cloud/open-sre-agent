@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.config_models import HelmIntegrationConfig
+from integrations.config_models import HelmIntegrationConfig
 from app.services.helm import HelmClient
 
 

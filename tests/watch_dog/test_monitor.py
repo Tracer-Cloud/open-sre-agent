@@ -80,7 +80,9 @@ def test_process_monitor_resolves_by_pid_and_warms_cpu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process = _FakeProcess(123, "python", cpu_values=(0.0, 22.0))
-    monkeypatch.setattr("app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process)
+    monkeypatch.setattr(
+        "app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
     sample = monitor.sample()
@@ -127,7 +129,9 @@ def test_process_monitor_returns_dead_sample_on_no_such_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process = _GoneProcess(123, "python")
-    monkeypatch.setattr("app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process)
+    monkeypatch.setattr(
+        "app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
     sample = monitor.sample()
@@ -141,7 +145,9 @@ def test_process_monitor_returns_dead_sample_on_access_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process = _AccessDeniedProcess(123, "python")
-    monkeypatch.setattr("app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process)
+    monkeypatch.setattr(
+        "app.tools.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
 
     monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
     sample = monitor.sample()

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.postgresql import (
+from integrations.postgresql import (
     get_current_queries,
     postgresql_extract_params,
     postgresql_is_available,

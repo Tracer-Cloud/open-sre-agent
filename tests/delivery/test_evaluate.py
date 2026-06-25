@@ -42,7 +42,7 @@ def test_deliver_runs_judge_when_evaluate_and_rubric_present(
         return fake
 
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         mock_judge,
     )
 
@@ -56,7 +56,7 @@ def test_deliver_skips_judge_when_evaluate_is_false(
 ) -> None:
     _patch_generate_report(monkeypatch)
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         lambda *_, **__: pytest.fail("judge should not be called"),
     )
 
@@ -75,7 +75,7 @@ def test_deliver_sets_skip_on_judge_failure(
         raise RuntimeError("API timeout")
 
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         failing_judge,
     )
 

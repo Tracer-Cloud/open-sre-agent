@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.integrations import dagster as dagster_integration
+from integrations import dagster as dagster_integration
 from app.services.dagster import DagsterClient
 from app.tools.DagsterAssetsTool import list_dagster_assets
 from app.tools.DagsterRunLogsTool import get_dagster_run_logs
@@ -235,7 +235,7 @@ def _make_mock_dagster_client(query_to_response: dict[str, dict[str, Any]]) -> h
 
 @pytest.fixture
 def patched_dagster_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch app.integrations.dagster._client to return a DagsterClient backed by
+    """Patch integrations.dagster._client to return a DagsterClient backed by
     a fixture httpx.Client that serves canned responses for each query."""
     mock_http = _make_mock_dagster_client(
         {

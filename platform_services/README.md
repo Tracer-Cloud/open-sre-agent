@@ -16,6 +16,8 @@ Initial areas:
 - `observability/` owns logging, tracing, progress, debug output, and runtime
   display ports.
 - `masking/` owns reversible masking and identifier normalization.
+- `scheduler/` owns cron-driven scheduled deliveries, task persistence, and
+  execution deduplication.
 - `sandbox/` owns constrained execution environments.
 - `guardrails/` owns minimal runtime safety checks outside the core agent loop.
 

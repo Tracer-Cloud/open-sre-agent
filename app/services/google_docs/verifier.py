@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.integrations.config_models import GoogleDocsIntegrationConfig
-from app.integrations.verification import register_probe_verifier
+from integrations.config_models import GoogleDocsIntegrationConfig
+from integrations.verification import register_probe_verifier
 from app.services.google_docs import GoogleDocsClient
 
 verify_google_docs = register_probe_verifier(

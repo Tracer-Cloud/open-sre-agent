@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.integrations.models import SplunkIntegrationConfig
+from integrations.models import SplunkIntegrationConfig
 from app.services.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
 
 # ── SplunkIntegrationConfig ───────────────────────────────────────────────────
@@ -400,7 +400,7 @@ def test_normalize_row_falls_back_message_field() -> None:
 
 
 def test_catalog_classifies_splunk_from_store() -> None:
-    from app.integrations.catalog import classify_integrations
+    from integrations.catalog import classify_integrations
 
     integrations = [
         {
@@ -428,7 +428,7 @@ def test_catalog_classifies_splunk_from_store() -> None:
 
 
 def test_catalog_classifies_splunk_v1_flat_credentials() -> None:
-    from app.integrations.catalog import classify_integrations
+    from integrations.catalog import classify_integrations
 
     integrations = [
         {
@@ -448,7 +448,7 @@ def test_catalog_classifies_splunk_v1_flat_credentials() -> None:
 
 
 def test_catalog_ignores_splunk_without_base_url() -> None:
-    from app.integrations.catalog import classify_integrations
+    from integrations.catalog import classify_integrations
 
     integrations = [
         {
@@ -465,7 +465,7 @@ def test_catalog_ignores_splunk_without_base_url() -> None:
 
 
 def test_catalog_ignores_splunk_without_token() -> None:
-    from app.integrations.catalog import classify_integrations
+    from integrations.catalog import classify_integrations
 
     integrations = [
         {
@@ -486,7 +486,7 @@ def test_catalog_ignores_splunk_without_token() -> None:
 
 
 def test_env_loader_picks_up_splunk_vars(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.setenv("SPLUNK_URL", "https://splunk.test:8089")
     monkeypatch.setenv("SPLUNK_TOKEN", "env-test-token")
@@ -501,7 +501,7 @@ def test_env_loader_picks_up_splunk_vars(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_env_loader_splunk_default_index_is_main(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.setenv("SPLUNK_URL", "https://splunk.test:8089")
     monkeypatch.setenv("SPLUNK_TOKEN", "env-test-token")
@@ -514,7 +514,7 @@ def test_env_loader_splunk_default_index_is_main(monkeypatch: pytest.MonkeyPatch
 
 
 def test_env_loader_splunk_not_loaded_when_url_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.delenv("SPLUNK_URL", raising=False)
     monkeypatch.delenv("SPLUNK_INSTANCES", raising=False)
@@ -526,7 +526,7 @@ def test_env_loader_splunk_not_loaded_when_url_missing(monkeypatch: pytest.Monke
 
 
 def test_env_loader_splunk_verify_ssl_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.setenv("SPLUNK_URL", "https://splunk.test:8089")
     monkeypatch.setenv("SPLUNK_TOKEN", "tok")
@@ -539,7 +539,7 @@ def test_env_loader_splunk_verify_ssl_false(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_env_loader_splunk_ca_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.setenv("SPLUNK_URL", "https://splunk.test:8089")
     monkeypatch.setenv("SPLUNK_TOKEN", "tok")
@@ -552,7 +552,7 @@ def test_env_loader_splunk_ca_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_env_loader_splunk_ca_bundle_default_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.setenv("SPLUNK_URL", "https://splunk.test:8089")
     monkeypatch.setenv("SPLUNK_TOKEN", "tok")

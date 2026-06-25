@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from app.integrations.config_models import IncidentIoIntegrationConfig
+from integrations.config_models import IncidentIoIntegrationConfig
 from app.services.incident_io import IncidentIoClient, make_incident_io_client
 from app.services.incident_io.client import _get_incident_write_lock
 

@@ -401,7 +401,7 @@ class ReplSession:
         known state untouched.
         """
         try:
-            from app.integrations.verify import resolve_effective_integrations
+            from integrations.verify import resolve_effective_integrations
 
             self.configured_integrations = tuple(sorted(resolve_effective_integrations()))
             self.configured_integrations_known = True

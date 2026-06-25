@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from app.integrations.registry import family_key
+from integrations.registry import family_key
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from core.orchestration.node.investigate.tools import get_available_tools
 
@@ -32,7 +32,7 @@ def _configured_slugs(session: _IntegrationSession | None) -> list[str]:
     if session is not None and session.configured_integrations_known:
         return sorted(session.configured_integrations)
     try:
-        from app.integrations.verify import resolve_effective_integrations
+        from integrations.verify import resolve_effective_integrations
 
         return sorted(resolve_effective_integrations())
     except Exception:

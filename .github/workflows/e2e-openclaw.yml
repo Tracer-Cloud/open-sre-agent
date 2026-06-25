@@ -22,7 +22,7 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
-      - "app/integrations/openclaw.py"
+      - "integrations/openclaw.py"
       - "app/tools/OpenClawMCPTool/**"
       - "tests/e2e/openclaw/**"
       - "tests/utils/alert_factory/**"
@@ -32,7 +32,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/integrations/openclaw.py"
+      - "integrations/openclaw.py"
       - "app/tools/OpenClawMCPTool/**"
       - "tests/e2e/openclaw/**"
       - "tests/utils/alert_factory/**"

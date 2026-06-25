@@ -6,8 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from app.integrations import port as integrations_port
-from app.integrations.port import set_remote_integrations_fetcher
+from integrations import port as integrations_port
+from integrations.port import set_remote_integrations_fetcher
 from cli.interactive_shell.ui.output import boundary as output_boundary
 from cli.interactive_shell.ui.output import tracker as output_tracker
 from cli.interactive_shell.ui.output.environment import debug_print

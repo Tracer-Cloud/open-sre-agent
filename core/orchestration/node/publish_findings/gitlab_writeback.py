@@ -3,7 +3,7 @@
 import logging
 import os
 
-from app.integrations.gitlab import build_gitlab_config, post_gitlab_mr_note
+from integrations.gitlab import build_gitlab_config, post_gitlab_mr_note
 from app.utils.truncation import truncate
 from core.domain.state import InvestigationState
 

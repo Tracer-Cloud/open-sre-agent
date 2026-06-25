@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.bitbucket import list_commits
+from integrations.bitbucket import list_commits
 from app.tools.BitbucketSearchCodeTool import (
     _bb_available,
     _bb_creds,

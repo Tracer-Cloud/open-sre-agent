@@ -10,7 +10,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {
             "smtp": {
                 "source": "local env",
@@ -66,7 +66,7 @@ def test_deliver_background_notifications_skips_when_no_channels_configured() ->
 
 
 def test_deliver_background_notifications_marks_missing_smtp(monkeypatch) -> None:
-    monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", lambda: {})
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", lambda: {})
     record = BackgroundInvestigationRecord(
         task_id="bg-123", status="completed", command="free-text"
     )

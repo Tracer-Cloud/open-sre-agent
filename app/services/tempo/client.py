@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-from app.integrations.tempo import TempoConfig
+from integrations.tempo import TempoConfig
 from app.services.otlp_trace import parse_otlp_trace
 
 logger = logging.getLogger(__name__)

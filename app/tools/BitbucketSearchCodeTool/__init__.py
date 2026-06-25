@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.bitbucket import (
+from integrations.bitbucket import (
     BitbucketConfig,
     bitbucket_config_from_env,
     build_bitbucket_config,

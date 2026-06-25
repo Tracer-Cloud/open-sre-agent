@@ -21,7 +21,7 @@ def _console() -> Console:
 
 def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {"gitlab": {}, "datadog": {}},
     )
     session = ReplSession()
@@ -33,7 +33,7 @@ def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -
 
 def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         dict,
     )
     session = ReplSession()
@@ -122,7 +122,7 @@ def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
 
 def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {"datadog": {}},
     )
     resolve_calls: list[str] = []
@@ -168,7 +168,7 @@ def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
         raise RuntimeError("catalog blew up")
 
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         _boom,
     )
     session = ReplSession()

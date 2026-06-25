@@ -4,7 +4,7 @@ import sys
 from types import ModuleType
 from unittest.mock import patch
 
-from app.integrations.llm_cli.errors import CLITimeoutError
+from integrations.llm_cli.errors import CLITimeoutError
 from core.runtime.llm_invoke_errors import _looks_like_timeout, classify_llm_invoke_failure
 
 

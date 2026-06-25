@@ -7,17 +7,21 @@ from unittest.mock import patch
 
 import pytest
 
-from app.scheduler.executor import execute_task
-from app.scheduler.types import Provider, ScheduledTask, TaskKind
+from platform_services.scheduler.executor import execute_task
+from platform_services.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 @pytest.fixture()
 def _tmp_stores(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Point both stores at tmp_path so tests are isolated."""
     monkeypatch.setattr(
-        "app.scheduler.claim_store._default_db_path", lambda: tmp_path / "scheduler.db"
+        "platform_services.scheduler.claim_store._default_db_path",
+        lambda: tmp_path / "scheduler.db",
     )
-    monkeypatch.setattr("app.scheduler.store._default_store_path", lambda: tmp_path / "tasks.json")
+    monkeypatch.setattr(
+        "platform_services.scheduler.store._default_store_path",
+        lambda: tmp_path / "tasks.json",
+    )
 
 
 @pytest.mark.usefixtures("_tmp_stores")
@@ -32,9 +36,11 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds,
-            patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.resolve_telegram_credentials"
+            ) as mock_creds,
+            patch("platform_services.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_creds.return_value = {"bot_token": "fake_token"}
             mock_deliver.return_value = (True, "", "msg_42")
@@ -54,8 +60,10 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor.resolve_telegram_credentials") as mock_creds,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch(
+                "platform_services.scheduler.executor.resolve_telegram_credentials"
+            ) as mock_creds,
         ):
             mock_creds.return_value = {}
             result = execute_task(task, "2026-01-01T09:00")
@@ -72,8 +80,8 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor._deliver_slack") as mock_deliver,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("platform_services.scheduler.executor._deliver_slack") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "ts_123")
             result = execute_task(task, "2026-01-01T09:00")
@@ -91,8 +99,8 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor._deliver_discord") as mock_deliver,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("platform_services.scheduler.executor._deliver_discord") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "msg_99")
             result = execute_task(task, "2026-01-01T09:00")
@@ -110,8 +118,8 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("platform_services.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_deliver.return_value = (True, "", "msg_1")
 
@@ -134,7 +142,7 @@ class TestExecutor:
             chat_id="-100123",
         )
 
-        with patch("app.scheduler.executor.build_message") as mock_build:
+        with patch("platform_services.scheduler.executor.build_message") as mock_build:
             mock_build.side_effect = RuntimeError("Pipeline crashed")
             result = execute_task(task, "2026-01-01T09:00")
 
@@ -150,8 +158,8 @@ class TestExecutor:
         )
 
         with (
-            patch("app.scheduler.executor.build_message", return_value="Scheduled report"),
-            patch("app.scheduler.executor._deliver_telegram") as mock_deliver,
+            patch("platform_services.scheduler.executor.build_message", return_value="Scheduled report"),
+            patch("platform_services.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_deliver.return_value = (False, "Connection refused", "")
             result = execute_task(task, "2026-01-01T09:00")

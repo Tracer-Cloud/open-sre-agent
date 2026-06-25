@@ -292,7 +292,7 @@ class TestKafkaTopicHealthRun:
         with patch(
             "app.tools.KafkaTopicHealthTool.get_topic_health",
             wraps=__import__(
-                "app.integrations.kafka", fromlist=["get_topic_health"]
+                "integrations.kafka", fromlist=["get_topic_health"]
             ).get_topic_health,
         ) as mock_fn:
             result = get_kafka_topic_health(bootstrap_servers="")

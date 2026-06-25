@@ -30,8 +30,8 @@ def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
 
 def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bool:
     from app.config import get_environment
-    from app.integrations.store import STORE_PATH
-    from app.integrations.verify import verify_integrations
+    from integrations.store import STORE_PATH
+    from integrations.verify import verify_integrations
     from cli.interactive_shell.ui.health_view import render_health_report
 
     results = verify_integrations()

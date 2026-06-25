@@ -11,8 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from app.integrations.config_models import HelmIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import HelmIntegrationConfig
+from integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 

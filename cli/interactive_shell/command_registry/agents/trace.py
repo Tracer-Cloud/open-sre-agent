@@ -11,8 +11,8 @@ from rich.live import Live
 from rich.markup import escape
 from rich.text import Text
 
-from app.fleet_monitoring.registry import AgentRegistry
-from app.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
+from app.tools.fleet_monitoring.registry import AgentRegistry
+from app.tools.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import BOLD_BRAND, DIM, ERROR
 

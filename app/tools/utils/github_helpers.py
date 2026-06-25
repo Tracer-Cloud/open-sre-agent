@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.github_mcp import (
+from integrations.github_mcp import (
     GitHubMCPConfig,
     build_github_mcp_config,
     github_mcp_config_from_env,

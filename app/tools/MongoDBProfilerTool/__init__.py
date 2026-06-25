@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.mongodb import (
+from integrations.mongodb import (
     MongoDBConfig,
     get_profiler_data,
     mongodb_database_is_available,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.tempo import TempoConfig, tempo_extract_params
+from integrations.tempo import TempoConfig, tempo_extract_params
 from app.services.tempo.client import TempoClient
 from app.tools.tool_decorator import tool
 from app.tools.utils.availability import tempo_available_or_backend

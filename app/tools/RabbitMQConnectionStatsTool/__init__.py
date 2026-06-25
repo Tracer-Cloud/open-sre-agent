@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.rabbitmq import (
+from integrations.rabbitmq import (
     RabbitMQConfig,
     get_connection_stats,
     rabbitmq_extract_params,

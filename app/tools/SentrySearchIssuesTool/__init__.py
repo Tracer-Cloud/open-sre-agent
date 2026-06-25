@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.sentry import (
+from integrations.sentry import (
     DEFAULT_SENTRY_ISSUE_LIMIT,
     SentryConfig,
     build_sentry_config,

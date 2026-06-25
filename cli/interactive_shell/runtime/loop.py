@@ -13,7 +13,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-from app.fleet_monitoring.sampler import start_sampler
+from app.tools.fleet_monitoring.sampler import start_sampler
 from cli.interactive_shell import alert_inbox as _alert_inbox
 from cli.interactive_shell.alert_renderer import drain_and_render_incoming
 from cli.interactive_shell.error_handling.exception_reporting import report_exception

@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from app.integrations.models import JiraIntegrationConfig
+from integrations.models import JiraIntegrationConfig
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)

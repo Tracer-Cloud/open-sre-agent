@@ -2,7 +2,7 @@
 
 Wraps the read-only Argo CD API endpoints used by investigation tools and
 integration verification. Credentials come from the local integration store or
-from environment variables resolved by ``app.integrations.catalog``.
+from environment variables resolved by ``integrations.catalog``.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from urllib.parse import quote
 
 import httpx
 
-from app.integrations.config_models import ArgoCDIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import ArgoCDIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)

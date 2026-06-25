@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.rabbitmq import (
+from integrations.rabbitmq import (
     RabbitMQConfig,
     get_broker_overview,
     rabbitmq_extract_params,

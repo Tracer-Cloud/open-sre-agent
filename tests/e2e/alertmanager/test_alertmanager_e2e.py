@@ -14,10 +14,10 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from app.integrations.catalog import (
+from integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
-from app.integrations.catalog import (
+from integrations.catalog import (
     load_env_integrations as _load_env_integrations,
 )
 from tests.e2e.source_helpers import resolve_available_tool_sources
@@ -239,7 +239,7 @@ class TestAlertmanagerVerification:
             },
         }
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -258,7 +258,7 @@ class TestAlertmanagerVerification:
             "error": "Connection refused",
         }
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -270,7 +270,7 @@ class TestAlertmanagerVerification:
         """Alertmanager verification returns 'missing' when not configured."""
         monkeypatch.delenv("ALERTMANAGER_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -282,7 +282,7 @@ class TestAlertmanagerVerification:
         """Verify integrations result has expected fields for alertmanager."""
         monkeypatch.delenv("ALERTMANAGER_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
         assert isinstance(results, list)
@@ -496,7 +496,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_creation(self):
         """AlertmanagerIntegrationConfig validates correctly with all fields."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.monitoring.svc:9093",
@@ -512,7 +512,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_url_normalization(self):
         """AlertmanagerIntegrationConfig strips whitespace and trailing slash from base_url."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="  http://alertmanager.example.com:9093/  ",
@@ -522,7 +522,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_basic_auth(self):
         """AlertmanagerIntegrationConfig stores basic auth credentials."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.example.com:9093",

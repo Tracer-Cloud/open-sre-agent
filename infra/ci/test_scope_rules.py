@@ -30,11 +30,11 @@ RULES: tuple[PathRule, ...] = (
     PathRule("core/orchestration/", (), always_escalate=True),
     PathRule("app/utils/", (), always_escalate=True),
     # Specific sub-packages before their parent
-    PathRule("app/integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
-    PathRule("app/integrations/opensre/", ("tests/integrations/opensre/",)),
-    PathRule("app/integrations/hermes/", ("tests/hermes/",)),
-    PathRule("app/integrations/", ("tests/integrations/",)),
-    PathRule("app/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
+    PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
+    PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
+    PathRule("integrations/hermes/", ("tests/hermes/",)),
+    PathRule("integrations/", ("tests/integrations/",)),
+    PathRule("app/tools/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
     PathRule("cli/", ("tests/cli/",)),
     PathRule("app/tools/watch_dog/", ("tests/watch_dog/",)),
     PathRule("app/tools/", ("tests/tools/",)),
@@ -42,10 +42,10 @@ RULES: tuple[PathRule, ...] = (
     PathRule("platform_services/analytics/", ("tests/analytics/",)),
     PathRule("platform_services/guardrails/", ("tests/test_guardrails/",)),
     PathRule("platform_services/masking/", ("tests/masking/",)),
-    PathRule("app/entrypoints/", ("tests/entrypoints/",)),
-    PathRule("app/remote/", ("tests/remote/",)),
+    PathRule("deployment/entrypoints/", ("tests/entrypoints/",)),
+    PathRule("deployment/remote/", ("tests/remote/",)),
     PathRule("platform_services/sandbox/", ("tests/sandbox/",)),
-    PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
+    PathRule("deployment/", ("tests/deployment/",)),
     PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
     PathRule("platform_services/auth/", ("tests/platform_services/auth/",)),
     PathRule("app/webapp.py", ("tests/test_webapp.py",)),
@@ -64,7 +64,11 @@ def _matches(path: str, prefix: str) -> bool:
 
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
-    return parts[1] if len(parts) > 1 and parts[0] == "app" else prefix
+    if len(parts) > 1 and parts[0] == "app":
+        return parts[1]
+    if parts[0] == "deployment":
+        return "deployment"
+    return prefix
 
 
 def classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:

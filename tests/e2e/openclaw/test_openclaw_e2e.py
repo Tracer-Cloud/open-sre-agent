@@ -26,9 +26,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.catalog import load_env_integrations as _load_env_integrations
-from app.integrations.openclaw import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.catalog import load_env_integrations as _load_env_integrations
+from integrations.openclaw import (
     OpenClawConfig,
     describe_openclaw_error,
     openclaw_runtime_unavailable_reason,
@@ -163,7 +163,7 @@ class TestOpenClawGatewayUnavailable:
         assert "openclaw" in sources
         assert sources["openclaw"].get("connection_verified") is True
 
-    @patch("app.integrations.openclaw.shutil.which", return_value=None)
+    @patch("integrations.openclaw.shutil.which", return_value=None)
     def test_describe_error_produces_gateway_hint_for_connection_closed(
         self, _mock_which: MagicMock
     ) -> None:
@@ -175,7 +175,7 @@ class TestOpenClawGatewayUnavailable:
             stdout="OpenClaw CLI help",
             stderr="",
         )
-        with patch("app.integrations.openclaw.subprocess.run", return_value=completed):
+        with patch("integrations.openclaw.subprocess.run", return_value=completed):
             detail = describe_openclaw_error(RuntimeError("Connection closed"), config)
 
         assert "openclaw gateway" in detail, (
@@ -183,7 +183,7 @@ class TestOpenClawGatewayUnavailable:
             "to run 'openclaw gateway run' or 'openclaw gateway start'."
         )
 
-    @patch("app.integrations.openclaw.shutil.which", return_value=None)
+    @patch("integrations.openclaw.shutil.which", return_value=None)
     def test_runtime_unavailable_reason_set_when_command_not_on_path(
         self, _mock_which: MagicMock
     ) -> None:
@@ -247,7 +247,7 @@ class TestOpenClawMCPAuthFailure:
             [RuntimeError("HTTP 401 from POST https://openclaw.example.com/mcp")],
         )
 
-        with patch("app.integrations.openclaw.list_openclaw_tools", side_effect=nested):
+        with patch("integrations.openclaw.list_openclaw_tools", side_effect=nested):
             result = validate_openclaw_config(config)
 
         assert result.ok is False
@@ -326,14 +326,14 @@ class TestOpenClawStdioCommandNotFound:
         )
         assert "Command not found" in detail
 
-    @patch("app.integrations.openclaw.shutil.which", return_value=None)
+    @patch("integrations.openclaw.shutil.which", return_value=None)
     def test_missing_binary_fails_verification_before_listing_tools(
         self, _mock_which: MagicMock
     ) -> None:
         """Verification must short-circuit to 'Command not found' without calling list_tools."""
         config = OpenClawConfig(mode="stdio", command="openclaw-mcp")
 
-        with patch("app.integrations.openclaw.list_openclaw_tools") as mock_list:
+        with patch("integrations.openclaw.list_openclaw_tools") as mock_list:
             result = validate_openclaw_config(config)
 
         assert result.ok is False

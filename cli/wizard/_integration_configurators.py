@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from app.integrations.sentry import get_sentry_auth_recommendations
-from app.integrations.store import remove_integration, upsert_integration
+from integrations.sentry import get_sentry_auth_recommendations
+from integrations.store import remove_integration, upsert_integration
 from cli.interactive_shell.ui.theme import (
     DEVICE_CODE,
     DIM,
@@ -460,7 +460,7 @@ def _github_wizard_browser_authorize() -> str | None:
     """Run GitHub device-flow browser authorization inside the wizard."""
     from rich.markup import escape
 
-    from app.integrations.github_mcp_oauth import (
+    from integrations.github_mcp_oauth import (
         GitHubDeviceCode,
         GitHubDeviceFlowError,
         authorize_github_via_device_flow,
@@ -1408,7 +1408,7 @@ def _configure_discord() -> tuple[str, str]:
                     }
                 },
             )
-            from app.integrations.cli import _register_discord_slash_command
+            from integrations.cli import _register_discord_slash_command
 
             _register_discord_slash_command(application_id, bot_token)
             sync_env_secret("DISCORD_BOT_TOKEN", bot_token)

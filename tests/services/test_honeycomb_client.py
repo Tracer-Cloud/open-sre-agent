@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.integrations.models import HoneycombIntegrationConfig
+from integrations.models import HoneycombIntegrationConfig
 from app.services.honeycomb.client import HoneycombClient
 
 

@@ -24,7 +24,7 @@ from pathlib import Path
 
 # ClaudeCodeAdapter is imported here so that the monkeypatch path
 # ``"…action_executor.ClaudeCodeAdapter"`` resolves in tests.
-from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
+from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
 # execute_shell_command is imported here so that the monkeypatch path
 # ``"…action_executor.execute_shell_command"`` resolves in tests. The

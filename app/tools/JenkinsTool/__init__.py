@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.jenkins import jenkins_config_from_env
+from integrations.jenkins import jenkins_config_from_env
 from app.services.jenkins import JenkinsClient, make_jenkins_client
 from app.tools.tool_decorator import tool
 

@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.catalog import load_env_integrations as _load_env_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.catalog import load_env_integrations as _load_env_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -207,7 +207,7 @@ class TestVictoriaLogsVerification:
         mock_response.raise_for_status.return_value = None
 
         with patch("httpx.Client.get", return_value=mock_response):
-            from app.integrations.verify import verify_integrations
+            from integrations.verify import verify_integrations
 
             results = verify_integrations(service="victoria_logs")
 
@@ -233,7 +233,7 @@ class TestVictoriaLogsVerification:
         )
 
         with patch("httpx.Client.get", return_value=mock_response):
-            from app.integrations.verify import verify_integrations
+            from integrations.verify import verify_integrations
 
             results = verify_integrations(service="victoria_logs")
 
@@ -246,7 +246,7 @@ class TestVictoriaLogsVerification:
         """No URL configured returns status=missing (not failed)."""
         monkeypatch.delenv("VICTORIA_LOGS_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="victoria_logs")
 
@@ -258,7 +258,7 @@ class TestVictoriaLogsVerification:
         """Verify result has the canonical {service, source, status, detail} shape."""
         monkeypatch.delenv("VICTORIA_LOGS_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="victoria_logs")
         for result in results:
@@ -418,7 +418,7 @@ class TestVictoriaLogsIntegrationConfig:
     """``VictoriaLogsIntegrationConfig`` model validation."""
 
     def test_config_creation(self) -> None:
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(
             base_url="http://vmlogs:9428",
@@ -430,14 +430,14 @@ class TestVictoriaLogsIntegrationConfig:
         assert config.integration_id == "vl-1"
 
     def test_config_url_normalization(self) -> None:
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(base_url="  http://vmlogs.example.com:9428/  ")
         assert config.base_url == "http://vmlogs.example.com:9428"
 
     def test_config_empty_tenant_normalizes_to_none(self) -> None:
         """Empty/whitespace tenant_id collapses to None so AccountID header is omitted."""
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         for empty in ("", "   ", None):
             config = VictoriaLogsIntegrationConfig(

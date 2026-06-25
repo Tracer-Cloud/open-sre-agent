@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.clickhouse import (
+from integrations.clickhouse import (
     ClickHouseConfig,
     clickhouse_extract_params,
     clickhouse_is_available,

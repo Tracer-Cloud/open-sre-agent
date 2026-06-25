@@ -178,7 +178,7 @@ def _configured_webhook_url() -> str:
         return env_webhook_url
 
     try:
-        from app.integrations.catalog import resolve_effective_integrations
+        from integrations.catalog import resolve_effective_integrations
 
         slack_integration = resolve_effective_integrations().get("slack") or {}
         config = slack_integration.get("config") if isinstance(slack_integration, dict) else {}

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.integrations.config_models import HelmIntegrationConfig
+from integrations.config_models import HelmIntegrationConfig
 from app.services.helm.client import HelmClient, _helm_client_major_version
 
 _HELM_V3_VERSION_STDOUT = (

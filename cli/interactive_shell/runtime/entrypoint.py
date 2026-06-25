@@ -10,7 +10,7 @@ import sys
 
 from rich.console import Console
 
-from app.fleet_monitoring.sweep import run_startup_sweep
+from app.tools.fleet_monitoring.sweep import run_startup_sweep
 from cli.config import ReplConfig
 from cli.interactive_shell import alert_inbox as _alert_inbox
 from cli.interactive_shell.prompting import prompt_surface as _prompt_surface

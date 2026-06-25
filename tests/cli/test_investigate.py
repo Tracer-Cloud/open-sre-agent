@@ -4,7 +4,7 @@ from typing import Any, NoReturn
 
 import pytest
 
-from app.integrations.llm_cli.errors import CLIAuthenticationRequired
+from integrations.llm_cli.errors import CLIAuthenticationRequired
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.investigation import (

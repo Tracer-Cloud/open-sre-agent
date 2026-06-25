@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from app.fleet_monitoring import probe as process_probe
+from app.tools.fleet_monitoring import probe as process_probe
 from app.tools.watch_dog.config import WatchdogConfig
 from cli.interactive_shell.error_handling.errors import OpenSREError
 

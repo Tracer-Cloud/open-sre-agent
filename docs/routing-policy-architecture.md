@@ -63,7 +63,7 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
 1. Context grounding (not routing). At REPL boot, `repl_main`
    (`cli/interactive_shell/runtime/entrypoint.py`) hydrates
    `session.configured_integrations` from the shared
-   `configured_integration_services()` helper in `app/integrations/catalog.py`
+   `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat
    assistant prompt (`_build_environment_block` in
    `cli/interactive_shell/chat/cli_agent.py`) lists the configured set as

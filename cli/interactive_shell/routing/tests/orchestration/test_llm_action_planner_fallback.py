@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.llm_cli.failure_explain import is_context_length_overflow
+from integrations.llm_cli.failure_explain import is_context_length_overflow
 from cli.interactive_shell.routing.handle_message_with_agent.errors import PlannerLLMError
 from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.planner import (
     plan_actions_with_llm_result,

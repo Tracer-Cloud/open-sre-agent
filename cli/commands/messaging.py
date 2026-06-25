@@ -7,13 +7,13 @@ import time
 import click
 from rich.console import Console
 
-from app.integrations.messaging_security import (
+from integrations.messaging_security import (
     MessagingIdentityPolicy,
     MessagingPlatform,
     generate_pairing_code,
     hash_pairing_code,
 )
-from app.integrations.store import get_integration, upsert_instance
+from integrations.store import get_integration, upsert_instance
 
 _console = Console(highlight=False)
 

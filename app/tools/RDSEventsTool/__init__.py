@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from app.integrations.rds import (
+from integrations.rds import (
     DEFAULT_RDS_REGION,
     rds_extract_params,
     rds_is_available,

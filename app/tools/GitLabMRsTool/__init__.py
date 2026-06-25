@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.gitlab import (
+from integrations.gitlab import (
     get_gitlab_mrs,
 )
 from app.tools.GitLabCommitsTool import _gitlab_available, _gl_creds, _resolve_config

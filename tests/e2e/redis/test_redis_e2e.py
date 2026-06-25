@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.verify import verify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.verify import verify_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -119,7 +119,7 @@ class TestRedisToolSourceAvailability:
 class TestRedisVerification:
     """Test Redis integration verification flow."""
 
-    @patch("app.integrations.redis._get_client")
+    @patch("integrations.redis._get_client")
     def test_verify_redis_success(self, mock_get_client):
         """Redis verification succeeds with valid config."""
         mock_client = MagicMock()
@@ -208,7 +208,7 @@ class TestRedisToolsAvailability:
 
     def test_redis_integration_config_has_required_fields(self):
         """Redis integration provides required fields in resolved config."""
-        from app.integrations.models import RedisIntegrationConfig
+        from integrations.models import RedisIntegrationConfig
 
         config = RedisIntegrationConfig(
             host="localhost",
@@ -237,7 +237,7 @@ class TestRedisP1ToolPaths:
     these tools with credentials resolved from the integration config.
     """
 
-    @patch("app.integrations.redis._get_client")
+    @patch("integrations.redis._get_client")
     def test_client_list_tool_path(self, mock_get_client):
         from app.tools.RedisClientListTool import get_redis_client_list
 
@@ -255,7 +255,7 @@ class TestRedisP1ToolPaths:
         assert result["blocked_clients"] == 1
         assert result["address_breakdown"]["10.0.0.1"] == 2
 
-    @patch("app.integrations.redis._get_client")
+    @patch("integrations.redis._get_client")
     def test_list_depth_tool_path(self, mock_get_client):
         from app.tools.RedisListDepthTool import get_redis_list_depth
 
@@ -276,7 +276,7 @@ class TestRedisP1ToolPaths:
         assert result["head"] == ["job-1"]
         assert result["tail"] == ["job-1500"]
 
-    @patch("app.integrations.redis._get_client")
+    @patch("integrations.redis._get_client")
     def test_latency_doctor_tool_path(self, mock_get_client):
         from app.tools.RedisLatencyDoctorTool import get_redis_latency_doctor
 

@@ -7,21 +7,21 @@ from typing import Any
 
 def load_verified_integrations() -> list[dict[str, str]]:
     """Import lazily so an unconfigured store doesn't slow down every REPL turn."""
-    from app.integrations.verify import verify_integrations
+    from integrations.verify import verify_integrations
 
     return verify_integrations()
 
 
 def configured_integration_names() -> list[str]:
     """Return configured integration service names without running verifiers."""
-    from app.integrations.verify import resolve_effective_integrations
+    from integrations.verify import resolve_effective_integrations
 
     return sorted(resolve_effective_integrations())
 
 
 def verify_integration(service: str) -> dict[str, str] | None:
     """Verify a single integration and return its result row."""
-    from app.integrations.verify import verify_integrations
+    from integrations.verify import verify_integrations
 
     normalized = service.strip().lower()
     if not normalized:

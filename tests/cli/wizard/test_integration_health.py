@@ -7,8 +7,8 @@ from importlib import import_module
 import httpx
 import pytest
 
-from app.integrations.betterstack import BetterStackValidationResult
-from app.integrations.github_mcp import GitHubMCPValidationResult
+from integrations.betterstack import BetterStackValidationResult
+from integrations.github_mcp import GitHubMCPValidationResult
 from cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,

@@ -9,8 +9,8 @@ from urllib.parse import quote
 
 import httpx
 
-from app.integrations.config_models import TemporalIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import TemporalIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)

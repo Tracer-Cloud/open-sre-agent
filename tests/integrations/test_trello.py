@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.integrations.trello import (
+from integrations.trello import (
     DEFAULT_TRELLO_BASE_URL,
     TrelloConfig,
     build_trello_config,
@@ -74,7 +74,7 @@ def test_validate_trello_connection_success(monkeypatch: pytest.MonkeyPatch) -> 
     def fake_request_json(*_args: object, **_kwargs: object) -> dict[str, str]:
         return {"id": "member123", "username": "test_user"}
 
-    monkeypatch.setattr("app.integrations.trello._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.trello._request_json", fake_request_json)
 
     result = validate_trello_connection(config=config)
 
@@ -106,7 +106,7 @@ def test_validate_trello_config_success(monkeypatch: pytest.MonkeyPatch) -> None
         return {"id": "member123", "username": "test_user"}
 
     monkeypatch.setattr(
-        "app.integrations.trello.validate_trello_connection",
+        "integrations.trello.validate_trello_connection",
         fake_validate_connection,
     )
 
@@ -130,7 +130,7 @@ def test_validate_trello_config_unauthorized(monkeypatch: pytest.MonkeyPatch) ->
         )
 
     monkeypatch.setattr(
-        "app.integrations.trello.validate_trello_connection",
+        "integrations.trello.validate_trello_connection",
         fake_validate_connection,
     )
 
@@ -151,7 +151,7 @@ def test_create_trello_card_success(monkeypatch: pytest.MonkeyPatch) -> None:
             "idList": _TEST_LIST_ID,
         }
 
-    monkeypatch.setattr("app.integrations.trello._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.trello._request_json", fake_request_json)
 
     result = create_trello_card(
         config=config,
@@ -172,7 +172,7 @@ def test_create_trello_card_uses_override_list_id(monkeypatch: pytest.MonkeyPatc
         captured_kwargs.update(kwargs)
         return {"id": "card123", "idList": "override_list"}
 
-    monkeypatch.setattr("app.integrations.trello._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.trello._request_json", fake_request_json)
 
     result = create_trello_card(
         config=config,

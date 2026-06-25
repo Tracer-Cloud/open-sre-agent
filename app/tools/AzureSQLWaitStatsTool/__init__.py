@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.azure_sql import (
+from integrations.azure_sql import (
     azure_sql_extract_params,
     azure_sql_is_available,
     get_wait_stats,

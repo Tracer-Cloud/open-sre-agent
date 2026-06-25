@@ -29,7 +29,7 @@ def _noop_cli_command(*_args: Any, **_kwargs: Any) -> bool:
 
 def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {"gitlab": {}, "sentry": {}},
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
@@ -57,7 +57,7 @@ def test_setup_subcommand_refreshes_configured_integrations(monkeypatch: Any) ->
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}}
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: dict(store),
     )
 
@@ -78,7 +78,7 @@ def test_remove_subcommand_refreshes_configured_integrations(monkeypatch: Any) -
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}, "sentry": {}}
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: dict(store),
     )
 
@@ -98,7 +98,7 @@ def test_mcp_connect_refreshes_configured_integrations(monkeypatch: Any) -> None
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}}
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: dict(store),
     )
 

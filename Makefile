@@ -419,7 +419,7 @@ test-rabbitmq-real:
 	RABBITMQ_USERNAME=sre_admin \
 	RABBITMQ_PASSWORD=sre_password \
 	RABBITMQ_VHOST=/orders \
-	$(PYTHON) -c "from app.integrations.rabbitmq import rabbitmq_config_from_env, validate_rabbitmq_config, get_queue_backlog, get_broker_overview; \
+	$(PYTHON) -c "from integrations.rabbitmq import rabbitmq_config_from_env, validate_rabbitmq_config, get_queue_backlog, get_broker_overview; \
 cfg = rabbitmq_config_from_env(); \
 print('validate:', validate_rabbitmq_config(cfg)); \
 print('overview:', get_broker_overview(cfg)); \

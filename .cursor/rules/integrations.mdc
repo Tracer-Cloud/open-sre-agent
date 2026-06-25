@@ -1,7 +1,7 @@
 ---
 description: Integration client patterns
 globs:
-  - app/integrations/**
+  - integrations/**
 ---
 
 # Integration Clients
@@ -15,7 +15,7 @@ app/services/
 ├── s3_client.py      # Single-file clients
 └── vercel/
 
-app/integrations/
+integrations/
 ├── clients/
 │   └── prefect/      # Legacy location — new clients go in app/services/
 ├── opensre_mcp.py    # MCP server implementation

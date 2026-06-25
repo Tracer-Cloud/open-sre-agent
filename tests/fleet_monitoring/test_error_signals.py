@@ -1,4 +1,4 @@
-"""Tests for app/fleet_monitoring/error_signals.py."""
+"""Tests for app/tools/fleet_monitoring/error_signals.py."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from app.fleet_monitoring.error_signals import (
+from app.tools.fleet_monitoring.error_signals import (
     DEFAULT_CATEGORIES,
     ErrorCategory,
     ErrorSignals,

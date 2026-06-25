@@ -1148,8 +1148,8 @@ def test_create_llm_client_claude_code_wires_cli_adapter(monkeypatch) -> None:
     monkeypatch.delenv("CLAUDE_CODE_MODEL", raising=False)
     llm_client.reset_llm_singletons()
     try:
-        from app.integrations.llm_cli.claude_code import ClaudeCodeAdapter
-        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+        from integrations.llm_cli.claude_code import ClaudeCodeAdapter
+        from integrations.llm_cli.runner import CLIBackedLLMClient
 
         client = llm_client._create_llm_client("reasoning")
 
@@ -1176,8 +1176,8 @@ def test_create_llm_client_gemini_cli_wires_cli_adapter(monkeypatch) -> None:
     monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)
     llm_client.reset_llm_singletons()
     try:
-        from app.integrations.llm_cli.gemini_cli import GeminiCLIAdapter
-        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+        from integrations.llm_cli.gemini_cli import GeminiCLIAdapter
+        from integrations.llm_cli.runner import CLIBackedLLMClient
 
         client = llm_client._create_llm_client("reasoning")
 

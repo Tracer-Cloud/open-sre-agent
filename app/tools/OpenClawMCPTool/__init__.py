@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     OpenClawConfig,
     OpenClawToolCallResult,
     build_openclaw_config,
@@ -10,10 +10,10 @@ from app.integrations.openclaw import (
     openclaw_config_from_env,
     openclaw_runtime_unavailable_reason,
 )
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     call_openclaw_tool as invoke_openclaw_mcp_tool,
 )
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     list_openclaw_tools as list_openclaw_mcp_tools,
 )
 from app.tools._telemetry import report_run_error

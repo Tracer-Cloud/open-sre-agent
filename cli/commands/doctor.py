@@ -84,7 +84,7 @@ def _check_llm_provider() -> tuple[bool, str]:
         "ollama": "OLLAMA_HOST",
     }
 
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     cli_reg = get_cli_provider_registration(provider)
     if cli_reg is not None:
@@ -108,7 +108,7 @@ def _check_llm_provider() -> tuple[bool, str]:
 
 
 def _check_integrations() -> tuple[bool, str]:
-    from app.integrations.store import STORE_PATH, list_integrations
+    from integrations.store import STORE_PATH, list_integrations
 
     path = Path(str(STORE_PATH))
     if not path.exists():

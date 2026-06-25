@@ -66,7 +66,7 @@ def _isolate_credential_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     ``~/.opensre`` store and make tests depend on local machine state.
     """
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {},
     )
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
@@ -75,7 +75,7 @@ def _isolate_credential_sources(monkeypatch: pytest.MonkeyPatch) -> None:
 def _patch_store(monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]) -> None:
     """Point the store-backed Telegram config at *config*."""
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {"telegram": {"source": "local store", "config": config}},
     )
 
@@ -255,7 +255,7 @@ def test_load_credentials_store_failure_falls_back_to_env(
     def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("store is locked")
 
-    monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", _boom)
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", _boom)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-tok")
     monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "env-chat")
 

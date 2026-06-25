@@ -22,7 +22,7 @@ def run_optional_opensre_evaluation(state: dict[str, Any]) -> dict[str, Any]:
             }
         }
 
-    from app.integrations.opensre.llm_eval_judge import run_opensre_llm_judge
+    from integrations.opensre.llm_eval_judge import run_opensre_llm_judge
 
     try:
         judge_result = run_opensre_llm_judge(

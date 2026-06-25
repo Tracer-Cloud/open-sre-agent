@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
-from app.integrations.datadog.correlation.factory import datadog_avg_query
+from integrations.datadog.correlation.factory import datadog_avg_query
 from core.domain.types.upstream import (
     UpstreamEvidenceBundle,
 )

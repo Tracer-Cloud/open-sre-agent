@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.integrations.cli import _setup_helm, cmd_setup
-from app.integrations.registry import SUPPORTED_SETUP_SERVICES
+from integrations.cli import _setup_helm, cmd_setup
+from integrations.registry import SUPPORTED_SETUP_SERVICES
 
 
 def test_setup_helm_persists_credentials() -> None:
@@ -21,8 +21,8 @@ def test_setup_helm_persists_credentials() -> None:
         return prompts.get(label, default)
 
     with (
-        patch("app.integrations.cli._p", side_effect=fake_prompt),
-        patch("app.integrations.cli.upsert_integration") as mock_upsert,
+        patch("integrations.cli._p", side_effect=fake_prompt),
+        patch("integrations.cli.upsert_integration") as mock_upsert,
     ):
         _setup_helm()
 
@@ -45,7 +45,7 @@ def test_cmd_setup_helm_dispatches_handler() -> None:
     def fake_handler() -> None:
         calls.append("helm")
 
-    with patch.dict("app.integrations.cli._HANDLERS", {"helm": fake_handler}):
+    with patch.dict("integrations.cli._HANDLERS", {"helm": fake_handler}):
         resolved = cmd_setup("helm")
 
     assert resolved == "helm"
@@ -53,7 +53,7 @@ def test_cmd_setup_helm_dispatches_handler() -> None:
 
 
 def test_helm_is_registered_for_setup() -> None:
-    from app.integrations.cli import _HANDLERS
+    from integrations.cli import _HANDLERS
 
     assert "helm" in SUPPORTED_SETUP_SERVICES
     assert "helm" in _HANDLERS

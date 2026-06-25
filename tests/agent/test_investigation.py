@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.llm_cli.errors import CLITimeoutError
+from integrations.llm_cli.errors import CLITimeoutError
 from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
 from app.tools.registered_tool import RegisteredTool
 from core.orchestration.node.investigate import (
@@ -304,7 +304,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
 
 def test_execute_tools_uses_availability_view_for_classified_integrations() -> None:
-    from app.integrations.config_models import GrafanaIntegrationConfig
+    from integrations.config_models import GrafanaIntegrationConfig
     from app.tools.GrafanaLogsTool import query_grafana_logs
 
     rt = query_grafana_logs.__opensre_registered_tool__

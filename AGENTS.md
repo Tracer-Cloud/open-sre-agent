@@ -19,7 +19,8 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `app/`                | Core agent logic, CLI, tools, integrations, services, graph pipeline, and runtime state.           |
+| `app/`                | Core application logic, tools, integrations, services, and runtime state.                          |
+| `deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
 | `.github/`            | CI workflows, issue templates, pull request template, and repository automation.                   |
@@ -34,22 +35,23 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `TESTING.md`          | `ReplDriver` reference: API, usage patterns, wait-time guide, and limitations.                    |
 | `CONTRIBUTING.md`     | Contribution workflow, branch/PR guidance, and quality expectations.                               |
 
-`app/` one level deeper:
+Main packages one level deeper:
 
 - `platform_services/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `platform_services/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `app/deployment/` — Deployment helpers for health polling, EC2 output state, and provider dry-run validation.
-- `app/entrypoints/` — High-level entrypoints exposed to external runtimes, including SDK and MCP boundaries.
+- `deployment/` — Single top-level home for deployment-facing code, split by concern:
+    - `deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
+    - `deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
+    - `deployment/remote/` — Remote-hosted runtime operations and integration points.
 - `platform_services/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
-- `app/integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
-- `app/integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
-- `app/integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `app/integrations/llm_cli/AGENTS.md`.
+- `integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
+- `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
+- `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
 - `platform_services/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
 - `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
-- `app/remote/` — Remote-hosted runtime operations and integration points.
 - `platform_services/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `app/services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `app/services/AGENTS.md`.
 - `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
@@ -114,9 +116,9 @@ Integration work usually spans config normalization, verification, service clien
 
 Files to touch:
 
-- `app/integrations/<name>.py` for config builders, validators, selectors, and normalization helpers.
-- `app/integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
-- `app/integrations/verify.py` when the integration needs a local verification path.
+- `integrations/<name>.py` for config builders, validators, selectors, and normalization helpers.
+- `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
+- `integrations/verify.py` when the integration needs a local verification path.
 - `app/services/<name>/client.py` when the integration needs a dedicated API client.
 - `app/tools/<Name>Tool/` or `app/tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
@@ -126,9 +128,9 @@ Files to touch:
 
 Examples from the repo:
 
-- Datadog: `app/services/datadog/client.py`, `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
-- Grafana: `app/integrations/catalog.py`, `app/integrations/verify.py`, `app/tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `app/integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Datadog: `app/services/datadog/client.py`, `integrations/catalog.py`, `integrations/verify.py`, `app/tools/DataDog*`, and `tests/integrations/test_verify.py`.
+- Grafana: `integrations/catalog.py`, `integrations/verify.py`, `app/tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Hermes: `integrations/hermes/`, `app/tools/HermesLogsTool/`, `app/tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 

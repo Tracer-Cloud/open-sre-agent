@@ -36,7 +36,7 @@ def _telegram_store_config() -> dict[str, object]:
     locked store must never crash the watchdog at startup.
     """
     try:
-        from app.integrations.catalog import resolve_effective_integrations
+        from integrations.catalog import resolve_effective_integrations
 
         entry = resolve_effective_integrations().get("telegram", {})
         config = entry.get("config", {}) if isinstance(entry, dict) else {}

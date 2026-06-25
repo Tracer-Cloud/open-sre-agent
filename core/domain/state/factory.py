@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
-from app.integrations.opensre.hf_remote import (
+from integrations.opensre.hf_remote import (
     extract_openrca_scoring_points,
     strip_scoring_points_from_alert,
 )

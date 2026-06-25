@@ -13,8 +13,8 @@ from typing import Any
 
 import httpx
 
-from app.integrations.config_models import IncidentIoIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import IncidentIoIntegrationConfig
+from integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.supabase import (
+from integrations.supabase import (
     get_service_health,
     resolve_supabase_config,
     supabase_extract_params,

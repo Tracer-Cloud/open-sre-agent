@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.integrations.betterstack import build_betterstack_config, validate_betterstack_config
-from app.integrations.config_models import PagerDutyIntegrationConfig
-from app.integrations.dagster import build_dagster_config, validate_dagster_config
-from app.integrations.gitlab import build_gitlab_config, validate_gitlab_config
-from app.integrations.jenkins import build_jenkins_config, validate_jenkins_config
-from app.integrations.models import (
+from integrations.betterstack import build_betterstack_config, validate_betterstack_config
+from integrations.config_models import PagerDutyIntegrationConfig
+from integrations.dagster import build_dagster_config, validate_dagster_config
+from integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from integrations.jenkins import build_jenkins_config, validate_jenkins_config
+from integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
     GoogleDocsIntegrationConfig,
@@ -17,8 +17,8 @@ from app.integrations.models import (
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
 )
-from app.integrations.sentry import build_sentry_config, validate_sentry_config
-from app.integrations.tempo import build_tempo_config, validate_tempo_config
+from integrations.sentry import build_sentry_config, validate_sentry_config
+from integrations.tempo import build_tempo_config, validate_tempo_config
 from app.services.alertmanager import make_alertmanager_client
 from app.services.coralogix import CoralogixClient
 from app.services.datadog import DatadogClient, DatadogConfig

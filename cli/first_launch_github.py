@@ -37,8 +37,8 @@ def _eligible_os() -> bool:
 
 
 def _github_already_configured() -> bool:
-    from app.integrations.github_mcp import github_mcp_config_from_env
-    from app.integrations.store import get_integration
+    from integrations.github_mcp import github_mcp_config_from_env
+    from integrations.store import get_integration
 
     if get_integration("github") is not None:
         return True
@@ -86,7 +86,7 @@ def _print_intro(console: Console) -> None:
 
 
 def _show_device_code(console: Console, code: object) -> None:
-    from app.integrations.github_mcp_oauth import GitHubDeviceCode
+    from integrations.github_mcp_oauth import GitHubDeviceCode
 
     if not isinstance(code, GitHubDeviceCode):
         return
@@ -120,8 +120,8 @@ def _ask_retry(_console: Console) -> bool:
 
 def _attempt_login(console: Console) -> str:
     """Run one login attempt. Returns ``"success"``, ``"failed"``, or ``"quit"``."""
-    from app.integrations.github_login import authenticate_and_configure_github
-    from app.integrations.github_mcp_oauth import GitHubDeviceFlowError
+    from integrations.github_login import authenticate_and_configure_github
+    from integrations.github_mcp_oauth import GitHubDeviceFlowError
 
     try:
         result = authenticate_and_configure_github(

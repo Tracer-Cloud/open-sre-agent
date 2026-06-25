@@ -1,11 +1,11 @@
-"""Tests for app.integrations._validation_helpers."""
+"""Tests for integrations._validation_helpers."""
 
 from __future__ import annotations
 
 import logging
 from unittest.mock import MagicMock, patch
 
-from app.integrations._validation_helpers import report_validation_failure
+from integrations._validation_helpers import report_validation_failure
 
 
 def _mock_logger() -> MagicMock:

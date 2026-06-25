@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.dagster import (
+from integrations.dagster import (
     DagsterConfig,
     dagster_extract_params,
     dagster_is_available,

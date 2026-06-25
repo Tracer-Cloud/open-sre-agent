@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.catalog import classify_integrations
+from integrations.catalog import classify_integrations
 
 
 def _v1_grafana(endpoint: str = "https://x", api_key: str = "k") -> dict:
@@ -210,7 +210,7 @@ def test_resolve_effective_integrations_propagates_single_non_default_instance()
     """Regression: when classify publishes _all_*_instances for a single
     non-default-named instance, resolve_effective_integrations must also
     propagate it so CLI/verify consumers see the instance metadata."""
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     single_prod = {
         "id": "env-grafana",
@@ -234,7 +234,7 @@ def test_resolve_effective_integrations_carries_instances_through_pydantic() -> 
     {name, tags, config, integration_id} instance shape we build. Previously
     this used list[IntegrationInstance] which would reject the extra keys
     under StrictConfigModel's extra='forbid'."""
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     env_records = [_v2_grafana_multi()]
     resolved = resolve_effective_integrations(store_integrations=[], env_integrations=env_records)

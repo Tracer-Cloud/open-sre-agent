@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.mariadb import (
+from integrations.mariadb import (
     MariaDBConfig,
     get_process_list,
     mariadb_extract_params,

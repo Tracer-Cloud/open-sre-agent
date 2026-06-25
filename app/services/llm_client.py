@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    from app.integrations.llm_cli.registry import CLIProviderRegistration
+    from integrations.llm_cli.registry import CLIProviderRegistration
 
 import boto3
 import botocore.exceptions
@@ -1261,7 +1261,7 @@ def reset_llm_singletons() -> None:
 
 def _get_cli_provider_registration(provider: str) -> CLIProviderRegistration | None:
     """Local import avoids package import cycle (llm_cli __init__ → runner → llm_client)."""
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     return get_cli_provider_registration(provider)
 
@@ -1394,7 +1394,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
         )
     elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
         from app.config import DEFAULT_MAX_TOKENS
-        from app.integrations.llm_cli.runner import CLIBackedLLMClient
+        from integrations.llm_cli.runner import CLIBackedLLMClient
 
         model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
         return CLIBackedLLMClient(

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.redis import (
+from integrations.redis import (
     RedisConfig,
     get_replication,
     redis_extract_params,

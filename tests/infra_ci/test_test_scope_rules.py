@@ -21,14 +21,14 @@ def _rules_module():
 
 def test_llm_cli_rule_takes_priority_over_integrations() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["app/integrations/llm_cli/foo.py"])
+    escalate, targets, _ = rules.classify(["integrations/llm_cli/foo.py"])
     assert not escalate
     assert targets == ["tests/integrations/llm_cli/"]
 
 
 def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["app/integrations/hermes/classifier.py"])
+    escalate, targets, _ = rules.classify(["integrations/hermes/classifier.py"])
     assert not escalate
     assert targets == ["tests/hermes/"]
 
@@ -38,7 +38,7 @@ def test_three_areas_escalates() -> None:
     changed = [
         "app/tools/a.py",
         "cli/b.py",
-        "app/integrations/hermes/c.py",
+        "integrations/hermes/c.py",
     ]
     escalate, _, areas = rules.classify(changed)
     assert escalate

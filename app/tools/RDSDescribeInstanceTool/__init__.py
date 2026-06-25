@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
-from app.integrations.rds import (
+from integrations.rds import (
     DEFAULT_RDS_REGION,
     rds_extract_params,
     rds_is_available,

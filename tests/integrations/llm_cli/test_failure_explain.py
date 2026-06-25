@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.integrations.llm_cli.failure_explain import (
+from integrations.llm_cli.failure_explain import (
     classify_cli_failure_category_hint,
     classify_cli_failure_hint,
     explain_cli_failure,

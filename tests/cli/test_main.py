@@ -52,8 +52,8 @@ def test_main_runs_health_command(monkeypatch) -> None:
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     with (
-        patch("app.integrations.verify.verify_integrations") as mock_verify,
-        patch("app.integrations.verify.format_verification_results") as mock_format,
+        patch("integrations.verify.verify_integrations") as mock_verify,
+        patch("integrations.verify.format_verification_results") as mock_format,
     ):
         mock_verify.return_value = [
             {
@@ -447,7 +447,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
         (
             ["integrations", "list"],
             "integrations_listed",
-            "app.integrations.cli.cmd_list",
+            "integrations.cli.cmd_list",
         ),
         (
             ["tests", "list"],
@@ -478,7 +478,7 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
             lambda: captured.append(subcommand_event),
         )
         monkeypatch.setattr(onboard_module, "capture_onboard_completed", lambda _cfg: None)
-    elif setup == "app.integrations.cli.cmd_list":
+    elif setup == "integrations.cli.cmd_list":
         integrations_module = importlib.import_module("cli.commands.integrations")
         monkeypatch.setattr(setup, lambda: None)
         monkeypatch.setattr(

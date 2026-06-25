@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.integrations.models import JiraIntegrationConfig as JiraConfig
+from integrations.models import JiraIntegrationConfig as JiraConfig
 from app.services.jira.client import JiraClient, make_jira_client
 
 

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.supabase import (
+from integrations.supabase import (
     SupabaseConfig,
     build_supabase_config,
     get_service_health,
@@ -130,7 +130,7 @@ class TestResolveSupabaseConfig:
                 }
             ],
         }
-        with patch("app.integrations.store.load_integrations", return_value=[v2_record]):
+        with patch("integrations.store.load_integrations", return_value=[v2_record]):
             config = resolve_supabase_config("https://proj.supabase.co")
         assert config.service_key == "from-store"
         assert config.url == "https://proj.supabase.co"
@@ -187,14 +187,14 @@ class TestValidateSupabaseConfig:
 
     def test_returns_ok_on_200(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", return_value=(200, {})):
+        with patch("integrations.supabase._make_request", return_value=(200, {})):
             result = validate_supabase_config(config)
         assert result.ok is True
         assert "proj.supabase.co" in result.detail
 
     def test_returns_error_on_non_200(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", return_value=(503, {})):
+        with patch("integrations.supabase._make_request", return_value=(503, {})):
             result = validate_supabase_config(config)
         assert result.ok is False
         assert "503" in result.detail
@@ -202,7 +202,7 @@ class TestValidateSupabaseConfig:
     def test_returns_error_on_connection_failure(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
         with patch(
-            "app.integrations.supabase._make_request",
+            "integrations.supabase._make_request",
             side_effect=ConnectionError("timed out"),
         ):
             result = validate_supabase_config(config)
@@ -224,7 +224,7 @@ class TestGetServiceHealth:
 
     def test_all_services_healthy(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", return_value=(200, {})):
+        with patch("integrations.supabase._make_request", return_value=(200, {})):
             result = get_service_health(config)
         assert result["available"] is True
         assert result["overall_healthy"] is True
@@ -240,7 +240,7 @@ class TestGetServiceHealth:
             called_paths.append(path)
             return (200, {})
 
-        with patch("app.integrations.supabase._make_request", side_effect=_capture):
+        with patch("integrations.supabase._make_request", side_effect=_capture):
             get_service_health(config)
 
         assert "/storage/v1/health" in called_paths
@@ -252,7 +252,7 @@ class TestGetServiceHealth:
         def _side_effect(cfg: SupabaseConfig, path: str, **_: Any) -> tuple[int, Any]:
             return (503, {}) if path == "/auth/v1/health" else (200, {})
 
-        with patch("app.integrations.supabase._make_request", side_effect=_side_effect):
+        with patch("integrations.supabase._make_request", side_effect=_side_effect):
             result = get_service_health(config)
 
         assert result["available"] is True
@@ -264,7 +264,7 @@ class TestGetServiceHealth:
     def test_connection_error_marks_service_degraded(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
         with patch(
-            "app.integrations.supabase._make_request",
+            "integrations.supabase._make_request",
             side_effect=ConnectionError("refused"),
         ):
             result = get_service_health(config)
@@ -274,7 +274,7 @@ class TestGetServiceHealth:
 
     def test_project_url_included_in_result(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", return_value=(200, {})):
+        with patch("integrations.supabase._make_request", return_value=(200, {})):
             result = get_service_health(config)
         assert result["project_url"] == "https://proj.supabase.co"
 
@@ -296,7 +296,7 @@ class TestGetStorageBuckets:
             {"id": "avatars", "name": "avatars", "public": True, "created_at": "2024-01-01"},
             {"id": "docs", "name": "docs", "public": False, "created_at": "2024-01-02"},
         ]
-        with patch("app.integrations.supabase._make_request", return_value=(200, mock_buckets)):
+        with patch("integrations.supabase._make_request", return_value=(200, mock_buckets)):
             result = get_storage_buckets(config)
         assert result["available"] is True
         assert result["total_buckets"] == 2
@@ -307,7 +307,7 @@ class TestGetStorageBuckets:
 
     def test_returns_error_on_403(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", return_value=(403, {})):
+        with patch("integrations.supabase._make_request", return_value=(403, {})):
             result = get_storage_buckets(config)
         assert result["available"] is False
         assert "403" in result["error"]
@@ -315,7 +315,7 @@ class TestGetStorageBuckets:
     def test_handles_non_list_body_gracefully(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
         with patch(
-            "app.integrations.supabase._make_request",
+            "integrations.supabase._make_request",
             return_value=(200, {"error": "unexpected"}),
         ):
             result = get_storage_buckets(config)
@@ -326,7 +326,7 @@ class TestGetStorageBuckets:
 
     def test_handles_exception(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key")
-        with patch("app.integrations.supabase._make_request", side_effect=RuntimeError("boom")):
+        with patch("integrations.supabase._make_request", side_effect=RuntimeError("boom")):
             result = get_storage_buckets(config)
         assert result["available"] is False
         assert "boom" in result["error"]
@@ -334,7 +334,7 @@ class TestGetStorageBuckets:
     def test_caps_results_at_max_results(self) -> None:
         config = SupabaseConfig(url="https://proj.supabase.co", service_key="key", max_results=2)
         mock_buckets = [{"id": str(i), "name": f"bucket-{i}"} for i in range(10)]
-        with patch("app.integrations.supabase._make_request", return_value=(200, mock_buckets)):
+        with patch("integrations.supabase._make_request", return_value=(200, mock_buckets)):
             result = get_storage_buckets(config)
         assert result["total_buckets"] == 10
         assert result["returned_buckets"] == 2

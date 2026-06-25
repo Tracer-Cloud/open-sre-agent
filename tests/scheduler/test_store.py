@@ -6,9 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from app.scheduler.claim_store import get_runs, try_claim
-from app.scheduler.store import add_task, get_task, list_tasks, remove_task, update_task
-from app.scheduler.types import Provider, ScheduledTask, TaskKind
+from platform_services.scheduler.claim_store import get_runs, try_claim
+from platform_services.scheduler.store import (
+    add_task,
+    get_task,
+    list_tasks,
+    remove_task,
+    update_task,
+)
+from platform_services.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 @pytest.fixture()

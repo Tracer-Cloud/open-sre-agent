@@ -9,7 +9,7 @@ from typing import Literal
 import questionary as questionary
 from rich.text import Text
 
-from app.integrations.llm_cli.binary_resolver import diagnose_binary_path
+from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from cli.interactive_shell.ui.theme import (
     ERROR,
     GLYPH_ERROR,

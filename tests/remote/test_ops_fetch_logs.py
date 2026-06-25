@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.remote.ops import RailwayRemoteOpsProvider, RemoteOpsError, RemoteServiceScope
+from deployment.remote.ops import RailwayRemoteOpsProvider, RemoteOpsError, RemoteServiceScope
 
 
 class _Result:
@@ -35,8 +35,8 @@ def test_fetch_logs_returns_captured_output() -> None:
     log_text = "2026-04-17 10:00:00 INFO app started\n2026-04-17 10:01:00 ERROR db timeout"
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("app.remote.ops.subprocess.run", side_effect=_make_run(log_output=log_text)),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.subprocess.run", side_effect=_make_run(log_output=log_text)),
     ):
         result = provider.fetch_logs(scope, lines=50)
 
@@ -48,9 +48,9 @@ def test_fetch_logs_strips_whitespace() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
         patch(
-            "app.remote.ops.subprocess.run",
+            "deployment.remote.ops.subprocess.run",
             side_effect=_make_run(log_output="\n\n  log content  \n\n"),
         ),
     ):
@@ -64,8 +64,8 @@ def test_fetch_logs_returns_empty_string_when_no_output() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("app.remote.ops.subprocess.run", side_effect=_make_run(log_output="")),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.subprocess.run", side_effect=_make_run(log_output="")),
     ):
         result = provider.fetch_logs(scope, lines=10)
 
@@ -77,7 +77,7 @@ def test_fetch_logs_raises_when_railway_cli_missing() -> None:
     scope = RemoteServiceScope(provider="railway")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value=None),
+        patch("deployment.remote.ops.shutil.which", return_value=None),
         pytest.raises(RemoteOpsError, match="Railway CLI is not installed"),
     ):
         provider.fetch_logs(scope, lines=10)
@@ -88,9 +88,9 @@ def test_fetch_logs_raises_on_non_zero_exit() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
         patch(
-            "app.remote.ops.subprocess.run",
+            "deployment.remote.ops.subprocess.run",
             side_effect=_make_run(log_returncode=1, log_stderr="not linked"),
         ),
         pytest.raises(RemoteOpsError, match="Railway command failed"),
@@ -103,9 +103,9 @@ def test_fetch_logs_appends_stderr_when_both_present() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
         patch(
-            "app.remote.ops.subprocess.run",
+            "deployment.remote.ops.subprocess.run",
             side_effect=_make_run(log_output="main log line", log_stderr="advisory message"),
         ),
     ):
@@ -120,9 +120,9 @@ def test_fetch_logs_returns_stderr_when_stdout_empty() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
         patch(
-            "app.remote.ops.subprocess.run",
+            "deployment.remote.ops.subprocess.run",
             side_effect=_make_run(log_output="", log_stderr="warning: logs delayed"),
         ),
     ):
@@ -145,8 +145,8 @@ def test_fetch_logs_passes_tail_argument() -> None:
         return _Result(0, stdout="logs")
 
     with (
-        patch("app.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("app.remote.ops.subprocess.run", side_effect=_run),
+        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("deployment.remote.ops.subprocess.run", side_effect=_run),
     ):
         provider.fetch_logs(scope, lines=42)
 

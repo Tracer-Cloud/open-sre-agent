@@ -13,8 +13,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.integrations import jenkins as jenkins_module
-from app.integrations.jenkins import (
+from integrations import jenkins as jenkins_module
+from integrations.jenkins import (
     JenkinsConfig,
     build_jenkins_config,
     jenkins_config_from_env,

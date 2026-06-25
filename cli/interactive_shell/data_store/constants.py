@@ -43,20 +43,20 @@ def __getattr__(name: str) -> tuple[str, ...]:
     # SETUP_SERVICES, VERIFY_SERVICES and MANAGED_INTEGRATION_SERVICES are
     # sourced from the runtime integration registry so the CLI's positional-arg
     # `click.Choice` validators stay in sync with what cmd_setup / cmd_verify
-    # can actually dispatch. Eagerly importing `app.integrations.registry` here
+    # can actually dispatch. Eagerly importing `integrations.registry` here
     # creates a circular import (registry -> verifiers -> github_mcp ->
     # cli.*). Deferring to first access lets `cli` finish
     # bootstrapping. See #1973 (verify) and #2537 (setup).
     if name == "SETUP_SERVICES":
-        from app.integrations.registry import SUPPORTED_SETUP_SERVICES
+        from integrations.registry import SUPPORTED_SETUP_SERVICES
 
         return SUPPORTED_SETUP_SERVICES
     if name == "VERIFY_SERVICES":
-        from app.integrations.registry import SUPPORTED_VERIFY_SERVICES
+        from integrations.registry import SUPPORTED_VERIFY_SERVICES
 
         return SUPPORTED_VERIFY_SERVICES
     if name == "MANAGED_INTEGRATION_SERVICES":
-        from app.integrations.registry import (
+        from integrations.registry import (
             SUPPORTED_SETUP_SERVICES,
             SUPPORTED_VERIFY_SERVICES,
         )

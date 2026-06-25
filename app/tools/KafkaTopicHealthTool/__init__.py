@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.kafka import (
+from integrations.kafka import (
     KafkaConfig,
     get_topic_health,
     kafka_extract_params,

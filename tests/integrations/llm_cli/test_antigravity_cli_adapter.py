@@ -13,14 +13,14 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.antigravity_cli import (
+from integrations.llm_cli.antigravity_cli import (
     _PROBE_TIMEOUT_SEC,
     AntigravityCLIAdapter,
     _fallback_antigravity_cli_paths,
     _resolve_exec_timeout_seconds,
 )
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
-from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+from integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -43,8 +43,8 @@ def _auth_ok_proc() -> MagicMock:
     return m
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/agy"
     mock_run.side_effect = [_version_proc(), _auth_ok_proc()]
@@ -57,8 +57,8 @@ def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     assert probe.version == "1.0.1"
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/agy"
     auth = MagicMock()
@@ -74,8 +74,8 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_uses_api_key_fallback(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/agy"
     auth = MagicMock()
@@ -92,8 +92,8 @@ def test_detect_uses_api_key_fallback(mock_which: MagicMock, mock_run: MagicMock
     assert "GEMINI_API_KEY fallback" in probe.detail
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_unclear_auth_on_network_error(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/agy"
     auth = MagicMock()
@@ -110,8 +110,8 @@ def test_detect_unclear_auth_on_network_error(mock_which: MagicMock, mock_run: M
     assert "Network error" in probe.detail
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_flags_outdated_version(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/agy"
     mock_run.side_effect = [_version_proc("1.0.0"), _auth_ok_proc()]
@@ -124,8 +124,8 @@ def test_detect_flags_outdated_version(mock_which: MagicMock, mock_run: MagicMoc
     assert "agy update" in probe.detail
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_upgrade_note_survives_auth_env_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -148,8 +148,8 @@ def test_detect_upgrade_note_survives_auth_env_fallback(
     assert "below tested minimum" in probe.detail
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     _mock_which.return_value = "/usr/bin/agy"
     m = MagicMock()
@@ -164,8 +164,8 @@ def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMoc
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     _mock_which.return_value = "/usr/bin/agy"
     mock_run.side_effect = subprocess.TimeoutExpired(
@@ -181,10 +181,10 @@ def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicM
 
 
 @patch(
-    "app.integrations.llm_cli.antigravity_cli._fallback_antigravity_cli_paths",
+    "integrations.llm_cli.antigravity_cli._fallback_antigravity_cli_paths",
     return_value=[],
 )
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock) -> None:
     probe = AntigravityCLIAdapter().detect()
     assert probe.installed is False
@@ -193,7 +193,7 @@ def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock)
     assert "not found" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     inv = AntigravityCLIAdapter().build(prompt="explain this alert", model=None, workspace="")
     assert inv.argv[0] == "/usr/bin/agy"
@@ -207,7 +207,7 @@ def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     assert inv.timeout_sec == 310.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_build_omits_model_and_output_format_and_stateful_flags(
     _mock_which: MagicMock,
 ) -> None:
@@ -245,7 +245,7 @@ def test_resolve_exec_timeout_uses_valid_value() -> None:
         assert _resolve_exec_timeout_seconds() == 240.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_build_uses_timeout_override(_mock_which: MagicMock) -> None:
     with patch.dict(os.environ, {"ANTIGRAVITY_CLI_TIMEOUT_SECONDS": "300"}, clear=False):
         inv = AntigravityCLIAdapter().build(prompt="p", model=None, workspace="")
@@ -254,7 +254,7 @@ def test_build_uses_timeout_override(_mock_which: MagicMock) -> None:
     assert inv.timeout_sec == 310.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_build_forwards_gemini_google_env(_mock_which: MagicMock) -> None:
     with patch.dict(
         os.environ,
@@ -292,7 +292,7 @@ def test_explain_failure_includes_returncode_and_stderr() -> None:
 def test_fallback_paths_macos() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
         patch.dict(os.environ, {}, clear=False),
     ):
         paths = _fallback_antigravity_cli_paths()
@@ -303,7 +303,7 @@ def test_fallback_paths_macos() -> None:
 
 
 def test_antigravity_cli_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("antigravity-cli")
     assert reg is not None
@@ -328,8 +328,8 @@ def test_antigravity_prefix_forwarded_to_subprocess() -> None:
     assert env["GOOGLE_CLOUD_PROJECT"] == "proj-x"
 
 
-@patch("app.integrations.llm_cli.antigravity_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.antigravity_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_auth_probe_uses_filtered_subprocess_env(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -369,7 +369,7 @@ def test_antigravity_cli_model_forwarded_to_subprocess() -> None:
     assert env["ANTIGRAVITY_CLI_MODEL"] == "gemini-3.5-flash"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_antigravity_build_absent_env_uses_defaults(_mock_which: MagicMock) -> None:
     """When ANTIGRAVITY_CLI_BIN, _MODEL, and _TIMEOUT_SECONDS are all absent, build()
     resolves the binary via PATH and uses the default 300s timeout."""
@@ -383,7 +383,7 @@ def test_antigravity_build_absent_env_uses_defaults(_mock_which: MagicMock) -> N
     assert inv.timeout_sec == 310.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/agy")
 def test_antigravity_empty_model_env_treated_as_absent(_mock_which: MagicMock) -> None:
     """An empty ANTIGRAVITY_CLI_MODEL must not produce a --model flag in argv,
     consistent with how other CLI providers treat empty model env vars."""

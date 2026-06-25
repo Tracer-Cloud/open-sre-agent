@@ -1,6 +1,6 @@
 """Unit tests for the Kafka integration module."""
 
-from app.integrations.kafka import (
+from integrations.kafka import (
     KafkaConfig,
     KafkaValidationResult,
     build_kafka_config,

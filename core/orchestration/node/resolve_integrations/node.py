@@ -8,16 +8,16 @@ import logging
 import os
 from typing import Any
 
-from app.integrations.catalog import (
+from integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
-from app.integrations.catalog import (
+from integrations.catalog import (
     load_env_integrations as _load_env_integrations,
 )
-from app.integrations.catalog import (
+from integrations.catalog import (
     merge_integrations_by_service as _merge_integrations_by_service,
 )
-from app.integrations.catalog import (
+from integrations.catalog import (
     merge_local_integrations as _merge_local_integrations,
 )
 from core.domain.state import InvestigationState
@@ -64,7 +64,7 @@ def _resolve(state: InvestigationState, *, emit_progress: bool) -> dict[str, Any
             )
             return {}
         try:
-            from app.integrations.port import fetch_remote_integrations
+            from integrations.port import fetch_remote_integrations
 
             all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=auth_token)
         except Exception as exc:
@@ -86,7 +86,7 @@ def _resolve(state: InvestigationState, *, emit_progress: bool) -> dict[str, Any
         if not org_id:
             return _resolve_from_local_sources(tracker)
         try:
-            from app.integrations.port import fetch_remote_integrations
+            from integrations.port import fetch_remote_integrations
 
             all_integrations = fetch_remote_integrations(org_id=org_id, auth_token=env_token)
         except Exception:
@@ -119,7 +119,7 @@ def _log_resolved(tracker: Any | None, resolved: dict[str, Any]) -> None:
 
 
 def _resolve_from_local_sources(tracker: Any | None) -> dict[str, Any]:
-    from app.integrations.store import STORE_PATH, load_integrations
+    from integrations.store import STORE_PATH, load_integrations
 
     store_integrations = load_integrations()
     env_integrations = _load_env_integrations() if not store_integrations else []
@@ -160,7 +160,7 @@ def _resolve_remote_with_local_fallback(
     remote_integrations: list[dict[str, Any]],
     tracker: Any | None,
 ) -> dict[str, Any]:
-    from app.integrations.store import load_integrations
+    from integrations.store import load_integrations
 
     store_integrations = load_integrations()
     env_integrations = _load_env_integrations()

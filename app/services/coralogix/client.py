@@ -9,8 +9,8 @@ from typing import Any
 
 import httpx
 
-from app.integrations.models import CoralogixIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.models import CoralogixIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 from app.services._streaming import StreamingParseStats
 

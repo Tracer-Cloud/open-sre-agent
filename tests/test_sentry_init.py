@@ -942,7 +942,7 @@ def test_apply_scope_tags_is_first_wins(monkeypatch) -> None:
 
 
 def test_init_sentry_ignore_errors_includes_cli_transient_error(monkeypatch) -> None:
-    from app.integrations.llm_cli.errors import CLITransientError
+    from integrations.llm_cli.errors import CLITransientError
 
     _clear_kill_switches(monkeypatch)
     init_mock, _ = _install_full_sentry_mock(monkeypatch)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.bitbucket import get_file_contents
+from integrations.bitbucket import get_file_contents
 from app.tools.BitbucketSearchCodeTool import (
     _bb_available,
     _bb_creds,

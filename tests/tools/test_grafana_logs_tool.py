@@ -24,7 +24,7 @@ def test_is_available_requires_grafana_creds() -> None:
 
 
 def test_is_available_accepts_classified_grafana_model() -> None:
-    from app.integrations.config_models import GrafanaIntegrationConfig
+    from integrations.config_models import GrafanaIntegrationConfig
 
     rt = query_grafana_logs.__opensre_registered_tool__
     assert (
@@ -65,7 +65,7 @@ def test_extract_params_accepts_catalog_grafana_shape() -> None:
 
 
 def test_extract_params_accepts_classified_grafana_model() -> None:
-    from app.integrations.config_models import GrafanaIntegrationConfig
+    from integrations.config_models import GrafanaIntegrationConfig
 
     rt = query_grafana_logs.__opensre_registered_tool__
     params = rt.extract_params(

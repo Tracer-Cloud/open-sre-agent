@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from rich.console import Console
 
-from app.fleet_monitoring.probe import ProcessSnapshot
+from app.tools.fleet_monitoring.probe import ProcessSnapshot
 from app.tools.watch_dog.alarms import AlarmCredentials
 from cli.interactive_shell.command_registry import dispatch_slash
 from cli.interactive_shell.runtime.session import ReplSession

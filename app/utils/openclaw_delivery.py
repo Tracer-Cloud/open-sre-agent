@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     build_openclaw_config,
     call_openclaw_tool,
     describe_openclaw_error,

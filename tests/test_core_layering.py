@@ -31,7 +31,7 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
 # - ``app.services.tracer_client`` — closed by #36
-#   (``app.integrations.port`` ``fetch_remote_integrations``). Other
+#   (``integrations.port`` ``fetch_remote_integrations``). Other
 #   ``app.services.*`` modules (LLM client, chat SDK adapter,
 #   ``agent_llm_client``) stay allowed because they are core
 #   capability access, not vendor-coupled like ``tracer_client``.
@@ -69,7 +69,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     """Core modules must avoid forbidden boundary packages.
 
     Use ports instead — ``platform_services.observability`` for progress/debug/display,
-    ``app.integrations.port`` for remote integrations — and register
+    ``integrations.port`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
@@ -81,6 +81,6 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``platform_services.observability.*`` or ``app.integrations.port``) and register "
+        "port (``platform_services.observability.*`` or ``integrations.port``) and register "
         "adapters via ``install_product_adapters``."
     )

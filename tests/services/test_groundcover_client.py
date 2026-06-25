@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from mcp import types
 
-from app.integrations.config_models import GroundcoverIntegrationConfig
+from integrations.config_models import GroundcoverIntegrationConfig
 from app.services.groundcover import client as gc_client
 from app.services.groundcover.client import GroundcoverClient
 

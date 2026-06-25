@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.verification import register_probe_verifier
+from integrations.verification import register_probe_verifier
 from app.services.argocd import ArgoCDClient, ArgoCDConfig
 
 verify_argocd = register_probe_verifier(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.betterstack import (
+from integrations.betterstack import (
     BetterStackConfig,
     betterstack_extract_params,
     betterstack_is_available,

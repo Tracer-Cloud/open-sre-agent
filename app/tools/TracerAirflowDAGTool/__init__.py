@@ -5,17 +5,17 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from app.integrations.airflow import (
+from integrations.airflow import (
     AirflowConfig,
     build_airflow_config,
 )
-from app.integrations.airflow import (
+from integrations.airflow import (
     get_airflow_dag_runs as fetch_airflow_dag_runs,
 )
-from app.integrations.airflow import (
+from integrations.airflow import (
     get_airflow_task_instances as fetch_airflow_task_instances,
 )
-from app.integrations.airflow import (
+from integrations.airflow import (
     get_recent_airflow_failures as fetch_recent_airflow_failures,
 )
 from app.tools.tool_decorator import tool

@@ -1,7 +1,7 @@
 """FixtureOpenClawBackend for synthetic investigation tests.
 
-Intercepts all calls to app.integrations.openclaw.call_openclaw_tool and
-app.integrations.openclaw.list_openclaw_tools, serving fixture data without
+Intercepts all calls to integrations.openclaw.call_openclaw_tool and
+integrations.openclaw.list_openclaw_tools, serving fixture data without
 any live OpenClaw process.
 
 Usage in run_suite.py
@@ -80,7 +80,7 @@ class FixtureOpenClawBackend:
 
         Patches both locations where openclaw_runtime_unavailable_reason
         is imported by name:
-          - app.integrations.openclaw   (canonical source)
+          - integrations.openclaw   (canonical source)
           - app.tools.OpenClawMCPTool   (tool layer local alias)
 
         Also patches the tool call and list functions at both the integration
@@ -88,7 +88,7 @@ class FixtureOpenClawBackend:
         """
         with (
             patch(
-                "app.integrations.openclaw.call_openclaw_tool",
+                "integrations.openclaw.call_openclaw_tool",
                 side_effect=self.call_tool,
             ),
             patch(
@@ -96,7 +96,7 @@ class FixtureOpenClawBackend:
                 side_effect=self.call_tool,
             ),
             patch(
-                "app.integrations.openclaw.list_openclaw_tools",
+                "integrations.openclaw.list_openclaw_tools",
                 side_effect=self.list_tools,
             ),
             patch(
@@ -104,7 +104,7 @@ class FixtureOpenClawBackend:
                 side_effect=self.list_tools,
             ),
             patch(
-                "app.integrations.openclaw.openclaw_runtime_unavailable_reason",
+                "integrations.openclaw.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
             patch(

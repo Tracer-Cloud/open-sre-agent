@@ -8,14 +8,14 @@ import click
 from rich.console import Console
 from rich.markup import escape
 
-from app.fleet_monitoring.discovery import (
+from app.tools.fleet_monitoring.discovery import (
     classify_command_provider,
     discover_agent_processes,
     display_command,
     process_command,
     registered_and_discovered_agents,
 )
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from app.tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 from cli.interactive_shell.ui.rendering import repl_table
 from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
 
@@ -27,7 +27,7 @@ def fleet() -> None:
 
 def _pid_exists(pid: int) -> bool:
     try:
-        from app.fleet_monitoring.probe import pid_exists
+        from app.tools.fleet_monitoring.probe import pid_exists
     except ModuleNotFoundError as exc:
         if exc.name != "psutil":
             raise

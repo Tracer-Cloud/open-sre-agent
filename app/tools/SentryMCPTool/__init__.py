@@ -9,7 +9,7 @@ individual MCP-side tools.
 
 from __future__ import annotations
 
-from app.integrations.sentry_mcp import (
+from integrations.sentry_mcp import (
     SentryMCPConfig,
     SentryMCPToolCallResult,
     build_sentry_mcp_config,
@@ -17,10 +17,10 @@ from app.integrations.sentry_mcp import (
     sentry_mcp_config_from_env,
     sentry_mcp_runtime_unavailable_reason,
 )
-from app.integrations.sentry_mcp import (
+from integrations.sentry_mcp import (
     call_sentry_mcp_tool as invoke_sentry_mcp_tool,
 )
-from app.integrations.sentry_mcp import (
+from integrations.sentry_mcp import (
     list_sentry_mcp_tools as list_sentry_mcp_server_tools,
 )
 from app.tools._telemetry import report_run_error

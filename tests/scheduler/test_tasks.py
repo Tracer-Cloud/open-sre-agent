@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-import app.scheduler.tasks as tasks_mod
-from app.scheduler.types import Provider, ScheduledTask, TaskKind
+import platform_services.scheduler.tasks as tasks_mod
+from platform_services.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 class TestMessageBuilders:

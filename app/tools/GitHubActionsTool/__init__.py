@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from app.integrations.github_mcp import call_github_mcp_tool
+from integrations.github_mcp import call_github_mcp_tool
 from app.tools.tool_decorator import tool
 from app.tools.utils.code_host_unavailable import code_host_unavailable_payload
 from app.tools.utils.github_helpers import (

@@ -2,7 +2,7 @@
 
 Use this directory when adding or updating an **API-backed** LLM provider (Anthropic,
 OpenAI-compatible, Bedrock, etc.). For subprocess CLIs, use
-`app/integrations/llm_cli/AGENTS.md`.
+`integrations/llm_cli/AGENTS.md`.
 
 For investigation **tool calling** (schemas, invoke payloads, message shapes—all providers), see
 [docs/investigation-tool-calling.md](../../docs/investigation-tool-calling.md).

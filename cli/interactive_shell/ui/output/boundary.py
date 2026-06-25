@@ -23,7 +23,7 @@ def install_product_adapters() -> None:
     - progress tracker: Noop default → Rich-backed CLI singleton (lazy)
     - remote integrations fetcher: empty default → Tracer Cloud adapter
     """
-    from app.integrations.port import set_remote_integrations_fetcher
+    from integrations.port import set_remote_integrations_fetcher
     from app.services.tracer_client.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )

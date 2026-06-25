@@ -7,8 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, cast
 
-from app.integrations.models import GoogleDocsIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.models import GoogleDocsIntegrationConfig
+from integrations.probes import ProbeResult
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.store import _save
+from integrations.store import _save
 
 
 def _assert_private_permissions(store_file) -> None:
@@ -26,7 +26,7 @@ class TestSavePermissions:
         store_file = tmp_path / "integrations.json"  # type: ignore[operator]
         data = {"mariadb": {"host": "db.example.com", "database": "prod"}}
 
-        with patch("app.integrations.store.STORE_PATH", store_file):
+        with patch("integrations.store.STORE_PATH", store_file):
             _save(data)
 
         _assert_private_permissions(store_file)
@@ -35,7 +35,7 @@ class TestSavePermissions:
         store_file = tmp_path / "integrations.json"  # type: ignore[operator]
         data = {"mariadb": {"host": "db.example.com"}}
 
-        with patch("app.integrations.store.STORE_PATH", store_file):
+        with patch("integrations.store.STORE_PATH", store_file):
             _save(data)
 
         content = json.loads(store_file.read_text())
@@ -44,7 +44,7 @@ class TestSavePermissions:
     def test_save_creates_parent_directories(self, tmp_path: pytest.TempPathFactory) -> None:
         nested = tmp_path / "a" / "b" / "integrations.json"  # type: ignore[operator]
 
-        with patch("app.integrations.store.STORE_PATH", nested):
+        with patch("integrations.store.STORE_PATH", nested):
             _save({"key": "value"})
 
         assert nested.exists()
@@ -56,7 +56,7 @@ class TestSavePermissions:
         store_file.write_text("{}")
         store_file.chmod(0o644)
 
-        with patch("app.integrations.store.STORE_PATH", store_file):
+        with patch("integrations.store.STORE_PATH", store_file):
             _save({"updated": True})
 
         _assert_private_permissions(store_file)

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from app.integrations.github_mcp import (
+from integrations.github_mcp import (
     build_github_mcp_config,
     format_github_mcp_validation_cli_report,
     validate_github_mcp_config,
 )
-from app.integrations.openclaw import build_openclaw_config, validate_openclaw_config
-from app.integrations.posthog_mcp import (
+from integrations.openclaw import build_openclaw_config, validate_openclaw_config
+from integrations.posthog_mcp import (
     build_posthog_mcp_config,
     validate_posthog_mcp_config,
 )
-from app.integrations.sentry_mcp import (
+from integrations.sentry_mcp import (
     build_sentry_mcp_config,
     validate_sentry_mcp_config,
 )

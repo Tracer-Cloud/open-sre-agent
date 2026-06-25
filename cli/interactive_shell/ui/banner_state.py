@@ -57,7 +57,7 @@ def _load_integration_health() -> list[tuple[str, str]]:
     network calls, so the banner reflects health without slowing startup.
     """
     try:
-        from app.integrations.catalog import (  # lazy — avoids circular deps
+        from integrations.catalog import (  # lazy — avoids circular deps
             configured_integration_health,
         )
 

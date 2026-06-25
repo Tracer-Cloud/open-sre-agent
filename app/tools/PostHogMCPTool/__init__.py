@@ -9,7 +9,7 @@ or renames individual MCP-side tools.
 
 from __future__ import annotations
 
-from app.integrations.posthog_mcp import (
+from integrations.posthog_mcp import (
     PostHogMCPConfig,
     PostHogMCPToolCallResult,
     build_posthog_mcp_config,
@@ -17,10 +17,10 @@ from app.integrations.posthog_mcp import (
     posthog_mcp_config_from_env,
     posthog_mcp_runtime_unavailable_reason,
 )
-from app.integrations.posthog_mcp import (
+from integrations.posthog_mcp import (
     call_posthog_mcp_tool as invoke_posthog_mcp_tool,
 )
-from app.integrations.posthog_mcp import (
+from integrations.posthog_mcp import (
     list_posthog_mcp_tools as list_posthog_mcp_server_tools,
 )
 from app.tools._telemetry import report_run_error

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     OpenClawConfig,
     call_openclaw_tool,
     describe_openclaw_error,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.sentry import get_sentry_issue
+from integrations.sentry import get_sentry_issue
 from app.tools.SentrySearchIssuesTool import (
     _resolve_config,
     _sentry_available,

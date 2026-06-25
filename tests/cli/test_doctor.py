@@ -115,7 +115,7 @@ def test_check_llm_provider_claude_code_ready(monkeypatch) -> None:
         detail="Authenticated via Claude subscription.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "claude-code" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -133,7 +133,7 @@ def test_check_llm_provider_claude_code_auth_unclear(monkeypatch) -> None:
         detail="claude auth status failed: unknown command",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "claude-code" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -152,7 +152,7 @@ def test_check_llm_provider_cli_branch_follows_registry_not_hardcoded_ids(monkey
         detail="CLI OK.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "hypothetical-cli" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -170,7 +170,7 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
         detail="Authenticated via Gemini CLI.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "gemini-cli" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -180,9 +180,9 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
 
 def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
     monkeypatch.setattr(
-        "app.integrations.store.list_integrations", lambda: [{"service": "grafana"}]
+        "integrations.store.list_integrations", lambda: [{"service": "grafana"}]
     )
 
     ok, detail = doctor._check_integrations()
@@ -195,8 +195,8 @@ def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
 def test_check_integrations_empty_store(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
     store_path.write_text('{"version": 2, "integrations": []}\n', encoding="utf-8")
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
-    monkeypatch.setattr("app.integrations.store.list_integrations", lambda: [])
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.list_integrations", lambda: [])
 
     ok, detail = doctor._check_integrations()
 
@@ -207,9 +207,9 @@ def test_check_integrations_empty_store(monkeypatch, tmp_path) -> None:
 def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
     store_path.write_text('{"version": 2, "integrations": []}\n', encoding="utf-8")
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
     monkeypatch.setattr(
-        "app.integrations.store.list_integrations",
+        "integrations.store.list_integrations",
         lambda: [{"service": "grafana"}, {"service": "datadog"}],
     )
 

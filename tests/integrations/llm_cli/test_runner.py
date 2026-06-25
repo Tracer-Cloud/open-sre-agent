@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.runner import CLIBackedLLMClient
+from integrations.llm_cli.runner import CLIBackedLLMClient
 
 
 def _mock_probe() -> MagicMock:
     return MagicMock(installed=True, bin_path="/usr/bin/mock-cli", logged_in=True, detail="ok")
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_llm_spawn_log_redacts_prompt_in_argv(mock_run: MagicMock, caplog) -> None:
     prompt = "customer secret investigation context"
     mock_adapter = MagicMock()
@@ -28,7 +28,7 @@ def test_cli_llm_spawn_log_redacts_prompt_in_argv(mock_run: MagicMock, caplog) -
 
     with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
-        with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
+        with caplog.at_level(logging.DEBUG, logger="integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
             client.invoke(prompt)
 
@@ -38,7 +38,7 @@ def test_cli_llm_spawn_log_redacts_prompt_in_argv(mock_run: MagicMock, caplog) -
     assert prompt not in spawn.argv
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_llm_spawn_log_keeps_non_prompt_argv_args(mock_run: MagicMock, caplog) -> None:
     prompt = "customer secret investigation context"
     mock_adapter = MagicMock()
@@ -56,7 +56,7 @@ def test_cli_llm_spawn_log_keeps_non_prompt_argv_args(mock_run: MagicMock, caplo
 
     with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
-        with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
+        with caplog.at_level(logging.DEBUG, logger="integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
             client.invoke(prompt)
 
@@ -65,7 +65,7 @@ def test_cli_llm_spawn_log_keeps_non_prompt_argv_args(mock_run: MagicMock, caplo
     assert spawn.argv == ["/usr/bin/mock-cli", "-p", "--output-format", "text"]
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_llm_spawn_log_redacts_prompt_equals_form(mock_run: MagicMock, caplog) -> None:
     prompt = "customer secret investigation context"
     mock_adapter = MagicMock()
@@ -83,7 +83,7 @@ def test_cli_llm_spawn_log_redacts_prompt_equals_form(mock_run: MagicMock, caplo
 
     with patch("platform_services.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
-        with caplog.at_level(logging.DEBUG, logger="app.integrations.llm_cli.runner"):
+        with caplog.at_level(logging.DEBUG, logger="integrations.llm_cli.runner"):
             client = CLIBackedLLMClient(mock_adapter)
             client.invoke(prompt)
 
@@ -93,12 +93,12 @@ def test_cli_llm_spawn_log_redacts_prompt_equals_form(mock_run: MagicMock, caplo
     assert all(prompt not in arg for arg in spawn.argv)
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_runner_uses_adapter_explain_failure_for_quota(mock_run: MagicMock) -> None:
     """Quota stderr is enriched via adapter explain_failure, not a runner-side classifier."""
     import pytest
 
-    from app.integrations.llm_cli.failure_explain import explain_cli_failure
+    from integrations.llm_cli.failure_explain import explain_cli_failure
 
     mock_adapter = MagicMock()
     mock_adapter.name = "codex"

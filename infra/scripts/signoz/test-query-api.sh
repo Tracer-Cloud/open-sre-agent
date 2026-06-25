@@ -33,7 +33,7 @@ import json
 import os
 import sys
 
-from app.integrations.signoz import SigNozConfig
+from integrations.signoz import SigNozConfig
 from app.services.signoz.client import SigNozClient
 
 config = SigNozConfig(

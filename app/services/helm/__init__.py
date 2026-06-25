@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.config_models import HelmIntegrationConfig
+from integrations.config_models import HelmIntegrationConfig
 from app.services.helm.client import HelmClient
 
 HelmConfig = HelmIntegrationConfig

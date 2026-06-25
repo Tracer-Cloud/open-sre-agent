@@ -12,7 +12,7 @@ import json
 from typing import Any
 from unittest.mock import patch
 
-from app.integrations.cloudtrail import (
+from integrations.cloudtrail import (
     DEFAULT_CLOUDTRAIL_REGION,
     cloudtrail_extract_params,
     cloudtrail_is_available,

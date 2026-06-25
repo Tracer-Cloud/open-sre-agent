@@ -1,8 +1,8 @@
 """Registry self-consistency invariants.
 
 These tests don't probe any integration. They enforce the static contract
-between :mod:`app.integrations.registry` and the CLI dispatch in
-:mod:`app.integrations.cli`. Each invariant prevents a class of drift that has
+between :mod:`integrations.registry` and the CLI dispatch in
+:mod:`integrations.cli`. Each invariant prevents a class of drift that has
 already shipped to ``main`` at least once: duplicate orders, orphan handlers
 (handler without a registry spec), verifier without a positional route.
 Failing here on PR catches the regression before users hit it via
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from app.integrations.cli import _HANDLERS
-from app.integrations.registry import (
+from integrations.cli import _HANDLERS
+from integrations.registry import (
     INTEGRATION_SPECS,
     SUPPORTED_SETUP_SERVICES,
 )
@@ -59,7 +59,7 @@ def test_every_cli_handler_is_registered_in_registry() -> None:
     orphans = [svc for svc in _HANDLERS if svc not in SUPPORTED_SETUP_SERVICES]
     if orphans:
         raise AssertionError(
-            f"app/integrations/cli.py defines _HANDLERS for {orphans} but registry "
+            f"integrations/cli.py defines _HANDLERS for {orphans} but registry "
             "has no setup_order for them. These handlers are unreachable: "
             "_SETUP_SERVICES only includes services that appear in both "
             "SUPPORTED_SETUP_SERVICES and _HANDLERS, so the wizard will never offer them."

@@ -3,8 +3,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.mongodb_atlas import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.mongodb_atlas import (
     MongoDBAtlasConfig,
     build_mongodb_atlas_config,
     mongodb_atlas_config_from_env,
@@ -90,7 +90,7 @@ class TestMongoDBAtlasBuild:
 
 
 class TestMongoDBAtlasValidation:
-    @patch("app.integrations.mongodb_atlas._get_client")
+    @patch("integrations.mongodb_atlas._get_client")
     def test_validate_success(self, mock_get_client):
         mock_client = MagicMock()
         mock_resp = MagicMock()
@@ -107,7 +107,7 @@ class TestMongoDBAtlasValidation:
         assert "proj" in result.detail
         mock_client.close.assert_called_once()
 
-    @patch("app.integrations.mongodb_atlas._get_client", side_effect=Exception("Network error"))
+    @patch("integrations.mongodb_atlas._get_client", side_effect=Exception("Network error"))
     def test_validate_exception(self, _):
         config = MongoDBAtlasConfig(api_public_key="pub", api_private_key="priv", project_id="proj")
         result = validate_mongodb_atlas_config(config)

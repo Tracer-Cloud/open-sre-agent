@@ -11,8 +11,8 @@ from typing import Any
 
 import httpx
 
-from app.integrations.config_models import OpsGenieIntegrationConfig
-from app.integrations.probes import ProbeResult
+from integrations.config_models import OpsGenieIntegrationConfig
+from integrations.probes import ProbeResult
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from app.integrations.store import get_integration
+from integrations.store import get_integration
 from app.llm_credentials import get_keyring_setup_instructions, has_llm_api_key, save_llm_api_key
 from app.version import get_version
 from cli.interactive_shell.ui.theme import (
@@ -447,7 +447,7 @@ def _render_saved_summary(
         credentials system keychain              [SECONDARY key] [TEXT value]
         store       ~/.opensre/store.json        [SECONDARY key] [BRAND path]
     """
-    from app.integrations.store import STORE_PATH
+    from integrations.store import STORE_PATH
 
     integrations_str = "  ·  ".join(configured_integrations) if configured_integrations else "none"
 
@@ -487,7 +487,7 @@ def _render_integration_result(
     github_display_level: str | None = None,
 ) -> None:
     if result.github_mcp is not None:
-        from app.integrations.github_mcp import (
+        from integrations.github_mcp import (
             GitHubMcpDisplayDetailLevel,
             print_github_mcp_validation_report,
         )

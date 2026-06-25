@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from app.integrations.jenkins import JenkinsConfig
+from integrations.jenkins import JenkinsConfig
 from app.services._error_helpers import capture_service_error
 
 logger = logging.getLogger(__name__)

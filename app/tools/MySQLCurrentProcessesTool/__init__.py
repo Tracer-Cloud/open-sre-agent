@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.mysql import (
+from integrations.mysql import (
     get_current_processes,
     mysql_extract_params,
     mysql_is_available,

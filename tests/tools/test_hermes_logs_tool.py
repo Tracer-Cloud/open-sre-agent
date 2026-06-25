@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.integrations.hermes.poller import HermesLogCursor
+from integrations.hermes.poller import HermesLogCursor
 from app.tools.HermesLogsTool import get_hermes_logs
 from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 

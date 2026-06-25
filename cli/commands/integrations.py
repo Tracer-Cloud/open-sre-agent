@@ -35,7 +35,7 @@ class IntegrationServiceChoice(click.Choice):
         ctx: click.Context | None,
     ) -> object:
         if isinstance(value, str):
-            from app.integrations.registry import resolve_management_service
+            from integrations.registry import resolve_management_service
 
             value = resolve_management_service(value)
         return super().convert(value, param, ctx)
@@ -52,7 +52,7 @@ def integrations() -> None:
 )
 def setup_integration(service: str | None) -> None:
     """Set up credentials for a service."""
-    from app.integrations.cli import cmd_setup, cmd_verify
+    from integrations.cli import cmd_setup, cmd_verify
 
     normalized_service = service or "prompt"
     capture_integration_setup_started(normalized_service)
@@ -70,7 +70,7 @@ def setup_integration(service: str | None) -> None:
 @integrations.command(name="list")
 def list_integrations() -> None:
     """List all configured integrations."""
-    from app.integrations.cli import cmd_list
+    from integrations.cli import cmd_list
 
     capture_integrations_listed()
     cmd_list()
@@ -80,7 +80,7 @@ def list_integrations() -> None:
 @click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
 def show_integration(service: str) -> None:
     """Show details for a configured integration."""
-    from app.integrations.cli import cmd_show
+    from integrations.cli import cmd_show
 
     cmd_show(service)
 
@@ -89,7 +89,7 @@ def show_integration(service: str) -> None:
 @click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
 def remove_integration(service: str) -> None:
     """Remove a configured integration."""
-    from app.integrations.cli import cmd_remove
+    from integrations.cli import cmd_remove
 
     cmd_remove(service)
     capture_integration_removed(service)
@@ -107,7 +107,7 @@ def verify_integration(
     send_slack_test: bool,
 ) -> None:
     """Verify integration connectivity (all services, or a specific one)."""
-    from app.integrations.cli import cmd_verify
+    from integrations.cli import cmd_verify
 
     exit_code = cmd_verify(
         service,

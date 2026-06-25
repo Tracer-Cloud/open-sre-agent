@@ -61,7 +61,7 @@ def gateway_command(
     log_level: str,
 ) -> None:
     """Run the local OpenSRE HTTP gateway server."""
-    # app.remote.server reads OPENSRE_API_KEY and INVESTIGATIONS_DIR at import
+    # deployment.remote.server reads OPENSRE_API_KEY and INVESTIGATIONS_DIR at import
     # time — keep that module lazy-loaded via the uvicorn app string below.
     if api_key:
         os.environ["OPENSRE_API_KEY"] = api_key
@@ -75,7 +75,7 @@ def gateway_command(
     import uvicorn
 
     uvicorn.run(
-        "app.remote.server:app",
+        "deployment.remote.server:app",
         host=host,
         port=port,
         reload=reload,

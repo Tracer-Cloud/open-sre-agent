@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from app.integrations.mongodb_atlas import (
+from integrations.mongodb_atlas import (
     MongoDBAtlasConfig,
     atlas_extract_params,
     atlas_is_available,

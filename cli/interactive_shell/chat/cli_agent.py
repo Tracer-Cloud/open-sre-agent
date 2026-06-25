@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
-from app.integrations.llm_cli.errors import CLITimeoutError
+from integrations.llm_cli.errors import CLITimeoutError
 from cli.interactive_shell.chat.action_plan import (
     _ALLOWED_SLASH_ACTIONS,
     _actions_allowed_by_capabilities,

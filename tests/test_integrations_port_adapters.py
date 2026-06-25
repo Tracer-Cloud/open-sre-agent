@@ -6,8 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from app.integrations import port as integrations_port
-from app.integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
+from integrations import port as integrations_port
+from integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
 from app.services.tracer_client.integrations_adapter import fetch_tracer_remote_integrations
 from cli.interactive_shell.ui.output import boundary as output_boundary
 from platform_services.observability import NoopProgressTracker

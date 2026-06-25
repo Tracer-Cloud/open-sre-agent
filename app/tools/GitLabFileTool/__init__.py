@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from app.integrations.gitlab import (
+from integrations.gitlab import (
     get_gitlab_file,
 )
 from app.tools.GitLabCommitsTool import _gitlab_available, _gl_creds, _resolve_config

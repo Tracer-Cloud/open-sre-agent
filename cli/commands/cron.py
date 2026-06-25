@@ -79,7 +79,7 @@ def cron_add(
     window_hours: int,
 ) -> None:
     """Add a new scheduled delivery task."""
-    from app.scheduler.types import Provider, ScheduledTask, TaskKind
+    from platform_services.scheduler.types import Provider, ScheduledTask, TaskKind
 
     # Validate cron expression by constructing the APScheduler trigger
     _validate_cron_and_timezone(cron_expr, timezone)
@@ -93,7 +93,7 @@ def cron_add(
         window_hours=window_hours,
     )
 
-    from app.scheduler.store import add_task
+    from platform_services.scheduler.store import add_task
 
     added = add_task(task)
     _console.print(f"[green]Task {added.id} created.[/green]")
@@ -104,7 +104,7 @@ def cron_add(
 @cron_command.command(name="list")
 def cron_list() -> None:
     """List all scheduled delivery tasks."""
-    from app.scheduler.store import list_tasks
+    from platform_services.scheduler.store import list_tasks
 
     tasks = list_tasks()
     if not tasks:
@@ -138,7 +138,7 @@ def cron_list() -> None:
 @click.argument("task_id")
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
-    from app.scheduler.store import remove_task
+    from platform_services.scheduler.store import remove_task
 
     if remove_task(task_id):
         _console.print(f"[green]Task {task_id} removed.[/green]")
@@ -151,8 +151,8 @@ def cron_remove(task_id: str) -> None:
 @click.argument("task_id")
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
-    from app.scheduler.runner import run_task_now
-    from app.scheduler.store import get_task
+    from platform_services.scheduler.runner import run_task_now
+    from platform_services.scheduler.store import get_task
 
     task = get_task(task_id)
     if task is None:
@@ -179,8 +179,8 @@ def cron_run(task_id: str) -> None:
 )
 def cron_logs(task_id: str, limit: int) -> None:
     """Show execution history for a scheduled task."""
-    from app.scheduler.claim_store import get_runs
-    from app.scheduler.store import get_task
+    from platform_services.scheduler.claim_store import get_runs
+    from platform_services.scheduler.store import get_task
 
     task = get_task(task_id)
     if task is None:
@@ -221,7 +221,7 @@ def cron_logs(task_id: str, limit: int) -> None:
 @cron_command.command(name="start")
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
-    from app.scheduler.runner import start_scheduler
+    from platform_services.scheduler.runner import start_scheduler
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")

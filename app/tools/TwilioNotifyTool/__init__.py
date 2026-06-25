@@ -74,7 +74,7 @@ class TwilioNotifyTool(BaseTool):
         # Resolve Twilio credentials here rather than receiving them as kwargs:
         # run() kwargs are recorded in tool-call traces/logs, so account_sid /
         # auth_token must stay out of the call signature entirely.
-        from app.integrations.catalog import resolve_effective_integrations
+        from integrations.catalog import resolve_effective_integrations
 
         entry = resolve_effective_integrations().get("twilio") or {}
         twilio = entry.get("config") or {}

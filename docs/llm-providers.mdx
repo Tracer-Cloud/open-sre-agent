@@ -303,7 +303,7 @@ CLI adapters.
 > **Not to be confused with `groq`.** The `grok-cli` provider is xAI's Grok Build CLI. The
 > separate `groq` provider is the Groq HTTP API (a different company); the two are unrelated.
 
-See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
+See [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
 ## Reasoning effort (interactive shell)
 
@@ -361,4 +361,4 @@ OpenSRE caches LLM clients on first use. To switch providers within a single pro
 - Provider literals and defaults: [`app/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/config.py) (`LLMProvider`, `LLMSettings`).
 - Runtime routing: [`app/services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/llm_client.py) (`_create_llm_client`).
 - API-backed provider guide: [`app/services/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md).
-- CLI-backed provider guide: [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md).
+- CLI-backed provider guide: [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md).

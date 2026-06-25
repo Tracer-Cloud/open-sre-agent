@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.integrations.postgresql import (
+from integrations.postgresql import (
     get_slow_queries,
     postgresql_extract_params,
     postgresql_is_available,

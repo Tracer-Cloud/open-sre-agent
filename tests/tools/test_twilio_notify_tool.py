@@ -32,7 +32,7 @@ def _patch_resolve(monkeypatch: pytest.MonkeyPatch, twilio_config: dict[str, Any
     if twilio_config is not None:
         effective["twilio"] = {"config": twilio_config, "source": "local env"}
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: effective,
     )
 

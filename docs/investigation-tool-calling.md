@@ -132,5 +132,5 @@ adapter strictness gaps.
 ## Related docs
 
 - [app/services/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md) — API provider wiring and env keys
-- [app/integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
+- [integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
 - [AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) — repo map and PR checklist

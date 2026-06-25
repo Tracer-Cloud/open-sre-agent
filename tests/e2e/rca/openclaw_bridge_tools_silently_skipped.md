@@ -44,7 +44,7 @@ investigations. The tools `list_openclaw_tools`, `search_openclaw_conversations`
 `call_openclaw_bridge_tool` all report `is_available=False` despite a valid connection.
 
 This is caused by Bug 1 in the OpenClaw catalog classifier:
-`app/integrations/_catalog_impl.py` returns `openclaw_config.model_dump()` without
+`integrations/_catalog_impl.py` returns `openclaw_config.model_dump()` without
 injecting `connection_verified=True`. The `_openclaw_available()` gate reads
 `sources["openclaw"]["connection_verified"]` which is never set, so
 `is_available()` always returns `False`.
@@ -58,7 +58,7 @@ Labels:
 
 Annotations:
 - affected_tools = list_openclaw_tools, search_openclaw_conversations, call_openclaw_bridge_tool
-- root_cause_file = app/integrations/_catalog_impl.py
+- root_cause_file = integrations/_catalog_impl.py
 - bug = connection_verified key missing from catalog-resolved openclaw config dict
 
 ## Alert Metadata
@@ -78,7 +78,7 @@ Annotations:
     "summary": "OpenClaw bridge tools permanently unavailable despite valid connection. connection_verified key absent from catalog-resolved config dict.",
     "description": "opensre integrations verify openclaw succeeds and the gateway is running, but across 47 consecutive investigations zero OpenClaw bridge tools were selected. Root cause: _catalog_impl.py calls openclaw_config.model_dump() and returns the result directly. model_dump() produces keys url, mode, auth_token, command, args — it does NOT include connection_verified. The _openclaw_available() function reads sources['openclaw']['connection_verified'] which is always absent, so is_available() returns False for all three bridge tools on every single investigation. Fix: add config_dict['connection_verified'] = True after model_dump() in _classify_service_instance() and in the env-var loader path.",
     "affected_tools": "list_openclaw_tools, search_openclaw_conversations, call_openclaw_bridge_tool",
-    "root_cause_file": "app/integrations/_catalog_impl.py",
+    "root_cause_file": "integrations/_catalog_impl.py",
     "bug_id": "Bug 1 (openclaw catalog omits connection_verified)",
     "investigations_affected": "47",
     "fix": "config_dict['connection_verified'] = True after openclaw_config.model_dump()"
@@ -122,7 +122,7 @@ set -euo pipefail
 
 echo "[check] Testing connection_verified injection in catalog classifier..."
 uv run python - <<'PYEOF'
-from app.integrations.catalog import classify_integrations as _classify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
 
 record = {
     "id": "openclaw-test",
