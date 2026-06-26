@@ -18,6 +18,7 @@ from typing import Any
 
 from app.config import has_credentials_for_active_llm_provider
 from app.pipeline.runners import run_investigation
+
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.rds_postgres.scenario_loader import ScenarioFixture
