@@ -6,8 +6,8 @@ from rich.text import Text
 
 from cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, TEXT
 from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
-from tools.registry import get_registered_tool_map, resolve_tool_display_name
 from platform.observability.tool_trace import format_json_preview
+from tools.registry import get_registered_tool_map, resolve_tool_display_name
 
 
 def tool_source_label(tool_name: str) -> str:
