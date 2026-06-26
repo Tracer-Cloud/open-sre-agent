@@ -39,7 +39,9 @@ def test_run_happy_path() -> None:
         "objects": [{"key": "a.csv"}, {"key": "b.csv"}, {"key": "c.csv"}],
         "is_truncated": False,
     }
-    with patch("tools.s3_list_tool.list_objects", return_value={"success": True, "data": fake_data}):
+    with patch(
+        "tools.s3_list_tool.list_objects", return_value={"success": True, "data": fake_data}
+    ):
         result = list_s3_objects(bucket="my-bucket", prefix="data/")
     assert result["found"] is True
     assert result["count"] == 3
@@ -48,7 +50,9 @@ def test_run_happy_path() -> None:
 
 def test_run_empty_bucket() -> None:
     fake_data = {"count": 0, "objects": [], "is_truncated": False}
-    with patch("tools.s3_list_tool.list_objects", return_value={"success": True, "data": fake_data}):
+    with patch(
+        "tools.s3_list_tool.list_objects", return_value={"success": True, "data": fake_data}
+    ):
         result = list_s3_objects(bucket="empty-bucket")
     assert result["found"] is False
     assert result["count"] == 0

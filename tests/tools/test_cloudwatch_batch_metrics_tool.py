@@ -39,7 +39,9 @@ def test_run_returns_error_for_invalid_metric_type() -> None:
 
 def test_run_cpu_metrics_happy_path() -> None:
     fake_metrics = [{"Timestamp": "2024-01-01", "Average": 50.0}]
-    with patch("tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics):
+    with patch(
+        "tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics
+    ):
         result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="cpu")
     assert result["metrics"] == fake_metrics
     assert result["metric_type"] == "cpu"
@@ -48,7 +50,9 @@ def test_run_cpu_metrics_happy_path() -> None:
 
 def test_run_memory_metrics_happy_path() -> None:
     fake_metrics = [{"Timestamp": "2024-01-01", "Average": 80.0}]
-    with patch("tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics):
+    with patch(
+        "tools.cloudwatch_batch_metrics_tool.get_metric_statistics", return_value=fake_metrics
+    ):
         result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="memory")
     assert result["metric_type"] == "memory"
 

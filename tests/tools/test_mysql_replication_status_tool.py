@@ -31,7 +31,9 @@ def test_run_happy_path_replica() -> None:
         "source_port": 3306,
         "last_error": "",
     }
-    with patch("tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result):
+    with patch(
+        "tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result
+    ):
         result = get_mysql_replication_status(host="replica.mysql.example.com", database="testdb")
     assert result["is_replica"] is True
     assert result["replica_io_running"] == "Yes"
@@ -45,7 +47,9 @@ def test_run_happy_path_primary() -> None:
         "is_replica": False,
         "note": "Server is not configured as a replica.",
     }
-    with patch("tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result):
+    with patch(
+        "tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result
+    ):
         result = get_mysql_replication_status(host="primary.mysql.example.com", database="testdb")
     assert result["is_replica"] is False
     assert "note" in result

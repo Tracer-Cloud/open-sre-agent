@@ -52,7 +52,9 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.postgresql_current_queries_tool.get_current_queries", return_value=fake_result):
+    with patch(
+        "tools.postgresql_current_queries_tool.get_current_queries", return_value=fake_result
+    ):
         result = get_postgresql_current_queries(
             host="localhost", database="testdb", threshold_seconds=2
         )

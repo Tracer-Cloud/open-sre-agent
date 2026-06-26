@@ -117,7 +117,9 @@ def test_run_table_stats_error_falls_back_to_empty_list() -> None:
     table_error_result = {"source": "clickhouse", "available": False, "error": "timeout"}
     with (
         patch("tools.clickhouse_system_health_tool.get_system_health", return_value=health_result),
-        patch("tools.clickhouse_system_health_tool.get_table_stats", return_value=table_error_result),
+        patch(
+            "tools.clickhouse_system_health_tool.get_table_stats", return_value=table_error_result
+        ),
     ):
         result = get_clickhouse_system_health(host="ch.example.com", include_table_stats=True)
     assert result["available"] is True

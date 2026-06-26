@@ -86,7 +86,9 @@ def test_run_error_path() -> None:
         "available": False,
         "error": "connection refused",
     }
-    with patch("tools.clickhouse_query_activity_tool.get_query_activity", return_value=error_result):
+    with patch(
+        "tools.clickhouse_query_activity_tool.get_query_activity", return_value=error_result
+    ):
         result = get_clickhouse_query_activity(host="ch.example.com")
     assert result["available"] is False
     assert "error" in result

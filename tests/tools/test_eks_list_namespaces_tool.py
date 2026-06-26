@@ -51,6 +51,8 @@ def test_run_happy_path() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("tools.eks_list_namespaces_tool.build_k8s_clients", side_effect=Exception("api error")):
+    with patch(
+        "tools.eks_list_namespaces_tool.build_k8s_clients", side_effect=Exception("api error")
+    ):
         result = list_eks_namespaces(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False

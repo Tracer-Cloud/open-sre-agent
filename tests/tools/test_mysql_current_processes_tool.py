@@ -49,7 +49,9 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.mysql_current_processes_tool.get_current_processes", return_value=fake_result):
+    with patch(
+        "tools.mysql_current_processes_tool.get_current_processes", return_value=fake_result
+    ):
         result = get_mysql_current_processes(
             host="localhost", database="testdb", threshold_seconds=2
         )
