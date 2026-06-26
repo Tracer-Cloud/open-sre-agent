@@ -1,0 +1,37 @@
+id: 010-alias-help
+title: Bare help alias
+intent_class: deterministic
+input:
+  prompt: help
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes: []
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: /help
+policy:
+  executes_terminal_action: true
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /help
+  args: []
+  content: /help
+response_contract:
+  must_contain_any:
+  - ran /help
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /help
+  args: []
+  content: /help

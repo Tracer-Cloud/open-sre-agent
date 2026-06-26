@@ -1,7 +1,7 @@
 """Unit tests for the SigNoz integration module."""
 
-from app.integrations.catalog import load_env_integrations
-from app.integrations.signoz import (
+from integrations.catalog import load_env_integrations
+from integrations.signoz import (
     SigNozConfig,
     build_signoz_config,
     signoz_config_from_env,
@@ -83,7 +83,7 @@ class TestSigNozValidation:
             captured["headers"] = kwargs.get("headers")
             return _FakeResponse()
 
-        monkeypatch.setattr("app.integrations.signoz.httpx.get", _fake_get)
+        monkeypatch.setattr("integrations.signoz.httpx.get", _fake_get)
 
         config = SigNozConfig(url="http://localhost:8080", api_key="test-key")
         result = validate_signoz_config(config)

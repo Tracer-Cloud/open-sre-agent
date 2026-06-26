@@ -6,28 +6,22 @@ import io
 
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.command_registry.integrations import (
+from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from cli.interactive_shell.command_registry.integrations import (
     _INTEGRATIONS_FIRST_ARGS,
-    _LIST_FIRST_ARGS,
     _MCP_FIRST_ARGS,
 )
-from app.cli.interactive_shell.command_registry.investigation import (
+from cli.interactive_shell.command_registry.investigation import (
     _INVESTIGATE_FIRST_ARGS,
     _TEMPLATE_FIRST_ARGS,
 )
-from app.cli.interactive_shell.command_registry.model import _MODEL_FIRST_ARGS
-from app.cli.interactive_shell.command_registry.session_cmds import (
+from cli.interactive_shell.command_registry.model.command import _MODEL_FIRST_ARGS
+from cli.interactive_shell.command_registry.settings_cmds import (
     _TRUST_FIRST_ARGS,
     _VERBOSE_FIRST_ARGS,
 )
-from app.cli.interactive_shell.commands import SLASH_COMMANDS as COMMANDS_EXPORT
-from app.cli.interactive_shell.runtime.session import ReplSession
-
-
-def test_commands_shim_reexports_same_registry() -> None:
-    assert COMMANDS_EXPORT["/help"] is SLASH_COMMANDS["/help"]
-    assert list(COMMANDS_EXPORT) == list(SLASH_COMMANDS)
+from cli.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -41,7 +35,7 @@ def test_slash_registry_includes_modular_commands() -> None:
         "/?",
         "/exit",
         "/model",
-        "/list",
+        "/tools",
         "/integrations",
         "/investigate",
         "/tasks",
@@ -64,7 +58,7 @@ def test_registry_first_arg_completion_hints_co_located_with_handlers() -> None:
     """Merged registry exposes the same first-arg tab tuples defined in each module."""
     expected: dict[str, tuple[tuple[str, str], ...]] = {
         "/model": _MODEL_FIRST_ARGS,
-        "/list": _LIST_FIRST_ARGS,
+        "/tools": _TOOLS_FIRST_ARGS,
         "/integrations": _INTEGRATIONS_FIRST_ARGS,
         "/mcp": _MCP_FIRST_ARGS,
         "/investigate": _INVESTIGATE_FIRST_ARGS,

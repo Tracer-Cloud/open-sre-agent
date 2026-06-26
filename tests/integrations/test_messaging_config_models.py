@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.config_models import (
+from integrations.config_models import (
     DiscordBotConfig,
     SlackBotConfig,
     TelegramBotConfig,
 )
-from app.integrations.messaging_security import MessagingIdentityPolicy
+from integrations.messaging_security import MessagingIdentityPolicy
 
 
 class TestTelegramBotConfigBackCompat:

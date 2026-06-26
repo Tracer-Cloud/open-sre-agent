@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.agent.correlation.feature_config import (
+from core.orchestration.node.publish_findings.upstream_correlation.feature_config import (
     load_feature_workflow_config,
     resolve_feature_keywords,
 )

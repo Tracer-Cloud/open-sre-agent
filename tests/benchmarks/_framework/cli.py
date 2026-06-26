@@ -62,23 +62,30 @@ from tests.benchmarks._framework.runner import BenchmarkRunner
 
 
 def _build_adapter(name: str) -> BenchmarkAdapter:
-    """Map ``config.benchmark`` to an adapter instance.
+    """Map ``config.benchmark`` to an adapter instance via the registry.
 
-    Registered adapters live in their own modules; the registry is here
-    so the framework doesn't depend on any specific adapter.
+    The framework's ``adapter_registry`` (see ``_framework/adapters.py``)
+    is the single source of truth for which adapters exist. This wrapper
+    bootstraps known adapters on first call and then delegates.
     """
-    if name == "cloudopsbench":
-        # Late import — keeps the framework importable even if the adapter
-        # has unmet deps (e.g., HF dataset not downloaded yet).
-        from tests.benchmarks.cloudopsbench.adapter import CloudOpsBenchAdapter
+    from tests.benchmarks._framework.adapters import (
+        build_adapter,
+        ensure_known_adapters_registered,
+    )
 
-        return CloudOpsBenchAdapter()
-    raise KeyError(name)
+    ensure_known_adapters_registered()
+    return build_adapter(name)
 
 
 def _known_adapters() -> list[str]:
-    """Adapters this CLI knows how to construct. Keep in sync with ``_build_adapter``."""
-    return ["cloudopsbench"]
+    """Adapters this CLI knows how to construct, via the registry."""
+    from tests.benchmarks._framework.adapters import (
+        ensure_known_adapters_registered,
+        known_adapters,
+    )
+
+    ensure_known_adapters_registered()
+    return known_adapters()
 
 
 # --------------------------------------------------------------------------- #
@@ -152,6 +159,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return EXIT_UNKNOWN_ADAPTER
+
+    # Strategy-pattern hand-off: each adapter owns its own config-knob
+    # handling via ``apply_config_overrides``. The framework no longer
+    # needs to know which adapter honors which fields. Default (base
+    # BenchmarkAdapter.apply_config_overrides) is a no-op for adapters
+    # without runtime knobs.
+    adapter.apply_config_overrides(config)
 
     runner = BenchmarkRunner(config=config, adapter=adapter, config_path=path)
 

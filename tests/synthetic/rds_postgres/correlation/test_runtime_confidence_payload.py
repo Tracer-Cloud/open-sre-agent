@@ -1,7 +1,9 @@
 from pathlib import Path
 
-from app.agent.correlation.runtime import build_runtime_correlation
-from app.agent.correlation.upstream import MetricSeries, TopologyHint, UpstreamEvidenceBundle
+from core.domain.types.upstream import MetricSeries, TopologyHint, UpstreamEvidenceBundle
+from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
+    build_runtime_correlation,
+)
 
 
 def test_runtime_payload_includes_shared_confidence_evidence_breakdown() -> None:

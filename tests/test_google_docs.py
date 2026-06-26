@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.services.google_docs import GoogleDocsClient, build_google_docs_client_from_env
-from app.services.google_docs.client import GoogleDocsIntegrationConfig
-from app.tools.GoogleDocsCreateReportTool import create_google_docs_incident_report
+from services.google_docs import GoogleDocsClient, build_google_docs_client_from_env
+from services.google_docs.client import GoogleDocsIntegrationConfig
+from tools.GoogleDocsCreateReportTool import create_google_docs_incident_report
 
 
 class TestGoogleDocsIntegrationConfig:
@@ -279,7 +279,7 @@ class TestBuildGoogleDocsClientFromEnv:
 class TestGoogleDocsIncidentReportTool:
     """Unit tests for create_google_docs_incident_report tool."""
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_success(
         self,
         mock_client_class: MagicMock,
@@ -308,7 +308,7 @@ class TestGoogleDocsIncidentReportTool:
         assert result["document_id"] == "doc123"
         assert result["document_url"] == "https://docs.google.com/document/d/doc123/edit"
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_not_configured(
         self,
         mock_client_class: MagicMock,
@@ -330,7 +330,7 @@ class TestGoogleDocsIncidentReportTool:
         assert result["success"] is False
         assert "not properly configured" in result["error"]
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_with_all_fields(
         self,
         mock_client_class: MagicMock,
@@ -371,7 +371,7 @@ class TestGoogleDocsIncidentReportTool:
             "doc123", "user@example.com", role="writer"
         )
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_api_error(
         self,
         mock_client_class: MagicMock,
@@ -399,21 +399,21 @@ class TestGoogleDocsIncidentReportTool:
 
     def test_tool_is_available_when_configured(self) -> None:
         """Test that is_available returns True when google_docs is configured."""
-        from app.tools.GoogleDocsCreateReportTool import _is_available
+        from tools.GoogleDocsCreateReportTool import _is_available
 
         sources = {"google_docs": {"configured": True}}
         assert _is_available(sources) is True
 
     def test_tool_is_available_when_not_configured(self) -> None:
         """Test that is_available returns False when google_docs is not configured."""
-        from app.tools.GoogleDocsCreateReportTool import _is_available
+        from tools.GoogleDocsCreateReportTool import _is_available
 
         sources = {}
         assert _is_available(sources) is False
 
     def test_tool_extract_params(self) -> None:
         """Test that extract_params returns correct parameters."""
-        from app.tools.GoogleDocsCreateReportTool import _extract_params
+        from tools.GoogleDocsCreateReportTool import _extract_params
 
         sources = {
             "google_docs": {
@@ -425,7 +425,7 @@ class TestGoogleDocsIncidentReportTool:
         assert params["credentials_file"] == "/path/to/creds.json"
         assert params["folder_id"] == "folder123"
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_with_custom_share_role(
         self,
         mock_client_class: MagicMock,
@@ -458,7 +458,7 @@ class TestGoogleDocsIncidentReportTool:
             "doc123", "user@example.com", role="reader"
         )
 
-    @patch("app.tools.GoogleDocsCreateReportTool.GoogleDocsClient")
+    @patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient")
     def test_create_report_with_invalid_share_role_defaults_to_writer(
         self,
         mock_client_class: MagicMock,
@@ -639,7 +639,7 @@ class TestGoogleDocsClientErrorHandling:
 
     def test_handle_google_api_error_with_403(self) -> None:
         """Test handling of 403 permission error."""
-        from app.services.google_docs.client import _handle_google_api_error
+        from services.google_docs.client import _handle_google_api_error
 
         class MockHttpError(Exception):
             def __init__(self) -> None:
@@ -654,7 +654,7 @@ class TestGoogleDocsClientErrorHandling:
 
     def test_handle_google_api_error_with_404(self) -> None:
         """Test handling of 404 not found error."""
-        from app.services.google_docs.client import _handle_google_api_error
+        from services.google_docs.client import _handle_google_api_error
 
         class MockHttpError(Exception):
             def __init__(self) -> None:
@@ -669,7 +669,7 @@ class TestGoogleDocsClientErrorHandling:
 
     def test_handle_google_api_error_with_429(self) -> None:
         """Test handling of 429 rate limit error."""
-        from app.services.google_docs.client import _handle_google_api_error
+        from services.google_docs.client import _handle_google_api_error
 
         class MockHttpError(Exception):
             def __init__(self) -> None:
@@ -684,7 +684,7 @@ class TestGoogleDocsClientErrorHandling:
 
     def test_handle_google_api_error_generic(self) -> None:
         """Test handling of generic error."""
-        from app.services.google_docs.client import _handle_google_api_error
+        from services.google_docs.client import _handle_google_api_error
 
         exc = Exception("Something went wrong")
         result = _handle_google_api_error(exc, "sharing document")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from app.integrations.daily_update import (
+from integrations.daily_update import (
     Contributor,
     PullRequestSummary,
     _github_repo_api_url,
@@ -32,7 +32,7 @@ def _pull_request(
         merged_at=datetime(2026, 4, 2, 18, 30, tzinfo=UTC),
         body="This adds the workflow and supporting automation.",
         labels=("automation",),
-        changed_files=("app/integrations/daily_update.py", ".github/workflows/daily-update.yml"),
+        changed_files=("integrations/daily_update.py", ".github/workflows/daily-update.yml"),
         additions=120,
         deletions=10,
         contributors=contributors
@@ -94,7 +94,7 @@ def test_summarize_highlights_falls_back_when_llm_fails(monkeypatch) -> None:
     def _raise() -> None:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.integrations.daily_update.get_llm_for_reasoning", _raise)
+    monkeypatch.setattr("integrations.daily_update.get_llm_for_reasoning", _raise)
 
     highlights, fallback_used = summarize_highlights(
         "Tracer-Cloud/opensre",

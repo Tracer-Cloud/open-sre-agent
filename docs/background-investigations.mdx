@@ -1,0 +1,104 @@
+---
+title: "Background investigations"
+description: "Run investigations asynchronously in the interactive shell and receive RCA completion notifications."
+---
+
+OpenSRE's interactive shell supports a **session-local background mode** for
+investigations.
+
+When background mode is enabled:
+
+- new investigations run asynchronously
+- the shell stays free for more questions and follow-ups
+- completed RCAs are tracked in-session
+- email notifications can be sent on completion via the `smtp` integration
+
+<Note>
+This first version is **session-local only**. If the REPL process exits,
+in-flight background jobs stop with it.
+</Note>
+
+---
+
+## Commands
+
+```text
+/background on
+/background off
+/background status
+/background list
+/background show <task_id>
+/background use <task_id>
+/background notify list
+/background notify set email
+```
+
+### What they do
+
+- `/background on` — enable async investigation launches
+- `/background off` — return to normal foreground execution
+- `/background list` — show tracked jobs
+- `/background show <task_id>` — show the RCA summary for one job
+- `/background use <task_id>` — promote a completed job into the active follow-up context
+- `/background notify set email` — keep email as the completion channel in v1
+
+---
+
+## Typical flow
+
+1. Start the interactive shell.
+2. Enable background mode:
+
+```text
+/background on
+```
+
+3. Start an investigation:
+
+```text
+/investigate kubernetes-high-cpu
+```
+
+or paste a fresh alert in free text.
+
+4. Keep using the shell while the RCA runs.
+5. When it completes:
+   - inspect it with `/background show <task_id>`
+   - adopt it into active follow-up context with `/background use <task_id>`
+
+---
+
+## RCA summary contents
+
+Completed background jobs store:
+
+- root cause
+- top analysis items
+- recommended next steps
+- internal stats:
+  - tool call count
+  - investigation loop count
+  - validity score
+
+---
+
+## Email notifications
+
+Email delivery is handled through the [`smtp`](/smtp) integration.
+
+The notification email focuses on:
+
+- **Root cause**
+- **Top analysis**
+- **What to do next**
+
+plus a short internal stats section.
+
+---
+
+## Current v1 limits
+
+- notification preferences are email-only in the current shipped path
+- jobs are not persisted across REPL restarts
+- completion does not automatically replace your active follow-up context
+- you must run `/background use <task_id>` to promote a finished RCA

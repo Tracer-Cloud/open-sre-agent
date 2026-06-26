@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from app.integrations.config_models import IncidentIoIntegrationConfig
-from app.services.incident_io import IncidentIoClient, make_incident_io_client
-from app.services.incident_io.client import _get_incident_write_lock
+from integrations.config_models import IncidentIoIntegrationConfig
+from services.incident_io import IncidentIoClient, make_incident_io_client
+from services.incident_io.client import _get_incident_write_lock
 
 
 def _response(payload: dict) -> MagicMock:
@@ -186,8 +186,8 @@ def test_append_summary_update_retries_until_verify_sees_finding(
 
     sleeps: list[float] = []
     monkeypatch.setattr(IncidentIoClient, "_request", fake_request)
-    monkeypatch.setattr("app.services.incident_io.client.time.sleep", sleeps.append)
-    monkeypatch.setattr("app.services.incident_io.client.random.random", lambda: 0.0)
+    monkeypatch.setattr("services.incident_io.client.time.sleep", sleeps.append)
+    monkeypatch.setattr("services.incident_io.client.random.random", lambda: 0.0)
 
     result = client.append_summary_update(
         "inc-123",
@@ -209,7 +209,7 @@ def test_append_summary_update_skips_post_when_finding_already_present(
         def now(cls, _tz=None):
             return datetime(2099, 1, 1, 0, 0, 0, tzinfo=UTC)
 
-    monkeypatch.setattr("app.services.incident_io.client.datetime", FrozenDateTime)
+    monkeypatch.setattr("services.incident_io.client.datetime", FrozenDateTime)
 
     embedded = "Existing\n\n---\n**OpenSRE finding: Already posted** (2099-01-01 00:00:00 UTC)"
     calls: list[tuple[str, str, dict]] = []
@@ -312,8 +312,8 @@ def test_request_honors_documented_json_rate_limit_retry_after(
     monkeypatch.setattr(client, "_get_client", lambda: fake_http_client)
 
     sleeps: list[float] = []
-    monkeypatch.setattr("app.services.incident_io.client.time.sleep", sleeps.append)
-    monkeypatch.setattr("app.services.incident_io.client.random.random", lambda: 0.0)
+    monkeypatch.setattr("services.incident_io.client.time.sleep", sleeps.append)
+    monkeypatch.setattr("services.incident_io.client.random.random", lambda: 0.0)
 
     response = client._request("GET", "/v2/incidents")
 

@@ -87,11 +87,15 @@ export ANTHROPIC_API_KEY=...
 
 Ensure the Railway project has Postgres and Redis and that the OpenSRE service has **`DATABASE_URI`** and **`REDIS_URI`** wired to them before deploying.
 
+Deploy the service using your Railway project workflow (see [deployment.mdx](deployment.mdx)).
+
+After deploy, register the remote agent:
+
 ```bash
-opensre deploy railway --project <project> --service <service> --yes
+opensre remote --url https://<your-service>.up.railway.app health
 ```
 
-If the service never becomes healthy, confirm both URIs are set on the service.
+If the service never becomes healthy, confirm both `DATABASE_URI` and `REDIS_URI` are set on the service.
 
 ### Remote hosted ops (Railway)
 
@@ -121,6 +125,12 @@ opensre remote ops logs --follow
 Events are tagged with `entrypoint`, `opensre.runtime`, and `deployment_method`. Sensitive headers, paths, and secret-shaped keys are scrubbed before send.
 
 A random install ID is stored under `~/.opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
+
+### First-launch GitHub login (macOS & Windows)
+
+On the first interactive launch on macOS or Windows (never on Linux, never in CI/tests), OpenSRE requires a GitHub device-flow sign-in before the REPL prompt. On success it sets `github_username` as a PostHog **person property** (via `$identify`/`$set`, which forces `$process_person_profile: True` for that one event — this is the only intentional PII OpenSRE sends) and emits a `github_login_completed` event. A marker at `~/.opensre/github_login_done` prevents re-prompting.
+
+The existing kill-switches still apply: `OPENSRE_NO_TELEMETRY` / `DO_NOT_TRACK` make the `$identify` and `github_login_completed` calls no-ops, but the login itself still runs. Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the login gate entirely (also auto-bypassed on Linux and in CI/tests).
 
 ### Kill-switch matrix
 

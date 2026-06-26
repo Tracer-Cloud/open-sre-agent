@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.delivery.publish_findings.gitlab_writeback import _build_mr_note
+from core.orchestration.node.publish_findings.gitlab_writeback import _build_mr_note
 
 # ---------------------------------------------------------------------------
 # _build_mr_note
@@ -69,39 +69,34 @@ def _make_state(**overrides: Any) -> dict[str, Any]:
 
 def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch all heavy dependencies of generate_report so we can run it in tests."""
+    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.build_report_context",
+        "core.orchestration.node.publish_findings.node.build_report_context",
         lambda _state: {},
     )
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.format_slack_message",
-        lambda _ctx: "slack report text",
+        "core.orchestration.node.publish_findings.node.build_report_messages",
+        lambda _ctx: ReportMessages(
+            slack_text="slack report text",
+            telegram_html="telegram report text",
+            whatsapp_text="whatsapp report text",
+            slack_blocks=[],
+        ),
     )
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.format_telegram_message",
-        lambda _ctx: "telegram report text",
-    )
-    monkeypatch.setattr(
-        "app.delivery.publish_findings.node.format_whatsapp_message",
-        lambda _ctx: "whatsapp report text",
-    )
-    monkeypatch.setattr(
-        "app.delivery.publish_findings.node.build_slack_blocks",
-        lambda _ctx: [],
-    )
-    monkeypatch.setattr(
-        "app.delivery.publish_findings.node.create_investigation_and_attach_url",
+        "core.orchestration.node.publish_findings.node.create_investigation_and_attach_url",
         lambda _state, _msg, _summary: (
             "inv-id-123",
             "https://app.example.com/inv/1",
         ),
     )
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.render_report",
+        "core.orchestration.node.publish_findings.node.render_report",
         lambda _msg, **_kw: None,
     )
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.open_in_editor",
+        "core.orchestration.node.publish_findings.node.open_in_editor",
         lambda _msg: None,
     )
 
@@ -115,15 +110,20 @@ def test_gitlab_writeback_calls_post_when_enabled(monkeypatch: pytest.MonkeyPatc
     mock_build_action_blocks = MagicMock(return_value=[])
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.delivery.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
         patch(
-            "app.delivery.publish_findings.gitlab_writeback.build_gitlab_config",
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            mock_post_note,
+        ),
+        patch(
+            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -142,11 +142,16 @@ def test_gitlab_writeback_skipped_when_env_var_not_set(monkeypatch: pytest.Monke
     mock_build_action_blocks = MagicMock(return_value=[])
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.delivery.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            mock_post_note,
+        ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -165,11 +170,16 @@ def test_gitlab_writeback_skipped_when_mr_iid_missing(monkeypatch: pytest.Monkey
     mock_build_action_blocks = MagicMock(return_value=[])
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.delivery.publish_findings.gitlab_writeback.post_gitlab_mr_note", mock_post_note),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            mock_post_note,
+        ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(state)  # type: ignore[arg-type]
 
@@ -184,22 +194,54 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
     mock_build_action_blocks = MagicMock(return_value=[])
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
         patch(
-            "app.delivery.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             side_effect=RuntimeError("network error"),
         ),
         patch(
-            "app.delivery.publish_findings.gitlab_writeback.build_gitlab_config",
+            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         result = generate_report(_make_state())  # type: ignore[arg-type]
 
     assert "slack_message" in result  # report returned despite write-back failure
+
+
+def test_generate_report_can_skip_terminal_render_and_editor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_generate_report_deps(monkeypatch)
+
+    mock_send_slack = MagicMock(return_value=(False, None))
+    mock_build_action_blocks = MagicMock(return_value=[])
+    mock_render_report = MagicMock()
+    mock_open_in_editor = MagicMock()
+
+    with (
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch("core.orchestration.node.publish_findings.node.render_report", mock_render_report),
+        patch("core.orchestration.node.publish_findings.node.open_in_editor", mock_open_in_editor),
+    ):
+        from core.orchestration.node.publish_findings.node import generate_report
+
+        generate_report(
+            _make_state(),  # type: ignore[arg-type]
+            render_terminal=False,
+            open_editor=False,
+        )
+
+    mock_render_report.assert_not_called()
+    mock_open_in_editor.assert_not_called()
 
 
 def test_openclaw_writeback_calls_delivery_when_configured(
@@ -212,11 +254,15 @@ def test_openclaw_writeback_calls_delivery_when_configured(
     mock_openclaw_delivery = MagicMock(return_value=(True, None))
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.utils.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "platform.notifications.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery
+        ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -241,11 +287,15 @@ def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPat
     mock_whatsapp_delivery = MagicMock(return_value=(True, ""))
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.utils.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "platform.notifications.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery
+        ),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -279,11 +329,13 @@ def test_twilio_sms_dispatched_when_enabled(monkeypatch: pytest.MonkeyPatch) -> 
     mock_sms = MagicMock(return_value=(True, "", "SM-XYZ"))
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -322,11 +374,13 @@ def test_twilio_sms_skipped_when_channel_disabled(monkeypatch: pytest.MonkeyPatc
     mock_sms = MagicMock(return_value=(True, "", "SM-X"))
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(
             _make_state(
@@ -351,11 +405,13 @@ def test_twilio_sms_skipped_without_recipient(monkeypatch: pytest.MonkeyPatch) -
     mock_sms = MagicMock(return_value=(True, "", "SM-X"))
 
     with (
-        patch("app.utils.slack_delivery.send_slack_report", mock_send_slack),
-        patch("app.utils.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("app.utils.twilio_delivery.send_twilio_sms_report", mock_sms),
+        patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from app.delivery.publish_findings.node import generate_report
+        from core.orchestration.node.publish_findings.node import generate_report
 
         generate_report(
             _make_state(

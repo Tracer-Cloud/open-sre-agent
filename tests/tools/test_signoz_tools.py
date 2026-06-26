@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from app.tools.SignozLogsTool import query_signoz_logs
-from app.tools.SignozMetricsTool import _metrics_is_available, query_signoz_metrics
-from app.tools.SignozTracesTool import query_signoz_traces
+from tools.SignozLogsTool import query_signoz_logs
+from tools.SignozMetricsTool import _metrics_is_available, query_signoz_metrics
+from tools.SignozTracesTool import query_signoz_traces
 
 
 class _FakeSigNozBackend:
@@ -96,7 +96,7 @@ class _FakeSigNozBackend:
 
 class TestQuerySignozLogs:
     def test_available_with_query_api_credentials_only(self) -> None:
-        from app.tools.SignozLogsTool import _logs_is_available
+        from tools.SignozLogsTool import _logs_is_available
 
         assert (
             _logs_is_available(
@@ -173,7 +173,7 @@ class TestQuerySignozMetrics:
 
 class TestQuerySignozTraces:
     def test_available_with_query_api_credentials_only(self) -> None:
-        from app.tools.SignozTracesTool import _traces_is_available
+        from tools.SignozTracesTool import _traces_is_available
 
         assert (
             _traces_is_available(

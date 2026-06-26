@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from app.cli.commands.hermes import hermes_command
+from cli.commands.hermes import hermes_command
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def _patch_agent_to_capture_sink():
     def _capture(self, *, sink, log_path, from_start):  # type: ignore[no-untyped-def]
         raise _AgentBuildAbort(sink)
 
-    return patch("app.cli.commands.hermes.HermesAgent.__init__", _capture)
+    return patch("cli.commands.hermes.HermesAgent.__init__", _capture)
 
 
 def test_bare_hermes_prints_help_and_exits_zero() -> None:
@@ -76,7 +76,7 @@ def test_watch_starts_with_correlator_by_default(telegram_env: None) -> None:
         except _AgentBuildAbort as exc:
             captured["sink"] = exc.sink
 
-    from app.integrations.hermes.correlating_sink import CorrelatingSink
+    from integrations.hermes.correlating_sink import CorrelatingSink
 
     assert isinstance(captured.get("sink"), CorrelatingSink)
 
@@ -95,7 +95,7 @@ def test_watch_no_correlate_uses_raw_telegram_sink(telegram_env: None) -> None:
         except _AgentBuildAbort as exc:
             captured["sink"] = exc.sink
 
-    from app.integrations.hermes.sinks import TelegramSink
+    from integrations.hermes.sinks import TelegramSink
 
     assert isinstance(captured.get("sink"), TelegramSink)
 

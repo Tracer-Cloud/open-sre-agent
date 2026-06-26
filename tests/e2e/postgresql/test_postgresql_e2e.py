@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.verify import verify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.verify import verify_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -139,7 +139,7 @@ class TestPostgreSQLToolSourceAvailability:
 class TestPostgreSQLVerification:
     """Test PostgreSQL integration verification flow."""
 
-    @patch("app.integrations.postgresql._get_connection")
+    @patch("integrations.postgresql._get_connection")
     def test_verify_postgresql_success(self, mock_get_connection, monkeypatch):
         """PostgreSQL verification succeeds with valid config."""
         monkeypatch.setenv("POSTGRESQL_HOST", "localhost")
@@ -183,7 +183,7 @@ class TestPostgreSQLToolsAvailability:
         """PostgreSQL tools modules exist and are properly structured."""
         try:
             # Tools are defined as decorated functions within __init__ modules
-            from app.tools import (
+            from tools import (
                 PostgreSQLCurrentQueriesTool,
                 PostgreSQLReplicationStatusTool,
                 PostgreSQLServerStatusTool,
@@ -202,7 +202,7 @@ class TestPostgreSQLToolsAvailability:
 
     def test_postgresql_integration_config_has_required_fields(self):
         """PostgreSQL integration provides required fields in resolved config."""
-        from app.integrations.models import PostgreSQLIntegrationConfig
+        from integrations.models import PostgreSQLIntegrationConfig
 
         config = PostgreSQLIntegrationConfig(
             host="localhost",

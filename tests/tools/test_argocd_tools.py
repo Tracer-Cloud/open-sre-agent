@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.tools.ArgoCDApplicationDiffTool import ArgoCDApplicationDiffTool
-from app.tools.ArgoCDApplicationStatusTool import ArgoCDApplicationStatusTool
+from tools.ArgoCDApplicationDiffTool import ArgoCDApplicationDiffTool
+from tools.ArgoCDApplicationStatusTool import ArgoCDApplicationStatusTool
 
 
 class _FakeArgoCDClient:
@@ -55,7 +55,7 @@ _ARGOCD_SOURCE = {
 
 def test_argocd_status_tool_extracts_params_and_returns_application(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(
-        "app.tools.ArgoCDApplicationStatusTool.make_argocd_client",
+        "tools.ArgoCDApplicationStatusTool.make_argocd_client",
         lambda *_args, **_kwargs: _FakeArgoCDClient(),
     )
     tool = ArgoCDApplicationStatusTool()
@@ -72,7 +72,7 @@ def test_argocd_status_tool_extracts_params_and_returns_application(monkeypatch)
 
 def test_argocd_diff_tool_reports_drift(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(
-        "app.tools.ArgoCDApplicationDiffTool.make_argocd_client",
+        "tools.ArgoCDApplicationDiffTool.make_argocd_client",
         lambda *_args, **_kwargs: _FakeArgoCDClient(),
     )
     tool = ArgoCDApplicationDiffTool()

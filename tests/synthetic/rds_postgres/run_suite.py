@@ -11,6 +11,7 @@ import argparse
 import difflib
 import json
 import os
+import sys
 import textwrap
 import time
 from collections.abc import Callable, Iterator
@@ -32,6 +33,10 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from tests.synthetic.llm_provider_preflight import (
+    UnsupportedSyntheticLLMProviderError,
+    validate_synthetic_llm_provider,
+)
 from tests.synthetic.mock_aws_backend import FixtureAWSBackend
 from tests.synthetic.mock_grafana_backend.backend import FixtureGrafanaBackend
 from tests.synthetic.mock_grafana_backend.selective_backend import SelectiveGrafanaBackend
@@ -102,8 +107,8 @@ def run_investigation(
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
 ) -> Any:
-    """Lazy-import ``app.pipeline.runners.run_investigation`` (keeps monkeypatch target stable)."""
-    from app.pipeline.runners import run_investigation as _impl
+    """Lazy-import ``core.orchestration.entrypoints.run_investigation`` (keeps monkeypatch target stable)."""
+    from core.orchestration.entrypoints import run_investigation as _impl
 
     return _impl(
         raw_alert,
@@ -470,7 +475,7 @@ def _suppress_investigation_rendering(enabled: bool) -> Iterator[None]:
     previous_output_format = os.environ.get("TRACER_OUTPUT_FORMAT")
     os.environ["TRACER_OUTPUT_FORMAT"] = "none"
 
-    from app.cli.support import output as output_module
+    from cli.interactive_shell.ui import output as output_module
 
     output_module.get_tracker(reset=True)
     try:
@@ -767,6 +772,7 @@ def _run_axis2_suite(
 def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
     args = parse_args(argv)
     config = _build_run_config(args)
+    validate_synthetic_llm_provider(suite_name="RDS PostgreSQL")
 
     # --axis2 short-circuits the default per-level orchestration: every selected
     # fixture is run twice (FixtureGrafanaBackend then SelectiveGrafanaBackend)
@@ -802,7 +808,11 @@ def run_suite(argv: list[str] | None = None) -> list[ScenarioScore]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    results = run_suite(argv)
+    try:
+        results = run_suite(argv)
+    except UnsupportedSyntheticLLMProviderError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     return 0 if all(result.passed for result in results) else 1
 
 

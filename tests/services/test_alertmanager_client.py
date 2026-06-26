@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.integrations.config_models import AlertmanagerIntegrationConfig
-from app.services.alertmanager.client import (
+from integrations.config_models import AlertmanagerIntegrationConfig
+from services.alertmanager.client import (
     AlertmanagerClient,
     make_alertmanager_client,
 )
@@ -109,7 +109,7 @@ def test_get_client_forwards_auth_config_to_httpx(monkeypatch: pytest.MonkeyPatc
         def close(self) -> None:
             return None
 
-    monkeypatch.setattr("app.services.alertmanager.client.httpx.Client", _FakeClient)
+    monkeypatch.setattr("services.alertmanager.client.httpx.Client", _FakeClient)
 
     c = _client(bearer_token="", username="admin", password="secret123")
     _ = c._get_client()
@@ -132,7 +132,7 @@ def test_get_status_success(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
 
@@ -143,7 +143,7 @@ def test_get_status_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_status_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"message": "forbidden"}, 403),
     )
 
@@ -158,7 +158,7 @@ def test_get_status_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr("app.services.alertmanager.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("services.alertmanager.client.httpx.Client.get", _raise)
 
     result = _client().get_status()
     assert result["success"] is False
@@ -172,7 +172,7 @@ def test_get_status_calls_correct_endpoint(monkeypatch: pytest.MonkeyPatch) -> N
         captured["path"] = path
         return _FakeResponse({"cluster": {"status": "ok"}})
 
-    monkeypatch.setattr("app.services.alertmanager.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("services.alertmanager.client.httpx.Client.get", _fake_get)
 
     _client().get_status()
     assert captured["path"] == "/api/v2/status"
@@ -195,7 +195,7 @@ def test_list_alerts_success(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
 
@@ -213,7 +213,7 @@ def test_list_alerts_with_filter_params(monkeypatch: pytest.MonkeyPatch) -> None
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse([])
 
-    monkeypatch.setattr("app.services.alertmanager.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("services.alertmanager.client.httpx.Client.get", _fake_get)
 
     _client().list_alerts(active=True, silenced=False, filter_labels=['alertname="Test"'])
 
@@ -224,7 +224,7 @@ def test_list_alerts_with_filter_params(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_list_alerts_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "unauthorized"}, 401),
     )
 
@@ -235,7 +235,7 @@ def test_list_alerts_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_alerts_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse([]),
     )
 
@@ -247,7 +247,7 @@ def test_list_alerts_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_alerts_unexpected_format(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"not": "a list"}),
     )
 
@@ -266,7 +266,7 @@ def test_list_alerts_limit_respected(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
 
@@ -301,7 +301,7 @@ def test_list_silences_success(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
 
@@ -316,7 +316,7 @@ def test_list_silences_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_silences_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "forbidden"}, 403),
     )
 
@@ -328,7 +328,7 @@ def test_list_silences_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_silences_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse([]),
     )
 
@@ -342,7 +342,7 @@ def test_list_silences_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_silences_unexpected_format(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"silences": []}),
     )
 
@@ -362,7 +362,7 @@ def test_list_silences_limit_respected(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
 
@@ -484,7 +484,7 @@ def test_make_client_strips_whitespace() -> None:
 
 def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"cluster": {"status": "ok"}}),
     )
 
@@ -495,7 +495,7 @@ def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_probe_access_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.services.alertmanager.client.httpx.Client.get",
+        "services.alertmanager.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "unauthorized"}, 401),
     )
 

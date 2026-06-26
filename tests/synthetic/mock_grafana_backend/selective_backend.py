@@ -92,6 +92,9 @@ class SelectiveGrafanaBackend:
     def query_traces(self, **_: Any) -> dict[str, Any]:
         return format_tempo_search()
 
+    def query_annotations(self, **_: Any) -> list[dict[str, Any]]:
+        return []
+
     def reset(self) -> None:
         """Clear the queried_metrics audit log (useful for re-running a scenario)."""
         self.queried_metrics = []

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from app.guardrails.rules import GuardrailAction, load_rules
+from platform.guardrails.rules import GuardrailAction, load_rules
 
 
 def _write_config(tmp_path: Path, data: dict) -> Path:

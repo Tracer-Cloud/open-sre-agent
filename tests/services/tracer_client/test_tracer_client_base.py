@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-import app.services.tracer_client.tracer_client_base as tracer_client_base
+import services.tracer_client.tracer_client_base as tracer_client_base
 
 
 class _FakeResponse:

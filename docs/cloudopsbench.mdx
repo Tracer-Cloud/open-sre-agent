@@ -190,7 +190,7 @@ everything in one pass, not one-fix-rerun-discover-next.
 
 ## Cost tracking
 
-The framework registers a usage hook on `app/services/llm_client.py`'s
+The framework registers a usage hook on `services/llm_client.py`'s
 `LLMClient`, `OpenAILLMClient`, and `BedrockLLMClient`. Every successful
 LLM call feeds `(model, tokens_in, tokens_out)` into a `CostTracker`.
 The tracker enforces the configured `cost_budget_usd` as a hard cap —

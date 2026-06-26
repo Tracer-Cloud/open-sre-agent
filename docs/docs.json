@@ -39,8 +39,17 @@
             "group": "First steps",
             "pages": [
               "quickstart",
+              "investigation-overview",
+              "interactive-shell-commands",
+              "interactive-shell-assistant",
               "deployment",
               "faq"
+            ]
+          },
+          {
+            "group": "Benchmark",
+            "pages": [
+              "cloudopsbench"
             ]
           },
           {
@@ -90,10 +99,11 @@
             "pages": [
               "integrations-overview",
               "remote-runtime-investigation",
+              "background-investigations",
               "masking",
               "interactive-shell-privacy",
               "sessions",
-              "agents",
+              "fleet",
               "cron",
               "multi-instance-integrations"
             ]
@@ -114,20 +124,30 @@
               "coralogix",
               "datadog",
               "grafana",
+              "grafana_annotations",
+              "groundcover",
               "hermes",
               "honeycomb",
               "incident_io",
+              "openobserve",
               "opsgenie",
+              "pagerduty",
+              "posthog-mcp",
               "sentry",
+              "sentry-mcp",
               "signoz",
-              "splunk"
+              "tempo",
+              "splunk",
+              "victoria_logs"
             ]
           },
           {
             "group": "Cloud, code, and collaboration",
             "expanded": true,
             "pages": [
+              "argocd",
               "aws",
+              "cloudtrail_events",
               "bitbucket",
               "github",
               "integrations/github-actions",
@@ -136,6 +156,7 @@
               "helm",
               "jenkins",
               "jira",
+              "integrations/trello",
               "vercel"
             ]
           },
@@ -144,6 +165,7 @@
             "expanded": true,
             "pages": [
               "messaging/index",
+              "smtp",
               "messaging/slack",
               "messaging/discord",
               "messaging/telegram",
@@ -154,18 +176,26 @@
           {
             "group": "Data and workflow systems",
             "pages": [
+              "airflow",
+              "azure-sql",
               "clickhouse",
               "dagster",
               "kafka",
               "mariadb",
               "mongodb",
+              "mongodb-atlas",
               "mysql",
               "openclaw",
               "opensearch",
               "postgresql",
               "prefect",
               "rabbitmq",
-              "rds"
+              "rds",
+              "snowflake",
+              "supabase",
+              "redis",
+              "rds",
+              "temporal"
             ]
           }
         ]
@@ -284,18 +314,6 @@
                   "comparisons/Tracer_vs_AWS_CloudWatch"
                 ]
               }
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Changelog",
-        "icon": "clock",
-        "groups": [
-          {
-            "group": "Daily updates",
-            "pages": [
-              "daily-updates/overview"
             ]
           }
         ]

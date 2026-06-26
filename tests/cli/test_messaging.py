@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from app.cli.commands.messaging import messaging
-from app.integrations.messaging_security import verify_pairing_code
+from cli.commands.messaging import messaging
+from integrations.messaging_security import verify_pairing_code
 
 
 @pytest.fixture()
@@ -17,7 +17,7 @@ def _isolated_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect the integration store to a temp directory."""
     store_path = tmp_path / "integrations.json"
     store_path.write_text(json.dumps({"version": 2, "integrations": []}))
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
     return store_path
 
 

@@ -119,6 +119,16 @@ TELEGRAM_DEFAULT_CHAT_ID=<chat-id>
 
 OpenSRE picks these up at startup and registers Telegram as an active integration.
 
+<Note>
+**Credential resolution.** Every Telegram delivery surface — investigations, the
+scheduler, `opensre watchdog`, `opensre hermes watch`, and the `/watch` REPL
+command — resolves the bot token in the same order: integration store →
+`TELEGRAM_BOT_TOKEN` env → system keyring; and the chat id as `--chat-id` →
+store `default_chat_id` → `TELEGRAM_DEFAULT_CHAT_ID` env. Either setup option
+above works for all of them — you do not need to export the token separately for
+the watchdog or Hermes.
+</Note>
+
 ---
 
 ## Step 5: Verify

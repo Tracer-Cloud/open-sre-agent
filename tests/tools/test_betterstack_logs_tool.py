@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.BetterStackLogsTool import query_betterstack_logs
 from tests.tools.conftest import BaseToolContract
+from tools.BetterStackLogsTool import query_betterstack_logs
 
 
 class TestBetterStackLogsToolContract(BaseToolContract):
@@ -29,7 +29,7 @@ def test_run_happy_path_explicit_source() -> None:
         "row_count": 1,
     }
     with patch(
-        "app.tools.BetterStackLogsTool.query_logs",
+        "tools.BetterStackLogsTool.query_logs",
         return_value=fake,
     ) as mock_query:
         result = query_betterstack_logs(
@@ -48,7 +48,7 @@ def test_run_happy_path_explicit_source() -> None:
 
 def test_source_falls_back_to_first_configured() -> None:
     with patch(
-        "app.tools.BetterStackLogsTool.query_logs",
+        "tools.BetterStackLogsTool.query_logs",
         return_value={
             "source": "betterstack",
             "available": True,
@@ -71,7 +71,7 @@ def test_missing_source_and_no_hints_surfaces_downstream() -> None:
     # When neither source nor sources are provided, query_logs is still called
     # with an empty source — downstream validation returns the structured error.
     with patch(
-        "app.tools.BetterStackLogsTool.query_logs",
+        "tools.BetterStackLogsTool.query_logs",
         return_value={
             "source": "betterstack",
             "available": False,

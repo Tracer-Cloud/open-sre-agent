@@ -9,14 +9,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
-from app.integrations.llm_cli.gemini_cli import (
+from integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+from integrations.llm_cli.gemini_cli import (
     _PROBE_TIMEOUT_SEC,
     GeminiCLIAdapter,
     _fallback_gemini_cli_paths,
     _resolve_exec_timeout_seconds,
 )
-from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -39,8 +39,8 @@ def _auth_ok_proc() -> MagicMock:
     return m
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gemini"
     mock_run.side_effect = [_version_proc(), _auth_ok_proc()]
@@ -57,8 +57,8 @@ def test_detect_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     assert "antigravity-cli" in probe.detail
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gemini"
     auth = MagicMock()
@@ -78,8 +78,8 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
     assert "antigravity-cli" not in probe.detail
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated_when_json_error_requests_auth(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -105,8 +105,8 @@ def test_detect_not_authenticated_when_json_error_requests_auth(
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated_uses_api_key_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -125,8 +125,8 @@ def test_detect_not_authenticated_uses_api_key_fallback(
     assert "GEMINI_API_KEY fallback" in probe.detail
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_unclear_auth(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/gemini"
     auth = MagicMock()
@@ -146,8 +146,8 @@ def test_detect_unclear_auth(mock_which: MagicMock, mock_run: MagicMock) -> None
     assert "2026-06-18" in probe.detail
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     _mock_which.return_value = "/usr/bin/gemini"
     m = MagicMock()
@@ -162,8 +162,8 @@ def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMoc
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     import subprocess
 
@@ -180,8 +180,8 @@ def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicM
     assert "could not run" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.gemini_cli._fallback_gemini_cli_paths", return_value=[])
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.gemini_cli._fallback_gemini_cli_paths", return_value=[])
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock) -> None:
     probe = GeminiCLIAdapter().detect()
     assert probe.installed is False
@@ -190,7 +190,7 @@ def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock)
     assert "not found" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
 def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     inv = GeminiCLIAdapter().build(prompt="explain this alert", model=None, workspace="")
     assert inv.argv[0] == "/usr/bin/gemini"
@@ -219,14 +219,14 @@ def test_resolve_exec_timeout_uses_valid_value() -> None:
         assert _resolve_exec_timeout_seconds() == 240.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
 def test_build_uses_timeout_override(_mock_which: MagicMock) -> None:
     with patch.dict(os.environ, {"GEMINI_CLI_TIMEOUT_SECONDS": "180"}, clear=False):
         inv = GeminiCLIAdapter().build(prompt="p", model=None, workspace="")
     assert inv.timeout_sec == 180.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
 def test_build_adds_model_flag(_mock_which: MagicMock) -> None:
     inv = GeminiCLIAdapter().build(prompt="p", model="gemini-2.5-pro", workspace="")
     assert "--model" in inv.argv
@@ -234,7 +234,7 @@ def test_build_adds_model_flag(_mock_which: MagicMock) -> None:
     assert inv.argv[idx + 1] == "gemini-2.5-pro"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/gemini")
 def test_build_forwards_gemini_google_env(_mock_which: MagicMock) -> None:
     with patch.dict(
         os.environ,
@@ -288,7 +288,7 @@ def test_explain_failure_includes_returncode_and_stderr() -> None:
 def test_fallback_paths_macos() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
         patch.dict(os.environ, {}, clear=False),
     ):
         paths = _fallback_gemini_cli_paths()
@@ -301,7 +301,7 @@ def test_fallback_paths_macos() -> None:
 def test_fallback_paths_windows() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "win32"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "win32"),
         patch.dict(
             os.environ,
             {
@@ -318,7 +318,7 @@ def test_fallback_paths_windows() -> None:
 
 
 def test_gemini_cli_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("gemini-cli")
     assert reg is not None
@@ -343,8 +343,8 @@ def test_gemini_google_prefix_forwarded_to_subprocess() -> None:
     assert env["GOOGLE_CLOUD_PROJECT"] == "proj-x"
 
 
-@patch("app.integrations.llm_cli.gemini_cli.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.gemini_cli.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_auth_probe_uses_filtered_subprocess_env(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:

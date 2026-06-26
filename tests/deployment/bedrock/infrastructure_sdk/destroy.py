@@ -11,7 +11,7 @@ from tests.deployment.bedrock.infrastructure_sdk.agent import delete_agent
 from tests.deployment.bedrock.infrastructure_sdk.iam import delete_bedrock_agent_role
 from tests.shared.infrastructure_sdk.config import delete_outputs, load_outputs
 
-STACK_NAME = "tracer-bedrock"
+STACK_NAME = "opensre-bedrock"
 REGION = "us-east-1"
 
 

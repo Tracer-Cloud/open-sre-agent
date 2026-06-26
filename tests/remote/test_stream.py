@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from app.remote.stream import (
+from deployment.remote.stream import (
     _build_event,
     _extract_event_details,
     _extract_node_name,

@@ -18,8 +18,8 @@ globs:
 ## File Placement
 
 Both patterns are valid and auto-discovered by pytest:
-- `app/tools/registry_test.py` — co-located next to source
-- `tests/app/tools/test_registry.py` — under `tests/` directory
+- `tools/registry_test.py` — co-located next to source
+- `tests/tools/test_registry.py` — under `tests/` directory
 
 ## Markers
 

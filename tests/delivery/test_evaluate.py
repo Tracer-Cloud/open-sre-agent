@@ -1,4 +1,4 @@
-"""Tests for app/delivery/__init__.py — LLM judge invocation path."""
+"""Tests for core/orchestration/node/publish_findings — LLM judge invocation path."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from app.delivery import deliver
-from app.state import make_initial_state
+from core.domain.state import make_initial_state
+from core.orchestration.node.publish_findings import deliver
 
 
 def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:
@@ -21,7 +21,7 @@ def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:
 
 def _patch_generate_report(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.delivery.publish_findings.node.generate_report",
+        "core.orchestration.node.publish_findings.generate_report",
         lambda _s: {"slack_message": "", "report": ""},
     )
 
@@ -42,13 +42,13 @@ def test_deliver_runs_judge_when_evaluate_and_rubric_present(
         return fake
 
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         mock_judge,
     )
 
     state = _make_state(evaluate=True, rubric="test rubric")
-    deliver(state)
-    assert state["opensre_llm_eval"] == fake
+    updates = deliver(state)
+    assert updates["opensre_llm_eval"] == fake
 
 
 def test_deliver_skips_judge_when_evaluate_is_false(
@@ -56,14 +56,14 @@ def test_deliver_skips_judge_when_evaluate_is_false(
 ) -> None:
     _patch_generate_report(monkeypatch)
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         lambda *_, **__: pytest.fail("judge should not be called"),
     )
 
     state = _make_state(evaluate=False, rubric="test rubric")
     state["opensre_eval_rubric"] = "test rubric"
-    deliver(state)
-    assert not state.get("opensre_llm_eval")
+    updates = deliver(state)
+    assert not updates.get("opensre_llm_eval")
 
 
 def test_deliver_sets_skip_on_judge_failure(
@@ -75,13 +75,13 @@ def test_deliver_sets_skip_on_judge_failure(
         raise RuntimeError("API timeout")
 
     monkeypatch.setattr(
-        "app.integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
+        "integrations.opensre.llm_eval_judge.run_opensre_llm_judge",
         failing_judge,
     )
 
     state = _make_state(evaluate=True, rubric="test rubric")
-    deliver(state)
-    ev = state.get("opensre_llm_eval")
+    updates = deliver(state)
+    ev = updates.get("opensre_llm_eval")
     assert ev is not None
     assert ev.get("skipped") is True
     assert "API timeout" in ev.get("reason", "")

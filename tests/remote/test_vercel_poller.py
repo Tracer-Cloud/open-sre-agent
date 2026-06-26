@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.remote.vercel_poller import (
+from deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
     VercelPollerSettings,
@@ -19,7 +19,7 @@ from app.remote.vercel_poller import (
     enrich_remote_alert_from_vercel,
     parse_vercel_url,
 )
-from app.services.vercel import VercelConfig
+from services.vercel import VercelConfig
 
 
 class _FakeVercelClient:
@@ -190,11 +190,11 @@ def test_enrich_remote_alert_from_vercel_resolves_selected_log_id(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: _fake_client("54w4s-1775494460431-b04b1df81301"),
     )
 
@@ -223,11 +223,11 @@ def test_collect_candidates_skips_processed_signatures(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: _fake_client(),
     )
     settings = VercelPollerSettings(
@@ -249,11 +249,11 @@ def test_collect_candidates_skips_processed_signatures(
 
 def test_collect_vercel_candidates_returns_actionable_deployments(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: _fake_client(),
     )
 
@@ -282,11 +282,11 @@ def test_collect_vercel_candidates_can_skip_runtime_logs(monkeypatch) -> None:
     fake.get_runtime_logs = types.MethodType(_counting_get_runtime_logs, fake)  # type: ignore[method-assign]
 
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: fake,
     )
 
@@ -298,11 +298,11 @@ def test_collect_vercel_candidates_can_skip_runtime_logs(monkeypatch) -> None:
 
 def test_collect_vercel_candidates_treats_runtime_error_level_as_actionable(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: _FakeVercelClient(
             projects=[{"id": "proj_123", "name": "tracer-marketing-website-v3"}],
             deployments=[
@@ -355,11 +355,11 @@ def test_collect_vercel_candidates_raises_on_api_error_when_requested(monkeypatc
             return {"success": False, "error": "HTTP 403: invalidToken"}
 
     monkeypatch.setattr(
-        "app.remote.vercel_poller.resolve_vercel_config",
+        "deployment.remote.vercel_poller.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.remote.vercel_poller._make_client_from_config",
+        "deployment.remote.vercel_poller._make_client_from_config",
         lambda _config: _FakeErrorVercelClient(),
     )
 
@@ -368,7 +368,7 @@ def test_collect_vercel_candidates_raises_on_api_error_when_requested(monkeypatc
 
 
 def test_resolve_vercel_config_reports_invalid_config(monkeypatch) -> None:
-    from app.remote import vercel_poller as module
+    from deployment.remote import vercel_poller as module
 
     monkeypatch.setattr(
         module,
@@ -376,7 +376,7 @@ def test_resolve_vercel_config_reports_invalid_config(monkeypatch) -> None:
         lambda: {"vercel": {"config": {"team_id": "team-only"}}},
     )
 
-    with patch("app.remote.vercel_poller.report_remote_exception") as report:
+    with patch("deployment.remote.vercel_poller.report_remote_exception") as report:
         assert module.resolve_vercel_config() is None
 
     report.assert_called_once()
@@ -411,10 +411,10 @@ async def test_run_forever_reports_candidate_handler_failure(monkeypatch, tmp_pa
     async def _cancel_sleep(_seconds: int) -> None:
         raise asyncio.CancelledError
 
-    monkeypatch.setattr("app.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
+    monkeypatch.setattr("deployment.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
 
     with (
-        patch("app.remote.vercel_poller.report_remote_exception") as report,
+        patch("deployment.remote.vercel_poller.report_remote_exception") as report,
         pytest.raises(asyncio.CancelledError),
     ):
         await poller.run_forever(_raise_handler)
@@ -447,10 +447,10 @@ async def test_run_forever_reports_iteration_failure(monkeypatch, tmp_path: Path
     async def _cancel_sleep(_seconds: int) -> None:
         raise asyncio.CancelledError
 
-    monkeypatch.setattr("app.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
+    monkeypatch.setattr("deployment.remote.vercel_poller.asyncio.sleep", _cancel_sleep)
 
     with (
-        patch("app.remote.vercel_poller.report_remote_exception") as report,
+        patch("deployment.remote.vercel_poller.report_remote_exception") as report,
         pytest.raises(asyncio.CancelledError),
     ):
         await poller.run_forever(_handler)

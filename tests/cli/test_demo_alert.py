@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.investigation.payload import (
+from cli.investigation.payload import (
     bundled_demo_alert_path,
     load_file,
     resolve_alert_path,

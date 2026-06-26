@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.verify import verify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.verify import verify_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -137,7 +137,7 @@ class TestMySQLToolSourceAvailability:
 class TestMySQLVerification:
     """Test MySQL integration verification flow."""
 
-    @patch("app.integrations.mysql._get_connection")
+    @patch("integrations.mysql._get_connection")
     def test_verify_mysql_success(self, mock_get_connection, monkeypatch):
         """MySQL verification succeeds with valid config."""
         monkeypatch.setenv("MYSQL_HOST", "localhost")
@@ -159,7 +159,7 @@ class TestMySQLVerification:
         assert mysql_result["status"] == "passed"
         mock_get_connection.assert_called_once()
 
-    @patch("app.integrations.mysql._get_connection")
+    @patch("integrations.mysql._get_connection")
     def test_verify_integrations_structure(self, mock_get_connection, monkeypatch):
         """Verify integrations returns a list with expected result fields."""
         monkeypatch.setenv("MYSQL_HOST", "localhost")
@@ -188,7 +188,7 @@ class TestMySQLToolsAvailability:
     def test_mysql_tools_exist_as_modules(self):
         """MySQL tools modules exist and are properly structured."""
         try:
-            from app.tools import (
+            from tools import (
                 MySQLCurrentProcessesTool,
                 MySQLReplicationStatusTool,
                 MySQLServerStatusTool,
@@ -237,11 +237,11 @@ class TestMySQLAlertFixture:
 
 
 class TestMySQLIntegrationConfig:
-    """Test MySQLIntegrationConfig model from app.integrations.models."""
+    """Test MySQLIntegrationConfig model from integrations.models."""
 
     def test_mysql_integration_config_has_required_fields(self):
         """MySQL integration provides required fields in resolved config."""
-        from app.integrations.models import MySQLIntegrationConfig
+        from integrations.models import MySQLIntegrationConfig
 
         config = MySQLIntegrationConfig(
             host="localhost",

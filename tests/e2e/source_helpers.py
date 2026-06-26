@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.investigation import _availability_view
-from app.tools.registry import get_registered_tools
+from core.orchestration.node.investigate.tools import availability_view
+from tools.registry import get_registered_tools
 
 
 def resolve_available_tool_sources(
@@ -18,7 +18,7 @@ def resolve_available_tool_sources(
     """
     sources: dict[str, dict[str, Any]] = {}
     tools = get_registered_tools("investigation")
-    availability_sources = _availability_view(resolved_integrations)
+    availability_sources = availability_view(resolved_integrations)
 
     for source_name, config in availability_sources.items():
         if source_name == "_all" or not isinstance(config, dict):

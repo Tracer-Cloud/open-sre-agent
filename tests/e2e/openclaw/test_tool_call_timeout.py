@@ -6,7 +6,7 @@ Drives a Python stdio MCP fixture
 tool sleeps for an hour. With ``OpenClawConfig.timeout_seconds=2.0``,
 a healthy integration should surface a timeout error within ~2s.
 
-:func:`app.integrations.openclaw._call_tool_async` wraps
+:func:`integrations.openclaw._call_tool_async` wraps
 ``session.call_tool(...)`` with :func:`asyncio.wait_for`, applying
 ``OpenClawConfig.timeout_seconds`` uniformly across all transports.
 The sleeping fixture exercises this wrapper end-to-end.

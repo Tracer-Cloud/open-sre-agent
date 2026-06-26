@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 
-from app.tools.tool_decorator import tool
+from tools.tool_decorator import tool
 
 # --------------------------------------------------------------------------- #
 # Dataset conventions — change only when the upstream dataset format changes. #
@@ -83,7 +83,7 @@ class _CloudOpsBenchBackend(Protocol):
 
     The concrete implementation lives at
     ``tests/benchmarks/cloudopsbench/replay_backend.py``. Capturing the
-    contract here instead of importing the class keeps ``app/`` runtime
+    contract here instead of importing the class keeps ``config/`` runtime
     code free of a dependency on ``tests/``.
 
     Identification is by **dedicated source slot**, not a marker attribute:
@@ -94,7 +94,7 @@ class _CloudOpsBenchBackend(Protocol):
     """
 
     # The Cloud-OpsBench dataset case being replayed. Typed ``Any`` because
-    # the Case schema lives outside ``app/`` (see
+    # the Case schema lives outside ``config/`` (see
     # ``tests/benchmarks/cloudopsbench/case_loader.py``). Attributes consumed
     # here: ``case.process`` (dict of path1/path2 step lists) and
     # ``case.result.fault_object``.

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from app.agent.correlation.providers import (
-    NoopUpstreamEvidenceProvider,
-    QueryBackedUpstreamEvidenceProvider,
-)
-from app.agent.correlation.upstream import (
+from core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,
     UpstreamEvidenceBundle,
+)
+from core.orchestration.node.publish_findings.upstream_correlation.providers import (
+    NoopUpstreamEvidenceProvider,
+    QueryBackedUpstreamEvidenceProvider,
 )
 
 

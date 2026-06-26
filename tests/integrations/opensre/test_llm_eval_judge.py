@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.opensre.llm_eval_judge import extract_judge_json_from_response
+from integrations.opensre.llm_eval_judge import extract_judge_json_from_response
 
 
 def test_extract_judge_json_from_clean_json() -> None:

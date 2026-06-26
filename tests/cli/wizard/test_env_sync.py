@@ -6,26 +6,17 @@ import stat
 import keyring
 import pytest
 
-from app.cli.wizard.config import PROVIDER_BY_VALUE
-from app.cli.wizard.env_sync import (
+from cli.wizard.config import PROVIDER_BY_VALUE
+from cli.wizard.env_sync import (
     _is_sensitive_env_key,
     sync_env_secret,
     sync_env_values,
     sync_provider_env,
 )
-from app.llm_credentials import resolve_env_credential
+from config.llm_credentials import resolve_env_credential
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
-
-
-@pytest.fixture(autouse=True)
-def _isolate_os_environ() -> None:
-    """Restore os.environ after each test that mutates process env."""
-    saved = dict(os.environ)
-    yield
-    os.environ.clear()
-    os.environ.update(saved)
 
 
 @pytest.mark.parametrize(

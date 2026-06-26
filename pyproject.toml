@@ -28,8 +28,12 @@ dependencies = [
     "fastapi>=0.135.3",
     "uvicorn[standard]>=0.30.0",
     # Authentication
-    "PyJWT>=2.8.0",
-    "cryptography>=42.0.0",
+    "PyJWT>=2.13.0",
+    # Cap below 49: cryptography 49.0.0 dropped x86-64 macOS wheels, which breaks
+    # the frozen darwin-x64 release binary (PyInstaller bundles a broken _openssl
+    # extension and the binary crashes at startup). Keep 48.x until the darwin-x64
+    # release target is dropped.
+    "cryptography>=48.0.1,<49",
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
@@ -56,6 +60,8 @@ dependencies = [
     "google-auth>=2.0.0,<3.0.0",
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
+    # Redis
+    "redis>=5.0.0,<6.0.0",
     # Signature verfication for discord
     "PyNaCl>=1.5.0",
     # MariaDB
@@ -77,7 +83,7 @@ Issues = "https://github.com/Tracer-Cloud/opensre/issues"
 Changelog = "https://github.com/Tracer-Cloud/opensre/releases"
 
 [project.scripts]
-opensre = "app.cli.__main__:main"
+opensre = "cli.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -129,10 +135,21 @@ azure_sql = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*", "tests*"]
+include = [
+  "app*",
+  "cli*",
+  "config*",
+  "core*",
+  "deployment*",
+  "integrations*",
+  "platform*",
+  "services*",
+  "tests*",
+  "tools*",
+]
 
 [tool.setuptools.package-data]
-"app.cli" = ["fixtures/*.json"]
+"cli" = ["fixtures/*.json"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.
@@ -140,9 +157,9 @@ include = ["app*", "tests*"]
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app"]
+paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools"]
 exclude = [
-  "app/tools/simple_tools.py",          # explicitly skipped by the registry
+  "tools/simple_tools.py",          # explicitly skipped by the registry
   "app/dockerfile_test.py",
   "app/**/*_test.py",                   # inline pytest modules
 ]
@@ -157,7 +174,7 @@ ignore_decorators = [
   "@validator",
   "@cache",
   "@lru_cache",
-  "@tool",               # @app.tools.tool_decorator.tool registrations
+  "@tool",               # @tools.tool_decorator.tool registrations
   "@mcp.tool",
   "@register*",
 ]
@@ -179,4 +196,5 @@ dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
     "types-psutil>=7.2.2.20260408",
+    "types-PyYAML>=6.0.12",
 ]

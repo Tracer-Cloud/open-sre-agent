@@ -27,7 +27,7 @@ from tests.shared.infrastructure_sdk.resources.vpc import (
     get_public_subnets,
 )
 
-STACK_NAME = "tracer-ec2"
+STACK_NAME = "opensre-ec2"
 REGION = DEFAULT_REGION
 
 

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from app.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
-from app.scheduler.types import TaskStatus
+from platform.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
+from platform.scheduler.types import TaskStatus
 
 
 @pytest.fixture()

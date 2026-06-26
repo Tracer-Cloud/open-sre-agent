@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.GitLabCommitsTool import list_gitlab_commits
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GitLabCommitsTool import list_gitlab_commits
 
 
 class TestGitLabCommitsToolContract(BaseToolContract):
@@ -52,7 +52,7 @@ def test_extract_params_defaults_ref_name_to_main() -> None:
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:
-    with patch("app.tools.GitLabCommitsTool._resolve_config", return_value=None):
+    with patch("tools.GitLabCommitsTool._resolve_config", return_value=None):
         result = list_gitlab_commits(project_id="42")
     assert result["available"] is False
     assert "not configured" in result["error"]
@@ -65,10 +65,8 @@ def test_run_happy_path_returns_commits() -> None:
         {"id": "def", "title": "feat: thing"},
     ]
     with (
-        patch("app.tools.GitLabCommitsTool._resolve_config", return_value=MagicMock()),
-        patch(
-            "app.tools.GitLabCommitsTool.get_gitlab_commits", return_value=fake_commits
-        ) as mock_fn,
+        patch("tools.GitLabCommitsTool._resolve_config", return_value=MagicMock()),
+        patch("tools.GitLabCommitsTool.get_gitlab_commits", return_value=fake_commits) as mock_fn,
     ):
         result = list_gitlab_commits(
             project_id="42",
@@ -86,8 +84,8 @@ def test_run_error_path_returns_empty_commits_when_integration_returns_empty() -
     """The integration coerces non-list (e.g. error) responses to []; the tool
     should still return a valid available payload with no commits."""
     with (
-        patch("app.tools.GitLabCommitsTool._resolve_config", return_value=MagicMock()),
-        patch("app.tools.GitLabCommitsTool.get_gitlab_commits", return_value=[]),
+        patch("tools.GitLabCommitsTool._resolve_config", return_value=MagicMock()),
+        patch("tools.GitLabCommitsTool.get_gitlab_commits", return_value=[]),
     ):
         result = list_gitlab_commits(project_id="42")
     assert result["available"] is True

@@ -55,11 +55,7 @@ You have two equivalent paths:
     ```bash
     opensre onboard
     ```
-    Select **Slack** and paste your webhook URL. The wizard validates the URL via a probe request.
-
-    <Note>
-    The wizard's Slack step currently validates the URL but does not persist it. After the wizard completes, run `opensre integrations setup slack` (or set `SLACK_WEBHOOK_URL` in `.env`) so the credentials are saved.
-    </Note>
+    Select **Slack** and paste your webhook URL. The wizard validates the URL via a probe request, then persists it to `~/.opensre/integrations.json` — the same store the direct setup command writes to. No extra step is needed.
   </Tab>
 </Tabs>
 

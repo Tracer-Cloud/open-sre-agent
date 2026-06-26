@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
-from app.cli.interactive_shell.command_registry.slash_catalog import (
+from cli.interactive_shell.command_registry import SLASH_COMMANDS
+from cli.interactive_shell.command_registry.slash_catalog import (
     _MCP_BY_COMMAND,
     build_slash_command_specs,
     format_slash_catalog_text,
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
     REGISTRY,
 )
 
@@ -23,8 +23,8 @@ def test_slash_catalog_covers_all_registered_commands() -> None:
     missing = sorted(registered - catalogued)
     stale = sorted(catalogued - registered)
     assert not missing, (
-        "Add _MCP_BY_COMMAND entries in app/cli/interactive_shell/command_registry/"
-        f"slash_catalog.py for: {missing}. See app/cli/interactive_shell/AGENTS.md "
+        "Add _MCP_BY_COMMAND entries in cli/interactive_shell/command_registry/"
+        f"slash_catalog.py for: {missing}. See cli/interactive_shell/AGENTS.md "
         "(Slash commands → REPL + CLI parity)."
     )
     assert not stale, (

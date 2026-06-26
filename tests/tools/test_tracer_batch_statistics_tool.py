@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.TracerBatchStatisticsTool import get_batch_statistics
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TracerBatchStatisticsTool import get_batch_statistics
 
 
 class TestTracerBatchStatisticsToolContract(BaseToolContract):
@@ -37,9 +37,7 @@ def test_run_happy_path() -> None:
     mock_client.get_batch_details.return_value = {
         "stats": {"failed_job_count": 2, "total_runs": 10, "total_cost": 5.50}
     }
-    with patch(
-        "app.tools.TracerBatchStatisticsTool.get_tracer_web_client", return_value=mock_client
-    ):
+    with patch("tools.TracerBatchStatisticsTool.get_tracer_web_client", return_value=mock_client):
         result = get_batch_statistics(trace_id="trace-123")
     assert result["failed_job_count"] == 2
     assert result["total_runs"] == 10

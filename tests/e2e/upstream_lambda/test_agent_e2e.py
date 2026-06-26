@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 import boto3
 import requests
 
-from app.cli.investigation import run_investigation_cli
-from app.utils.tracing import traceable
+from cli.investigation import run_investigation_cli
+from platform.observability.tracing import traceable
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
 

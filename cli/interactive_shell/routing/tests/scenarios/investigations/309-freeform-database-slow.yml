@@ -1,0 +1,44 @@
+id: 309-freeform-database-slow
+title: Freeform database slow question
+intent_class: investigation
+input:
+  prompt: why is the database slow?
+session:
+  has_prior_state: false
+  configured_integrations:
+  - datadog
+  resolved_integrations:
+    datadog:
+      connection_verified: true
+      api_key: fixture-api-key
+      app_key: fixture-app-key
+      site: datadoghq.com
+      base_url: https://api.datadoghq.com
+notes: []
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: true
+planned_actions:
+- kind: investigation
+  source: llm
+  target_surface: investigation
+response_contract:
+  must_contain_any:
+  - investigat
+  - rca
+  - database
+  - slow
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+  - type: alert
+    ok: true
+runs: 3
+tool_actions:
+- surface: dispatch
+  kind: investigation

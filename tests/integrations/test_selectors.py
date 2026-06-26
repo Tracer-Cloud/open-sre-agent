@@ -1,8 +1,8 @@
-"""Tests for app/integrations/selectors.py."""
+"""Tests for integrations/selectors.py."""
 
 from __future__ import annotations
 
-from app.integrations.selectors import (
+from integrations.selectors import (
     get_default_instance,
     get_instance_by_name,
     get_instances,

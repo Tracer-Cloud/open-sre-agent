@@ -6,9 +6,13 @@ from pathlib import Path
 
 import pytest
 
-import app.constants as const_module
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
+import config.constants as const_module
+from cli.interactive_shell.runtime.session import (
+    SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+    ReplSession,
+    _scenario_id_from_synthetic_label,
+)
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
 
 
 class TestReplSession:
@@ -39,6 +43,49 @@ class TestReplSession:
         session.clear()
         assert session.pending_prompt_default is None
 
+    def test_queue_auto_command_sets_pending_and_notifies(self) -> None:
+        session = ReplSession()
+        calls: list[bool] = []
+        session.prompt_refresh_fn = lambda: calls.append(True)
+        session.queue_auto_command("/integrations setup sentry")
+        assert session.pending_prompt_default == "/integrations setup sentry"
+        assert session.pending_prompt_autosubmit is True
+        assert calls == [True]
+
+    def test_take_pending_autosubmit_returns_and_clears(self) -> None:
+        session = ReplSession()
+        session.pending_prompt_autosubmit = True
+        assert session.take_pending_autosubmit() is True
+        assert session.pending_prompt_autosubmit is False
+        assert session.take_pending_autosubmit() is False
+
+    def test_clear_resets_pending_autosubmit(self) -> None:
+        session = ReplSession()
+        session.queue_auto_command("/integrations setup sentry")
+        session.clear()
+        assert session.pending_prompt_autosubmit is False
+        assert session.pending_prompt_default is None
+
+    def test_scenario_id_from_synthetic_label(self) -> None:
+        assert (
+            _scenario_id_from_synthetic_label(
+                "opensre tests synthetic --scenario 001-replication-lag"
+            )
+            == "001-replication-lag"
+        )
+        assert _scenario_id_from_synthetic_label("rds_postgres:001-replication-lag") == (
+            "001-replication-lag"
+        )
+        assert _scenario_id_from_synthetic_label("opensre tests synthetic --scenario ./evil") == ""
+        assert _scenario_id_from_synthetic_label("rds_postgres:not-a-scenario") == ""
+
+    def test_suggest_synthetic_failure_follow_up_sets_pending(self) -> None:
+        session = ReplSession()
+        session.suggest_synthetic_failure_follow_up(
+            label="opensre tests synthetic --scenario 001-replication-lag",
+        )
+        assert session.pending_prompt_default == SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+
     def test_record_appends_entry(self) -> None:
         session = ReplSession()
         session.record("alert", "cpu high")
@@ -61,6 +108,7 @@ class TestReplSession:
     def test_clear_preserves_trust_mode(self) -> None:
         session = ReplSession()
         session.trust_mode = True
+        session.background_notification_preferences.set_channels(["email"])
         session.accumulated_context["service"] = "api"
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
@@ -79,6 +127,7 @@ class TestReplSession:
         assert session.task_registry.list_recent() == []
         assert session.ctrl_c_intervention_count == 0
         assert session.correction_intervention_count == 0
+        assert session.background_notification_preferences.channels == ("email",)
         assert session.trust_mode is True  # preserved intentionally
 
     def test_clear_keeps_persisted_task_history_file(

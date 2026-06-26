@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.TracerErrorLogsTool import get_error_logs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TracerErrorLogsTool import get_error_logs
 
 
 class TestTracerErrorLogsToolContract(BaseToolContract):
@@ -42,7 +42,7 @@ def test_run_filters_error_logs() -> None:
             {"message": "fail to connect", "log_level": "WARNING", "timestamp": "2024-01-01"},
         ]
     }
-    with patch("app.tools.TracerErrorLogsTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.TracerErrorLogsTool.get_tracer_web_client", return_value=mock_client):
         result = get_error_logs(trace_id="trace-123", error_only=True)
     assert result["total_logs"] == 3
     # ERROR level + fail keyword = 2
@@ -57,6 +57,6 @@ def test_run_returns_all_logs_when_not_error_only() -> None:
             {"message": "debug log", "log_level": "DEBUG", "timestamp": "2024-01-01"},
         ]
     }
-    with patch("app.tools.TracerErrorLogsTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.TracerErrorLogsTool.get_tracer_web_client", return_value=mock_client):
         result = get_error_logs(trace_id="trace-123", error_only=False)
     assert result["filtered_count"] == 2

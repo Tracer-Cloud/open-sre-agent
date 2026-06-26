@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.scheduler.types import (
+from platform.scheduler.types import (
     Provider,
     ScheduledTask,
     TaskKind,

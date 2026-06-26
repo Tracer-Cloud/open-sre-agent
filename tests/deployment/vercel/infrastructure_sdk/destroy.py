@@ -8,7 +8,7 @@ import time
 from tests.deployment.vercel.infrastructure_sdk.client import delete_deployment, delete_project
 from tests.shared.infrastructure_sdk.config import delete_outputs, load_outputs
 
-STACK_NAME = "tracer-vercel"
+STACK_NAME = "opensre-vercel"
 
 
 def destroy() -> dict[str, list[str]]:

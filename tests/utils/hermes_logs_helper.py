@@ -1,7 +1,7 @@
 """Shared Hermes-log polling helper for the test suite.
 
-This is the test-side counterpart to ``app.tools.HermesLogsTool``: it
-wraps :func:`app.integrations.hermes.poller.poll_hermes_logs` with the small
+This is the test-side counterpart to ``tools.HermesLogsTool``: it
+wraps :func:`integrations.hermes.poller.poll_hermes_logs` with the small
 ergonomics every Hermes test ends up wanting — a temp-file context
 manager that appends lines with realistic line endings and flushing,
 a cursor-aware polling loop with a deadline, and helpers that pull
@@ -22,9 +22,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.integrations.hermes.classifier import IncidentClassifier
-from app.integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
-from app.integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
+from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
+from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
 
 _DEFAULT_POLL_BUDGET_S: float = 5.0
 _DEFAULT_POLL_INTERVAL_S: float = 0.02

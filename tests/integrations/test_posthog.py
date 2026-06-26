@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from app.integrations.posthog import (
+from integrations.posthog import (
     BounceRateAlert,
     BounceRateResult,
     PostHogConfig,
@@ -63,7 +63,7 @@ def test_validate_posthog_config_success(monkeypatch: pytest.MonkeyPatch) -> Non
     def fake_request_json(*args, **kwargs):
         return {"id": 123, "name": "Demo Project"}
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = validate_posthog_config(config)
 
@@ -87,7 +87,7 @@ def test_validate_posthog_config_unauthorized(monkeypatch: pytest.MonkeyPatch) -
             response=response,
         )
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = validate_posthog_config(config)
 
@@ -113,7 +113,7 @@ def test_validate_posthog_config_forbidden(monkeypatch: pytest.MonkeyPatch) -> N
             response=response,
         )
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = validate_posthog_config(config)
 
@@ -138,7 +138,7 @@ def test_validate_posthog_config_not_found(monkeypatch: pytest.MonkeyPatch) -> N
             response=response,
         )
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = validate_posthog_config(config)
 
@@ -155,7 +155,7 @@ def test_validate_posthog_config_http_error_detail_starts_with_http(
     response = httpx.Response(401, request=request)
 
     monkeypatch.setattr(
-        "app.integrations.posthog._request_json",
+        "integrations.posthog._request_json",
         lambda *_a, **_kw: (_ for _ in ()).throw(
             httpx.HTTPStatusError("401", request=request, response=response)
         ),
@@ -176,7 +176,7 @@ def test_validate_posthog_config_generic_error_still_handled(
     def fake_request_json(*args, **kwargs):
         raise ConnectionError("network unreachable")
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = validate_posthog_config(config)
 
@@ -193,7 +193,7 @@ def test_query_bounce_rate_success(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_request_json(*args, **kwargs):
         return {"results": [[750, 1000]]}
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = query_bounce_rate(config, period="24h")
 
@@ -214,7 +214,7 @@ def test_query_bounce_rate_clamps_to_one(monkeypatch: pytest.MonkeyPatch) -> Non
     def fake_request_json(*args, **kwargs):
         return {"results": [[1500, 1000]]}
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     result = query_bounce_rate(config, period="24h")
 
@@ -232,7 +232,7 @@ def test_query_bounce_rate_empty_results(monkeypatch: pytest.MonkeyPatch) -> Non
     def fake_request_json(*args, **kwargs):
         return {"results": []}
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     with pytest.raises(ValueError, match="Empty PostHog response"):
         query_bounce_rate(config)
@@ -247,7 +247,7 @@ def test_query_bounce_rate_invalid_response(monkeypatch: pytest.MonkeyPatch) -> 
     def fake_request_json(*args, **kwargs):
         return []
 
-    monkeypatch.setattr("app.integrations.posthog._request_json", fake_request_json)
+    monkeypatch.setattr("integrations.posthog._request_json", fake_request_json)
 
     with pytest.raises(ValueError, match="Unexpected PostHog response"):
         query_bounce_rate(config)
@@ -262,7 +262,7 @@ def test_check_bounce_rate_alert_below_threshold(monkeypatch: pytest.MonkeyPatch
     )
 
     monkeypatch.setattr(
-        "app.integrations.posthog.query_bounce_rate",
+        "integrations.posthog.query_bounce_rate",
         lambda _config, period: BounceRateResult(
             bounce_rate=0.3,
             total_sessions=600,
@@ -286,7 +286,7 @@ def test_check_bounce_rate_alert_warning(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     monkeypatch.setattr(
-        "app.integrations.posthog.query_bounce_rate",
+        "integrations.posthog.query_bounce_rate",
         lambda _config, period: BounceRateResult(
             bounce_rate=0.75,
             total_sessions=1000,
@@ -314,7 +314,7 @@ def test_check_bounce_rate_alert_critical(monkeypatch: pytest.MonkeyPatch) -> No
     )
 
     monkeypatch.setattr(
-        "app.integrations.posthog.query_bounce_rate",
+        "integrations.posthog.query_bounce_rate",
         lambda _config, period: BounceRateResult(
             bounce_rate=0.95,
             total_sessions=1000,

@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.verify import verify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.verify import verify_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -115,7 +115,7 @@ class TestMongoDBToolSourceAvailability:
 class TestMongoDBVerification:
     """Test MongoDB integration verification flow."""
 
-    @patch("app.integrations.mongodb._get_client")
+    @patch("integrations.mongodb._get_client")
     def test_verify_mongodb_success(self, mock_get_client):
         """MongoDB verification succeeds with valid config."""
         mock_client = MagicMock()
@@ -155,7 +155,7 @@ class TestMongoDBToolsAvailability:
         """MongoDB tools modules exist and are properly structured."""
         try:
             # Tools are defined as decorated functions within __init__ modules
-            from app.tools import (
+            from tools import (
                 MongoDBCollectionStatsTool,
                 MongoDBCurrentOpsTool,
                 MongoDBProfilerTool,
@@ -174,7 +174,7 @@ class TestMongoDBToolsAvailability:
 
     def test_mongodb_integration_config_has_required_fields(self):
         """MongoDB integration provides required fields in resolved config."""
-        from app.integrations.models import MongoDBIntegrationConfig
+        from integrations.models import MongoDBIntegrationConfig
 
         config = MongoDBIntegrationConfig(
             connection_string="mongodb://localhost",

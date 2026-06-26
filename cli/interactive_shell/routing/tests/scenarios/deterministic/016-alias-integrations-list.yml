@@ -1,0 +1,39 @@
+id: 016-alias-integrations-list
+title: Integrations list alias
+intent_class: deterministic
+input:
+  prompt: integrations list
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes: []
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: /integrations list
+policy:
+  executes_terminal_action: true
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /integrations
+  args:
+  - list
+  content: /integrations list
+response_contract:
+  must_contain_any:
+  - ran /integrations list
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /integrations
+  args:
+  - list
+  content: /integrations list

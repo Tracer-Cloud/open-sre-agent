@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import platform
 import subprocess
 import sys
 from collections.abc import Iterable
@@ -34,6 +33,7 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
+import platform
 from tests.benchmarks._framework.adapters import BenchmarkAdapter
 from tests.benchmarks._framework.config import BenchmarkConfig
 from tests.benchmarks._framework.cost import lookup_pricing
@@ -55,6 +55,7 @@ _ENV_ALLOWLIST: frozenset[str] = frozenset(
     {
         "OPENSRE_BENCH_WORKERS",
         "OPENSRE_BENCH_COST_BUDGET_USD",
+        "BENCH_MIN_TOOL_CALLS",
         "PYTHONPATH",
         "LANG",
         "LC_ALL",
@@ -121,7 +122,7 @@ def capture_provenance(
         Plain dict, JSON-serializable, suitable for ``json.dump`` to
         ``provenance.json`` in the run directory.
     """
-    return {
+    provenance: dict[str, Any] = {
         "schema_version": PROVENANCE_SCHEMA_VERSION,
         "run_id": run_id,
         "started_at": started_at,
@@ -135,6 +136,10 @@ def capture_provenance(
         "dataset": _dataset_section(adapter),
         "run_inputs": _run_inputs_section(config),
     }
+    # Strategy hook — the framework's job is to assemble the standard
+    # sections; adapters extend with their own keys (e.g. CloudOpsBench
+    # adds ``min_tool_calls`` to ``run_inputs``). See BenchmarkAdapter.
+    return adapter.extend_provenance(provenance)
 
 
 # --------------------------------------------------------------------------- #
@@ -148,7 +153,14 @@ def _git_state() -> dict[str, Any]:
         sha_full = _run_git("rev-parse", "HEAD") or "(unknown)"
         sha_short = _run_git("rev-parse", "--short", "HEAD") or "(unknown)"
         branch = _run_git("rev-parse", "--abbrev-ref", "HEAD") or "(unknown)"
-        status_porcelain = _run_git("status", "--porcelain") or ""
+        # NB: fetch porcelain UNSTRIPPED. ``git status --porcelain`` emits
+        # ``XY PATH`` where column 0 (X = index state) is a SIGNIFICANT space for
+        # unstaged-only changes (e.g. " M core/orchestration/node/investigate/agent.py"). The
+        # default strip in ``_run_git`` would eat that leading space on the first
+        # line, shifting it left so ``line[3:]`` slices into the path and drops
+        # its first character (" M app…" → "pp/agent/…"). Keep the raw spacing so
+        # the fixed-width [3:] slice lands exactly on the path.
+        status_porcelain = _run_git("status", "--porcelain", strip=False) or ""
         changed_files = [
             line[3:].strip()
             for line in status_porcelain.splitlines()
@@ -171,8 +183,13 @@ def _git_state() -> dict[str, Any]:
         }
 
 
-def _run_git(*args: str) -> str | None:
-    """Run a git command; return stripped stdout or None on failure."""
+def _run_git(*args: str, strip: bool = True) -> str | None:
+    """Run a git command; return stdout (stripped by default) or None on failure.
+
+    Pass ``strip=False`` for commands whose leading/trailing whitespace is
+    significant — notably ``status --porcelain``, where column 0 is a meaningful
+    space for unstaged changes.
+    """
     result = subprocess.run(
         ["git", *args],
         capture_output=True,
@@ -182,7 +199,7 @@ def _run_git(*args: str) -> str | None:
     )
     if result.returncode != 0:
         return None
-    return result.stdout.strip()
+    return result.stdout.strip() if strip else result.stdout
 
 
 # --------------------------------------------------------------------------- #
@@ -326,6 +343,10 @@ def _stringify_optional_path(value: Any) -> str | None:
 
 
 def _run_inputs_section(config: BenchmarkConfig) -> dict[str, Any]:
+    # Adapter-agnostic. Knobs that belong to a specific adapter (e.g.
+    # CloudOpsBench's ``min_tool_calls``) are injected via the adapter's
+    # ``extend_provenance`` hook, NOT by the framework reaching into the
+    # adapter's internals. See BenchmarkAdapter.extend_provenance.
     return {
         "modes": list(config.modes),
         "llms": list(config.llms),

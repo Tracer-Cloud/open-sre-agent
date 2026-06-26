@@ -3,10 +3,10 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.probe_utils import run_version_probe
+from integrations.llm_cli.probe_utils import run_version_probe
 
 
-@patch("app.integrations.llm_cli.probe_utils.subprocess.run")
+@patch("integrations.llm_cli.probe_utils.subprocess.run")
 def test_run_version_probe_success(mock_run: MagicMock) -> None:
     mock_run.return_value = subprocess.CompletedProcess(
         args=["/bin/tool", "--version"],
@@ -21,7 +21,7 @@ def test_run_version_probe_success(mock_run: MagicMock) -> None:
     assert detail is None
 
 
-@patch("app.integrations.llm_cli.probe_utils.subprocess.run")
+@patch("integrations.llm_cli.probe_utils.subprocess.run")
 def test_run_version_probe_nonzero(mock_run: MagicMock) -> None:
     mock_run.return_value = subprocess.CompletedProcess(
         args=["/bin/tool", "--version"],
@@ -36,7 +36,7 @@ def test_run_version_probe_nonzero(mock_run: MagicMock) -> None:
     assert detail == "`/bin/tool --version` failed: broken"
 
 
-@patch("app.integrations.llm_cli.probe_utils.subprocess.run")
+@patch("integrations.llm_cli.probe_utils.subprocess.run")
 def test_run_version_probe_timeout(mock_run: MagicMock) -> None:
     mock_run.side_effect = subprocess.TimeoutExpired(cmd=["/bin/tool", "--version"], timeout=3.0)
 
@@ -47,7 +47,7 @@ def test_run_version_probe_timeout(mock_run: MagicMock) -> None:
     assert detail.startswith("Could not run `/bin/tool --version`:")
 
 
-@patch("app.integrations.llm_cli.probe_utils.subprocess.run")
+@patch("integrations.llm_cli.probe_utils.subprocess.run")
 def test_run_version_probe_oserror(mock_run: MagicMock) -> None:
     mock_run.side_effect = OSError("no exec")
 

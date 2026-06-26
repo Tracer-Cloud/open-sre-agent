@@ -13,15 +13,15 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.integrations import jenkins as jenkins_module
-from app.integrations.jenkins import (
+from integrations import jenkins as jenkins_module
+from integrations.jenkins import (
     JenkinsConfig,
     build_jenkins_config,
     jenkins_config_from_env,
     validate_jenkins_config,
 )
-from app.services.jenkins import make_jenkins_client
-from app.services.jenkins.client import (
+from services.jenkins import make_jenkins_client
+from services.jenkins.client import (
     JenkinsClient,
     _iso_from_ms,
     _job_api_path,
@@ -215,7 +215,7 @@ class TestHelpers:
         assert _safe_job_name("") is None
 
     def test_coerce_build_number(self) -> None:
-        from app.services.jenkins.client import _coerce_build_number
+        from services.jenkins.client import _coerce_build_number
 
         assert _coerce_build_number(4) == 4
         assert _coerce_build_number("7") == 7
@@ -536,21 +536,21 @@ class _FakeToolClient:
 
 class TestTools:
     def test_availability_requires_verified_connection(self) -> None:
-        from app.tools.JenkinsTool import _jenkins_available
+        from tools.JenkinsTool import _jenkins_available
 
         assert not _jenkins_available({"jenkins": {}})
         assert not _jenkins_available({"jenkins": {"connection_verified": False}})
         assert _jenkins_available({"jenkins": {"connection_verified": True}})
 
     def test_build_tool_extract_params_soft_defaults_job_name(self) -> None:
-        from app.tools.JenkinsTool import _list_jenkins_builds_extract_params
+        from tools.JenkinsTool import _list_jenkins_builds_extract_params
 
         # job_name absent from sources -> empty default (LLM supplies it as a tool arg)
         params = _list_jenkins_builds_extract_params({"jenkins": {"connection_verified": True}})
         assert params["job_name"] == ""
 
     def test_creds_mapping_from_source_dict(self) -> None:
-        from app.tools.JenkinsTool import _jenkins_creds
+        from tools.JenkinsTool import _jenkins_creds
 
         creds = _jenkins_creds({"base_url": "http://x", "username": "u", "api_token": "t"})
         assert creds == {"jenkins_url": "http://x", "jenkins_user": "u", "jenkins_token": "t"}
@@ -558,7 +558,7 @@ class TestTools:
     def test_resolve_client_needs_both_url_and_token_explicitly(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.tools import JenkinsTool
+        from tools import JenkinsTool
 
         seen: list[tuple] = []
         monkeypatch.setattr(JenkinsTool, "jenkins_config_from_env", lambda: None)
@@ -577,7 +577,7 @@ class TestTools:
     def test_resolve_client_env_path_requires_complete_config(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.tools import JenkinsTool
+        from tools import JenkinsTool
 
         # env has url+token but no username -> jenkins_config_from_env returns a
         # config, but it is not is_configured, so no client is built.
@@ -594,7 +594,7 @@ class TestTools:
     def test_resolve_client_explicit_path_without_username_returns_none(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.tools import JenkinsTool
+        from tools import JenkinsTool
 
         # url + token explicitly present but no username (and no env) -> the
         # factory refuses to build an empty-username client -> None.
@@ -602,7 +602,7 @@ class TestTools:
         assert JenkinsTool._resolve_client("http://x", None, "t") is None
 
     def test_not_configured_when_no_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from app.tools import JenkinsTool
+        from tools import JenkinsTool
 
         monkeypatch.setattr(JenkinsTool, "_resolve_client", lambda *_a, **_k: None)
         result = JenkinsTool.list_jenkins_builds("demo")
@@ -610,7 +610,7 @@ class TestTools:
         assert "not configured" in result["error"]
 
     def test_list_builds_tool_shapes_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from app.tools import JenkinsTool
+        from tools import JenkinsTool
 
         fake = _FakeToolClient(
             list_builds={
@@ -629,7 +629,7 @@ class TestTools:
         assert result["failed_builds"][0]["number"] == 4
 
     def test_tools_registered_in_registry(self) -> None:
-        from app.tools.registry import get_registered_tools
+        from tools.registry import get_registered_tools
 
         names = {t.name for t in get_registered_tools() if t.source == "jenkins"}
         assert names == {

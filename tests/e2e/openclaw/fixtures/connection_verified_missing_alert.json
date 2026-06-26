@@ -16,9 +16,9 @@
   },
   "commonAnnotations": {
     "summary": "OpenClaw bridge tools permanently unavailable despite valid configuration",
-    "description": "Despite a valid OpenClaw integration being present in resolved_integrations, the planner never selects list_openclaw_tools, search_openclaw_conversations, or call_openclaw_bridge_tool. Root cause: the catalog classifier returns the openclaw config dict without injecting connection_verified=True, so _openclaw_available() always returns False. Bug: app/integrations/_catalog_impl.py line 488.",
+    "description": "Despite a valid OpenClaw integration being present in resolved_integrations, the planner never selects list_openclaw_tools, search_openclaw_conversations, or call_openclaw_bridge_tool. Root cause: the catalog classifier returns the openclaw config dict without injecting connection_verified=True, so _openclaw_available() always returns False. Bug: integrations/_catalog_impl.py line 488.",
     "affected_tools": "list_openclaw_tools, search_openclaw_conversations, call_openclaw_bridge_tool",
-    "root_cause_file": "app/integrations/_catalog_impl.py",
+    "root_cause_file": "integrations/_catalog_impl.py",
     "fix": "Add config_dict['connection_verified'] = True after openclaw_config.model_dump()"
   },
   "externalURL": "http://alertmanager.monitoring.svc:9093",

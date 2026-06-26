@@ -17,6 +17,9 @@ class HermesBackend(Protocol):
     def get_provider_traffic(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
         pass
 
+    def get_adapter_catalog(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
+        pass
+
     def get_config(self, session_id: str = "", **kwargs: Any) -> dict[str, Any]:
         pass
 
@@ -91,6 +94,22 @@ class FixtureHermesBackend:
             "available": True,
             "session_id": session_id or str(evidence.get("session_id", "")),
             "calls": list(evidence.get("calls", [])),
+            "error": None,
+        }
+
+    def get_adapter_catalog(self, session_id: str = "", **_: Any) -> dict[str, Any]:
+        evidence = self._fixture.evidence.hermes_adapter_catalog
+        if evidence is None:
+            return self._missing("adapter_catalog")
+        return {
+            "source": "hermes",
+            "available": True,
+            "session_id": session_id,
+            "messaging_adapters": list(evidence.get("messaging_adapters", [])),
+            "llm_providers": list(evidence.get("llm_providers", [])),
+            "execution_backends": list(evidence.get("execution_backends", [])),
+            "build_version": str(evidence.get("build_version", "")),
+            "registered_at": str(evidence.get("registered_at", "")),
             "error": None,
         }
 

@@ -121,11 +121,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `cli/support/output` |
-| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `cli/support/output` |
+| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `cli/interactive_shell/ui/output` |
+| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `cli/interactive_shell/ui/output` |
 | `TRACER_API_URL` | | API URL for tracer reports | `utils/slack_delivery` |
-| `NO_COLOR` | | Disable colored output (standard convention) | `cli/support/output` |
-| `COLUMNS` | `80` | Terminal column width for output formatting | `cli/support/output` |
+| `NO_COLOR` | | Disable colored output (standard convention) | `cli/interactive_shell/ui/output` |
+| `COLUMNS` | `80` | Terminal column width for output formatting | `cli/interactive_shell/ui/output` |
 | `ENV` | `development` | Environment (`development`, `production`) | `config` |
 
 ## Credentials & Authentication
@@ -140,14 +140,14 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `OPENSRE_NO_TELEMETRY` | `0` | Disable all telemetry | `utils/sentry_sdk` |
+| `OPENSRE_NO_TELEMETRY` | `0` | Disable all telemetry, including Sentry and PostHog (covers `$ai_generation` prompt/response events) | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_DISABLED` | `0` | Disable Sentry error reporting | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_DSN` | | Override Sentry DSN | `utils/sentry_sdk` |
 | `OPENSRE_SENTRY_LOGGING_DISABLED` | `0` | Disable Sentry log integration | `.env.example` |
 | `OPENSRE_DEPLOYMENT_METHOD` | `local` | Deployment method tag for Sentry (`railway`, `ec2`, `vercel`, `local`) | `.env.example` |
 | `OPENSRE_PROMPT_LOG_DISABLED` | `0` | Disable prompt logging entirely | `.env.example` |
 | `OPENSRE_PROMPT_LOG_LOCAL_DISABLED` | `0` | Disable local prompt log file | `.env.example` |
-| `OPENSRE_PROMPT_LOG_REDACT` | `0` | Redact prompts before logging | `.env.example` |
+| `OPENSRE_PROMPT_LOG_REDACT` | `1` | Redact known token shapes from prompts/responses before local or PostHog logging | `.env.example` |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.config/opensre/prompt_log.jsonl` | Path to local prompt log file | `.env.example` |
 | `DO_NOT_TRACK` | `0` | Honor global do-not-track preference | `utils/sentry_sdk` |
 | `SENTRY_TRACES_SAMPLE_RATE` | `1.0` | Trace sampling rate for Sentry | `.env.example` |
@@ -165,7 +165,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `OSRE_HELM_INTEGRATION` | | Enable Helm integration (1/true/yes) | `integrations/_catalog_impl` |
-| `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `delivery/publish_findings/gitlab_writeback` |
+| `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `core/orchestration/node/publish_findings/gitlab_writeback` |
 | `OPENSRE_RELEASES_API_URL` | GitHub releases API | Override releases API endpoint | `cli/support/update` |
 
 ## Integration Credentials
@@ -180,6 +180,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |
 | `DD_APP_KEY` | | Datadog application key | `integrations/_catalog_impl` |
 | `DD_SITE` | `datadoghq.com` | Datadog site (us/eu) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_API_KEY` | | groundcover read-only service-account token (alias: `GROUNDCOVER_MCP_TOKEN`) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_MCP_URL` | `https://mcp.groundcover.com/api/mcp` | groundcover MCP endpoint | `integrations/_catalog_impl` |
+| `GROUNDCOVER_TENANT_UUID` | | Tenant UUID (multi-workspace accounts) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_BACKEND_ID` | | Backend ID (multi-backend tenants) | `integrations/_catalog_impl` |
+| `GROUNDCOVER_TIMEZONE` | `UTC` | Timezone for returned timestamps (`X-Timezone`) | `integrations/_catalog_impl` |
 | `HONEYCOMB_API_KEY` | | Honeycomb API key | `integrations/_catalog_impl` |
 | `HONEYCOMB_DATASET` | `__all__` | Honeycomb dataset slug | `integrations/_catalog_impl` |
 | `HONEYCOMB_API_URL` | `https://api.honeycomb.io` | Honeycomb API endpoint | `integrations/_catalog_impl` |
@@ -215,7 +220,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 ### Messaging
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `cli/support/output`, `utils/slack_delivery` |
+| `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `cli/interactive_shell/ui/output`, `utils/slack_delivery` |
 | `SLACK_BOT_TOKEN` | | Slack bot token | `scheduler/credentials`, `.env.example` |
 | `SLACK_ACCESS_TOKEN` | | Slack user token | `scheduler/credentials` |
 | `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github_issue_comments` |
@@ -223,7 +228,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |
 | `DISCORD_PUBLIC_KEY` | | Discord public key | `integrations/_catalog_impl` |
 | `DISCORD_DEFAULT_CHANNEL_ID` | | Default Discord channel | `integrations/_catalog_impl` |
-| `TELEGRAM_BOT_TOKEN` | | Telegram bot token | `watch_dog/alarms`, `scheduler/credentials` |
+| `TELEGRAM_BOT_TOKEN` | | Telegram bot token | `tools/watch_dog/alarms`, `scheduler/credentials` |
 | `TELEGRAM_DEFAULT_CHAT_ID` | | Default Telegram chat ID | `integrations/_catalog_impl` |
 | `TWILIO_ACCOUNT_SID` | | Twilio account SID | `integrations/_catalog_impl` |
 | `TWILIO_AUTH_TOKEN` | | Twilio auth token | `integrations/_catalog_impl` |
@@ -272,6 +277,12 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `MONGODB_ATLAS_PRIVATE_KEY` | | MongoDB Atlas private API key | `integrations/_catalog_impl` |
 | `MONGODB_ATLAS_PROJECT_ID` | | MongoDB Atlas project ID | `integrations/_catalog_impl` |
 | `MONGODB_ATLAS_BASE_URL` | `https://cloud.mongodb.com/api/atlas/v2` | MongoDB Atlas API base URL | `.env.example` |
+| `REDIS_HOST` | | Redis host | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_PORT` | `6379` | Redis port | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_USERNAME` | | Redis ACL username (Redis 6+) | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_PASSWORD` | | Redis password | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_DATABASE` | `0` | Redis database number | `integrations/redis`, `integrations/_catalog_impl` |
+| `REDIS_SSL` | `false` | Connect using TLS | `integrations/redis`, `integrations/_catalog_impl` |
 | `POSTGRESQL_HOST` | | PostgreSQL host | `integrations/_catalog_impl` |
 | `POSTGRESQL_PORT` | `5432` | PostgreSQL port | `integrations/_catalog_impl` |
 | `POSTGRESQL_DATABASE` | | PostgreSQL database name | `integrations/_catalog_impl` |
@@ -382,6 +393,7 @@ Many integrations support multi-instance configuration via JSON:
 |------------------|-------------|
 | `GRAFANA_INSTANCES` | JSON array of Grafana instances |
 | `DD_INSTANCES` | JSON array of Datadog instances |
+| `GROUNDCOVER_INSTANCES` | JSON array of groundcover instances |
 | `HONEYCOMB_INSTANCES` | JSON array of Honeycomb instances |
 | `CORALOGIX_INSTANCES` | JSON array of Coralogix instances |
 | `AWS_INSTANCES` | JSON array of AWS accounts |

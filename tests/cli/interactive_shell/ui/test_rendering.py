@@ -3,24 +3,52 @@
 from __future__ import annotations
 
 import io
+import re
 import threading
 
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.runtime import loop
-from app.cli.interactive_shell.ui.rendering import (
+from cli.interactive_shell.runtime.state import SpinnerState
+from cli.interactive_shell.runtime.streaming_console import StreamingConsole
+from cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
+from cli.interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
     render_mcp_table,
-    repl_print,
-    repl_table,
 )
 
 
 def test_repl_table_minimal_box() -> None:
     t = repl_table(title="T")
     assert t.title == "T"
+
+
+def test_print_repl_json_tty_uses_single_buffered_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+
+    console = Console(file=fake_stdout, force_terminal=True, width=80)
+    print_repl_json(console, '{"ok": true}')
+
+    assert len(fake_stdout.writes) == 1
+    rendered = re.sub(r"\x1b\[[0-9;]*m", "", fake_stdout.writes[0])
+    assert rendered.startswith("\r\n")
+    assert '"ok": true' in rendered
 
 
 def test_render_integrations_table_empty_shows_hint() -> None:
@@ -34,7 +62,7 @@ def test_repl_print_resets_before_each_line(monkeypatch) -> None:
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        "cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -50,12 +78,12 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+        "cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
-    console = loop.StreamingConsole(
-        loop.SpinnerState(),
+    console = StreamingConsole(
+        SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,
@@ -86,12 +114,12 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive",
+        "cli.interactive_shell.ui.choice_menu.repl_tty_interactive",
         lambda: True,
     )
 
-    console = loop.StreamingConsole(
-        loop.SpinnerState(),
+    console = StreamingConsole(
+        SpinnerState(),
         threading.Event(),
         file=io.StringIO(),
         force_terminal=False,
@@ -127,6 +155,24 @@ def test_render_integrations_table_renders_content(
     assert "grafana" in capsys.readouterr().out
 
 
+def test_render_integrations_table_sorts_services_and_includes_mcp(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    console = Console(force_terminal=False, width=80)
+    render_integrations_table(
+        console,
+        [
+            {"service": "sentry", "source": "-", "status": "missing", "detail": "missing"},
+            {"service": "github", "source": "-", "status": "missing", "detail": "missing"},
+            {"service": "datadog", "source": "env", "status": "passed", "detail": "ok"},
+        ],
+    )
+
+    output = capsys.readouterr().out
+    assert output.index("datadog") < output.index("github") < output.index("sentry")
+    assert "github" in output
+
+
 def test_render_mcp_table_renders_content(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -147,7 +193,7 @@ def test_render_mcp_table_renders_content(
 
 
 def test_print_planned_actions_formats_kinds() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
         PlannedAction,
     )
 

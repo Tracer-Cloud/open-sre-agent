@@ -140,3 +140,18 @@ routable
 systemd
 tailer
 traceback
+# Interactive-shell routing / agent architecture terms
+dedupe
+hardcoding
+postprocessing
+prefills
+stdin
+validator
+docstring
+misclassifications
+pid
+# GitHub / Sentry MCP integration docs terms
+OAuth
+args
+Streamable
+toolsets

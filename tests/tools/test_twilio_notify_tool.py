@@ -1,4 +1,4 @@
-"""Tests for app/tools/TwilioNotifyTool — SMS notification surface."""
+"""Tests for tools/TwilioNotifyTool — SMS notification surface."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.tools.TwilioNotifyTool import TwilioNotifyTool, twilio_notify
+from tools.TwilioNotifyTool import TwilioNotifyTool, twilio_notify
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def _patch_resolve(monkeypatch: pytest.MonkeyPatch, twilio_config: dict[str, Any
     if twilio_config is not None:
         effective["twilio"] = {"config": twilio_config, "source": "local env"}
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: effective,
     )
 
@@ -106,7 +106,7 @@ def test_run_resolves_credentials_internally_and_dispatches(
         captured["ctx"] = ctx
         return True, "", "SM-SENT"
 
-    monkeypatch.setattr("app.tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
+    monkeypatch.setattr("tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
 
     result = twilio_notify.run(body="page on-call", to="+14155559999")
 
@@ -138,7 +138,7 @@ def test_run_falls_back_to_default_recipient(monkeypatch: pytest.MonkeyPatch) ->
         captured["ctx"] = ctx
         return True, "", "SM-DEF"
 
-    monkeypatch.setattr("app.tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
+    monkeypatch.setattr("tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
 
     result = twilio_notify.run(body="hi")
 
@@ -192,7 +192,7 @@ def test_run_propagates_send_error(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "app.tools.TwilioNotifyTool.send_twilio_sms_report",
+        "tools.TwilioNotifyTool.send_twilio_sms_report",
         lambda _r, _c: (False, "twilio rejected", ""),
     )
 

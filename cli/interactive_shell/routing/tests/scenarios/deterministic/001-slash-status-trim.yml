@@ -1,0 +1,37 @@
+id: 001-slash-status-trim
+title: Slash /status with trimmed whitespace
+intent_class: deterministic
+input:
+  prompt: '  /status  '
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes: []
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: /status
+policy:
+  executes_terminal_action: true
+planned_actions:
+- kind: slash
+  source: deterministic
+  target_surface: slash
+  command: /status
+  args: []
+  content: /status
+response_contract:
+  must_contain_any:
+  - ran /status
+  must_not_contain: []
+history:
+  expected:
+  - type: slash
+    ok: true
+runs: 1
+tool_actions:
+- surface: dispatch
+  kind: slash
+  command: /status
+  args: []
+  content: /status

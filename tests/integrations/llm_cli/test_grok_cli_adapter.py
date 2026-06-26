@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
-from app.integrations.llm_cli.grok_cli import (
+from integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+from integrations.llm_cli.grok_cli import (
     GrokCLIAdapter,
     _classify_grok_auth_from_probe,
     _fallback_grok_paths,
@@ -19,8 +19,8 @@ from app.integrations.llm_cli.grok_cli import (
 )
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
-_SUBPROCESS_RUN = "app.integrations.llm_cli.grok_cli.subprocess.run"
-_WHICH = "app.integrations.llm_cli.binary_resolver.shutil.which"
+_SUBPROCESS_RUN = "integrations.llm_cli.grok_cli.subprocess.run"
+_WHICH = "integrations.llm_cli.binary_resolver.shutil.which"
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -231,7 +231,7 @@ def test_detect_api_key_fallback_overrides_probe_timeout(
     assert "XAI_API_KEY" in probe.detail
 
 
-@patch("app.integrations.llm_cli.grok_cli._fallback_grok_paths", return_value=[])
+@patch("integrations.llm_cli.grok_cli._fallback_grok_paths", return_value=[])
 @patch(_WHICH, return_value=None)
 def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock) -> None:
     with patch.dict(os.environ, {"GROK_CLI_BIN": ""}, clear=False):
@@ -335,7 +335,7 @@ def test_build_sets_no_color_env(_mock_which: MagicMock) -> None:
     assert inv.env.get("NO_COLOR") == "1"
 
 
-@patch("app.integrations.llm_cli.grok_cli._fallback_grok_paths", return_value=[])
+@patch("integrations.llm_cli.grok_cli._fallback_grok_paths", return_value=[])
 @patch(_WHICH, return_value=None)
 def test_build_raises_when_binary_not_found(
     _mock_which: MagicMock, _mock_fallback: MagicMock
@@ -432,7 +432,7 @@ def test_detect_uses_grok_cli_bin_env(mock_run: MagicMock, tmp_path: Path) -> No
 
 
 def test_grok_cli_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("grok-cli")
     assert reg is not None
@@ -468,7 +468,7 @@ def test_xai_key_forwarded_via_build() -> None:
 
 def test_xai_key_not_in_blanket_subprocess_env() -> None:
     """XAI_API_KEY must NOT be forwarded via the global prefix allowlist (would leak to others)."""
-    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+    from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     with patch.dict(os.environ, {"XAI_API_KEY": "xai-secret"}, clear=False):
         env = build_cli_subprocess_env(None)
@@ -484,7 +484,7 @@ def test_xai_key_not_in_blanket_subprocess_env() -> None:
 def test_fallback_paths_linux() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "linux"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "linux"),
         patch.dict(os.environ, {"npm_config_prefix": "/custom/npm"}, clear=False),
     ):
         paths = _fallback_grok_paths()

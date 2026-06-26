@@ -33,6 +33,16 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "time_range_minutes": 60,
             "node_ip": "10.0.1.42",
         },
+        "groundcover": {
+            "connection_verified": True,
+            "api_key": "gc_test_token",
+            "mcp_url": "https://mcp.groundcover.com/api/mcp",
+            "tenant_uuid": "",
+            "backend_id": "",
+            "timezone": "UTC",
+            "default_query": "level:error | fields _time, workload, instance, content | limit 50",
+            "period": "PT1H",
+        },
         "grafana": {
             "connection_verified": True,
             "grafana_endpoint": "https://grafana.example.com",
@@ -114,6 +124,14 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
         "mongodb": {
             "connection_string": "mongodb://localhost:27017",
         },
+        "redis": {
+            "host": "localhost",
+            "port": 6379,
+            "username": "",
+            "password": "",
+            "db": 0,
+            "ssl": False,
+        },
         "postgresql": {
             "host": "localhost",
             "port": 5432,
@@ -152,6 +170,11 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "ca_bundle": "/etc/ssl/certs/corp-ca.pem",
             "default_query": 'index=main "NullPointerException" | head 50',
             "time_range_minutes": 60,
+        },
+        "temporal": {
+            "base_url": "http://localhost:7233",
+            "api_key": "",
+            "namespace": "default",
         },
     }
     if overrides:
@@ -195,7 +218,7 @@ class MockHttpxResponse:
         def _fake_post(url, headers, json, timeout):
             return MockHttpxResponse({"data": []})
 
-        monkeypatch.setattr("app.tools.MyTool.httpx.post", _fake_post)
+        monkeypatch.setattr("tools.MyTool.httpx.post", _fake_post)
     """
 
     def __init__(
@@ -237,7 +260,7 @@ class BaseToolContract:
 
     Example for function-based tool::
 
-        from app.tools.MyTool import my_func
+        from tools.MyTool import my_func
 
         class TestMyTool(BaseToolContract):
             def get_tool_under_test(self):

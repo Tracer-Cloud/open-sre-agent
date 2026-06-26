@@ -6,8 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from app.cli.interactive_shell.references import cli_reference as cli_reference_module
-from app.cli.interactive_shell.references.cli_reference import (
+from cli.interactive_shell.references import cli_reference as cli_reference_module
+from cli.interactive_shell.references.cli_reference import (
     build_cli_reference_text,
     get_cli_reference_cache_stats,
     invalidate_cli_reference_cache,
@@ -31,7 +31,7 @@ def test_second_build_is_cache_hit() -> None:
 
 
 def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
-    from app.cli.__main__ import cli
+    from cli.__main__ import cli
 
     text = build_cli_reference_text()
     captured = capsys.readouterr()

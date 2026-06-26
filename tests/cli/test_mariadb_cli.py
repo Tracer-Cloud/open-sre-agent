@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.cli import _parse_port
+from integrations.cli import _parse_port
 
 
 class TestParsePort:

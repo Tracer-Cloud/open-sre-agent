@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from app.llm_reasoning_effort import (
+from config.llm_reasoning_effort import (
     ReasoningEffortChoice,
     apply_reasoning_effort,
     describe_reasoning_effort_default,

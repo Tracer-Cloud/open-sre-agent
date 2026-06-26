@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
-from app.integrations.llm_cli.claude_code import (
+from integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+from integrations.llm_cli.claude_code import (
     _PROBE_TIMEOUT_SEC,
     ClaudeCodeAdapter,
     _classify_claude_code_auth,
@@ -49,8 +49,8 @@ def test_classify_auth_no_credentials_linux() -> None:
     """On Linux, no env var and no credentials file → definitive False."""
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.sys.platform", "linux"),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+        patch("integrations.llm_cli.claude_code.sys.platform", "linux"),
+        patch("integrations.llm_cli.claude_code.Path") as mock_path,
     ):
         mock_creds = MagicMock()
         mock_creds.exists.return_value = False
@@ -63,8 +63,8 @@ def test_classify_auth_no_credentials_macos_returns_none() -> None:
     """On macOS with no binary, no file, no API key → None (can't verify without binary)."""
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.sys.platform", "darwin"),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+        patch("integrations.llm_cli.claude_code.sys.platform", "darwin"),
+        patch("integrations.llm_cli.claude_code.Path") as mock_path,
     ):
         mock_creds = MagicMock()
         mock_creds.exists.return_value = False
@@ -77,8 +77,8 @@ def test_classify_auth_no_credentials_windows_returns_false() -> None:
     """On Windows, same as Linux: without binary or OAuth file, auth is definitively False."""
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.sys.platform", "win32"),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+        patch("integrations.llm_cli.claude_code.sys.platform", "win32"),
+        patch("integrations.llm_cli.claude_code.Path") as mock_path,
     ):
         mock_creds = MagicMock()
         mock_creds.exists.return_value = False
@@ -96,7 +96,7 @@ def test_classify_auth_credentials_file_present(tmp_path: Path) -> None:
 
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.Path.home", return_value=tmp_path),
+        patch("integrations.llm_cli.claude_code.Path.home", return_value=tmp_path),
     ):
         logged_in, detail = _classify_claude_code_auth()
 
@@ -107,7 +107,7 @@ def test_classify_auth_credentials_file_present(tmp_path: Path) -> None:
 def test_classify_auth_credentials_file_unreadable() -> None:
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+        patch("integrations.llm_cli.claude_code.Path") as mock_path,
     ):
         mock_creds = MagicMock()
         mock_creds.exists.return_value = True
@@ -122,7 +122,7 @@ def test_classify_auth_api_key_not_blocked_by_unreadable_creds() -> None:
     """ANTHROPIC_API_KEY must succeed even when credentials file raises OSError."""
     with (
         patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}, clear=False),
-        patch("app.integrations.llm_cli.claude_code.Path") as mock_path,
+        patch("integrations.llm_cli.claude_code.Path") as mock_path,
     ):
         mock_creds = MagicMock()
         mock_creds.exists.return_value = True
@@ -139,7 +139,7 @@ def test_classify_auth_api_key_not_blocked_by_unreadable_creds() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_subscription(mock_run: MagicMock) -> None:
     """Subscription login: loggedIn=true, no apiKeySource → subscription detail."""
     m = MagicMock()
@@ -153,7 +153,7 @@ def test_probe_cli_auth_subscription(mock_run: MagicMock) -> None:
     assert "user@example.com" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_api_key(mock_run: MagicMock) -> None:
     """API key auth: loggedIn=true, apiKeySource present → API key detail."""
     m = MagicMock()
@@ -166,7 +166,7 @@ def test_probe_cli_auth_api_key(mock_run: MagicMock) -> None:
     assert "ANTHROPIC_API_KEY" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_not_logged_in(mock_run: MagicMock) -> None:
     m = MagicMock()
     m.returncode = 0
@@ -178,7 +178,7 @@ def test_probe_cli_auth_not_logged_in(mock_run: MagicMock) -> None:
     assert "Not authenticated" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_nonzero_exit(mock_run: MagicMock) -> None:
     """Non-zero exit with no parseable JSON → None (probe failure)."""
     m = MagicMock()
@@ -191,7 +191,7 @@ def test_probe_cli_auth_nonzero_exit(mock_run: MagicMock) -> None:
     assert "failed" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_not_logged_in_exits_1(mock_run: MagicMock) -> None:
     """Real CLI returns exit 1 with valid JSON ``loggedIn=false`` when no auth.
 
@@ -209,7 +209,7 @@ def test_probe_cli_auth_not_logged_in_exits_1(mock_run: MagicMock) -> None:
     assert "Not authenticated" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_subscription_with_env_api_key_reports_subscription(
     mock_run: MagicMock,
 ) -> None:
@@ -234,7 +234,7 @@ def test_probe_cli_auth_subscription_with_env_api_key_reports_subscription(
     assert "user@example.com" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_api_key_only_uses_authmethod(mock_run: MagicMock) -> None:
     """authMethod=api_key → detail names the env source via apiKeySource."""
     m = MagicMock()
@@ -247,7 +247,7 @@ def test_probe_cli_auth_api_key_only_uses_authmethod(mock_run: MagicMock) -> Non
     assert "ANTHROPIC_API_KEY" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_unrecognized_authmethod_does_not_use_apikeysource(
     mock_run: MagicMock,
 ) -> None:
@@ -273,7 +273,7 @@ def test_probe_cli_auth_unrecognized_authmethod_does_not_use_apikeysource(
     assert "user@example.com" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_exit_1_json_on_stderr_only_is_probe_failure(
     mock_run: MagicMock,
 ) -> None:
@@ -294,7 +294,7 @@ def test_probe_cli_auth_exit_1_json_on_stderr_only_is_probe_failure(
     assert "failed" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_timeout(mock_run: MagicMock) -> None:
     import subprocess
 
@@ -306,7 +306,7 @@ def test_probe_cli_auth_timeout(mock_run: MagicMock) -> None:
     assert "timed out" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
     mock_run.side_effect = OSError("permission denied")
     logged_in, detail = _probe_cli_auth("/usr/bin/claude")
@@ -314,7 +314,7 @@ def test_probe_cli_auth_os_error(mock_run: MagicMock) -> None:
     assert "permission denied" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
     """Older CLI versions that output non-JSON on exit 0 are treated as authenticated."""
     m = MagicMock()
@@ -327,7 +327,7 @@ def test_probe_cli_auth_non_json_exit_zero(mock_run: MagicMock) -> None:
     assert "CLI" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_non_json_not_logged_in_exit_zero(mock_run: MagicMock) -> None:
     """Plain-text 'not logged in' on exit 0 must not be misclassified as authenticated."""
     m = MagicMock()
@@ -340,7 +340,7 @@ def test_probe_cli_auth_non_json_not_logged_in_exit_zero(mock_run: MagicMock) ->
     assert "Not authenticated" in detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
 def test_probe_cli_auth_uses_filtered_subprocess_env(mock_run: MagicMock) -> None:
     """Auth probe should use the same filtered env shape as runtime invocation."""
     m = MagicMock()
@@ -371,8 +371,8 @@ def test_probe_cli_auth_uses_filtered_subprocess_env(mock_run: MagicMock) -> Non
     assert "RANDOM_SECRET" not in env
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_subscription_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """detect() returns logged_in=True via subscription when binary is available."""
     mock_which.return_value = "/usr/bin/claude"
@@ -391,8 +391,8 @@ def test_detect_subscription_authenticated(mock_which: MagicMock, mock_run: Magi
     assert "subscription" in probe.detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_api_key_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """detect() returns logged_in=True via API key when binary reports apiKeySource."""
     mock_which.return_value = "/usr/bin/claude"
@@ -437,8 +437,8 @@ def _auth_status_proc(logged_in: bool, api_key_source: str = "", email: str = ""
     return m
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in_via_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/claude"
     mock_run.side_effect = [
@@ -455,8 +455,8 @@ def test_detect_logged_in_via_api_key(mock_which: MagicMock, mock_run: MagicMock
     assert probe.version == "1.2.3"
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """When claude auth status reports not logged in, detect() returns logged_in=False."""
     mock_which.return_value = "/usr/bin/claude"
@@ -469,8 +469,8 @@ def test_detect_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) ->
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated_uses_api_key_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -485,8 +485,8 @@ def test_detect_not_authenticated_uses_api_key_fallback(
     assert "ANTHROPIC_API_KEY fallback" in probe.detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_authenticated_uses_auth_token_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -505,8 +505,8 @@ def test_detect_not_authenticated_uses_auth_token_fallback(
     assert "ANTHROPIC_AUTH_TOKEN fallback" in probe.detail
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_unclear_auth_uses_api_key_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -525,8 +525,8 @@ def test_detect_unclear_auth_uses_api_key_fallback(
     assert "ANTHROPIC_API_KEY fallback" in probe.detail
 
 
-@patch("app.integrations.llm_cli.claude_code._fallback_claude_code_paths", return_value=[])
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.claude_code._fallback_claude_code_paths", return_value=[])
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock) -> None:
     probe = ClaudeCodeAdapter().detect()
     assert probe.installed is False
@@ -535,8 +535,8 @@ def test_detect_not_installed(_mock_which: MagicMock, _mock_fallback: MagicMock)
     assert "not found" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     _mock_which.return_value = "/usr/bin/claude"
     m = MagicMock()
@@ -551,8 +551,8 @@ def test_detect_version_command_fails(_mock_which: MagicMock, mock_run: MagicMoc
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_os_error(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     _mock_which.return_value = "/usr/bin/claude"
     mock_run.side_effect = OSError("not found")
@@ -563,8 +563,8 @@ def test_detect_version_os_error(_mock_which: MagicMock, mock_run: MagicMock) ->
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Cold-start `claude --version` can exceed the probe timeout; must not raise."""
     import subprocess
@@ -588,7 +588,7 @@ def test_detect_version_timeout_expired(_mock_which: MagicMock, mock_run: MagicM
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     inv = ClaudeCodeAdapter().build(prompt="explain this alert", model=None, workspace="")
     assert inv.argv[0] == "/usr/bin/claude"
@@ -599,7 +599,7 @@ def test_build_basic_invocation(_mock_which: MagicMock) -> None:
     assert inv.timeout_sec == 300.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_adds_model_flag(_mock_which: MagicMock) -> None:
     inv = ClaudeCodeAdapter().build(prompt="p", model="claude-opus-4-7", workspace="")
     assert "--model" in inv.argv
@@ -607,34 +607,34 @@ def test_build_adds_model_flag(_mock_which: MagicMock) -> None:
     assert inv.argv[idx + 1] == "claude-opus-4-7"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_omits_model_flag_when_empty(_mock_which: MagicMock) -> None:
     inv = ClaudeCodeAdapter().build(prompt="p", model="", workspace="")
     assert "--model" not in inv.argv
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_omits_model_flag_when_none(_mock_which: MagicMock) -> None:
     inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace="")
     assert "--model" not in inv.argv
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_uses_provided_workspace(_mock_which: MagicMock) -> None:
     workspace = "/my/project"
     inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace=workspace)
     assert Path(inv.cwd) == Path(workspace)
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_build_sets_no_color_env(_mock_which: MagicMock) -> None:
     inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace="")
     assert inv.env is not None
     assert inv.env.get("NO_COLOR") == "1"
 
 
-@patch("app.integrations.llm_cli.claude_code._fallback_claude_code_paths", return_value=[])
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.claude_code._fallback_claude_code_paths", return_value=[])
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_build_raises_when_binary_not_found(
     _mock_which: MagicMock, _mock_fallback: MagicMock
 ) -> None:
@@ -688,7 +688,7 @@ def test_detect_uses_claude_code_bin_env(tmp_path: Path) -> None:
             {"CLAUDE_CODE_BIN": str(fake_bin), "ANTHROPIC_API_KEY": "sk-t"},
             clear=False,
         ),
-        patch("app.integrations.llm_cli.claude_code.subprocess.run") as mock_run,
+        patch("integrations.llm_cli.claude_code.subprocess.run") as mock_run,
     ):
         mock_run.return_value = _version_proc()
         probe = ClaudeCodeAdapter().detect()
@@ -698,8 +698,8 @@ def test_detect_uses_claude_code_bin_env(tmp_path: Path) -> None:
     assert mock_run.call_args[0][0][0] == str(fake_bin)
 
 
-@patch("app.integrations.llm_cli.claude_code.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
+@patch("integrations.llm_cli.claude_code.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude")
 def test_detect_falls_back_when_bin_env_invalid(
     _mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -723,7 +723,7 @@ def test_detect_falls_back_when_bin_env_invalid(
 def test_fallback_paths_macos() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
         patch.dict(os.environ, {}, clear=False),
     ):
         paths = _fallback_claude_code_paths()
@@ -737,7 +737,7 @@ def test_fallback_paths_macos() -> None:
 def test_fallback_paths_linux() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "linux"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "linux"),
         patch.dict(os.environ, {"npm_config_prefix": "/custom/npm"}, clear=False),
     ):
         paths = _fallback_claude_code_paths()
@@ -749,7 +749,7 @@ def test_fallback_paths_linux() -> None:
 def test_fallback_paths_windows() -> None:
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "win32"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "win32"),
         patch.dict(
             os.environ,
             {
@@ -772,7 +772,7 @@ def test_fallback_paths_windows() -> None:
 
 
 def test_claude_code_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("claude-code")
     assert reg is not None
@@ -799,9 +799,7 @@ def test_anthropic_key_forwarded_via_build() -> None:
             },
             clear=False,
         ),
-        patch(
-            "app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude"
-        ),
+        patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/claude"),
     ):
         inv = ClaudeCodeAdapter().build(prompt="p", model=None, workspace="")
 
@@ -812,7 +810,7 @@ def test_anthropic_key_forwarded_via_build() -> None:
 
 def test_anthropic_key_not_in_blanket_subprocess_env() -> None:
     """ANTHROPIC_API_KEY must NOT be forwarded via the global prefix allowlist (would leak to Codex)."""
-    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+    from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-secret"}, clear=False):
         env = build_cli_subprocess_env(None)
@@ -821,7 +819,7 @@ def test_anthropic_key_not_in_blanket_subprocess_env() -> None:
 
 
 def test_claude_prefix_forwarded_to_subprocess() -> None:
-    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+    from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     with patch.dict(
         os.environ,

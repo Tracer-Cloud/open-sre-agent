@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from app.cli.tests import interactive
-from app.cli.tests.catalog import TestCatalog as Catalog
-from app.cli.tests.catalog import TestCatalogItem as CatalogItem
-from app.cli.tests.discover import load_test_catalog
+from cli.tests import interactive
+from cli.tests.catalog import TestCatalog as Catalog
+from cli.tests.catalog import TestCatalogItem as CatalogItem
+from cli.tests.discover import load_test_catalog
 
 
 def test_choose_interactive_item_returns_single_match_without_extra_prompt(monkeypatch) -> None:

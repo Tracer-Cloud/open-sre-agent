@@ -6,13 +6,13 @@ from datetime import UTC, datetime, timedelta
 
 from rich.console import Console
 
-from app.cli.interactive_shell.alert_inbox import AlertInbox, IncomingAlert
-from app.cli.interactive_shell.alert_renderer import (
+from cli.interactive_shell.alert_inbox import AlertInbox, IncomingAlert
+from cli.interactive_shell.alert_renderer import (
     drain_and_render_incoming,
     format_incoming_alert,
     time_ago,
 )
-from app.cli.interactive_shell.runtime import ReplSession
+from cli.interactive_shell.runtime import ReplSession
 
 
 class TestTimeAgo:

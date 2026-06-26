@@ -20,8 +20,8 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
-from app.cli.interactive_shell.prompting import prompt_surface
-from app.cli.interactive_shell.prompting.prompt_surface import (
+from cli.interactive_shell.prompting import prompt_surface
+from cli.interactive_shell.prompting.prompt_surface import (
     _SHIFT_ENTER_SEQUENCE,
     ReplInputLexer,
     ShellCompleter,
@@ -29,19 +29,20 @@ from app.cli.interactive_shell.prompting.prompt_surface import (
     _build_prompt_style,
     _tab_expand_or_menu,
 )
-from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
-from app.cli.interactive_shell.runtime import execution as loop_execution
-from app.cli.interactive_shell.runtime import loop as loop_module
-from app.cli.interactive_shell.runtime import state as loop_state
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from app.cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
+from cli.interactive_shell.runtime import dispatch as loop_dispatch
+from cli.interactive_shell.runtime import execution as loop_execution
+from cli.interactive_shell.runtime import state as loop_state
+from cli.interactive_shell.runtime.cpr_stdin import strip_cpr_sequences
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.streaming_console import StreamingConsole
+from cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from cli.interactive_shell.ui.theme import ANSI_RESET, PROMPT_ACCENT_ANSI
 
 
 def test_streaming_console_status_does_not_recurse(monkeypatch) -> None:
     """Regression: overriding Console.print broke Rich's status spinner."""
     spinner = loop_state.SpinnerState()
-    console = loop_module.StreamingConsole(
+    console = StreamingConsole(
         spinner,
         threading.Event(),
         file=io.StringIO(),
@@ -68,7 +69,7 @@ def test_strip_cpr_sequences_removes_terminal_cursor_replies(
     text: str,
     expected: str,
 ) -> None:
-    assert loop_module._strip_cpr_sequences(text) == expected
+    assert strip_cpr_sequences(text) == expected
 
 
 def test_repl_input_lexer_highlights_first_slash_token() -> None:
@@ -92,7 +93,7 @@ def test_build_prompt_session_uses_persistent_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -112,7 +113,7 @@ def test_build_prompt_session_falls_back_to_memory_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     blocked_home = tmp_path / "not-a-directory"
     blocked_home.write_text("", encoding="utf-8")
@@ -128,7 +129,7 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
     with create_app_session(input=DummyInput(), output=DummyOutput()):
@@ -150,7 +151,7 @@ def test_shift_enter_inserts_newline_before_submit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import app.constants as const_module
+    import config.constants as const_module
 
     monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
 
@@ -180,7 +181,8 @@ def test_shell_completer_previews_all_commands() -> None:
 
     assert "/help" in names
     assert "/effort" in names
-    assert "/list" in names
+    assert "/integrations" in names
+    assert "/tools" in names
     assert "/model" in names
     assert all(name.startswith("/") for name in names)
 
@@ -188,23 +190,23 @@ def test_shell_completer_previews_all_commands() -> None:
 def test_shell_completer_filters_by_prefix() -> None:
     completions = list(
         ShellCompleter().get_completions(
-            Document("/li"),
+            Document("/to"),
             CompleteEvent(text_inserted=True),
         )
     )
 
-    assert [completion.text for completion in completions] == ["/list"]
+    assert [completion.text for completion in completions] == ["/tools"]
 
 
-def test_shell_completer_suggests_subcommands_for_list() -> None:
+def test_shell_completer_suggests_subcommands_for_tools() -> None:
     completions = list(
         ShellCompleter().get_completions(
-            Document("/list "),
+            Document("/tools "),
             CompleteEvent(text_inserted=True),
         )
     )
     names = sorted({c.text for c in completions})
-    assert names == ["integrations", "mcp", "models", "tools"]
+    assert names == ["list"]
 
 
 def test_shell_completer_hides_inline_picker_autocomplete_in_tty(
@@ -309,7 +311,7 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_completion_menu_current_item_uses_highlight_style() -> None:
-    from app.cli.interactive_shell.ui.theme import BG, HIGHLIGHT
+    from cli.interactive_shell.ui.theme import BG, HIGHLIGHT
 
     style = _build_prompt_style()
     attrs = style.get_attrs_for_style_str("class:repl-slash-command")
@@ -359,152 +361,41 @@ def test_shell_completer_investigate_includes_template_hints() -> None:
     assert any(c.text == "splunk" for c in completions)
 
 
-def test_run_new_alert_marks_task_failed_on_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from rich.console import Console
-
-    from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
-    from app.cli.support.errors import OpenSREError
-
-    def _raise(
-        alert_text: str,
-        context_overrides: object = None,
-        cancel_requested: object = None,
-    ) -> dict[str, object]:
-        raise OpenSREError("integration misconfigured", suggestion="run /doctor")
-
-    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_execution.run_new_alert("High CPU alert", session, console)
-    inv_tasks = [
-        t for t in session.task_registry.list_recent(10) if t.kind == TaskKind.INVESTIGATION
-    ]
-    assert len(inv_tasks) == 1
-    assert inv_tasks[0].status == TaskStatus.FAILED
-    assert inv_tasks[0].error == "integration misconfigured"
-
-
-def test_run_new_alert_tracks_cli_paste_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    from rich.console import Console
-
-    track_calls: list[tuple[str, str]] = []
-
-    class _TrackContext:
-        def __enter__(self) -> None:
-            return None
-
-        def __exit__(self, exc_type, exc, tb) -> bool:
-            _ = (exc_type, exc, tb)
-            return False
-
-    def fake_track_investigation(*, entrypoint, trigger_mode, **kwargs):  # type: ignore[no-untyped-def]
-        _ = kwargs
-        track_calls.append((entrypoint.value, trigger_mode.value))
-        return _TrackContext()
-
-    monkeypatch.setattr("app.analytics.cli.track_investigation", fake_track_investigation)
-    monkeypatch.setattr(
-        "app.cli.investigation.run_investigation_for_session",
-        lambda **_kwargs: {"root_cause": "handled"},
-    )
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-
-    loop_execution.run_new_alert("High CPU alert", session, console)
-
-    assert track_calls == [("cli_paste", "paste")]
-
-
-def test_run_new_alert_hides_prompt_spinner_before_progress(
+def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    observed_streaming: list[bool] = []
-    invalidations: list[None] = []
+    from rich.console import Console
 
-    def _fake_run(
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.investigation_runner import (
+        run_text_investigation,
+    )
+
+    launches: list[tuple[str, str]] = []
+
+    def _fake_start_background_text_investigation(
         *,
         alert_text: str,
-        context_overrides: object = None,
-        cancel_requested: object = None,
-    ) -> dict[str, object]:
-        _ = (alert_text, context_overrides, cancel_requested)
-        observed_streaming.append(spinner.streaming)
-        return {"root_cause": "handled"}
+        session: ReplSession,
+        console: Console,
+        display_command: str,
+    ) -> str:
+        _ = (session, console)
+        launches.append((alert_text, display_command))
+        return "bg123"
 
-    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake_run)
-
-    spinner = loop_state.SpinnerState()
-    spinner.start()
-    console = loop_module.StreamingConsole(
-        spinner,
-        threading.Event(),
-        prompt_invalidator=lambda: invalidations.append(None),
-        file=io.StringIO(),
-        force_terminal=False,
-        highlight=False,
-    )
-
-    loop_execution.run_new_alert("High CPU alert", ReplSession(), console)
-
-    assert observed_streaming == [False]
-    assert invalidations == [None]
-
-
-def test_run_new_alert_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from rich.console import Console
-
-    from app.cli.interactive_shell.runtime.tasks import TaskStatus
-
-    captured_errors: list[BaseException] = []
-
-    def _raise(
-        alert_text: str,
-        context_overrides: object = None,
-        cancel_requested: object = None,
-    ) -> dict[str, object]:
-        raise RuntimeError("pipeline exploded")
-
-    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
-        lambda exc, **_kwargs: captured_errors.append(exc),
+        "cli.interactive_shell.runtime.background_runner.start_background_text_investigation",
+        _fake_start_background_text_investigation,
     )
+
     session = ReplSession()
+    session.background_mode_enabled = True
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
-    loop_execution.run_new_alert("High CPU alert", session, console)
+    run_text_investigation("High CPU alert", session, console)
 
-    inv_tasks = session.task_registry.list_recent(10)
-    assert inv_tasks[0].status == TaskStatus.FAILED
-    assert len(captured_errors) == 1
-    assert isinstance(captured_errors[0], RuntimeError)
-
-
-def test_run_new_alert_does_not_report_opensre_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    from rich.console import Console
-
-    from app.cli.support.errors import OpenSREError
-
-    captured_errors: list[BaseException] = []
-
-    def _raise(
-        alert_text: str,
-        context_overrides: object = None,
-        cancel_requested: object = None,
-    ) -> dict[str, object]:
-        raise OpenSREError("integration misconfigured")
-
-    monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
-    monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
-        lambda exc, **_kwargs: captured_errors.append(exc),
-    )
-    session = ReplSession()
-    console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-
-    loop_execution.run_new_alert("High CPU alert", session, console)
-
-    assert captured_errors == []
+    assert launches == [("High CPU alert", "background free-text investigation")]
+    assert session.task_registry.list_recent(10) == []
 
 
 def test_dispatch_one_turn_reports_slash_dispatch_error(
@@ -519,11 +410,11 @@ def test_dispatch_one_turn_reports_slash_dispatch_error(
         raise RuntimeError("handler crashed")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.runtime.execution.dispatch_slash",
+        "cli.interactive_shell.runtime.execution.dispatch_slash",
         _boom,
     )
     monkeypatch.setattr(
-        "app.cli.support.exception_reporting.capture_exception",
+        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     session = ReplSession()
@@ -551,7 +442,7 @@ def test_dispatch_one_turn_calls_on_exit_when_slash_returns_false(
     from rich.console import Console
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.runtime.execution.dispatch_slash",
+        "cli.interactive_shell.runtime.execution.dispatch_slash",
         lambda *_args, **_kwargs: False,
     )
 
@@ -995,7 +886,7 @@ class TestStreamingConsole:
         spinner = loop_state.SpinnerState()
         spinner.start()
         cancel = _threading.Event()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             cancel,
             highlight=False,
@@ -1010,7 +901,7 @@ class TestStreamingConsole:
 
         spinner = loop_state.SpinnerState()
         cancel = _threading.Event()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             cancel,
             highlight=False,
@@ -1030,7 +921,7 @@ class TestStreamingConsole:
         import threading as _threading
 
         spinner = loop_state.SpinnerState()
-        console = loop_module.StreamingConsole(
+        console = StreamingConsole(
             spinner,
             _threading.Event(),
             file=io.StringIO(),
@@ -1040,11 +931,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "app.cli.interactive_shell.ui.choice_menu.ensure_tty_column_zero",
+            "cli.interactive_shell.ui.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "app.cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
+            "cli.interactive_shell.ui.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1549,7 +1440,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     ) -> None:
         from rich.console import Console
 
-        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
+        from cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )
@@ -1591,7 +1482,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         """
         from rich.console import Console
 
-        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
+        from cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )

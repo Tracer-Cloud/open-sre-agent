@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.sandbox.runner import SandboxResult
-from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
-from app.tools.run_diagnostic_code import run_diagnostic_code
+from platform.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
+from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from tools.run_diagnostic_code import run_diagnostic_code
 
 
 def _registered() -> RegisteredTool:
@@ -99,7 +99,7 @@ class TestRunDiagnosticCodeExecution:
         assert "error" in result
 
     def test_timeout_capped_at_max(self) -> None:
-        with patch("app.tools.run_diagnostic_code.run_python_sandbox") as mock_run:
+        with patch("tools.run_diagnostic_code.run_python_sandbox") as mock_run:
             mock_run.return_value = SandboxResult(
                 code="pass",
                 inputs={},
@@ -113,7 +113,7 @@ class TestRunDiagnosticCodeExecution:
             assert kwargs["timeout"] <= 60
 
     def test_default_timeout_is_applied_when_none(self) -> None:
-        with patch("app.tools.run_diagnostic_code.run_python_sandbox") as mock_run:
+        with patch("tools.run_diagnostic_code.run_python_sandbox") as mock_run:
             mock_run.return_value = SandboxResult(
                 code="pass",
                 inputs={},
@@ -127,7 +127,7 @@ class TestRunDiagnosticCodeExecution:
             assert kwargs["timeout"] == 30
 
     def test_error_field_present_on_runner_error(self) -> None:
-        with patch("app.tools.run_diagnostic_code.run_python_sandbox") as mock_run:
+        with patch("tools.run_diagnostic_code.run_python_sandbox") as mock_run:
             mock_run.return_value = SandboxResult(
                 code="pass",
                 inputs={},

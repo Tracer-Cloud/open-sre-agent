@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from app.guardrails.engine import GuardrailBlockedError, reset_guardrail_engine
+from platform.guardrails.engine import GuardrailBlockedError, reset_guardrail_engine
 
 # ---------------------------------------------------------------------------
 # Shared LLM-client capture fixtures
@@ -52,7 +52,7 @@ def anthropic_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
     class _FakeClient:
         messages = _FakeMessages()
 
-    from app.services.llm_client import LLMClient
+    from services.llm_client import LLMClient
 
     client = LLMClient(model="test", max_tokens=10)
     monkeypatch.setattr(client, "_client", _FakeClient())
@@ -79,7 +79,7 @@ def openai_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, Any]
     class _FakeClient:
         chat = _FakeChat()
 
-    from app.services.llm_client import OpenAILLMClient
+    from services.llm_client import OpenAILLMClient
 
     monkeypatch.setenv("TEST_KEY", "fake-key")
     client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
@@ -110,8 +110,8 @@ class TestLLMClientGuardrails:
                 {"name": "aws_key", "action": "redact", "patterns": ["AKIA[0-9A-Z]{16}"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
         captured: dict = {}
 
@@ -130,7 +130,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -149,10 +149,10 @@ class TestLLMClientGuardrails:
                 {"name": "blocker", "action": "block", "keywords": ["forbidden"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_ensure_client", lambda: None)
@@ -164,7 +164,7 @@ class TestLLMClientGuardrails:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "app.guardrails.engine.get_default_rules_path",
+            "platform.guardrails.engine.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
 
@@ -185,7 +185,7 @@ class TestLLMClientGuardrails:
         class _FakeClient:
             messages = _FakeMessages()
 
-        from app.services.llm_client import LLMClient
+        from services.llm_client import LLMClient
 
         client = LLMClient(model="test", max_tokens=10)
         monkeypatch.setattr(client, "_client", _FakeClient())
@@ -205,8 +205,8 @@ class TestOpenAIClientGuardrails:
                 {"name": "aws_key", "action": "redact", "patterns": ["AKIA[0-9A-Z]{16}"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
         captured: dict = {}
 
@@ -236,7 +236,7 @@ class TestOpenAIClientGuardrails:
         class _FakeClient:
             chat = _FakeChat()
 
-        from app.services.llm_client import OpenAILLMClient
+        from services.llm_client import OpenAILLMClient
 
         monkeypatch.setenv("TEST_KEY", "fake-key")
         client = OpenAILLMClient(model="test", max_tokens=10, api_key_env="TEST_KEY")
@@ -262,17 +262,17 @@ class TestChatNodeGuardrails:
                 {"name": "aws_key", "action": "redact", "patterns": ["AKIA[0-9A-Z]{16}"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         secret = "key is AKIAIOSFODNN7EXAMPLE"
         msgs: list[dict[str, Any]] = [
             {"role": "user", "content": "hello"},
             {"role": "user", "content": secret},
         ]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
 
         assert result[0]["content"] == "hello"
         assert "AKIA" not in str(result[1]["content"])
@@ -290,14 +290,14 @@ class TestChatNodeGuardrails:
                 {"name": "blocker", "action": "block", "keywords": ["forbidden"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "this is forbidden"}]
         with pytest.raises(GuardrailBlockedError):
-            _apply_guardrails_to_messages(msgs)
+            apply_guardrails_to_messages(msgs)
 
     def test_skips_non_string_content(
         self,
@@ -310,13 +310,13 @@ class TestChatNodeGuardrails:
                 {"name": "r1", "action": "redact", "keywords": ["secret"]},
             ],
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": None}]
-        _apply_guardrails_to_messages(msgs)
+        apply_guardrails_to_messages(msgs)
 
     def test_noop_when_no_rules(
         self,
@@ -324,14 +324,14 @@ class TestChatNodeGuardrails:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "app.guardrails.engine.get_default_rules_path",
+            "platform.guardrails.engine.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         msgs: list[dict[str, Any]] = [{"role": "user", "content": "AKIAIOSFODNN7EXAMPLE"}]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
         assert result[0]["content"] == "AKIAIOSFODNN7EXAMPLE"
 
 
@@ -366,8 +366,8 @@ class TestOverlappingRedactionReachesDownstream:
 
     def _install_rules(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         config = _write_rules(tmp_path, _OVERLAPPING_RULES)
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
-        monkeypatch.setattr("app.guardrails.rules.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.rules.get_default_rules_path", lambda: config)
 
     def test_anthropic_client_sends_merged_redaction(
         self,
@@ -449,11 +449,11 @@ class TestOverlappingRedactionReachesDownstream:
         overlapping rules, leaving originals untouched (it copies)."""
         self._install_rules(tmp_path, monkeypatch)
 
-        from app.agent.chat import _apply_guardrails as _apply_guardrails_to_messages
+        from platform.guardrails.apply import apply_guardrails_to_messages
 
         original = "Investigation: api_key=AKIAIOSFODNN7EXAMPLE surfaced in logs"
         msgs: list[dict[str, Any]] = [{"role": "user", "content": original}]
-        result = _apply_guardrails_to_messages(msgs)
+        result, _ = apply_guardrails_to_messages(msgs)
 
         redacted = str(result[0]["content"])
         assert "api_key=" not in redacted

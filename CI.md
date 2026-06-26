@@ -95,7 +95,7 @@ Rules with `always_escalate=True` map to `make test-cov`; all others list their
 
 Run `make test-cov` (instead of only targeted tests) when any of these are true:
 
-- Shared/core code changed (`app/utils/`, `app/state/`, `app/types/`, `app/pipeline/`, `app/nodes/`)
+- Shared/core code changed (`utils/`, `core/domain/state/`, `core/domain/types/`, `core/orchestration/`, `app/nodes/`)
 - 3+ app areas changed in one diff
 - New files with unclear blast radius
 - Cross-cutting refactor
@@ -120,6 +120,8 @@ You may run `make check` as a final pass, but it is heavier (`test-full`) than t
 ## 6) Routing tests
 
 Routing live tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
+
+In CI, [`.github/workflows/routing-live.yml`](.github/workflows/routing-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `routing-checks` gate (deterministic routing + fixture integrity, `-m "not live_llm"`) and the sharded `routing-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
 
 ## 7) CI-only tests
 

@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.tools.AzureMonitorLogsTool import (
+from tests.tools.conftest import BaseToolContract
+from tools.AzureMonitorLogsTool import (
     _bounded_limit,
     _ensure_take_clause,
     query_azure_monitor_logs,
 )
-from tests.tools.conftest import BaseToolContract
 
 
 def _registered_tool() -> Any:
@@ -150,7 +150,7 @@ def test_run_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["json"] = kwargs.get("json", {})
         return mocked_response
 
-    monkeypatch.setattr("app.tools.AzureMonitorLogsTool.httpx.post", fake_post)
+    monkeypatch.setattr("tools.AzureMonitorLogsTool.httpx.post", fake_post)
 
     result = query_azure_monitor_logs(
         workspace_id="workspace-123",
@@ -175,7 +175,7 @@ def test_run_http_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
     mocked_response.json.return_value = {}
 
     monkeypatch.setattr(
-        "app.tools.AzureMonitorLogsTool.httpx.post",
+        "tools.AzureMonitorLogsTool.httpx.post",
         lambda *_args, **_kwargs: mocked_response,
     )
 
