@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Iterable
+from contextlib import suppress
 from typing import Any
 
 from prompt_toolkit import PromptSession
@@ -27,18 +28,8 @@ from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.ca
     BARE_COMMAND_ALIASES,
 )
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.ui import (
-    ANSI_DIM,
-    ANSI_RESET,
-    BG,
-    DIM,
-    DIM_COUNTER_ANSI,
-    HIGHLIGHT,
-    PROMPT_ACCENT_ANSI,
-    PROMPT_FRAME_ANSI,
-    TEXT,
-    repl_tty_interactive,
-)
+from cli.interactive_shell.ui import theme as ui_theme
+from cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
 _PROMPT_RULE_CHAR = "─"
 # Keystroke escape (xterm modifyOtherKeys for Shift+Enter), not a colour code.
@@ -50,7 +41,9 @@ def _prompt_rule_line(width: int) -> str:
 
 
 def _prompt_rule_ansi() -> str:
-    return f"{PROMPT_FRAME_ANSI}{_prompt_rule_line(_terminal_columns())}{ANSI_RESET}"
+    return (
+        f"{ui_theme.PROMPT_FRAME_ANSI}{_prompt_rule_line(_terminal_columns())}{ui_theme.ANSI_RESET}"
+    )
 
 
 def _prompt_counter_text(session: ReplSession) -> str:
@@ -64,10 +57,10 @@ def _prompt_prefix_text(session: ReplSession) -> str:
 def _prompt_line_ansi(session: ReplSession) -> ANSI:
     counter = _prompt_counter_text(session)
     if counter:
-        prefix = f"{DIM_COUNTER_ANSI}{counter}{ANSI_RESET}"
+        prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
     else:
         prefix = ""
-    return ANSI(f"{prefix}{PROMPT_ACCENT_ANSI}❯{ANSI_RESET} ")
+    return ANSI(f"{prefix}{ui_theme.PROMPT_ACCENT_ANSI}❯{ui_theme.ANSI_RESET} ")
 
 
 def _prompt_message(session: ReplSession) -> ANSI:
@@ -81,14 +74,16 @@ def render_submitted_prompt(console: Console, session: ReplSession, text: str) -
     continuation_prefix = " " * len(_prompt_prefix_text(session))
     rendered = Text()
     counter = _prompt_counter_text(session)
+    # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
+    # so resolve to a concrete string at the call site to keep palette colors.
     if counter:
-        rendered.append(counter, style=DIM)
-    rendered.append("❯ ", style=f"bold {HIGHLIGHT}")
-    rendered.append(lines[0])
+        rendered.append(counter, style=str(ui_theme.DIM))
+    rendered.append("❯ ", style=f"bold {ui_theme.HIGHLIGHT}")
+    rendered.append(lines[0], style=str(ui_theme.TEXT))
     for line in lines[1:]:
         rendered.append("\n")
-        rendered.append(continuation_prefix, style=DIM)
-        rendered.append(line)
+        rendered.append(continuation_prefix, style=str(ui_theme.DIM))
+        rendered.append(line, style=str(ui_theme.TEXT))
     console.print(rendered)
 
 
@@ -241,7 +236,7 @@ def completion_preview_hint_ansi() -> str:
     except Exception:
         cols = _DEFAULT_TERMINAL_COLUMNS
     line = _clip_text(f"{label}{_COMPLETION_PREVIEW_SEP}{description}", cols)
-    return f"{ANSI_DIM}{line}{ANSI_RESET}"
+    return f"{ui_theme.ANSI_DIM}{line}{ui_theme.ANSI_RESET}"
 
 
 def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
@@ -408,18 +403,22 @@ def _build_prompt_key_bindings() -> KeyBindings:
 
 
 def _build_prompt_style() -> Style:
+    theme = ui_theme.get_active_theme()
+    text_fg = f"fg:{theme.TEXT}"
     return Style.from_dict(
         {
-            "prompt-frame-line": f"bold {HIGHLIGHT}",
-            "repl-slash-command": f"bold {HIGHLIGHT} bg:{BG}",
-            "completion-menu": f"bg:{BG}",
-            "completion-menu.completion": f"{TEXT} bg:{BG}",
-            "completion-menu.completion.current": f"bold {HIGHLIGHT} bg:{BG}",
-            "completion-menu.meta.completion": f"{DIM} bg:{BG}",
-            "completion-menu.meta.completion.current": f"{HIGHLIGHT} bg:{BG}",
-            "completion-menu.border": DIM,
-            "scrollbar.background": f"bg:{BG}",
-            "scrollbar.button": f"bg:{DIM}",
+            "prompt-frame-line": f"bold {theme.HIGHLIGHT}",
+            "": text_fg,
+            "default": text_fg,
+            "repl-slash-command": f"bold {theme.HIGHLIGHT} bg:{theme.BG}",
+            "completion-menu": f"bg:{theme.BG}",
+            "completion-menu.completion": f"{theme.TEXT} bg:{theme.BG}",
+            "completion-menu.completion.current": f"bold {theme.HIGHLIGHT} bg:{theme.BG}",
+            "completion-menu.meta.completion": f"{theme.DIM} bg:{theme.BG}",
+            "completion-menu.meta.completion.current": f"{theme.HIGHLIGHT} bg:{theme.BG}",
+            "completion-menu.border": theme.DIM,
+            "scrollbar.background": f"bg:{theme.BG}",
+            "scrollbar.button": f"bg:{theme.DIM}",
             # prompt_toolkit defaults the ``bottom-toolbar`` style to
             # ``reverse:noinherit``, which paints the toolbar as a dark
             # highlighted band across the terminal. Clear the reverse
@@ -432,7 +431,9 @@ def _build_prompt_style() -> Style:
 
 
 _DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
-_DEFAULT_PLACEHOLDER_ANSI = ANSI(f"{ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ANSI_RESET}")
+_DEFAULT_PLACEHOLDER_ANSI = ANSI(
+    f"{ui_theme.ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}"
+)
 
 
 def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
@@ -446,8 +447,25 @@ def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
     if session.resumed_from_name:
         parts.append(f"resumed: {_short_meta(session.resumed_from_name, max_len=32)}")
     if parts:
-        return ANSI(f"{ANSI_DIM}{' · '.join(parts)}{ANSI_RESET}")
+        return ANSI(f"{ui_theme.ANSI_DIM}{' · '.join(parts)}{ui_theme.ANSI_RESET}")
     return _DEFAULT_PLACEHOLDER_ANSI
+
+
+def refresh_prompt_theme(session: ReplSession) -> None:
+    """Apply the active palette to the running prompt (input text + placeholder)."""
+    app = session.pt_style_app
+    if app is None:
+        return
+    app.style = _build_prompt_style()
+    # Between prompt_async turns the Application is not running; invalidate() then
+    # triggers ESC[6n CPR queries whose responses leak as literal text on the
+    # next idle-hint line (e.g. ``^[[1;1R/ for commands``).
+    if not app.is_running:
+        return
+    if app.renderer is not None:
+        with suppress(Exception):
+            app.renderer.clear()
+    app.invalidate()
 
 
 def wire_prompt_refresh(
@@ -544,6 +562,7 @@ __all__ = [
     "_build_prompt_key_bindings",
     "_build_prompt_session",
     "_build_prompt_style",
+    "refresh_prompt_theme",
     "_prompt_message",
     "_prompt_rule_ansi",
     "_tab_expand_or_menu",

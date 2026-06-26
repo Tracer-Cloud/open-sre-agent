@@ -277,6 +277,12 @@ def _cmd_debug(session: ReplSession, console: Console, args: list[str]) -> bool:
     return run_cli_command(console, ["debug", *args])
 
 
+def _cmd_misses(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    # Non-interactive printers only (list/stats/export/convert) — capture so the
+    # output reaches the REPL buffer instead of the child's inherited stdout.
+    return run_cli_command(console, ["misses", *args], capture_output=True)
+
+
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/onboard",
@@ -375,6 +381,18 @@ COMMANDS: list[SlashCommand] = [
         "/debug",
         "run targeted runtime diagnostics",
         _cmd_debug,
+        execution_tier=ExecutionTier.SAFE,
+    ),
+    SlashCommand(
+        "/misses",
+        "Triage investigation misses and export them as benchmark scenarios.",
+        _cmd_misses,
+        usage=(
+            "/misses list",
+            "/misses stats",
+            "/misses export --out <dir>",
+            "/misses convert <miss_id>",
+        ),
         execution_tier=ExecutionTier.SAFE,
     ),
 ]

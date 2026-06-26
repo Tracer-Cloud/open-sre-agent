@@ -485,23 +485,15 @@ class TestStreamRendererCleanupOnException:
 
 class TestStreamRendererStdinWatcher:
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
-    def test_starts_only_one_stdin_watcher(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from cli.interactive_shell.ui.output import toggles as toggles_module
-
-        starts = 0
-        original_start = toggles_module.CtrlOToggleWatcher.start
-
-        def counting_start(self: toggles_module.CtrlOToggleWatcher) -> None:
-            nonlocal starts
-            starts += 1
-            original_start(self)
-
-        monkeypatch.setattr(toggles_module.CtrlOToggleWatcher, "start", counting_start)
-
+    def test_uses_tracker_owned_stdin_watcher(self) -> None:
         renderer = StreamRenderer(local=True)
+        watcher = renderer._tracker._toggle_watcher
+
+        assert watcher is not None
         renderer.render_stream(_investigation_events())
 
-        assert starts == 1
+        assert renderer._tracker._toggle_watcher is None
+        assert renderer._toggle_unregister is None
 
 
 def _diagnose_streaming_events() -> Iterator[StreamEvent]:

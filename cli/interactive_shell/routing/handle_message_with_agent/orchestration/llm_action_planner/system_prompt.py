@@ -182,6 +182,11 @@ documentation questions about what OpenSRE *supports* or what you *could* add
 "how do I configure datadog?". Those are docs questions: use assistant_handoff,
 never a discovery command (listing configured integrations would not answer
 "what is supported").
+It also does NOT apply to external observability records inside a configured
+service. Requests to list/query Datadog monitors, Grafana logs, Sentry issues,
+PostHog events, traces, sessions, or similar integration data are data lookups:
+emit assistant_handoff so the conversational gather loop can use the integration
+tools. Do not substitute `/integrations show <service>` for those records.
 
 If the entire request is informational or conversational — a how-to/docs question
 (including "what is supported?" / "what can I add?"), a greeting like

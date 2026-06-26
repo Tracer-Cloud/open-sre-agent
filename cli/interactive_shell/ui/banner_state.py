@@ -74,7 +74,7 @@ def _is_alert_listener_active() -> bool:
     try:
         from cli.config import ReplConfig
 
-        return ReplConfig.load().alert_listener_enabled
+        return ReplConfig.load(apply_active_theme=False).alert_listener_enabled
     except Exception:
         return False
 

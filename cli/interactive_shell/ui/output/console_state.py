@@ -10,6 +10,7 @@ _live_console: Console | None = None
 _active_display: Any | None = None
 _completed_footer_snapshot: tuple[str, float, str, str] | None = None
 _prompt_suppress_fn: Callable[[], None] | None = None
+_tracker_toggle_stop_fn: Callable[[], None] | None = None
 
 
 def set_prompt_suppress_fn(fn: Callable[[], None] | None) -> None:
@@ -20,6 +21,12 @@ def set_prompt_suppress_fn(fn: Callable[[], None] | None) -> None:
 
 def get_prompt_suppress_fn() -> Callable[[], None] | None:
     return _prompt_suppress_fn
+
+
+def set_tracker_toggle_stop_fn(fn: Callable[[], None] | None) -> None:
+    """Register callback used to stop tracker-owned keyboard watchers."""
+    global _tracker_toggle_stop_fn
+    _tracker_toggle_stop_fn = fn
 
 
 def _capture_footer_snapshot(display: Any) -> None:
@@ -75,6 +82,6 @@ def stop_display() -> None:
     """Stop any running live display before printing final report output."""
     if _active_display is not None:
         _active_display.stop()
-    from cli.interactive_shell.ui.output.tracker import _stop_active_tracker_toggle_watcher
 
-    _stop_active_tracker_toggle_watcher()
+    if _tracker_toggle_stop_fn is not None:
+        _tracker_toggle_stop_fn()

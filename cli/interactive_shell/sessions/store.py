@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,9 @@ from cli.interactive_shell.sessions.protocol import SessionPersistenceSource
 from config.version import get_version
 
 _NAME_MAX_CHARS = 50
+_TRIGGER_MAX_CHARS = 200
+_ROOT_CAUSE_PREVIEW_CHARS = 80
+_DEFAULT_RCA_HISTORY_LIMIT = 50
 
 # Turn kinds that represent user-initiated chat messages.  session.record() is
 # called with the route kind, not a normalised "chat" label, so this set must
@@ -518,3 +522,169 @@ class SessionStore:
             }
 
         return None
+
+    @staticmethod
+    def _investigation_record_from_state(
+        state: dict[str, Any],
+        *,
+        trigger: str,
+        investigation_id: str | None = None,
+    ) -> dict[str, Any]:
+        report = state.get("problem_md") or state.get("slack_message") or state.get("report") or ""
+        return {
+            "type": "investigation_result",
+            "investigation_id": investigation_id or uuid.uuid4().hex[:8],
+            "completed_at": datetime.now(UTC).isoformat(),
+            "trigger": trigger.strip()[:_TRIGGER_MAX_CHARS],
+            "root_cause": str(state.get("root_cause") or ""),
+            "report": str(report),
+            "root_cause_category": str(state.get("root_cause_category") or ""),
+            "alert_name": str(state.get("alert_name") or ""),
+            "run_id": str(state.get("run_id") or ""),
+        }
+
+    @staticmethod
+    def append_investigation_result(
+        session_id: str,
+        state: dict[str, Any],
+        *,
+        trigger: str = "",
+    ) -> str:
+        """Append a completed RCA record to the session file for /rca history.
+
+        Returns the generated investigation_id. No-ops silently when the session
+        file is missing or not writable.
+        """
+        investigation_id = uuid.uuid4().hex[:8]
+        with contextlib.suppress(Exception):
+            path = _session_path(session_id)
+            if not path.exists():
+                return investigation_id
+            SessionStore._ensure_session_open(session_id)
+            record = SessionStore._investigation_record_from_state(
+                state,
+                trigger=trigger,
+                investigation_id=investigation_id,
+            )
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return investigation_id
+
+    @staticmethod
+    def _collect_investigation_records(
+        path: Path,
+        *,
+        lines: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        if lines is None:
+            with contextlib.suppress(Exception):
+                lines = path.read_text(encoding="utf-8").splitlines()
+            if not lines:
+                return []
+
+        session_id = path.stem
+        session_name = _derive_name(lines)
+        started_at: str | None = None
+        with contextlib.suppress(json.JSONDecodeError):
+            start = json.loads(lines[0])
+            if start.get("type") == "session_start":
+                session_id = str(start.get("session_id") or session_id)
+                started_at = start.get("started_at")
+
+        records: list[dict[str, Any]] = []
+        for line in lines[1:]:
+            with contextlib.suppress(json.JSONDecodeError):
+                rec = json.loads(line)
+                if rec.get("type") != "investigation_result":
+                    continue
+                root_cause = str(rec.get("root_cause") or "")
+                preview = root_cause.replace("\n", " ").strip()
+                if len(preview) > _ROOT_CAUSE_PREVIEW_CHARS:
+                    preview = preview[: _ROOT_CAUSE_PREVIEW_CHARS - 1] + "…"
+                records.append(
+                    {
+                        "investigation_id": str(rec.get("investigation_id") or ""),
+                        "session_id": session_id,
+                        "session_name": session_name,
+                        "session_started_at": started_at,
+                        "completed_at": rec.get("completed_at"),
+                        "trigger": rec.get("trigger") or "",
+                        "root_cause_preview": preview,
+                        "root_cause": root_cause,
+                        "report": str(rec.get("report") or ""),
+                        "root_cause_category": rec.get("root_cause_category") or "",
+                        "alert_name": rec.get("alert_name") or "",
+                        "run_id": rec.get("run_id") or "",
+                    }
+                )
+        return records
+
+    @staticmethod
+    def load_investigation_history(n: int = _DEFAULT_RCA_HISTORY_LIMIT) -> list[dict[str, Any]]:
+        """Return persisted RCA records across sessions, newest first."""
+        sessions_dir = _sessions_dir()
+        if not sessions_dir.exists():
+            return []
+
+        def _mtime(p: Path) -> float:
+            with contextlib.suppress(OSError):
+                return p.stat().st_mtime
+            return 0.0
+
+        all_paths = sorted(sessions_dir.glob("*.jsonl"), key=_mtime, reverse=True)
+        results: list[dict[str, Any]] = []
+        for path in all_paths:
+            with contextlib.suppress(Exception):
+                lines = path.read_text(encoding="utf-8").splitlines()
+                if not lines:
+                    continue
+                results.extend(SessionStore._collect_investigation_records(path, lines=lines))
+            if len(results) >= n * 3:
+                break
+
+        results.sort(key=lambda item: item.get("completed_at") or "", reverse=True)
+        return results[:n]
+
+    @staticmethod
+    def _scan_investigation_prefix(normalized: str) -> tuple[dict[str, Any] | None, int]:
+        sessions_dir = _sessions_dir()
+        if not sessions_dir.exists():
+            return None, 0
+
+        match: dict[str, Any] | None = None
+        count = 0
+        for path in sessions_dir.glob("*.jsonl"):
+            with contextlib.suppress(Exception):
+                lines = path.read_text(encoding="utf-8").splitlines()
+                for rec in SessionStore._collect_investigation_records(path, lines=lines):
+                    inv_id = str(rec.get("investigation_id") or "").lower()
+                    if not inv_id.startswith(normalized):
+                        continue
+                    count += 1
+                    if count == 1:
+                        match = rec
+                    else:
+                        match = None
+        return match, count
+
+    @staticmethod
+    def lookup_investigation(investigation_id_prefix: str) -> tuple[dict[str, Any] | None, int]:
+        """Return ``(record, match_count)`` for a prefix lookup.
+
+        ``record`` is populated only when ``match_count == 1``.
+        """
+        normalized = investigation_id_prefix.strip().lower()
+        if not normalized:
+            return None, 0
+        return SessionStore._scan_investigation_prefix(normalized)
+
+    @staticmethod
+    def load_investigation(investigation_id_prefix: str) -> dict[str, Any] | None:
+        """Load one persisted RCA record by investigation_id prefix."""
+        record, count = SessionStore.lookup_investigation(investigation_id_prefix)
+        return record if count == 1 else None
+
+    @staticmethod
+    def count_investigation_prefix_matches(prefix: str) -> int:
+        _, count = SessionStore.lookup_investigation(prefix)
+        return count

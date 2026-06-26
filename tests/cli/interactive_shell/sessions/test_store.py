@@ -783,3 +783,102 @@ def test_repl_session_rotates_id_on_clear() -> None:
     s.clear()
     assert s.session_id != original_id
     assert s.started_at <= time.time()
+
+
+# ── investigation_result / RCA history ───────────────────────────────────────
+
+
+def test_append_investigation_result_writes_record(tmp_path: Path) -> None:
+    session = _make_session()
+    state = {
+        "root_cause": "connection pool exhausted",
+        "problem_md": "## Summary\nPool leak in checkout-api",
+        "root_cause_category": "resource",
+        "alert_name": "checkout latency",
+    }
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        inv_id = SessionStore.append_investigation_result(
+            session.session_id,
+            state,
+            trigger="/investigate generic",
+        )
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    inv = next(r for r in records if r["type"] == "investigation_result")
+    assert inv["investigation_id"] == inv_id
+    assert inv["root_cause"] == "connection pool exhausted"
+    assert "Pool leak" in inv["report"]
+    assert inv["trigger"] == "/investigate generic"
+
+
+def test_append_investigation_result_uses_report_fallback(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        SessionStore.append_investigation_result(
+            session.session_id,
+            {"root_cause": "api error", "report": "report-only payload"},
+            trigger="/investigate generic",
+        )
+
+    records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
+    inv = next(r for r in records if r["type"] == "investigation_result")
+    assert inv["report"] == "report-only payload"
+
+
+def test_load_investigation_history_returns_newest_first(tmp_path: Path) -> None:
+    session_a = _make_session()
+    session_b = ReplSession()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session_a)
+        SessionStore.append_investigation_result(
+            session_a.session_id,
+            {"root_cause": "older issue", "problem_md": "old report"},
+            trigger="/investigate generic",
+        )
+        SessionStore.open_session(session_b)
+        SessionStore.append_investigation_result(
+            session_b.session_id,
+            {"root_cause": "newer issue", "problem_md": "new report"},
+            trigger="/investigate datadog",
+        )
+
+        history = SessionStore.load_investigation_history()
+
+    assert len(history) == 2
+    assert history[0]["root_cause"] == "newer issue"
+    assert history[1]["root_cause"] == "older issue"
+
+
+def test_load_investigation_by_prefix(tmp_path: Path) -> None:
+    session = _make_session()
+    with _patch_dir(tmp_path):
+        SessionStore.open_session(session)
+        inv_id = SessionStore.append_investigation_result(
+            session.session_id,
+            {"root_cause": "disk full", "problem_md": "report body"},
+            trigger="/investigate alert.json",
+        )
+        loaded = SessionStore.load_investigation(inv_id[:4])
+
+    assert loaded is not None
+    assert loaded["investigation_id"] == inv_id
+    assert loaded["root_cause"] == "disk full"
+
+
+def test_apply_investigation_result_persists_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    session = ReplSession()
+    SessionStore.open_session(session)
+    session.apply_investigation_result(
+        {"root_cause": "OOM killer", "problem_md": "memory spike"},
+        trigger="sample:generic",
+    )
+
+    history = SessionStore.load_investigation_history()
+    assert len(history) == 1
+    assert history[0]["root_cause"] == "OOM killer"
+    assert history[0]["trigger"] == "sample:generic"

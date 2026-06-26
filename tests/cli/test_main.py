@@ -580,9 +580,53 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
         exit_code = main([])
 
     assert exit_code == 0
-    assert len(load_calls) == 1
-    assert load_calls[0].get("cli_enabled") is True, (
-        f"default no-args run must pass cli_enabled=True, got {load_calls[0]}"
+    assert len(load_calls) >= 1
+    repl_load = load_calls[-1]
+    assert repl_load.get("cli_enabled") is True, (
+        f"default no-args run must pass cli_enabled=True, got {repl_load}"
     )
-    assert load_calls[0].get("cli_layout") is None
+    assert repl_load.get("cli_layout") is None
+    assert repl_load.get("cli_theme") is None, (
+        f"default no-args run must leave theme env/config overridable, got {repl_load}"
+    )
     assert landing_calls == [], "REPL should run, not landing page"
+
+
+def test_invalid_theme_flag_returns_usage_error(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+
+    exit_code = main(["--theme", "chartreuse"])
+
+    assert exit_code == 2
+    err = capsys.readouterr().err
+    assert "Invalid value for '--theme'" in err
+    assert "chartreuse" in err
+
+
+def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.sys.stdout.isatty", lambda: True)
+
+    load_calls: list[dict] = []
+
+    @classmethod  # type: ignore[misc]
+    def spy_load(_cls, **kw):  # type: ignore[no-untyped-def]
+        load_calls.append(kw)
+        return ReplConfig(enabled=True, layout="classic", theme="blue")
+
+    monkeypatch.setattr("cli.config.ReplConfig.load", spy_load)
+
+    with (
+        patch("cli.interactive_shell.run_repl", return_value=0),
+        patch("cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
+    ):
+        exit_code = main(["--theme", "BLUE"])
+
+    assert exit_code == 0
+    assert len(load_calls) >= 1
+    assert all(call.get("cli_theme") == "blue" for call in load_calls)

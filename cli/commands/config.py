@@ -12,7 +12,13 @@ import click
 from config.constants import OPENSRE_HOME_DIR
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
-_SUPPORTED_KEYS = ("interactive.enabled", "interactive.layout")
+_SUPPORTED_KEYS = ("interactive.enabled", "interactive.layout", "interactive.theme")
+
+
+def _supported_themes() -> set[str]:
+    from cli.interactive_shell.ui.theme import list_theme_names
+
+    return set(list_theme_names())
 
 
 def _masked(value: str | None) -> str:
@@ -130,6 +136,13 @@ def _coerce_value(key: str, raw_value: str) -> bool | str:
                 "Invalid value for interactive.layout. Use 'classic' or 'pinned'."
             )
         return layout
+    if key == "interactive.theme":
+        theme = raw_value.strip().lower()
+        supported_themes = _supported_themes()
+        if theme not in supported_themes:
+            supported = ", ".join(sorted(supported_themes))
+            raise click.UsageError(f"Invalid value for interactive.theme. Use one of: {supported}.")
+        return theme
     raise click.UsageError(
         f"Unknown config key '{key}'. Supported keys: {', '.join(_SUPPORTED_KEYS)}"
     )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -13,6 +15,35 @@ from core.domain.types.root_cause_categories import (
     VALID_ROOT_CAUSE_CATEGORIES,
     render_prompt_taxonomy,
 )
+
+logger = logging.getLogger(__name__)
+
+_TOKEN_RE = re.compile(r"[\s\-/]+")
+
+# Hand-curated adjacent labels emitted by older prompts or parsers. Targets are
+# still gated by the caller's allowed taxonomy, so Hermes-only prompts cannot
+# normalize onto product-infra categories.
+_CATEGORY_ALIASES: dict[str, str] = {
+    "code_bug": "code_defect_null_handling",
+    "config_error": "configuration_error",
+    "configuration": "configuration_error",
+    "connection_pool_exhaustion": "connection_exhaustion",
+    "cpu_throttling": "pod_cpu_throttled",
+    "database": "connection_exhaustion",
+    "database_connection_failure": "connection_exhaustion",
+    "dns_failure": "dns_resolution_failure",
+    "infrastructure": "configuration_error",
+    "memory_pressure": "pod_oomkilled",
+    "mysql_connection_pool_exhaustion": "connection_pool_leak",
+    "network_delay": "network_partition",
+    "network_latency_issue": "network_partition",
+    "oom_killed": "pod_oomkilled",
+    "oomkilled": "pod_oomkilled",
+    "performance": "application_tier_load_spike",
+    "pod_cpu_overload": "pod_cpu_throttled",
+    "pod_oom_killed": "pod_oomkilled",
+    "redis_connection_pool_exhaustion": "connection_pool_leak",
+}
 
 
 @dataclass
@@ -96,6 +127,48 @@ def taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
     return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
 
 
+def root_cause_category_instruction_for_source(alert_source: str) -> str:
+    categories = taxonomy_categories_for_alert_source(alert_source)
+    taxonomy = render_prompt_taxonomy(categories).strip()
+    if alert_source.strip().lower() == "hermes":
+        return (
+            "Use exactly one category name from the Hermes taxonomy below\n\n"
+            "## Hermes root cause category taxonomy (single source of truth)\n"
+            f"{taxonomy}"
+        )
+    return (
+        "Use exactly one category name from the root cause taxonomy below\n\n"
+        "## Root cause category taxonomy (single source of truth)\n"
+        f"{taxonomy}"
+    )
+
+
+def normalize_root_cause_category(raw: str, *, allowed_categories: set[str]) -> str:
+    """Map adjacent labels onto a canonical allowed category when possible."""
+    cleaned = raw.strip()
+    if not cleaned:
+        return cleaned
+
+    if cleaned in allowed_categories:
+        return cleaned
+
+    normalized = _normalize_token(cleaned)
+    if normalized in allowed_categories:
+        return normalized
+
+    alias_target = _CATEGORY_ALIASES.get(normalized)
+    if alias_target is not None and alias_target in allowed_categories:
+        logger.info("Normalized root_cause_category %r -> %r", cleaned, alias_target)
+        return alias_target
+
+    return cleaned
+
+
+def _normalize_token(raw: str) -> str:
+    cleaned = raw.strip().lower()
+    return _TOKEN_RE.sub("_", cleaned).strip("_")
+
+
 def build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
     category_taxonomy = render_prompt_taxonomy(include_categories).strip()
 
@@ -136,16 +209,21 @@ def build_investigation_result(
     non_validated_claims: list[str],
     remediation_steps: list[str],
     validity_score: float,
+    alert_source: str = "",
 ) -> InvestigationResult:
+    normalized_category = normalize_root_cause_category(
+        root_cause_category,
+        allowed_categories=taxonomy_categories_for_alert_source(alert_source),
+    )
     score, recommendations, mismatch, reason = apply_category_alignment_adjustments(
         root_cause=root_cause,
-        root_cause_category=root_cause_category,
+        root_cause_category=normalized_category,
         validity_score=validity_score,
         investigation_recommendations=[],
     )
     return InvestigationResult(
         root_cause=root_cause,
-        root_cause_category=root_cause_category,
+        root_cause_category=normalized_category,
         causal_chain=causal_chain,
         validated_claims=claims_to_dicts(validated_claims, "validated"),
         non_validated_claims=claims_to_dicts(non_validated_claims, "not_validated"),

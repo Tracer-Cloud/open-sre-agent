@@ -32,6 +32,7 @@ from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
 )
+from cli.interactive_shell.ui.theme import list_theme_names  # noqa: E402
 from config.version import get_version  # noqa: E402
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
 from platform.analytics.provider import (  # noqa: E402
@@ -150,6 +151,13 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     help="Interactive-shell layout: 'classic' (scrolling) or 'pinned' (fixed "
     "input bar). Overrides OPENSRE_LAYOUT env var and ~/.opensre/config.yml.",
 )
+@click.option(
+    "--theme",
+    type=click.Choice(list(list_theme_names()), case_sensitive=False),
+    default=None,
+    help="Interactive-shell color palette. Overrides OPENSRE_THEME env var "
+    "and ~/.opensre/config.yml interactive.theme.",
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -159,6 +167,7 @@ def cli(
     yes: bool,
     interactive: bool,
     layout: str | None,
+    theme: str | None,
 ) -> None:
     """OpenSRE - open-source SRE agent for automated incident investigation and root cause analysis."""
     ctx.ensure_object(dict)
@@ -171,22 +180,27 @@ def cli(
     if verbose or debug:
         os.environ["TRACER_VERBOSE"] = "1"
 
+    from cli.config import ReplConfig
+
     _capture_accepted_cli_invocation(ctx)
 
     if ctx.invoked_subcommand is None:
         if sys.stdin.isatty() and sys.stdout.isatty():
-            from cli.config import ReplConfig
             from cli.interactive_shell import run_repl
 
             config = ReplConfig.load(
                 cli_enabled=interactive,
                 cli_layout=layout,
+                cli_theme=theme,
             )
             if config.enabled:
                 raise SystemExit(run_repl(config=config))
         click.echo("🚧 OpenSRE is in Public Beta — features may change.", err=True)
         render_landing(cli)
         raise SystemExit(0)
+
+    # Apply interactive.theme / OPENSRE_THEME / --theme for subcommands (onboard, etc.).
+    ReplConfig.load(cli_theme=theme)
 
 
 register_commands(cli)

@@ -70,6 +70,8 @@ async def run_interactive(
 
     pt_app = pt_session.app
     main_loop = asyncio.get_running_loop()
+    session.pt_style_app = pt_app
+    session.main_loop = main_loop
     state.bind_loop(main_loop)
 
     _invalidate_prompt = _prompt_surface.wire_prompt_refresh(session, pt_app, main_loop)
@@ -192,9 +194,11 @@ async def run_interactive(
         if state.is_awaiting_confirmation():
             confirm_text = state.confirm_prompt_text
             return ANSI(f"{confirm_text}\n{base}")
-        prefix = _prompt_surface.resolve_prompt_prefix_ansi(
-            inline_spinner=spinner.inline_spinner_ansi(),
-            idle_hint=spinner.idle_hint_ansi(),
+        prefix = strip_cpr_sequences(
+            _prompt_surface.resolve_prompt_prefix_ansi(
+                inline_spinner=spinner.inline_spinner_ansi(),
+                idle_hint=spinner.idle_hint_ansi(),
+            )
         )
         return ANSI(f"{prefix}\n{base}")
 
@@ -239,6 +243,9 @@ async def run_interactive(
                 # Application's fresh vt100 parser.
                 # The brief sleep lets in-transit terminal responses land in the
                 # buffer before the non-blocking select drain runs.
+                if session.pending_theme_refresh:
+                    session.pending_theme_refresh = False
+                    _prompt_surface.refresh_prompt_theme(session)
                 await asyncio.sleep(0.05)
                 drain_stale_cpr_bytes()
                 try:

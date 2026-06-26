@@ -18,15 +18,8 @@ from typing import Literal
 from rich.console import Console
 from rich.markup import escape
 
+from cli.interactive_shell.ui import theme as ui_theme
 from cli.interactive_shell.ui.key_reader import read_key_unix, read_key_windows
-from cli.interactive_shell.ui.theme import (
-    ANSI_RESET,
-    DIM,
-    DIM_COUNTER_ANSI,
-    MENU_SELECTION_ROW_ANSI,
-    PROMPT_ACCENT_ANSI,
-    SECONDARY,
-)
 
 _HINT = "↑↓/j/k/Tab  Enter/Space  Esc/q"
 CRUMB_SEP = "  ›  "
@@ -58,7 +51,7 @@ def repl_section_break(console: Console) -> None:
     """Blank line + dim rule between an inline menu step and Rich output."""
     prepare_repl_output_line()
     console.print()
-    console.rule(characters="─", style=DIM)
+    console.rule(characters="─", style=str(ui_theme.DIM))
     console.print()
 
 
@@ -159,12 +152,12 @@ def _draw_menu(
     for _ in range(_MENU_LEADING_LINES):
         write_menu_line()
     # title
-    write_menu_line(f"{PROMPT_ACCENT_ANSI}{title}{ANSI_RESET}")
+    write_menu_line(f"{ui_theme.PROMPT_ACCENT_ANSI}{title}{ui_theme.ANSI_RESET}")
     # breadcrumb path
     if crumb:
-        write_menu_line(f"{DIM_COUNTER_ANSI}{crumb}{ANSI_RESET}")
+        write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{crumb}{ui_theme.ANSI_RESET}")
     # separator below header
-    write_menu_line(f"{DIM_COUNTER_ANSI}{_rule(w)}{ANSI_RESET}")
+    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_rule(w)}{ui_theme.ANSI_RESET}")
     write_menu_line()
     # choices
     for i, label in enumerate(labels):
@@ -172,11 +165,11 @@ def _draw_menu(
         sym = ">" if here else " "
         padded = _pad(sym, label, w)
         if here:
-            write_menu_line(f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}")
+            write_menu_line(f"{ui_theme.MENU_SELECTION_ROW_ANSI}{padded}{ui_theme.ANSI_RESET}")
         else:
-            write_menu_line(f"{DIM_COUNTER_ANSI}{padded}{ANSI_RESET}")
+            write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{padded}{ui_theme.ANSI_RESET}")
     write_menu_line()
-    write_menu_line(f"{DIM_COUNTER_ANSI}{_HINT}{ANSI_RESET}")
+    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_HINT}{ui_theme.ANSI_RESET}")
     out.flush()
 
 
@@ -190,11 +183,17 @@ def _erase_menu(crumb: str, labels: list[str]) -> None:
 # ── picker loop ──────────────────────────────────────────────────────────────
 
 
-def _pick(*, title: str, crumb: str, labels: list[str]) -> int | None:
+def _pick(
+    *,
+    title: str,
+    crumb: str,
+    labels: list[str],
+    initial_index: int = 0,
+) -> int | None:
     """Draw an inline menu, let user navigate, erase on exit. Returns index or None."""
     if not labels:
         return None
-    idx = 0
+    idx = initial_index % len(labels)
     height = _menu_height(crumb, labels)
     first = True
     while True:
@@ -229,17 +228,27 @@ def repl_choose_one(
     title: str,
     choices: list[tuple[str, str]],
     breadcrumb: str = "",
+    initial_value: str | None = None,
 ) -> str | None:
     """Show an inline erasing arrow-key menu; return selected value or None on Esc.
 
     ``breadcrumb`` is a slash-separated path shown dimly below the title, e.g.
     ``/model › set``.  Only call when :func:`repl_tty_interactive` is True.
     """
+    from cli.interactive_shell.runtime.cpr_stdin import drain_stale_cpr_bytes
+
     if not choices or not repl_tty_interactive():
         return None
+    drain_stale_cpr_bytes()
     crumb = breadcrumb
     labels = [label for _value, label in choices]
-    picked = _pick(title=title, crumb=crumb, labels=labels)
+    initial_index = 0
+    if initial_value is not None:
+        for index, (value, _label) in enumerate(choices):
+            if value == initial_value:
+                initial_index = index
+                break
+    picked = _pick(title=title, crumb=crumb, labels=labels, initial_index=initial_index)
     if picked is None:
         return None
     value = choices[picked][0]
@@ -255,9 +264,9 @@ def print_valid_choice_list(
     """Print one choice per line for scan-friendly fallback/error messaging."""
     if not choices:
         return
-    console.print(f"[{SECONDARY}]{title}[/]")
+    console.print(f"[{ui_theme.SECONDARY}]{title}[/]")
     for choice in choices:
-        console.print(f"[{SECONDARY}]  - {escape(choice)}[/]")
+        console.print(f"[{ui_theme.SECONDARY}]  - {escape(choice)}[/]")
 
 
 __all__ = [

@@ -11,7 +11,14 @@ from rich.console import Console
 
 from cli.interactive_shell.runtime.state import SpinnerState
 from cli.interactive_shell.runtime.streaming_console import StreamingConsole
-from cli.interactive_shell.ui.rendering import print_repl_json, repl_print, repl_table
+from cli.interactive_shell.ui.rendering import (
+    _repl_write_buffer,
+    print_repl_json,
+    refresh_welcome_poster,
+    repl_print,
+    repl_render_launch_poster,
+    repl_table,
+)
 from cli.interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
@@ -128,6 +135,95 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     repl_print(console, "line")
 
     assert fake_stdout.writes == ["\r\n", "\r"]
+
+
+def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+
+    from cli.interactive_shell.ui.theme import set_active_theme
+
+    set_active_theme("blue")
+    console = Console(
+        file=fake_stdout,
+        force_terminal=True,
+        highlight=False,
+        color_system="truecolor",
+        width=120,
+    )
+    repl_render_launch_poster(console, theme_notice="blue")
+
+    written = "".join(fake_stdout.writes)
+    assert "theme set:" in written
+    assert "blue" in written
+    assert "38;2;168;212;255" in written
+    assert "185;237;175" not in written
+    assert "opensre" in written
+    assert "Welcome back" in written
+    assert "\r\n" in written
+    # REPL path must not emit bare \\n (causes double-spaced splash under patch_stdout).
+    assert "\r" not in written.replace("\r\n", "")
+
+
+def test_repl_write_buffer_strips_only_escaped_cpr_sequences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+
+    _repl_write_buffer("\x1b[1;1Rtheme set: pink 12;5R\r\n")
+
+    written = "".join(fake_stdout.writes)
+    assert "theme set: pink" in written
+    assert "12;5R" in written
+    assert "\x1b[1;1R" not in written
+
+
+def test_refresh_welcome_poster_drains_cpr_after_clear(monkeypatch: pytest.MonkeyPatch) -> None:
+    drains: list[str] = []
+
+    monkeypatch.setattr(
+        "cli.interactive_shell.ui.rendering.repl_clear_screen",
+        lambda: drains.append("clear"),
+    )
+    monkeypatch.setattr(
+        "cli.interactive_shell.runtime.cpr_stdin.drain_stale_cpr_bytes",
+        lambda: drains.append("drain"),
+    )
+    monkeypatch.setattr(
+        "cli.interactive_shell.ui.rendering.repl_render_launch_poster",
+        lambda *_args, **_kwargs: drains.append("render"),
+    )
+
+    console = Console(file=io.StringIO(), force_terminal=False)
+    refresh_welcome_poster(console)
+
+    assert drains == ["clear", "drain", "render"]
 
 
 def test_render_integrations_table_renders_content(

@@ -131,3 +131,27 @@ def test_config_set_unknown_key_returns_helpful_error(monkeypatch, tmp_path: Pat
     assert "Unknown config key 'foo.bar'" in result.output
     assert "interactive.enabled" in result.output
     assert "interactive.layout" in result.output
+    assert "interactive.theme" in result.output
+
+
+def test_config_set_round_trips_theme(monkeypatch, tmp_path: Path) -> None:
+    opensre_home = _patch_config_home(monkeypatch, tmp_path)
+    runner = CliRunner()
+
+    set_result = runner.invoke(cli, ["config", "set", "interactive.theme", "blue"])
+    assert set_result.exit_code == 0
+    assert "interactive.theme = blue" in set_result.output
+
+    config_path = opensre_home / "config.yml"
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert data["interactive"]["theme"] == "blue"
+
+
+def test_config_set_invalid_theme_value_returns_helpful_error(monkeypatch, tmp_path: Path) -> None:
+    _patch_config_home(monkeypatch, tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["config", "set", "interactive.theme", "chartreuse"])
+
+    assert result.exit_code != 0
+    assert "Invalid value for interactive.theme" in result.output

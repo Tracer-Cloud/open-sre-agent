@@ -12,6 +12,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from cli.interactive_shell.command_registry.types import SlashCommand
+from cli.interactive_shell.ui import theme as ui_theme
 from cli.interactive_shell.ui.choice_menu import (
     erase_menu_lines,
     menu_columns,
@@ -19,18 +20,6 @@ from cli.interactive_shell.ui.choice_menu import (
     write_menu_line,
 )
 from cli.interactive_shell.ui.rendering import print_repl_table, repl_print, repl_table
-from cli.interactive_shell.ui.theme import (
-    ANSI_RESET,
-    BOLD_BRAND,
-    BOLD_BRAND_ANSI,
-    DIM,
-    DIM_COUNTER_ANSI,
-    HIGHLIGHT,
-    HIGHLIGHT_ANSI,
-    MENU_SELECTION_ROW_ANSI,
-    PROMPT_ACCENT_ANSI,
-    TEXT_ANSI,
-)
 
 HelpSection = tuple[str, Sequence[SlashCommand]]
 _HELP_VIEW_ROWS = 21
@@ -65,23 +54,30 @@ class HelpDisplayRow:
 
 def render_help_index(console: Console, sections: Sequence[HelpSection]) -> None:
     """Render the compact non-interactive help index."""
-    table = repl_table(title="Slash commands", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(
+        title="Slash commands",
+        title_style=str(ui_theme.BOLD_BRAND),
+        show_header=False,
+    )
     table.add_column("command", no_wrap=True, min_width=18)
-    table.add_column("description", style=DIM)
+    table.add_column("description", style=str(ui_theme.DIM))
 
     for section_name, commands in sections:
         if not commands:
             continue
-        table.add_row(f"[{BOLD_BRAND}]{escape(section_name)}[/]", "")
+        table.add_row(f"[{ui_theme.BOLD_BRAND}]{escape(section_name)}[/]", "")
         for index, command in enumerate(commands):
             table.add_row(
-                f"  [{HIGHLIGHT}]{escape(command.name)}[/]",
+                f"  [{ui_theme.HIGHLIGHT}]{escape(command.name)}[/]",
                 escape(command.description),
                 end_section=(index == len(commands) - 1),
             )
 
     print_repl_table(console, table)
-    repl_print(console, f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
+    repl_print(
+        console,
+        f"[{ui_theme.DIM}]Use[/] [bold]/help <command>[/bold] [{ui_theme.DIM}]for usage.[/]",
+    )
 
 
 def render_section_detail(
@@ -90,18 +86,33 @@ def render_section_detail(
     commands: Sequence[SlashCommand],
 ) -> None:
     """Render one category using the same compact description-only style."""
-    table = repl_table(title=f"{section_name} commands", title_style=BOLD_BRAND, show_header=False)
+    table = repl_table(
+        title=f"{section_name} commands",
+        title_style=str(ui_theme.BOLD_BRAND),
+        show_header=False,
+    )
     table.add_column("command", no_wrap=True, min_width=18)
-    table.add_column("description", style=DIM)
+    table.add_column("description", style=str(ui_theme.DIM))
     for command in commands:
-        table.add_row(f"[{HIGHLIGHT}]{escape(command.name)}[/]", escape(command.description))
+        table.add_row(
+            f"[{ui_theme.HIGHLIGHT}]{escape(command.name)}[/]",
+            escape(command.description),
+        )
     print_repl_table(console, table)
-    repl_print(console, f"[{DIM}]Use[/] [bold]/help <command>[/bold] [{DIM}]for usage.[/]")
+    repl_print(
+        console,
+        f"[{ui_theme.DIM}]Use[/] [bold]/help <command>[/bold] [{ui_theme.DIM}]for usage.[/]",
+    )
 
 
 def render_command_detail(console: Console, command: SlashCommand) -> None:
     """Render detailed help for one slash command."""
-    table = Table(title=command.name, title_style=BOLD_BRAND, show_header=False, box=None)
+    table = Table(
+        title=command.name,
+        title_style=str(ui_theme.BOLD_BRAND),
+        show_header=False,
+        box=None,
+    )
     table.add_column("label", style="bold", no_wrap=True)
     table.add_column("value")
     table.add_row("description", escape(command.description))
@@ -291,7 +302,8 @@ def _render_section_row(section: str, width: int) -> str:
     left_column = _pad(section, _left_column_width(width))
     right_column = " " * _right_column_width(width)
     return (
-        f"{BOLD_BRAND_ANSI}{left_column}{ANSI_RESET}{DIM_COUNTER_ANSI}│ {right_column}{ANSI_RESET}"
+        f"{ui_theme.BOLD_BRAND_ANSI}{left_column}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.DIM_COUNTER_ANSI}│ {right_column}{ui_theme.ANSI_RESET}"
     )
 
 
@@ -299,10 +311,10 @@ def _render_detail_row(detail: HelpDetailLine, width: int) -> str:
     left_column = " " * _left_column_width(width)
     right_column = _clip(detail.text, _right_column_width(width))
     right_padding = " " * max(0, _right_column_width(width) - _visible_width(right_column))
-    detail_ansi = TEXT_ANSI if detail.role == "label" else DIM_COUNTER_ANSI
+    detail_ansi = ui_theme.TEXT_ANSI if detail.role == "label" else ui_theme.DIM_COUNTER_ANSI
     return (
-        f"{DIM_COUNTER_ANSI}{left_column}│ {ANSI_RESET}"
-        f"{detail_ansi}{right_column}{right_padding}{ANSI_RESET}"
+        f"{ui_theme.DIM_COUNTER_ANSI}{left_column}│ {ui_theme.ANSI_RESET}"
+        f"{detail_ansi}{right_column}{right_padding}{ui_theme.ANSI_RESET}"
     )
 
 
@@ -325,7 +337,7 @@ def _render_command_row(
     left = f" {marker} {affordance} {command.name}"
     padded = _render_grid_row(left, command.description, width)
     if selected:
-        return f"{MENU_SELECTION_ROW_ANSI}{padded}{ANSI_RESET}"
+        return f"{ui_theme.MENU_SELECTION_ROW_ANSI}{padded}{ui_theme.ANSI_RESET}"
 
     left_width = _left_column_width(width)
     right_width = _right_column_width(width)
@@ -336,15 +348,16 @@ def _render_command_row(
     right_column = _clip(command.description, right_width)
     right_padding = " " * max(0, right_width - _visible_width(right_column))
     return (
-        f"{DIM_COUNTER_ANSI}{prefix}{ANSI_RESET}"
-        f"{HIGHLIGHT_ANSI}{command_name}{ANSI_RESET}"
-        f"{DIM_COUNTER_ANSI}{command_padding}│ {right_column}{right_padding}{ANSI_RESET}"
+        f"{ui_theme.DIM_COUNTER_ANSI}{prefix}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.HIGHLIGHT_ANSI}{command_name}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.DIM_COUNTER_ANSI}{command_padding}│ {right_column}{right_padding}"
+        f"{ui_theme.ANSI_RESET}"
     )
 
 
 def _render_help_row(row: HelpRow, *, selected: bool, expanded: bool, width: int) -> str:
     if row.separator:
-        return f"{DIM_COUNTER_ANSI}{_separator_rule(width)}{ANSI_RESET}"
+        return f"{ui_theme.DIM_COUNTER_ANSI}{_separator_rule(width)}{ui_theme.ANSI_RESET}"
     if row.section is not None:
         return _render_section_row(row.section, width)
     if row.command is None:
@@ -400,9 +413,13 @@ def _draw_help_menu(
     total_count = sum(1 for row in rows if row.selectable)
 
     write_menu_line()
-    write_menu_line(f"{PROMPT_ACCENT_ANSI}{_center('Slash commands', width)}{ANSI_RESET}")
-    write_menu_line(f"{DIM_COUNTER_ANSI}{selected_count}/{total_count}{ANSI_RESET}")
-    write_menu_line(f"{DIM_COUNTER_ANSI}{_separator_rule(width)}{ANSI_RESET}")
+    write_menu_line(
+        f"{ui_theme.PROMPT_ACCENT_ANSI}{_center('Slash commands', width)}{ui_theme.ANSI_RESET}"
+    )
+    write_menu_line(
+        f"{ui_theme.DIM_COUNTER_ANSI}{selected_count}/{total_count}{ui_theme.ANSI_RESET}"
+    )
+    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_separator_rule(width)}{ui_theme.ANSI_RESET}")
     for offset, row in enumerate(visible, start=start):
         write_menu_line(
             _render_display_row(
@@ -415,7 +432,7 @@ def _draw_help_menu(
     for _ in range(max(0, effective_viewport_height - len(visible))):
         write_menu_line()
     write_menu_line()
-    write_menu_line(f"{DIM_COUNTER_ANSI}{_HELP_HINT}{ANSI_RESET}")
+    write_menu_line(f"{ui_theme.DIM_COUNTER_ANSI}{_HELP_HINT}{ui_theme.ANSI_RESET}")
     sys.stdout.flush()
     return height
 

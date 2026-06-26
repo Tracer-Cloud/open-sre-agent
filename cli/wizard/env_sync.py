@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
@@ -29,6 +30,23 @@ _SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
     }
 )
 _SENSITIVE_SUBSTRINGS: tuple[str, ...] = ("connection_string",)
+
+
+@dataclass(frozen=True)
+class _PublicEnvLines:
+    """Validated `.env` content that contains no sensitive assignments."""
+
+    lines: tuple[str, ...]
+
+    @classmethod
+    def from_lines(cls, lines: list[str]) -> _PublicEnvLines:
+        public_lines = _strip_sensitive_env_lines(lines)
+        _ensure_no_sensitive_env_lines(public_lines)
+        return cls(tuple(public_lines))
+
+    def write_to(self, target_path: Path) -> None:
+        with target_path.open("w", encoding="utf-8", newline="") as env_file:
+            env_file.writelines(self.lines)
 
 
 def _is_sensitive_env_key(key: str) -> bool:
@@ -101,13 +119,10 @@ def _ensure_no_sensitive_env_lines(lines: list[str]) -> None:
 
 def _write_env(target_path: Path, lines: list[str]) -> None:
     """Write non-sensitive .env lines with owner-only permissions when possible."""
-    public_lines = _strip_sensitive_env_lines(lines)
-    _ensure_no_sensitive_env_lines(public_lines)
+    public_lines = _PublicEnvLines.from_lines(lines)
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        with target_path.open("w", encoding="utf-8", newline="") as env_file:
-            # Sensitive assignments are stripped and checked above before this sink.
-            env_file.writelines(public_lines)  # lgtm[py/clear-text-storage-sensitive-data]
+        public_lines.write_to(target_path)
     except PermissionError as exc:
         raise PermissionError(
             f"Cannot write to {target_path}: permission denied. "

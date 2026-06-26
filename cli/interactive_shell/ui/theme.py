@@ -25,27 +25,295 @@ Usage
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import SupportsIndex
+
 from rich.theme import Theme
 
-# ── Semantic color tokens (the only permitted colours) ─────────────────────
-# BRAND/DIM/HIGHLIGHT/WARNING are re-exported from config.ui_theme so core
-# modules (e.g. the publish_findings terminal renderer) can read the
-# same hex values without depending on the CLI layer. CLI-only tokens
-# (TEXT, SECONDARY, ERROR, BG) stay here.
-from config.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING
 
-TEXT = "#E0E0E0"
-SECONDARY = "#888888"
-ERROR = "#C45B52"
-BG = "#0A0A0A"
+@dataclass(frozen=True)
+class CliTheme:
+    """Named palette for interactive shell rendering."""
+
+    name: str
+    HIGHLIGHT: str
+    BRAND: str
+    TEXT: str
+    SECONDARY: str
+    DIM: str
+    WARNING: str
+    ERROR: str
+    BG: str
+    INPUT_SURFACE: str
+
+
+THEME_REGISTRY: dict[str, CliTheme] = {
+    "green": CliTheme(
+        name="green",
+        HIGHLIGHT="#B9EDAF",
+        BRAND="#66A17D",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#CEA25C",
+        ERROR="#C45B52",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "blue": CliTheme(
+        name="blue",
+        HIGHLIGHT="#A8D4FF",
+        BRAND="#6FA5D8",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#D8B06F",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "amber": CliTheme(
+        name="amber",
+        HIGHLIGHT="#F2D48A",
+        BRAND="#C99944",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#E0B466",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "mono": CliTheme(
+        name="mono",
+        HIGHLIGHT="#C6C6C6",
+        BRAND="#A7A7A7",
+        TEXT="#E0E0E0",
+        SECONDARY="#9A9A9A",
+        DIM="#4A4A4A",
+        WARNING="#B0B0B0",
+        ERROR="#8E8E8E",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "red": CliTheme(
+        name="red",
+        HIGHLIGHT="#FF9E8A",
+        BRAND="#C45B52",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#E0B466",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "pink": CliTheme(
+        name="pink",
+        HIGHLIGHT="#FFB3D9",
+        BRAND="#D4729A",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#E0B466",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "purple": CliTheme(
+        name="purple",
+        HIGHLIGHT="#C8A8FF",
+        BRAND="#9678C0",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#D8B06F",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "orange": CliTheme(
+        name="orange",
+        HIGHLIGHT="#FFC08A",
+        BRAND="#D4884A",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#E0B466",
+        ERROR="#CF6B63",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+    "teal": CliTheme(
+        name="teal",
+        HIGHLIGHT="#8AE2D6",
+        BRAND="#5BA89D",
+        TEXT="#E0E0E0",
+        SECONDARY="#888888",
+        DIM="#444444",
+        WARNING="#CEA25C",
+        ERROR="#C45B52",
+        BG="#0A0A0A",
+        INPUT_SURFACE="#141414",
+    ),
+}
+
+DEFAULT_THEME_NAME = "green"
+
+
+def _fg(rgb: tuple[int, int, int]) -> str:
+    return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
+
+
+def _parse_hex_color(value: str) -> tuple[int, int, int]:
+    stripped = value.lstrip("#")
+    return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
+
+
+class _LazyRichStyle(str):
+    """Rich markup colour token that tracks :func:`set_active_theme`.
+
+    Importers can bind ``HIGHLIGHT`` (etc.) at module load; ``str()`` and
+    ``f"[{HIGHLIGHT}]"`` resolve against the active palette at render time.
+    """
+
+    __slots__ = ("_field", "_bold")
+
+    def __new__(cls, field: str, *, bold: bool = False) -> _LazyRichStyle:
+        instance = str.__new__(cls, "")
+        object.__setattr__(instance, "_field", field)
+        object.__setattr__(instance, "_bold", bold)
+        return instance
+
+    def _resolve(self) -> str:
+        field = object.__getattribute__(self, "_field")
+        bold = object.__getattribute__(self, "_bold")
+        value = getattr(_ACTIVE_THEME, field)
+        return f"bold {value}" if bold else value
+
+    def __str__(self) -> str:
+        return self._resolve()
+
+    def __format__(self, format_spec: str) -> str:
+        return format(self._resolve(), format_spec)
+
+    def __bool__(self) -> bool:
+        return bool(self._resolve())
+
+    def lstrip(self, chars: str | None = None) -> str:
+        resolved = self._resolve()
+        return resolved.lstrip() if chars is None else resolved.lstrip(chars)
+
+    def rstrip(self, chars: str | None = None) -> str:
+        resolved = self._resolve()
+        return resolved.rstrip() if chars is None else resolved.rstrip(chars)
+
+    def strip(self, chars: str | None = None) -> str:
+        resolved = self._resolve()
+        return resolved.strip() if chars is None else resolved.strip(chars)
+
+    def split(self, sep: str | None = None, maxsplit: SupportsIndex = -1) -> list[str]:
+        resolved = self._resolve()
+        return resolved.split(sep, maxsplit)
+
+    def rsplit(self, sep: str | None = None, maxsplit: SupportsIndex = -1) -> list[str]:
+        resolved = self._resolve()
+        return resolved.rsplit(sep, maxsplit)
+
+
+def _resolve_theme_name(name: str | None) -> str:
+    normalized = (name or DEFAULT_THEME_NAME).strip().lower()
+    return normalized if normalized in THEME_REGISTRY else DEFAULT_THEME_NAME
+
+
+def get_theme(theme_name: str | None) -> CliTheme:
+    """Return a registered palette by name; fall back to default."""
+    return THEME_REGISTRY[_resolve_theme_name(theme_name)]
+
+
+def list_theme_names() -> tuple[str, ...]:
+    """Return available theme names in display order."""
+    return tuple(THEME_REGISTRY.keys())
+
+
+def get_active_theme() -> CliTheme:
+    """Return the currently active palette."""
+    return _ACTIVE_THEME
+
+
+def get_active_theme_name() -> str:
+    """Return the currently active palette name."""
+    return _ACTIVE_THEME.name
+
+
+def _apply_theme(theme: CliTheme) -> None:
+    global HIGHLIGHT_ANSI, BRAND_ANSI, TEXT_ANSI, DIM_ANSI, BOLD_BRAND_ANSI
+    global PROMPT_ACCENT_ANSI, PROMPT_FRAME_ANSI, DIM_COUNTER_ANSI, SURFACE_BG_ANSI
+    global INPUT_SURFACE_BG_ANSI, MENU_SELECTION_ROW_ANSI, MARKDOWN_THEME
+    global DEVICE_CODE_ANSI
+
+    _highlight_rgb = _parse_hex_color(theme.HIGHLIGHT)
+    _brand_rgb = _parse_hex_color(theme.BRAND)
+    _text_rgb = _parse_hex_color(theme.TEXT)
+    _dim_rgb = _parse_hex_color(theme.DIM)
+    _bg_rgb = _parse_hex_color(theme.BG)
+    _input_surface_rgb = _parse_hex_color(theme.INPUT_SURFACE)
+
+    HIGHLIGHT_ANSI = _fg(_highlight_rgb)
+    BRAND_ANSI = _fg(_brand_rgb)
+    TEXT_ANSI = _fg(_text_rgb)
+    DIM_ANSI = _fg(_dim_rgb)
+    BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
+
+    PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_highlight_rgb[0]};{_highlight_rgb[1]};{_highlight_rgb[2]}m"
+    PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
+    DEVICE_CODE_ANSI = PROMPT_ACCENT_ANSI
+    DIM_COUNTER_ANSI = DIM_ANSI
+    SURFACE_BG_ANSI = f"\x1b[48;2;{_bg_rgb[0]};{_bg_rgb[1]};{_bg_rgb[2]}m"
+    INPUT_SURFACE_BG_ANSI = (
+        f"\x1b[48;2;{_input_surface_rgb[0]};{_input_surface_rgb[1]};{_input_surface_rgb[2]}m"
+    )
+    MENU_SELECTION_ROW_ANSI = f"{INPUT_SURFACE_BG_ANSI}\x1b[1m{HIGHLIGHT_ANSI}"
+
+    MARKDOWN_THEME = Theme(
+        {
+            "markdown.code": f"bold {theme.HIGHLIGHT}",
+            "markdown.code_block": theme.TEXT,
+            "markdown.h1": f"bold {theme.HIGHLIGHT}",
+            "markdown.h2": f"bold {theme.BRAND}",
+            "markdown.h3": f"bold {theme.BRAND}",
+        }
+    )
+
+
+def set_active_theme(theme_name: str | None) -> CliTheme:
+    """Activate a palette and refresh all derived style constants."""
+    global _ACTIVE_THEME
+    _ACTIVE_THEME = get_theme(theme_name)
+    _apply_theme(_ACTIVE_THEME)
+    return _ACTIVE_THEME
+
+
+# ── Semantic color tokens (the only permitted colours) ─────────────────────
+_ACTIVE_THEME = get_theme(DEFAULT_THEME_NAME)
+
+HIGHLIGHT = _LazyRichStyle("HIGHLIGHT")
+BRAND = _LazyRichStyle("BRAND")
+TEXT = _LazyRichStyle("TEXT")
+SECONDARY = _LazyRichStyle("SECONDARY")
+DIM = _LazyRichStyle("DIM")
+WARNING = _LazyRichStyle("WARNING")
+ERROR = _LazyRichStyle("ERROR")
+BG = _LazyRichStyle("BG")
+INPUT_SURFACE = _LazyRichStyle("INPUT_SURFACE")
 
 # ── Rich style shorthands (bold variants of the semantic tokens) ──────────
 
-BOLD_HIGHLIGHT = f"bold {HIGHLIGHT}"
-BOLD_BRAND = f"bold {BRAND}"
-BOLD_TEXT = f"bold {TEXT}"
-BOLD_WARNING = f"bold {WARNING}"
-BOLD_ERROR = f"bold {ERROR}"
+BOLD_HIGHLIGHT = _LazyRichStyle("HIGHLIGHT", bold=True)
+BOLD_BRAND = _LazyRichStyle("BRAND", bold=True)
+BOLD_TEXT = _LazyRichStyle("TEXT", bold=True)
+BOLD_WARNING = _LazyRichStyle("WARNING", bold=True)
+BOLD_ERROR = _LazyRichStyle("ERROR", bold=True)
 
 # GitHub/device-flow one-time codes should be easy to spot and transcribe.
 DEVICE_CODE = BOLD_HIGHLIGHT
@@ -108,53 +376,26 @@ GLYPH_BULLET = "·"
 # permitted. Every truecolour value below corresponds to one of the eight
 # semantic tokens above.
 
-_HIGHLIGHT_RGB = (0xB9, 0xED, 0xAF)
-_BRAND_RGB = (0x66, 0xA1, 0x7D)
-_TEXT_RGB = (0xE0, 0xE0, 0xE0)
-_DIM_RGB = (0x44, 0x44, 0x44)
-_BG_RGB = (0x0A, 0x0A, 0x0A)
-
-
-def _fg(rgb: tuple[int, int, int]) -> str:
-    return f"\x1b[38;2;{rgb[0]};{rgb[1]};{rgb[2]}m"
-
-
-HIGHLIGHT_ANSI = _fg(_HIGHLIGHT_RGB)
-BRAND_ANSI = _fg(_BRAND_RGB)
-TEXT_ANSI = _fg(_TEXT_RGB)
-DIM_ANSI = _fg(_DIM_RGB)
-BOLD_BRAND_ANSI = f"\x1b[1m{BRAND_ANSI}"
-DEVICE_CODE_ANSI = f"\x1b[1;38;2;{_HIGHLIGHT_RGB[0]};{_HIGHLIGHT_RGB[1]};{_HIGHLIGHT_RGB[2]}m"
+# Placeholders — populated by :func:`set_active_theme` (ANSI + Markdown only).
+HIGHLIGHT_ANSI = ""
+BRAND_ANSI = ""
+TEXT_ANSI = ""
+DIM_ANSI = ""
+BOLD_BRAND_ANSI = ""
+DEVICE_CODE_ANSI = ""
 
 ANSI_RESET = "\x1b[0m"
 ANSI_BOLD = "\x1b[1m"
 ANSI_DIM = "\x1b[2m"
 
-PROMPT_ACCENT_ANSI = f"\x1b[1;38;2;{_HIGHLIGHT_RGB[0]};{_HIGHLIGHT_RGB[1]};{_HIGHLIGHT_RGB[2]}m"
-PROMPT_FRAME_ANSI = PROMPT_ACCENT_ANSI
+PROMPT_ACCENT_ANSI = ""
+PROMPT_FRAME_ANSI = ""
+DIM_COUNTER_ANSI = ""
+SURFACE_BG_ANSI = ""
+INPUT_SURFACE_BG_ANSI = ""
+MENU_SELECTION_ROW_ANSI = ""
 
-DIM_COUNTER_ANSI = DIM_ANSI
-SURFACE_BG_ANSI = f"\x1b[48;2;{_BG_RGB[0]};{_BG_RGB[1]};{_BG_RGB[2]}m"
+MARKDOWN_THEME = Theme({})
 
-# Input box surface — slightly lighter than BG so the full-width fill is visible.
-_INPUT_SURFACE_RGB = (0x14, 0x14, 0x14)
-INPUT_SURFACE = "#141414"
-INPUT_SURFACE_BG_ANSI = (
-    f"\x1b[48;2;{_INPUT_SURFACE_RGB[0]};{_INPUT_SURFACE_RGB[1]};{_INPUT_SURFACE_RGB[2]}m"
-)
-
-# Inline REPL picker: full-line selection bar (HIGHLIGHT fg over INPUT_SURFACE bg).
-MENU_SELECTION_ROW_ANSI = f"{INPUT_SURFACE_BG_ANSI}\x1b[1m{HIGHLIGHT_ANSI}"
-
-# ── Rich Theme override for Markdown rendering ─────────────────────────────
-# Overrides Rich's defaults ("bold cyan on black" / "cyan on black") so that
-# inline code spans and code-block chrome stay within the project palette.
-MARKDOWN_THEME = Theme(
-    {
-        "markdown.code": f"bold {HIGHLIGHT}",
-        "markdown.code_block": TEXT,
-        "markdown.h1": f"bold {HIGHLIGHT}",
-        "markdown.h2": f"bold {BRAND}",
-        "markdown.h3": f"bold {BRAND}",
-    }
-)
+# Ensure ANSI/Markdown derived constants match the default active theme.
+set_active_theme(DEFAULT_THEME_NAME)

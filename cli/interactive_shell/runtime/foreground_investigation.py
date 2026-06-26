@@ -50,7 +50,7 @@ def run_foreground_investigation(
 
     root = final_state.get("root_cause")
     task.mark_completed(result=str(root) if root is not None else "")
-    session.apply_investigation_result(final_state)
+    session.apply_investigation_result(final_state, trigger=task_command)
 
     # Mirror the standalone CLI (run_investigation_cli_streaming): show the
     # blocking RCA-accuracy feedback menu after the report. Pass console=None so

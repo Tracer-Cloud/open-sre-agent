@@ -151,6 +151,25 @@ class ReplSession:
     its ``paused`` flag (when it is a ``RedactingFileHistory``) without
     needing access to the ``PromptSession``."""
 
+    pt_style_app: Any = None
+    """The prompt-toolkit ``Application`` instance for this session.
+
+    Stored here (instead of accessed via ``get_app_or_none()``) so that
+    worker-thread slash commands (e.g. ``/theme``) can refresh styles via
+    ``call_soon_threadsafe`` on the main asyncio loop."""
+
+    main_loop: Any = None
+    """The asyncio event loop for the main REPL coroutine.
+
+    Set once in ``run_interactive`` so worker-thread code can schedule
+    prompt-toolkit updates on the main thread."""
+
+    active_theme_name: str = "green"
+    """Interactive shell palette name for this REPL session (``/theme``, prompts)."""
+
+    pending_theme_refresh: bool = False
+    """When True, apply the active palette to prompt-toolkit before the next prompt."""
+
     task_registry: TaskRegistry = field(default_factory=TaskRegistry)
     """Recent in-flight and completed shell tasks for /tasks and /cancel."""
 
@@ -496,7 +515,12 @@ class ReplSession:
         self.hydrate_configured_integrations()
         self.warm_resolved_integrations()
 
-    def apply_investigation_result(self, state: dict[str, Any]) -> None:
+    def apply_investigation_result(
+        self,
+        state: dict[str, Any],
+        *,
+        trigger: str = "",
+    ) -> None:
         """Record a completed investigation result and reset follow-up context.
 
         Replaces the inline ``session.last_state = …`` +
@@ -505,9 +529,12 @@ class ReplSession:
         This prevents CLI-agent turns from an earlier interaction from bleeding
         into the follow-up grounding context of a new investigation.
         """
+        from cli.interactive_shell.sessions.store import SessionStore
+
         self.last_state = state
         self.follow_up_messages.clear()
         self.accumulate_from_state(state)
+        SessionStore.append_investigation_result(self.session_id, state, trigger=trigger)
 
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset the session to a fresh state (used by /new and /resume)."""

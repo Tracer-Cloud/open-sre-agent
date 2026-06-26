@@ -18,13 +18,14 @@ _ALIASES_BY_TARGET: dict[str, tuple[str, ...]] = {
     "uninstall": ("uninstall",),
     "list": ("list",),
     "integrations": ("integrations", "integration", "int"),
+    "verify": ("verify",),
     "mcp": ("mcp",),
     "fleet": ("fleet",),
     "doctor": ("doctor",),
     "welcome": ("welcome", "agent", "hi", "hey", "menu"),
 }
 
-_TARGETS_WITH_ARGS = frozenset({"integrations", "mcp"})
+_TARGETS_WITH_ARGS = frozenset({"integrations", "mcp", "verify"})
 
 
 def _build_alias_map() -> dict[str, str]:

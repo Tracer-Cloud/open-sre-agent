@@ -60,6 +60,7 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         # CPR responses land as literal keystrokes in the incoming prompt buffer.
         "/doctor",
         "/version",
+        "/verify",
         "/status",
         "/cost",
         "/tasks",
@@ -73,6 +74,7 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/sessions",
         "/resume",
         "/new",
+        "/rca",
     }
 )
 _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
@@ -84,6 +86,11 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("/integrations", "remove"),
         ("/mcp", "connect"),
         ("/mcp", "disconnect"),
+        ("/rca", "history"),
+        ("/rca", "list"),
+        ("/rca", "ls"),
+        ("/rca", "show"),
+        ("/rca", "save"),
     }
 )
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
@@ -133,6 +140,8 @@ def dispatch_needs_exclusive_stdin(text: str, _session: ReplSession) -> bool:
     args = [arg.lower() for arg in parts[1:]]
 
     if name in _WAIT_FOR_COMPLETION_COMMANDS:
+        return True
+    if name == "/theme":
         return True
     if name in _EXCLUSIVE_STDIN_MENU_COMMANDS and not args:
         return True

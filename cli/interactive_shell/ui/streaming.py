@@ -32,7 +32,7 @@ from collections.abc import Iterator
 from rich.console import Console
 from rich.markdown import Markdown
 
-from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, MARKDOWN_THEME
+from cli.interactive_shell.ui import theme as ui_theme
 from cli.interactive_shell.ui.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -67,7 +67,7 @@ def render_response_header(console: Console, label: str) -> None:
     ``agent_actions.execute_cli_actions`` so the planned-actions path
     and the streaming response path use the exact same prefix.
     """
-    console.print(f"[{BOLD_BRAND}]●[/] [{DIM}]{label}[/]")
+    console.print(f"[{ui_theme.BOLD_BRAND}]●[/] [{ui_theme.DIM}]{label}[/]")
 
 
 def _format_tokens(token_count: int) -> str:
@@ -97,7 +97,7 @@ def stream_to_console(
         if text:
             console.print()
             render_response_header(console, label)
-            with console.use_theme(MARKDOWN_THEME):
+            with console.use_theme(ui_theme.MARKDOWN_THEME):
                 console.print(Markdown(text, code_theme=_MARKDOWN_CODE_THEME))
             console.print()
         return text
@@ -171,7 +171,7 @@ def stream_to_console(
     def _render_paragraph(text: str) -> None:
         if not text.strip():
             return
-        with console.use_theme(MARKDOWN_THEME):
+        with console.use_theme(ui_theme.MARKDOWN_THEME):
             console.print(Markdown(text.rstrip(), code_theme=_MARKDOWN_CODE_THEME))
 
     def _flush_paragraphs(*, force: bool = False) -> None:
@@ -281,7 +281,7 @@ def stream_to_console(
         elapsed = time.monotonic() - started
         if buffer:
             tokens = _format_tokens(total_bytes // _CHARS_PER_TOKEN)
-            console.print(f"[{DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
+            console.print(f"[{ui_theme.DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
         console.print()
 
     return "".join(buffer)

@@ -283,16 +283,31 @@ def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
         console.print(f"[{DIM}]no investigation in this session yet.[/]")
         return True
 
-    from rich.markdown import Markdown
-    from rich.padding import Padding
-    from rich.rule import Rule
-
     root_cause = session.last_state.get("root_cause", "")
     report = session.last_state.get("problem_md") or session.last_state.get("slack_message") or ""
 
     if not root_cause and not report:
         console.print(f"[{DIM}]last investigation has no report content.[/]")
         return True
+
+    render_investigation_report(
+        console,
+        root_cause=str(root_cause),
+        report=str(report),
+    )
+    return True
+
+
+def render_investigation_report(
+    console: Console,
+    *,
+    root_cause: str,
+    report: str,
+) -> None:
+    """Render root cause and report sections shared by /last and /rca show."""
+    from rich.markdown import Markdown
+    from rich.padding import Padding
+    from rich.rule import Rule
 
     for title, body in (("Root Cause", root_cause), ("Report", report)):
         if not body:
@@ -301,7 +316,42 @@ def _cmd_last(session: ReplSession, console: Console, _args: list[str]) -> bool:
         console.print(Rule(f"[bold {HIGHLIGHT}] {title} [/]", style=DIM, align="left"))
         console.print(Padding(Markdown(str(body).strip()), (1, 2)))
 
-    return True
+
+def write_investigation_export(
+    dest: Path,
+    *,
+    root_cause: str = "",
+    report: str = "",
+    full_state: dict[str, object] | None = None,
+) -> None:
+    """Write investigation content to ``dest`` as markdown or JSON."""
+    if full_state is not None:
+        if not root_cause:
+            root_cause = str(full_state.get("root_cause") or "")
+        if not report:
+            report = str(
+                full_state.get("problem_md")
+                or full_state.get("slack_message")
+                or full_state.get("report")
+                or ""
+            )
+
+    if dest.suffix.lower() == ".json":
+        payload = dict(full_state) if full_state is not None else {}
+        if root_cause:
+            payload.setdefault("root_cause", root_cause)
+        if report:
+            payload.setdefault("problem_md", report)
+            payload.setdefault("report", report)
+        dest.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        return
+
+    lines: list[str] = []
+    if root_cause:
+        lines.append(f"## Root Cause\n\n{root_cause}\n")
+    if report:
+        lines.append(f"## Report\n\n{report}\n")
+    dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
 
 
 def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -311,21 +361,7 @@ def _cmd_save(session: ReplSession, console: Console, args: list[str]) -> bool:
 
     dest = Path(args[0])
     try:
-        if dest.suffix.lower() == ".json":
-            dest.write_text(json.dumps(session.last_state, indent=2, default=str), encoding="utf-8")
-        else:
-            root_cause = session.last_state.get("root_cause", "")
-            report = (
-                session.last_state.get("problem_md")
-                or session.last_state.get("slack_message")
-                or ""
-            )
-            lines = []
-            if root_cause:
-                lines.append(f"## Root Cause\n\n{root_cause}\n")
-            if report:
-                lines.append(f"## Report\n\n{report}\n")
-            dest.write_text("\n".join(lines) or "(no report content)", encoding="utf-8")
+        write_investigation_export(dest, full_state=session.last_state)
         console.print(f"[{HIGHLIGHT}]saved:[/] {escape(str(dest))}")
     except Exception as exc:
         report_exception(exc, context="interactive_shell.save_report")

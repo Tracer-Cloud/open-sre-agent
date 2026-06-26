@@ -21,13 +21,17 @@ class DisplayProtocol(Protocol):
     ``isinstance`` branching on concrete classes.
     """
 
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        raise NotImplementedError
 
-    def step_start(self, node_name: str) -> None: ...
+    def step_start(self, node_name: str) -> None:
+        raise NotImplementedError
 
-    def step_complete(self, node_name: str, event: ProgressEvent) -> None: ...
+    def step_complete(self, node_name: str, event: ProgressEvent) -> None:
+        raise NotImplementedError
 
-    def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None: ...
+    def step_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
+        raise NotImplementedError
 
     def set_tool_details(
         self,
@@ -36,8 +40,11 @@ class DisplayProtocol(Protocol):
         records: list[dict[str, Any]],
         summary: str,
         clear: bool = False,
-    ) -> None: ...
+    ) -> None:
+        raise NotImplementedError
 
-    def print_above(self, text: str) -> None: ...
+    def print_above(self, text: str) -> None:
+        raise NotImplementedError
 
-    def print_above_renderable(self, renderable: Any) -> None: ...
+    def print_above_renderable(self, renderable: Any) -> None:
+        raise NotImplementedError

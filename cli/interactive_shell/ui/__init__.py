@@ -16,6 +16,7 @@ from cli.interactive_shell.ui.provider import resolve_provider_models
 from cli.interactive_shell.ui.rendering import (
     print_repl_json,
     print_repl_table,
+    refresh_welcome_poster,
     repl_print,
     repl_table,
 )
@@ -102,6 +103,7 @@ __all__ = [
     "print_repl_json",
     "print_repl_table",
     "render_agents_table",
+    "refresh_welcome_poster",
     "render_banner",
     "render_ready_box",
     "render_integrations_table",

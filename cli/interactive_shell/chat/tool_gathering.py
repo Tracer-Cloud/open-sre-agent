@@ -158,7 +158,6 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
 
     for tc, output in executed:
         with contextlib.suppress(Exception):
-            ok = not (isinstance(output, dict) and "error" in output)
             body = (
                 output
                 if isinstance(output, str)
@@ -172,7 +171,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
                 tool=str(tc.name),
                 arguments=arguments,
                 result=_truncate(body, _MAX_PER_TOOL_CHARS),
-                ok=ok,
+                ok=not (isinstance(output, dict) and "error" in output),
             )
 
 

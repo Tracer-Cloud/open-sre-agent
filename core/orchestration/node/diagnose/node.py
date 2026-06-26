@@ -40,7 +40,7 @@ def parse_diagnosis(
         return _parse_via_structured_output(last_text, evidence, alert_source=alert_source)
     except Exception as err:
         logger.warning("Structured diagnosis parse failed, falling back: %s", err)
-        return _parse_via_legacy(last_text, evidence, alert_name)
+        return _parse_via_legacy(last_text, evidence, alert_name, alert_source=alert_source)
 
 
 def diagnose(state: InvestigationState) -> dict[str, Any]:
@@ -136,11 +136,16 @@ Evidence keys collected: {", ".join(evidence.keys()) if evidence else "none"}
         non_validated_claims=schema["non_validated_claims"],
         remediation_steps=schema["remediation_steps"],
         validity_score=schema["validity_score"],
+        alert_source=alert_source,
     )
 
 
 def _parse_via_legacy(
-    last_text: str, _evidence: dict[str, Any], alert_name: str
+    last_text: str,
+    _evidence: dict[str, Any],
+    alert_name: str,
+    *,
+    alert_source: str = "",
 ) -> InvestigationResult:
     from services import parse_root_cause
 
@@ -154,6 +159,7 @@ def _parse_via_legacy(
             non_validated_claims=rr.non_validated_claims,
             remediation_steps=rr.remediation_steps,
             validity_score=0.5,
+            alert_source=alert_source,
         )
     except Exception as err:
         logger.warning("Legacy parse_root_cause also failed: %s", err)

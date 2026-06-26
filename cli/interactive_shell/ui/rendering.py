@@ -17,7 +17,10 @@ from typing import Any
 
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
+
+from cli.interactive_shell.ui import theme as ui_theme
 
 _REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
 
@@ -150,6 +153,84 @@ def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     _console_print_prepared(console, *objects, **kwargs)
 
 
+def _repl_write_buffer(rendered: str) -> None:
+    """Flush pre-rendered Rich output with CRLF line endings (patch_stdout safe)."""
+    from cli.interactive_shell.runtime.cpr_stdin import strip_cpr_escape_sequences
+
+    normalized = strip_cpr_escape_sequences(rendered.replace("\r\n", "\n").replace("\n", "\r\n"))
+    token = _REPL_OUTPUT_PREPARED.set(True)
+    try:
+        sys.stdout.write(normalized)
+        sys.stdout.flush()
+    finally:
+        _REPL_OUTPUT_PREPARED.reset(token)
+
+
+def repl_clear_screen() -> None:
+    """Clear the terminal scrollback when the REPL runs under patch_stdout."""
+    if not sys.stdout.isatty():
+        return
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+
+
+def _theme_notice_line(theme_notice: str) -> str:
+    """REPL-safe ``theme set: <name>`` using the active palette (not stale imports)."""
+    return (
+        f"{ui_theme.HIGHLIGHT_ANSI}theme set: {escape(theme_notice)}{ui_theme.ANSI_RESET}\r\n\r\n"
+    )
+
+
+def repl_render_launch_poster(
+    console: Console,
+    *,
+    session: object = None,
+    theme_notice: str | None = None,
+) -> None:
+    """Render splash + welcome panel using REPL-safe CRLF writes."""
+    from cli.interactive_shell.ui import banner as banner_module
+
+    if console.file is sys.stdout and sys.stdout.isatty():
+        width = _prepare_tty_for_rich(console)
+        buf = io.StringIO()
+        buf_console = Console(
+            file=buf,
+            force_terminal=True,
+            highlight=False,
+            color_system="truecolor",
+            legacy_windows=False,
+            width=width,
+        )
+        banner_module.render_splash(buf_console, first_run=False)
+        banner_module.render_ready_box(buf_console, session=session)
+        prefix = _theme_notice_line(theme_notice) if theme_notice else ""
+        _repl_write_buffer(prefix + buf.getvalue())
+        return
+
+    if theme_notice:
+        _console_print_prepared(
+            console,
+            f"[{ui_theme.HIGHLIGHT}]theme set:[/] {escape(theme_notice)}",
+        )
+    banner_module.render_splash(console, first_run=False)
+    banner_module.render_ready_box(console, session=session)
+
+
+def refresh_welcome_poster(
+    console: Console,
+    *,
+    session: object = None,
+    theme_notice: str | None = None,
+) -> None:
+    """Clear scrollback and redraw splash art + welcome panel with the active theme."""
+    from cli.interactive_shell.runtime.cpr_stdin import drain_stale_cpr_bytes
+
+    repl_clear_screen()
+    # ``repl_clear_screen`` can trigger a toolbar DSR/CPR exchange; drain before writing.
+    drain_stale_cpr_bytes()
+    repl_render_launch_poster(console, session=session, theme_notice=theme_notice)
+
+
 def repl_table(**kwargs: Any) -> Table:
     """Minimal outer borders — closer to Claude Code than full ASCII grids."""
     opts: dict[str, Any] = {
@@ -167,6 +248,9 @@ __all__ = [
     "_repl_table_width",
     "print_repl_json",
     "print_repl_table",
+    "refresh_welcome_poster",
+    "repl_clear_screen",
     "repl_print",
+    "repl_render_launch_poster",
     "repl_table",
 ]

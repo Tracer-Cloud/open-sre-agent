@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from prompt_toolkit.application.current import get_app_or_none
 
-from cli.interactive_shell.ui import ANSI_DIM, ANSI_RESET, PROMPT_ACCENT_ANSI
+from cli.interactive_shell.ui import theme as ui_theme
 from cli.interactive_shell.ui.token_format import _CHARS_PER_TOKEN, format_token_count_short
 
 # How often prompt-toolkit refreshes prompt callbacks and confirmation polling.
@@ -137,7 +137,7 @@ class SpinnerState:
         app = get_app_or_none()
         if app is not None and app.current_buffer.text:
             hint += "  ·  esc to clear"
-        return f"{ANSI_DIM}{hint}{ANSI_RESET}"
+        return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
 
     def inline_spinner_ansi(self) -> str:
         if not self.streaming:
@@ -152,8 +152,8 @@ class SpinnerState:
         else:
             suffix = f" ({elapsed:.0f}s)"
         return (
-            f"{PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ANSI_RESET}"
-            f"{ANSI_DIM}{suffix}  esc to cancel{ANSI_RESET}"
+            f"{ui_theme.PROMPT_ACCENT_ANSI}{glyph} {self._verb}…{ui_theme.ANSI_RESET}"
+            f"{ui_theme.ANSI_DIM}{suffix}  esc to cancel{ui_theme.ANSI_RESET}"
         )
 
 

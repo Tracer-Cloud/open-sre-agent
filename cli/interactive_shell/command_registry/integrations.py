@@ -157,6 +157,62 @@ def _mcp_service_choices() -> list[tuple[str, str]]:
     return [(name, name) for name in names]
 
 
+def _print_verify_summary(
+    console: Console, results: list[dict[str, str]], *, single_service: bool
+) -> None:
+    failed = [r for r in results if r.get("status") in ("failed", "missing")]
+    if single_service:
+        if not results:
+            return
+        service = escape(str(results[0].get("service", "?")))
+        style = WARNING if failed else HIGHLIGHT
+        detail = "needs attention" if failed else "ok"
+        repl_print(console, f"[{style}]{service} {detail}.[/]")
+        return
+    if failed:
+        repl_print(console, f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
+    else:
+        repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
+
+
+def _run_verify(session: ReplSession, console: Console, service: str | None = None) -> bool:
+    normalized = ""
+    if service is not None:
+        from integrations.registry import SUPPORTED_VERIFY_SERVICES, resolve_management_service
+
+        normalized = resolve_management_service(service)
+        if normalized not in SUPPORTED_VERIFY_SERVICES:
+            repl_print(
+                console,
+                f"[{ERROR}]unsupported verify target:[/] {escape(normalized)}  "
+                f"(try [bold]/verify[/bold] with no args to verify all)",
+            )
+            session.mark_latest(ok=False, kind="slash")
+            return True
+
+    prepare_repl_output_line()
+    label = escape(normalized) if service is not None else "integrations"
+    with console.status(f"[{DIM}]Verifying {label}…[/]", spinner="dots"):
+        if service is not None:
+            match = repl_data.verify_integration(normalized)
+            if match is None:
+                repl_print(console, f"[{ERROR}]service not found:[/] {escape(normalized)}")
+                session.mark_latest(ok=False, kind="slash")
+                return True
+            results = [match]
+        else:
+            results = repl_data.load_verified_integrations()
+
+    _record_integrations_observation(session, results)
+    render_integrations_table(console, results)
+    _print_verify_summary(console, results, single_service=service is not None)
+    return True
+
+
+def _cmd_verify_route(session: ReplSession, console: Console, args: list[str]) -> bool:
+    return _cmd_integrations(session, console, ["verify", *args])
+
+
 def _render_integration_show(session: ReplSession, console: Console, service: str) -> bool:
     """Verify and print one integration. Returns False when the service is unknown."""
     from integrations.registry import resolve_management_service
@@ -210,17 +266,15 @@ def _cmd_integrations(session: ReplSession, console: Console, args: list[str]) -
         return True
 
     if sub == "verify":
-        prepare_repl_output_line()
-        with console.status(f"[{DIM}]Verifying integrations…[/]", spinner="dots"):
-            results = repl_data.load_verified_integrations()
-        _record_integrations_observation(session, results)
-        render_integrations_table(console, results)
-        failed = [r for r in results if r.get("status") in ("failed", "missing")]
-        if failed:
-            repl_print(console, f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
-        else:
-            repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
-        return True
+        if len(args) > 2:
+            repl_print(
+                console,
+                f"[{DIM}]usage:[/] /integrations verify [service]  "
+                f"(or [bold]/verify [service][/bold])",
+            )
+            session.mark_latest(ok=False, kind="slash")
+            return True
+        return _run_verify(session, console, args[1] if len(args) == 2 else None)
 
     if sub == "setup":
         result = run_cli_command(console, ["integrations", "setup", *args[1:]])
@@ -375,6 +429,13 @@ _MCP_FIRST_ARGS: tuple[tuple[str, str], ...] = (
 
 COMMANDS: list[SlashCommand] = [
     SlashCommand(
+        "/verify",
+        "Verify configured integration connectivity.",
+        _cmd_verify_route,
+        usage=("/verify", "/verify <service>"),
+        execution_tier=ExecutionTier.ELEVATED,
+    ),
+    SlashCommand(
         "/integrations",
         "Manage integrations.",
         _cmd_integrations,
@@ -382,6 +443,7 @@ COMMANDS: list[SlashCommand] = [
             "/integrations",
             "/integrations list",
             "/integrations verify",
+            "/integrations verify <service>",
             "/integrations show <service>",
         ),
         notes=("In a TTY, bare /integrations opens an interactive menu.",),

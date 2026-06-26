@@ -95,6 +95,13 @@ def test_integrations_verify_resolves_elevated() -> None:
     assert tier == ExecutionTier.ELEVATED
 
 
+def test_verify_resolves_elevated() -> None:
+    tier = resolve_slash_execution_tier("/verify", [], ExecutionTier.ELEVATED)
+    assert tier == ExecutionTier.ELEVATED
+    tier = resolve_slash_execution_tier("/verify", ["datadog"], ExecutionTier.ELEVATED)
+    assert tier == ExecutionTier.ELEVATED
+
+
 def test_investigation_launch_is_allow() -> None:
     r = evaluate_investigation_launch(action_type="investigation")
     assert r.verdict == "allow"

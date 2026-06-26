@@ -6,7 +6,7 @@ import os
 import sys
 from typing import Literal
 
-import questionary as questionary
+import questionary
 from rich.text import Text
 
 from cli.interactive_shell.ui.theme import (
@@ -17,12 +17,7 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from cli.wizard._integration_configurators import (
-    DEFAULT_GITHUB_MCP_MODE as DEFAULT_GITHUB_MCP_MODE,
-)
-from cli.wizard._integration_configurators import (
-    DEFAULT_GITHUB_MCP_URL as DEFAULT_GITHUB_MCP_URL,
-)
+from cli.wizard import _integration_configurators as _integration_configurators_module
 from cli.wizard._integration_configurators import (
     _configure_selected_integrations,
 )
@@ -44,13 +39,23 @@ from cli.wizard._ui import (
 )
 from cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from cli.wizard.env_sync import sync_env_values, sync_provider_env
-from cli.wizard.integration_health import IntegrationHealthResult as IntegrationHealthResult
+from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
 from cli.wizard.store import get_store_path, save_local_config
 from cli.wizard.validation import build_demo_action_response as _build_demo_action_response
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 
+DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
+DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
 WIZARD_TOTAL_STEPS = 4
+
+__all__ = [
+    "DEFAULT_GITHUB_MCP_MODE",
+    "DEFAULT_GITHUB_MCP_URL",
+    "IntegrationHealthResult",
+    "build_demo_action_response",
+    "questionary",
+]
 
 
 # Re-export build_demo_action_response from validation as a stable module-level

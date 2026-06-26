@@ -29,6 +29,24 @@ _DIAGNOSE_SPINNER_NAME = "dots12"
 _DIAGNOSE_SPINNER_COLOR = "orange1"
 _HIDDEN_PROGRESS_NODES = frozenset({"publish_findings"})
 
+__all__ = [
+    "_BOLD",
+    "_CYAN",
+    "_DIAGNOSE_NODE",
+    "_DIAGNOSE_RENDER_INTERVAL_S",
+    "_DIAGNOSE_SPINNER_COLOR",
+    "_DIAGNOSE_SPINNER_NAME",
+    "_DIM",
+    "_GREEN",
+    "_HIDDEN_PROGRESS_NODES",
+    "_NODE_END_KINDS",
+    "_NODE_START_KINDS",
+    "_RESET",
+    "_TOKEN_STREAM_KIND",
+    "_WHITE",
+    "_render_source",
+]
+
 
 def _render_source(*, local: bool) -> str:
     return EntrypointSource.CLI_PASTE.value if local else EntrypointSource.REMOTE_HTTP.value

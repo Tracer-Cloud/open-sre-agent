@@ -170,6 +170,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Reprint the most recent investigation report from this session.",
         "User asks to show the last investigation result or report again",
     ),
+    "/rca": _mcp(
+        "Browse persisted RCA reports across sessions. Subcommands: history, show <id>, save <path>.",
+        "User asks for past RCA reports, investigation history, or to export a previous root-cause report",
+        anti_examples=("User asks for command history or up-arrow recall (use /history)",),
+    ),
     "/mcp": _mcp(
         "Manage connected MCP servers. Subcommands: list, connect, disconnect.",
         "User asks to list, connect, or disconnect MCP servers",
@@ -178,6 +183,15 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/messaging": _mcp(
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
         "User asks about Telegram pairing, messaging allowlist, or messaging status",
+    ),
+    "/misses": _mcp(
+        "Triage investigation misses and export them as benchmark regression scenarios. "
+        "Subcommands: list, stats, export --out <dir>, convert <miss_id>.",
+        "User asks about investigation misses, miss triage, or miss trends",
+        "User asks to convert recent misses into regression scenarios or evals",
+        anti_examples=(
+            "User asks for raw feedback ratings without taxonomy (read ~/.opensre/feedback.jsonl directly)",
+        ),
     ),
     "/model": _mcp(
         "Show or change active LLM provider and models. Subcommands: show, set, restore, toolcall.",
@@ -267,6 +281,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Browse and run inventoried tests from the terminal. Subcommands: list, run, synthetic.",
         "User asks to list or run bundled tests via /tests",
     ),
+    "/theme": _mcp(
+        "Choose and persist the interactive shell color palette (TTY picker or /theme <name>).",
+        "User asks to change the REPL color theme or palette",
+        anti_examples=("User asks about light/dark mode in a web UI",),
+    ),
     "/trust": _mcp(
         "Enable or disable trust mode (skip execution confirmation prompts). on | off.",
         "User asks to enable or disable trust mode or auto-approve",
@@ -286,6 +305,16 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/verbose": _mcp(
         "Toggle verbose logging in the REPL. on | off.",
         "User asks to enable or disable verbose logging",
+    ),
+    "/verify": _mcp(
+        "Run connectivity checks on configured integrations. "
+        "Bare /verify checks all; pass a service name to verify one.",
+        "User asks to verify integrations or check if a named integration is reachable",
+        "User asks to verify one integration by name (e.g. datadog, telegram)",
+        anti_examples=(
+            "User asks for full agent and LLM health (use /health)",
+            "User asks to show integration config details (use /integrations show)",
+        ),
     ),
     "/version": _mcp(
         "Print OpenSRE version, Python version, and OS information.",

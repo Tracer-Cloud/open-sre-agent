@@ -21,6 +21,8 @@ class UpstreamCandidate:
     confidence: float
     correlated_signals: tuple[CorrelatedSignal, ...]
     rationale: str
+    confidence_label: str = "low"
+    evidence_breakdown: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)

@@ -10,10 +10,7 @@ from core.domain.alerts.alert_source import (
     relevant_sources_for_alert,
     resolve_alert_source,
 )
-from core.domain.types.root_cause_categories import (
-    HERMES_ROOT_CAUSE_CATEGORIES,
-    render_prompt_taxonomy,
-)
+from core.domain.state.diagnosis import root_cause_category_instruction_for_source
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
 
@@ -77,25 +74,10 @@ _ALERT_SOURCE_TO_TOOL_SOURCES = {
 }
 _SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
 
-_DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION = (
-    "One of database / infrastructure / code_bug / configuration / network / performance / "
-    "healthy / unknown"
-)
-
 
 def build_system_prompt(state: dict[str, Any]) -> str:
     alert_source = resolve_alert_source(state)
-    root_cause_category_instruction = _DEFAULT_ROOT_CAUSE_CATEGORY_INSTRUCTION
-
-    if alert_source == "hermes":
-        taxonomy = render_prompt_taxonomy(
-            HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"}
-        ).strip()
-        root_cause_category_instruction = (
-            "Use exactly one category name from the Hermes taxonomy below\n\n"
-            "## Hermes root cause category taxonomy (single source of truth)\n"
-            f"{taxonomy}"
-        )
+    root_cause_category_instruction = root_cause_category_instruction_for_source(alert_source)
 
     return _INVESTIGATION_SYSTEM.format(
         root_cause_category_instruction=root_cause_category_instruction

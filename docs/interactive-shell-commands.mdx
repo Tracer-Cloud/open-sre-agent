@@ -78,6 +78,7 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 | Command | What it does |
 | --- | --- |
 | `/health` | Integration and agent health check |
+| `/verify` | Verify integration connectivity (all or one service) |
 | `/integrations` | List, verify, show, setup, or remove integrations |
 | `/mcp` | List, connect, or disconnect MCP servers |
 | `/model` | Show or switch LLM provider and models |
@@ -513,7 +514,8 @@ Parent directories must exist or be creatable; write failures print the underlyi
 
 | Question | Command |
 | --- | --- |
-| Are my integrations configured and reachable? | `/health` or `/integrations verify` |
+| Are my integrations configured and reachable? | `/verify`, `/health`, or `/integrations verify` |
+| Verify one integration by name? | `/verify datadog` or `/integrations verify datadog` |
 | Show one integration's credentials/endpoints? | `/integrations show datadog` |
 | Is Python/Docker/venv OK on this machine? | `/doctor` |
 | What integrations exist in OpenSRE generally? | Ask in plain language (docs answer) — not `/integrations list` |
@@ -526,7 +528,22 @@ Read-only pass/fail report for the local OpenSRE agent, LLM connectivity, and ea
 /health
 ```
 
-Runs live verification against the integration store. Use before incidents to confirm Datadog/Grafana/K8s credentials still work.
+Runs live verification against the integration store. Use before incidents to confirm Datadog/Grafana/K8s credentials still work. For integration-only checks without the full agent/LLM report, prefer `/verify`.
+
+### `/verify`
+
+Shortcut for integration connectivity checks (same as `opensre integrations verify` / `make verify-integrations`).
+
+```text
+/verify
+/verify datadog
+/verify telegram
+```
+
+| Form | Behavior |
+| --- | --- |
+| Bare `/verify` | Verify all integrations; prints status table plus `all integrations ok` or `N integration(s) need attention` |
+| `/verify <service>` | Verify one named integration |
 
 ### `/integrations`
 
@@ -534,6 +551,7 @@ Runs live verification against the integration store. Use before incidents to co
 /integrations
 /integrations list
 /integrations verify
+/integrations verify datadog
 /integrations show datadog
 /integrations setup datadog
 /integrations remove datadog
@@ -542,7 +560,8 @@ Runs live verification against the integration store. Use before incidents to co
 | Subcommand | Behavior |
 | --- | --- |
 | `list` (default) | Verify all configured integrations and render status table |
-| `verify` | Same verification; prints `all integrations ok` or `N integration(s) need attention` |
+| `verify` | Verify all integrations; prints summary line |
+| `verify <service>` | Verify one integration (same as `/verify <service>`) |
 | `show <service>` | Verify one service and print key/value config (masked secrets) |
 | `setup <service>` | Launch setup wizard via CLI subprocess |
 | `remove <service>` | Remove from local store **elevated** |
@@ -1031,7 +1050,7 @@ You do not need to memorize every slash command. Examples:
 | You type | Typical routing |
 | --- | --- |
 | "what's my token usage?" | `/cost` |
-| "verify datadog" | `/integrations verify` |
+| "verify datadog" | `/verify datadog` |
 | "show datadog config" | `/integrations show datadog` |
 | "switch to openai gpt-4.1" | `/model set openai gpt-4.1` |
 | "run the generic sample alert" | `/investigate generic` |
@@ -1064,7 +1083,7 @@ Compound requests ("health then integrations") execute as an ordered sequence of
 ```text
 /onboard
 /health
-/integrations verify
+/verify
 /model show
 ```
 

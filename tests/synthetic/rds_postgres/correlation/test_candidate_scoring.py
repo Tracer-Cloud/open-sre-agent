@@ -34,8 +34,8 @@ def test_candidate_correlation_combines_time_window_and_topology() -> None:
     assert result.time_window_score == 0.9
     assert result.topology_score == 1.0
     assert result.periodicity_score == 0.0
-    assert result.operator_hint_score == 0.0
-    assert result.final_confidence == 0.75
+    assert result.feature_workflow_score == 0.0
+    assert result.final_confidence == 0.705
 
 
 def test_candidate_correlation_penalizes_unrelated_candidate() -> None:
@@ -61,7 +61,7 @@ def test_candidate_correlation_penalizes_unrelated_candidate() -> None:
         topology=topology,
     )
 
-    assert result.final_confidence == 0.05
+    assert result.final_confidence == 0.045
 
 
 def test_candidate_correlation_includes_periodicity_and_operator_hint() -> None:
@@ -101,5 +101,5 @@ def test_candidate_correlation_includes_periodicity_and_operator_hint() -> None:
     )
 
     assert result.periodicity_score == 1.0
-    assert result.operator_hint_score == 1.0
-    assert result.final_confidence == 0.95
+    assert result.feature_workflow_score == 1.0
+    assert result.final_confidence == 0.955

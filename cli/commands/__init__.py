@@ -21,6 +21,7 @@ from cli.commands.guardrails import guardrails
 from cli.commands.hermes import hermes_command
 from cli.commands.integrations import integrations
 from cli.commands.messaging import messaging
+from cli.commands.misses import misses_command
 from cli.commands.onboard import onboard
 from cli.commands.remote import remote
 from cli.commands.tests import tests
@@ -36,6 +37,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     guardrails,
     fleet,
     messaging,
+    misses_command,
     hermes_command,
     cron_command,
     watchdog_command,

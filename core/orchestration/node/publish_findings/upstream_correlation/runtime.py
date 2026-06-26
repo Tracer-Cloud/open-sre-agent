@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 
 from core.domain.correlation.scoring import (
@@ -7,7 +9,6 @@ from core.domain.correlation.scoring import (
     metric_to_time_series,
     rank_upstream_candidates,
     score_candidate_correlation,
-    score_operator_hint,
     score_periodic_spikes,
     score_time_window_correlation,
     score_topology_adjacency,
@@ -17,10 +18,44 @@ from core.domain.types.upstream import (
     UpstreamCandidate,
     UpstreamEvidenceBundle,
 )
+from core.orchestration.node.publish_findings.upstream_correlation.feature_config import (
+    load_feature_workflow_config,
+    resolve_feature_keywords,
+)
+from core.orchestration.node.publish_findings.upstream_correlation.feature_workflow import (
+    score_feature_workflow_hypothesis,
+)
 from core.orchestration.node.publish_findings.upstream_correlation.reporting import (
     build_correlation_report,
     correlation_report_to_payload,
 )
+
+_FEATURE_CONFIG_ENV = "OPENSRE_FEATURE_WORKFLOW_CONFIG"
+
+
+def _runtime_feature_keywords(
+    *,
+    endpoint: str | None,
+    service_name: str,
+) -> tuple[str, ...]:
+    config_path = os.getenv(_FEATURE_CONFIG_ENV)
+    if not config_path:
+        return ()
+
+    config_file = Path(config_path)
+    if not config_file.exists():
+        return ()
+
+    try:
+        config = load_feature_workflow_config(config_file)
+    except Exception:
+        return ()
+
+    return resolve_feature_keywords(
+        endpoint=endpoint,
+        service_name=service_name,
+        config=config,
+    )
 
 
 def _empty_correlation() -> dict[str, Any]:
@@ -39,6 +74,7 @@ def build_runtime_correlation(
         return _empty_correlation()
 
     rds_metric = evidence.rds_metrics[0]
+    endpoint = next((hint for hint in evidence.operator_hints if hint.startswith("/")), None)
     candidates: list[UpstreamCandidate] = []
 
     for metric in evidence.upstream_metrics:
@@ -71,9 +107,32 @@ def build_runtime_correlation(
             spike_threshold=75.0,
         )
 
-        operator_hint = score_operator_hint(
-            metric_name=metric.name,
-            operator_hints=evidence.operator_hints,
+        metric_keywords = tuple(
+            token
+            for token in metric.name.lower()
+            .replace("{", " ")
+            .replace("}", " ")
+            .replace(":", " ")
+            .replace(",", " ")
+            .replace(".", " ")
+            .replace("-", " ")
+            .split()
+            if len(token) > 2
+        )
+
+        config_keywords = _runtime_feature_keywords(
+            endpoint=endpoint,
+            service_name=metric.name,
+        )
+
+        candidate_keywords = tuple(dict.fromkeys(metric_keywords + config_keywords))
+
+        workflow_hints = tuple(hint for hint in evidence.operator_hints if not hint.startswith("/"))
+
+        feature_workflow = score_feature_workflow_hypothesis(
+            candidate_name=metric.name,
+            candidate_keywords=candidate_keywords,
+            operator_hints=workflow_hints,
         )
 
         score = score_candidate_correlation(
@@ -84,7 +143,7 @@ def build_runtime_correlation(
             ),
             topology=topology,
             periodicity=periodicity,
-            operator_hint=operator_hint,
+            operator_hint=feature_workflow,
         )
 
         candidates.append(
@@ -92,8 +151,18 @@ def build_runtime_correlation(
                 name=metric.name,
                 tier="application",
                 confidence=score.final_confidence,
+                confidence_label=score.shared_confidence.label,
                 correlated_signals=(),
                 rationale=score.rationale,
+                evidence_breakdown=tuple(
+                    {
+                        "source": contribution.source,
+                        "score": contribution.score,
+                        "weight": contribution.weight,
+                        "rationale": contribution.rationale,
+                    }
+                    for contribution in score.shared_confidence.contributions
+                ),
             )
         )
 

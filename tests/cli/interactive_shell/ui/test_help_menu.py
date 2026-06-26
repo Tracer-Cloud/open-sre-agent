@@ -8,6 +8,7 @@ import sys
 
 from cli.interactive_shell.command_registry.types import SlashCommand
 from cli.interactive_shell.ui import help_menu
+from cli.interactive_shell.ui import theme as ui_theme
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 
@@ -82,8 +83,8 @@ def test_section_rows_keep_divider_dim() -> None:
         width=40,
     )
 
-    assert f"{help_menu.BOLD_BRAND_ANSI}Investigation" in rendered
-    assert f"{help_menu.DIM_COUNTER_ANSI}│" in rendered
+    assert f"{ui_theme.BOLD_BRAND_ANSI}Investigation" in rendered
+    assert f"{ui_theme.DIM_COUNTER_ANSI}│" in rendered
 
 
 def test_detail_rows_use_text_labels_dim_values_and_dim_divider() -> None:
@@ -100,10 +101,10 @@ def test_detail_rows_use_text_labels_dim_values_and_dim_divider() -> None:
         width=40,
     )
 
-    assert f"{help_menu.DIM_COUNTER_ANSI}{' ' * help_menu._left_column_width(40)}│ " in label
-    assert f"{help_menu.TEXT_ANSI}usage:" in label
-    assert f"{help_menu.DIM_COUNTER_ANSI}{' ' * help_menu._left_column_width(40)}│ " in value
-    assert f"{help_menu.DIM_COUNTER_ANSI}  /help" in value
+    assert f"{ui_theme.DIM_COUNTER_ANSI}{' ' * help_menu._left_column_width(40)}│ " in label
+    assert f"{ui_theme.TEXT_ANSI}usage:" in label
+    assert f"{ui_theme.DIM_COUNTER_ANSI}{' ' * help_menu._left_column_width(40)}│ " in value
+    assert f"{ui_theme.DIM_COUNTER_ANSI}  /help" in value
 
 
 def test_draw_help_menu_centers_title(monkeypatch) -> None:
@@ -226,9 +227,26 @@ def test_command_rows_highlight_only_unselected_command_name() -> None:
     )
 
     assert (
-        f"{help_menu.DIM_COUNTER_ANSI}   ▸ {help_menu.ANSI_RESET}{help_menu.HIGHLIGHT_ANSI}/trust"
+        f"{ui_theme.DIM_COUNTER_ANSI}   ▸ {ui_theme.ANSI_RESET}{ui_theme.HIGHLIGHT_ANSI}/trust"
     ) in rendered
-    assert f"{help_menu.HIGHLIGHT_ANSI}▸" not in rendered
+    assert f"{ui_theme.HIGHLIGHT_ANSI}▸" not in rendered
+
+
+def test_help_menu_command_rows_track_active_theme() -> None:
+    from cli.interactive_shell.ui.theme import set_active_theme
+
+    set_active_theme("green")
+    green_highlight = ui_theme.HIGHLIGHT_ANSI
+    set_active_theme("purple")
+    rendered = help_menu._render_command_row(
+        SlashCommand("/trust", "Manage trust mode.", lambda *_args: True),
+        selected=False,
+        expanded=False,
+        width=60,
+    )
+
+    assert ui_theme.HIGHLIGHT_ANSI in rendered
+    assert green_highlight not in rendered
 
 
 def test_expanded_detail_lines_include_all_usage_examples_and_notes() -> None:

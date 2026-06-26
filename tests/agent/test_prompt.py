@@ -10,10 +10,9 @@ from core.orchestration.node.investigate.prompt import (
 def test_build_system_prompt_non_hermes_uses_generic_category_instruction() -> None:
     prompt = build_system_prompt({"alert_source": "grafana"})
 
-    assert (
-        "One of database / infrastructure / code_bug / configuration / network / performance"
-        in prompt
-    )
+    assert "Root cause category taxonomy" in prompt
+    assert "connection_exhaustion" in prompt
+    assert "[database]" in prompt
     assert "Hermes root cause category taxonomy" not in prompt
     assert "agent_hang" not in prompt
 
