@@ -298,9 +298,7 @@ def _google_docs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from vendors.google_docs import create_google_docs_incident_report
-
-        return create_google_docs_incident_report(
+        return mod.create_google_docs_incident_report(
             title="t",
             summary="s",
             root_cause="rc",
@@ -325,9 +323,7 @@ def _eks_list_clusters_case() -> ToolFailureCase:
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import list_eks_clusters
-
-        return list_eks_clusters(role_arn="arn:aws:iam::123:role/x")
+        return mod.list_eks_clusters(role_arn="arn:aws:iam::123:role/x")
 
     return ToolFailureCase("eks_list_clusters", patch, invoke, "list_eks_clusters", "eks")
 
@@ -339,9 +335,7 @@ def _eks_describe_cluster_case() -> ToolFailureCase:
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import describe_eks_cluster
-
-        return describe_eks_cluster(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
+        return mod.describe_eks_cluster(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
     return ToolFailureCase("eks_describe_cluster", patch, invoke, "describe_eks_cluster", "eks")
 
@@ -353,9 +347,7 @@ def _eks_nodegroup_case() -> ToolFailureCase:
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import get_eks_nodegroup_health
-
-        return get_eks_nodegroup_health(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
+        return mod.get_eks_nodegroup_health(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
     return ToolFailureCase("eks_nodegroup_health", patch, invoke, "get_eks_nodegroup_health", "eks")
 
@@ -367,9 +359,7 @@ def _eks_addon_case() -> ToolFailureCase:
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import describe_eks_addon
-
-        return describe_eks_addon(
+        return mod.describe_eks_addon(
             cluster_name="c",
             addon_name="coredns",
             role_arn="arn:aws:iam::123:role/x",
@@ -385,9 +375,7 @@ def _eks_events_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import get_eks_events
-
-        return get_eks_events(
+        return mod.get_eks_events(
             cluster_name="c",
             namespace="default",
             role_arn="arn:aws:iam::123:role/x",
@@ -403,9 +391,7 @@ def _eks_node_health_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import get_eks_node_health
-
-        return get_eks_node_health(
+        return mod.get_eks_node_health(
             cluster_name="c",
             role_arn="arn:aws:iam::123:role/x",
         )
@@ -420,9 +406,7 @@ def _eks_list_namespaces_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import list_eks_namespaces
-
-        return list_eks_namespaces(
+        return mod.list_eks_namespaces(
             cluster_name="c",
             role_arn="arn:aws:iam::123:role/x",
         )
@@ -437,9 +421,7 @@ def _eks_list_deployments_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import list_eks_deployments
-
-        return list_eks_deployments(
+        return mod.list_eks_deployments(
             cluster_name="c",
             namespace="default",
             role_arn="arn:aws:iam::123:role/x",
@@ -455,9 +437,7 @@ def _eks_list_pods_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import list_eks_pods
-
-        return list_eks_pods(
+        return mod.list_eks_pods(
             cluster_name="c",
             namespace="default",
             role_arn="arn:aws:iam::123:role/x",
@@ -473,9 +453,7 @@ def _eks_pod_logs_case() -> ToolFailureCase:
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from vendors.eks import get_eks_pod_logs
-
-        return get_eks_pod_logs(
+        return mod.get_eks_pod_logs(
             cluster_name="c",
             namespace="default",
             pod_name="p",
