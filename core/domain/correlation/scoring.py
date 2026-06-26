@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
 from core.domain.correlation.confidence import (
     EvidenceContribution,
@@ -54,6 +55,11 @@ class PeriodicityScore:
 @dataclass(frozen=True)
 class OperatorHintScore:
     score: float
+
+
+class HintEvidenceScore(Protocol):
+    @property
+    def score(self) -> float: ...
 
 
 @dataclass(frozen=True)
@@ -213,7 +219,7 @@ def score_candidate_correlation(
     time_window: TimeWindowCorrelation,
     topology: TopologyCorrelation,
     periodicity: PeriodicityScore | None = None,
-    operator_hint: OperatorHintScore | None = None,
+    operator_hint: HintEvidenceScore | None = None,
 ) -> CandidateCorrelationScore:
     periodicity_score = periodicity.score if periodicity is not None else 0.0
     feature_workflow_score = (

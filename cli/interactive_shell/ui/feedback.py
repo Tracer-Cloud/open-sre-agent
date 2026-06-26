@@ -145,8 +145,8 @@ def _emit_analytics(record: dict[str, Any]) -> None:
 
 def _emit_miss_classified(miss_record: dict[str, Any]) -> None:
     """Emit a follow-up event so PostHog dashboards can chart category trends."""
-    from app.analytics.events import Event
-    from app.analytics.provider import get_analytics
+    from platform.analytics.events import Event
+    from platform.analytics.provider import get_analytics
 
     with contextlib.suppress(Exception):
         props: dict[str, Any] = {
