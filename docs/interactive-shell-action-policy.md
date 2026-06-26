@@ -61,7 +61,7 @@ Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
 1. Context grounding (not action planning). At REPL boot, `repl_main`
-   (`interactive_shell/runtime/entrypoint.py`) hydrates
+   (`interactive_shell/entrypoint.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat

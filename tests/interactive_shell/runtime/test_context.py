@@ -10,7 +10,7 @@ from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 from pydantic import ValidationError
 
-from interactive_shell.runtime.controller import InteractiveShellController
+from interactive_shell.controller import InteractiveShellController
 from interactive_shell.runtime.core.context import (
     ReplRuntimeContext,
     ReplSessionBootstrapSpec,

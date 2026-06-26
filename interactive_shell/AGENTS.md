@@ -17,7 +17,8 @@ should be predictable, interruptible, explainable, and safe by default.
 
 | Area | Owns | Keep out |
 | --- | --- | --- |
-| `runtime/controller.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
+| `controller.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
+| `entrypoint.py` | process/bootstrap boundary for starting the REPL | per-turn dispatch/runtime logic |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
 | `orchestration/` | action planning, execution policy, action executor, deterministic command detection, and interaction models | raw UI formatting |

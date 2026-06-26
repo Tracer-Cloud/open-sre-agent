@@ -2,15 +2,15 @@
 
 ## Human summary
 
-The `runtime` package is the interactive shell runtime for OpenSRE. It keeps
-the prompt alive, accepts user input turn by turn, hands each turn to
-the shell pipeline, and keeps the terminal responsive while work is running.
+The `runtime` package holds the focused support modules for the interactive
+shell runtime. The top-level bootstrap and controller live one level up in
+`interactive_shell/`.
 
 In simple terms:
 
-- `entrypoint.py` starts the interactive session and handles startup/shutdown.
+- `../entrypoint.py` starts the interactive session and handles startup/shutdown.
 - `startup/first_launch_github.py` owns the first-launch GitHub sign-in gate.
-- `controller.py` owns the `InteractiveShellController` orchestration class,
+- `../controller.py` owns the `InteractiveShellController` orchestration class,
   including prompt input, submitted prompt handling, queued turn consumption,
   prompt-mediated confirmation waits, one-turn pipeline handoff, background output draining, and
   shutdown.
@@ -41,7 +41,7 @@ The runtime package is intentionally split into focused concerns:
 - `core/state.py` — runtime state and transition helpers only.
 - `core/turn_detection.py` — pure prompt text classification only.
 - `utils/input_policy.py` — terminal stdin/spinner gating decisions only.
-- `controller.py` — stable async entrypoint and async prompt runtime/event loop
+- `../controller.py` — stable async entrypoint and async prompt runtime/event loop
   orchestration, submitted prompt handling, queued-turn consumption,
   prompt-mediated confirmation waits, turn telemetry, one-turn pipeline
   handoff, background output draining, and shutdown only.
@@ -52,7 +52,7 @@ The runtime package is intentionally split into focused concerns:
 - `background/models.py` — background investigation record and preferences only.
 - `background/runner.py` — session-local background investigation launchers only.
 - `background/notifications.py` — background RCA completion notification delivery only.
-- `entrypoint.py` — process/bootstrap boundary only.
+- `../entrypoint.py` — process/bootstrap boundary only.
 - `startup/initial_input.py` — scripted initial-input replay only.
 - `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `core/session.py` — session-scoped REPL state only.
@@ -66,8 +66,8 @@ owner module instead of broadening module responsibilities.
 
 The interactive runtime must keep this shape:
 
-1. `entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
-2. `entrypoint.repl_main` creates `InteractiveShellController`.
+1. `interactive_shell.entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
+2. `interactive_shell.entrypoint.repl_main` creates `InteractiveShellController`.
 3. `InteractiveShellController.start_interactive_shell` owns prompt lifecycle,
    submitted input handling, queued-turn consumption, and per-turn task
    scheduling.
@@ -79,8 +79,8 @@ Do not invert this dependency direction.
 
 ```mermaid
 flowchart TD
-  runRepl["entrypoint.run_repl"] --> replMain["entrypoint.repl_main"]
-  replMain --> controller["controller.InteractiveShellController"]
+  runRepl["interactive_shell.entrypoint.run_repl"] --> replMain["interactive_shell.entrypoint.repl_main"]
+  replMain --> controller["interactive_shell.controller.InteractiveShellController"]
   controller --> executeTurn["controller._run_queued_turn"]
   executeTurn --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
   controller --> replState["core.state.ReplState"]
@@ -112,7 +112,7 @@ flowchart TD
 
 ## Controller rules
 
-- `controller.py` owns:
+- `../controller.py` owns:
   - `InteractiveShellController`
   - `start_interactive_shell` shell lifecycle orchestration
   - `_run_prompt_loop` — read and handle user input until exit
@@ -145,7 +145,7 @@ flowchart TD
 
 ## Entry-point rules
 
-- `entrypoint.py` owns:
+- `../entrypoint.py` owns:
   - startup sweep
   - TTY/non-TTY gate
   - banner display for interactive runs
@@ -164,9 +164,9 @@ flowchart TD
 ## Test seam policy
 
 - Prefer patching canonical module seams:
-  - `runtime.controller.*` for prompt-loop, queued-turn, confirmation behavior,
+  - `interactive_shell.controller.*` for prompt-loop, queued-turn, confirmation behavior,
     one-turn pipeline execution, and side effects
-  - `runtime.entrypoint.*` for process/bootstrap behavior
+  - `interactive_shell.entrypoint.*` for process/bootstrap behavior
   - `runtime.core.state.*` for state-specific behavior
 - Avoid adding new tests that monkeypatch package-root internals in
   `runtime.__init__` unless there is no stable canonical seam.
