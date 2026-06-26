@@ -126,15 +126,6 @@ class ConnectedInvestigationAgent:
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
-        # When the active LLM is CLI-backed and this is a plain ConnectedInvestigationAgent
-        # (not a custom subclass), silently promote self to CLIBackedInvestigationAgent so
-        # _should_accept_conclusion enforces all planned tools. Subclasses (e.g.
-        # BenchInvestigationAgent) manage their own termination policy and are unaffected.
-        from services.agent_llm_client import CLIBackedAgentClient
-
-        if isinstance(llm, CLIBackedAgentClient) and type(self) is ConnectedInvestigationAgent:
-            self.__class__ = CLIBackedInvestigationAgent
-
         # Merge tool_context into a local view so the system prompt can read
         # available_sources / available_action_names without mutating the caller's state.
         system = self._build_system_prompt({**state_dict, **tool_context})
@@ -195,8 +186,13 @@ class ConnectedInvestigationAgent:
         # Both are set before the loop so they're always initialised; evidence is a
         # reference to the same mutable dict the loop populates, so overrides always
         # see the current state without an extra assignment inside the loop body.
+        # Only track names that exist in the tool schema the LLM actually receives —
+        # hallucinated or expired names would otherwise cause futile nudge cycles.
+        _available_tool_names = {t.name for t in tools}
         self._planned_actions: list[str] = [
-            str(name) for name in (state_dict.get("planned_actions") or []) if str(name).strip()
+            str(name)
+            for name in (state_dict.get("planned_actions") or [])
+            if str(name).strip() and str(name) in _available_tool_names
         ]
         self._current_evidence: dict[str, Any] = evidence
 
@@ -345,6 +341,19 @@ class ConnectedInvestigationAgent:
 
 
 InvestigationAgent = ConnectedInvestigationAgent
+
+
+def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
+    """Return the investigation agent class appropriate for the current LLM provider.
+
+    Callers that need a fixed class (e.g. bench harness, integration tests) should
+    pass an explicit ``agent_class`` to the pipeline rather than calling this.
+    """
+    from services.agent_llm_client import CLIBackedAgentClient
+
+    if isinstance(get_agent_llm(), CLIBackedAgentClient):
+        return CLIBackedInvestigationAgent
+    return ConnectedInvestigationAgent
 
 
 class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):

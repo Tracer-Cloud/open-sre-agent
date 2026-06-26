@@ -104,12 +104,11 @@ class TestShouldAcceptConclusion:
         assert accept is True
 
 
-class TestAgentSelfPromotion:
-    """ConnectedInvestigationAgent promotes itself to CLIBackedInvestigationAgent at runtime.
+class TestGetInvestigationAgentClass:
+    """get_investigation_agent_class() selects the right agent class for the active LLM.
 
-    The CLI detection lives in agent.run() rather than pipeline.py to keep
-    the pipeline free of vendor service imports (layering rule enforced by
-    tests/core/orchestration/test_layering.py).
+    The factory lives in agent.py and is called by pipeline.py, keeping the pipeline
+    free of direct vendor service imports (layering rule: tests/core/orchestration/test_layering.py).
     """
 
     def test_cli_backed_investigation_agent_is_subclass_of_connected(self) -> None:
@@ -117,46 +116,23 @@ class TestAgentSelfPromotion:
 
         assert issubclass(CLIBackedInvestigationAgent, ConnectedInvestigationAgent)
 
-    def test_base_agent_promotes_to_cli_subclass_when_llm_is_cli_backed(
-        self, monkeypatch: Any
-    ) -> None:
-        from core.orchestration.node.investigate import ConnectedInvestigationAgent
+    def test_returns_cli_agent_class_for_cli_backed_llm(self, monkeypatch: Any) -> None:
+        from core.orchestration.node.investigate.agent import get_investigation_agent_class
         from services.agent_llm_client import CLIBackedAgentClient
 
-        fake_cli_llm = mock.MagicMock(spec=CLIBackedAgentClient)
         monkeypatch.setattr(
-            "core.orchestration.node.investigate.agent.get_agent_llm", lambda: fake_cli_llm
+            "core.orchestration.node.investigate.agent.get_agent_llm",
+            lambda: mock.MagicMock(spec=CLIBackedAgentClient),
         )
+        assert get_investigation_agent_class() is CLIBackedInvestigationAgent
 
-        agent = ConnectedInvestigationAgent()
-        assert type(agent) is ConnectedInvestigationAgent  # not yet promoted
-
-        # Simulate what run() does after calling get_agent_llm()
-        if (
-            isinstance(fake_cli_llm, CLIBackedAgentClient)
-            and type(agent) is ConnectedInvestigationAgent
-        ):
-            agent.__class__ = CLIBackedInvestigationAgent
-
-        assert type(agent) is CLIBackedInvestigationAgent
-
-    def test_subclass_is_not_promoted_when_llm_is_cli_backed(self) -> None:
-        """Custom subclasses manage their own termination — the promotion guard
-        (type(self) is ConnectedInvestigationAgent) must not affect them."""
+    def test_returns_base_agent_class_for_non_cli_llm(self, monkeypatch: Any) -> None:
         from core.orchestration.node.investigate import ConnectedInvestigationAgent
-        from services.agent_llm_client import CLIBackedAgentClient
+        from core.orchestration.node.investigate.agent import get_investigation_agent_class
+        from services.agent_llm_client import AnthropicAgentClient
 
-        class CustomAgent(ConnectedInvestigationAgent):
-            pass
-
-        fake_cli_llm = mock.MagicMock(spec=CLIBackedAgentClient)
-        agent = CustomAgent()
-
-        # The guard fires only for the base class, not subclasses
-        if (
-            isinstance(fake_cli_llm, CLIBackedAgentClient)
-            and type(agent) is ConnectedInvestigationAgent
-        ):
-            agent.__class__ = CLIBackedInvestigationAgent
-
-        assert type(agent) is CustomAgent  # unchanged
+        monkeypatch.setattr(
+            "core.orchestration.node.investigate.agent.get_agent_llm",
+            lambda: mock.MagicMock(spec=AnthropicAgentClient),
+        )
+        assert get_investigation_agent_class() is ConnectedInvestigationAgent

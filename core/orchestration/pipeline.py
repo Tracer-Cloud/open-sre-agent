@@ -31,13 +31,13 @@ def run_connected_investigation(
     """
     from core.orchestration.node.diagnose import diagnose
     from core.orchestration.node.extract_alert import extract_alert
-    from core.orchestration.node.investigate import ConnectedInvestigationAgent
+    from core.orchestration.node.investigate import get_investigation_agent_class
     from core.orchestration.node.plan_actions import plan_actions
     from core.orchestration.node.publish_findings import deliver
     from core.orchestration.node.resolve_integrations import resolve_integrations
     from platform.observability.sentry_sdk import capture_exception
 
-    agent_class = agent_class or ConnectedInvestigationAgent
+    agent_class = agent_class or get_investigation_agent_class()
 
     try:
         apply_state_updates(state, resolve_integrations(state))

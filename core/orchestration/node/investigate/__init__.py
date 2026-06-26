@@ -16,9 +16,10 @@ if TYPE_CHECKING:
     from core.orchestration.node.investigate.agent import (
         ConnectedInvestigationAgent,
         InvestigationAgent,
+        get_investigation_agent_class,
     )
 
-__all__ = ["ConnectedInvestigationAgent", "InvestigationAgent"]
+__all__ = ["ConnectedInvestigationAgent", "InvestigationAgent", "get_investigation_agent_class"]
 
 
 def __getattr__(name: str) -> object:
@@ -26,10 +27,12 @@ def __getattr__(name: str) -> object:
         from core.orchestration.node.investigate.agent import (
             ConnectedInvestigationAgent,
             InvestigationAgent,
+            get_investigation_agent_class,
         )
 
         return {
             "ConnectedInvestigationAgent": ConnectedInvestigationAgent,
             "InvestigationAgent": InvestigationAgent,
+            "get_investigation_agent_class": get_investigation_agent_class,
         }[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
