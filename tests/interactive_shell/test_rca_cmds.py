@@ -11,7 +11,7 @@ from rich.console import Console
 
 from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.harness.state.sessions.store import SessionStore
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

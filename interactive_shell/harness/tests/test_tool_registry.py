@@ -19,7 +19,7 @@ from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 # OpenAI's Chat Completions API rejects any tool name that does not match
 # this pattern with HTTP 400. Every OpenAI-compatible provider (OpenRouter,

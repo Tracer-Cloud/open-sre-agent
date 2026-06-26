@@ -37,7 +37,7 @@ from interactive_shell.harness.orchestration.interaction_models import (
 from interactive_shell.harness.orchestration.llm_action_planner import (
     LlmActionPlanResult,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 
 _PLANNER_RESULT_PATCH = (

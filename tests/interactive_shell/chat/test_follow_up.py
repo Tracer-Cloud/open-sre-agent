@@ -14,7 +14,7 @@ from interactive_shell.chat.follow_up import (
     _summarize_last_state,
     answer_follow_up,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 class _StreamingClient:

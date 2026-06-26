@@ -16,7 +16,7 @@ from interactive_shell.harness.tests.orchestration.routing_test_harness import (
     RoutingHarness,
     planned_action,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def test_execute_with_harness_dispatches_slash_action() -> None:

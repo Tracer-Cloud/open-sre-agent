@@ -27,7 +27,7 @@ from interactive_shell.chat.prompt_rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.token_accounting import build_llm_run_info
+from interactive_shell.runtime.core.token_accounting import build_llm_run_info
 from interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ASSISTANT, stream_to_console
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from interactive_shell.utils.telemetry import LlmRunInfo

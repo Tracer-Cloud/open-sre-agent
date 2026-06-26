@@ -190,7 +190,7 @@ def test_tracker_uses_repl_append_display_under_repl_safe_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
-    from interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from interactive_shell.runtime.ui.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         tracker = ProgressTracker()
@@ -226,7 +226,7 @@ def test_repl_display_buffers_subtext_until_step_complete(
 
 @pytest.mark.asyncio
 async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
-    from interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from interactive_shell.runtime.ui.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         assert await asyncio.to_thread(output_environment._repl_progress_active) is True
@@ -527,7 +527,7 @@ def test_ctrl_o_watcher_stop_restores_canonical_echo(
         def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
             return [], [], []
 
-    from interactive_shell.ui import key_reader
+    from interactive_shell.ui.components import key_reader
 
     monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
     monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())

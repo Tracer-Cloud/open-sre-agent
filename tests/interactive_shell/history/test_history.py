@@ -9,7 +9,7 @@ import pytest
 
 from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.harness.state.history import load_command_history_entries
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[object, object]:

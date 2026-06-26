@@ -11,19 +11,14 @@ In simple terms:
 
 - `entrypoint.py` starts the interactive session and handles startup/shutdown.
 - `loop.py` runs the async prompt loop, queue, and cancellation wiring.
-- `dispatch.py` is the control-plane router for one turn: it decides **how** a
-  turn should be handled (slash command vs agent/help/follow-up path), handles
-  cancel/confirm gating, and delegates execution.
-- `execution.py` performs the side effects (run slash commands, answer via
-  agent/help/follow-up, run investigations, emit analytics).
-- `state.py` holds shared runtime state (`ReplState`, `SpinnerState`) used by
-  the loop and dispatch flow.
-- `session.py` owns the per-REPL-process `ReplSession` (history, accumulated
-  context, trust mode, interaction counters).
+- `core/` holds the core runtime engine:
+  - `dispatch.py` — control-plane router for one turn
+  - `execution.py` — side effects (slash commands, agent/help/follow-up, investigations)
+  - `state.py` — shared runtime state (`ReplState`, `SpinnerState`)
+  - `session.py` — per-REPL-process `ReplSession`
+  - `token_accounting.py` — LLM token usage and run metadata
 - `tasks.py` owns the cross-session task registry surfaced via `/tasks` and
   `/cancel`.
-- `token_accounting.py` records LLM token usage onto `ReplSession` and assembles
-  per-call run metadata (`LlmRunInfo`) for prompt logging and the `/cost` view.
 
 These instructions apply to `interactive_shell/runtime/` and all
 subdirectories. Parent `AGENTS.md` files still apply.
@@ -32,14 +27,14 @@ subdirectories. Parent `AGENTS.md` files still apply.
 
 The runtime package is intentionally split into focused concerns:
 
-- `state.py` — runtime state and transition helpers only.
-- `dispatch.py` — control-plane routing/input gating only.
-- `execution.py` — side-effectful execution only.
+- `core/state.py` — runtime state and transition helpers only.
+- `core/dispatch.py` — control-plane routing/input gating only.
+- `core/execution.py` — side-effectful execution only.
 - `loop.py` — async prompt runtime/event loop orchestration only.
 - `entrypoint.py` — process/bootstrap boundary only.
-- `session.py` — session-scoped REPL state only.
+- `core/session.py` — session-scoped REPL state only.
 - `tasks.py` — task registry + persistence only.
-- `token_accounting.py` — session-scoped LLM token accounting and run metadata only.
+- `core/token_accounting.py` — session-scoped LLM token accounting and run metadata only.
 
 Keep these boundaries strict. If a change crosses concerns, move code to the
 owner module instead of broadening module responsibilities.
@@ -50,8 +45,8 @@ The interactive runtime must keep this shape:
 
 1. `entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
 2. `loop.run_interactive` owns queueing, prompt lifecycle, and task scheduling.
-3. `dispatch.dispatch_one_turn` computes control decisions and delegates.
-4. `execution.execute_routed_turn` performs side effects.
+3. `core.dispatch.dispatch_one_turn` computes control decisions and delegates.
+4. `core.execution.execute_routed_turn` performs side effects.
 
 Do not invert this dependency direction.
 
@@ -61,11 +56,11 @@ Do not invert this dependency direction.
 flowchart TD
   runRepl["entrypoint.run_repl"] --> replMain["entrypoint.repl_main"]
   replMain --> runInteractive["loop.run_interactive"]
-  runInteractive --> dispatchTurn["dispatch.dispatch_one_turn"]
-  dispatchTurn --> executeTurn["execution.execute_routed_turn"]
+  runInteractive --> dispatchTurn["core.dispatch.dispatch_one_turn"]
+  dispatchTurn --> executeTurn["core.execution.execute_routed_turn"]
   executeTurn --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
-  runInteractive --> replState["state.ReplState"]
-  runInteractive --> spinnerState["state.SpinnerState"]
+  runInteractive --> replState["core.state.ReplState"]
+  runInteractive --> spinnerState["core.state.SpinnerState"]
 ```
 
 ## State ownership rules
@@ -83,17 +78,17 @@ flowchart TD
 
 ## Dispatch rules
 
-- `dispatch.py` must remain control-plane only:
+- `core/dispatch.py` must remain control-plane only:
   - route input
   - correction/cancel/confirm gating
   - command normalization for slash decisions
   - delegation to execution
 - Do not add analytics emission, LLM calls, investigation execution, or slash
-  side effects to `dispatch.py`.
+  side effects to `core/dispatch.py`.
 
 ## Execution rules
 
-- `execution.py` owns all side effects:
+- `core/execution.py` owns all side effects:
   - slash command dispatch
   - cli help/agent/follow-up responses
   - investigation launch and error handling
@@ -133,10 +128,10 @@ flowchart TD
 ## Test seam policy
 
 - Prefer patching canonical module seams:
-  - `runtime.dispatch.*` for control-plane behavior
-  - `runtime.execution.*` for side effects
+  - `runtime.core.dispatch.*` for control-plane behavior
+  - `runtime.core.execution.*` for side effects
   - `runtime.entrypoint.*` for process/bootstrap behavior
-  - `runtime.state.*` for state-specific behavior
+  - `runtime.core.state.*` for state-specific behavior
   - `runtime.loop.*` for prompt-loop / streaming console behavior
 - Avoid adding new tests that monkeypatch package-root internals in
   `runtime.__init__` unless there is no stable canonical seam.

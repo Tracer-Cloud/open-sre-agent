@@ -40,7 +40,7 @@ from interactive_shell.ui.components.token_format import (
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
-# value (and intent) as ``runtime.state.PROMPT_REFRESH_INTERVAL_S``.
+# value (and intent) as ``runtime.core.state.PROMPT_REFRESH_INTERVAL_S``.
 _PROGRESS_INTERVAL_S = 0.1
 
 # Markdown rendering constants — extracted so streaming.py and any

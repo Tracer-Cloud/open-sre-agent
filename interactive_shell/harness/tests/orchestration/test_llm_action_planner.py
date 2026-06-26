@@ -28,7 +28,7 @@ from interactive_shell.harness.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
 from interactive_shell.harness.router import route_input
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 PROMPT_TURN_CONTRACTS_DATASET = Path(__file__).resolve().parents[1] / "prompt_turn_contracts.yml"
 

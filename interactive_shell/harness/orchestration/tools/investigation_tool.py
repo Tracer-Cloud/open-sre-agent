@@ -19,7 +19,7 @@ from interactive_shell.harness.orchestration.tool_contracts import (
     object_schema,
     string_property,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _investigation_planner_selectable(_session: ReplSession) -> bool:

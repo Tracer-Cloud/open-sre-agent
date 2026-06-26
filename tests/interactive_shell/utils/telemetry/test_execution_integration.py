@@ -9,7 +9,7 @@ from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
 from interactive_shell.runtime import execution
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo
 
 

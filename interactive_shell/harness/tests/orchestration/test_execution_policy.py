@@ -27,7 +27,7 @@ from interactive_shell.harness.orchestration.execution_policy import (
 from interactive_shell.harness.orchestration.execution_tier import (
     ExecutionTier,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _ask_result() -> ExecutionPolicyResult:

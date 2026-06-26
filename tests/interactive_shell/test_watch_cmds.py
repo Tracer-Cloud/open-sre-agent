@@ -15,7 +15,7 @@ from interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 from tools.watch_dog.alarms import AlarmCredentials
 

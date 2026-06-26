@@ -29,7 +29,7 @@ from interactive_shell.chat.system_prompt import (
     _build_observation_block,
     _build_system_prompt,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

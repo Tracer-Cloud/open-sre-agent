@@ -8,7 +8,7 @@ from interactive_shell.harness.orchestration.command_dispatch import (
     deterministic_command_text,
 )
 from interactive_shell.harness.router import RouteKind, route_input
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 @pytest.mark.parametrize(

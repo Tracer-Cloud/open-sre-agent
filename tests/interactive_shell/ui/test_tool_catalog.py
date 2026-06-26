@@ -13,7 +13,7 @@ import pytest
 from rich.console import Console
 
 from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.ui.tables import tool_catalog
 from interactive_shell.ui.tables.tool_catalog import (
     ToolCatalogEntry,

@@ -7,7 +7,7 @@ from interactive_shell.harness.orchestration.command_dispatch import (
     opensre_investigate_slash_text,
 )
 from interactive_shell.harness.router import RouteKind, route_input
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def test_opensre_investigate_slash_text_maps_input_flag() -> None:

@@ -30,7 +30,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.harness.state.conversation_history import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,

@@ -12,7 +12,7 @@ from typing import Any
 from rich.console import Console
 
 from interactive_shell.runtime import entrypoint
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _console() -> Console:
@@ -232,7 +232,7 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
         return _PromptSession()
 
     monkeypatch.setattr(
-        entrypoint._prompt_surface,
+        entrypoint._input_prompt,
         "_build_prompt_session",
         _build_prompt_session,
     )

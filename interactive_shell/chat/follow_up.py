@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
-from interactive_shell.runtime.token_accounting import build_llm_run_info
+from interactive_shell.runtime.core.token_accounting import build_llm_run_info
 from interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ANSWER, WARNING, stream_to_console
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from interactive_shell.utils.telemetry import LlmRunInfo
@@ -18,7 +18,7 @@ from interactive_shell.utils.telemetry import LlmRunInfo
 _logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from interactive_shell.runtime.session import ReplSession
+    from interactive_shell.runtime.core.session import ReplSession
 
 # Keep at most this many Q&A pairs in follow-up history (matches cli_agent cap).
 _MAX_FOLLOW_UP_TURNS = 12

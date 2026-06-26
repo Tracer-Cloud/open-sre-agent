@@ -15,7 +15,7 @@ from interactive_shell.harness.pipeline import (
     handle_message_with_agent,
 )
 from interactive_shell.harness.domain.types import RouteDecision
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 from platform.analytics.events import Event
 from platform.analytics.provider import JsonValue, get_analytics
@@ -44,7 +44,7 @@ def _answer_cli_agent_with_tools(
     through unchanged.
 
     ``answer_cli_agent`` is read from the module namespace so existing test seams
-    that patch ``runtime.execution.answer_cli_agent`` keep working.
+    that patch ``runtime.core.execution.answer_cli_agent`` keep working.
     """
     if tool_observation is None:
         gathered = gather_tool_evidence(text, session, console, is_tty=is_tty)

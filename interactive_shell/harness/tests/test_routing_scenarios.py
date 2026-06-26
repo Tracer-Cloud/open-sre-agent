@@ -41,7 +41,7 @@ from interactive_shell.harness.tests.scenario_loader import (
     load_all_scenarios,
     read_shard_config,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 class ExpectedAction(TypedDict):

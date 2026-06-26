@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from interactive_shell.harness.state.sessions.store import SessionStore, _sessions_dir
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

@@ -34,7 +34,7 @@ from interactive_shell.harness.orchestration.action_executor import (
 from interactive_shell.harness.orchestration.action_executor.shell_execution import (
     ShellExecutionResult,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 
 

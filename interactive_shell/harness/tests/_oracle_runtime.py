@@ -34,8 +34,8 @@ from interactive_shell.harness.tests.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
-from interactive_shell.runtime.execution import execute_routed_turn
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.execution import execute_routed_turn
+from interactive_shell.runtime.core.session import ReplSession
 
 # Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
 # live-resolved config for a service instead of a pinned fake one. The oracle

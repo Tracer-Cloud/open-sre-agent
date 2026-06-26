@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from interactive_shell.runtime.token_accounting import record_invoke_response
+from interactive_shell.runtime.core.token_accounting import record_invoke_response
 
 from .constants import _OPENAI_STYLE_PROVIDERS, _USER_TEMPLATE
 from .prompting import _connected_integrations_block, _recent_conversation_block, _system_prompt
@@ -18,7 +18,7 @@ def _tool_specs_for_provider(session: Any) -> list[dict[str, Any]]:
     from interactive_shell.harness.orchestration.tool_registry import (
         REGISTRY,
     )
-    from interactive_shell.runtime.session import ReplSession
+    from interactive_shell.runtime.core.session import ReplSession
 
     provider = resolve_llm_settings().provider
     base_specs = REGISTRY.tool_specs_for_llm(session or ReplSession())

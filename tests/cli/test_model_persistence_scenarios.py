@@ -13,7 +13,7 @@ import cli.wizard.store as wizard_store
 from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
 from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.command_registry import repl_data as repl_data_module
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

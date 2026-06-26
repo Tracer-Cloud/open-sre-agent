@@ -12,7 +12,7 @@ from rich.console import Console
 from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.harness.state import history as history_module
 from interactive_shell.harness.state.history.policy import RedactingFileHistory
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

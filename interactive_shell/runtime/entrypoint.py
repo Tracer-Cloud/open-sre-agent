@@ -11,13 +11,13 @@ from rich.console import Console
 
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
-from interactive_shell.runtime.dispatch import run_initial_input
-from interactive_shell.runtime.loop import run_interactive
-from interactive_shell.runtime.session import ReplSession
-from interactive_shell.runtime.tasks import TaskRegistry
 from interactive_shell.harness.state.sessions.store import SessionStore
+from interactive_shell.runtime.core.dispatch import run_initial_input
+from interactive_shell.runtime.loop import run_interactive
+from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.runtime.tasks import TaskRegistry
 from interactive_shell.ui import DIM, render_banner
-from interactive_shell.ui import prompt_surface as _prompt_surface
+from interactive_shell.ui import input_prompt as _input_prompt
 from tools.fleet_monitoring.sweep import run_startup_sweep
 
 log = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
     session.active_theme_name = get_active_theme_name()
     _hydrate_configured_integrations(session)
     session.task_registry = TaskRegistry.persistent()
-    pt_session = _prompt_surface._build_prompt_session()
+    pt_session = _input_prompt._build_prompt_session()
     session.prompt_history_backend = pt_session.history
 
     if initial_input:

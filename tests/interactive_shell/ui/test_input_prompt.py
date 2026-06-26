@@ -9,17 +9,18 @@ import pytest
 from prompt_toolkit.completion import Completion
 
 from interactive_shell.runtime import state as loop_state
-from interactive_shell.runtime.session import ReplSession
-from interactive_shell.ui import prompt_surface
-from interactive_shell.ui.prompt_surface import (
+from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.ui.input_prompt import completion as prompt_completion
+from interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
+from interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
+from interactive_shell.ui.input_prompt.rendering import (
     _DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
     _prompt_turn_number,
-    completion_preview_hint_ansi,
     resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
-    wire_prompt_refresh,
 )
 from platform.common.task_types import TaskKind
 
@@ -180,7 +181,7 @@ class _FakeApp:
 
 class TestCompletionPreviewHint:
     def test_returns_empty_when_no_app(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: None)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: None)
         assert completion_preview_hint_ansi() == ""
 
     def test_shows_full_slash_command_description(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -200,7 +201,7 @@ class TestCompletionPreviewHint:
             ),
             output=_FakeOutput(),
         )
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: app)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: app)
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered.startswith("/investigate — ")
@@ -226,7 +227,7 @@ class TestCompletionPreviewHint:
             ),
             output=_FakeOutput(),
         )
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: app)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: app)
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered == "/plugin-cmd — Plugin-provided slash command."
@@ -250,7 +251,7 @@ class TestCompletionPreviewHint:
             ),
             output=_FakeOutput(),
         )
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: app)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: app)
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered == "/effort high — favor more thorough reasoning"
@@ -274,7 +275,7 @@ class TestCompletionPreviewHint:
             ),
             output=_FakeOutput(),
         )
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: app)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: app)
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered == "/plugin-cmd — Plugin-provided slash command."
@@ -300,7 +301,7 @@ class TestCompletionPreviewHint:
             ),
             output=_FakeOutput(columns=40),
         )
-        monkeypatch.setattr(prompt_surface, "get_app_or_none", lambda: app)
+        monkeypatch.setattr(prompt_completion, "get_app_or_none", lambda: app)
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered.endswith("…")
@@ -313,7 +314,7 @@ class TestResolvePromptPrefix:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            prompt_surface,
+            prompt_rendering,
             "completion_preview_hint_ansi",
             lambda: "preview line",
         )
@@ -330,7 +331,7 @@ class TestResolvePromptPrefix:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            prompt_surface,
+            prompt_rendering,
             "completion_preview_hint_ansi",
             lambda: "preview line",
         )

@@ -182,7 +182,7 @@ def test_call_llm_prefixes_fallback_provider_context(monkeypatch) -> None:
     from interactive_shell.harness.orchestration.llm_action_planner.llm_client import (  # noqa: E501
         _call_llm,
     )
-    from interactive_shell.runtime.session import ReplSession
+    from interactive_shell.runtime.core.session import ReplSession
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setattr(
@@ -207,7 +207,7 @@ def test_call_llm_prefixes_active_provider_context_without_fallback(monkeypatch)
     from interactive_shell.harness.orchestration.llm_action_planner.llm_client import (  # noqa: E501
         _call_llm,
     )
-    from interactive_shell.runtime.session import ReplSession
+    from interactive_shell.runtime.core.session import ReplSession
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setattr(

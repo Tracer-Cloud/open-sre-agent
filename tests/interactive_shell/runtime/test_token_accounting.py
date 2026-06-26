@@ -12,8 +12,8 @@ from rich.console import Console
 
 from core.runtime.llm.llm_client import LLMResponse
 from interactive_shell.chat.cli_agent import answer_cli_agent
-from interactive_shell.runtime.session import ReplSession
-from interactive_shell.runtime.token_accounting import (
+from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.runtime.core.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
     format_token_total,

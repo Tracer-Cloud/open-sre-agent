@@ -10,7 +10,7 @@ from typing import Any
 from rich.console import Console
 from rich.file_proxy import FileProxy
 
-from interactive_shell.runtime.state import SpinnerState
+from interactive_shell.runtime.core.state import SpinnerState
 
 
 class StreamingConsole(Console):

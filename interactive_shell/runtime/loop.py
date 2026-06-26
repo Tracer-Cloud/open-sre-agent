@@ -15,12 +15,12 @@ from rich.markup import escape
 
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.runtime.background_runner import drain_background_notices
-from interactive_shell.runtime.cpr_stdin import (
+from interactive_shell.runtime.ui.cpr_stdin import (
     contains_cpr_sequence,
     drain_stale_cpr_bytes,
     strip_cpr_sequences,
 )
-from interactive_shell.runtime.dispatch import (
+from interactive_shell.runtime.core.dispatch import (
     DispatchCancelled,
     build_cancel_key_bindings,
     dispatch_needs_exclusive_stdin,
@@ -31,17 +31,20 @@ from interactive_shell.runtime.dispatch import (
     looks_like_confirmation_answer,
     route_confirm_through_prompt,
 )
-from interactive_shell.runtime.repl_progress import repl_safe_progress_scope
-from interactive_shell.runtime.session import ReplSession
-from interactive_shell.runtime.state import (
+from interactive_shell.runtime.ui.repl_progress import repl_safe_progress_scope
+from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.runtime.core.state import (
     PROMPT_REFRESH_INTERVAL_S,
     ReplState,
     SpinnerState,
 )
-from interactive_shell.runtime.streaming_console import StreamingConsole
+from interactive_shell.runtime.ui.streaming_console import StreamingConsole
 from interactive_shell.ui import ERROR, WARNING
-from interactive_shell.ui import prompt_surface as _prompt_surface
+from interactive_shell.ui import input_prompt as _input_prompt
 from interactive_shell.ui.alerts import drain_and_render_incoming
+from interactive_shell.ui.input_prompt import rendering as _prompt_rendering
+from interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
+from interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from platform.terminal.prompt_support import (
     repl_prompt_note_ctrl_c,
@@ -59,7 +62,7 @@ async def run_interactive(
 ) -> None:
     session.schedule_warm_resolved_integrations()
     if pt_session is None:
-        pt_session = _prompt_surface._build_prompt_session(session)
+        pt_session = _input_prompt._build_prompt_session(session)
         session.prompt_history_backend = pt_session.history
     spinner = SpinnerState()
     state = ReplState()
@@ -74,7 +77,7 @@ async def run_interactive(
     session.main_loop = main_loop
     state.bind_loop(main_loop)
 
-    _invalidate_prompt = _prompt_surface.wire_prompt_refresh(session, pt_app, main_loop)
+    _invalidate_prompt = wire_prompt_refresh(session, pt_app, main_loop)
 
     def _request_exit() -> None:
         state.request_exit()
@@ -190,14 +193,14 @@ async def run_interactive(
             state.queue.task_done()
 
     def _message_with_spinner() -> ANSI:
-        base = _prompt_surface._prompt_message(session).value
+        base = _prompt_rendering._prompt_message(session).value
         if state.is_awaiting_confirmation():
             confirm_text = state.confirm_prompt_text
             return ANSI(f"{confirm_text}\n{base}")
         prefix = strip_cpr_sequences(
-            _prompt_surface.resolve_prompt_prefix_ansi(
+            _prompt_rendering.resolve_prompt_prefix_ansi(
                 inline_spinner=spinner.inline_spinner_ansi(),
-                idle_hint=_prompt_surface.resolve_idle_hint_ansi(session),
+                idle_hint=_prompt_rendering.resolve_idle_hint_ansi(session),
             )
         )
         return ANSI(f"{prefix}\n{base}")
@@ -245,7 +248,7 @@ async def run_interactive(
                 # buffer before the non-blocking select drain runs.
                 if session.pending_theme_refresh:
                     session.pending_theme_refresh = False
-                    _prompt_surface.refresh_prompt_theme(session)
+                    refresh_prompt_theme(session)
                 await asyncio.sleep(0.05)
                 drain_stale_cpr_bytes()
                 try:
@@ -260,7 +263,9 @@ async def run_interactive(
                             message=_message_with_spinner,
                             bottom_toolbar=spinner.toolbar_ansi,
                             refresh_interval=PROMPT_REFRESH_INTERVAL_S,
-                            placeholder=lambda: _prompt_surface.resolve_prompt_placeholder(session),
+                            placeholder=lambda: _prompt_rendering.resolve_prompt_placeholder(
+                                session
+                            ),
                             default=prefilled,
                         )
                 except EOFError:
@@ -291,7 +296,7 @@ async def run_interactive(
                     return
                 if state.is_dispatch_running() and looks_like_cancel_request(text):
                     stripped = (text or "").strip()
-                    _prompt_surface.render_submitted_prompt(echo_console, session, stripped)
+                    _prompt_rendering.render_submitted_prompt(echo_console, session, stripped)
                     state.cancel_current_dispatch()
                     continue
 
@@ -304,14 +309,14 @@ async def run_interactive(
                     )
                     stripped = (text or "").strip()
                     if stripped:
-                        _prompt_surface.render_submitted_prompt(echo_console, session, stripped)
+                        _prompt_rendering.render_submitted_prompt(echo_console, session, stripped)
                         await state.queue.put(stripped)
                     continue
 
                 stripped = (text or "").strip()
                 if not stripped:
                     continue
-                _prompt_surface.render_submitted_prompt(echo_console, session, stripped)
+                _prompt_rendering.render_submitted_prompt(echo_console, session, stripped)
                 wait_for_dispatch = dispatch_needs_exclusive_stdin(stripped, session)
                 await state.queue.put(stripped)
                 if wait_for_dispatch:

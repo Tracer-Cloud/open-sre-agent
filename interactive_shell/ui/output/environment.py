@@ -4,7 +4,7 @@ import contextlib
 import os
 import sys
 
-from interactive_shell.runtime.repl_progress import repl_safe_progress_requested
+from interactive_shell.runtime.ui.repl_progress import repl_safe_progress_requested
 from platform.observability.output_format import get_output_format
 from platform.terminal.theme import SECONDARY
 

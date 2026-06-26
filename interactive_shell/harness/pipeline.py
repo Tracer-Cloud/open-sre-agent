@@ -20,7 +20,7 @@ from interactive_shell.harness.orchestration.command_dispatch import (
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.ui import DIM, ERROR
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder

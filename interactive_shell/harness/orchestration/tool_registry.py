@@ -12,7 +12,7 @@ from interactive_shell.harness.orchestration.tool_contracts import (
     ToolContext,
     ToolEntry,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 class ActionToolRegistry:

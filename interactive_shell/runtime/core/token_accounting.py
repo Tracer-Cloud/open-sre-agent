@@ -9,7 +9,7 @@ from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from interactive_shell.utils.telemetry import LlmRunInfo
 
 if TYPE_CHECKING:
-    from interactive_shell.runtime.session import ReplSession
+    from interactive_shell.runtime.core.session import ReplSession
     from core.runtime.llm.llm_client import LLMResponse
 
 

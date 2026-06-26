@@ -4,7 +4,7 @@
 path (no pre-existing ``tool_observation``) and threads any collected evidence
 into ``answer_cli_agent`` as an off-screen observation. The summarize path (a
 ``tool_observation`` already supplied) is passed through unchanged. These tests
-patch the canonical ``runtime.execution`` seams so no LLM or tools run.
+patch the canonical ``runtime.core.execution`` seams so no LLM or tools run.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.console import Console
 
-import interactive_shell.runtime.execution as execution
-from interactive_shell.runtime.session import ReplSession
+import interactive_shell.runtime.core.execution as execution
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _console() -> Console:

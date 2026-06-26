@@ -17,7 +17,7 @@ import interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
 from interactive_shell.harness.orchestration.tool_contracts import (
     ToolContext,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _ctx() -> tuple[ToolContext, io.StringIO, ReplSession]:

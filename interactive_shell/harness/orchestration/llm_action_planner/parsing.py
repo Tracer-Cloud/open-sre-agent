@@ -13,7 +13,7 @@ from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 from .normalization import _content_from_tool_args, _normalize_tool_args
 

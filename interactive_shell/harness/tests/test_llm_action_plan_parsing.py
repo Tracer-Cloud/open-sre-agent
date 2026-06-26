@@ -7,7 +7,7 @@ import json
 from interactive_shell.harness.orchestration.llm_action_planner.parsing import (
     _parse_tool_plan,
 )
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def test_parse_tool_plan_drops_unavailable_tool_calls() -> None:

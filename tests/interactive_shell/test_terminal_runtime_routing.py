@@ -25,7 +25,7 @@ from interactive_shell.harness.orchestration.tools import (
 )
 from interactive_shell.runtime import dispatch as loop_dispatch
 from interactive_shell.runtime import execution as loop_execution
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(

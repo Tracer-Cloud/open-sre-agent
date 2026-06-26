@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import config.constants as const_module
-from interactive_shell.runtime.session import (
+from interactive_shell.runtime.core.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
     _scenario_id_from_synthetic_label,

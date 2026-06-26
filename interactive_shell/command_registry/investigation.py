@@ -15,7 +15,7 @@ from interactive_shell.runtime.background_runner import (
     start_background_template_investigation,
     start_background_text_investigation,
 )
-from interactive_shell.runtime.foreground_investigation import run_foreground_investigation
+from interactive_shell.runtime.ui.foreground_investigation import run_foreground_investigation
 from interactive_shell.ui import (
     DIM,
     ERROR,

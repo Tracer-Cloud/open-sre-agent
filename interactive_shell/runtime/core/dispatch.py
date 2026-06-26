@@ -14,14 +14,12 @@ from interactive_shell.harness import router as _router
 from interactive_shell.harness.orchestration.command_dispatch import (
     deterministic_command_text,
 )
-from interactive_shell.runtime.execution import execute_routed_turn
-from interactive_shell.runtime.session import ReplSession
-from interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
-from interactive_shell.ui import prompt_surface as _prompt_surface
+from interactive_shell.runtime.core.execution import execute_routed_turn
+from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.runtime.core.state import PROMPT_REFRESH_INTERVAL_S, ReplState
 from interactive_shell.ui import render_banner
 from interactive_shell.ui.components.choice_menu import repl_tty_interactive
-
-render_submitted_prompt = _prompt_surface.render_submitted_prompt
+from interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 
 _INTERVENTION_CORRECTION_RE = re.compile(
     r"("

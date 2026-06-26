@@ -21,7 +21,7 @@ from interactive_shell.command_registry.settings_cmds import (
     _VERBOSE_FIRST_ARGS,
 )
 from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

@@ -17,7 +17,7 @@ from interactive_shell.chat.cli_help import (
 )
 from interactive_shell.chat.grounding import docs_reference
 from interactive_shell.chat.grounding.docs_reference import invalidate_docs_cache
-from interactive_shell.runtime.session import ReplSession
+from interactive_shell.runtime.core.session import ReplSession
 
 
 @pytest.fixture(autouse=True)

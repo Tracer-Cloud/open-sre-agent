@@ -16,7 +16,7 @@ from interactive_shell.runtime import (
     ReplSession,
     TaskKind,
 )
-from interactive_shell.runtime.background_notifications import (
+from interactive_shell.runtime.ui.background_notifications import (
     deliver_background_notifications,
 )
 from interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING

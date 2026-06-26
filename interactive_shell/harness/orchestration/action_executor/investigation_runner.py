@@ -12,7 +12,7 @@ from interactive_shell.harness.orchestration.execution_policy import (
     plan_investigation_execution,
 )
 from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.foreground_investigation import run_foreground_investigation
+from interactive_shell.runtime.ui.foreground_investigation import run_foreground_investigation
 from platform.common.task_types import TaskRecord
 
 
