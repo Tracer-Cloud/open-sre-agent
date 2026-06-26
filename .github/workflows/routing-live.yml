@@ -9,6 +9,9 @@ on:
       - "cli/interactive_shell/runtime/**"
       - "cli/interactive_shell/commands.py"
       - "core/runtime/**"
+      - "services/**"
+      - "tools/**"
+      - "integrations/**"
       - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
@@ -22,6 +25,9 @@ on:
       - "cli/interactive_shell/runtime/**"
       - "cli/interactive_shell/commands.py"
       - "core/runtime/**"
+      - "services/**"
+      - "tools/**"
+      - "integrations/**"
       - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
@@ -99,17 +105,12 @@ jobs:
       ROUTING_SHARD_TOTAL: "8"
       ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
       PYTHONUTF8: "1"
-      # Live-data routing scenarios (e.g. 316) resolve a real Sentry integration
-      # from these env vars and assert the gather loop returns valid data. Only
-      # the token is a secret; org/project/url are non-sensitive. When the secret
-      # is absent (e.g. fork PRs) the scenario SKIPS rather than fails, so this is
-      # additive and never breaks the suite.
+      # @live gather scenarios (316, 333–335, 337) require these secrets in CI.
+      # Missing values fail the job in preflight and via skip_or_fail in tests.
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG_SLUG: tracer-30
       SENTRY_PROJECT_SLUG: python
       SENTRY_URL: https://sentry.io
-      # Optional: live-gather incident scenarios (333–335) resolve real Datadog
-      # credentials. When absent the scenarios skip (no DD_API_KEY/DD_APP_KEY).
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_SITE: datadoghq.com
@@ -135,10 +136,23 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Validate live LLM credential wiring
+      - name: Validate live routing credentials
         run: |
+          missing=()
           if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "::error::OPENAI_API_KEY is missing for live routing tests."
+            missing+=(OPENAI_API_KEY)
+          fi
+          if [ -z "${SENTRY_AUTH_TOKEN}" ]; then
+            missing+=(SENTRY_AUTH_TOKEN)
+          fi
+          if [ -z "${DD_API_KEY}" ]; then
+            missing+=(DD_API_KEY)
+          fi
+          if [ -z "${DD_APP_KEY}" ]; then
+            missing+=(DD_APP_KEY)
+          fi
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing secrets for live routing tests: ${missing[*]}"
             exit 1
           fi
 

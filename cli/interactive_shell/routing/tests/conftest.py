@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from cli.interactive_shell.routing.tests._ci_gates import running_in_github_actions
 from config.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
@@ -97,3 +98,35 @@ def _repl_execution_policy_auto_yes(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda _prompt: "y",
     )
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+
+_LIVE_LLM_SKIPS_IN_CI: list[str] = []
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[object]
+) -> Iterator[None]:
+    """Fail the run if any live_llm test skips in CI (belt-and-suspenders)."""
+    outcome = yield
+    report = outcome.get_result()  # type: ignore[attr-defined]
+    if (
+        running_in_github_actions()
+        and report.when == "call"
+        and report.skipped
+        and item.get_closest_marker("live_llm") is not None
+    ):
+        _LIVE_LLM_SKIPS_IN_CI.append(f"{item.nodeid}: {report.longrepr}")
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    if not _LIVE_LLM_SKIPS_IN_CI:
+        return
+    terminal = session.config.pluginmanager.get_plugin("terminalreporter")
+    if terminal is not None:
+        terminal.write_line(
+            "live_llm tests must not skip in CI (fix credentials, flags, or shard config):"
+        )
+        for line in _LIVE_LLM_SKIPS_IN_CI:
+            terminal.write_line(f"  - {line}")
+    session.exitstatus = 1
