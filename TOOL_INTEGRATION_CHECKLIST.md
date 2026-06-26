@@ -20,6 +20,10 @@ This file is the detailed definition of done for tool and integration work. Use 
 - `docs/docs.json`
 - `tests/tools/test_<tool_name>.py`
 
+Do not add new tool surfaces under `vendors/`. `tools/` is the canonical
+agent-callable boundary; `vendors/` is only loaded through an explicit legacy
+allowlist while existing vendor-hosted tools are migrated.
+
 ### Contract and implementation
 
 - [ ] Pick the simplest shape that fits the tool (`@tool(...)` for lightweight tools, richer class only when needed)
@@ -65,6 +69,10 @@ Common failure modes to consider:
 - `docs/docs.json`
 - `tests/integrations/test_<name>.py`
 - related `tests/tools/`, `tests/e2e/`, or `tests/synthetic/` coverage
+
+Do not add new external clients under `vendors/`. `integrations/` owns user
+configuration and resolution, `services/` owns reusable external clients, and
+`tools/` owns agent-callable behavior.
 
 ### Core completeness
 
@@ -114,6 +122,7 @@ For tools that list, search, or inspect resources:
 - [ ] Unit tests for config/normalization
 - [ ] Tool contract tests or equivalent schema/metadata coverage
 - [ ] Runtime registry/discovery test proves the tool is visible on the expected surface(s)
+- [ ] New tool code lives under `tools/`; new reusable API client code lives under `services/`
 - [ ] Runtime behavior tests for success and failure paths
 - [ ] At least one realistic fixture for live payload parsing if external payloads are involved
 - [ ] If investigation-relevant, at least one test proves the planner/agent can discover or invoke the tool through the normal runtime path

@@ -1,4 +1,12 @@
-# LLM API providers (hosted HTTP)
+# Reusable service clients
+
+Use this directory for reusable runtime clients and adapters that call external
+APIs on behalf of integrations or tools. For a new integration that needs direct
+remote calls, the canonical client home is `services/<vendor>/client.py`.
+`integrations/` owns user configuration and verification wiring; `tools/` owns
+agent-callable surfaces. Do not add new client or tool code under `vendors/`.
+
+## LLM API providers (hosted HTTP)
 
 Use this directory when adding or updating an **API-backed** LLM provider (Anthropic,
 OpenAI-compatible, Bedrock, etc.). For subprocess CLIs, use

@@ -25,6 +25,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | `integrations/`       | Integration config normalization, verification, store, catalog logic, and the Hermes log pipeline. |
 | `services/`           | Reusable API clients and adapters for integrations and tools (including LLM providers).            |
 | `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
+| `vendors/`            | Legacy third-party client/tool packages kept for migration compatibility; do not add new tool surfaces here. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
@@ -64,6 +65,7 @@ Main packages one level deeper:
 - `services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `services/AGENTS.md`.
 - `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
+- `vendors/` — Legacy third-party client/tool packages. New reusable external API clients belong under `services/<vendor>/client.py`; new agent-callable surfaces belong under `tools/`.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `platform/` — Guardrails, masking, sandbox, analytics, auth, and cross-cutting platform services (e.g. `platform/notifications/telegram_delivery.py`).
 - `tools/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `platform/notifications/telegram_delivery.py`.
@@ -89,9 +91,10 @@ Steps:
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
 3. Keep the tool self-contained. Put reusable transport or parsing code in `services/` or `tools/utils/` rather than copying it into the tool body.
-4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
-5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
-6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
+4. Do not add new `@tool(...)` functions, `BaseTool` subclasses, or other registry surfaces under `vendors/`. The registry only loads existing vendor modules through an explicit legacy allowlist while those tools are migrated.
+5. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
+6. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
+7. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
 
 ### Changing the investigation pipeline
 
@@ -133,6 +136,8 @@ Files to touch:
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
 - `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
+
+Do not add new integration clients or agent-callable tool definitions under `vendors/`. Treat `integrations/` as the user/config boundary, `services/` as the reusable external-client boundary, and `tools/` as the agent-callable boundary.
 
 Examples from the repo:
 
@@ -180,6 +185,7 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- Vendor tool surfaces: `vendors/` is a legacy compatibility area, not the place for new tools. The registry only imports explicitly allowlisted legacy vendor modules; new tool surfaces must live under `tools/`, and reusable API clients must live under `services/<vendor>/client.py`.
 - Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
   location. Update callers to the canonical module and delete the old path.
 

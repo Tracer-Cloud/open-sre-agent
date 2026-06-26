@@ -27,6 +27,37 @@ _SKIP_MODULE_NAMES = {
     "utils",
 }
 
+# Legacy vendor modules that still expose agent-callable tool surfaces from
+# ``vendors.<name>``. Keep this list explicit so new vendor packages do not
+# become tools by accident; new tools belong under ``tools/``.
+_LEGACY_VENDOR_TOOL_MODULE_NAMES: tuple[str, ...] = (
+    "alertmanager",
+    "argocd",
+    "coralogix",
+    "dagster",
+    "datadog",
+    "eks",
+    "elasticsearch",
+    "google_docs",
+    "grafana",
+    "groundcover",
+    "helm",
+    "honeycomb",
+    "incident_io",
+    "jenkins",
+    "jira",
+    "opsgenie",
+    "pagerduty",
+    "prefect",
+    "signoz",
+    "splunk",
+    "supabase",
+    "tempo",
+    "temporal",
+    "vercel",
+    "victoria_logs",
+)
+
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
 # Registered packages are walked the same way as :mod:`tools` — each
@@ -65,6 +96,9 @@ def register_external_tool_package(package: ModuleType) -> None:
 
 
 def _iter_tool_module_names(package: ModuleType) -> list[str]:
+    if package is vendors_package:
+        return list(_LEGACY_VENDOR_TOOL_MODULE_NAMES)
+
     module_names: list[str] = []
     for module_info in pkgutil.iter_modules(package.__path__):
         if module_info.name in _SKIP_MODULE_NAMES:
@@ -138,8 +172,9 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    # Walk the canonical tools package, then the vendor surfaces package,
-    # then any externally-registered packages in registration order.
+    # Walk the canonical tools package, then explicitly allowlisted legacy
+    # vendor tool modules, then any externally-registered packages in
+    # registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
     packages: list[ModuleType] = [tools_package, vendors_package, *_external_tool_packages]
     for package in packages:
