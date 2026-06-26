@@ -157,7 +157,6 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     from platform.observability.tool_trace import redact_sensitive
 
     for tc, output in executed:
-        ok = not (isinstance(output, dict) and "error" in output)
         with contextlib.suppress(Exception):
             body = (
                 output
@@ -172,7 +171,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
                 tool=str(tc.name),
                 arguments=arguments,
                 result=_truncate(body, _MAX_PER_TOOL_CHARS),
-                ok=ok,
+                ok=not (isinstance(output, dict) and "error" in output),
             )
 
 
