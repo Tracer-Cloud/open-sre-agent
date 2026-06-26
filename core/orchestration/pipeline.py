@@ -32,20 +32,12 @@ def run_connected_investigation(
     from core.orchestration.node.diagnose import diagnose
     from core.orchestration.node.extract_alert import extract_alert
     from core.orchestration.node.investigate import ConnectedInvestigationAgent
-    from core.orchestration.node.investigate.agent import CLIBackedInvestigationAgent
     from core.orchestration.node.plan_actions import plan_actions
     from core.orchestration.node.publish_findings import deliver
     from core.orchestration.node.resolve_integrations import resolve_integrations
     from platform.observability.sentry_sdk import capture_exception
 
-    if agent_class is None:
-        from services.agent_llm_client import CLIBackedAgentClient, get_agent_llm
-
-        agent_class = (
-            CLIBackedInvestigationAgent
-            if isinstance(get_agent_llm(), CLIBackedAgentClient)
-            else ConnectedInvestigationAgent
-        )
+    agent_class = agent_class or ConnectedInvestigationAgent
 
     try:
         apply_state_updates(state, resolve_integrations(state))

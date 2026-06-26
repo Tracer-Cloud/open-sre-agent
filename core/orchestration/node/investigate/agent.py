@@ -126,6 +126,15 @@ class ConnectedInvestigationAgent:
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
+        # When the active LLM is CLI-backed and this is a plain ConnectedInvestigationAgent
+        # (not a custom subclass), silently promote self to CLIBackedInvestigationAgent so
+        # _should_accept_conclusion enforces all planned tools. Subclasses (e.g.
+        # BenchInvestigationAgent) manage their own termination policy and are unaffected.
+        from services.agent_llm_client import CLIBackedAgentClient
+
+        if isinstance(llm, CLIBackedAgentClient) and type(self) is ConnectedInvestigationAgent:
+            self.__class__ = CLIBackedInvestigationAgent
+
         # Merge tool_context into a local view so the system prompt can read
         # available_sources / available_action_names without mutating the caller's state.
         system = self._build_system_prompt({**state_dict, **tool_context})
