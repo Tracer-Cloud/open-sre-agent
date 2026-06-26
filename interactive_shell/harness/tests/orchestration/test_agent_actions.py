@@ -1137,7 +1137,7 @@ def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object)
         dirs.append(target)
 
     def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
-        raise AssertionError("subprocess.run should not be used for !cd builtin routing")
+        raise AssertionError("subprocess.run should not be used for !cd builtin execution")
 
     monkeypatch.setattr(action_executor.os, "chdir", _fake_chdir)
     monkeypatch.setattr(shell_execution.subprocess, "run", _boom)
@@ -1158,7 +1158,7 @@ def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object
         return PurePosixPath("/shown")
 
     def _boom(*_args: object, **_kwargs: object) -> None:  # pragma: no cover
-        raise AssertionError("subprocess.run should not be used for !pwd builtin routing")
+        raise AssertionError("subprocess.run should not be used for !pwd builtin execution")
 
     monkeypatch.setattr(action_executor.Path, "cwd", classmethod(_fake_cwd))
     monkeypatch.setattr(shell_execution.subprocess, "run", _boom)

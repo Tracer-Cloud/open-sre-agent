@@ -1,4 +1,4 @@
-"""Routing-focused tests for interactive shell terminal runtime dispatch helpers."""
+"""Turn-focused tests for interactive shell terminal runtime dispatch helpers."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from interactive_shell.harness.orchestration.tools import (
 from interactive_shell.harness.orchestration.tools import (
     slash_tool as _slash_tool,
 )
-from interactive_shell.runtime import controller as loop_controller
+from interactive_shell.harness.pipeline import handle_message_with_agent
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.runtime.utils import input_policy as loop_input_policy
 
@@ -150,7 +150,7 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
-def test_execute_routed_turn_nitro_prompt_uses_cli_agent_actions(
+def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -186,22 +186,24 @@ def test_execute_routed_turn_nitro_prompt_uses_cli_agent_actions(
         _ = confirm_fn
         llm_calls.append(text)
 
-    monkeypatch.setattr(
-        loop_controller,
-        "execute_cli_actions",
-        _fake_execute_cli_actions,
-    )
-    monkeypatch.setattr(loop_controller, "answer_cli_agent", _fake_answer_cli_agent)
-
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_controller.execute_routed_turn(nitro_prompt, session, console)
+    handle_message_with_agent(
+        nitro_prompt,
+        session,
+        console,
+        recorder=None,
+        confirm_fn=None,
+        is_tty=None,
+        execute_actions=_fake_execute_cli_actions,
+        answer_agent=_fake_answer_cli_agent,
+    )
 
     assert action_calls == [nitro_prompt]
     assert llm_calls == []
 
 
-def test_execute_routed_turn_nitro_prompt_executes_remote_then_investigation(
+def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -246,12 +248,19 @@ def test_execute_routed_turn_nitro_prompt_executes_remote_then_investigation(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    loop_controller.execute_routed_turn(nitro_prompt, session, console)
+    handle_message_with_agent(
+        nitro_prompt,
+        session,
+        console,
+        recorder=None,
+        confirm_fn=None,
+        is_tty=None,
+    )
 
     assert call_order == ["slash:/remote", "investigation:hello world"]
 
 
-class TestDispatchSpinnerRouting:
+class TestDispatchSpinnerBehavior:
     @pytest.mark.parametrize(
         "text",
         [

@@ -30,7 +30,6 @@ class Event(StrEnum):
     INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"
     INVESTIGATION_MISS_CLASSIFIED = "investigation_miss_classified"
     DIAGNOSIS_CATEGORY_MISMATCH = "diagnosis_category_mismatch"
-    INTERACTIVE_SHELL_ROUTE_DECISION = "interactive_shell_route_decision"
 
     # Integrations
     INTEGRATION_SETUP_STARTED = "integration_setup_started"

@@ -7,7 +7,7 @@ LLM, tool runners, or the investigation pipeline.
 
 from __future__ import annotations
 
-# Natural-language investigation routing in the interactive shell. When ``True``
+# Natural-language investigation dispatch in the interactive shell. When ``True``
 # the planner is offered ``investigation_start``, so incident-style prompts can
 # trigger the RCA pipeline from the REPL. When ``False`` (emergency rollback
 # only) those prompts fall through to the conversational assistant instead.
@@ -17,8 +17,8 @@ from __future__ import annotations
 # investigations; they do not go through ``investigation_start``.
 #
 # Keep ``True`` as the shipped default. Set ``False`` only for emergency rollback;
-# investigation dispatch routing scenarios then skip in ``routing-live`` (they do
-# not fail ``routing-checks``).
+# investigation dispatch scenarios then skip in ``turn-live`` (they do not fail
+# ``turn-checks``).
 INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True
 
 

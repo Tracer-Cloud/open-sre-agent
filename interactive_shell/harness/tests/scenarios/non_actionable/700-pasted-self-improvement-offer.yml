@@ -14,8 +14,8 @@ available_capabilities:
   llm_provider: []
 notes:
 - Prompt reads like the assistant offering a code change; nothing to execute.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

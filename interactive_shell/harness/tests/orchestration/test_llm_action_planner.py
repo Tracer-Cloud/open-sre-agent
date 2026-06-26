@@ -76,7 +76,7 @@ def _load_live_cases() -> list[PlannerLiveCase]:
             {
                 "id": str(row["id"]),
                 "input": str(row["input"]),
-                "expected_kind": str(row["expected_route_kind"]),
+                "expected_kind": str(row["expected_turn_kind"]),
                 "expected_actions": [
                     {"kind": str(action["kind"]), "content": str(action["content"])}
                     for action in raw_actions

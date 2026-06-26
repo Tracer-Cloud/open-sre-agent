@@ -6,17 +6,13 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-import interactive_shell.harness.orchestration.agent_actions as _agent_actions
 from core.domain.alerts import inbox as _alert_inbox
-from interactive_shell.chat import cli_agent as _cli_agent
-from interactive_shell.chat.tool_gathering import gather_tool_evidence
 from interactive_shell.harness.pipeline import handle_message_with_agent
 from interactive_shell.runtime.background.workers import BackgroundTaskManager
 from interactive_shell.runtime.core.context import (
@@ -52,77 +48,16 @@ from interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 from interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from interactive_shell.ui.streaming.console import StreamingConsole
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
-from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
+from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 
 log = logging.getLogger(__name__)
 
-answer_cli_agent = _cli_agent.answer_cli_agent
-execute_cli_actions = _agent_actions.execute_cli_actions
-_FIXED_ROUTE_KIND = "handle_message_with_agent"
+_AGENT_TURN_KIND = "agent"
 
 
 class DispatchCancelled(Exception):
     """Raised when in-flight dispatch is cancelled during confirmation."""
-
-
-def _answer_cli_agent_with_tools(
-    text: str,
-    session: ReplSession,
-    console: Console,
-    *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-    tool_observation: str | None = None,
-) -> LlmRunInfo | None:
-    """Answer a turn, first gathering live evidence from registered tools."""
-    if tool_observation is None:
-        gathered = gather_tool_evidence(text, session, console, is_tty=is_tty)
-        if gathered:
-            return answer_cli_agent(
-                text,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                tool_observation=gathered,
-                tool_observation_on_screen=False,
-            )
-    return answer_cli_agent(
-        text,
-        session,
-        console,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        tool_observation=tool_observation,
-    )
-
-
-def execute_routed_turn(
-    text: str,
-    session: ReplSession,
-    console: Console,
-    *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-) -> None:
-    """Record prompt telemetry and hand one prompt turn to the shell pipeline."""
-    session_token = bind_cli_session_id(session.session_id)
-    try:
-        recorder = PromptRecorder.start(session=session, text=text, route_kind=_FIXED_ROUTE_KIND)
-
-        handle_message_with_agent(
-            text,
-            session,
-            console,
-            recorder=recorder,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            execute_actions=execute_cli_actions,
-            answer_agent=_answer_cli_agent_with_tools,
-        )
-    finally:
-        reset_cli_session_id(session_token)
 
 
 class InteractiveShellController:
@@ -196,7 +131,7 @@ class InteractiveShellController:
         self._start_runtime_services()
         try:
             with patch_stdout(raw=True):
-                await self._accept_prompt_input_until_exit()
+                await self._run_prompt_loop()
         finally:
             await self._shutdown_runtime()
 
@@ -209,9 +144,9 @@ class InteractiveShellController:
             self.inbox,
             self.prompt.invalidate_prompt,
         )
-        self.tasks = self.background.start_all(self._consume_queued_turns_until_exit)
+        self.tasks = self.background.start_all(self._run_turn_queue_loop)
 
-    async def _accept_prompt_input_until_exit(self) -> None:
+    async def _run_prompt_loop(self) -> None:
         while not self.state.exit_requested:
             if self.background is not None:
                 self.background.drain_turn_start_output(self.echo_console)
@@ -228,11 +163,11 @@ class InteractiveShellController:
                     self.session,
                 ),
             )
-            should_continue = await self._apply_input_action(action)
+            should_continue = await self._handle_input_action(action)
             if not should_continue:
                 return
 
-    async def _apply_input_action(self, action: InputAction) -> bool:
+    async def _handle_input_action(self, action: InputAction) -> bool:
         match action:
             case IgnoreInput():
                 return True
@@ -250,21 +185,21 @@ class InteractiveShellController:
                 if warning:
                     self.echo_console.print(warning)
                 self.prompt.render_submitted_prompt(self.echo_console, text)
-                await self._submit_turn(text)
+                await self._enqueue_turn(text)
                 if wait:
-                    await self._wait_until_idle()
+                    await self._await_turn_completion()
                 return True
 
-    async def _submit_turn(self, text: str) -> None:
+    async def _enqueue_turn(self, text: str) -> None:
         await self.state.queue.put(text)
 
-    async def _wait_until_idle(self) -> None:
+    async def _await_turn_completion(self) -> None:
         await self.state.queue.join()
 
     def _cancel_current_turn(self) -> None:
         self.state.cancel_current_dispatch()
 
-    async def _consume_queued_turns_until_exit(self) -> None:
+    async def _run_turn_queue_loop(self) -> None:
         while not self.state.exit_requested:
             try:
                 text = await self.state.queue.get()
@@ -274,7 +209,7 @@ class InteractiveShellController:
                 self.state.queue.task_done()
                 return
 
-            turn_task = asyncio.create_task(self._execute_single_turn(text))
+            turn_task = asyncio.create_task(self._run_queued_turn(text))
             self.state.current_task = turn_task
             try:
                 await turn_task
@@ -285,7 +220,7 @@ class InteractiveShellController:
             self.state.clear_current_task()
             self.state.queue.task_done()
 
-    async def _execute_single_turn(self, text: str) -> None:
+    async def _run_queued_turn(self, text: str) -> None:
         dispatch_cancel = threading.Event()
         current_task = asyncio.current_task()
         if current_task is not None:
@@ -314,17 +249,28 @@ class InteractiveShellController:
                 if turn_needs_exclusive_stdin(text, self.session)
                 else repl_safe_progress_scope()
             )
-            with progress_scope:
-                await asyncio.to_thread(
-                    execute_routed_turn,
-                    text,
-                    self.session,
-                    console,
-                    confirm_fn=lambda prompt: request_confirmation_via_prompt(
-                        self.state,
-                        prompt,
-                    ),
+            session_token = bind_cli_session_id(self.session.session_id)
+            try:
+                recorder = PromptRecorder.start(
+                    session=self.session,
+                    text=text,
+                    turn_kind=_AGENT_TURN_KIND,
                 )
+                with progress_scope:
+                    await asyncio.to_thread(
+                        handle_message_with_agent,
+                        text,
+                        self.session,
+                        console,
+                        recorder=recorder,
+                        confirm_fn=lambda prompt: request_confirmation_via_prompt(
+                            self.state,
+                            prompt,
+                        ),
+                        is_tty=None,
+                    )
+            finally:
+                reset_cli_session_id(session_token)
         except asyncio.CancelledError:
             console.print(f"[{WARNING}]· interrupted[/]")
             raise
@@ -376,9 +322,5 @@ def request_confirmation_via_prompt(state: ReplState, prompt_text: str) -> str:
 __all__ = [
     "DispatchCancelled",
     "InteractiveShellController",
-    "_answer_cli_agent_with_tools",
-    "answer_cli_agent",
-    "execute_cli_actions",
-    "execute_routed_turn",
     "request_confirmation_via_prompt",
 ]

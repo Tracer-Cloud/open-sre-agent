@@ -17,8 +17,8 @@ available_capabilities:
 notes:
 - 'P0 priority prompt (misc_capability_question #2) from OpenSRE analytics priority-prompts report.'
 - Prompt is sent verbatim; planner should map to /integrations list.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

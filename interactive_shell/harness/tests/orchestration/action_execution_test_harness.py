@@ -1,4 +1,4 @@
-"""Typed fake planner/registry harness for routing execution tests."""
+"""Typed fake planner/registry harness for action-execution tests."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class FakeDispatcher:
 
 
 @dataclass
-class RoutingHarness:
+class ActionExecutionHarness:
     planner: FakePlanner
     dispatcher: FakeDispatcher
     console_buffer: io.StringIO = field(default_factory=io.StringIO)

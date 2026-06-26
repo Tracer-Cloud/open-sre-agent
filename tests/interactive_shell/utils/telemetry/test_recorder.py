@@ -7,7 +7,7 @@ from interactive_shell.utils.telemetry.config import PromptLogConfig
 from interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
 
 
-def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: Path) -> None:
+def test_prompt_recorder_start_respects_supported_turns(monkeypatch, tmp_path: Path) -> None:
     cfg = PromptLogConfig(
         enabled=True,
         local_enabled=False,
@@ -20,8 +20,8 @@ def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: 
         "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
-    assert PromptRecorder.start(session=session, text="hello", route_kind="slash") is None
-    assert PromptRecorder.start(session=session, text="hello", route_kind="cli_help") is not None
+    assert PromptRecorder.start(session=session, text="hello", turn_kind="slash") is None
+    assert PromptRecorder.start(session=session, text="hello", turn_kind="cli_help") is not None
 
 
 def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
@@ -51,7 +51,7 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
     recorder.set_response("command failed (exit 1)\nboom")
     recorder.flush()
     assert captured
-    assert captured[0]["cli_route_kind"] == "background_task"
+    assert captured[0]["cli_turn_kind"] == "background_task"
     assert captured[0]["$ai_trace_id"] == "ab247135"
     assert captured[0]["$ai_input"][0]["content"] == "opensre investigate --service api"
     assert captured[0]["$ai_output_choices"][0]["content"] == "command failed (exit 1)\nboom"
@@ -83,7 +83,7 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
     recorder = PromptRecorder.start(
         session=session,
         text="Bearer token-value-12345678901234567890",
-        route_kind="cli_help",
+        turn_kind="cli_help",
     )
     assert recorder is not None
     recorder.set_response(
@@ -126,7 +126,7 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
     recorder = PromptRecorder.start(
         session=session,
         text="hello",
-        route_kind="handle_message_with_agent",
+        turn_kind="agent",
     )
     assert recorder is not None
     recorder.set_response("world", LlmRunInfo(model="gpt-test", provider="openai", latency_ms=50))
@@ -170,7 +170,7 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
     recorder = PromptRecorder.start(
         session=session,
         text="hello",
-        route_kind="handle_message_with_agent",
+        turn_kind="agent",
     )
     assert recorder is not None
     recorder.set_response("world", LlmRunInfo(model="gpt-test", provider="openai", latency_ms=50))
@@ -214,7 +214,7 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
     recorder = PromptRecorder.start(
         session=session,
         text="hello",
-        route_kind="handle_message_with_agent",
+        turn_kind="agent",
     )
     assert recorder is not None
     recorder.set_response("world", LlmRunInfo(model="gpt-test", provider="openai", latency_ms=50))

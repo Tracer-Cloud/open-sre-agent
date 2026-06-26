@@ -12,8 +12,8 @@ notes:
   "?" previously pushed this to the conversational assistant ("paste the alert text"). The LLM planner
   must recognize the "sample/test alert" noun phrase and emit the alert_sample tool with template=generic,
   not investigation_start or assistant_handoff.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

@@ -1,4 +1,4 @@
-"""Runtime helpers for live routing turn-execution oracle tests."""
+"""Runtime helpers for live turn-execution oracle tests."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )
+from interactive_shell.harness.pipeline import handle_message_with_agent
 from interactive_shell.harness.tests._oracle_normalize import (
     normalize_history_entry,
     normalize_response_text,
@@ -33,8 +34,9 @@ from interactive_shell.harness.tests.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
-from interactive_shell.runtime.controller import execute_routed_turn
 from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.utils.telemetry import PromptRecorder
+from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 
 # Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
 # live-resolved config for a service instead of a pinned fake one. The oracle
@@ -45,7 +47,7 @@ from interactive_shell.runtime.core.session import ReplSession
 # the live integration and returned valid data (not a 401). When the credential
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
-_FIXED_ROUTE_KIND = "handle_message_with_agent"
+_AGENT_TURN_KIND = "agent"
 
 
 @dataclass
@@ -93,7 +95,7 @@ def resolve_live_integrations(
     Returns ``(expanded_override, unavailable_services)``. ``unavailable_services``
     lists services whose credentials could not be resolved; callers skip those
     scenarios rather than failing them (a missing credential is an environment
-    gap, not a routing regression). Non-sentinel entries pass through untouched.
+    gap, not a turn-execution regression). Non-sentinel entries pass through untouched.
     """
     if not override:
         return override, []
@@ -384,12 +386,19 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     prompt = case.scenario.input.prompt
     history_start = len(session.history)
 
-    execute_routed_turn(
-        prompt,
-        session,
-        console,
-        confirm_fn=lambda _prompt: "y",
-    )
+    session_token = bind_cli_session_id(session.session_id)
+    try:
+        recorder = PromptRecorder.start(session=session, text=prompt, turn_kind=_AGENT_TURN_KIND)
+        handle_message_with_agent(
+            prompt,
+            session,
+            console,
+            recorder=recorder,
+            confirm_fn=lambda _prompt: "y",
+            is_tty=None,
+        )
+    finally:
+        reset_cli_session_id(session_token)
     answer = case.answer
     normalized_response = normalize_response_text(console_buffer.getvalue())
     history_delta = [normalize_history_entry(entry) for entry in session.history[history_start:]]
@@ -420,7 +429,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     )
 
     passed = True
-    if answer.route.expected_kind != _FIXED_ROUTE_KIND:
+    if answer.turn.expected_kind != _AGENT_TURN_KIND:
         passed = False
     if answer.policy.executes_terminal_action:
         if not executed_match:
@@ -452,8 +461,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         passed=passed,
         details={
             "id": case.scenario.id,
-            "route_kind_actual": _FIXED_ROUTE_KIND,
-            "route_kind_expected": answer.route.expected_kind,
+            "turn_kind_actual": _AGENT_TURN_KIND,
+            "turn_kind_expected": answer.turn.expected_kind,
             "executed_actions_actual": executed,
             "executed_actions_expected": executed_expected,
             "history_actual": history_delta,

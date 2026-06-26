@@ -10,8 +10,8 @@ session:
 notes:
 - Quick-start demo command must resolve deterministically (not cli_agent fail-closed).
 - Execution uses /investigate (SAFE tier) so no Proceed? confirmation prompt.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: /investigate alert.json
 policy:
   executes_terminal_action: true

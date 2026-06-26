@@ -1,4 +1,4 @@
-"""CI vs local behavior for routing tests that may skip when prerequisites are missing."""
+"""CI vs local behavior for turn tests that may skip when prerequisites are missing."""
 
 from __future__ import annotations
 

@@ -13,8 +13,8 @@ notes:
 - Live-gather counterpart to 326-priority-prompt-checkout-500-latency-deploy.
 - Asserts a live Datadog gather tool returns valid data (empty results OK).
 - 'P0 priority prompt (http_5xx_or_latency_after_deploy #2).'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

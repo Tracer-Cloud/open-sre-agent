@@ -1,4 +1,4 @@
-"""Canonical routing scenario tests (deterministic + live LLM)."""
+"""Canonical turn scenario tests (deterministic + live LLM)."""
 
 from __future__ import annotations
 
@@ -215,7 +215,7 @@ def test_shard_selection_is_non_empty() -> None:
     if _LIVE_CASES:
         return
     total, index = read_shard_config()
-    skip_or_fail(f"No routing cases selected for shard {index}/{total}.")
+    skip_or_fail(f"No turn cases selected for shard {index}/{total}.")
 
 
 def test_deterministic_command_text_matches_scenario(deterministic_case: ScenarioCase) -> None:
@@ -224,7 +224,7 @@ def test_deterministic_command_text_matches_scenario(deterministic_case: Scenari
 
     # The literal-command detector must reproduce the normalized slash command
     # the scenario expects for UI policy decisions.
-    assert deterministic_command_text(prompt) == answer.route.expected_command_text
+    assert deterministic_command_text(prompt) == answer.turn.expected_command_text
 
 
 def test_help_normalizes_to_slash_help_deterministically() -> None:
@@ -305,7 +305,7 @@ def test_live_action_planning(
     if passed_count >= required:
         return
 
-    artifact_dir = tmp_path_factory.mktemp("routing_live_action_planning")
+    artifact_dir = tmp_path_factory.mktemp("turn_live_action_planning")
     artifact_file = Path(artifact_dir) / f"{live_planning_case.scenario.id}.json"
     artifact_file.write_text(
         json.dumps(failures, indent=2, ensure_ascii=True),
@@ -342,7 +342,7 @@ def test_live_turn_execution_oracle(
         return
 
     failed_details = [item.details for item in run_results if not item.passed]
-    artifact_dir = tmp_path_factory.mktemp("routing_live_action_oracles")
+    artifact_dir = tmp_path_factory.mktemp("turn_live_action_oracles")
     artifact_file = Path(artifact_dir) / f"{live_oracle_case.scenario.id}.json"
     artifact_file.write_text(
         json.dumps([item.details for item in run_results], indent=2, ensure_ascii=True),

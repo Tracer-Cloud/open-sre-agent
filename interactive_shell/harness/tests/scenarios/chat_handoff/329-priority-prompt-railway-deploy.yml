@@ -10,8 +10,8 @@ session:
 notes:
 - 'P0 priority prompt (misc_setup_or_onboarding #1) from OpenSRE analytics priority-prompts report.'
 - Prompt is sent verbatim; do not normalize typos or mixed language.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

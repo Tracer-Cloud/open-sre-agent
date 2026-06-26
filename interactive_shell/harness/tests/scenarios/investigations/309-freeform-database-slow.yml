@@ -15,8 +15,8 @@ session:
       site: datadoghq.com
       base_url: https://api.datadoghq.com
 notes: []
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

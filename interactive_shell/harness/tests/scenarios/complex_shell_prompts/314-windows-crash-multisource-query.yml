@@ -39,8 +39,8 @@ notes:
 - 'Gather negative control: connected integrations must route to investigation_start, not the conversational
   gather loop on the same turn. not_called on Sentry/GitHub/PostHog gather tools proves dispatch won over
   handoff fan-out (contrast 338, where the same integrations DO gather).'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

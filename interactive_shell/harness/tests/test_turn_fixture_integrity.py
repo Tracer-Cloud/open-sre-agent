@@ -1,4 +1,4 @@
-"""Guardrails for routing scenario directories and test hygiene."""
+"""Guardrails for turn scenario directories and test hygiene."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from interactive_shell.harness.tests.scenario_loader import (
 )
 
 TESTS_DIR = Path(__file__).resolve().parent
-ROUTING_SCENARIOS_TEST = TESTS_DIR / "test_routing_scenarios.py"
+TURN_SCENARIOS_TEST = TESTS_DIR / "test_turn_scenarios.py"
 
 
 def _repo_root() -> Path:
@@ -33,7 +33,7 @@ def _repo_root() -> Path:
     return TESTS_DIR.parents[2]
 
 
-LEGACY_ROUTING_TESTS_DIRS = (
+LEGACY_TURN_TESTS_DIRS = (
     _repo_root() / "tests" / "cli" / "interactive_shell" / "routing",
     _repo_root() / "tests" / "interactive_shell" / "harness",
 )
@@ -204,7 +204,7 @@ def test_scenarios_use_tool_actions_not_legacy_fields() -> None:
                 f"{scenario_file.name}: remove executed_actions/gathered_tools_contract; "
                 "use tool_actions."
             )
-    assert not violations, "legacy routing action fields found:\n" + "\n".join(violations)
+    assert not violations, "legacy action fields found:\n" + "\n".join(violations)
 
 
 def test_gathered_tools_contract_names_are_registered() -> None:
@@ -233,29 +233,29 @@ def test_gathered_tools_contract_names_are_registered() -> None:
     )
 
 
-def test_routing_test_modules_do_not_use_mock_patterns() -> None:
+def test_turn_test_modules_do_not_use_mock_patterns() -> None:
     violations: list[str] = []
-    for test_path in (ROUTING_SCENARIOS_TEST, ORACLE_RUNTIME):
+    for test_path in (TURN_SCENARIOS_TEST, ORACLE_RUNTIME):
         if not test_path.exists():
             continue
         for violation in _mock_policy_violations(test_path):
             violations.append(f"{test_path.name}: found disallowed {violation}")
     assert not violations, (
-        "No-mocks policy violated in routing tests. "
-        "Remove mock usage from canonical routing suites.\n" + "\n".join(violations)
+        "No-mocks policy violated in turn tests. "
+        "Remove mock usage from canonical turn suites.\n" + "\n".join(violations)
     )
 
 
-def test_routing_tests_are_fully_colocated() -> None:
+def test_turn_tests_are_fully_colocated() -> None:
     unexpected = sorted(
         f"{path.parent.relative_to(_repo_root()).as_posix()}/{path.name}"
-        for directory in LEGACY_ROUTING_TESTS_DIRS
+        for directory in LEGACY_TURN_TESTS_DIRS
         if directory.exists()
         for path in directory.glob("test_*.py")
         if path.name not in ALLOWED_LEGACY_TESTS
     )
     assert not unexpected, (
-        "Routing tests must be colocated under interactive_shell/harness/tests/. "
-        "No routing tests should remain under split legacy routing test directories: "
+        "Turn tests must be colocated under interactive_shell/harness/tests/. "
+        "No turn tests should remain under split legacy test directories: "
         + ", ".join(unexpected)
     )

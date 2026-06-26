@@ -1,4 +1,4 @@
-"""Pytest fixtures for co-located routing tests."""
+"""Pytest fixtures for co-located turn tests."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _repo_root() -> Path:
 
 _PROJECT_ROOT = _repo_root()
 _ENV_PATH = _PROJECT_ROOT / ".env"
-_ROUTING_TEST_DEFAULT_ENV = {
+_TURN_TEST_DEFAULT_ENV = {
     "OPENSRE_SENTRY_DISABLED": "1",
     "OPENSRE_NO_TELEMETRY": "1",
     "OPENSRE_INVESTIGATION_SOURCE": "test",
@@ -40,14 +40,14 @@ _ROUTING_TEST_DEFAULT_ENV = {
 
 
 def pytest_configure(config: pytest.Config) -> None:  # noqa: ARG001
-    """Load project settings for co-located routing tests."""
+    """Load project settings for co-located turn tests."""
     load_env(_ENV_PATH, override=False)
 
 
 @pytest.fixture(autouse=True)
-def _routing_test_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def _turn_test_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mirror test-suite defaults while keeping env mutations isolated per test."""
-    for key, value in _ROUTING_TEST_DEFAULT_ENV.items():
+    for key, value in _TURN_TEST_DEFAULT_ENV.items():
         monkeypatch.setenv(key, value)
 
 
@@ -67,7 +67,7 @@ def _resolve_live_llm_configuration(
     request: pytest.FixtureRequest,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[None]:
-    """Let live LLM routing tests run with Anthropic or OpenAI credentials."""
+    """Let live LLM turn tests run with Anthropic or OpenAI credentials."""
     if request.node.get_closest_marker("live_llm") is None:
         yield
         return
@@ -84,7 +84,7 @@ def _resolve_live_llm_configuration(
         hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
         # Keep live_llm tests fail-closed for credential/config regressions.
         # Live suites must run with real credentials and fail on misconfiguration.
-        pytest.fail(f"Live LLM routing tests require usable LLM configuration:{hint}. {msg}")
+        pytest.fail(f"Live LLM turn tests require usable LLM configuration:{hint}. {msg}")
 
     from core.runtime.llm.llm_client import reset_llm_singletons
 

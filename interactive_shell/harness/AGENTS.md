@@ -18,7 +18,7 @@ subdirectories. Parent `AGENTS.md` files still apply.
   variable, or return a trivial tuple/value.
 - As a hard rule, avoid creating helper functions that are ~1-3 lines unless
   they satisfy one of the allowed exceptions below.
-- Prefer keeping short, linear logic inline in the main routing flow when the
+- Prefer keeping short, linear logic inline in the main turn-handling flow when the
   helper would force readers to jump around the file.
 
 ### Allowed exceptions
@@ -28,12 +28,12 @@ Small helpers are allowed only when at least one is true:
 - **Boundary isolation:** wraps exception handling, I/O, or cross-module
   boundary behavior that should be isolated for safety.
 - **Reuse:** used in multiple call sites (not just one).
-- **Domain naming:** captures a routing concept that is non-obvious inline.
+- **Domain naming:** captures an action-planning concept that is non-obvious inline.
 - **Test seam:** creates a stable seam needed for deterministic tests.
 
 ### Review checklist
 
-Before adding any helper in routing modules, ask:
+Before adding any helper in harness modules, ask:
 
 1. Does this reduce cognitive load, or just split obvious logic?
 2. Would inline code be clearer than jumping to another function?
@@ -44,20 +44,20 @@ If all answers are weak, keep the logic inline.
 ## Test Placement Policy For Harness
 
 - Harness tests must be co-located under `interactive_shell/harness/tests/`.
-- Do **not** move routing tests back under `tests/interactive_shell/harness/`.
+- Do **not** move turn tests back under `tests/interactive_shell/harness/`.
 - When adding a new harness-phase test file, place it under
-  `interactive_shell/harness/tests/` and keep routing test fixtures
+  `interactive_shell/harness/tests/` and keep turn test fixtures
   under that subtree.
 
 ## Harness Test Ownership And File Layout
 
 | File | Ownership | Scope |
 | --- | --- | --- |
-| `interactive_shell/harness/tests/test_routing_scenarios.py` | Harness package owners | Canonical runner: deterministic routing, live classification, action planning, turn-execution oracles |
-| `interactive_shell/harness/tests/test_routing_fixture_integrity.py` | Harness package owners | Scenario-tree/schema/no-mocks guardrails |
+| `interactive_shell/harness/tests/test_turn_scenarios.py` | Harness package owners | Canonical runner: deterministic command detection, live action planning, turn-execution oracles |
+| `interactive_shell/harness/tests/test_turn_fixture_integrity.py` | Harness package owners | Scenario-tree/schema/no-mocks guardrails |
 | `interactive_shell/harness/tests/scenario_loader.py` | Harness package owners | Load `scenarios/<behavior_class>/<id>/{scenario.yml,answer.yml}` |
 | `interactive_shell/harness/tests/scenarios/**/scenario.yml` | Harness package owners | Input world: prompt, session, capabilities, intent metadata |
-| `interactive_shell/harness/tests/scenarios/**/answer.yml` | Harness package owners | Expected behavior: route, policy, planned/executed actions, response contract |
+| `interactive_shell/harness/tests/scenarios/**/answer.yml` | Harness package owners | Expected behavior: turn, policy, planned/executed actions, response contract |
 
 ## Scenario schema and `available_capabilities` semantics
 
@@ -88,17 +88,18 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 ## Harness Test Isolation Policy
 
 - Do **not** use `unittest.mock`, `patch`, `MagicMock`, or equivalent mocking
-  primitives in routing tests.
-- Do **not** stub or monkeypatch the LLM client path in routing tests.
+  primitives in turn tests.
+- Do **not** stub or monkeypatch the LLM client path in turn tests.
 - Harness contract tests must exercise the real turn-execution stack
-  (`execute_routed_turn` -> `handle_message_with_agent`) and rely on curated
+  (`InteractiveShellController._run_queued_turn` / initial-input replay ->
+  `handle_message_with_agent`) and rely on curated
   prompts instead of synthetic mocked return values.
 
-## Important routing decisions (locked)
+## Important Turn-Handling Decisions (locked)
 
-- There is no top-level router: every turn is handed to
+- There is no top-level classifier: every turn is handed to
   `handle_message_with_agent`. Do **not** add command/slash/help/alert branches
-  or any other top-level routing phases before the agent.
+  or any other top-level phases before the agent.
 - There is no deterministic command-dispatch fast path in
   `handle_message_with_agent`. Every turn enters the agent pipeline; slash
   command execution belongs to the planner/tool path (`slash_invoke`) rather than
@@ -106,9 +107,9 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 - The runtime (`runtime/dispatch.py`) may reuse
   `orchestration.command_dispatch.deterministic_command_text` for terminal-UI concerns only
   (spinner suppression and exclusive-stdin gating). This is a presentation
-  concern and must not re-introduce a routing branch.
-- Regex fallback has been intentionally removed from routing. Do **not**
-  re-introduce `regex_fallback`/`routes/route_regex_fallback`-style phases
+  concern and must not re-introduce a pre-agent branch.
+- Regex fallback has been intentionally removed. Do **not**
+  re-introduce legacy regex fallback phases
   unless there is an explicit product decision to restore them.
 - **The LLM action planner is the sole tool selector for non-command turns.**
   There is no regex/keyword intent inference and no deterministic
@@ -133,7 +134,7 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   reintroduce a planning-stage denial; if write/mutating actions are ever added,
   gate them with an execution-stage confirmation (see
   `orchestration/execution_policy.py`), not a planner denial. The legacy
-  `fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fixture
+  `fail_closed`, `has_unhandled_clause`, and `turn.expected_signals` fixture
   fields were removed (the oracle never asserted on them); the policy block now
   carries a single `executes_terminal_action` boolean. See the `Answer` and
   `AnswerPolicy` docstrings in `tests/scenario_loader.py` for the two execution
@@ -146,28 +147,28 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   ``valid_data``, ``valid_data_any``). Handoff-only prompts live under
   ``scenarios/chat_handoff/``; integration gather / live / terminal scenarios
   stay in ``complex_shell_prompts/``.
-- Preserve routing decision observability contracts used in tests:
-  `fallback_reason` semantics and `matched_signals` (`cli_agent_action_plan`, etc.).
+- Preserve action-planning observability contracts used in tests:
+  planner trace semantics such as `cli_agent_action_plan`.
 
-## Routing test execution requirements (locked)
+## Turn test execution requirements (locked)
 
-- Routing tests are part of the default CI/CD flow; do **not** move them to
+- Turn tests are part of the default CI/CD flow; do **not** move them to
   optional-only jobs.
 - Keep deterministic dispatch contracts
-  (`test_routing_scenarios.py::test_deterministic_command_dispatch` and
-  `test_routing_fixture_integrity.py`) in the default PR CI flow. These run as
-  the no-LLM `routing-checks` job in `.github/workflows/routing-live.yml`
+  (`test_turn_scenarios.py::test_deterministic_command_text_matches_scenario` and
+  `test_turn_fixture_integrity.py`) in the default PR CI flow. These run as
+  the no-LLM `turn-checks` job in `.github/workflows/interactive-shell-live.yml`
   (`pytest interactive_shell/harness/tests/ -m "not live_llm"`), which
   needs no secrets and therefore also gates fork PRs.
-- Run the live-LLM routing suites (`test_routing_scenarios.py` live tests) on
+- Run the live-LLM turn suites (`test_turn_scenarios.py` live tests) on
   **both** same-repo pull requests and post-merge `main` pushes, sharded across
-  **8** shards (`ROUTING_SHARD_TOTAL=8`, matrix `shard_index: 0..7`) via the
-  `routing-live` job in `.github/workflows/routing-live.yml`. Fork PRs skip the
-  live job (no secrets); the `routing-checks` job still gates them.
-- Execute routing suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
+  **8** shards (`TURN_SHARD_TOTAL=8`, matrix `shard_index: 0..7`) via the
+  `turn-live` job in `.github/workflows/interactive-shell-live.yml`. Fork PRs skip the
+  live job (no secrets); the `turn-checks` job still gates them.
+- Execute turn suites with heavy parallelism (`pytest-xdist`, e.g. `-n auto`)
   in both local and CI environments.
-- Local developer goal: the live-LLM routing contract suite should be runnable
+- Local developer goal: the live-LLM turn contract suite should be runnable
   in roughly 20 seconds on a typical dev machine.
 - If runtime drifts above the target, reduce/curate prompt cases first (keep
   coverage signal high), then tune worker parallelism; avoid weakening core
-  deterministic routing coverage.
+  deterministic command-detection coverage.

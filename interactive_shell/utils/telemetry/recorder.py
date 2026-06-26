@@ -18,13 +18,13 @@ from interactive_shell.utils.telemetry.integration_snapshot import (
 from interactive_shell.utils.telemetry.sinks.local_jsonl import append_prompt_log_record
 from interactive_shell.utils.telemetry.sinks.posthog_ai import capture_ai_generation
 
-_SUPPORTED_ROUTE_KINDS = frozenset(
-    {"handle_message_with_agent", "cli_help", "follow_up", "new_alert", "background_task"}
+_SUPPORTED_TURN_KINDS = frozenset(
+    {"agent", "cli_help", "follow_up", "new_alert", "background_task"}
 )
 
-# Maps PromptRecorder route_kind → session turn kind stored in turn_detail records.
-_ROUTE_TO_SESSION_KIND: dict[str, str] = {
-    "handle_message_with_agent": "chat",
+# Maps PromptRecorder turn_kind to session turn kind stored in turn_detail records.
+_TURN_TO_SESSION_KIND: dict[str, str] = {
+    "agent": "chat",
     "cli_help": "chat",
     "follow_up": "follow_up",
     "new_alert": "alert",
@@ -51,14 +51,14 @@ class PromptRecorder:
         self,
         *,
         config: PromptLogConfig,
-        route_kind: str,
+        turn_kind: str,
         session_id: str,
         turn_id: str,
         prompt: str,
         session: Any | None = None,
     ) -> None:
         self._config = config
-        self._route_kind = route_kind
+        self._turn_kind = turn_kind
         self._session_id = session_id
         self._turn_id = turn_id
         self._prompt = prompt
@@ -78,10 +78,10 @@ class PromptRecorder:
         *,
         session: Any,
         text: str,
-        route_kind: str,
+        turn_kind: str,
     ) -> PromptRecorder | None:
         config = PromptLogConfig.load()
-        if not config.enabled or route_kind not in _SUPPORTED_ROUTE_KINDS:
+        if not config.enabled or turn_kind not in _SUPPORTED_TURN_KINDS:
             # When prompt logging is fully disabled, no recorder is created and
             # no turn_detail records are written to the session file. This means
             # the crash-recovery fallback in load_session() will produce empty
@@ -90,7 +90,7 @@ class PromptRecorder:
             return None
         return cls(
             config=config,
-            route_kind=route_kind,
+            turn_kind=turn_kind,
             session_id=_session_id(session),
             turn_id=str(uuid.uuid4()),
             prompt=_sanitize_text(text, config=config),
@@ -120,7 +120,7 @@ class PromptRecorder:
             return None
         return cls(
             config=config,
-            route_kind="background_task",
+            turn_kind="background_task",
             session_id=_session_id(session),
             turn_id=task_id or str(uuid.uuid4()),
             prompt=_sanitize_text(command, config=config),
@@ -147,7 +147,7 @@ class PromptRecorder:
             "ts": datetime.now(UTC).isoformat(),
             "session_id": self._session_id,
             "turn_id": self._turn_id,
-            "route_kind": self._route_kind,
+            "turn_kind": self._turn_kind,
             "prompt": self._prompt,
             "response": self._response,
             "model": self._model or "",
@@ -165,7 +165,7 @@ class PromptRecorder:
         with contextlib.suppress(Exception):
             from interactive_shell.harness.state.sessions.store import SessionStore
 
-            session_kind = _ROUTE_TO_SESSION_KIND.get(self._route_kind, self._route_kind)
+            session_kind = _TURN_TO_SESSION_KIND.get(self._turn_kind, self._turn_kind)
             SessionStore.append_turn_detail(
                 self._session_id,
                 session_kind,
@@ -185,7 +185,7 @@ class PromptRecorder:
                         "$ai_trace_id": self._turn_id,
                         "$ai_session_id": self._session_id,
                         "$ai_span_id": self._turn_id,
-                        "$ai_span_name": f"interactive_shell.{self._route_kind}",
+                        "$ai_span_name": f"interactive_shell.{self._turn_kind}",
                         "$ai_model": self._model or "unknown",
                         "$ai_provider": self._provider or "unknown",
                         "$ai_input": [{"role": "user", "content": self._prompt}],
@@ -200,7 +200,7 @@ class PromptRecorder:
                         ),
                         "$ai_input_tokens": self._input_tokens or 0,
                         "$ai_output_tokens": self._output_tokens or 0,
-                        "cli_route_kind": self._route_kind,
+                        "cli_turn_kind": self._turn_kind,
                         "cli_session_id": self._session_id,
                         "cli_turn_id": self._turn_id,
                         "opensre_version": get_version(),

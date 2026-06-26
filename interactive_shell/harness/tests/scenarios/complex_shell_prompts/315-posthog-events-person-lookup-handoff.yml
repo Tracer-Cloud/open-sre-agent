@@ -22,7 +22,7 @@ notes:
 - Grounded against the live PostHog MCP (project 'Tracer Cloud Production', id 196678) on 2026-06-18.
   The person whose github_username is 'davincios' exists (person id bed2a68f-ce46-5d68-9835-537389f3e317,
   distinct_id fb70eccb-ba6d-46a3-b9ba-7cf67dbc9d9a, $lib opensre-cli). They carry two $identify events
-  (17:05:49Z and 17:25:05Z) plus a rich history (~21 event types incl. interactive_shell_route_decision,
+  (17:05:49Z and 17:25:05Z) plus a rich history (~21 event types incl. terminal_turn_summarized,
   $ai_generation, cli_invoked), so this is a legitimate, reproducible lookup -- not a contrived prompt.
 - 'Solidity contract: because PostHog is the only resolved integration, the gather loop MUST engage the
   PostHog tool surface on every run -- list_posthog_tools is asserted via must_call_all (strictly stronger
@@ -33,8 +33,8 @@ notes:
   401s), so requiring it would make the fixture fail in every credential-less environment (CI included).
   list_posthog_tools firing is the deterministic, auth-independent proof that the gather loop routed this
   lookup to PostHog.'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

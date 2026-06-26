@@ -21,8 +21,8 @@ notes:
   no live data source to read.'
 - 'The synthesized alert_text varies per run, so planned_actions leaves content empty: the planning test
   asserts an investigation with non-empty alert_text rather than an exact string (same convention as 314).'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true
