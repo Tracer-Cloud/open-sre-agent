@@ -53,7 +53,7 @@ def build_datadog_provider(
     directly; the factory does **not** know about agent state shape.
     """
     from integrations.config_models import DatadogIntegrationConfig
-    from vendors.datadog.client import DatadogClient
+    from integrations.datadog.client import DatadogClient
 
     if not datadog_config:
         return None

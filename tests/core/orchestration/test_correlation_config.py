@@ -80,8 +80,8 @@ def test_correlation_config_uses_alert_resource_and_scoped_metric_query() -> Non
     }
 
     with (
-        patch("vendors.datadog.client.DatadogClient.query_metrics", query_metrics),
-        patch("vendors.datadog.client.DatadogClient.search_logs", search_logs),
+        patch("integrations.datadog.client.DatadogClient.query_metrics", query_metrics),
+        patch("integrations.datadog.client.DatadogClient.search_logs", search_logs),
     ):
         config = build_correlation_config(state)
         assert config is not None

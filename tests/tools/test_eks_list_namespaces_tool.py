@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.eks import list_eks_namespaces
+from tools.eks_tools import list_eks_namespaces
 
 
 class TestEKSListNamespacesToolContract(BaseToolContract):
@@ -41,7 +41,7 @@ def test_run_happy_path() -> None:
         items=[_make_ns("default"), _make_ns("kube-system")]
     )
     with patch(
-        "vendors.eks.build_k8s_clients",
+        "tools.eks_tools.build_k8s_clients",
         return_value=(mock_core_v1, MagicMock()),
     ):
         result = list_eks_namespaces(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
@@ -51,6 +51,6 @@ def test_run_happy_path() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("vendors.eks.build_k8s_clients", side_effect=Exception("api error")):
+    with patch("tools.eks_tools.build_k8s_clients", side_effect=Exception("api error")):
         result = list_eks_namespaces(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False

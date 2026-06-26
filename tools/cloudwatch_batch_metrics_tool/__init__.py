@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.cloudwatch_client import get_metric_statistics
+from integrations.aws.cloudwatch_client import get_metric_statistics
 from tools._telemetry import report_run_error
 from tools.tool_decorator import tool
 from tools.utils.availability import cloudwatch_is_available

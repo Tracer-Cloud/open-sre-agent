@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.coralogix import CoralogixLogsTool
+from tools.coralogix_tools import CoralogixLogsTool
 
 
 class TestCoralogixLogsToolContract(BaseToolContract):
@@ -32,7 +32,7 @@ def test_run_returns_unavailable_when_not_configured() -> None:
     tool = CoralogixLogsTool()
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("vendors.coralogix.CoralogixClient", return_value=mock_client):
+    with patch("tools.coralogix_tools.CoralogixClient", return_value=mock_client):
         result = tool.run(query="source logs | limit 50", coralogix_api_key="")
     assert result["available"] is False
 
@@ -51,8 +51,8 @@ def test_run_happy_path() -> None:
         "warnings": [],
     }
     with (
-        patch("vendors.coralogix.CoralogixClient", return_value=mock_client),
-        patch("vendors.coralogix.build_coralogix_logs_query", return_value="source logs"),
+        patch("tools.coralogix_tools.CoralogixClient", return_value=mock_client),
+        patch("tools.coralogix_tools.build_coralogix_logs_query", return_value="source logs"),
     ):
         result = tool.run(
             query="source logs | limit 50",
@@ -69,8 +69,8 @@ def test_run_api_error() -> None:
     mock_client.is_configured = True
     mock_client.query_logs.return_value = {"success": False, "error": "Rate limited"}
     with (
-        patch("vendors.coralogix.CoralogixClient", return_value=mock_client),
-        patch("vendors.coralogix.build_coralogix_logs_query", return_value="source logs"),
+        patch("tools.coralogix_tools.CoralogixClient", return_value=mock_client),
+        patch("tools.coralogix_tools.build_coralogix_logs_query", return_value="source logs"),
     ):
         result = tool.run(query="source logs", coralogix_api_key="cx_key")
     assert result["available"] is False

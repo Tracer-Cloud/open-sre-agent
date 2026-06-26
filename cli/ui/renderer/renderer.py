@@ -9,13 +9,6 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-from cli.interactive_shell.ui.output import (
-    ProgressTracker,
-    _fmt_timing,
-    _repl_progress_active,
-    get_output_format,
-    register_tool_detail_toggle,
-)
 from cli.ui.renderer.constants import (
     _DIAGNOSE_NODE,
     _HIDDEN_PROGRESS_NODES,
@@ -36,6 +29,13 @@ from cli.ui.renderer.tools import (
 )
 from core.domain.stream import StreamEvent
 from infra.deployment.remote.reasoning import reasoning_text
+from interactive_shell.ui.output import (
+    ProgressTracker,
+    _fmt_timing,
+    _repl_progress_active,
+    get_output_format,
+    register_tool_detail_toggle,
+)
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from platform.observability.tool_trace import format_json_preview
@@ -527,7 +527,7 @@ class StreamRenderer:
         return None
 
     def _print_report(self) -> None:
-        from cli.interactive_shell.ui.output import stop_display
+        from interactive_shell.ui.output import stop_display
 
         stop_display()
 

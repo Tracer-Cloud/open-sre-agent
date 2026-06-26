@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from vendors.jira import JiraSearchIssuesTool
+from tools.jira_tools import JiraSearchIssuesTool
 
 
 def _tool() -> JiraSearchIssuesTool:
@@ -34,7 +34,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["project_key"] == "OPS"
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_returns_issues(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.search_issues.return_value = {
@@ -57,7 +57,7 @@ def test_run_returns_issues(mock_make: MagicMock) -> None:
     assert result["issues"][0]["issue_key"] == "OPS-1"
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.search_issues.return_value = {"success": False, "error": "HTTP 400"}
@@ -68,7 +68,7 @@ def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     assert "400" in result["error"]
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_returns_unavailable_without_credentials(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(base_url="", email="", api_token="")

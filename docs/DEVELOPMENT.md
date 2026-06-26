@@ -32,9 +32,9 @@ One-shot (includes heavier `test-full`): `make check`.
 
 Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
-## Routing policy architecture
+## Interactive shell action policy
 
-Routing precedence, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/routing-policy-architecture.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/routing-policy-architecture.md).
+Action-planner behavior, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/interactive-shell-action-policy.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/interactive-shell-action-policy.md).
 
 ## Investigation tool calling
 
@@ -52,9 +52,9 @@ PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR un
 6. Optional: lower `--max-cpu` so a threshold trips; after Telegram sends, the REPL prints one line: `[task …] alarm fired: … (telegram delivered)`.
 
 Automated equivalent (runs in `make test-cov`):  
-`uv run pytest tests/cli/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
+`uv run pytest tests/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
 
-Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/cli/interactive_shell/repl_watchdog_demo.md).
+Longer transcript (optional): [tests/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/interactive_shell/repl_watchdog_demo.md).
 
 ## VS Code dev container
 

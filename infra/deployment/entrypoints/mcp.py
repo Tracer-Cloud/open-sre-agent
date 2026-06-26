@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ValidationError
 
-from cli.interactive_shell.ui.output.boundary import install_product_adapters
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.investigation import run_investigation_cli
+from interactive_shell.ui.output.boundary import install_product_adapters
+from interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.analytics.cli import track_investigation
 from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.observability.sentry_sdk import capture_exception, init_sentry

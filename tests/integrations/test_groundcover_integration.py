@@ -6,9 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from integrations.config_models import GroundcoverIntegrationConfig
+from integrations.groundcover.verifier import verify_groundcover as _verify_groundcover
 from integrations.probes import ProbeResult
 from integrations.verify import resolve_effective_integrations
-from vendors.groundcover.verifier import verify_groundcover as _verify_groundcover
 
 
 def test_config_defaults_and_normalization() -> None:
@@ -98,7 +98,7 @@ def test_env_multi_instance(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_verify_reports_probe_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    from vendors.groundcover.client import GroundcoverClient
+    from integrations.groundcover.client import GroundcoverClient
 
     monkeypatch.setattr(
         GroundcoverClient,
@@ -119,7 +119,7 @@ def test_verify_missing_when_no_token() -> None:
 
 
 def test_verify_never_leaks_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    from vendors.groundcover.client import GroundcoverClient
+    from integrations.groundcover.client import GroundcoverClient
 
     def _raise(_self: GroundcoverClient) -> ProbeResult:
         raise RuntimeError("boom")

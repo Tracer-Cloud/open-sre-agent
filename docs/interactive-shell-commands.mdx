@@ -3,7 +3,7 @@ title: 'Interactive Shell Commands'
 description: 'Complete reference for every slash command in the OpenSRE REPL — session control, investigations, integrations, tasks, watchdogs, and more'
 ---
 
-Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action planner can route intent to the right command.
+Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action planner can select the right command.
 
 Run `/help` anytime for the live command list grouped by category. In a TTY, bare `/help` opens an interactive picker; selecting a command runs it directly.
 
@@ -17,8 +17,8 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 
 | Input type | What happens |
 | --- | --- |
-| Slash command (`/status`) | Parsed and dispatched immediately — fastest path for known actions |
-| Plain language (`verify datadog`) | Routed by the action planner to slash commands, investigations, or doc-grounded answers |
+| Slash command (`/status`) | Planned as an explicit command action and executed by the REPL |
+| Plain language (`verify datadog`) | Mapped by the action planner to slash commands, investigations, or doc-grounded answers |
 | Pasted alert JSON/text | Often starts an investigation without a slash command |
 | Shell one-liner (`kubectl get pods`) | Executed through shell policy when the planner selects a shell action |
 
@@ -126,7 +126,7 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | `/config` | Show or edit `~/.opensre/config.yml` |
 | `/cron` | Manage scheduled delivery jobs |
 | `/messaging` | Telegram pairing and allowlist |
-| `/hermes` | Hermes log tailing and incident routing |
+| `/hermes` | Hermes log tailing and incident escalation |
 | `/guardrails` | Sensitive-information guardrail rules |
 | `/tests` | Browse and run inventoried tests |
 | `/update` | Check for updates and upgrade OpenSRE |
@@ -240,7 +240,7 @@ Example output (measured + estimated mix):
 
 When any estimate is included, the table title notes `(includes estimates)` and rows show measured vs estimated splits.
 
-**What increments the counter:** Normal LLM chat turns. **What does not:** Deterministic slash routing that never calls the API (e.g. some direct command mappings).
+**What increments the counter:** Normal LLM chat turns and planner calls. **What does not:** Non-LLM command handling such as history recall or prompt rendering.
 
 Token totals reset on `/new` or when session identity is rotated. They do **not** carry across `/resume`. See [Session History](/sessions).
 
@@ -624,7 +624,7 @@ List tools available to investigation and chat surfaces in this build (name, sou
 /tools list
 ```
 
-There is no global `/list` command — use domain-specific list commands (see [Natural language routing](#natural-language-routing)).
+There is no global `/list` command — use domain-specific list commands (see [Natural language actions](#natural-language-actions)).
 
 ---
 
@@ -856,7 +856,7 @@ When the alert listener is active:
 | `dropped` | Alerts dropped when queue was full |
 | `recent` | Up to 5 latest alert names/snippets |
 
-If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL can route them into investigations from plain language.
+If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL can start investigations from plain language.
 
 ---
 
@@ -923,7 +923,7 @@ Telegram bot pairing and sender allowlist — required for `/watch` alarms and s
 /hermes watch
 ```
 
-Tail Hermes logs and route classified incidents. See [Hermes](/hermes) and [Hermes runbook](/hermes_runbook).
+Tail Hermes logs and escalate classified incidents. See [Hermes](/hermes) and [Hermes runbook](/hermes_runbook).
 
 ### `/guardrails`
 
@@ -1043,11 +1043,11 @@ Non-TTY: elevated commands **fail closed** (error message, no side effect).
 
 ---
 
-## Natural language routing
+## Natural language actions
 
 You do not need to memorize every slash command. Examples:
 
-| You type | Typical routing |
+| You type | Typical action |
 | --- | --- |
 | "what's my token usage?" | `/cost` |
 | "verify datadog" | `/verify datadog` |
@@ -1163,7 +1163,7 @@ Continue chatting, then optionally:
 
 - [Session History](/sessions) — persistence format, privacy, `/new` vs `/clear`
 - [Interactive Shell Privacy](/interactive-shell-privacy) — redaction, env vars, threat model
-- [Investigation overview](/investigation-overview) — RCA workflow, plain-language routing, CLI investigate
+- [Investigation overview](/investigation-overview) — RCA workflow, plain-language actions, CLI investigate
 - [LLM providers](/llm-providers) — `/model` and `/effort`
 - [Agents](/fleet) — fleet dashboard, bus, trace, budgets
 - [Cron](/cron) — `/cron` scheduled deliveries

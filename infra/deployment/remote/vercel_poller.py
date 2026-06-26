@@ -14,8 +14,8 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
 from infra.deployment.remote.error_reporting import report_remote_exception
+from integrations.vercel.client import VercelClient, VercelConfig, make_vercel_client
 from integrations.verify import resolve_effective_integrations
-from vendors.vercel.client import VercelClient, VercelConfig, make_vercel_client
 
 logger = logging.getLogger(__name__)
 
@@ -138,11 +138,9 @@ def _int_env(name: str, default: int, *, minimum: int) -> int:
 
 
 def _split_repo_full_name(value: str) -> tuple[str, str]:
-    cleaned = value.strip().strip("/")
-    if cleaned.count("/") < 1:
-        return "", ""
-    owner, repo = cleaned.split("/", 1)
-    return owner.strip(), repo.strip().removesuffix(".git")
+    from tools.utils.github_repo_scope import split_repo_full_name
+
+    return split_repo_full_name(value)
 
 
 def _extract_meta_field(meta: dict[str, Any], *keys: str) -> str:
@@ -894,7 +892,7 @@ def collect_vercel_candidates(
 
     When ``include_runtime_logs`` is False, skip per-deployment runtime log HTTP calls.
     Uses ``list_deployments`` plus per-deployment events/runtime logs (parallel fetch when
-    using a real :class:`~services.vercel.client.VercelClient`).
+    using a real :class:`~integrations.vercel.client.VercelClient`).
     """
     config = resolve_vercel_config()
     if config is None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.tracer_client import get_tracer_web_client
+from integrations.tracer import get_tracer_web_client
 from tools.tool_decorator import tool
 from tools.utils.log_compaction import build_error_taxonomy, deduplicate_logs
 

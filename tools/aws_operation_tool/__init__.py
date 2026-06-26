@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.aws_sdk_client import execute_aws_sdk_call
+from integrations.aws.aws_sdk_client import execute_aws_sdk_call
 from tools.tool_decorator import tool
 
 

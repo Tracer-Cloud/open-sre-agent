@@ -3,8 +3,8 @@ from __future__ import annotations
 import click
 import pytest
 
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
-from cli.interactive_shell.utils.error_handling.exception_reporting import (
+from interactive_shell.utils.error_handling.errors import OpenSREError
+from interactive_shell.utils.error_handling.exception_reporting import (
     report_exception,
     should_report_exception,
 )
@@ -30,7 +30,7 @@ def test_report_exception_captures_unexpected_error(monkeypatch: pytest.MonkeyPa
         captured.append((exc, context if isinstance(context, str) else None))
 
     monkeypatch.setattr(
-        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception", _capture
+        "interactive_shell.utils.error_handling.exception_reporting.capture_exception", _capture
     )
     exc = RuntimeError("boom")
 
@@ -41,7 +41,7 @@ def test_report_exception_captures_unexpected_error(monkeypatch: pytest.MonkeyPa
 def test_report_exception_skips_expected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[BaseException] = []
     monkeypatch.setattr(
-        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 

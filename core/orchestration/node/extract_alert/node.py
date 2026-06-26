@@ -16,6 +16,7 @@ from core.domain.alerts.extraction import (
 )
 from core.domain.state import InvestigationState
 from core.domain.types.incident_window import resolve_incident_window
+from core.runtime.llm.llm_client import get_llm_for_reasoning
 from platform.observability import (
     debug_print,
     render_investigation_header,
@@ -23,7 +24,6 @@ from platform.observability import (
 from platform.observability import (
     get_progress_tracker as get_tracker,
 )
-from services import get_llm_for_reasoning
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@ debug output, and check the runtime output format.
 
 Core agent/pipeline/utils code depends only on these ports. Concrete
 implementations live in adapter packages (e.g. the Rich-backed REPL
-tracker under ``cli/interactive_shell/ui/output/``). The boundary
+tracker under ``interactive_shell/ui/output/``). The boundary
 (typically the CLI entry point) registers the adapter via the
 ``set_progress_tracker`` / ``set_debug_printer`` injection helpers.
 

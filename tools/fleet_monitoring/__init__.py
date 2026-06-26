@@ -4,7 +4,7 @@ Backend support package for the ``monitor-local-agents`` initiative.
 The per-PID probe, registry, status heuristic, token meters, and
 other collectors live in submodules and feed the ``/fleet``
 slash-command dashboard inside the ``opensre`` interactive shell;
-UI wiring lives in ``cli/interactive_shell/command_registry/``.
+UI wiring lives in ``interactive_shell/command_registry/``.
 
 This file is required for setuptools' default ``find_packages``
 discovery — without it the ``tools.fleet_monitoring.*`` subpackages would be

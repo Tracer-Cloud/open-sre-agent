@@ -169,22 +169,24 @@ class TestRedisToolsAvailability:
     def test_redis_tools_exist_as_modules(self):
         """Redis tools modules exist and are properly structured."""
         try:
-            import tools.redis_client_list_tool as RedisClientListTool
-            import tools.redis_key_scan_tool as RedisKeyScanTool
-            import tools.redis_latency_doctor_tool as RedisLatencyDoctorTool
-            import tools.redis_list_depth_tool as RedisListDepthTool
-            import tools.redis_replication_tool as RedisReplicationTool
-            import tools.redis_server_info_tool as RedisServerInfoTool
-            import tools.redis_slowlog_tool as RedisSlowlogTool
+            import importlib
+
+            redis_client_list_tool = importlib.import_module("tools.redis_client_list_tool")
+            redis_key_scan_tool = importlib.import_module("tools.redis_key_scan_tool")
+            redis_latency_doctor_tool = importlib.import_module("tools.redis_latency_doctor_tool")
+            redis_list_depth_tool = importlib.import_module("tools.redis_list_depth_tool")
+            redis_replication_tool = importlib.import_module("tools.redis_replication_tool")
+            redis_server_info_tool = importlib.import_module("tools.redis_server_info_tool")
+            redis_slowlog_tool = importlib.import_module("tools.redis_slowlog_tool")
 
             # All 7 tool modules should be importable (4 baseline + 3 P1)
-            assert RedisServerInfoTool is not None
-            assert RedisSlowlogTool is not None
-            assert RedisReplicationTool is not None
-            assert RedisKeyScanTool is not None
-            assert RedisClientListTool is not None
-            assert RedisListDepthTool is not None
-            assert RedisLatencyDoctorTool is not None
+            assert redis_server_info_tool is not None
+            assert redis_slowlog_tool is not None
+            assert redis_replication_tool is not None
+            assert redis_key_scan_tool is not None
+            assert redis_client_list_tool is not None
+            assert redis_list_depth_tool is not None
+            assert redis_latency_doctor_tool is not None
         except ImportError as e:
             pytest.fail(f"Failed to import Redis tool modules: {e}")
 

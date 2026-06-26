@@ -5,11 +5,11 @@ from typing import Any, NoReturn
 import pytest
 
 from cli.error_mapping import reraise_cli_runtime_error
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.investigation import run_investigation_cli, stream_investigation_cli
 from core.domain.stream import StreamEvent
 from core.orchestration.entrypoints import resolve_investigation_context
 from integrations.llm_cli.errors import CLIAuthenticationRequired
+from interactive_shell.utils.error_handling.errors import OpenSREError
 
 
 def test_resolve_investigation_context_prefers_cli_overrides() -> None:

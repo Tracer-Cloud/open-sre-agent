@@ -5,8 +5,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from cli.interactive_shell.ui.output import get_output_format
 from cli.ui.renderer.constants import _BOLD, _CYAN, _DIM, _RESET
+from interactive_shell.ui.output import get_output_format
 from platform.terminal.theme import BRAND
 
 

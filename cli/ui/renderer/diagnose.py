@@ -12,14 +12,6 @@ from rich.markdown import Markdown
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cli.interactive_shell.ui.output import (
-    ProgressTracker,
-    _repl_progress_active,
-    get_output_format,
-    set_live_console,
-    stop_display,
-    unregister_live_console,
-)
 from cli.ui.renderer.constants import (
     _BOLD,
     _DIAGNOSE_LIVE_REFRESH,
@@ -34,6 +26,14 @@ from cli.ui.renderer.constants import (
     _render_source,
 )
 from core.domain.stream import StreamEvent
+from interactive_shell.ui.output import (
+    ProgressTracker,
+    _repl_progress_active,
+    get_output_format,
+    set_live_console,
+    stop_display,
+    unregister_live_console,
+)
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 

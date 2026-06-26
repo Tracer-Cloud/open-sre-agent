@@ -4,10 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from integrations.config_models import SnowflakeIntegrationConfig
+from integrations.datadog.client import DatadogConfig
 from integrations.github_mcp import (
     _remote_github_mcp_session_url,
     build_github_mcp_config,
 )
+from integrations.grafana.config import GrafanaAccountConfig
 from integrations.models import (
     AWSIntegrationConfig,
     BetterStackIntegrationConfig,
@@ -18,8 +20,6 @@ from integrations.models import (
 )
 from integrations.sentry import build_sentry_config
 from integrations.snowflake import classify as classify_snowflake
-from vendors.datadog.client import DatadogConfig
-from vendors.grafana.config import GrafanaAccountConfig
 
 
 def test_betterstack_config_rejects_unknown_fields_with_suggestion() -> None:

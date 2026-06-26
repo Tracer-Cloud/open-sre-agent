@@ -32,7 +32,7 @@ import logging
 import re
 from typing import Any
 
-from services.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from core.runtime.llm.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.predictor.snapping import _snap_fault_object, _snap_root_cause
 from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _FAULT_OBJECT_NAMESPACES,

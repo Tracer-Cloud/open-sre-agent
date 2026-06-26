@@ -30,7 +30,7 @@ def _check_llm_settings() -> None:
     """Validate LLM settings early and surface misconfiguration as a structured error."""
     from pydantic import ValidationError
 
-    from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+    from interactive_shell.utils.error_handling.errors import OpenSREError
 
     try:
         resolve_llm_settings()
@@ -51,7 +51,7 @@ def _check_llm_settings() -> None:
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     """Map investigation runtime failures to structured CLI errors."""
     if isinstance(exc, _InvestigationPumpCancelled):
-        from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+        from interactive_shell.utils.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "Investigation streaming stopped before completion.",
@@ -198,8 +198,8 @@ def run_investigation_cli_streaming(
         events.close()
         raise
 
-    from cli.interactive_shell.ui.feedback import prompt_investigation_feedback
-    from cli.interactive_shell.ui.key_reader import restore_stdin_terminal
+    from interactive_shell.ui.components.key_reader import restore_stdin_terminal
+    from interactive_shell.ui.feedback import prompt_investigation_feedback
 
     restore_stdin_terminal()
     prompt_investigation_feedback(final_state)
@@ -305,7 +305,7 @@ def _run_session_alert_payload(
                 )
         return dict(rendered_state)
 
-    from cli.interactive_shell.ui.output import reset_tracker, set_silent_tracker
+    from interactive_shell.ui.output import reset_tracker, set_silent_tracker
 
     set_silent_tracker()
     renderer = StreamRenderer(local=True, display=False)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from cli.__main__ import cli
 from cli.commands import _COMMANDS
-from cli.interactive_shell.ui.layout import _commands_from_group
+from interactive_shell.ui.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:

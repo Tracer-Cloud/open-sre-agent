@@ -9,9 +9,8 @@ on:
       - "core/**"
       - "infra/deployment/**"
       - "integrations/**"
+      - "interactive_shell/**"
       - "platform/**"
-      - "services/**"
-      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -32,9 +31,8 @@ on:
       - "core/**"
       - "infra/deployment/**"
       - "integrations/**"
+      - "interactive_shell/**"
       - "platform/**"
-      - "services/**"
-      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -52,7 +50,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform services tools vendors"
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations interactive_shell platform tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -109,20 +107,21 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            shard: tools-services
+            shard: tools-runtime
             pytest_paths: >-
               tests/tools
-              tests/services
+              tests/core/runtime/llm
+              tests/platform/observability
               tests/utils
               tests/masking
               tests/core/domain/types
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime
-            # Live planner/routing contracts (tests/cli/.../test_llm_action_planner.py)
-            # are validated on openai, matching routing-live.yml. The
+            # Live planner/action contracts (tests/cli/.../test_llm_action_planner.py)
+            # are validated on openai, matching interactive-shell-live.yml. The
             # default anthropic tool-call model (haiku) cannot reliably perform
-            # compound action routing, so pin this shard to openai.
+            # compound action planning, so pin this shard to openai.
             llm_provider: openai
             pytest_paths: >-
               tests/cli
@@ -241,8 +240,8 @@ jobs:
           --cov=core
           --cov=infra.deployment
           --cov=integrations
+          --cov=interactive_shell
           --cov=platform
-          --cov=services
           --cov=tools
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
@@ -373,8 +372,6 @@ jobs:
               - "infra/deployment/**"
               - "integrations/**"
               - "core/orchestration/**"
-              - "services/**"
-              - "vendors/**"
               - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"

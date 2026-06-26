@@ -6,7 +6,7 @@ They live in ``platform/common`` so non-CLI packages (e.g. ``tools.watch_dog``)
 can depend on the task contract without importing the CLI package.
 
 The persistent registry that stores and rehydrates these records lives in
-``cli.interactive_shell.runtime.tasks`` (a CLI-runtime concern).
+``interactive_shell.runtime.tasks`` (a CLI-runtime concern).
 """
 
 from __future__ import annotations

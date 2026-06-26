@@ -258,7 +258,7 @@ def test_adapter_skips_handoff_for_structured_predictor_variant() -> None:
             "tests.benchmarks.cloudopsbench.adapter.performance_context_for_case_dir",
             return_value=("", None),
         ),
-        patch("services.agent_llm_client.get_agent_llm"),
+        patch("core.runtime.llm.agent_llm_client.get_agent_llm"),
         patch(
             "tests.benchmarks.cloudopsbench.predictor.llm_call_structured_openai.emit_paper_predictions_structured",
             return_value={"top_3_predictions": [dict(p) for p in raw_predictions]},

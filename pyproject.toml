@@ -142,11 +142,10 @@ include = [
   "core*",
   "infra*",
   "integrations*",
+  "interactive_shell*",
   "platform*",
-  "services*",
   "tests*",
   "tools*",
-  "vendors*",
 ]
 
 [tool.setuptools.package-data]
@@ -158,7 +157,15 @@ include = [
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["cli", "core", "infra/deployment", "integrations", "platform", "services", "tools"]
+paths = [
+  "cli",
+  "core",
+  "infra/deployment",
+  "integrations",
+  "interactive_shell",
+  "platform",
+  "tools",
+]
 exclude = [
   "tools/simple_tools.py",          # explicitly skipped by the registry
 ]

@@ -2,7 +2,7 @@
 
 Verifier callables are sourced from the central plugin registry
 (``integrations.verification``). Importing this module triggers
-:func:`register_all_verifiers`, which pulls in every vendor's
+:func:`register_all_verifiers`, which pulls in every integration-local
 ``@register_verifier`` decorator so the registry is fully populated
 before any caller looks anything up.
 """
@@ -16,8 +16,8 @@ from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
 from integrations.registry import CORE_VERIFY_SERVICES, SUPPORTED_VERIFY_SERVICES
+from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.verification import VerifierFn, get_verifier, result
-from integrations.verifiers.slack import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 
 register_all_verifiers()
 

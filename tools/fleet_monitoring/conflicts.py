@@ -1,7 +1,7 @@
 """File-write conflict detection for ``/fleet conflicts``.
 
 Pure detection logic over write events. Presentation lives in
-``cli.interactive_shell.command_registry.agents.conflicts_view`` so this
+``interactive_shell.command_registry.agents.conflicts_view`` so this
 module stays independent of the interactive shell.
 """
 

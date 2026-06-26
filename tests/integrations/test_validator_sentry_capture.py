@@ -344,13 +344,24 @@ def _kwarg_str(call: ast.Call, key: str) -> str | None:
     return None
 
 
+def _source_path(module_path: str) -> Path:
+    path = _REPO_ROOT / module_path
+    if path.exists():
+        return path
+    if module_path.startswith("integrations/") and module_path.endswith(".py"):
+        package_path = _REPO_ROOT / module_path.removesuffix(".py") / "__init__.py"
+        if package_path.exists():
+            return package_path
+    return path
+
+
 @pytest.mark.parametrize(
     "case",
     CASES,
     ids=lambda c: f"{Path(c.module_path).stem}::{c.function}",
 )
 def test_broad_except_calls_report_validation_failure(case: MigrationCase) -> None:
-    source = (_REPO_ROOT / case.module_path).read_text(encoding="utf-8")
+    source = _source_path(case.module_path).read_text(encoding="utf-8")
     tree = ast.parse(source)
     fn = _find_function(tree, case.function)
     assert fn is not None, f"function {case.function} not found in {case.module_path}"
@@ -383,7 +394,7 @@ def test_every_migrated_module_imports_the_helper() -> None:
     """Sanity guard: every file we touched should import report_validation_failure."""
     seen_modules = {case.module_path for case in CASES}
     for module_path in seen_modules:
-        source = (_REPO_ROOT / module_path).read_text(encoding="utf-8")
+        source = _source_path(module_path).read_text(encoding="utf-8")
         # Accept both a standalone import line and a combined import that also
         # brings in other helpers (e.g. report_classify_failure).
         imported = (

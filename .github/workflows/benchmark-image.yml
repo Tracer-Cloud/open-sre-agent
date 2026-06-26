@@ -49,8 +49,6 @@ on:
       - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
-      - "services/**"
-      - "vendors/**"
       - "tools/**"
       - "tests/benchmarks/**"
       - ".github/workflows/benchmark-image.yml"

@@ -4,7 +4,7 @@ Use this checklist whenever you add or materially change:
 
 - a tool under `tools/`
 - an integration under `integrations/`
-- a service client under `services/` that changes investigation behavior
+- an integration-local client or verifier under `integrations/<name>/`
 - investigation source wiring for an existing tool/integration
 
 This file is the detailed definition of done for tool and integration work. Use it together with [AGENTS.md](AGENTS.md) and [CI.md](CI.md).
@@ -15,10 +15,14 @@ This file is the detailed definition of done for tool and integration work. Use 
 
 - `tools/<ToolName>/__init__.py` or `tools/<tool_file>.py`
 - `tools/utils/` for shared helpers
-- `services/<vendor>/client.py` if transport/parsing should live in a reusable client
+- `integrations/<name>/client.py` if transport/parsing should live in the integration implementation
 - `docs/<tool_name>.mdx`
 - `docs/docs.json`
 - `tests/tools/test_<tool_name>.py`
+
+`tools/` is the canonical agent-callable boundary. Do not add `@tool(...)`
+functions, `BaseTool` classes, or registry-discovered modules under
+`integrations/`; tools should call integration-local clients and helpers.
 
 ### Contract and implementation
 
@@ -29,7 +33,7 @@ This file is the detailed definition of done for tool and integration work. Use 
 - [ ] `extract_params` maps resolved integration state into tool args correctly
 - [ ] Failure responses have a stable, investigation-friendly shape
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
-- [ ] Reusable transport/parsing logic lives in `services/` or `tools/utils/` rather than being copied into the tool body
+- [ ] Reusable transport or integration-specific parsing logic lives in `integrations/<name>/` or `tools/utils/` rather than being copied into the tool body
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
 - [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
 
@@ -56,22 +60,27 @@ Common failure modes to consider:
 
 ### Files usually involved
 
-- `integrations/<name>.py`
+- `integrations/<name>/__init__.py`
+- `integrations/<name>/client.py`
+- `integrations/<name>/verifier.py`
 - `integrations/catalog.py`
 - `integrations/verify.py`
-- `services/<name>/client.py`
 - `tools/<Name>Tool/` or `tools/<tool_file>.py`
 - `docs/<name>.mdx`
 - `docs/docs.json`
 - `tests/integrations/test_<name>.py`
 - related `tests/tools/`, `tests/e2e/`, or `tests/synthetic/` coverage
 
+`integrations/` owns user configuration, resolution, clients, verifiers, and
+integration-local helpers. `tools/` owns agent-callable behavior. Do not add or
+import top-level `vendors/` or `services/` packages.
+
 ### Core completeness
 
-- [ ] Integration config, normalization, and validators are in place under `integrations/<name>.py`
+- [ ] Integration config, normalization, and validators are in place under `integrations/<name>/__init__.py`
 - [ ] Catalog resolution / env loading is wired correctly
 - [ ] Verification path is wired in `integrations/verify.py` and adapters/registry as needed
-- [ ] Service client is added under `services/<name>/client.py` (only if the integration needs direct remote calls)
+- [ ] Integration-local client is added under `integrations/<name>/client.py` (only if the integration needs direct remote calls)
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
 - [ ] `opensre onboard` parity is added or intentionally documented as out of scope
@@ -114,6 +123,7 @@ For tools that list, search, or inspect resources:
 - [ ] Unit tests for config/normalization
 - [ ] Tool contract tests or equivalent schema/metadata coverage
 - [ ] Runtime registry/discovery test proves the tool is visible on the expected surface(s)
+- [ ] New tool code lives under `tools/`; new integration API client code lives under `integrations/<name>/`
 - [ ] Runtime behavior tests for success and failure paths
 - [ ] At least one realistic fixture for live payload parsing if external payloads are involved
 - [ ] If investigation-relevant, at least one test proves the planner/agent can discover or invoke the tool through the normal runtime path

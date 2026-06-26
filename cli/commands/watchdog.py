@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 from pydantic import ValidationError
 
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+from interactive_shell.utils.error_handling.errors import OpenSREError
 from tools.watch_dog.config import WatchdogConfig
 from tools.watch_dog.runner import run_watchdog
 

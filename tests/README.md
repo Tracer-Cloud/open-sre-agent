@@ -18,7 +18,7 @@ This document defines semantic naming for the test catalog so test type and envi
 - `tests/synthetic/`: synthetic RCA simulations with scored fixtures and deterministic scenario assets.
 - `tests/e2e/`: real end-to-end scenarios that execute against real services and infrastructure.
 - `tests/deployment/`: deployment validation and infrastructure deployment tests.
-- `tests/<domain>/`: unit and integration tests for product modules (for example `cli/`, `tools/`, `integrations/`, `services/`).
+- `tests/<domain>/`: unit and integration tests for product modules (for example `cli/`, `tools/`, `integrations/`, `core/`, `platform/`).
 
 ## E2E naming rules
 

@@ -84,10 +84,10 @@ def version_command() -> None:
 )
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
-    from cli.interactive_shell.ui.health_view import render_health_json, render_health_report
     from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
+    from interactive_shell.ui.health import render_health_json, render_health_report
 
     def _run_once() -> int:
         results = verify_integrations()
@@ -206,7 +206,7 @@ def investigate_command(
         )
         return
     if slack_thread:
-        from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+        from interactive_shell.utils.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "--slack-thread requires --service.",
@@ -274,9 +274,9 @@ def _run_service_investigation(
     import os
 
     from cli.args import write_json
-    from cli.interactive_shell.utils.error_handling.errors import OpenSREError
     from cli.investigation import run_investigation_cli
     from infra.deployment.remote.runtime_alert import build_runtime_alert_payload
+    from interactive_shell.utils.error_handling.errors import OpenSREError
 
     conflicting = [
         flag

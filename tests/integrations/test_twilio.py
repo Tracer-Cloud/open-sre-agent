@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from integrations.config_models import TwilioIntegrationConfig, TwilioSMSChannelConfig
-from integrations.verifiers.twilio import verify_twilio as _verify_twilio
+from integrations.twilio.verifier import verify_twilio as _verify_twilio
 
 
 class _FakeResponse:
@@ -97,7 +97,7 @@ def test_verify_missing_auth_token() -> None:
 
 def test_verify_passed_when_sms_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "integrations.verifiers.twilio.requests.get",
+        "integrations.twilio.verifier.requests.get",
         lambda *_a, **_kw: _FakeResponse({"friendly_name": "Demo"}),
     )
 
@@ -116,7 +116,7 @@ def test_verify_passed_when_sms_ready(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_verify_passed_with_messaging_service_sid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "integrations.verifiers.twilio.requests.get",
+        "integrations.twilio.verifier.requests.get",
         lambda *_a, **_kw: _FakeResponse({"friendly_name": "Demo"}),
     )
 
@@ -134,7 +134,7 @@ def test_verify_passed_with_messaging_service_sid(monkeypatch: pytest.MonkeyPatc
 
 def test_verify_failed_when_sms_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "integrations.verifiers.twilio.requests.get",
+        "integrations.twilio.verifier.requests.get",
         lambda *_a, **_kw: _FakeResponse({"friendly_name": "Demo"}),
     )
 
@@ -155,7 +155,7 @@ def test_verify_failed_when_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*_a: Any, **_kw: Any) -> Any:
         raise Exception("Connection timeout")
 
-    monkeypatch.setattr("integrations.verifiers.twilio.requests.get", _raise)
+    monkeypatch.setattr("integrations.twilio.verifier.requests.get", _raise)
 
     result = _verify_twilio("env", {"account_sid": "AC1", "auth_token": "tok"})
 

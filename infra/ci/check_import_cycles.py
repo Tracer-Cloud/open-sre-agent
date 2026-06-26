@@ -79,7 +79,6 @@ _SKIP_ROOT_DIRS = frozenset(
         ".ruff_cache",
         ".venv",
         "__pycache__",
-        "app",
         "docs",
         "infra",
         "opensre.egg-info",

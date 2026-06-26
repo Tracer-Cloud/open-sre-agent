@@ -10,10 +10,10 @@ from rich.console import Console
 
 import cli.wizard.env_sync as env_sync
 import cli.wizard.store as wizard_store
-from cli.interactive_shell.command_registry import dispatch_slash
-from cli.interactive_shell.command_registry import repl_data as repl_data_module
-from cli.interactive_shell.runtime.session import ReplSession
 from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
+from interactive_shell.command_registry import dispatch_slash
+from interactive_shell.command_registry import repl_data as repl_data_module
+from interactive_shell.runtime.core.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -123,7 +123,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -146,7 +146,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -176,7 +176,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -202,7 +202,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -230,7 +230,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")

@@ -20,9 +20,9 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | `core/`               | Investigation orchestration, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
-| `cli/`                | Command-line interface, onboarding wizard, and the interactive terminal (REPL) loop.               |
-| `integrations/`       | Integration config normalization, verification, store, catalog logic, and the Hermes log pipeline. |
-| `services/`           | Reusable API clients and adapters for integrations and tools (including LLM providers).            |
+| `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
+| `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
+| `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, and the Hermes log pipeline. |
 | `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
@@ -45,21 +45,22 @@ Main packages one level deeper:
 
 - `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
-- `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
+- `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
+- `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `infra/deployment/` — Single top-level home for deployment-facing code, split by concern:
     - `infra/deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
     - `infra/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
     - `infra/deployment/remote/` — Remote-hosted runtime operations and integration points.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
-- `integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
+- `integrations/` — Integration config normalization, verification, selectors, clients, integration-local helpers, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
 - `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
 - `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
+- `core/runtime/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
 - `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
-- `services/` — Reusable clients and adapters for integrations/tools. LLM APIs: `services/AGENTS.md`.
 - `core/domain/state/` — Shared agent runtime envelope (`AgentState`), chat slice, state factories, investigation pipeline slice contracts, `EvidenceEntry`, and diagnosis rules.
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
@@ -77,7 +78,7 @@ Files to touch:
 
 - `tools/<ToolName>/__init__.py` for the tool implementation, or `tools/<tool_file>.py` for a lighter-weight function tool.
 - `tools/utils/` if the tool needs shared helper code.
-- `services/<vendor>/client.py` if the tool should reuse a dedicated API client instead of inlining requests.
+- `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/tools/test_<tool_name>.py` for behavior and regression coverage.
@@ -86,7 +87,7 @@ Steps:
 
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Keep the tool self-contained. Put reusable transport or parsing code in `services/` or `tools/utils/` rather than copying it into the tool body.
+3. Keep the tool self-contained. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body.
 4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
 6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
@@ -118,30 +119,33 @@ Steps:
 
 ### Adding an Integration
 
-Integration work usually spans config normalization, verification, service clients, tools, docs, and tests.
+Integration work usually spans config normalization, verification, integration-local clients/helpers, tools, docs, and tests.
 
 Files to touch:
 
-- `integrations/<name>.py` for config builders, validators, selectors, and normalization helpers.
+- `integrations/<name>/__init__.py` for config builders, validators, selectors, and normalization helpers.
+- `integrations/<name>/client.py` when the integration needs a dedicated API client.
+- `integrations/<name>/verifier.py` when the integration needs local verification logic.
 - `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
 - `integrations/verify.py` when the integration needs a local verification path.
-- `services/<name>/client.py` when the integration needs a dedicated API client.
 - `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
 - `tests/tools/test_<tool_name>.py` and any relevant `tests/e2e/` or `tests/synthetic/` files if the integration is exercised by tools or scenarios.
 
+Treat `integrations/` as the canonical user/config and external-client boundary, and `tools/` as the canonical agent-callable boundary. Do not add or import top-level `vendors/` or `services/` packages.
+
 Examples from the repo:
 
-- Datadog: `services/datadog/client.py`, `integrations/catalog.py`, `integrations/verify.py`, `tools/DataDog*`, and `tests/integrations/test_verify.py`.
-- Grafana: `integrations/catalog.py`, `integrations/verify.py`, `tools/Grafana*`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
+- Datadog: `integrations/datadog/client.py`, `integrations/datadog/verifier.py`, `integrations/catalog.py`, `tools/datadog_tools/`, and Datadog-related tests under `tests/integrations/` and `tests/tools/`.
+- Grafana: `integrations/grafana/`, `integrations/catalog.py`, `tools/grafana_tools/`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
 - Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
 1. Add the integration config and normalization logic first so the rest of the stack can consume a consistent shape.
-2. Add or update the service client only when the integration needs direct remote calls.
+2. Add or update the integration-local client only when the integration needs direct remote calls.
 3. Wire the tool layer after the config path is stable.
 4. Add docs and tests together so the integration is understandable and verifiable.
 5. Run `make verify-integrations` before treating the integration as complete.
@@ -166,11 +170,11 @@ Basic steps:
 
 ## 4. Testing
 
-Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
+Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
 
 ## 5. Footguns (common mistakes to avoid)
 
-- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `cli/interactive_shell/harness/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`cli/interactive_shell/harness/handle_message_with_agent/orchestration/execution_policy.py`), not the planner.
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `interactive_shell/harness/AGENTS.md` and `docs/interactive-shell-action-policy.md`. If mutating actions are ever added, gate them at the execution stage (`interactive_shell/harness/orchestration/execution_policy.py`), not the planner.
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
@@ -178,6 +182,7 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 - Docker requirement: Several targets, including the Grafana local stack and Chaos Mesh workflows, require a running Docker daemon.
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
+- External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
 - Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
   location. Update callers to the canonical module and delete the old path.
 

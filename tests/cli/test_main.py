@@ -82,7 +82,7 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -163,7 +163,7 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -184,7 +184,7 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -533,7 +533,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     def _fail_if_called(**_kw: object) -> int:
         raise AssertionError("run_repl must not run when config.enabled=False")
 
-    with patch("cli.interactive_shell.run_repl", side_effect=_fail_if_called):
+    with patch("interactive_shell.run_repl", side_effect=_fail_if_called):
         exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
@@ -570,8 +570,8 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     )
 
     with (
-        patch("cli.interactive_shell.run_repl", return_value=0),
-        patch("cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
+        patch("interactive_shell.run_repl", return_value=0),
+        patch("interactive_shell.runtime.entrypoint.run_repl", return_value=0),
     ):
         exit_code = main([])
 
@@ -618,8 +618,8 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
     monkeypatch.setattr("config.repl_config.ReplConfig.load", spy_load)
 
     with (
-        patch("cli.interactive_shell.run_repl", return_value=0),
-        patch("cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
+        patch("interactive_shell.run_repl", return_value=0),
+        patch("interactive_shell.runtime.entrypoint.run_repl", return_value=0),
     ):
         exit_code = main(["--theme", "BLUE"])
 

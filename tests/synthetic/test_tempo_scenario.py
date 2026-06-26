@@ -13,7 +13,7 @@ import pytest
 pytestmark = pytest.mark.synthetic
 
 from core.domain.alerts.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
-from vendors.tempo import query_tempo
+from tools.tempo_tools import query_tempo
 
 
 class _FixtureTempoBackend:

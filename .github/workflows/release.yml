@@ -28,7 +28,7 @@ on:
           - release
           - main
       tag:
-        description: "Optional tag to release (e.g. v2026.4.5 or v0.1). Ignored for the main channel."
+        description: "Optional tag to release (e.g. v0.1.2026.6.26 or v0.1). Ignored for the main channel."
         required: false
         type: string
 
@@ -91,7 +91,9 @@ jobs:
             year="$(date -u +%Y)"
             month="$(date -u +%-m)"
             day="$(date -u +%-d)"
-            tag_name="v${year}.${month}.${day}"
+            # Keep the v0.1 prefix so the tag makes clear the product is still
+            # v0.1, while the date stays useful (e.g. v0.1.2026.6.26).
+            tag_name="v0.1.${year}.${month}.${day}"
           fi
 
           echo "channel=release" >> "$GITHUB_OUTPUT"
@@ -377,7 +379,7 @@ jobs:
           target_sha="$(git rev-parse "origin/$default_branch")"
 
           previous_tag="$(
-            git tag --list 'v[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*' --sort=-v:refname \
+            git tag --list 'v0.1.[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*' --sort=-v:refname \
               | grep -v -x "$TAG_NAME" \
               | head -n 1 \
               || true
@@ -477,23 +479,17 @@ jobs:
           fi
 
           VERSION="${TAG_NAME#v}"
-          latest_flag="--latest=false"
-          release_title="Latest"
-          case "$TAG_NAME" in
-            v[0-9][0-9][0-9][0-9].*) ;;
-            *)
-              latest_flag="--latest"
-              release_title="OpenSRE ${VERSION}"
-              ;;
-          esac
 
+          # Every release-channel publish is the newest stable build at this
+          # point, so mark it as GitHub's Latest. The title keeps the full
+          # version (e.g. "OpenSRE 0.1.2026.6.26") so the v0.1 line is clear.
           gh release create "$TAG_NAME" \
             release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$TARGET_SHA" \
-            --title "$release_title" \
+            --title "OpenSRE ${VERSION}" \
             --notes-file RELEASE_NOTES.md \
-            "$latest_flag"
+            --latest
 
           echo "created=true" >> "$GITHUB_OUTPUT"
 

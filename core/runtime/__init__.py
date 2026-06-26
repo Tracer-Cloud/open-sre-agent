@@ -7,7 +7,7 @@ budget enforcement.
 Consumers:
 
 * :mod:`core.orchestration.node.investigate` — investigation agent loop
-* :mod:`cli.interactive_shell.chat.tool_gathering` — REPL evidence gathering
+* :mod:`interactive_shell.chat.tool_gathering` — REPL evidence gathering
 """
 
 from __future__ import annotations

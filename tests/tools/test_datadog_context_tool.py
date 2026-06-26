@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.datadog import fetch_datadog_context
+from tools.datadog_tools import fetch_datadog_context
 
 
 class TestDataDogContextToolContract(BaseToolContract):
@@ -54,7 +54,7 @@ def test_run_happy_path() -> None:
 
     mock_client.fetch_all = fake_fetch_all
 
-    with patch("vendors.datadog.make_async_client", return_value=mock_client):
+    with patch("tools.datadog_tools.make_async_client", return_value=mock_client):
         result = fetch_datadog_context(query="service:test", api_key="key", app_key="akey")
     assert result["available"] is True
     assert len(result["logs"]) == 1
@@ -76,7 +76,7 @@ def test_run_partial_failure() -> None:
 
     mock_client.fetch_all = fake_fetch_all
 
-    with patch("vendors.datadog.make_async_client", return_value=mock_client):
+    with patch("tools.datadog_tools.make_async_client", return_value=mock_client):
         result = fetch_datadog_context(query="service:test", api_key="key", app_key="akey")
     assert result["available"] is True
     assert result["logs"] == []
@@ -103,7 +103,7 @@ def test_run_extracts_failed_pods() -> None:
 
     mock_client.fetch_all = fake_fetch_all
 
-    with patch("vendors.datadog.make_async_client", return_value=mock_client):
+    with patch("tools.datadog_tools.make_async_client", return_value=mock_client):
         result = fetch_datadog_context(query="test", api_key="key", app_key="akey")
     assert result["available"] is True
     assert any(p["pod_name"] == "my-pod" for p in result["failed_pods"])

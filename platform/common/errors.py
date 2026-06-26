@@ -5,7 +5,7 @@ link, following the `clig.dev <https://clig.dev/>`_ / flyctl convention. Lives
 in ``platform/common`` so any layer (CLI, tools, integrations, infra) can raise
 and catch the same error contract without importing the CLI package.
 
-Rendering is a CLI concern: ``cli.interactive_shell.utils.error_handling.errors``
+Rendering is a CLI concern: ``interactive_shell.utils.error_handling.errors``
 defines a ``click.ClickException`` subclass so CLI-raised errors render through
 Click's existing path, and ``cli.__main__`` renders base errors raised by
 non-CLI code. Catch this base type to handle both.

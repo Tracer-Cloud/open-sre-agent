@@ -121,11 +121,11 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `cli/interactive_shell/ui/output` |
-| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `cli/interactive_shell/ui/output` |
+| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `interactive_shell/ui/output` |
+| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `interactive_shell/ui/output` |
 | `TRACER_API_URL` | | API URL for tracer reports | `utils/slack_delivery` |
-| `NO_COLOR` | | Disable colored output (standard convention) | `cli/interactive_shell/ui/output` |
-| `COLUMNS` | `80` | Terminal column width for output formatting | `cli/interactive_shell/ui/output` |
+| `NO_COLOR` | | Disable colored output (standard convention) | `interactive_shell/ui/output` |
+| `COLUMNS` | `80` | Terminal column width for output formatting | `interactive_shell/ui/output` |
 | `ENV` | `development` | Environment (`development`, `production`) | `config` |
 
 ## Credentials & Authentication
@@ -220,7 +220,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 ### Messaging
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `cli/interactive_shell/ui/output`, `utils/slack_delivery` |
+| `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `interactive_shell/ui/output`, `utils/slack_delivery` |
 | `SLACK_BOT_TOKEN` | | Slack bot token | `scheduler/credentials`, `.env.example` |
 | `SLACK_ACCESS_TOKEN` | | Slack user token | `scheduler/credentials` |
 | `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github_issue_comments` |

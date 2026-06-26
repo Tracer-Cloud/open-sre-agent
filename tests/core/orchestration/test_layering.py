@@ -1,7 +1,7 @@
 """Layering boundary tests for the orchestration pipeline runtime.
 
 The pipeline orchestrator coordinates stages; it must not import from
-vendor service modules. Vendor wiring lives behind the
+transport-layer modules. Integration-specific wiring lives behind the
 ``core.orchestration.node.publish_findings.upstream_correlation`` factory (and
 similar factories for future correlation sources).
 
@@ -26,17 +26,11 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
     Path("core/orchestration/state_updates.py"),
     Path("core/orchestration/stream_payloads.py"),
 )
-# Block *all* vendor service modules, not just Datadog. The whole pattern
-# is that orchestration entrypoints route vendor wiring through a stage-owned
-# factory, so reaching directly into ``services.<anything>`` is a
-# layering violation regardless of vendor.
-# This guards against future Grafana/AWS/etc. imports without manual edits.
-#
 # ``infra.deployment.remote`` is a transport-layer package (HTTP client, SSE parser). The
 # orchestration core must not depend on it — domain types it shares with
 # the remote runner live in ``core.domain`` (see ``StreamEvent``).
 # ``cli`` is the presentation layer; same rule.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("services", "infra.deployment.remote", "cli")
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("infra.deployment.remote", "cli")
 
 
 def _orchestration_pipeline_modules() -> list[Path]:
@@ -63,7 +57,7 @@ def _imported_modules(source: str) -> set[str]:
 def test_orchestration_pipeline_module_does_not_import_forbidden_layer(
     module_path: Path,
 ) -> None:
-    """Every orchestration pipeline runtime module must avoid forbidden vendor imports."""
+    """Every orchestration pipeline runtime module must avoid forbidden imports."""
     source = module_path.read_text(encoding="utf-8")
     imports = _imported_modules(source)
     leaks = {
@@ -72,7 +66,7 @@ def test_orchestration_pipeline_module_does_not_import_forbidden_layer(
         if any(imp == prefix or imp.startswith(f"{prefix}.") for prefix in _FORBIDDEN_PREFIXES)
     }
     assert not leaks, (
-        f"{module_path} imports vendor service module(s) {sorted(leaks)} — route through "
+        f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through "
         "an abstraction (e.g. "
         "``core.orchestration.node.publish_findings.upstream_correlation."
         "build_upstream_evidence_provider``) instead."

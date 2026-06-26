@@ -30,14 +30,13 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 # - ``cli`` — closed by #35 (observability ports). Core never
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
-# - ``services.tracer_client`` — closed by #36
-#   (``integrations.port`` ``fetch_remote_integrations``). Other
-#   ``services.*`` modules (LLM client, chat SDK adapter,
-#   ``agent_llm_client``) stay allowed because they are core
-#   capability access, not vendor-coupled like ``tracer_client``.
+# - ``integrations.tracer`` — closed by #36
+#   (``integrations.port`` ``fetch_remote_integrations``). Hosted LLM
+#   provider code lives in ``core.runtime.llm`` and remains core runtime
+#   capability access rather than integration-coupled transport.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "cli",
-    "services.tracer_client",
+    "integrations.tracer",
 )
 
 

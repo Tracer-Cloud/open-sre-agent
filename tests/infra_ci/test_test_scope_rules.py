@@ -33,6 +33,13 @@ def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
     assert targets == ["tests/hermes/"]
 
 
+def test_interactive_shell_routes_to_its_own_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["interactive_shell/runtime/session.py"])
+    assert not escalate
+    assert targets == ["tests/interactive_shell/"]
+
+
 def test_three_areas_escalates() -> None:
     rules = _rules_module()
     changed = [

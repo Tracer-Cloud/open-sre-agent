@@ -244,8 +244,8 @@ def test_reset_opensre_singletons_clears_both_module_caches(
     # Import the real modules and replace the two reset functions with
     # call-tracking stubs. This works regardless of which order
     # _reset_opensre_singletons invokes them.
-    import services.agent_llm_client as agent_llm_mod
-    import services.llm_client as llm_mod
+    import core.runtime.llm.agent_llm_client as agent_llm_mod
+    import core.runtime.llm.llm_client as llm_mod
 
     monkeypatch.setattr(
         llm_mod, "reset_llm_singletons", lambda: call_log.append("reset_llm_singletons")
@@ -257,7 +257,7 @@ def test_reset_opensre_singletons_clears_both_module_caches(
     LLMDispatcher._reset_opensre_singletons()  # type: ignore[attr-defined]
 
     assert "reset_llm_singletons" in call_log, (
-        "llm_client._client singleton was NOT cleared — opensre.services.llm_client "
+        "llm_client._client singleton was NOT cleared — opensre.core.runtime.llm.llm_client "
         "would keep returning the previously-activated provider's client"
     )
     assert "reset_agent_client" in call_log, (

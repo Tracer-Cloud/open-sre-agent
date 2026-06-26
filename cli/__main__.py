@@ -22,12 +22,12 @@ import click  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from cli.commands import register_commands  # noqa: E402
-from cli.interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
-from cli.interactive_shell.utils.error_handling.exception_reporting import (  # noqa: E402
+from config.version import get_version  # noqa: E402
+from interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
+from interactive_shell.utils.error_handling.exception_reporting import (  # noqa: E402
     report_exception,
     should_report_exception,
 )
-from config.version import get_version  # noqa: E402
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
 from platform.analytics.provider import (  # noqa: E402
     Properties,
@@ -191,7 +191,7 @@ def cli(
 
     if ctx.invoked_subcommand is None:
         if sys.stdin.isatty() and sys.stdout.isatty():
-            from cli.interactive_shell import run_repl
+            from interactive_shell import run_repl
 
             config = ReplConfig.load(
                 cli_enabled=interactive,
@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     # (ProgressTracker, debug_print) so any core code under core/domain,
     # core/orchestration, utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
-    from cli.interactive_shell.ui.output.boundary import (
+    from interactive_shell.ui.output.boundary import (
         install_product_adapters,
     )
 

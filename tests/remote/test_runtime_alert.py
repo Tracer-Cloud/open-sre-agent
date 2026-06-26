@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from infra.deployment.operations.health import HealthPollStatus
 from infra.deployment.remote.ops import RemoteOpsError, ServiceStatus
 from infra.deployment.remote.runtime_alert import build_runtime_alert_payload
+from interactive_shell.utils.error_handling.errors import OpenSREError
 
 
 def _status(**overrides: object) -> ServiceStatus:

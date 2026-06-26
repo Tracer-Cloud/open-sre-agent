@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from cli.commands.remote_health import _save_remote_base_url, run_remote_health_check
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+from interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.common.runtime_flags import (
     is_interactive_env,
     is_json_output,

@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from integrations.alertmanager.client import make_alertmanager_client
 from integrations.betterstack import build_betterstack_config, validate_betterstack_config
 from integrations.config_models import PagerDutyIntegrationConfig
+from integrations.coralogix.client import CoralogixClient
 from integrations.dagster import build_dagster_config, validate_dagster_config
+from integrations.datadog.client import DatadogClient, DatadogConfig
+from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from integrations.gitlab import build_gitlab_config, validate_gitlab_config
+from integrations.grafana.client import get_grafana_client_from_credentials
+from integrations.honeycomb.client import HoneycombClient
+from integrations.incident_io.client import IncidentIoClient
 from integrations.jenkins import build_jenkins_config, validate_jenkins_config
 from integrations.models import (
     AWSIntegrationConfig,
@@ -17,19 +24,12 @@ from integrations.models import (
     HoneycombIntegrationConfig,
     IncidentIoIntegrationConfig,
 )
+from integrations.opsgenie.client import OpsGenieClient, OpsGenieConfig
+from integrations.pagerduty.client import PagerDutyClient
 from integrations.sentry import build_sentry_config, validate_sentry_config
+from integrations.splunk.client import SplunkClient, SplunkConfig
 from integrations.tempo import build_tempo_config, validate_tempo_config
-from vendors.alertmanager.client import make_alertmanager_client
-from vendors.coralogix.client import CoralogixClient
-from vendors.datadog.client import DatadogClient, DatadogConfig
-from vendors.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
-from vendors.grafana.client import get_grafana_client_from_credentials
-from vendors.honeycomb.client import HoneycombClient
-from vendors.incident_io.client import IncidentIoClient
-from vendors.opsgenie.client import OpsGenieClient, OpsGenieConfig
-from vendors.pagerduty.client import PagerDutyClient
-from vendors.splunk.client import SplunkClient, SplunkConfig
-from vendors.vercel.client import VercelClient, VercelConfig
+from integrations.vercel.client import VercelClient, VercelConfig
 
 from .shared import IntegrationHealthResult
 
@@ -172,7 +172,7 @@ def validate_google_docs_integration(
     folder_id: str,
 ) -> IntegrationHealthResult:
     """Validate Google Docs credentials and folder access."""
-    from vendors.google_docs.client import GoogleDocsClient
+    from integrations.google_docs.client import GoogleDocsClient
 
     try:
         config = GoogleDocsIntegrationConfig.model_validate(

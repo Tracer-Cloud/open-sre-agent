@@ -157,7 +157,7 @@ def test_validate_github_mcp_config_custom_url_without_token_still_probes(
 def test_verify_github_reports_credential_less_as_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from integrations.verifiers.github import verify_github as _verify_github
+    from integrations.github.verifier import verify_github as _verify_github
 
     def _must_not_connect(_config: Any) -> list[dict[str, Any]]:
         raise AssertionError("network must not be probed for credential-less config")

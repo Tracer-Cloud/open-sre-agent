@@ -12,9 +12,9 @@ from typing import Any
 
 import pytest
 
+from integrations.elasticsearch.client import ElasticsearchConfig
 from tests.tools.conftest import BaseToolContract
 from tools.opensearch_analytics_tool import query_opensearch_analytics
-from vendors.elasticsearch.client import ElasticsearchConfig
 
 # ---------------------------------------------------------------------------
 # Test helpers — keep ElasticsearchClient stubbing consistent

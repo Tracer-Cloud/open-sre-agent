@@ -196,7 +196,7 @@ def test_investigate_maps_runtime_failure_to_service_unavailable(
         raise expected_error
 
     def fake_reraise(_exc: BaseException) -> None:
-        from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+        from interactive_shell.utils.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "LLM invocation failed.",

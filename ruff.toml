@@ -41,27 +41,27 @@ ignore = [
 # Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
 # F401 is enforced so unused imports surface in lint (and CI) like in app/.
 "tests/**/*.py" = ["ARG001", "E402"]
-# Harness tests are colocated under cli/ but are still tests: fake callables
-# match real signatures and leave some keyword params unused, exactly like the
-# tests/ tree above.
-"cli/interactive_shell/harness/tests/**/*.py" = ["ARG001", "E402"]
+# Harness tests are colocated with the source package but are still tests: fake
+# callables match real signatures and leave some keyword params unused, exactly
+# like the tests/ tree above.
+"interactive_shell/harness/tests/**/*.py" = ["ARG001", "E402"]
 
 # CLI entry points
 "cli/__main__.py" = ["ARG001"]
 
 # stderr/stdout buffers outlive the function — closed in a watcher thread's `finally`,
 # so a `with` block at the call site would close them before the subprocess runs.
-"cli/interactive_shell/harness/orchestration/action_executor/synthetic_tasks.py" = ["SIM115"]
-"cli/interactive_shell/harness/orchestration/action_executor/background_tasks.py" = ["SIM115"]
+"interactive_shell/harness/orchestration/action_executor/synthetic_tasks.py" = ["SIM115"]
+"interactive_shell/harness/orchestration/action_executor/background_tasks.py" = ["SIM115"]
 
 # self._fd is opened in __init__ and must remain open for the lifetime of the
 # background reader thread (_reader_loop). A with-block would close the fd when
 # __init__ exits — before the thread reads anything. The fd is closed in close().
 "tools/fleet_monitoring/tail.py" = ["SIM115"]
 
-# vendors/<vendor>/__init__.py files are concatenations of multiple tool modules.
+# tools/<vendor>_tools/__init__.py files are concatenations of multiple tool modules.
 # Imports appear in each section rather than all at the top (E402).
-"vendors/**/__init__.py" = ["E402", "F811"]
+"tools/*_tools/__init__.py" = ["E402", "F811"]
 
 [lint.isort]
 known-first-party = [
@@ -70,10 +70,8 @@ known-first-party = [
     "core",
     "infra",
     "integrations",
+    "interactive_shell",
     "platform",
-    "services",
     "tests",
     "tools",
-    "vendors",
 ]
-

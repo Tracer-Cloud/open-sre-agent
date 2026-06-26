@@ -7,7 +7,7 @@ Tagging conventions (pass via ``tags``):
   surface   — cli | interactive_shell | service_client | tool | node |
                pipeline | integration | remote_server | analytics | auth |
                webapp | mcp | sandbox | deployment | masking
-  component — module-level identifier, e.g. ``services.grafana.tempo``
+  component — module-level identifier, e.g. ``integrations.grafana.tempo``
   integration — vendor when applicable: grafana | splunk | vercel | …
 """
 

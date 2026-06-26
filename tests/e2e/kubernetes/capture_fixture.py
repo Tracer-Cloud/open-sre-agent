@@ -73,7 +73,7 @@ def _extract_k8s_tags(logs: list[dict]) -> dict[str, str]:
 
 
 def capture(time_range_minutes: int = 60) -> dict:
-    from vendors.datadog.client import DatadogClient, DatadogConfig
+    from integrations.datadog.client import DatadogClient, DatadogConfig
 
     api_key = os.environ.get("DD_API_KEY", "")
     app_key = os.environ.get("DD_APP_KEY", "")

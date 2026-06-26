@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from integrations.config_models import WhatsAppConfig
-from integrations.verifiers.whatsapp import verify_whatsapp as _verify_whatsapp
+from integrations.whatsapp.verifier import verify_whatsapp as _verify_whatsapp
 
 
 class _FakeResponse:
@@ -80,7 +80,7 @@ def test_verify_whatsapp_success(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get(*args: Any, **kwargs: Any) -> Any:
         return _FakeResponse({"friendly_name": "Demo Account", "sid": "AC123"})
 
-    monkeypatch.setattr("integrations.verifiers.whatsapp.requests.get", _fake_get)
+    monkeypatch.setattr("integrations.whatsapp.verifier.requests.get", _fake_get)
 
     result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 
@@ -92,7 +92,7 @@ def test_verify_whatsapp_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get(*args: Any, **kwargs: Any) -> Any:
         raise Exception("Connection timeout")
 
-    monkeypatch.setattr("integrations.verifiers.whatsapp.requests.get", _fake_get)
+    monkeypatch.setattr("integrations.whatsapp.verifier.requests.get", _fake_get)
 
     result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 
@@ -104,7 +104,7 @@ def test_verify_whatsapp_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_get(*args: Any, **kwargs: Any) -> Any:
         return _FakeResponse({}, status_code=401)
 
-    monkeypatch.setattr("integrations.verifiers.whatsapp.requests.get", _fake_get)
+    monkeypatch.setattr("integrations.whatsapp.verifier.requests.get", _fake_get)
 
     result = _verify_whatsapp("env", {"account_sid": "AC123", "auth_token": "tok"})
 

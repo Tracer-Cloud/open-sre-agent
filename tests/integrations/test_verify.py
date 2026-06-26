@@ -5,22 +5,22 @@ from typing import Any
 
 import pytest
 
-from integrations.verifiers.aws import verify_aws as _verify_aws
-from integrations.verifiers.github import verify_github as _verify_github
-from integrations.verifiers.grafana import verify_grafana as _verify_grafana
-from integrations.verifiers.sentry import verify_sentry as _verify_sentry
-from integrations.verifiers.snowflake import verify_snowflake as _verify_snowflake
-from integrations.verifiers.telegram import verify_telegram as _verify_telegram
-from integrations.verifiers.tracer import verify_tracer as _verify_tracer
+from integrations.aws.verifier import verify_aws as _verify_aws
+from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
+from integrations.datadog.verifier import verify_datadog as _verify_datadog
+from integrations.github.verifier import verify_github as _verify_github
+from integrations.grafana.verifier import verify_grafana as _verify_grafana
+from integrations.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
+from integrations.sentry.verifier import verify_sentry as _verify_sentry
+from integrations.snowflake.verifier import verify_snowflake as _verify_snowflake
+from integrations.telegram.verifier import verify_telegram as _verify_telegram
+from integrations.tracer.verifier import verify_tracer as _verify_tracer
+from integrations.vercel.verifier import verify_vercel as _verify_vercel
 from integrations.verify import (
     resolve_effective_integrations,
     verification_exit_code,
     verify_integrations,
 )
-from vendors.coralogix.verifier import verify_coralogix as _verify_coralogix
-from vendors.datadog.verifier import verify_datadog as _verify_datadog
-from vendors.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
-from vendors.vercel.verifier import verify_vercel as _verify_vercel
 
 
 class _FakeResponse:
@@ -163,7 +163,7 @@ def test_verify_telegram_passes_with_get_me(monkeypatch: pytest.MonkeyPatch) -> 
         return _FakeResponse({"ok": True, "result": {"username": "opensre_bot"}})
 
     monkeypatch.setattr(
-        "integrations.verifiers.telegram.requests.get",
+        "integrations.telegram.verifier.requests.get",
         _fake_requests_get,
     )
     result = _verify_telegram(
@@ -182,7 +182,7 @@ def test_verify_telegram_missing_token() -> None:
 
 def test_verify_telegram_api_not_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "integrations.verifiers.telegram.requests.get",
+        "integrations.telegram.verifier.requests.get",
         lambda *_a, **_kw: _FakeResponse({"ok": False, "description": "Unauthorized"}),
     )
     result = _verify_telegram("local store", {"bot_token": "bad"})
@@ -230,7 +230,7 @@ def test_verify_slack_send_test_posts_to_webhook(monkeypatch: pytest.MonkeyPatch
         posted.append((url, json))
         return _FakeResponse()
 
-    monkeypatch.setattr("integrations.verifiers.slack.httpx.post", _fake_post)
+    monkeypatch.setattr("integrations.slack.verifier.httpx.post", _fake_post)
 
     results = verify_integrations("slack", send_slack_test=True)
 
@@ -278,7 +278,7 @@ def test_verify_slack_send_test_false_does_not_post(monkeypatch: pytest.MonkeyPa
     def _fail_post(*_args: Any, **_kwargs: Any) -> None:
         raise AssertionError("httpx.post must not be called when send_slack_test=False")
 
-    monkeypatch.setattr("integrations.verifiers.slack.httpx.post", _fail_post)
+    monkeypatch.setattr("integrations.slack.verifier.httpx.post", _fail_post)
 
     results = verify_integrations("slack")  # default: send_slack_test=False
 
@@ -330,7 +330,7 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "integrations.verifiers.grafana.requests.get",
+        "integrations.grafana.verifier.requests.get",
         _fake_requests_get,
     )
 
@@ -345,8 +345,8 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
 
 
 def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.datadog.client import DatadogClient
     from integrations.probes import ProbeResult
-    from vendors.datadog.client import DatadogClient
 
     monkeypatch.setattr(
         DatadogClient,
@@ -394,8 +394,8 @@ def test_verify_snowflake_requires_token() -> None:
 
 
 def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.honeycomb.client import HoneycombClient
     from integrations.probes import ProbeResult
-    from vendors.honeycomb.client import HoneycombClient
 
     monkeypatch.setattr(
         HoneycombClient,
@@ -415,8 +415,8 @@ def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_verify_coralogix_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.coralogix.client import CoralogixClient
     from integrations.probes import ProbeResult
-    from vendors.coralogix.client import CoralogixClient
 
     monkeypatch.setattr(
         CoralogixClient,
@@ -464,7 +464,7 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
             return _AssumedSTSClient()
         return _BaseSTSClient()
 
-    monkeypatch.setattr("integrations.verifiers.aws.boto3.client", _fake_boto3_client)
+    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
 
     result = _verify_aws(
         "local store",
@@ -491,11 +491,11 @@ def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> N
             return [{"id": "int-1"}, {"id": "int-2"}]
 
     monkeypatch.setattr(
-        "integrations.verifiers.tracer.extract_org_id_from_jwt",
+        "integrations.tracer.verifier.extract_org_id_from_jwt",
         lambda _token: "org_123",
     )
     monkeypatch.setattr(
-        "integrations.verifiers.tracer.TracerClient",
+        "integrations.tracer.verifier.TracerClient",
         _FakeTracerClient,
     )
 
@@ -640,7 +640,7 @@ def test_verification_exit_code_requires_core_success() -> None:
 
 def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from vendors.vercel.client import VercelClient
+    from integrations.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,
@@ -658,7 +658,7 @@ def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) 
 
 def test_verify_vercel_fails_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from vendors.vercel.client import VercelClient
+    from integrations.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,
@@ -679,7 +679,7 @@ def test_verify_vercel_missing_token() -> None:
 
 def test_verify_integrations_dispatches_to_vercel(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from vendors.vercel.client import VercelClient
+    from integrations.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,

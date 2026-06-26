@@ -7,7 +7,6 @@ from typing import Any
 
 import click
 
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
@@ -17,6 +16,7 @@ from core.domain.types.upstream import (
 from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
     build_runtime_correlation,
 )
+from interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.analytics.cli import (
     capture_test_run_completed,
     capture_test_run_failed,

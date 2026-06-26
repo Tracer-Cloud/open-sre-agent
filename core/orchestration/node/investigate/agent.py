@@ -36,11 +36,11 @@ from core.runtime import (
     summarise,
     tool_source,
 )
+from core.runtime.llm.agent_llm_client import ToolCall, get_agent_llm
 from core.runtime.llm_invoke_errors import classify_llm_invoke_failure
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tool_trace import redact_sensitive
-from services.agent_llm_client import ToolCall, get_agent_llm
 from tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)
@@ -349,7 +349,7 @@ def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
     Callers that need a fixed class (e.g. bench harness, integration tests) should
     pass an explicit ``agent_class`` to the pipeline rather than calling this.
     """
-    from services.agent_llm_client import CLIBackedAgentClient
+    from core.runtime.llm.agent_llm_client import CLIBackedAgentClient
 
     if isinstance(get_agent_llm(), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent

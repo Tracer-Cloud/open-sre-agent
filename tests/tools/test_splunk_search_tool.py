@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.splunk import SplunkSearchTool
+from tools.splunk_tools import SplunkSearchTool
 
 
 class TestSplunkSearchToolContract(BaseToolContract):
@@ -108,7 +108,7 @@ def test_run_returns_unavailable_on_client_error() -> None:
     tool = SplunkSearchTool()
     mock_client = MagicMock()
     mock_client.search_logs.return_value = {"success": False, "error": "Connection refused"}
-    with patch("vendors.splunk.make_client", return_value=mock_client):
+    with patch("tools.splunk_tools.make_client", return_value=mock_client):
         result = tool.run(
             query="index=main | head 50",
             base_url="https://splunk:8089",
@@ -142,7 +142,7 @@ def test_run_happy_path_separates_error_logs() -> None:
         ],
         "total": 3,
     }
-    with patch("vendors.splunk.make_client", return_value=mock_client):
+    with patch("tools.splunk_tools.make_client", return_value=mock_client):
         result = tool.run(
             query='index=main "NullPointerException" | head 50',
             base_url="https://splunk:8089",
@@ -168,7 +168,7 @@ def test_run_happy_path_no_error_logs_when_clean() -> None:
         ],
         "total": 2,
     }
-    with patch("vendors.splunk.make_client", return_value=mock_client):
+    with patch("tools.splunk_tools.make_client", return_value=mock_client):
         result = tool.run(
             query="index=main | head 50",
             base_url="https://splunk:8089",
@@ -190,7 +190,7 @@ def test_run_includes_truncation_note_when_results_exceed_limit() -> None:
         "logs": many_logs,
         "total": 100,
     }
-    with patch("vendors.splunk.make_client", return_value=mock_client):
+    with patch("tools.splunk_tools.make_client", return_value=mock_client):
         result = tool.run(
             query="index=main | head 100",
             base_url="https://splunk:8089",
@@ -211,7 +211,7 @@ def test_run_passes_verify_ssl_to_client() -> None:
         m.search_logs.return_value = {"success": True, "logs": [], "total": 0}
         return m
 
-    with patch("vendors.splunk.make_client", side_effect=fake_make_client):
+    with patch("tools.splunk_tools.make_client", side_effect=fake_make_client):
         tool.run(
             query="index=main | head 50",
             base_url="https://splunk:8089",
@@ -232,7 +232,7 @@ def test_run_passes_ca_bundle_to_client() -> None:
         m.search_logs.return_value = {"success": True, "logs": [], "total": 0}
         return m
 
-    with patch("vendors.splunk.make_client", side_effect=fake_make_client):
+    with patch("tools.splunk_tools.make_client", side_effect=fake_make_client):
         tool.run(
             query="index=main | head 50",
             base_url="https://splunk:8089",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.honeycomb import HoneycombTracesTool
+from tools.honeycomb_tools import HoneycombTracesTool
 
 
 class TestHoneycombTracesToolContract(BaseToolContract):
@@ -41,7 +41,7 @@ def test_run_returns_unavailable_when_not_configured() -> None:
     tool = HoneycombTracesTool()
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("vendors.honeycomb.HoneycombClient", return_value=mock_client):
+    with patch("tools.honeycomb_tools.HoneycombClient", return_value=mock_client):
         result = tool.run(dataset="__all__", honeycomb_api_key="")
     assert result["available"] is False
 
@@ -56,7 +56,7 @@ def test_run_happy_path() -> None:
         "query_url": "https://ui.honeycomb.io/...",
         "query_result_id": "qr1",
     }
-    with patch("vendors.honeycomb.HoneycombClient", return_value=mock_client):
+    with patch("tools.honeycomb_tools.HoneycombClient", return_value=mock_client):
         result = tool.run(
             dataset="__all__",
             service_name="my-service",
@@ -71,7 +71,7 @@ def test_run_api_error() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_traces.return_value = {"success": False, "error": "Unauthorized"}
-    with patch("vendors.honeycomb.HoneycombClient", return_value=mock_client):
+    with patch("tools.honeycomb_tools.HoneycombClient", return_value=mock_client):
         result = tool.run(dataset="__all__", honeycomb_api_key="hc_key")
     assert result["available"] is False
     assert "Unauthorized" in result["error"]

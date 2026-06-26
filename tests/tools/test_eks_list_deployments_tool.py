@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.eks import list_eks_deployments
+from tools.eks_tools import list_eks_deployments
 
 
 class TestEKSListDeploymentsToolContract(BaseToolContract):
@@ -46,7 +46,7 @@ def test_run_happy_path() -> None:
         items=[_make_deployment("dep-1"), _make_deployment("dep-2")]
     )
     with patch(
-        "vendors.eks.build_k8s_clients",
+        "tools.eks_tools.build_k8s_clients",
         return_value=(MagicMock(), mock_apps_v1),
     ):
         result = list_eks_deployments(
@@ -63,7 +63,7 @@ def test_run_detects_degraded() -> None:
         items=[_make_deployment("dep-1", desired=3, ready=2, unavailable=1)]
     )
     with patch(
-        "vendors.eks.build_k8s_clients",
+        "tools.eks_tools.build_k8s_clients",
         return_value=(MagicMock(), mock_apps_v1),
     ):
         result = list_eks_deployments(
@@ -76,7 +76,7 @@ def test_run_all_namespaces() -> None:
     mock_apps_v1 = MagicMock()
     mock_apps_v1.list_deployment_for_all_namespaces.return_value = MagicMock(items=[])
     with patch(
-        "vendors.eks.build_k8s_clients",
+        "tools.eks_tools.build_k8s_clients",
         return_value=(MagicMock(), mock_apps_v1),
     ):
         result = list_eks_deployments(
@@ -87,7 +87,7 @@ def test_run_all_namespaces() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("vendors.eks.build_k8s_clients", side_effect=Exception("forbidden")):
+    with patch("tools.eks_tools.build_k8s_clients", side_effect=Exception("forbidden")):
         result = list_eks_deployments(
             cluster_name="c1", namespace="default", role_arn="arn:aws:iam::123:role/r"
         )
