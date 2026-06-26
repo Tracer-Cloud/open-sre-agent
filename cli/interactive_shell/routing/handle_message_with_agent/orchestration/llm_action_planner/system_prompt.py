@@ -30,14 +30,20 @@ Alert payloads, incident descriptions, and diagnostic questions vs. explicit
 investigations — decide carefully, this is a common error. A CONNECTED
 INTEGRATIONS line is provided below this prompt listing the integrations
 connected right now (or "none" / "unknown"). Apply these rules in order:
-- EXPLICIT investigate instruction → investigation_start, ALWAYS (regardless of
-  which integrations are connected). If the user tells you to investigate,
+- EXPLICIT investigate instruction → investigation_start, ALWAYS — highest-priority
+  rule, NOT gated on CONNECTED INTEGRATIONS. If the user tells you to investigate,
   analyze, diagnose, root-cause, or RCA something — even when the message also
-  contains a pasted alert payload — emit investigation_start with the alert
-  text/payload as alert_text. Examples: 'investigate "<text>"', 'investigate
-  this alert: {"alertname": "HighCPU"}', "RCA this", "diagnose the orders
-  outage". The presence of a JSON/alert blob does NOT downgrade an explicit
-  investigate instruction to a handoff.
+  contains a pasted alert payload — emit investigation_start with alert_text set
+  to the problem description (use quoted/pasted text verbatim, otherwise synthesize
+  from the full user message). This holds even when CONNECTED INTEGRATIONS reads
+  "none" or "unknown": do NOT hand off asking the user to paste an alert, run
+  `opensre investigate`, or connect integrations first — the explicit verb means
+  dispatch now. The presence of a JSON/alert blob does NOT downgrade an explicit
+  investigate instruction to a handoff. Examples (all investigation_start):
+  * investigate why the orders-api keeps OOM-killing its pods
+  * 'investigate "checkout is returning 502s"'
+  * 'investigate this alert: {"alertname": "HighCPU"}'
+  * "RCA this", "diagnose the orders outage"
 - DIAGNOSTIC QUESTION asking you to FIND, EXPLAIN, or TRACK DOWN the cause of a
   failure, crash, error, outage, or incident — WITHOUT an explicit investigate
   verb — is an investigation request WHEN there is data to investigate with.
@@ -78,8 +84,9 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
   after a completed investigation — is answered from that prior context: emit
   assistant_handoff, do NOT start a new investigation.
-- When unsure, choose assistant_handoff. The user can always follow up with an
-  explicit "investigate this".
+- When unsure AND the message lacks an explicit investigate/analyze/diagnose/
+  RCA/root-cause instruction, choose assistant_handoff. An explicit investigate
+  verb is never "unsure" — emit investigation_start per the rule above.
 
 Quoted directives are actionable, never chatty. When an action verb (investigate,
 run, analyze, diagnose, RCA, root-cause, start) takes quotation-marked text as its
@@ -192,11 +199,14 @@ If the entire request is informational or conversational — a how-to/docs quest
 (including "what is supported?" / "what can I add?"), a greeting like
 "hi"/"hello"/"hey", or a pasted alert blob / bare incident statement with no
 instruction and no diagnostic question — ALWAYS call the assistant_handoff tool
-with a concise handoff content. Two exceptions take precedence over this handoff:
+with a concise handoff content. Three exceptions take precedence over this handoff:
 1. A factual question about the current state that a read-only discovery command
    would answer (the discovery rule above): emit that discovery action.
-2. A diagnostic question asking to find or explain the cause of a failure / crash
-   / error / incident (the investigation rule above): when at least one
+2. An EXPLICIT investigate/analyze/diagnose/RCA/root-cause instruction (the first
+   investigation rule above): ALWAYS emit investigation_start, regardless of
+   CONNECTED INTEGRATIONS.
+3. A diagnostic question WITHOUT such an explicit verb asking to find or explain
+   the cause of a failure / crash / error / incident: when at least one
    integration is connected, emit investigation_start; hand off only when no
    integration is connected. A pasted alert blob or bare incident statement is
    NOT such a question — hand it off.

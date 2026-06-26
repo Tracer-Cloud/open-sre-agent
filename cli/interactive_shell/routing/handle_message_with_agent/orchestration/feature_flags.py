@@ -19,7 +19,7 @@ from __future__ import annotations
 #
 # Flip to ``True`` to restore natural-language investigation routing (which also
 # re-enables the investigation routing scenarios that skip while this is False).
-INTERACTIVE_SHELL_INVESTIGATION_ENABLED = False
+INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True
 
 
 def investigation_loop_enabled() -> bool:
