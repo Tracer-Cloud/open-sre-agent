@@ -134,6 +134,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
     assert "synthetic_run" not in names
     assert "shell_run" not in names
     assert "code_implement" not in names
+    assert "code_fix_security_alerts" not in names
     assert "llm_set_provider" not in names
 
 
@@ -142,6 +143,11 @@ def test_llm_set_provider_offered_by_default() -> None:
     still offered the provider-switch tool."""
     names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
     assert "llm_set_provider" in names
+
+
+def test_security_fix_pr_tool_offered_by_default() -> None:
+    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    assert "code_fix_security_alerts" in names
 
 
 def test_registry_dispatch_blocks_unavailable_tool() -> None:

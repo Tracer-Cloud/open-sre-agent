@@ -236,7 +236,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_client_list_tool_path(self, mock_get_client):
-        from tools.redis_client_list_tool import get_redis_client_list
+        import tools.redis_client_list_tool as RedisClientListTool
 
         mock_client = MagicMock()
         mock_client.client_list.return_value = [
@@ -245,7 +245,11 @@ class TestRedisP1ToolPaths:
         ]
         mock_get_client.return_value = mock_client
 
-        result = get_redis_client_list(host="prod-cache.redis.internal", port=6379, db=0)
+        result = RedisClientListTool.get_redis_client_list(
+            host="prod-cache.redis.internal",
+            port=6379,
+            db=0,
+        )
 
         assert result["available"] is True
         assert result["total_clients"] == 2
@@ -254,14 +258,14 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_list_depth_tool_path(self, mock_get_client):
-        from tools.redis_list_depth_tool import get_redis_list_depth
+        import tools.redis_list_depth_tool as RedisListDepthTool
 
         mock_client = MagicMock()
         mock_client.type.return_value = "list"
         mock_client.pipeline.return_value.execute.return_value = [1500, ["job-1"], ["job-1500"]]
         mock_get_client.return_value = mock_client
 
-        result = get_redis_list_depth(
+        result = RedisListDepthTool.get_redis_list_depth(
             key="sidekiq:queue:default",
             host="prod-cache.redis.internal",
             head=1,
@@ -275,7 +279,7 @@ class TestRedisP1ToolPaths:
 
     @patch("integrations.redis._get_client")
     def test_latency_doctor_tool_path(self, mock_get_client):
-        from tools.redis_latency_doctor_tool import get_redis_latency_doctor
+        import tools.redis_latency_doctor_tool as RedisLatencyDoctorTool
 
         mock_client = MagicMock()
         mock_client.execute_command.return_value = "I detected spikes caused by fork."
@@ -286,7 +290,7 @@ class TestRedisP1ToolPaths:
         mock_client.config_get.return_value = {"latency-monitor-threshold": "100"}
         mock_get_client.return_value = mock_client
 
-        result = get_redis_latency_doctor(host="prod-cache.redis.internal")
+        result = RedisLatencyDoctorTool.get_redis_latency_doctor(host="prod-cache.redis.internal")
 
         assert result["available"] is True
         assert result["monitoring_active"] is True

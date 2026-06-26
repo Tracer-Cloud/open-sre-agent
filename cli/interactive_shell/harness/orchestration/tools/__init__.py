@@ -15,6 +15,7 @@ import cli.interactive_shell.harness.orchestration.tools.implementation_tool as 
 import cli.interactive_shell.harness.orchestration.tools.investigation_tool as investigation_tool
 import cli.interactive_shell.harness.orchestration.tools.llm_provider_tool as llm_provider_tool
 import cli.interactive_shell.harness.orchestration.tools.sample_alert_tool as sample_alert_tool
+import cli.interactive_shell.harness.orchestration.tools.security_fix_pr_tool as security_fix_pr_tool
 import cli.interactive_shell.harness.orchestration.tools.shell_tool as shell_tool
 import cli.interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
 import cli.interactive_shell.harness.orchestration.tools.synthetic_tool as synthetic_tool
@@ -41,6 +42,7 @@ __all__ = [
     "investigation_tool",
     "llm_provider_tool",
     "sample_alert_tool",
+    "security_fix_pr_tool",
     "shell_tool",
     "slash_tool",
     "synthetic_tool",

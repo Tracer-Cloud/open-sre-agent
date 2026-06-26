@@ -536,23 +536,27 @@ class _FakeToolClient:
 
 class TestTools:
     def test_availability_requires_verified_connection(self) -> None:
-        from vendors.jenkins import _jenkins_available
+        import vendors.jenkins as jenkins_tool
 
-        assert not _jenkins_available({"jenkins": {}})
-        assert not _jenkins_available({"jenkins": {"connection_verified": False}})
-        assert _jenkins_available({"jenkins": {"connection_verified": True}})
+        assert not jenkins_tool._jenkins_available({"jenkins": {}})
+        assert not jenkins_tool._jenkins_available({"jenkins": {"connection_verified": False}})
+        assert jenkins_tool._jenkins_available({"jenkins": {"connection_verified": True}})
 
     def test_build_tool_extract_params_soft_defaults_job_name(self) -> None:
-        from vendors.jenkins import _list_jenkins_builds_extract_params
+        import vendors.jenkins as jenkins_tool
 
         # job_name absent from sources -> empty default (LLM supplies it as a tool arg)
-        params = _list_jenkins_builds_extract_params({"jenkins": {"connection_verified": True}})
+        params = jenkins_tool._list_jenkins_builds_extract_params(
+            {"jenkins": {"connection_verified": True}}
+        )
         assert params["job_name"] == ""
 
     def test_creds_mapping_from_source_dict(self) -> None:
-        from vendors.jenkins import _jenkins_creds
+        import vendors.jenkins as jenkins_tool
 
-        creds = _jenkins_creds({"base_url": "http://x", "username": "u", "api_token": "t"})
+        creds = jenkins_tool._jenkins_creds(
+            {"base_url": "http://x", "username": "u", "api_token": "t"}
+        )
         assert creds == {"jenkins_url": "http://x", "jenkins_user": "u", "jenkins_token": "t"}
 
     def test_resolve_client_needs_both_url_and_token_explicitly(

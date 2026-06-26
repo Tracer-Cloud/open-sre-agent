@@ -48,6 +48,26 @@ def _get_claude_code_adapter_cls() -> type[Any]:
 
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
+_IMPLEMENTATION_RULES = (
+    "Implement the requested change in this repository.",
+    "Follow AGENTS.md, existing project conventions, and local code style.",
+    "Do not create a git commit or push changes.",
+    "Do not run destructive git commands such as reset --hard or checkout --.",
+    "Preserve unrelated user changes in the working tree.",
+    "Run focused tests or lint checks when practical.",
+    "Finish with a concise summary of changed files and verification performed.",
+)
+_SECURITY_FIX_PR_RULES = (
+    "Inspect the GitHub CodeQL/code-scanning alerts at the provided URL using gh or the GitHub API.",
+    "Fix every open alert that applies to this repository; do not dismiss alerts.",
+    "Create or switch to a focused branch before committing if needed.",
+    "Stage only files changed for the security-alert fix.",
+    "Create a git commit, push the branch, and open a pull request.",
+    "Do not run destructive git commands such as reset --hard or checkout --.",
+    "Preserve unrelated user changes in the working tree.",
+    "Run focused tests or lint checks when practical.",
+    "Finish with the PR URL, changed files, and verification performed.",
+)
 
 
 def _recent_cli_agent_context(session: ReplSession, *, limit: int = 6) -> str:
@@ -68,23 +88,23 @@ def _is_context_dependent_implementation_request(request: str) -> bool:
     }
 
 
-def _build_claude_code_implementation_prompt(request: str, session: ReplSession) -> str:
+def _build_claude_code_implementation_prompt(
+    request: str,
+    session: ReplSession,
+    *,
+    rules: tuple[str, ...] = _IMPLEMENTATION_RULES,
+) -> str:
     context = _recent_cli_agent_context(session)
     context_block = (
         f"--- Recent OpenSRE terminal assistant context ---\n{context}\n\n" if context else ""
     )
+    rules_block = "\n".join(f"- {rule}" for rule in rules)
     return (
         "You are Claude Code working in the current OpenSRE repository.\n\n"
         f"{context_block}"
         f"--- User implementation request ---\n{request.strip()}\n\n"
         "--- Rules ---\n"
-        "- Implement the requested change in this repository.\n"
-        "- Follow AGENTS.md, existing project conventions, and local code style.\n"
-        "- Do not create a git commit or push changes.\n"
-        "- Do not run destructive git commands such as reset --hard or checkout --.\n"
-        "- Preserve unrelated user changes in the working tree.\n"
-        "- Run focused tests or lint checks when practical.\n"
-        "- Finish with a concise summary of changed files and verification performed.\n"
+        f"{rules_block}\n"
     )
 
 
@@ -107,13 +127,15 @@ def run_claude_code_implementation(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     action_already_listed: bool = False,
+    prompt_rules: tuple[str, ...] = _IMPLEMENTATION_RULES,
+    action_summary_label: str = "Claude Code implementation",
 ) -> None:
     policy = evaluate_code_agent_launch()
     if not execution_allowed(
         policy,
         session=session,
         console=console,
-        action_summary=f"Claude Code implementation: {request}",
+        action_summary=f"{action_summary_label}: {request}",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         action_already_listed=action_already_listed,
@@ -140,7 +162,11 @@ def run_claude_code_implementation(
         session.record("implementation", request, ok=False)
         return
 
-    prompt = _build_claude_code_implementation_prompt(request, session)
+    prompt = _build_claude_code_implementation_prompt(
+        request,
+        session,
+        rules=prompt_rules,
+    )
     try:
         invocation = adapter.build(
             prompt=prompt,
@@ -242,4 +268,32 @@ def run_claude_code_implementation(
         f"[{DIM}]Claude Code started — task[/] [bold]{escape(task.task_id)}[/bold]. "
         f"[{HIGHLIGHT}]/tasks[/] [{DIM}]to monitor,[/] "
         f"[{HIGHLIGHT}]/cancel {escape(task.task_id)}[/] [{DIM}]to stop.[/]"
+    )
+
+
+def run_claude_code_security_fix_pr(
+    alerts_url: str,
+    instructions: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    action_already_listed: bool = False,
+) -> None:
+    request = (
+        "Fix all open security/code-scanning alerts for this repository and open a PR.\n"
+        f"Alerts URL: {alerts_url.strip()}"
+    )
+    if instructions.strip():
+        request = f"{request}\nAdditional instructions: {instructions.strip()}"
+    run_claude_code_implementation(
+        request,
+        session,
+        console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        action_already_listed=action_already_listed,
+        prompt_rules=_SECURITY_FIX_PR_RULES,
+        action_summary_label="Claude Code security fix PR",
     )

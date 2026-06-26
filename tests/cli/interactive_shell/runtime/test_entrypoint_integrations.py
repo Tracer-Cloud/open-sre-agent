@@ -223,7 +223,7 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         entrypoint._prompt_surface,
         "_build_prompt_session",
-        lambda: type("P", (), {"history": None})(),
+        type("P", (), {"history": None}),
     )
 
     import asyncio

@@ -27,7 +27,7 @@ from pathlib import Path
 from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 
 from .background_tasks import start_background_cli_task
-from .implementation_runner import run_claude_code_implementation
+from .implementation_runner import run_claude_code_implementation, run_claude_code_security_fix_pr
 from .investigation_runner import run_sample_alert, run_text_investigation
 from .opensre_cli_runner import (
     _INTERACTIVE_OPENSRE_COMMAND_PATHS,
@@ -117,6 +117,7 @@ __all__ = [
     "read_diag",
     "read_task_output",
     "run_claude_code_implementation",
+    "run_claude_code_security_fix_pr",
     "run_cd_command",
     "run_opensre_cli_command",
     "run_opensre_cli_command_result",

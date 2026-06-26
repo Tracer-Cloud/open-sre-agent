@@ -15,6 +15,7 @@ ActionKind = Literal[
     "task_cancel",
     "cli_command",
     "implementation",
+    "security_fix_pr",
     "assistant_handoff",
 ]
 ActionSource = Literal["deterministic", "llm"]
@@ -29,7 +30,7 @@ def default_target_surface(kind: ActionKind) -> TargetSurface | None:
         return "slash"
     if kind in {"shell", "cli_command"}:
         return "terminal"
-    if kind == "implementation":
+    if kind in {"implementation", "security_fix_pr"}:
         return "implementation"
     return "investigation"
 

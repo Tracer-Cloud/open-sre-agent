@@ -1574,7 +1574,6 @@ class TestResumeCommand:
     def test_apply_resume_adopts_target_session_and_restores_context(self, tmp_path: Path) -> None:
         """_apply_resume_data must flush the current session, adopt the target ID,
         reopen its file, and restore cli_agent_messages + accumulated_context."""
-        import json
         from unittest.mock import patch
 
         from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
@@ -1880,8 +1879,6 @@ class TestSaveCommand:
         assert "db timeout" in content
 
     def test_saves_json(self, tmp_path: object) -> None:
-        import json
-
         session = ReplSession()
         session.last_state = {"root_cause": "db timeout"}
         dest = tmp_path / "report.json"  # type: ignore[operator]

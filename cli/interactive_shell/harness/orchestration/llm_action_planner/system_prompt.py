@@ -170,6 +170,8 @@ Other tools:
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind
 - shell_run — narrowly scoped local diagnostic shell commands
+- code_fix_security_alerts — launch a local code agent to fix GitHub
+  code-scanning/security alerts and open a PR
 - code_implement — code implementation workflow
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)

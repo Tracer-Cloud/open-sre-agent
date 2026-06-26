@@ -74,6 +74,7 @@ ACTION_KIND_TO_TOOL: dict[ActionKind, str] = {
     "task_cancel": "task_cancel",
     "cli_command": "cli_exec",
     "implementation": "code_implement",
+    "security_fix_pr": "code_fix_security_alerts",
     "assistant_handoff": "assistant_handoff",
 }
 

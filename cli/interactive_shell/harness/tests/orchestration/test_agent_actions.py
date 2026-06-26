@@ -25,6 +25,7 @@ import cli.interactive_shell.harness.orchestration.action_executor.shell_executi
 import cli.interactive_shell.harness.orchestration.agent_actions as agent_actions
 import cli.interactive_shell.harness.orchestration.tools.implementation_tool as implementation_tool
 import cli.interactive_shell.harness.orchestration.tools.llm_provider_tool as llm_provider_tool
+import cli.interactive_shell.harness.orchestration.tools.security_fix_pr_tool as security_fix_pr_tool
 import cli.interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
 from cli.interactive_shell.harness.orchestration import (
     intent_parser as intent_parser_module,
@@ -96,6 +97,19 @@ _FAKE_PLANS: dict[str, tuple[list[PlannedAction], bool]] = {
     ),
     "please implement /history search": (
         [_action("implementation", "/history search")],
+        False,
+    ),
+    "fix all code scanning security issues and open a pr": (
+        [
+            _action(
+                "security_fix_pr",
+                "https://github.com/Tracer-Cloud/opensre/security/code-scanning",
+                args={
+                    "alerts_url": "https://github.com/Tracer-Cloud/opensre/security/code-scanning",
+                    "instructions": "fix all open alerts and open a PR",
+                },
+            )
+        ],
         False,
     ),
     (
@@ -474,6 +488,54 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
     output = buf.getvalue()
     assert "implementation" in output
     assert "implemented /history search" in output
+
+
+def test_execute_cli_actions_runs_security_fix_pr_action(monkeypatch: object) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def _fake_run_security_fix_pr(
+        alerts_url: str,
+        instructions: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> None:
+        calls.append((alerts_url, instructions))
+        session.record("implementation", alerts_url, ok=True)
+        console.print(f"opened PR for {alerts_url}")
+
+    monkeypatch.setattr(
+        security_fix_pr_tool,
+        "run_claude_code_security_fix_pr",
+        _fake_run_security_fix_pr,
+    )
+
+    session = ReplSession()
+    console, buf = _capture()
+    handled = agent_actions.execute_cli_actions(
+        "fix all code scanning security issues and open a pr", session, console
+    )
+
+    assert handled.handled is True
+    assert calls == [
+        (
+            "https://github.com/Tracer-Cloud/opensre/security/code-scanning",
+            "fix all open alerts and open a PR",
+        )
+    ]
+    assert session.history == [
+        {
+            "type": "cli_agent",
+            "text": "fix all code scanning security issues and open a pr",
+            "ok": True,
+        },
+        {
+            "type": "implementation",
+            "text": "https://github.com/Tracer-Cloud/opensre/security/code-scanning",
+            "ok": True,
+        },
+    ]
+    assert "opened PR" in buf.getvalue()
 
 
 def test_execute_cli_actions_answers_discord_then_dispatches_datadog(

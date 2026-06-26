@@ -21,6 +21,7 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 | Plain language (`verify datadog`) | Routed by the action planner to slash commands, investigations, or doc-grounded answers |
 | Pasted alert JSON/text | Often starts an investigation without a slash command |
 | Shell one-liner (`kubectl get pods`) | Executed through shell policy when the planner selects a shell action |
+| Security remediation request | Can launch a local coding agent to fix GitHub code-scanning alerts and open a pull request **elevated** |
 
 **TTY vs non-TTY:** The full experience (interactive menus, confirmations, onboarding wizards) requires a real terminal. Piping input or running in CI sets non-interactive mode — elevated commands are rejected unless trust mode was enabled in a prior interactive session (prefer explicit CLI commands outside the REPL for automation).
 
@@ -1056,6 +1057,7 @@ You do not need to memorize every slash command. Examples:
 | "run the generic sample alert" | `/investigate generic` |
 | "list my past sessions" | `/sessions` |
 | "check health then list integrations" | `/health` then `/integrations list` |
+| "fix all code scanning security issues and open a PR" | Local coding agent fixes alerts and opens a PR **elevated** |
 | "how do I configure Datadog?" | Doc-grounded answer (no mutating command) |
 
 **List intents** — there is no global `/list`:

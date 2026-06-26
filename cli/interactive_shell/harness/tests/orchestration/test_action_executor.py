@@ -22,6 +22,7 @@ from cli.interactive_shell.harness.orchestration.action_executor import (
     read_task_output,
     run_cd_command,
     run_claude_code_implementation,
+    run_claude_code_security_fix_pr,
     run_opensre_cli_command,
     run_pwd_command,
     run_shell_command,
@@ -302,6 +303,89 @@ def test_run_claude_code_implementation_starts_tracked_task(
     out = buf.getvalue()
     assert "Claude Code started" in out
     assert "Claude Code completed" in out
+
+
+def test_run_claude_code_security_fix_pr_uses_publish_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stdin_seen: list[str | None] = []
+
+    class _FakeAdapter:
+        def detect(self) -> CLIProbe:
+            return CLIProbe(
+                installed=True,
+                version="1.2.3",
+                logged_in=True,
+                bin_path="/usr/local/bin/claude",
+                detail="ok",
+            )
+
+        def build(
+            self,
+            *,
+            prompt: str,
+            model: str | None,
+            workspace: str,
+            reasoning_effort: str | None = None,
+        ) -> CLIInvocation:
+            assert model is None
+            assert workspace
+            assert reasoning_effort is None
+            assert "https://github.com/Tracer-Cloud/opensre/security/code-scanning" in prompt
+            assert "Create a git commit, push the branch, and open a pull request." in prompt
+            assert "Do not create a git commit or push changes." not in prompt
+            return CLIInvocation(
+                argv=("/usr/local/bin/claude", "-p", "--output-format", "text"),
+                stdin=prompt,
+                cwd=workspace,
+                env={},
+                timeout_sec=120.0,
+            )
+
+    class _FakeProcess:
+        returncode = 0
+
+        def communicate(
+            self,
+            input: str | None = None,
+            timeout: int | None = None,
+        ) -> tuple[str, str]:
+            assert timeout is not None
+            stdin_seen.append(input)
+            return "opened https://github.com/Tracer-Cloud/opensre/pull/1\n", ""
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "cli.interactive_shell.harness.orchestration.action_executor.ClaudeCodeAdapter",
+        _FakeAdapter,
+    )
+    monkeypatch.setattr(
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
+        lambda _command, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
+        _ImmediateThread,
+    )
+
+    session = ReplSession()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    run_claude_code_security_fix_pr(
+        "https://github.com/Tracer-Cloud/opensre/security/code-scanning",
+        "open a ready PR",
+        session,
+        console,
+        confirm_fn=lambda _prompt: "y",
+        is_tty=True,
+    )
+
+    assert stdin_seen
+    assert session.history[-1]["type"] == "implementation"
+    assert "Claude Code completed" in buf.getvalue()
 
 
 def test_run_claude_code_implementation_rejects_vague_request_without_context() -> None:

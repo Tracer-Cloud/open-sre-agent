@@ -320,6 +320,10 @@ def patch_execution_boundary(
             content = str(action_data.get("task", "")).strip()
             action["content"] = content
             history_type = "implementation"
+        elif kind == "security_fix_pr":
+            content = str(action_data.get("alerts_url", "")).strip()
+            action["content"] = content
+            history_type = "security_fix_pr"
         else:
             action["content"] = content
             history_type = "cli_agent"

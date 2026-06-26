@@ -54,6 +54,7 @@ VALID_ACTION_KINDS = frozenset(
         "task_cancel",
         "cli_command",
         "implementation",
+        "security_fix_pr",
         "assistant_handoff",
     }
 )

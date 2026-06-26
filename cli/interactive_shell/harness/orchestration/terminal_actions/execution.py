@@ -113,7 +113,15 @@ def execute_cli_actions(
         item
         for item in session.history[history_start:]
         if item.get("type")
-        in {"slash", "shell", "alert", "synthetic_test", "implementation", "cli_command"}
+        in {
+            "slash",
+            "shell",
+            "alert",
+            "synthetic_test",
+            "implementation",
+            "security_fix_pr",
+            "cli_command",
+        }
     ]
     executed_count = len(executed_entries)
     executed_success_count = sum(1 for item in executed_entries if item.get("ok", True))

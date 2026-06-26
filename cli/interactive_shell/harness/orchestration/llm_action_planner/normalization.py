@@ -123,6 +123,13 @@ def _normalize_tool_args(
         task = str(args.get("task", "")).strip()
         return {"task": task} if task else None
 
+    if kind == "security_fix_pr":
+        alerts_url = str(args.get("alerts_url", "")).strip()
+        instructions = str(args.get("instructions", "")).strip()
+        if not alerts_url:
+            return None
+        return {"alerts_url": alerts_url, "instructions": instructions}
+
     if kind == "assistant_handoff":
         content = str(args.get("content", "")).strip()
         return {"content": content} if content else None
@@ -152,6 +159,8 @@ def _content_from_tool_args(kind: str, args: dict[str, Any]) -> str:
         return str(args.get("target", "")).strip()
     if kind == "implementation":
         return str(args.get("task", "")).strip()
+    if kind == "security_fix_pr":
+        return str(args.get("alerts_url", "")).strip()
     if kind == "llm_provider":
         return str(args.get("target", args.get("provider", ""))).strip()
     return str(args.get("content", "")).strip()

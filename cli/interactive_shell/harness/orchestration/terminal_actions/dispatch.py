@@ -47,6 +47,8 @@ def tool_args_for_action(action: PlannedAction) -> dict[str, Any]:
         return {"payload": content}
     if action.kind == "implementation":
         return {"task": content}
+    if action.kind == "security_fix_pr":
+        return {"alerts_url": content, "instructions": ""}
     return {"content": content}
 
 
