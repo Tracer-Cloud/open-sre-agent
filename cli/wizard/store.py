@@ -90,10 +90,8 @@ def update_local_llm_selection(
     local = targets.setdefault("local", {})
     local["provider"] = provider
     local["model"] = model
-    if api_key_env:
-        local["api_key_env"] = api_key_env
-    if model_env:
-        local["model_env"] = model_env
+    local["api_key_env"] = api_key_env
+    local["model_env"] = model_env
     local["updated_at"] = timestamp
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

@@ -84,6 +84,33 @@ def test_update_local_llm_selection_merges_without_resetting_other_fields(tmp_pa
     assert "updated_at" in payload["targets"]["local"]
 
 
+def test_update_local_llm_selection_clears_api_key_env_for_cli_provider(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    save_local_config(
+        wizard_mode="quickstart",
+        provider="anthropic",
+        model="claude-haiku",
+        api_key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_REASONING_MODEL",
+        probes={"local": {"target": "local", "reachable": True, "detail": "ok"}},
+        path=store_path,
+    )
+
+    update_local_llm_selection(
+        provider="claude-code",
+        model="",
+        api_key_env="",
+        model_env="CLAUDE_CODE_MODEL",
+        path=store_path,
+    )
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    local = payload["targets"]["local"]
+    assert local["provider"] == "claude-code"
+    assert local["api_key_env"] == ""
+    assert local["model_env"] == "CLAUDE_CODE_MODEL"
+
+
 def test_remote_ops_config_round_trip(tmp_path) -> None:
     store_path = tmp_path / "opensre.json"
 
