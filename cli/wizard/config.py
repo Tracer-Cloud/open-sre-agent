@@ -22,7 +22,7 @@ from config.config import (
 )
 from integrations.llm_cli.base import LLMCLIAdapter
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ENV_PATH = Path(os.getenv("OPENSRE_PROJECT_ENV_PATH", PROJECT_ROOT / ".env"))
 
 CredentialKind = Literal["api_key", "host", "cli", "none"]
