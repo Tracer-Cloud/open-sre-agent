@@ -93,6 +93,23 @@ def read_key_unix(*, also_cancel: tuple[bytes, ...] = ()) -> str:
                         return "right"
                     if arr == b"D":
                         return "left"
+                    # Not an arrow key — drain the rest of the CSI sequence so
+                    # bytes like "0;1R" from a CPR (ESC[row;colR) don't leak into
+                    # the next read or the prompt buffer as literal characters.
+                    while arr and arr[-1:] not in (
+                        b"R",
+                        b"~",
+                        b"u",
+                        b"H",
+                        b"F",
+                        b"Z",
+                        b"P",
+                        b"Q",
+                        b"S",
+                    ):
+                        if not _sel.select([fd], [], [], 0)[0]:
+                            break
+                        arr = os.read(fd, 1)
             return "cancel"
         return "ignore"
     finally:

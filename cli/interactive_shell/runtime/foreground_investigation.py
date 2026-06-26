@@ -56,16 +56,25 @@ def run_foreground_investigation(
     # blocking RCA-accuracy feedback menu after the report. Pass console=None so
     # the cursor-safe _run_select (per-line erase) is used instead of
     # repl_choose_one, whose block-erase is unstable after Rich Live streaming.
+    #
+    # Safety check: only read stdin when prompt_async is NOT running.
+    # When the investigation was dispatched without exclusive stdin (e.g. an
+    # LLM-agent-routed free-text message), prompt_async is already active and its
+    # Application periodically sends ESC[6n CPR queries. Those terminal responses
+    # (ESC[row;colR) arrive in stdin while read_key_unix is blocking. Even with the
+    # CSI-drain fix in read_key_unix, racing with an active Application is unsafe:
+    # skip the feedback menu and avoid the stdin conflict entirely.
     from cli.interactive_shell.ui.feedback import prompt_investigation_feedback
     from cli.interactive_shell.ui.key_reader import restore_stdin_terminal
 
-    # The explicit pre-call (kept identical to the CLI path) primes the terminal
-    # out of the streaming watcher's no-echo/raw mode *before* the feedback
-    # helper prints its root-cause context and header. prompt_investigation_feedback
-    # restores again in its own finally; this pre-call covers the output it emits
-    # ahead of _run_select's own restore, so it is not redundant with that teardown.
-    restore_stdin_terminal()
-    prompt_investigation_feedback(final_state)
+    pt_app = getattr(session, "pt_style_app", None)
+    pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)
+    if not pt_app_running:
+        # The explicit pre-call (kept identical to the CLI path) primes the terminal
+        # out of the streaming watcher's no-echo/raw mode *before* the feedback
+        # helper prints its root-cause context and header.
+        restore_stdin_terminal()
+        prompt_investigation_feedback(final_state)
     return final_state
 
 
