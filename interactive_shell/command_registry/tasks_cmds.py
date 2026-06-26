@@ -22,7 +22,7 @@ from interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from interactive_shell.ui.time_format import format_repl_timestamp
+from interactive_shell.ui.components.time_format import format_repl_timestamp
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mA-Za-z]")
 _MAX_DETAIL_CHARS = 120

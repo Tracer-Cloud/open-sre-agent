@@ -2,18 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from interactive_shell.ui.banner import (
-    render_banner,
-    render_ready_box,
-)
-from interactive_shell.ui.choice_menu import (
+from interactive_shell.ui.banner import render_banner, render_ready_box
+from interactive_shell.ui.components import (
     print_valid_choice_list,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from interactive_shell.ui.provider import resolve_provider_models
-from interactive_shell.ui.rendering import (
+from interactive_shell.ui.components.rendering import (
     print_repl_json,
     print_repl_table,
     refresh_welcome_poster,
@@ -35,6 +31,7 @@ from interactive_shell.ui.tables import (
     render_models_table,
     render_table,
     render_tools_table,
+    resolve_provider_models,
 )
 from platform.terminal.theme import (
     ANSI_DIM,
@@ -56,12 +53,7 @@ from platform.terminal.theme import (
 )
 
 if TYPE_CHECKING:
-    # ``_build_agents_table`` and ``render_agents_table`` are PEP 562 lazy module
-    # attributes resolved by ``__getattr__`` below (loaded from ``agents_view`` only
-    # on first access so collectors don't pull in Rich). Declaring them here makes
-    # them visible to static analyzers that can't follow ``__getattr__`` (CodeQL
-    # ``py/undefined-export``, ruff F822) without eagerly importing the module.
-    from interactive_shell.ui.agents_view import (
+    from interactive_shell.ui.agents.agents_view import (
         _build_agents_table,
         render_agents_table,
     )
@@ -69,9 +61,9 @@ if TYPE_CHECKING:
 
 def __getattr__(name: str) -> Any:
     if name in {"_build_agents_table", "render_agents_table"}:
-        from interactive_shell.ui import agents_view
+        from interactive_shell.ui import agents
 
-        return getattr(agents_view, name)
+        return getattr(agents, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

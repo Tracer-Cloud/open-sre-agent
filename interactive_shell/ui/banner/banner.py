@@ -42,9 +42,9 @@ from rich.text import Text
 
 from config.repl_config import WHATS_NEW
 from config.version import get_version
-from interactive_shell.ui.banner_art import _render_art
-from interactive_shell.ui.banner_state import _build_ambient_right_column
-from interactive_shell.ui.provider import detect_provider_model
+from interactive_shell.ui.banner.banner_state import _build_ambient_right_column
+from interactive_shell.ui.components.banner_art import _render_art
+from interactive_shell.ui.tables.provider import detect_provider_model
 from platform.terminal.theme import (
     BRAND,
     DIM,

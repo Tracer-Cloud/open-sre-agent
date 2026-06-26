@@ -65,7 +65,7 @@ def run_foreground_investigation(
     # CSI-drain fix in read_key_unix, racing with an active Application is unsafe:
     # skip the feedback menu and avoid the stdin conflict entirely.
     from interactive_shell.ui.feedback import prompt_investigation_feedback
-    from interactive_shell.ui.key_reader import restore_stdin_terminal
+    from interactive_shell.ui.components.key_reader import restore_stdin_terminal
 
     pt_app = getattr(session, "pt_style_app", None)
     pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)

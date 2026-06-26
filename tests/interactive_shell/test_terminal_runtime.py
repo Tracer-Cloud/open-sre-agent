@@ -1020,11 +1020,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "interactive_shell.ui.choice_menu.ensure_tty_column_zero",
+            "interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "interactive_shell.ui.choice_menu.prepare_repl_output_line",
+            "interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1696,7 +1696,7 @@ class TestThemeCommand:
             refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
 
         monkeypatch.setattr(
-            "interactive_shell.ui.rendering.refresh_welcome_poster",
+            "interactive_shell.ui.components.rendering.refresh_welcome_poster",
             _refresh,
         )
 
@@ -1741,7 +1741,7 @@ class TestThemeCommand:
             lambda: drains.append("drain"),
         )
         monkeypatch.setattr(
-            "interactive_shell.ui.rendering.refresh_welcome_poster",
+            "interactive_shell.ui.components.rendering.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
         monkeypatch.setattr("cli.commands.config._load_config", lambda: {})

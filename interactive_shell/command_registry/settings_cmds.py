@@ -24,7 +24,7 @@ from interactive_shell.ui import (
     WARNING,
     resolve_provider_models,
 )
-from interactive_shell.ui.choice_menu import (
+from interactive_shell.ui.components.choice_menu import (
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,

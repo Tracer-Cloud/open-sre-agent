@@ -147,7 +147,7 @@ def print_repl_json(console: Console, json_str: str) -> None:
 
 def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     """Print via Rich after resetting the TTY column (inline-menu safe)."""
-    from interactive_shell.ui.choice_menu import prepare_repl_output_line
+    from interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 
     prepare_repl_output_line()
     _console_print_prepared(console, *objects, **kwargs)

@@ -10,8 +10,8 @@ from rich.markup import escape
 
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
-from interactive_shell.ui.time_format import format_repl_timestamp
+from interactive_shell.ui.components.choice_menu import repl_choose_one, repl_tty_interactive
+from interactive_shell.ui.components.time_format import format_repl_timestamp
 
 
 def _record_resume_slash(

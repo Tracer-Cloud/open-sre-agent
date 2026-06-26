@@ -32,7 +32,7 @@ from interactive_shell.ui.output.tracker import (
     reset_tracker,
     set_silent_tracker,
 )
-from interactive_shell.ui.time_format import _fmt_timing
+from interactive_shell.ui.components.time_format import _fmt_timing
 
 __all__ = [
     # Tracker / progress

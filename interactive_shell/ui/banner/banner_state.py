@@ -2,7 +2,7 @@
 
 Queries integration health and alert-listener config without making
 network calls — results are cached-once per banner render and used by
-:func:`interactive_shell.ui.banner._build_ambient_right_column`.
+:func:`interactive_shell.ui.banner.banner._build_ambient_right_column`.
 """
 
 from __future__ import annotations

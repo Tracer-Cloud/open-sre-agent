@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import platform.terminal.theme as ui_theme
-from interactive_shell.ui.key_reader import read_key_unix, read_key_windows
+from interactive_shell.ui.components.key_reader import read_key_unix, read_key_windows
 
 _HINT = "↑↓/j/k/Tab  Enter/Space  Esc/q"
 CRUMB_SEP = "  ›  "

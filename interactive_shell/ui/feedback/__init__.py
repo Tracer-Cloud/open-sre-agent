@@ -27,7 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from interactive_shell.ui.key_reader import (
+from interactive_shell.ui.components.key_reader import (
     flush_stdin_unix,
     read_key_unix,
     read_key_windows,
@@ -187,7 +187,7 @@ def _root_cause_width(*, console: Console | None) -> int:
     """Best-effort terminal width for root-cause display (matches REPL tables)."""
     import shutil
 
-    from interactive_shell.ui.rendering import _repl_table_width
+    from interactive_shell.ui.components.rendering import _repl_table_width
 
     if console is not None:
         return _repl_table_width(console)
@@ -305,7 +305,7 @@ def _read_note(*, console: Console | None) -> str:
 def _pick_rating(*, console: Console | None) -> str | None:
     """Show the rating prompt; returns key or None on cancel/skip."""
     if console is not None:
-        from interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
+        from interactive_shell.ui.components.choice_menu import repl_choose_one, repl_tty_interactive
 
         if not repl_tty_interactive():
             return None
@@ -323,7 +323,7 @@ def _pick_taxonomy(*, console: Console | None) -> str | None:
     choices = taxonomy_choices()
 
     if console is not None:
-        from interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
+        from interactive_shell.ui.components.choice_menu import repl_choose_one, repl_tty_interactive
 
         if not repl_tty_interactive():
             return None

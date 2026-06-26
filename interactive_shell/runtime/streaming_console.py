@@ -47,11 +47,11 @@ class StreamingConsole(Console):
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Reset the TTY column before each print when not streaming."""
         if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):
-            from interactive_shell.ui.choice_menu import (
+            from interactive_shell.ui.components.choice_menu import (
                 ensure_tty_column_zero,
                 prepare_repl_output_line,
             )
-            from interactive_shell.ui.rendering import (
+            from interactive_shell.ui.components.rendering import (
                 _repl_output_already_prepared,
                 _repl_table_width,
             )

@@ -10,8 +10,8 @@ from rich.markup import escape
 from interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import ERROR
-from interactive_shell.ui.choice_menu import repl_tty_interactive
-from interactive_shell.ui.help_menu import (
+from interactive_shell.ui.components.choice_menu import repl_tty_interactive
+from interactive_shell.ui.help.help_menu import (
     HelpSection,
     choose_help_command,
     render_command_detail,

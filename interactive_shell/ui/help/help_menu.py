@@ -12,13 +12,13 @@ from rich.markup import escape
 from rich.table import Table
 
 from interactive_shell.command_registry.types import SlashCommand
-from interactive_shell.ui.choice_menu import (
+from interactive_shell.ui.components.choice_menu import (
     erase_menu_lines,
     menu_columns,
     read_menu_action,
     write_menu_line,
 )
-from interactive_shell.ui.rendering import print_repl_table, repl_print, repl_table
+from interactive_shell.ui.components.rendering import print_repl_table, repl_print, repl_table
 from platform.terminal import theme as ui_theme
 
 HelpSection = tuple[str, Sequence[SlashCommand]]

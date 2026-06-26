@@ -198,8 +198,8 @@ def run_investigation_cli_streaming(
         events.close()
         raise
 
+    from interactive_shell.ui.components.key_reader import restore_stdin_terminal
     from interactive_shell.ui.feedback import prompt_investigation_feedback
-    from interactive_shell.ui.key_reader import restore_stdin_terminal
 
     restore_stdin_terminal()
     prompt_investigation_feedback(final_state)

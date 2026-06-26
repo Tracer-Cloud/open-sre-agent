@@ -16,8 +16,8 @@ from rich.text import Text
 from interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
 )
-from interactive_shell.ui.provider import resolve_provider_models
-from interactive_shell.ui.rendering import (
+from interactive_shell.ui.tables.provider import resolve_provider_models
+from interactive_shell.ui.components.rendering import (
     _prepare_tty_for_rich,
     print_repl_table,
     repl_print,
@@ -32,7 +32,7 @@ from platform.terminal.theme import (
 )
 
 if TYPE_CHECKING:
-    from interactive_shell.ui.tool_catalog import ToolCatalogEntry
+    from interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 
 # MCP-type services are also rendered under `/mcp list` for focused MCP actions.
 MCP_INTEGRATION_SERVICES = frozenset({"github", "openclaw"})

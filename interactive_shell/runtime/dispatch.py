@@ -19,7 +19,7 @@ from interactive_shell.runtime.session import ReplSession
 from interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
 from interactive_shell.ui import prompt_surface as _prompt_surface
 from interactive_shell.ui import render_banner
-from interactive_shell.ui.choice_menu import repl_tty_interactive
+from interactive_shell.ui.components.choice_menu import repl_tty_interactive
 
 render_submitted_prompt = _prompt_surface.render_submitted_prompt
 

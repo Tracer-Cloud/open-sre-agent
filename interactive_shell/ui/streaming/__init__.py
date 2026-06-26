@@ -33,7 +33,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
-from interactive_shell.ui.token_format import (
+from interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )

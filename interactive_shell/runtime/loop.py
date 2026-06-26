@@ -41,7 +41,7 @@ from interactive_shell.runtime.state import (
 from interactive_shell.runtime.streaming_console import StreamingConsole
 from interactive_shell.ui import ERROR, WARNING
 from interactive_shell.ui import prompt_surface as _prompt_surface
-from interactive_shell.ui.incoming_alerts import drain_and_render_incoming
+from interactive_shell.ui.alerts import drain_and_render_incoming
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from platform.terminal.prompt_support import (
     repl_prompt_note_ctrl_c,

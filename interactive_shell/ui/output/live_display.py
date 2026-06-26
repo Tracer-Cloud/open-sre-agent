@@ -15,7 +15,7 @@ from interactive_shell.ui.output.labels import (
     _node_label,
     _node_phase_label,
 )
-from interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
+from interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from platform.observability.tool_trace import format_json_preview
 from platform.terminal.theme import (
     BRAND,

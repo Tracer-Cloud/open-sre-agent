@@ -12,7 +12,7 @@ from interactive_shell.ui.output.environment import (
     get_output_format,
 )
 from interactive_shell.ui.output.labels import BADGE_STYLES
-from interactive_shell.ui.time_format import _elapsed_hms
+from interactive_shell.ui.components.time_format import _elapsed_hms
 from platform.terminal.theme import (
     BRAND,
     DIM,

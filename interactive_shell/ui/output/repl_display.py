@@ -16,7 +16,7 @@ from interactive_shell.ui.output.labels import (
     _node_phase_label,
     build_progress_step_text,
 )
-from interactive_shell.ui.time_format import _elapsed_hms
+from interactive_shell.ui.components.time_format import _elapsed_hms
 from platform.terminal.theme import BRAND, DIM, SECONDARY
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
@@ -77,7 +77,7 @@ class _ReplEventLogDisplay:
 
     def _emit(self, line: Text | Any) -> None:
         self._stop_animation()
-        from interactive_shell.ui.choice_menu import prepare_repl_output_line
+        from interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 
         prepare_repl_output_line()
         self._console.print(line)

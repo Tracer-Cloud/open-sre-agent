@@ -1,4 +1,8 @@
-"""Prompt rendering and prompt-toolkit wiring for the interactive shell."""
+"""Prompt rendering and prompt-toolkit wiring for the interactive shell.
+This is the most important file in the interactive shell package. 
+It is responsible for rendering the prompt and the prompt-toolkit application.
+It is the start of the whole flow. 
+"""
 
 from __future__ import annotations
 
@@ -28,8 +32,8 @@ from interactive_shell.harness.orchestration.command_dispatch.catalog import (
 )
 from interactive_shell.runtime import ReplSession
 from interactive_shell.harness.state.history import load_prompt_history
-from interactive_shell.ui.banner_state import integration_display_name
-from interactive_shell.ui.choice_menu import repl_tty_interactive
+from interactive_shell.ui.banner.banner_state import integration_display_name
+from interactive_shell.ui.components.choice_menu import repl_tty_interactive
 from platform.terminal import theme as ui_theme
 
 _PROMPT_RULE_CHAR = "─"
@@ -556,6 +560,7 @@ def _suppress_empty_arg_completions_for_inline_picker(cmd_name: str, raw_arg: st
 
 
 def _build_prompt_session(session: ReplSession | None = None) -> PromptSession[str]:
+    # This is the most important function in the prompt surface package
     placeholder = (
         (lambda: resolve_prompt_placeholder(session))
         if session is not None

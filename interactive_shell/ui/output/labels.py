@@ -4,7 +4,7 @@ import re
 
 from rich.text import Text
 
-from interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
+from interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from platform.terminal.theme import (
     BRAND,
     DIM,

@@ -123,7 +123,7 @@ class CtrlOToggleWatcher:
         if self._fd is not None and self._old_attrs is not None and termios is not None:
             with contextlib.suppress(Exception):
                 termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old_attrs)
-        from interactive_shell.ui.key_reader import restore_stdin_terminal
+        from interactive_shell.ui.components.key_reader import restore_stdin_terminal
 
         restore_stdin_terminal()
 

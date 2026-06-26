@@ -14,7 +14,7 @@ from interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from interactive_shell.ui.time_format import format_repl_duration, format_repl_timestamp
+from interactive_shell.ui.components.time_format import format_repl_duration, format_repl_timestamp
 
 
 def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:

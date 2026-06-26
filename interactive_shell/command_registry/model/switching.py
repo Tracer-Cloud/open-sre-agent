@@ -9,7 +9,7 @@ from rich.markup import escape
 
 import interactive_shell.command_registry.repl_data as repl_data
 from interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
-from interactive_shell.ui.choice_menu import print_valid_choice_list
+from interactive_shell.ui.components.choice_menu import print_valid_choice_list
 
 
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:

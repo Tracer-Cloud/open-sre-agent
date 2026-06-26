@@ -24,7 +24,7 @@ from interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from interactive_shell.ui.time_format import format_repl_timestamp
+from interactive_shell.ui.components.time_format import format_repl_timestamp
 from platform.common.errors import OpenSREError
 from tools.fleet_monitoring.probe import pid_exists
 from tools.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env

@@ -272,7 +272,7 @@ def _execute_action_plan(
             if not _registered_interactive_command(command):
                 console.print(f"[{ERROR}]unsupported interactive command:[/] {escape(command)}")
                 continue
-            from interactive_shell.ui.choice_menu import repl_tty_interactive
+            from interactive_shell.ui.components.choice_menu import repl_tty_interactive
 
             if not repl_tty_interactive():
                 console.print(

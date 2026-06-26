@@ -24,7 +24,7 @@ from interactive_shell.ui.output.tool_details import (
 from interactive_shell.ui.output.tool_details import (
     record_tool_summary as _record_tool_summary,
 )
-from interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
+from interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from tools.registry import resolve_tool_display_name
 
 

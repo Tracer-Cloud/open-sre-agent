@@ -87,7 +87,7 @@ def health_command(watch: bool, rate: int) -> None:
     from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
-    from interactive_shell.ui.health_view import render_health_json, render_health_report
+    from interactive_shell.ui.health import render_health_json, render_health_report
 
     def _run_once() -> int:
         results = verify_integrations()

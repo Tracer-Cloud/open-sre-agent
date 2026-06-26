@@ -31,7 +31,7 @@ def _cmd_health(_session: ReplSession, console: Console, _args: list[str]) -> bo
     from config.config import get_environment
     from integrations.store import STORE_PATH
     from integrations.verify import verify_integrations
-    from interactive_shell.ui.health_view import render_health_report
+    from interactive_shell.ui.health import render_health_report
 
     results = verify_integrations()
     environment = get_environment().value

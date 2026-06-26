@@ -8,7 +8,7 @@ from rich.markup import escape
 from rich.table import Table
 
 import platform.terminal.theme as ui_theme
-from interactive_shell.ui.rendering import repl_table
+from interactive_shell.ui.components.rendering import repl_table
 from tools.fleet_monitoring.conflicts import FileWriteConflict
 
 _EMPTY_STATE = "no conflicts detected"

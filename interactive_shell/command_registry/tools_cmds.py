@@ -11,7 +11,7 @@ from interactive_shell.command_registry.types import (
 )
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import render_tools_table
-from interactive_shell.ui.tool_catalog import build_tool_catalog
+from interactive_shell.ui.tables.tool_catalog import build_tool_catalog
 
 
 def _list_tools(_session: ReplSession, console: Console, _args: list[str]) -> bool:
