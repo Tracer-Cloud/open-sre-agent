@@ -150,6 +150,15 @@ class ReplDriver:
         """Return True if substring appears anywhere in the stripped output."""
         return substring in self.text
 
+    def wait_until_contains(self, *substrings: str, timeout: float = 30.0) -> bool:
+        """Drain output until any substring appears or the timeout expires."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if any(substring in self.text for substring in substrings):
+                return True
+            self._drain(min(0.5, deadline - time.monotonic()))
+        return any(substring in self.text for substring in substrings)
+
     def lines(self) -> list[str]:
         """Non-empty visible lines from the stripped output."""
         return [line for line in self.text.splitlines() if line.strip()]

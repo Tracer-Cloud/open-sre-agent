@@ -344,17 +344,17 @@ class TestResumeLiveRepl:
                 repl.send("", wait=3.0)
                 repl.reset_output()
 
-            repl.send("/sessions", wait=3.0)
-            assert repl.contains("live9999") or repl.contains("live redis")
+            repl.send("/sessions", wait=1.0)
+            assert repl.wait_until_contains("live9999", "live redis", timeout=60.0)
 
             repl.reset_output()
-            repl.send(f"/resume {target_id[:8]}", wait=4.0)
-            assert repl.contains("resumed session")
-            assert repl.contains("live redis investigation")
+            repl.send(f"/resume {target_id[:8]}", wait=1.0)
+            assert repl.wait_until_contains("resumed session", timeout=60.0)
+            assert repl.wait_until_contains("live redis investigation", timeout=10.0)
 
             repl.reset_output()
-            repl.send("/status", wait=2.0)
-            assert repl.contains("interactions")
+            repl.send("/status", wait=1.0)
+            assert repl.wait_until_contains("interactions", timeout=60.0)
 
         target_path = sessions_dir / f"{target_id}.jsonl"
         assert target_path.exists()
