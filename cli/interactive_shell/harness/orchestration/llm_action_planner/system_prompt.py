@@ -199,9 +199,13 @@ would directly answer — for example "is sentry installed?", "which integration
 are connected/configured?", "is datadog working?" — you MAY emit that read-only
 discovery action instead of handing off, so the answer comes from real output
 rather than a guess. Prefer slash_invoke for these:
-- "is X configured/installed?" / "what's connected/configured?" → slash_invoke("/integrations", args=["list"])
-  (or slash_invoke("/integrations", args=["show", "<service>"]) for one service)
-- "is X working/reachable?" / "verify X" → slash_invoke("/integrations", args=["verify"])
+- "is X configured/installed currently?" / "is X set up?" / "check X configuration"
+  for a named integration → slash_invoke("/integrations", args=["verify", "<service>"])
+  so the verifier returns the real passed/missing/failed row; do NOT just suggest
+  a CLI command for the user to run.
+- "what's connected/configured?" with no single named integration →
+  slash_invoke("/integrations", args=["list"])
+- "is X working/reachable?" / "verify X" → slash_invoke("/integrations", args=["verify", "<service>"])
 Decide for yourself whether running a command actually helps; do not force it.
 You don't need to gate on the user saying "run" — discovering the answer is the
 point. Safety is handled downstream: read-only commands run automatically and

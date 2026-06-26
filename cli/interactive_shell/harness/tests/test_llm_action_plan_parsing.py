@@ -52,3 +52,60 @@ def test_parse_tool_plan_keeps_available_tool_calls() -> None:
     assert actions[0].kind == "shell"
     assert actions[0].content == "pwd"
     assert has_unhandled is False
+
+
+def test_parse_tool_plan_keeps_verify_for_unconfigured_service() -> None:
+    session = ReplSession()
+    session.configured_integrations_known = True
+    session.configured_integrations = ()
+    raw = json.dumps(
+        {
+            "tool_calls": [
+                {
+                    "name": "slash_invoke",
+                    "arguments": {
+                        "command": "/integrations",
+                        "args": ["verify", "sentry"],
+                    },
+                }
+            ],
+            "text": "",
+        }
+    )
+
+    parsed = _parse_tool_plan(raw, session=session)
+
+    assert parsed is not None
+    actions, has_unhandled = parsed
+    assert len(actions) == 1
+    assert actions[0].kind == "slash"
+    assert actions[0].content == "/integrations verify sentry"
+    assert actions[0].args == {"command": "/integrations", "args": ["verify", "sentry"]}
+    assert has_unhandled is False
+
+
+def test_parse_tool_plan_still_drops_show_for_unconfigured_service() -> None:
+    session = ReplSession()
+    session.configured_integrations_known = True
+    session.configured_integrations = ()
+    raw = json.dumps(
+        {
+            "tool_calls": [
+                {
+                    "name": "slash_invoke",
+                    "arguments": {
+                        "command": "/integrations",
+                        "args": ["show", "sentry"],
+                    },
+                }
+            ],
+            "text": "",
+        }
+    )
+
+    parsed = _parse_tool_plan(raw, session=session)
+
+    assert parsed is not None
+    actions, has_unhandled = parsed
+    assert actions == []
+    assert has_unhandled is False

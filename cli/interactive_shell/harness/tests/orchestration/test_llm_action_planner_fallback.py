@@ -42,6 +42,9 @@ def test_system_prompt_permits_read_only_discovery_for_factual_questions() -> No
     assert "read-only" in prompt
     assert "/integrations" in prompt
     assert "is sentry installed" in prompt
+    assert 'args=["verify", "<service>"]' in prompt
+    assert "passed/missing/failed" in prompt
+    assert "do not just suggest" in prompt
     # The planner is explicitly permitted to emit a read-only discovery action
     # for current-state questions instead of always handing off.
     assert "may emit that read-only discovery action" in prompt

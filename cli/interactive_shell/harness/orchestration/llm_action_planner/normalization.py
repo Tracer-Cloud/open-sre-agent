@@ -43,7 +43,7 @@ def _normalize_tool_args(
         if configured_known and command == "/integrations" and parsed_args:
             op = parsed_args[0].lower()
             service = parsed_args[1].lower() if len(parsed_args) > 1 else ""
-            if op in {"show", "verify", "remove"} and service and service not in configured:
+            if op in {"show", "remove"} and service and service not in configured:
                 return None
         return {"command": command, "args": parsed_args}
 
