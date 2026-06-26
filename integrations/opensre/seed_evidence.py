@@ -9,6 +9,11 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
+from integrations.opensre.grafana_backend_queries import (
+    query_logs_from_backend,
+    query_metrics_from_backend,
+    query_traces_from_backend,
+)
 from integrations.opensre.grafana_mappers import (
     _map_grafana_logs,
     _map_grafana_metrics,
@@ -18,9 +23,6 @@ from integrations.opensre.inject import (
     inject_opensre_into_resolved_integrations,
     resolve_opensre_telemetry_dir,
 )
-from tools.GrafanaLogsTool import query_grafana_logs
-from tools.GrafanaMetricsTool import query_grafana_metrics
-from tools.GrafanaTracesTool import query_grafana_traces
 
 
 def merge_opensre_seed_into_state(
@@ -49,36 +51,29 @@ def merge_opensre_seed_into_state(
     )
     evidence.update(
         _map_grafana_metrics(
-            query_grafana_metrics(
+            query_metrics_from_backend(
+                backend,
                 metric_name="",
                 service_name=None,
-                grafana_backend=backend,
             )
         )
     )
     evidence.update(
         _map_grafana_logs(
-            query_grafana_logs(
+            query_logs_from_backend(
+                backend,
                 service_name="",
-                pipeline_name="",
                 execution_run_id=None,
-                time_range_minutes=60,
-                limit=200,
-                grafana_endpoint=None,
-                grafana_api_key=None,
-                grafana_backend=backend,
             )
         )
     )
     evidence.update(
         _map_grafana_traces(
-            query_grafana_traces(
+            query_traces_from_backend(
+                backend,
                 service_name="",
                 execution_run_id=None,
                 limit=50,
-                grafana_endpoint=None,
-                grafana_api_key=None,
-                grafana_backend=backend,
             )
         )
     )

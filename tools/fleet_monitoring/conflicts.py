@@ -1,9 +1,8 @@
-"""File-write conflict detection and rendering for `/fleet conflicts`.
+"""File-write conflict detection for ``/fleet conflicts``.
 
-Detection is pure logic over a list of write events. Whatever upstream component
-(a watcher; eventually #1500's blast-radius watcher, or a polling collector)
-produces these events is out of scope for this module — we accept events as
-input and treat collection as somebody else's problem.
+Pure detection logic over write events. Presentation lives in
+``cli.interactive_shell.command_registry.agents.conflicts_view`` so this
+module stays independent of the interactive shell.
 """
 
 from __future__ import annotations
@@ -11,10 +10,6 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
-
-from rich.markup import escape
-from rich.table import Table
 
 #: Default conflict window. Two distinct agents writing the same file within
 #: this many seconds is treated as a conflict (per AniketXD on Discord).
@@ -100,41 +95,9 @@ def detect_conflicts(
     return conflicts
 
 
-def _format_timestamp(t: float) -> str:
-    return datetime.fromtimestamp(t, tz=UTC).strftime("%H:%M:%S UTC")
-
-
-def render_conflicts(conflicts: list[FileWriteConflict]) -> Table | str:
-    """Render conflicts as a Rich table, or return ``"no conflicts detected"`` if empty."""
-    if not conflicts:
-        return "no conflicts detected"
-
-    # Deferred to avoid a circular import: the interactive-shell package eagerly
-    # initialises its REPL graph, which imports the /fleet slash command, which
-    # imports this module.
-    from cli.interactive_shell.ui.rendering import repl_table
-    from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM
-
-    table = repl_table(title="Agent file-write conflicts", title_style=BOLD_BRAND)
-    table.add_column("path", style="bold", overflow="fold")
-    table.add_column("agents", overflow="fold")
-    table.add_column("first seen", style=DIM)
-    table.add_column("last seen", style=DIM)
-
-    for conflict in conflicts:
-        table.add_row(
-            escape(conflict.path),
-            escape(", ".join(conflict.agents)),
-            _format_timestamp(conflict.first_seen),
-            _format_timestamp(conflict.last_seen),
-        )
-    return table
-
-
 __all__ = [
     "DEFAULT_WINDOW_SECONDS",
     "FileWriteConflict",
     "WriteEvent",
     "detect_conflicts",
-    "render_conflicts",
 ]

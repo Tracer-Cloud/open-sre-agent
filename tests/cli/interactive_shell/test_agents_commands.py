@@ -12,14 +12,11 @@ from rich.table import Table
 from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from cli.interactive_shell.command_registry.agents import core as agents_core
 from cli.interactive_shell.command_registry.agents import trace as agents_trace
+from cli.interactive_shell.command_registry.agents.conflicts_view import render_conflicts
 from cli.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
 from cli.interactive_shell.runtime.session import ReplSession
 from tools.fleet_monitoring import config as config_mod
-from tools.fleet_monitoring.conflicts import (
-    DEFAULT_WINDOW_SECONDS,
-    FileWriteConflict,
-    render_conflicts,
-)
+from tools.fleet_monitoring.conflicts import DEFAULT_WINDOW_SECONDS, FileWriteConflict
 from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 from tools.fleet_monitoring.tail import AttachUnsupported, TailBuffer
 

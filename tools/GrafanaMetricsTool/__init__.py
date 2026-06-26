@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from integrations.opensre.grafana_backend_queries import query_metrics_from_backend
 from tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
@@ -94,16 +95,11 @@ def query_grafana_metrics(
 ) -> dict:
     """Query Grafana Cloud Mimir for pipeline metrics."""
     if grafana_backend is not None:
-        raw = grafana_backend.query_timeseries(query=metric_name)
-        metrics = raw.get("data", {}).get("result", [])
-        return {
-            "source": "grafana_mimir",
-            "available": True,
-            "metrics": metrics,
-            "total_series": len(metrics),
-            "metric_name": metric_name,
-            "service_name": service_name,
-        }
+        return query_metrics_from_backend(
+            grafana_backend,
+            metric_name=metric_name,
+            service_name=service_name,
+        )
 
     client = _resolve_grafana_client(
         grafana_endpoint, grafana_api_key, grafana_username, grafana_password

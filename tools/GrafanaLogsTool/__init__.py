@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.opensre.grafana_backend_queries import query_logs_from_backend
+from platform.common.evidence_compaction import summarize_counts
+from platform.common.log_compaction import build_error_taxonomy, deduplicate_logs
 from services.grafana import get_grafana_client_from_credentials
 from tools.tool_decorator import tool
-from tools.utils.compaction import summarize_counts
-from tools.utils.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def _map_pipeline_to_service_name(pipeline_name: str) -> str:
@@ -133,40 +134,11 @@ def query_grafana_logs(
     the tool falls back to the configured Grafana Cloud credentials.
     """
     if grafana_backend is not None:
-        raw = grafana_backend.query_logs(service_name=service_name)
-        logs: list[dict] = []
-        for stream in raw.get("data", {}).get("result", []):
-            stream_labels = stream.get("stream", {})
-            for ts_ns, line in stream.get("values", []):
-                logs.append({"timestamp": ts_ns, "message": line, **stream_labels})
-        error_keywords = ("error", "fail", "exception", "traceback")
-        error_logs = [
-            log
-            for log in logs
-            if "error" in str(log.get("log_level", "")).lower()
-            or any(kw in log.get("message", "").lower() for kw in error_keywords)
-        ]
-        # Phase 1: deduplicate + count-group so bursts don't steal all slots
-        compacted_logs = deduplicate_logs(logs, max_output=50)
-        compacted_error_logs = deduplicate_logs(error_logs, max_output=20)
-        # Phase 2: structured error taxonomy across the *full* error set
-        error_taxonomy = build_error_taxonomy(error_logs)
-        result_data = {
-            "source": "grafana_loki",
-            "available": True,
-            "logs": compacted_logs,
-            "error_logs": compacted_error_logs,
-            "total_logs": len(logs),
-            "compacted_log_count": len(compacted_logs),
-            "compacted_error_log_count": len(compacted_error_logs),
-            "error_taxonomy": error_taxonomy,
-            "service_name": service_name,
-            "query": "",
-        }
-        summary = summarize_counts(len(logs), len(compacted_logs), "logs")
-        if summary:
-            result_data["truncation_note"] = summary
-        return result_data
+        return query_logs_from_backend(
+            grafana_backend,
+            service_name=service_name,
+            execution_run_id=execution_run_id,
+        )
 
     client = _resolve_grafana_client(
         grafana_endpoint, grafana_api_key, grafana_username, grafana_password

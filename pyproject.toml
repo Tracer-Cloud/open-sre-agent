@@ -94,6 +94,7 @@ dev = [
     "pytest-xdist>=3.5.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    "import-linter>=2.0",
     "types-requests",
     "types-psycopg2",
     "types-PyMySQL",
@@ -194,4 +195,5 @@ dev = [
     "pytest-cov>=7.1.0",
     "types-psutil>=7.2.2.20260408",
     "types-PyYAML>=6.0.12",
+    "import-linter>=2.0",
 ]

@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.opensre.grafana_backend_queries import query_traces_from_backend
+from platform.common.evidence_compaction import (
+    DEFAULT_TRACE_LIMIT,
+    compact_traces,
+    summarize_counts,
+)
 from tools.GrafanaLogsTool import (
     _grafana_available,
     _grafana_creds,
@@ -11,7 +17,6 @@ from tools.GrafanaLogsTool import (
     _resolve_grafana_client,
 )
 from tools.tool_decorator import tool
-from tools.utils.compaction import DEFAULT_TRACE_LIMIT, compact_traces, summarize_counts
 
 
 def _extract_pipeline_spans(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -88,32 +93,13 @@ def query_grafana_traces(
 ) -> dict:
     """Query Grafana Cloud Tempo for pipeline traces."""
     if grafana_backend is not None:
-        raw = grafana_backend.query_traces(service_name=service_name)
-        traces = raw.get("traces", [])
-        if execution_run_id and traces:
-            filtered = [
-                t
-                for t in traces
-                if any(
-                    s.get("attributes", {}).get("execution.run_id") == execution_run_id
-                    for s in t.get("spans", [])
-                )
-            ]
-            traces = filtered if filtered else traces
-        compacted_traces = compact_traces(traces, limit=limit)
-        summary = summarize_counts(len(traces), len(compacted_traces), "traces")
-        result_data: dict[str, Any] = {
-            "source": "grafana_tempo",
-            "available": True,
-            "traces": compacted_traces,
-            "pipeline_spans": _extract_pipeline_spans(compacted_traces),
-            "total_traces": len(traces),
-            "service_name": service_name,
-            "execution_run_id": execution_run_id,
-        }
-        if summary:
-            result_data["truncation_note"] = summary
-        return result_data
+        return query_traces_from_backend(
+            grafana_backend,
+            service_name=service_name,
+            execution_run_id=execution_run_id,
+            limit=limit,
+            extract_pipeline_spans=_extract_pipeline_spans,
+        )
 
     client = _resolve_grafana_client(grafana_endpoint, grafana_api_key)
     if not client or not client.is_configured:

@@ -19,6 +19,8 @@ on:
       - "ruff.toml"
       - "mypy.ini"
       - "Makefile"
+      - ".importlinter"
+      - "scripts/**"
       - ".github/workflows/ci.yml"
 
   pull_request:
@@ -39,6 +41,8 @@ on:
       - "ruff.toml"
       - "mypy.ini"
       - "Makefile"
+      - ".importlinter"
+      - "scripts/**"
       - ".github/workflows/ci.yml"
 
 permissions:
@@ -91,6 +95,9 @@ jobs:
 
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
+
+      - name: Import graph
+        run: uv run python scripts/check_imports.py
 
   test:
     name: test (${{ matrix.shard }})

@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.tree import Tree
 
+from cli.interactive_shell.command_registry.agents.conflicts_view import render_conflicts
 from cli.interactive_shell.command_registry.agents.kill import _cmd_agents_kill
 from cli.interactive_shell.command_registry.agents.trace import _cmd_agents_trace
 from cli.interactive_shell.command_registry.types import SlashCommand
@@ -41,7 +42,6 @@ from tools.fleet_monitoring.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     WriteEvent,
     detect_conflicts,
-    render_conflicts,
 )
 from tools.fleet_monitoring.coordination import BranchClaims
 from tools.fleet_monitoring.discovery import registered_and_discovered_agents
