@@ -26,6 +26,8 @@ def _assert_query_success_or_skip_auth(result: dict) -> None:
         pytest.skip(f"Grafana live query credentials were rejected: {detail}")
     if any(token in detail_lower for token in ("timed out", "timeout", "connection reset")):
         pytest.skip(f"Grafana live query hit a transient network failure: {detail}")
+    if "too many unhealthy instances in the ring" in detail_lower:
+        pytest.skip(f"Grafana Tempo live query hit a transient backend failure: {detail}")
     if "unable to find datasource" in detail_lower:
         pytest.skip(
             f"Grafana datasource UID not available (discovery may have timed out): {detail}"
@@ -62,6 +64,20 @@ def test_assert_query_success_or_skip_auth_skips_timeout():
                 "error": (
                     "HTTPSConnectionPool(host='tracerbio.grafana.net', port=443): "
                     "Read timed out. (read timeout=10)"
+                ),
+            }
+        )
+
+
+def test_assert_query_success_or_skip_auth_skips_tempo_ring_failure():
+    with pytest.raises(Skipped, match="transient backend failure"):
+        _assert_query_success_or_skip_auth(
+            {
+                "success": False,
+                "error": (
+                    "Tempo query failed: 500 error querying live-stores in Querier.SearchRecent: "
+                    "error finding partition ring replicas: partition 46: "
+                    "too many unhealthy instances in the ring"
                 ),
             }
         )

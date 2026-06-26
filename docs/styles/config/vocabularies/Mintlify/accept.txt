@@ -171,5 +171,19 @@ pid
 # GitHub / Sentry MCP integration docs terms
 OAuth
 args
+arg
 Streamable
 toolsets
+# Interactive shell command docs terms
+lookups
+openai
+prompt_toolkit
+REPL
+REPL's
+runbook
+Splunk
+subcommands
+submenu
+substring
+unencrypted
+venv
