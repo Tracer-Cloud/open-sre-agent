@@ -11,9 +11,9 @@ from rich.console import Console
 from cli.interactive_shell.command_registry import dispatch_slash
 from cli.interactive_shell.command_registry import repl_data as repl_data_module
 from cli.interactive_shell.runtime.session import ReplSession
+import cli.wizard.env_sync as env_sync
+import cli.wizard.store as wizard_store
 from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
-from cli.wizard.env_sync import sync_provider_env, sync_reasoning_model_env
-from cli.wizard.store import load_local_config, save_local_config, update_local_llm_selection
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -24,9 +24,6 @@ def _capture() -> tuple[Console, io.StringIO]:
 @pytest.fixture
 def persistence_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     """Isolate .env and opensre.json writes for scenario tests."""
-    import cli.wizard.env_sync as env_sync
-    import cli.wizard.store as wizard_store
-
     env_path = tmp_path / "project.env"
     store_path = tmp_path / "opensre.json"
     monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -55,7 +52,7 @@ class TestEnvSyncPersistence:
         self, persistence_paths: dict[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
-        sync_provider_env(
+        env_sync.sync_provider_env(
             provider=PROVIDER_BY_VALUE["openai"],
             model="gpt-5-mini",
             env_path=persistence_paths["env"],
@@ -64,7 +61,7 @@ class TestEnvSyncPersistence:
         assert "LLM_PROVIDER=openai" in env_body
         assert "OPENAI_REASONING_MODEL=gpt-5-mini" in env_body
 
-        stored = load_local_config(persistence_paths["store"])
+        stored = wizard_store.load_local_config(persistence_paths["store"])
         local = stored["targets"]["local"]
         assert local["provider"] == "openai"
         assert local["model"] == "gpt-5-mini"
@@ -73,7 +70,7 @@ class TestEnvSyncPersistence:
     def test_reasoning_only_updates_store_model(
         self, persistence_paths: dict[str, Path], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        save_local_config(
+        wizard_store.save_local_config(
             wizard_mode="quickstart",
             provider="openai",
             model="gpt-5-mini",
@@ -84,20 +81,20 @@ class TestEnvSyncPersistence:
         )
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
-        sync_reasoning_model_env(
+        env_sync.sync_reasoning_model_env(
             provider=PROVIDER_BY_VALUE["openai"],
             model="gpt-5.4-mini",
             env_path=persistence_paths["env"],
         )
 
-        stored = load_local_config(persistence_paths["store"])
+        stored = wizard_store.load_local_config(persistence_paths["store"])
         assert stored["targets"]["local"]["provider"] == "openai"
         assert stored["targets"]["local"]["model"] == "gpt-5.4-mini"
         assert "LLM_PROVIDER=" not in persistence_paths["env"].read_text(encoding="utf-8")
 
     def test_cli_provider_switch_clears_stale_api_key_env(self, tmp_path: Path) -> None:
         store_path = tmp_path / "opensre.json"
-        save_local_config(
+        wizard_store.save_local_config(
             wizard_mode="quickstart",
             provider="anthropic",
             model="claude-haiku",
@@ -106,14 +103,14 @@ class TestEnvSyncPersistence:
             probes={},
             path=store_path,
         )
-        update_local_llm_selection(
+        wizard_store.update_local_llm_selection(
             provider="claude-code",
             model="",
             api_key_env="",
             model_env="CLAUDE_CODE_MODEL",
             path=store_path,
         )
-        local = load_local_config(store_path)["targets"]["local"]
+        local = wizard_store.load_local_config(store_path)["targets"]["local"]
         assert local["provider"] == "claude-code"
         assert local["api_key_env"] == ""
 
@@ -140,7 +137,7 @@ class TestReplModelPersistence:
         assert "LLM_PROVIDER=anthropic" in env_body
         assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in env_body
 
-        stored = load_local_config(persistence_paths["store"])["targets"]["local"]
+        stored = wizard_store.load_local_config(persistence_paths["store"])["targets"]["local"]
         assert stored["provider"] == "anthropic"
         assert stored["model"] == "claude-opus-4-7"
 
@@ -153,7 +150,7 @@ class TestReplModelPersistence:
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-        save_local_config(
+        wizard_store.save_local_config(
             wizard_mode="quickstart",
             provider="anthropic",
             model="claude-haiku",
@@ -170,7 +167,7 @@ class TestReplModelPersistence:
         assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in env_body
         assert "LLM_PROVIDER=" not in env_body
 
-        stored = load_local_config(persistence_paths["store"])["targets"]["local"]
+        stored = wizard_store.load_local_config(persistence_paths["store"])["targets"]["local"]
         assert stored["provider"] == "anthropic"
         assert stored["model"] == "claude-opus-4-7"
 
@@ -197,7 +194,7 @@ class TestReplModelPersistence:
         assert "ANTHROPIC_REASONING_MODEL=claude-opus-4-7" in env_body
         assert "ANTHROPIC_TOOLCALL_MODEL=claude-haiku-4-5" in env_body
 
-        stored = load_local_config(persistence_paths["store"])["targets"]["local"]
+        stored = wizard_store.load_local_config(persistence_paths["store"])["targets"]["local"]
         assert stored["model"] == "claude-opus-4-7"
 
     def test_model_toolcall_set_does_not_rewrite_store_reasoning_model(
@@ -209,7 +206,7 @@ class TestReplModelPersistence:
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-        save_local_config(
+        wizard_store.save_local_config(
             wizard_mode="quickstart",
             provider="anthropic",
             model="claude-opus-4-7",
@@ -225,7 +222,7 @@ class TestReplModelPersistence:
         assert "ANTHROPIC_TOOLCALL_MODEL=claude-haiku-4-5-20251001" in persistence_paths[
             "env"
         ].read_text(encoding="utf-8")
-        stored = load_local_config(persistence_paths["store"])["targets"]["local"]
+        stored = wizard_store.load_local_config(persistence_paths["store"])["targets"]["local"]
         assert stored["model"] == "claude-opus-4-7"
 
     def test_model_restore_updates_env_and_store(
@@ -246,7 +243,7 @@ class TestReplModelPersistence:
         env_body = persistence_paths["env"].read_text(encoding="utf-8")
         assert f"ANTHROPIC_REASONING_MODEL={default_model}" in env_body
 
-        stored = load_local_config(persistence_paths["store"])["targets"]["local"]
+        stored = wizard_store.load_local_config(persistence_paths["store"])["targets"]["local"]
         assert stored["provider"] == "anthropic"
         assert stored["model"] == default_model
 
