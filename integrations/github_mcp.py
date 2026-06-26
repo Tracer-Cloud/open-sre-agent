@@ -37,6 +37,9 @@ DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"
 DEFAULT_GITHUB_MCP_TOOLSETS = ("repos", "issues", "pull_requests", "actions", "search")
 
+# Non-transport metadata persisted alongside MCP credentials in the integration store.
+_CREDENTIAL_METADATA_KEYS: frozenset[str] = frozenset({"username"})
+
 REQUIRED_SOURCE_INVESTIGATION_TOOLS = (
     "get_file_contents",
     "get_repository_tree",
@@ -411,8 +414,10 @@ def format_github_mcp_validation_cli_report(result: GitHubMCPValidationResult) -
 
 def build_github_mcp_config(raw: dict[str, Any] | None) -> GitHubMCPConfig:
     """Build a normalized config object from env/store data."""
-
-    return GitHubMCPConfig.model_validate(raw or {})
+    data = dict(raw or {})
+    for key in _CREDENTIAL_METADATA_KEYS:
+        data.pop(key, None)
+    return GitHubMCPConfig.model_validate(data)
 
 
 def github_mcp_config_from_env() -> GitHubMCPConfig | None:
@@ -464,9 +469,19 @@ def github_integration_is_configured() -> bool:
     record = get_integration("github")
     if record is not None:
         credentials = record.get("credentials") or {}
-        if github_mcp_is_usably_configured(build_github_mcp_config(credentials)):
-            return True
-    env_config = github_mcp_config_from_env()
+        try:
+            if github_mcp_is_usably_configured(build_github_mcp_config(credentials)):
+                return True
+        except Exception:
+            logger.warning(
+                "Ignoring invalid GitHub integration credentials in store",
+                exc_info=True,
+            )
+    try:
+        env_config = github_mcp_config_from_env()
+    except Exception:
+        logger.warning("Ignoring invalid GitHub MCP env configuration", exc_info=True)
+        return False
     return env_config is not None and github_mcp_is_usably_configured(env_config)
 
 

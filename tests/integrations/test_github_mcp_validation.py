@@ -876,6 +876,42 @@ def test_github_mcp_is_usably_configured_accepts_hosted_copilot_with_token() -> 
     assert github_mcp_module.github_mcp_is_usably_configured(config) is True
 
 
+def test_build_github_mcp_config_strips_persisted_username_metadata() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "gho_test",
+            "username": "octocat",
+        }
+    )
+    assert config.auth_token == "gho_test"
+    assert "username" not in config.model_fields_set
+
+
+def test_github_integration_is_configured_true_when_store_has_token_and_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                    "auth_token": "gho_test",
+                    "username": "octocat",
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is True
+
+
 def test_github_integration_is_configured_ignores_stale_store_record(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
