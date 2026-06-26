@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
 )
 

@@ -13,8 +13,8 @@ import io
 import pytest
 from rich.console import Console
 
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools.slash_tool as slash_tool
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_contracts import (
+import cli.interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
+from cli.interactive_shell.harness.orchestration.tool_contracts import (
     ToolContext,
 )
 from cli.interactive_shell.runtime.session import ReplSession

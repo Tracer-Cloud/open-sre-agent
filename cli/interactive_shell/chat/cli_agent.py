@@ -77,7 +77,7 @@ def _execute_action_plan(
         switch_llm_provider,
         switch_toolcall_model,
     )
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
+    from cli.interactive_shell.harness.orchestration.execution_policy import (
         evaluate_llm_runtime_switch,
         evaluate_slash_tier,
         execution_allowed,
@@ -226,7 +226,7 @@ def _execute_action_plan(
                     "in this session.[/]"
                 )
                 continue
-            from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor import (
+            from cli.interactive_shell.harness.orchestration.action_executor import (
                 run_opensre_cli_command,
             )
 

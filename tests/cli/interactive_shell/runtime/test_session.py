@@ -12,7 +12,8 @@ from cli.interactive_shell.runtime.session import (
     ReplSession,
     _scenario_id_from_synthetic_label,
 )
-from cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
+from cli.interactive_shell.runtime.tasks import TaskRegistry
+from platform.common.task_types import TaskKind
 
 
 class TestReplSession:

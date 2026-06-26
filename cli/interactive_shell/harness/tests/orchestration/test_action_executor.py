@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor import (
+from cli.interactive_shell.harness.orchestration.action_executor import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
     _is_interactive_wizard,
@@ -30,12 +30,12 @@ from cli.interactive_shell.harness.handle_message_with_agent.orchestration.actio
     terminate_child_process,
     watch_synthetic_subprocess,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.shell_execution import (
+from cli.interactive_shell.harness.orchestration.action_executor.shell_execution import (
     ShellExecutionResult,
 )
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
+from platform.common.task_types import TaskKind, TaskStatus
 
 
 class _ImmediateThread:
@@ -127,7 +127,7 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
         directories.append(target)
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.chdir",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.chdir",
         _chdir,
     )
 
@@ -147,7 +147,7 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         raise OSError("permission denied")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.chdir",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.chdir",
         _chdir,
     )
     monkeypatch.setattr(
@@ -256,15 +256,15 @@ def test_run_claude_code_implementation_starts_tracked_task(
 
     monkeypatch.delenv("CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE", raising=False)
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.ClaudeCodeAdapter",
+        "cli.interactive_shell.harness.orchestration.action_executor.ClaudeCodeAdapter",
         _FakeAdapter,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -336,7 +336,7 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.execute_shell_command",
+        "cli.interactive_shell.harness.orchestration.action_executor.execute_shell_command",
         _fake_execute,
     )
 
@@ -363,7 +363,7 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.execute_shell_command",
+        "cli.interactive_shell.harness.orchestration.action_executor.execute_shell_command",
         _fake_execute,
     )
 
@@ -390,7 +390,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         raise RuntimeError("spawn failed")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.execute_shell_command",
+        "cli.interactive_shell.harness.orchestration.action_executor.execute_shell_command",
         _raise,
     )
     monkeypatch.setattr(
@@ -429,7 +429,7 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.run",
         _fake_run,
     )
 
@@ -460,7 +460,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.run",
         _fake_run,
     )
 
@@ -507,7 +507,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
 
@@ -571,24 +571,24 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
         raise OSError(errno.EIO, "pty closed")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.openpty",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.openpty",
         lambda: (10, 11),
         raising=False,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.read",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.read",
         _fake_read,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.close",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.close",
         lambda fd: closed_fds.append(fd),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -637,15 +637,15 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
         return _FakeProcess()
 
     monkeypatch.delattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.openpty",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.openpty",
         raising=False,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -695,11 +695,11 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
             return 1
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         lambda _command, **_kwargs: _FakeProcess(),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -753,11 +753,11 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
             return 0
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         lambda _command, **_kwargs: _FakeProcess(),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -829,11 +829,11 @@ def test_task_pty_stream_reports_unexpected_failure(
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.read",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.read",
         _raise_read,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.os.close",
+        "cli.interactive_shell.harness.orchestration.action_executor.os.close",
         lambda fd: closed_fds.append(fd),
     )
 
@@ -861,7 +861,7 @@ def test_start_background_cli_task_reports_spawn_failure(
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
 
@@ -905,15 +905,15 @@ def test_start_background_cli_task_reports_watcher_failure(
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.read_diag",
+        "cli.interactive_shell.harness.orchestration.action_executor.read_diag",
         lambda _buf: (_ for _ in ()).throw(RuntimeError("diag broke")),
     )
 
@@ -972,11 +972,11 @@ def test_start_background_cli_task_skips_follow_up_after_session_reset(
 
     _DeferredThread.pending.clear()
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _DeferredThread,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
 
@@ -1016,7 +1016,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1069,7 +1069,7 @@ def test_run_synthetic_test_unknown_scenario_sentinel_does_not_launch(
         raise AssertionError("Popen should not be invoked for the unknown-scenario sentinel")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _popen_must_not_be_called,
     )
 
@@ -1108,11 +1108,11 @@ def test_run_synthetic_test_streams_subprocess_output(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1159,11 +1159,11 @@ def test_run_synthetic_test_honours_explicit_scenario(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1201,11 +1201,11 @@ def test_run_synthetic_test_all_launches_suite_alias(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1257,11 +1257,11 @@ def _capture_popen_kwargs(
         return _CapturedPopen()
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.threading.Thread",
+        "cli.interactive_shell.harness.orchestration.action_executor.threading.Thread",
         _ImmediateThread,
     )
     return captured
@@ -1419,11 +1419,11 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
         raise AssertionError("subprocess.run must not be called for interactive subcommand")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.run",
         _fake_run,
     )
 
@@ -1468,11 +1468,11 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
     run_calls: list[list[str]] = []
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.Popen",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.Popen",
         lambda cmd, **_kw: popen_calls.append(cmd),
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.subprocess.run",
+        "cli.interactive_shell.harness.orchestration.action_executor.subprocess.run",
         lambda cmd, **_kw: run_calls.append(cmd),
     )
 
@@ -1522,7 +1522,7 @@ def test_run_opensre_cli_command_skips_confirmation_for_investigate(
         start_calls.append(argv_list)
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.start_background_cli_task",
+        "cli.interactive_shell.harness.orchestration.action_executor.start_background_cli_task",
         _fake_start_background_cli_task,
     )
 
@@ -1564,7 +1564,7 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
         start_calls.append(argv_list)
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.start_background_cli_task",
+        "cli.interactive_shell.harness.orchestration.action_executor.start_background_cli_task",
         _fake_start_background_cli_task,
     )
 

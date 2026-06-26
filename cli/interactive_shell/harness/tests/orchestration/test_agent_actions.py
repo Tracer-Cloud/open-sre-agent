@@ -20,28 +20,28 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor as action_executor
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.shell_execution as shell_execution
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions as agent_actions
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools.implementation_tool as implementation_tool
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools.llm_provider_tool as llm_provider_tool
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools.slash_tool as slash_tool
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration import (
+import cli.interactive_shell.harness.orchestration.action_executor as action_executor
+import cli.interactive_shell.harness.orchestration.action_executor.shell_execution as shell_execution
+import cli.interactive_shell.harness.orchestration.agent_actions as agent_actions
+import cli.interactive_shell.harness.orchestration.tools.implementation_tool as implementation_tool
+import cli.interactive_shell.harness.orchestration.tools.llm_provider_tool as llm_provider_tool
+import cli.interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
+from cli.interactive_shell.harness.orchestration import (
     intent_parser as intent_parser_module,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     ActionKind,
     PlannedAction,
     default_target_surface,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner import (
     LlmActionPlanResult,
 )
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from platform.common.task_types import TaskKind, TaskStatus
 
 _PLANNER_RESULT_PATCH = (
-    "cli.interactive_shell.harness.handle_message_with_agent.orchestration"
+    "cli.interactive_shell.harness.orchestration"
     ".terminal_actions.planning.plan_actions_with_llm_result"
 )
 

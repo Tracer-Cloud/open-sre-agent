@@ -28,8 +28,7 @@ should be predictable, interruptible, explainable, and safe by default.
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
 | `state/` | conversation context helpers and shared state persistence | prompt rendering |
 | `history/` | prompt history policy and persistence | prompt rendering |
-| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output | business logic or network calls |
-| `alerts/` | alert presentation in the REPL (`renderer.py`). The receiver, queue, and listener lifecycle live in `core.domain.alerts.inbox` | general HTTP framework behavior |
+| `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `incoming_alerts.py` (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the
 owning area rather than adding more logic to the caller.

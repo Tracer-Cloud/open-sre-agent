@@ -15,7 +15,6 @@ from cli.interactive_shell.runtime.background_runner import (
     start_background_text_investigation,
 )
 from cli.interactive_shell.runtime.foreground_investigation import run_foreground_investigation
-from cli.interactive_shell.runtime.tasks import TaskRecord
 from cli.interactive_shell.ui import (
     DIM,
     ERROR,
@@ -29,6 +28,7 @@ from cli.interactive_shell.ui.choice_menu import (
 )
 from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from config.llm_reasoning_effort import apply_reasoning_effort
+from platform.common.task_types import TaskRecord
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:

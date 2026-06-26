@@ -10,7 +10,6 @@ from prompt_toolkit.completion import Completion
 
 from cli.interactive_shell.runtime import state as loop_state
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.runtime.tasks import TaskKind
 from cli.interactive_shell.ui import prompt_surface
 from cli.interactive_shell.ui.prompt_surface import (
     _DEFAULT_PLACEHOLDER_TEXT,
@@ -22,6 +21,7 @@ from cli.interactive_shell.ui.prompt_surface import (
     resolve_prompt_prefix_ansi,
     wire_prompt_refresh,
 )
+from platform.common.task_types import TaskKind
 
 
 def _strip_ansi(text: str) -> str:

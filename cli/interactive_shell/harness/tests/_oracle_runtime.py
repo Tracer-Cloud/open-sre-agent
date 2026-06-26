@@ -19,7 +19,7 @@ from rich.console import Console
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_registry import (
+from cli.interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )

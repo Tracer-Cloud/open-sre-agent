@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner import (
     llm_client,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.prompting import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner.prompting import (
     _connected_integrations_block,
     _recent_conversation_block,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.system_prompt import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner.system_prompt import (
     _SYSTEM_PROMPT_BASE,
 )
 from cli.interactive_shell.state.conversation_history import NO_HISTORY_PLACEHOLDER

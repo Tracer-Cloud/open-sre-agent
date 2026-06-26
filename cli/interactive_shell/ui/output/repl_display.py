@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import sys
 import threading
 import time
@@ -23,6 +24,26 @@ _REPL_ANIM_INTERVAL = 0.35
 _ANIM_SEC = "\x1b[38;5;247m"
 _ANIM_DIM = "\x1b[2m"
 _ANIM_RST = "\x1b[0m"
+# Timestamp + indent + trailing dot animation; keep hints on one physical row.
+_HINT_LINE_OVERHEAD = 20
+
+
+def _terminal_columns() -> int:
+    try:
+        cols = shutil.get_terminal_size(fallback=(80, 24)).columns
+    except OSError:
+        cols = 80
+    return max(40, cols - 1)
+
+
+def _fit_hint_prefix(prefix: str, *, cols: int | None = None) -> str:
+    """Truncate hint text so cursor-up animation stays on a single terminal row."""
+    budget = max(16, (cols if cols is not None else _terminal_columns()) - _HINT_LINE_OVERHEAD)
+    if len(prefix) <= budget:
+        return prefix
+    if budget <= 3:
+        return prefix[:budget]
+    return f"{prefix[: budget - 3]}..."
 
 
 def _stdout_is_tty() -> bool:
@@ -46,6 +67,7 @@ class _ReplEventLogDisplay:
         self._prompt_suppressed = False
         self._anim_stop: threading.Event | None = None
         self._anim_thread: threading.Thread | None = None
+        self._last_emitted_hint: str | None = None
 
     def stop(self) -> None:
         from cli.interactive_shell.ui.output.console_state import _capture_footer_snapshot
@@ -73,6 +95,7 @@ class _ReplEventLogDisplay:
     def _start_animation(self, prefix: str) -> None:
         if not _stdout_is_tty():
             return
+        fitted_prefix = _fit_hint_prefix(prefix)
         stop = threading.Event()
         self._anim_stop = stop
         t0 = self._t0
@@ -87,7 +110,7 @@ class _ReplEventLogDisplay:
                     f"\033[A\r"
                     f"{_ANIM_SEC}{ts}  {_ANIM_RST}"
                     f"{_ANIM_DIM}      ↳  {_ANIM_RST}"
-                    f"{_ANIM_SEC}{prefix} {dots}{_ANIM_RST}"
+                    f"{_ANIM_SEC}{fitted_prefix} {dots}{_ANIM_RST}"
                     f"\033[K\n"
                 )
                 if not stop.is_set():
@@ -99,15 +122,22 @@ class _ReplEventLogDisplay:
         thread.start()
 
     def animate_hint(self, text: str) -> None:
-        self._stop_animation()
-        prefix = text.rstrip("· \t")
+        """Print one compact lap-status line; no cursor-up animation in the REPL.
+
+        Append-only output under prompt_toolkit cannot safely rewrite rows in
+        place — the old animation thread spammed stdout and looked like hundreds
+        of repeated API/tool lines when hints wrapped.
+        """
+        prefix = _fit_hint_prefix(text.rstrip("· \t"))
+        if prefix == self._last_emitted_hint:
+            return
+        self._last_emitted_hint = prefix
         elapsed_total = time.monotonic() - self._t0
         t = Text()
         t.append(f"{_elapsed_hms(elapsed_total)}  ", style=SECONDARY)
         t.append("      ↳  ", style=DIM)
-        t.append(f"{prefix} ·", style=SECONDARY)
+        t.append(prefix, style=SECONDARY)
         self._emit(t)
-        self._start_animation(prefix)
 
     def step_start(self, node_name: str) -> None:
         from cli.interactive_shell.ui.output.console_state import get_prompt_suppress_fn
@@ -123,6 +153,7 @@ class _ReplEventLogDisplay:
                 "subtext_until": 0.0,
             }
             self._current_phase = _node_phase_label(node_name)
+        self._last_emitted_hint = None
         self._emit(
             build_progress_step_text(
                 node_name=node_name,
@@ -143,6 +174,7 @@ class _ReplEventLogDisplay:
 
     def step_complete(self, node_name: str, event: ProgressEvent) -> None:
         self._stop_animation()
+        self._last_emitted_hint = None
         with self._lock:
             info = self._active_steps.pop(node_name, {})
             subtext = info.get("subtext")

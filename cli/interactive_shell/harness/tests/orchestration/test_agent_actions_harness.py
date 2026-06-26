@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.harness.orchestration.agent_actions import (
     execute_cli_actions,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.terminal_actions.models import (
+from cli.interactive_shell.harness.orchestration.terminal_actions.models import (
     ActionPlanningDecision,
 )
 from cli.interactive_shell.harness.tests.orchestration.routing_test_harness import (

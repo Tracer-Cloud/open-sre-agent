@@ -5,12 +5,8 @@ from cli.interactive_shell.runtime.background import (
     BackgroundNotificationPreferences,
 )
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.runtime.tasks import (
-    TaskKind,
-    TaskRecord,
-    TaskRegistry,
-    TaskStatus,
-)
+from cli.interactive_shell.runtime.tasks import TaskRegistry
+from platform.common.task_types import TaskKind, TaskRecord, TaskStatus
 
 __all__ = [
     "ReplSession",

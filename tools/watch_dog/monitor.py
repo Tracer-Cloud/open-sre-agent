@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from cli.interactive_shell.runtime.tasks import TaskRecord, TaskStatus
+from platform.common.task_types import TaskRecord, TaskStatus
 from tools.fleet_monitoring.probe import probe
 from tools.watch_dog.alarms import AlarmDispatcher
 

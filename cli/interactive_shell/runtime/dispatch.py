@@ -11,7 +11,7 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from rich.console import Console
 
 from cli.interactive_shell.harness import router as _router
-from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness.command_dispatch import (
     deterministic_command_text,
 )
 from cli.interactive_shell.runtime.execution import execute_routed_turn

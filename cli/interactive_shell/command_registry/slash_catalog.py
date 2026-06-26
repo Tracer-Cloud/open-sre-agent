@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from cli.interactive_shell.command_registry.types import SlashCommand
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_tier import (
+from cli.interactive_shell.harness.orchestration.execution_tier import (
     ExecutionTier,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_contracts import (
+from cli.interactive_shell.harness.orchestration.tool_contracts import (
     object_schema,
     string_array_property,
     string_property,

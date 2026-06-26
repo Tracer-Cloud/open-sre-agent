@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.shell_policy import (
+from cli.interactive_shell.harness.orchestration.shell_policy import (
     argv_for_repl_builtin_routing,
     classify_command,
     evaluate_policy,

@@ -8,13 +8,13 @@ import pytest
 from rich.console import Console
 
 from cli.interactive_shell.command_registry import SLASH_COMMANDS
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration import (
+from cli.interactive_shell.harness.orchestration import (
     feature_flags,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_contracts import (
+from cli.interactive_shell.harness.orchestration.tool_contracts import (
     ToolContext,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_registry import (
+from cli.interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )

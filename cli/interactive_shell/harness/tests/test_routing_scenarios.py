@@ -9,16 +9,16 @@ from typing import NotRequired, TypedDict, cast
 import pytest
 
 from cli.interactive_shell.command_registry import SLASH_COMMANDS
-from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness.command_dispatch import (
     deterministic_command_text,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.feature_flags import (
+from cli.interactive_shell.harness.orchestration.feature_flags import (
     investigation_loop_enabled,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
 from cli.interactive_shell.harness.router import RouteKind, route_input

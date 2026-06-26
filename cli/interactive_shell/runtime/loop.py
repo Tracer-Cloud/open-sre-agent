@@ -13,7 +13,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.alerts.renderer import drain_and_render_incoming
 from cli.interactive_shell.runtime.background_runner import drain_background_notices
 from cli.interactive_shell.runtime.cpr_stdin import (
     contains_cpr_sequence,
@@ -41,6 +40,7 @@ from cli.interactive_shell.runtime.state import (
 from cli.interactive_shell.runtime.streaming_console import StreamingConsole
 from cli.interactive_shell.ui import ERROR, WARNING
 from cli.interactive_shell.ui import prompt_surface as _prompt_surface
+from cli.interactive_shell.ui.incoming_alerts import drain_and_render_incoming
 from cli.interactive_shell.ui.prompt_support import (
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,

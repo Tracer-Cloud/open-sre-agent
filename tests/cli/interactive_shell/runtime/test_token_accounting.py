@@ -137,7 +137,7 @@ class _FakeLLMClient:
 
 
 _PLANNER_LLM_CLIENT = (
-    "cli.interactive_shell.harness.handle_message_with_agent"
+    "cli.interactive_shell.harness"
     ".orchestration.llm_action_planner.llm_client"
 )
 
@@ -154,7 +154,7 @@ def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
 
 
 def test_planner_call_llm_records_provider_token_usage() -> None:
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.harness.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 
@@ -189,7 +189,7 @@ def test_planner_call_llm_records_provider_token_usage() -> None:
 
 
 def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> None:
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.harness.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 

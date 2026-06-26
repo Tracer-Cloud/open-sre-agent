@@ -105,7 +105,9 @@ class ToolTrackingMixin:
             output,
             elapsed=_fmt_timing(elapsed_ms) if elapsed_ms is not None else "",
         )
-        if elapsed_ms is not None:
+        if elapsed_ms is not None and not _is_repl_display(self._display):
+            # REPL investigations show an aggregate lap summary; one line per tool
+            # call floods scrollback during multi-lap ReAct loops.
             self.print_above_renderable(
                 build_tool_call_line(tool_name, elapsed_ms, time.monotonic() - self._t0)
             )

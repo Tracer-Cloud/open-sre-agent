@@ -102,7 +102,7 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 - Deterministic command dispatch is an **internal fast path of the agent**, not
   a routing branch. `handle_message_with_agent` detects literal slash commands,
   bare command aliases, and `opensre investigate` quick-starts via
-  `handle_message_with_agent/command_dispatch/` and dispatches them directly
+  `command_dispatch/` and dispatches them directly
   (no LLM); everything else falls through to LLM action planning + assistant.
 - The runtime (`runtime/dispatch.py`) may reuse
   `command_dispatch.deterministic_command_text` for terminal-UI concerns only

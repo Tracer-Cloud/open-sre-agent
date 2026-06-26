@@ -21,8 +21,8 @@ from cli.interactive_shell.command_registry.investigation import (
 from cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 from cli.interactive_shell.ui.tool_catalog import ToolCatalogEntry
+from platform.common.task_types import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -1753,10 +1753,10 @@ class TestResumeCommand:
         """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
         from unittest.mock import patch
 
-        from cli.interactive_shell.harness.handle_message_with_agent.errors import (
+        from cli.interactive_shell.harness.errors import (
             PlannerLLMError,
         )
-        from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
+        from cli.interactive_shell.harness.orchestration.agent_actions import (
             execute_cli_actions,
         )
 
@@ -1767,7 +1767,7 @@ class TestResumeCommand:
             raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions._plan_actions",
+            "cli.interactive_shell.harness.orchestration.agent_actions._plan_actions",
             side_effect=_raise,
         ):
             execute_cli_actions("check cpu usage", session, console)

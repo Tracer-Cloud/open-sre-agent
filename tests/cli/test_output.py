@@ -573,8 +573,52 @@ def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
     assert watcher._fd is None
 
 
+def test_repl_tracker_skips_per_tool_call_lines(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output_tracker, "_repl_progress_active", lambda: True)
+    tracker = ProgressTracker()
+    tracker.start("investigation_agent")
+    tracker.record_tool_start("query_datadog_logs", event_key="call-1")
+    tracker.record_tool_end(
+        "query_datadog_logs",
+        {"logs": []},
+        event_key="call-1",
+    )
+    out = _strip_ansi(capsys.readouterr().out)
+    assert "Datadog" not in out or "Investigation" in out
+    assert out.count("↳") == 0
+    tracker.complete("investigation_agent")
+
+
 class TestReplHintAnimation:
     """Tests for _ReplEventLogDisplay in-place hint animation."""
+
+    def test_fit_hint_prefix_truncates_for_narrow_terminals(self) -> None:
+        long_prefix = (
+            "Reviewing evidence (lap 2/20) after Datadog logs, "
+            "Datadog events, Datadog monitors, search sentry issues"
+        )
+        fitted = output_repl._fit_hint_prefix(long_prefix, cols=80)
+        assert fitted.endswith("...")
+        assert len(fitted) <= 80 - output_repl._HINT_LINE_OVERHEAD
+
+    def test_fit_hint_prefix_keeps_short_text(self) -> None:
+        short = "Planning investigation (lap 1/20)"
+        assert output_repl._fit_hint_prefix(short, cols=80) == short
+
+    def test_animate_hint_does_not_start_animation_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """REPL lap hints print once; no background cursor-up spam."""
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
+        display = self._make_display()
+        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ·")
+        assert display._anim_thread is None
+        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ··")
+        assert display._anim_thread is None
 
     def _make_display(self) -> output_repl._ReplEventLogDisplay:
         return output_repl._ReplEventLogDisplay(t0=0.0)

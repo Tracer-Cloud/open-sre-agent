@@ -445,7 +445,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
 ) -> None:
     from rich.console import Console
 
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.investigation_runner import (
+    from cli.interactive_shell.harness.orchestration.action_executor.investigation_runner import (
         run_text_investigation,
     )
 
@@ -1529,7 +1529,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     ) -> None:
         from rich.console import Console
 
-        from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
+        from cli.interactive_shell.harness.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )
@@ -1571,7 +1571,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         """
         from rich.console import Console
 
-        from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
+        from cli.interactive_shell.harness.orchestration.execution_policy import (
             ExecutionPolicyResult,
             execution_allowed,
         )

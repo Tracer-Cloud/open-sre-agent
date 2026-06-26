@@ -11,14 +11,14 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness.command_dispatch import (
     deterministic_command_text,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.errors import PlannerLLMError
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.errors import PlannerLLMError
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
 from cli.interactive_shell.harness.router import route_input

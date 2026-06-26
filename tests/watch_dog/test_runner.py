@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
-from cli.interactive_shell.utils.error_handling.exit_codes import ERROR, SUCCESS
+from platform.common.exit_codes import ERROR, SUCCESS
 from tools.watch_dog.config import WatchdogConfig
 from tools.watch_dog.process_monitor import ProcessSample
 from tools.watch_dog.runner import run_watchdog

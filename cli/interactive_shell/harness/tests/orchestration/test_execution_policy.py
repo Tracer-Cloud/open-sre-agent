@@ -13,7 +13,7 @@ import io
 
 from rich.console import Console
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
+from cli.interactive_shell.harness.orchestration.execution_policy import (
     ExecutionPolicyResult,
     evaluate_code_agent_launch,
     evaluate_investigation_launch,
@@ -24,7 +24,7 @@ from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execu
     execution_allowed,
     resolve_slash_execution_tier,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_tier import (
+from cli.interactive_shell.harness.orchestration.execution_tier import (
     ExecutionTier,
 )
 from cli.interactive_shell.runtime.session import ReplSession

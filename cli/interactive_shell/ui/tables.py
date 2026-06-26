@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
 )
 from cli.interactive_shell.ui.provider import resolve_provider_models

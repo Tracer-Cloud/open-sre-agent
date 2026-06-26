@@ -8,10 +8,10 @@ from typing import cast
 
 import yaml
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     ActionKind,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_registry import (
+from cli.interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )

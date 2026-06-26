@@ -48,7 +48,7 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_row("interactions", str(len(session.history)))
 
     if session.incoming_alerts:
-        from cli.interactive_shell.alerts.renderer import time_ago
+        from cli.interactive_shell.ui.incoming_alerts import time_ago
 
         most_recent = session.incoming_alerts[-1]
         age_str = time_ago(most_recent.received_at)

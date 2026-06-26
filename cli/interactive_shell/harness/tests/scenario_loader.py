@@ -10,10 +10,10 @@ from typing import Any, cast
 import yaml
 
 from cli.interactive_shell.command_registry import SLASH_COMMANDS
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.orchestration.interaction_models import (
     default_target_surface,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.synthetic_scenarios import (
+from cli.interactive_shell.harness.orchestration.synthetic_scenarios import (
     list_rds_postgres_scenarios,
 )
 

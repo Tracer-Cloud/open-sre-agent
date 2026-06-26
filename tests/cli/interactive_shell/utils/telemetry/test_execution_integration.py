@@ -4,7 +4,7 @@ import io
 
 from rich.console import Console
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
 from cli.interactive_shell.harness.types import RouteDecision, RouteKind

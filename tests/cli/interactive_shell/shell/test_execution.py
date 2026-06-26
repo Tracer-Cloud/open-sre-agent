@@ -7,7 +7,7 @@ from typing import NoReturn
 
 import pytest
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor.shell_execution import (
+from cli.interactive_shell.harness.orchestration.action_executor.shell_execution import (
     ShellExecutionResult,
     execute_shell_command,
 )
@@ -23,7 +23,7 @@ def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration"
+        "cli.interactive_shell.harness.orchestration"
         ".action_executor.shell_execution.subprocess.run",
         _raise,
     )
@@ -58,7 +58,7 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
         )
 
     monkeypatch.setattr(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration"
+        "cli.interactive_shell.harness.orchestration"
         ".action_executor.shell_execution.subprocess.run",
         _raise,
     )

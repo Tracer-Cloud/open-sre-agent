@@ -12,10 +12,10 @@ import io
 
 from rich.console import Console
 
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.pipeline import (
+from cli.interactive_shell.harness.pipeline import (
     handle_message_with_agent,
 )
 from cli.interactive_shell.runtime.session import ReplSession

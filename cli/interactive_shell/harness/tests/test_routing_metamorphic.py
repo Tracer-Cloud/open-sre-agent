@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness.command_dispatch import (
     deterministic_command_text,
 )
 from cli.interactive_shell.harness.router import RouteKind, route_input

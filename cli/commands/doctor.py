@@ -43,9 +43,9 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from cli.interactive_shell.utils.error_handling.exit_codes import ERROR as EXIT_ERROR
-from cli.interactive_shell.utils.error_handling.exit_codes import SUCCESS
 from config.version import get_version
+from platform.common.exit_codes import ERROR as EXIT_ERROR
+from platform.common.exit_codes import SUCCESS
 
 
 def _check(name: str, fn: Any) -> dict[str, str]:

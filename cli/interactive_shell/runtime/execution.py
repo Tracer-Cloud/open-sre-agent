@@ -7,11 +7,11 @@ from typing import cast
 
 from rich.console import Console
 
-import cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions as _agent_actions
+import cli.interactive_shell.harness.orchestration.agent_actions as _agent_actions
 from cli.interactive_shell.chat import cli_agent as _cli_agent
 from cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
 from cli.interactive_shell.command_registry import dispatch_slash
-from cli.interactive_shell.harness.handle_message_with_agent.pipeline import (
+from cli.interactive_shell.harness.pipeline import (
     handle_message_with_agent,
 )
 from cli.interactive_shell.harness.types import RouteDecision

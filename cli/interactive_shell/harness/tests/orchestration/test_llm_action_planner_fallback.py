@@ -6,14 +6,14 @@ from unittest.mock import patch
 
 import pytest
 
-from cli.interactive_shell.harness.handle_message_with_agent.errors import PlannerLLMError
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.planner import (
+from cli.interactive_shell.harness.errors import PlannerLLMError
+from cli.interactive_shell.harness.orchestration.llm_action_planner.planner import (
     plan_actions_with_llm_result,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.prompting import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner.prompting import (
     _system_prompt,
 )
-from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.system_prompt import (
+from cli.interactive_shell.harness.orchestration.llm_action_planner.system_prompt import (
     _SYSTEM_PROMPT_BASE,
 )
 from integrations.llm_cli.failure_explain import is_context_length_overflow
@@ -111,7 +111,7 @@ def test_plan_actions_with_llm_result_hands_off_on_prompt_overflow(overflow_mess
         raise PlannerLLMError(overflow_message)
 
     with patch(
-        "cli.interactive_shell.harness.handle_message_with_agent.orchestration."
+        "cli.interactive_shell.harness.orchestration."
         "llm_action_planner.planner._call_llm",
         side_effect=_raise_overflow,
     ):
@@ -128,7 +128,7 @@ def test_plan_actions_with_llm_result_hands_off_on_prompt_overflow(overflow_mess
 def test_plan_actions_with_llm_result_re_raises_non_overflow_planner_errors() -> None:
     with (
         patch(
-            "cli.interactive_shell.harness.handle_message_with_agent.orchestration."
+            "cli.interactive_shell.harness.orchestration."
             "llm_action_planner.planner._call_llm",
             side_effect=PlannerLLMError("codex: quota or rate limit exceeded (exit 1)"),
         ),
@@ -140,7 +140,7 @@ def test_plan_actions_with_llm_result_re_raises_non_overflow_planner_errors() ->
 def test_plan_actions_with_llm_result_re_raises_timeout_too_long_errors() -> None:
     with (
         patch(
-            "cli.interactive_shell.harness.handle_message_with_agent.orchestration."
+            "cli.interactive_shell.harness.orchestration."
             "llm_action_planner.planner._call_llm",
             side_effect=PlannerLLMError("The request took too long to complete"),
         ),
@@ -163,7 +163,7 @@ class _RaisingClient:
 
 
 def _patch_planner_llm(monkeypatch, error: Exception) -> None:
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration import (
+    from cli.interactive_shell.harness.orchestration import (
         llm_action_planner,
     )
 
@@ -182,7 +182,7 @@ def test_call_llm_prefixes_fallback_provider_context(monkeypatch) -> None:
     # Configured openai but only anthropic has a key: the user-visible planner
     # error must say the call fell back to anthropic, instead of an opaque
     # "Anthropic credit balance too low" that contradicts their config.
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (  # noqa: E501
+    from cli.interactive_shell.harness.orchestration.llm_action_planner.llm_client import (  # noqa: E501
         _call_llm,
     )
     from cli.interactive_shell.runtime.session import ReplSession
@@ -207,7 +207,7 @@ def test_call_llm_prefixes_fallback_provider_context(monkeypatch) -> None:
 
 
 def test_call_llm_prefixes_active_provider_context_without_fallback(monkeypatch) -> None:
-    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (  # noqa: E501
+    from cli.interactive_shell.harness.orchestration.llm_action_planner.llm_client import (  # noqa: E501
         _call_llm,
     )
     from cli.interactive_shell.runtime.session import ReplSession

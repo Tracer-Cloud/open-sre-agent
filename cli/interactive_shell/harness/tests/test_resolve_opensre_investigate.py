@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness.command_dispatch import (
     deterministic_command_text,
     opensre_investigate_slash_text,
 )
