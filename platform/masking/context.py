@@ -9,9 +9,10 @@ over strings, lists, and dicts. The placeholder map is serialized to
 from __future__ import annotations
 
 import re
+from typing import Any
+
 from platform.masking.detectors import DetectedIdentifier, find_identifiers
 from platform.masking.policy import MaskingPolicy, compile_extra_patterns
-from typing import Any
 
 
 class MaskingContext:

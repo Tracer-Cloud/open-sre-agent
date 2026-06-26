@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from typing import Any
+
 from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

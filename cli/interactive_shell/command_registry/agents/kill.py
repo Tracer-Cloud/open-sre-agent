@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
-from platform.analytics.events import Event
-from platform.analytics.provider import get_analytics
 
 from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
+from platform.analytics.events import Event
+from platform.analytics.provider import get_analytics
 from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
 from tools.fleet_monitoring.registry import AgentRegistry
 

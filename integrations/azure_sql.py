@@ -15,13 +15,13 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from platform.common.truncation import truncate
 from typing import Any
 
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

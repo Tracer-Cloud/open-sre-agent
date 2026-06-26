@@ -13,12 +13,13 @@ and Telegram delivery helpers. These tests pin down the contract:
 
 from __future__ import annotations
 
-from platform.notifications.delivery_transport import DeliveryResponse, post_json
 from typing import Any
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
+
+from platform.notifications.delivery_transport import DeliveryResponse, post_json
 
 
 def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> MagicMock:

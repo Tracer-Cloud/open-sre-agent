@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from enum import StrEnum
-from platform.analytics.provider import Properties
 from typing import Final
+
+from platform.analytics.provider import Properties
 
 INVESTIGATION_EVENT_SCHEMA_VERSION: Final[int] = 1
 

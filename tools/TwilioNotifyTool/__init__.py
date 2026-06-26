@@ -7,9 +7,9 @@ whenever a Twilio integration with the SMS channel enabled exists.
 
 from __future__ import annotations
 
-from platform.notifications.twilio_delivery import send_twilio_sms_report
 from typing import Any
 
+from platform.notifications.twilio_delivery import send_twilio_sms_report
 from tools.base import BaseTool
 
 

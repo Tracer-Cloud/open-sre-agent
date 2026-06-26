@@ -7,7 +7,6 @@ import contextlib
 import hashlib
 import json
 import os
-import platform
 import queue
 import re
 import tempfile
@@ -18,14 +17,15 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from platform.analytics.events import Event
 from typing import Final
 
 import httpx
 
+import platform
 from cli.wizard.store import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_version
+from platform.analytics.events import Event
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"

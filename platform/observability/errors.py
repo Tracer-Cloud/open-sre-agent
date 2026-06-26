@@ -16,8 +16,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from platform.observability.sentry_sdk import capture_exception
 from typing import Any
+
+from platform.observability.sentry_sdk import capture_exception
 
 
 def report_exception(

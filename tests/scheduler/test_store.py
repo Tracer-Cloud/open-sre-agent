@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+import pytest
+
 from platform.scheduler.claim_store import get_runs, try_claim
 from platform.scheduler.store import (
     add_task,
@@ -12,8 +15,6 @@ from platform.scheduler.store import (
     update_task,
 )
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
-
-import pytest
 
 
 @pytest.fixture()

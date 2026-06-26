@@ -7,10 +7,11 @@ lives in :mod:`platform.notifications.whatsapp_delivery` and the two share no co
 from __future__ import annotations
 
 import logging
-from platform.common.truncation import truncate
 from typing import Any
 
 import httpx
+
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

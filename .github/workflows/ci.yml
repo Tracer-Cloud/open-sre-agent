@@ -16,6 +16,8 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "pytest.ini"
+      - "ruff.toml"
+      - "mypy.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
 
@@ -34,6 +36,8 @@ on:
       - "pyproject.toml"
       - "uv.lock"
       - "pytest.ini"
+      - "ruff.toml"
+      - "mypy.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
 

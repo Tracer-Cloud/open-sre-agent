@@ -8,11 +8,12 @@ import time
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
-from platform.analytics import install, provider
-from platform.analytics.events import Event
 from typing import NoReturn
 
 import pytest
+
+from platform.analytics import install, provider
+from platform.analytics.events import Event
 
 
 @pytest.fixture(autouse=True)

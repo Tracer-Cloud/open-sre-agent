@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from platform.observability.tracing import traceable
 from typing import Any
 
 from core.orchestration.entrypoints import run_investigation
+from platform.observability.tracing import traceable
 from tests.synthetic.hermes_rca.scenario_loader import SUITE_DIR, load_scenario
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
 from tests.utils.alert_factory.factory import create_alert

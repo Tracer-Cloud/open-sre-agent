@@ -9,9 +9,9 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from platform.scheduler.types import TaskRun, TaskStatus
 
 from config.constants import OPENSRE_HOME_DIR
+from platform.scheduler.types import TaskRun, TaskStatus
 
 _DB_FILENAME = "scheduler.db"
 

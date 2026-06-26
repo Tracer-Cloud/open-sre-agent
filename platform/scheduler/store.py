@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from platform.scheduler.claim_store import _DB_FILENAME, delete_runs
-from platform.scheduler.types import ScheduledTask
 
 from filelock import FileLock
 
 from config.constants import OPENSRE_HOME_DIR
+from platform.scheduler.claim_store import _DB_FILENAME, delete_runs
+from platform.scheduler.types import ScheduledTask
 
 logger = logging.getLogger(__name__)
 

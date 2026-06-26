@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from platform.notifications.openclaw_delivery import send_openclaw_report
 from typing import Any
 
 import pytest
+
+from platform.notifications.openclaw_delivery import send_openclaw_report
 
 
 def _state(**overrides: Any) -> dict[str, Any]:

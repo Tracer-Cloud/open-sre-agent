@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from platform.notifications.twilio_delivery import post_twilio_sms, send_twilio_sms_report
 from typing import Any
 
 import pytest
+
+from platform.notifications.twilio_delivery import post_twilio_sms, send_twilio_sms_report
 
 
 class _Resp:

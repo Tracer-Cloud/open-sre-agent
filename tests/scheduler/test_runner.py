@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from platform.scheduler.runner import (
     _compute_fire_time,
     _make_trigger,
@@ -10,9 +14,6 @@ from platform.scheduler.runner import (
     run_task_now,
 )
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
-from unittest.mock import patch
-
-import pytest
 
 
 class TestMakeTrigger:

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+
+import pytest
+
 from platform.notifications.smtp_delivery import (
     format_background_rca_email,
     send_smtp_report,
     verify_smtp_connection,
 )
-
-import pytest
 
 
 class _FakeSMTP:

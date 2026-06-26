@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import platform
-
 from rich.console import Console
 
+import platform
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import (

@@ -19,13 +19,14 @@ The acceptance criteria from issue #1499 map onto these tests as follows:
 from __future__ import annotations
 
 import re
-from platform.guardrails.engine import GuardrailEngine
-from platform.guardrails.rules import GuardrailAction, GuardrailRule
-from platform.guardrails.stream import GuardrailStream
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+from platform.guardrails.engine import GuardrailEngine
+from platform.guardrails.rules import GuardrailAction, GuardrailRule
+from platform.guardrails.stream import GuardrailStream
 
 # ---------------------------------------------------------------------------
 # Helpers

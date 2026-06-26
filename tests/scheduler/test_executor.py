@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from platform.scheduler.executor import execute_task
-from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 from unittest.mock import patch
 
 import pytest
+
+from platform.scheduler.executor import execute_task
+from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 @pytest.fixture()

@@ -17,11 +17,12 @@ network is never touched. Provider-specific success criteria
 from __future__ import annotations
 
 import logging
-from platform.notifications import slack_delivery
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+from platform.notifications import slack_delivery
 
 
 def _mock_response(status_code: int, json_body: Any = None, text: str = "") -> MagicMock:

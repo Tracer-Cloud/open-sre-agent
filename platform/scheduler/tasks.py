@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
+
 from platform.scheduler.types import ScheduledTask, TaskKind
 
 logger = logging.getLogger(__name__)

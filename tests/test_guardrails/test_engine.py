@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+import pytest
+import yaml
+
 from platform.guardrails.audit import AuditLogger
 from platform.guardrails.engine import (
     GuardrailBlockedError,
@@ -10,9 +14,6 @@ from platform.guardrails.engine import (
     reset_guardrail_engine,
 )
 from platform.guardrails.rules import GuardrailAction, GuardrailRule
-
-import pytest
-import yaml
 
 
 def _rule(

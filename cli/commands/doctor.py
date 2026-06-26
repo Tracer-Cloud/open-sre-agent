@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,6 +30,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
+import platform
 from cli.interactive_shell.data_store.context import is_json_output
 from cli.interactive_shell.error_handling.exit_codes import ERROR as EXIT_ERROR
 from cli.interactive_shell.error_handling.exit_codes import SUCCESS

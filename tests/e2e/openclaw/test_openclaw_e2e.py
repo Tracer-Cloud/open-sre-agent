@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from platform.notifications.openclaw_delivery import send_openclaw_report
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -35,6 +34,7 @@ from integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
+from platform.notifications.openclaw_delivery import send_openclaw_report
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 # ---------------------------------------------------------------------------

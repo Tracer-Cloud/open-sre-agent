@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
 from platform.masking.policy import IdentifierKind, MaskingPolicy, compile_extra_patterns
 
 

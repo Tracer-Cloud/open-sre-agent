@@ -11,12 +11,13 @@ never touched and the URL resolution is deterministic.
 
 from __future__ import annotations
 
-from platform.notifications import ingest_delivery
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+
+from platform.notifications import ingest_delivery
 
 
 @pytest.fixture

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from platform.guardrails.engine import GuardrailBlockedError, reset_guardrail_engine
 from typing import Any
 
 import pytest
 import yaml
+
+from platform.guardrails.engine import GuardrailBlockedError, reset_guardrail_engine
 
 # ---------------------------------------------------------------------------
 # Shared LLM-client capture fixtures

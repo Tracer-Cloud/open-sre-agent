@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import NamedTuple
+
 from platform.guardrails.audit import AuditLogger
 from platform.guardrails.rules import (
     GuardrailAction,
@@ -11,7 +13,6 @@ from platform.guardrails.rules import (
     get_default_rules_path,
     load_rules,
 )
-from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
 

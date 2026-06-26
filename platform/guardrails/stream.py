@@ -22,6 +22,7 @@ chunk that contained at least one match.
 from __future__ import annotations
 
 from collections.abc import Callable
+
 from platform.analytics.cli import capture_agent_secret_detected
 from platform.guardrails.audit import AuditLogger
 from platform.guardrails.engine import GuardrailEngine, ScanMatch

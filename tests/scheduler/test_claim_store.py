@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from platform.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
-from platform.scheduler.types import TaskStatus
 
 import pytest
+
+from platform.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
+from platform.scheduler.types import TaskStatus
 
 
 @pytest.fixture()

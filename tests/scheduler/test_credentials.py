@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from platform.scheduler.credentials import (
     resolve_discord_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
 )
-
-import pytest
 
 
 class TestTelegramCredentials:

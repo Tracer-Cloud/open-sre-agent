@@ -11,6 +11,7 @@ _render_art(width)  return the best-fit art string for a given terminal width
 from __future__ import annotations
 
 import os
+
 from platform.observability.figlet import render_figlet
 
 # Pre-rendered during development and checked into this module as a static string.

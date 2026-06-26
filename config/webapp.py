@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from platform.observability.sentry_sdk import init_sentry
-
 from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
 from config.version import get_version
+from platform.observability.sentry_sdk import init_sentry
 
 init_sentry(entrypoint="webapp")
 

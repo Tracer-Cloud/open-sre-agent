@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import platform
-
 from cli.__main__ import main
 from config.version import get_version
 

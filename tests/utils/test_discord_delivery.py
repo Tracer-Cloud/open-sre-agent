@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+from unittest.mock import MagicMock
+
+import pytest
+
 from platform.notifications import discord_delivery
 from platform.notifications.discord_delivery import (
     create_discord_thread,
     post_discord_message,
     send_discord_report,
 )
-from typing import Any
-from unittest.mock import MagicMock
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers

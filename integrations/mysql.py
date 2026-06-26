@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from platform.common.truncation import truncate
 from typing import Any
 
 from pydantic import Field, field_validator
@@ -22,6 +21,7 @@ from integrations._relational import (
     resolve_stored_or_env_config,
 )
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

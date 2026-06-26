@@ -10,14 +10,14 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from platform.common.coercion import safe_int
-from platform.common.truncation import truncate
 from typing import Any
 
 from pydantic import Field, field_validator
 
 from integrations._relational import RelationalConfigBase, env_bool, env_str
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
+from platform.common.coercion import safe_int
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

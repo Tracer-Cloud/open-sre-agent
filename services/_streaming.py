@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
+
 from platform.observability.errors import report_exception
 
 #: Default fraction of skipped lines tolerated before a stream is flagged.

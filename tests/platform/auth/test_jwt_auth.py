@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import jwt as pyjwt
+import pytest
+
 from platform.auth.jwt_auth import (
     AsyncJWKSCache,
     JWTVerificationError,
     get_signing_key_from_jwks,
 )
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import jwt as pyjwt
-import pytest
 
 
 @pytest.mark.asyncio

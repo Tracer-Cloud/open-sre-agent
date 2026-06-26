@@ -12,10 +12,11 @@ import logging
 import signal
 import threading
 from datetime import UTC, datetime
+from typing import Any
+
 from platform.scheduler.executor import execute_task
 from platform.scheduler.store import get_task, list_tasks, update_task
 from platform.scheduler.types import ScheduledTask
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

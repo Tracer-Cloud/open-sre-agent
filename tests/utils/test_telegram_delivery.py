@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+from unittest.mock import MagicMock
+
+import pytest
+
 from platform.notifications import telegram_delivery
 from platform.notifications.telegram_delivery import (
     _TelegramTokenFilter,
@@ -10,10 +15,6 @@ from platform.notifications.telegram_delivery import (
     send_telegram_report,
     truncate_for_telegram_html,
 )
-from typing import Any
-from unittest.mock import MagicMock
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers

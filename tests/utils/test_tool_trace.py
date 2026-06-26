@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from platform.observability.tool_trace import (
     format_json_preview,
     format_tool_trace_entry,
     redact_sensitive,
 )
-from typing import Any
 
 SENSITIVE_KEYS = [
     "api_key",

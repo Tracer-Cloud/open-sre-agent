@@ -4,12 +4,12 @@ import io
 import re
 import shutil
 import sys
-from platform.observability import get_output_format
 
 from rich.console import Console
 from rich.text import Text
 
 from config.ui_theme import BRAND, DIM, HIGHLIGHT, WARNING
+from platform.observability import get_output_format
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers

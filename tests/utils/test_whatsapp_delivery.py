@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from platform.notifications.whatsapp_delivery import (
     post_whatsapp_message_twilio,
     send_whatsapp_report,
 )
-from typing import Any
-
-import pytest
 
 
 def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -> None:

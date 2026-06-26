@@ -5,10 +5,10 @@ import json
 import logging
 from contextlib import suppress
 from io import BytesIO
-from platform.observability.errors import report_exception
 from typing import Any
 from zipfile import ZipFile
 
+from platform.observability.errors import report_exception
 from services.env import make_boto3_client, require_aws_credentials
 
 logger = logging.getLogger(__name__)

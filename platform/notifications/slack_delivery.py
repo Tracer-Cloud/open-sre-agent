@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 import os
 import re
-from platform.notifications.delivery_transport import post_json
-from platform.observability import debug_print
 from typing import Any
 
 from config.config import SLACK_CHANNEL
+from platform.notifications.delivery_transport import post_json
+from platform.observability import debug_print
 
 logger = logging.getLogger(__name__)
 

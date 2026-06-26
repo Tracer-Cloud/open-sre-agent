@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from platform.analytics.source import (
     INVESTIGATION_EVENT_SCHEMA_VERSION,
     EntrypointSource,
@@ -8,8 +10,6 @@ from platform.analytics.source import (
     is_test_run,
     resolve_environment_tag,
 )
-
-import pytest
 
 
 def test_is_test_run_true_for_explicit_source_override(monkeypatch: pytest.MonkeyPatch) -> None:

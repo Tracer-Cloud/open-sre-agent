@@ -18,14 +18,6 @@ from config.platform_bootstrap import ensure_project_platform_package
 
 ensure_project_platform_package()
 
-from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
-from platform.analytics.provider import (  # noqa: E402
-    Properties,
-    capture_first_run_if_needed,
-    shutdown_analytics,
-)
-from platform.observability.sentry_sdk import capture_exception, init_sentry  # noqa: E402
-
 import click  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
@@ -41,6 +33,13 @@ from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
     install_questionary_escape_cancel,
 )
 from config.version import get_version  # noqa: E402
+from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
+from platform.analytics.provider import (  # noqa: E402
+    Properties,
+    capture_first_run_if_needed,
+    shutdown_analytics,
+)
+from platform.observability.sentry_sdk import capture_exception, init_sentry  # noqa: E402
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"

@@ -41,16 +41,10 @@ ignore = [
 # Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
 # F401 is enforced so unused imports surface in lint (and CI) like in app/.
 "tests/**/*.py" = ["ARG001", "E402"]
-# Routing tests are colocated under app/ (see test_routing_fixture_integrity.py)
-# but are still tests: fake callables match real signatures and leave some
-# keyword params unused, exactly like the tests/ tree above.
+# Routing tests are colocated under cli/ but are still tests: fake callables
+# match real signatures and leave some keyword params unused, exactly like the
+# tests/ tree above.
 "cli/interactive_shell/routing/tests/**/*.py" = ["ARG001", "E402"]
-
-# Pydantic models have fields that appear unused but are accessed dynamically
-"app/ingest.py" = ["ARG002"]
-
-# Dataclass fields from external APIs may not all be used
-"app/tracer/client.py" = ["ARG002"]
 
 # CLI entry points
 "cli/__main__.py" = ["ARG001"]
@@ -64,4 +58,17 @@ ignore = [
 # background reader thread (_reader_loop). A with-block would close the fd when
 # __init__ exits — before the thread reads anything. The fd is closed in close().
 "tools/fleet_monitoring/tail.py" = ["SIM115"]
+
+[lint.isort]
+known-first-party = [
+    "cli",
+    "config",
+    "core",
+    "deployment",
+    "integrations",
+    "platform",
+    "services",
+    "tests",
+    "tools",
+]
 

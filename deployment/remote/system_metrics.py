@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import shutil
 import socket
 import subprocess
@@ -18,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import platform
 from deployment.remote.error_reporting import report_remote_exception
 
 logger = logging.getLogger(__name__)

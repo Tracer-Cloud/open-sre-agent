@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import platform
 import sys
 
 from rich.console import Console
 
+import platform
 from cli.config import ReplConfig
 from cli.interactive_shell import alert_inbox as _alert_inbox
 from cli.interactive_shell.prompting import prompt_surface as _prompt_surface

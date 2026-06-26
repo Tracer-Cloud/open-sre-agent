@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from platform.sandbox.runner import DEFAULT_TIMEOUT, MAX_TIMEOUT, run_python_sandbox
 from typing import Any
 
+from platform.sandbox.runner import DEFAULT_TIMEOUT, MAX_TIMEOUT, run_python_sandbox
 from tools.tool_decorator import tool
 
 

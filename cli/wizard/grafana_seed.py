@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import time
 from contextlib import suppress
-from platform.observability.sentry_sdk import init_sentry
 from typing import Any
 
 import requests
+
+from platform.observability.sentry_sdk import init_sentry
 
 LOCAL_LOKI_URL = "http://localhost:3100"
 SERVICE_NAME = "prefect-etl-pipeline-local"

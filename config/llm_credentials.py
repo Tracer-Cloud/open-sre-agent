@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
-import platform
 import shutil
 from typing import Final
 
 import keyring
 import keyring.errors
+
+import platform
 
 _KEYRING_SERVICE: Final = "opensre.llm"
 _DISABLED_VALUES: Final = frozenset({"1", "true", "yes", "on"})

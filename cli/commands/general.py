@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import json
-import platform
 import sys
 import time
+
+import click
+
+import platform
+from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+from cli.interactive_shell.data_store.context import is_json_output, is_yes
+from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
+from config.version import get_version
 from platform.analytics.cli import (
     capture_update_completed,
     capture_update_failed,
@@ -13,13 +20,6 @@ from platform.analytics.cli import (
     track_investigation,
 )
 from platform.analytics.source import EntrypointSource, TriggerMode
-
-import click
-
-from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
-from cli.interactive_shell.data_store.context import is_json_output, is_yes
-from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
-from config.version import get_version
 
 
 @click.command(name="uninstall")

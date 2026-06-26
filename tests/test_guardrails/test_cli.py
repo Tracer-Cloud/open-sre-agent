@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from platform.guardrails.audit import AuditLogger
-from platform.guardrails.cli import cmd_audit, cmd_init, cmd_rules, cmd_test
 
 import pytest
 import yaml
+
+from platform.guardrails.audit import AuditLogger
+from platform.guardrails.cli import cmd_audit, cmd_init, cmd_rules, cmd_test
 
 
 class TestCmdInit:

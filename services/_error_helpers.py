@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from platform.observability.errors import report_exception
 from typing import Any
 
 import httpx
+
+from platform.observability.errors import report_exception
 
 
 def _is_transient_vendor_error(exc: BaseException) -> bool:

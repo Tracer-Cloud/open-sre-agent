@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import logging
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from platform.observability.errors import (
     OpenSRESilentFallback,
     report_and_reraise,
     report_and_swallow,
     report_exception,
 )
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 @pytest.fixture(autouse=True)

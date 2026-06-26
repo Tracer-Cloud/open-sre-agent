@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from platform.observability.tool_trace import redact_sensitive
 from typing import Any
 
 from core.domain.alerts.alert_source import (
@@ -10,6 +9,7 @@ from core.domain.alerts.alert_source import (
     resolve_alert_source,
 )
 from core.runtime import public_tool_input
+from platform.observability.tool_trace import redact_sensitive
 from services.agent_llm_client import ToolCall
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools

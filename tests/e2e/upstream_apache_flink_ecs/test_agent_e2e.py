@@ -13,12 +13,12 @@ import json
 import sys
 import time
 from datetime import UTC, datetime
-from platform.observability.tracing import traceable
 
 import boto3
 import requests
 
 from cli.investigation import run_investigation_cli
+from platform.observability.tracing import traceable
 from tests.shared.e2e_rca_checks import (
     audit_key_mentioned,
     investigation_text_blob,

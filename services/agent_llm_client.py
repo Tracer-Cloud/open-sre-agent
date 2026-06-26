@@ -383,11 +383,10 @@ class BedrockConverseAgentClient:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        from platform.guardrails.apply import apply_guardrails_to_converse_payload
-        from platform.guardrails.engine import GuardrailBlockedError
-
         import botocore.exceptions
 
+        from platform.guardrails.apply import apply_guardrails_to_converse_payload
+        from platform.guardrails.engine import GuardrailBlockedError
         from services.bedrock_converse import (
             is_non_retryable_bedrock_code,
             map_bedrock_client_error,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from platform.common.url_validation import validate_https_or_loopback_http_url
 from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -17,6 +16,7 @@ from integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
+from platform.common.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"

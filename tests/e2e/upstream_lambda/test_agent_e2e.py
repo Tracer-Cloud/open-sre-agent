@@ -8,12 +8,12 @@ import json
 import sys
 import time
 from datetime import UTC, datetime
-from platform.observability.tracing import traceable
 
 import boto3
 import requests
 
 from cli.investigation import run_investigation_cli
+from platform.observability.tracing import traceable
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
 

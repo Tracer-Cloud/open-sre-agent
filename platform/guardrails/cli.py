@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+
+import click
+
 from platform.guardrails.audit import AuditLogger
 from platform.guardrails.engine import GuardrailEngine
 from platform.guardrails.rules import get_default_rules_path, load_rules
-
-import click
 
 _STARTER_CONFIG = """\
 # OpenSRE Guardrails Configuration

@@ -25,9 +25,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from platform.analytics.cli import capture_investigation_failed, track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.observability.sentry_sdk import capture_exception, init_sentry
 from typing import Any
 
 from dotenv import load_dotenv
@@ -58,6 +55,9 @@ from deployment.remote.vercel_poller import (
     VercelResolutionError,
     enrich_remote_alert_from_vercel,
 )
+from platform.analytics.cli import capture_investigation_failed, track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
+from platform.observability.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 from platform.masking.context import MaskingContext
 from platform.masking.policy import ALL_KINDS, MaskingPolicy
 

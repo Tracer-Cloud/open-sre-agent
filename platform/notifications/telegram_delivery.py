@@ -5,9 +5,10 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
+from typing import Any
+
 from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

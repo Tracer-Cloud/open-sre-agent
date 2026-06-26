@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+
 from platform.scheduler.claim_store import complete_run, try_claim
 from platform.scheduler.credentials import (
     resolve_discord_credentials,
