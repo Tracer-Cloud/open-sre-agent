@@ -1,5 +1,5 @@
 id: 022-opensre-investigate-alert-json
-title: opensre investigate -i alert.json routes to /investigate without LLM planner
+title: opensre investigate -i alert.json normalizes to /investigate for terminal UI policy
 intent_class: deterministic
 input:
   prompt: opensre investigate -i alert.json

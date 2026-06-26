@@ -17,7 +17,7 @@ notes:
 - GitHub MCP auth alone does not set owner/repo in the integration store. This scenario asserts
   the gather loop infers Tracer-Cloud/opensre from the inline repo URL, enables search_github_issues,
   and calls it. call_any (not valid_data) matches 338 — fake fixture token may 401 against live MCP,
-  but "was called" proves gather routed to GitHub instead of hallucinating issue text.
+  but "was called" proves gather selected GitHub instead of hallucinating issue text.
 turn:
   expected_kind: agent
   expected_command_text: null

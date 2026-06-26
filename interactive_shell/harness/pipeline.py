@@ -42,6 +42,8 @@ def handle_message_with_agent(
     # output produced by *this* planner turn.
     session.last_command_observation = None
 
+    # Keep the turn boundary LLM-first. Do not branch on literal command syntax
+    # here; slash and shell execution must come from typed planner actions.
     turn = execute(
         text,
         session,

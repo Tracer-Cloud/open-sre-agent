@@ -357,7 +357,7 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/hermes",
-        "Live-tail Hermes logs and route incidents to Telegram.",
+        "Live-tail Hermes logs and send incidents to Telegram.",
         _cmd_hermes,
         usage=("/hermes watch",),
         execution_tier=ExecutionTier.SAFE,

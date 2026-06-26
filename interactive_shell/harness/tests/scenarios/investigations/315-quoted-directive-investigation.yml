@@ -1,5 +1,5 @@
 id: 315-quoted-directive-investigation
-title: Quoted directive routes to investigation, not a chatty handoff
+title: Quoted directive dispatches investigation, not a chatty handoff
 intent_class: investigation
 input:
   prompt: investigate "checkout is returning 502s for EU customers"

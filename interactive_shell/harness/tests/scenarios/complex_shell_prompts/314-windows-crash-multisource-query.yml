@@ -36,7 +36,7 @@ notes:
 - 'The investigation alert_text is synthesized from the prompt and varies per run, so planned_actions
   leaves content empty: the planning test asserts an investigation with non-empty alert_text rather than
   an exact string.'
-- 'Gather negative control: connected integrations must route to investigation_start, not the conversational
+- 'Gather negative control: connected integrations must dispatch investigation_start, not the conversational
   gather loop on the same turn. not_called on Sentry/GitHub/PostHog gather tools proves dispatch won over
   handoff fan-out (contrast 338, where the same integrations DO gather).'
 turn:

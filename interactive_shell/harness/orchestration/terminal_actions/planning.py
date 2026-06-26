@@ -1,8 +1,8 @@
-"""Second-phase action planning for interactive-shell free text.
+"""Second-phase action planning for interactive-shell turns.
 
-Every free-text turn reaches the CLI agent path first. This module
-decides whether the turn should execute explicit terminal actions before the
-assistant falls back to a conversational answer.
+Every user turn reaches the LLM planner before any terminal action is eligible
+to run. This module decides whether the planner's typed actions should execute
+before the assistant falls back to a conversational answer.
 """
 
 from __future__ import annotations
@@ -38,22 +38,10 @@ def plan_actions(
     default_planner: Callable[..., Any],
 ) -> ActionPlanningDecision:
     """Plan executable terminal actions for one CLI-agent turn."""
-    # Fast path: `!cmd` is an explicit shell-passthrough prefix that must bypass
-    # the LLM planner entirely.
-    stripped = message.strip()
-    if stripped.startswith("!") and len(stripped) > 1:
-        from interactive_shell.harness.orchestration.intent_parser import (
-            shell_action,
-        )
-
-        cmd = " ".join(stripped[1:].split())  # normalise internal whitespace/newlines
-        if cmd:
-            return ActionPlanningDecision(
-                actions=(shell_action(f"!{cmd}", 0),),
-                has_unhandled_clause=False,
-                policy_trace=("deterministic_bang_shell",),
-            )
-
+    # Do not add deterministic command fast paths here. Every user turn must
+    # reach the LLM action planner first; literal-looking commands are only
+    # executable after the planner emits a typed action such as shell_run or
+    # slash_invoke.
     if planner is default_planner:
         llm_plan_result = plan_actions_with_llm_result(message, session=session)
         if llm_plan_result is None:

@@ -10,7 +10,7 @@ session:
   resolved_integrations:
     datadog: '@live'
 notes:
-- Live-gather counterpart to 325-priority-prompt-checkout-502-rate. Same prompt and handoff routing, but
+- Live-gather counterpart to 325-priority-prompt-checkout-502-rate. Same prompt and handoff behavior, but
   asserts the conversational gather loop reaches live Datadog and returns valid data via query_datadog_logs
   or query_datadog_all (316-style), not merely that a tool was invoked despite auth/transport errors.
 - 'P0 priority prompt (http_5xx_or_latency_after_deploy #1).'

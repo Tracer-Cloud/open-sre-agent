@@ -33,10 +33,7 @@ def _repo_root() -> Path:
     return TESTS_DIR.parents[2]
 
 
-LEGACY_TURN_TESTS_DIRS = (
-    _repo_root() / "tests" / "cli" / "interactive_shell" / "routing",
-    _repo_root() / "tests" / "interactive_shell" / "harness",
-)
+LEGACY_TURN_TESTS_DIRS = (_repo_root() / "tests" / "interactive_shell" / "harness",)
 ALLOWED_LEGACY_TESTS: set[str] = set()
 ORACLE_RUNTIME = TESTS_DIR / "_oracle_runtime.py"
 

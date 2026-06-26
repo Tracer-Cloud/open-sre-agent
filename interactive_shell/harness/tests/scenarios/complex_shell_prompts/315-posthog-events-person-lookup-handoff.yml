@@ -31,7 +31,7 @@ notes:
   of passing on hallucinated text. call_posthog_tool is intentionally NOT required: it only fires after
   list_posthog_tools authenticates against the live endpoint, which the fake fixture token cannot do (it
   401s), so requiring it would make the fixture fail in every credential-less environment (CI included).
-  list_posthog_tools firing is the deterministic, auth-independent proof that the gather loop routed this
+  list_posthog_tools firing is the deterministic, auth-independent proof that the gather loop selected this
   lookup to PostHog.'
 turn:
   expected_kind: agent

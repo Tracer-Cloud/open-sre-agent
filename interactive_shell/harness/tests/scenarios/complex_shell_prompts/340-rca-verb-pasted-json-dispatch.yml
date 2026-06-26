@@ -19,7 +19,7 @@ notes:
   planner emits investigation_start with the payload as alert_text. This is the explicit-verb contrast to
   306-pasted-alert-json-payload, where a BARE JSON blob with no instruction is just a fact statement and
   correctly hands off; here the same kind of blob is the OBJECT of an explicit RCA verb and must dispatch.'
-- 'Because this routes down the planner -> dispatch path (investigation_start), the conversational
+- 'Because this uses the planner -> dispatch path (investigation_start), the conversational
   gather_tool_evidence loop does not run, so no integration tool should fire. search_sentry_issues,
   search_github_issues, list_posthog_tools, and query_datadog_all are asserted not_called as a guard that a
   dispatched investigation never silently falls back into chat-surface gathering.'

@@ -141,8 +141,8 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         anti_examples=("User asks a procedural docs question (assistant_handoff)",),
     ),
     "/hermes": _mcp(
-        "Live-tail Hermes logs and route detected incidents to Telegram. Subcommand: watch.",
-        "User asks to watch Hermes logs or Hermes incident routing",
+        "Live-tail Hermes logs and send detected incidents to Telegram. Subcommand: watch.",
+        "User asks to watch Hermes logs or Hermes incident escalation",
     ),
     "/history": _mcp(
         "Manage persisted command history: clear, off, on, retention <N>.",

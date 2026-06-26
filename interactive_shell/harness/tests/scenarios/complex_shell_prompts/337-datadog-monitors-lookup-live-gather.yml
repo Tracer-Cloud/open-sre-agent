@@ -17,7 +17,7 @@ notes:
   Datadog"), the planner must hand off and let the conversational gather loop query Datadog. This is the
   Datadog counterpart to the Sentry lookup in 316 and the PostHog lookup in 315, and the lookup contrast to
   the Datadog INCIDENT gathers in 333-335 (which describe a failing service, not a record listing).'
-- 'Correct-integration routing guard: Datadog is the only resolved integration, so the gather loop MUST
+- 'Correct-integration selection guard: Datadog is the only resolved integration, so the gather loop MUST
   engage a Datadog tool and MUST NOT touch Sentry/GitHub/PostHog. search_sentry_issues, search_github_issues,
   and list_posthog_tools are asserted not_called so a gather loop that fans out to the wrong integration
   fails here instead of passing on unrelated text.'

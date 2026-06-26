@@ -1360,21 +1360,17 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     assert captured_executed == [(1, 1, 1)]
 
 
-def test_execute_cli_actions_bang_prefix_dispatches_to_shell_bypassing_llm(
+def test_execute_cli_actions_bang_prefix_runs_only_after_llm_plans_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """!cmd prefix must be dispatched deterministically to shell execution without calling
-    the LLM planner.  Regression: bare `!cmd` (and multiline `!cmd\\n   args`) was
-    passed to the LLM which misidentified it as a pasted snippet and returned
-    assistant_handoff instead of shell_run.
-    """
+    """Bare !cmd input still goes through the LLM planner before shell execution."""
     llm_called: list[str] = []
 
-    def _fail_if_called(message: str, *, session: object = None) -> None:  # pragma: no cover
+    def _planner(message: str, *, session: object = None) -> LlmActionPlanResult:  # noqa: ARG001
         llm_called.append(message)
-        raise AssertionError("LLM planner must not be called for !cmd input")
+        return _llm_plan_result([_action("shell", "!curl wttr.in/London")])
 
-    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _fail_if_called)
+    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _planner)
 
     calls: list[tuple[str, dict[str, object]]] = []
 
@@ -1391,7 +1387,7 @@ def test_execute_cli_actions_bang_prefix_dispatches_to_shell_bypassing_llm(
     handled = agent_actions.execute_cli_actions("!curl\n      wttr.in/London", session, console)
 
     assert handled.handled is True
-    assert llm_called == [], "LLM planner must not have been invoked for !cmd input"
+    assert llm_called == ["!curl\n      wttr.in/London"]
     assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
     # The executor strips `!` and runs with shell=True.
     assert calls[0][0] == "curl wttr.in/London"
@@ -1402,7 +1398,15 @@ def test_execute_cli_actions_bang_prefix_dispatches_to_shell_bypassing_llm(
 def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Single-line !cmd dispatches to shell execution without any LLM involvement."""
+    """Single-line !cmd shell execution is planner-owned, not a deterministic bypass."""
+    llm_called: list[str] = []
+
+    def _planner(message: str, *, session: object = None) -> LlmActionPlanResult:  # noqa: ARG001
+        llm_called.append(message)
+        return _llm_plan_result([_action("shell", "!echo hello world")])
+
+    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _planner)
+
     calls: list[tuple[str, dict[str, object]]] = []
 
     def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -1417,6 +1421,7 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     handled = agent_actions.execute_cli_actions("!echo hello world", session, console)
 
     assert handled.handled is True
+    assert llm_called == ["!echo hello world"]
     assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
     assert calls[0][0] == "echo hello world"
     assert calls[0][1]["shell"] is True

@@ -65,6 +65,9 @@ _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
 
 
 def turn_should_show_spinner(text: str, _session: ReplSession) -> bool:
+    # This deterministic command check is UI-only. It must never become an
+    # execution shortcut; submitted turns still go through the LLM planner before
+    # any slash or shell action can run.
     return deterministic_command_text(text.strip()) is None
 
 
@@ -76,6 +79,8 @@ def turn_needs_exclusive_stdin(text: str, _session: ReplSession) -> bool:
     if not t:
         return False
 
+    # Reserve stdin early for literal command-shaped input, but do not dispatch
+    # here. Execution remains planner-owned so there are no command fast paths.
     dispatch_text = deterministic_command_text(t)
     if dispatch_text is None:
         return False
