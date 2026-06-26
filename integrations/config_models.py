@@ -1177,7 +1177,6 @@ class TemporalIntegrationConfig(StrictConfigModel):
 
     @property
     def headers(self) -> dict[str, str]:
-
         headers = {
             "Content-Type": "application/json",
         }
