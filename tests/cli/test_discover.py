@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.tests.discover import (
+from cli.tests.discover import (
     _comment_map_for_makefile,
     _discover_rds_synthetic_scenarios,
     discover_make_targets,
@@ -57,7 +57,7 @@ def test_discover_make_targets_finds_target_at_line_one(
     """Regression guard: re.MULTILINE regex must match a target with no preceding newline."""
     makefile = tmp_path / "Makefile"
     makefile.write_text("test-cov:\n\tpytest\n\ntest-full:\n\tpytest --full\n", encoding="utf-8")
-    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+    monkeypatch.setattr("cli.tests.discover.MAKEFILE_PATH", makefile)
 
     items = discover_make_targets()
 
@@ -70,7 +70,7 @@ def test_discover_make_targets_skips_targets_missing_from_makefile(
 ) -> None:
     makefile = tmp_path / "Makefile"
     makefile.write_text("test-cov:\n\tpytest\n\ndeploy:\n\tpython deploy.py\n", encoding="utf-8")
-    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+    monkeypatch.setattr("cli.tests.discover.MAKEFILE_PATH", makefile)
 
     ids = [item.id for item in discover_make_targets()]
     assert set(ids) == {"make:test-cov", "make:deploy"}
@@ -85,7 +85,7 @@ def test_discover_make_targets_applies_comment_and_metadata(
         "# Grafana integration checks\ntest-grafana:\n\tpytest tests/integrations\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+    monkeypatch.setattr("cli.tests.discover.MAKEFILE_PATH", makefile)
 
     items = discover_make_targets()
     assert len(items) == 1
@@ -99,7 +99,7 @@ def test_discover_make_targets_applies_comment_and_metadata(
 # ---------------------------------------------------------------------------
 # Bundled-binary degradation (regression for #1078)
 #
-# ``packaging/opensre.spec`` collects only ``app/`` data files, so at runtime
+# ``deployment/packaging/opensre.spec`` collects only ``config/`` data files, so at runtime
 # in a PyInstaller-bundled ``opensre`` binary the ``tests/`` tree, ``Makefile``,
 # and ``tests/e2e/rca`` directory are absent. Each ``discover_*`` helper must
 # return cleanly so ``opensre tests`` and ``opensre tests list`` keep working
@@ -119,20 +119,20 @@ def _patch_discover_paths(
 ) -> None:
     """Helper: monkeypatch any subset of the discover module's path constants.
 
-    Reduces the ``monkeypatch.setattr("app.cli.tests.discover.X", ...)`` ×4
+    Reduces the ``monkeypatch.setattr("cli.tests.discover.X", ...)`` ×4
     repetition that tests in ``TestDiscoverGracefulOnMissingSource`` would
     otherwise carry. Per @muddlebee's PR #952 review nit on duplicated test
     setup."""
     if repo_root is not None:
-        monkeypatch.setattr("app.cli.tests.discover.REPO_ROOT", repo_root)
+        monkeypatch.setattr("cli.tests.discover.REPO_ROOT", repo_root)
     if makefile is not None:
-        monkeypatch.setattr("app.cli.tests.discover.MAKEFILE_PATH", makefile)
+        monkeypatch.setattr("cli.tests.discover.MAKEFILE_PATH", makefile)
     if rca_dir is not None:
-        monkeypatch.setattr("app.cli.tests.discover.RCA_DIR", rca_dir)
+        monkeypatch.setattr("cli.tests.discover.RCA_DIR", rca_dir)
     if synthetic_dir is not None:
-        monkeypatch.setattr("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", synthetic_dir)
+        monkeypatch.setattr("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", synthetic_dir)
     if cloudopsbench_dir is not None:
-        monkeypatch.setattr("app.cli.tests.discover.CLOUDOPSBENCH_DIR", cloudopsbench_dir)
+        monkeypatch.setattr("cli.tests.discover.CLOUDOPSBENCH_DIR", cloudopsbench_dir)
 
 
 class TestDiscoverGracefulOnMissingSource:

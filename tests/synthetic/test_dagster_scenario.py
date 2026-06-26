@@ -18,19 +18,19 @@ from typing import Any
 import httpx
 import pytest
 
-from app.core.domain.alerts.alert_source import (
+from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
 )
-from app.core.domain.alerts.alert_source import (
+from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
 )
-from app.integrations import dagster as dagster_integration
-from app.services.dagster import DagsterClient
-from app.tools.DagsterAssetsTool import list_dagster_assets
-from app.tools.DagsterRunLogsTool import get_dagster_run_logs
-from app.tools.DagsterRunsTool import list_dagster_runs
-from app.tools.DagsterSchedulesTool import list_dagster_schedule_ticks
-from app.tools.DagsterSensorsTool import list_dagster_sensor_ticks
+from integrations import dagster as dagster_integration
+from services.dagster import DagsterClient
+from tools.DagsterAssetsTool import list_dagster_assets
+from tools.DagsterRunLogsTool import get_dagster_run_logs
+from tools.DagsterRunsTool import list_dagster_runs
+from tools.DagsterSchedulesTool import list_dagster_schedule_ticks
+from tools.DagsterSensorsTool import list_dagster_sensor_ticks
 
 pytestmark = pytest.mark.synthetic
 
@@ -235,7 +235,7 @@ def _make_mock_dagster_client(query_to_response: dict[str, dict[str, Any]]) -> h
 
 @pytest.fixture
 def patched_dagster_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch app.integrations.dagster._client to return a DagsterClient backed by
+    """Patch integrations.dagster._client to return a DagsterClient backed by
     a fixture httpx.Client that serves canned responses for each query."""
     mock_http = _make_mock_dagster_client(
         {

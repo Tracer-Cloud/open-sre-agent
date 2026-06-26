@@ -19,7 +19,7 @@ from unittest.mock import patch
 import pytest
 from filelock import Timeout
 
-from app.integrations.store import (
+from integrations.store import (
     IntegrationStoreLockTimeout,
     _load_raw,
     _save,
@@ -32,7 +32,7 @@ from app.integrations.store import (
 @pytest.fixture
 def tmp_store(tmp_path: Path):
     store_file = tmp_path / "integrations.json"
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         yield store_file
 
 
@@ -154,10 +154,10 @@ def _cross_process_worker(store_path_str: str, service: str, token: str) -> None
     from pathlib import Path
     from unittest.mock import patch
 
-    from app.integrations.store import upsert_integration
+    from integrations.store import upsert_integration
 
     store_file = Path(store_path_str)
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         upsert_integration(service, {"credentials": {"token": token}})
 
 
@@ -199,7 +199,7 @@ def test_atomic_write_failure_cleanup(tmp_store: Path) -> None:
         raise OSError("simulated replace failure")
 
     with (
-        patch("app.integrations.store.os.replace", side_effect=failing_replace),
+        patch("integrations.store.os.replace", side_effect=failing_replace),
         pytest.raises(OSError, match="simulated replace failure"),
     ):
         _save({"version": 2, "integrations": []})
@@ -231,7 +231,7 @@ def test_v1_load_returns_migrated_data_when_persist_fails(tmp_store: Path) -> No
     def failing_replace(src: str, dst: str) -> None:
         raise OSError("simulated replace failure")
 
-    with patch("app.integrations.store.os.replace", side_effect=failing_replace):
+    with patch("integrations.store.os.replace", side_effect=failing_replace):
         data = _load_raw()
 
     assert data["version"] == 2
@@ -264,7 +264,7 @@ def test_v1_load_returns_migrated_data_when_migration_lock_times_out(tmp_store: 
     }
     tmp_store.write_text(json.dumps(v1_data) + "\n", encoding="utf-8")
 
-    with patch("app.integrations.store._acquire_lock", return_value=TimedOutLock()):
+    with patch("integrations.store._acquire_lock", return_value=TimedOutLock()):
         data = _load_raw()
 
     assert data["version"] == 2
@@ -380,7 +380,7 @@ def test_lock_timeout_raises_store_specific_oserror(tmp_store: Path) -> None:
             return None
 
     with (
-        patch("app.integrations.store._acquire_lock", return_value=TimedOutLock()),
+        patch("integrations.store._acquire_lock", return_value=TimedOutLock()),
         pytest.raises(IntegrationStoreLockTimeout) as exc_info,
     ):
         upsert_integration("grafana", {"credentials": {"api_key": "k"}})

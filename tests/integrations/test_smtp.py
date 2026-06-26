@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.config_models import SMTPIntegrationConfig
-from app.integrations.verifiers.smtp import verify_smtp as _verify_smtp
+from integrations.config_models import SMTPIntegrationConfig
+from integrations.verifiers.smtp import verify_smtp as _verify_smtp
 
 
 def test_config_accepts_starttls_defaults() -> None:
@@ -37,7 +37,7 @@ def test_config_rejects_partial_auth() -> None:
 
 def test_verify_smtp_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.utils.smtp_delivery.verify_smtp_connection",
+        "platform.notifications.smtp_delivery.verify_smtp_connection",
         lambda _config: (True, "Connected to SMTP server successfully."),
     )
 
@@ -65,7 +65,7 @@ def test_catalog_bootstraps_smtp_from_env(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("SMTP_FROM_ADDRESS", "opensre@example.com")
     monkeypatch.setenv("SMTP_DEFAULT_TO", "team@example.com")
 
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     effective = resolve_effective_integrations()
 

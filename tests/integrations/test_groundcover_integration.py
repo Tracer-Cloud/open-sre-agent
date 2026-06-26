@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.config_models import GroundcoverIntegrationConfig
-from app.integrations.probes import ProbeResult
-from app.integrations.verify import resolve_effective_integrations
-from app.services.groundcover.verifier import verify_groundcover as _verify_groundcover
+from integrations.config_models import GroundcoverIntegrationConfig
+from integrations.probes import ProbeResult
+from integrations.verify import resolve_effective_integrations
+from services.groundcover.verifier import verify_groundcover as _verify_groundcover
 
 
 def test_config_defaults_and_normalization() -> None:
@@ -55,7 +55,7 @@ def test_config_allows_loopback_http_for_tests() -> None:
 
 
 def test_env_single_instance_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv("GROUNDCOVER_API_KEY", "env-tok")
     monkeypatch.setenv("GROUNDCOVER_TENANT_UUID", "t1")
 
@@ -69,7 +69,7 @@ def test_env_single_instance_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_env_token_alias(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.delenv("GROUNDCOVER_API_KEY", raising=False)
     monkeypatch.setenv("GROUNDCOVER_MCP_TOKEN", "alias-tok")
 
@@ -79,7 +79,7 @@ def test_env_token_alias(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_env_multi_instance(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.catalog import load_env_integrations
+    from integrations.catalog import load_env_integrations
 
     monkeypatch.delenv("GROUNDCOVER_API_KEY", raising=False)
     monkeypatch.delenv("GROUNDCOVER_MCP_TOKEN", raising=False)
@@ -98,7 +98,7 @@ def test_env_multi_instance(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_verify_reports_probe_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services.groundcover.client import GroundcoverClient
+    from services.groundcover.client import GroundcoverClient
 
     monkeypatch.setattr(
         GroundcoverClient,
@@ -119,7 +119,7 @@ def test_verify_missing_when_no_token() -> None:
 
 
 def test_verify_never_leaks_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services.groundcover.client import GroundcoverClient
+    from services.groundcover.client import GroundcoverClient
 
     def _raise(_self: GroundcoverClient) -> ProbeResult:
         raise RuntimeError("boom")

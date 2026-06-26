@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.integrations.datadog.correlation.adapter import (
+from integrations.datadog.correlation.adapter import (
     DatadogCorrelationAdapter,
 )
 

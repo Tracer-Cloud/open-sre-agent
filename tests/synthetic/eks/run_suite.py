@@ -7,7 +7,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from app.core.orchestration.entrypoints import run_investigation
+from core.orchestration.entrypoints import run_investigation
 from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,
     K8sScenarioFixture,

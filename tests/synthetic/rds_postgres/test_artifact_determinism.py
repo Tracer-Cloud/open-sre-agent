@@ -64,6 +64,7 @@ def _make_observation(tmp_path: Path, scenario_id: str = "000-test") -> RunObser
         trajectory_policy_version="default_v1",
         reasoning=None,
         reasoning_status="not_captured",
+        correlation=None,
         observed_evidence_sources=[],
         required_evidence_sources=[],
         missing_required_evidence_sources=[],

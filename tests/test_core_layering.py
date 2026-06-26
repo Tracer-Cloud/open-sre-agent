@@ -1,13 +1,13 @@
-"""Layering boundary test: core packages must not import from ``app.cli``.
+"""Layering boundary test: core-facing packages must not import from ``cli``.
 
-Core (``app/core/domain/``, ``app/core/orchestration/``, ``app/utils/``) reports
-progress, prints debug output, and renders investigation headers/footers through
-the ports defined in :mod:`app.observability`. Reaching into ``app.cli.*`` directly
-couples the domain/orchestration layer to the REPL's specific renderer and breaks
-headless / non-TTY callers.
+Core (``core/domain/``, ``core/orchestration/``) reports progress, prints debug
+output, and renders investigation headers/footers through the ports defined in
+:mod:`platform.observability`. Reaching into ``cli.*`` directly couples the
+domain/orchestration layer to the REPL's specific renderer and breaks headless /
+non-TTY callers.
 
 See issue #35 and the introduction of ``build_*_provider`` /
-``set_*`` injection helpers in ``app/observability/``.
+``set_*`` injection helpers in ``platform/observability/``.
 """
 
 from __future__ import annotations
@@ -18,26 +18,26 @@ from pathlib import Path
 import pytest
 
 _CORE_PACKAGES: tuple[Path, ...] = (
-    Path("app/core/domain"),
-    Path("app/core/orchestration"),
-    Path("app/utils"),
+    Path("core/domain"),
+    Path("core/orchestration"),
+    Path("platform/observability"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /
 # vendor service packages implement them at the boundary.
 #
 # Forbidden prefixes:
-# - ``app.cli`` — closed by #35 (observability ports). Core never
+# - ``cli`` — closed by #35 (observability ports). Core never
 #   needs CLI internals; if you think you do, file a new
 #   observability port instead.
-# - ``app.services.tracer_client`` — closed by #36
-#   (``app.integrations.port`` ``fetch_remote_integrations``). Other
-#   ``app.services.*`` modules (LLM client, chat SDK adapter,
+# - ``services.tracer_client`` — closed by #36
+#   (``integrations.port`` ``fetch_remote_integrations``). Other
+#   ``services.*`` modules (LLM client, chat SDK adapter,
 #   ``agent_llm_client``) stay allowed because they are core
 #   capability access, not vendor-coupled like ``tracer_client``.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
-    "app.cli",
-    "app.services.tracer_client",
+    "cli",
+    "services.tracer_client",
 )
 
 
@@ -68,8 +68,8 @@ def _imported_modules(source: str) -> set[str]:
 def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None:
     """Core modules must avoid forbidden boundary packages.
 
-    Use ports instead — ``app.observability`` for progress/debug/display,
-    ``app.integrations.port`` for remote integrations — and register
+    Use ports instead — ``platform.observability`` for progress/debug/display,
+    ``integrations.port`` for remote integrations — and register
     concrete adapters via ``install_product_adapters``.
     """
     source = module_path.read_text(encoding="utf-8")
@@ -81,6 +81,6 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     }
     assert not leaks, (
         f"{module_path} imports forbidden module(s) {sorted(leaks)} — route through a "
-        "port (``app.observability.*`` or ``app.integrations.port``) and register "
+        "port (``platform.observability.*`` or ``integrations.port``) and register "
         "adapters via ``install_product_adapters``."
     )

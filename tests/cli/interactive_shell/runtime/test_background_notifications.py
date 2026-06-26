@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
-from app.cli.interactive_shell.runtime.background_notifications import (
+from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
+from cli.interactive_shell.runtime.background_notifications import (
     deliver_background_notifications,
 )
 
@@ -10,7 +10,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {
             "smtp": {
                 "source": "local env",
@@ -36,7 +36,7 @@ def test_deliver_background_notifications_sends_email_when_smtp_is_configured(
         return True, ""
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.runtime.background_notifications.send_smtp_report",
+        "cli.interactive_shell.runtime.background_notifications.send_smtp_report",
         _fake_send_smtp_report,
     )
 
@@ -66,7 +66,7 @@ def test_deliver_background_notifications_skips_when_no_channels_configured() ->
 
 
 def test_deliver_background_notifications_marks_missing_smtp(monkeypatch) -> None:
-    monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", lambda: {})
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", lambda: {})
     record = BackgroundInvestigationRecord(
         task_id="bg-123", status="completed", command="free-text"
     )

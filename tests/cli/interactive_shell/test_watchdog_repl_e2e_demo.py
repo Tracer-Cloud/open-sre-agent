@@ -23,11 +23,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import dispatch_slash
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
-from app.fleet_monitoring.probe import ProcessSnapshot
-from app.watch_dog.alarms import AlarmCredentials
+from cli.interactive_shell.command_registry import dispatch_slash
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from tools.fleet_monitoring.probe import ProcessSnapshot
+from tools.watch_dog.alarms import AlarmCredentials
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -38,11 +38,11 @@ def _capture() -> tuple[Console, io.StringIO]:
 def test_repl_watchdog_end_to_end_demo_script(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drive the full REPL slash pipeline for watchdogs (deterministic probe stub)."""
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
+        "cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
         lambda *_a, **_kw: AlarmCredentials(bot_token="demo-token", chat_id="1"),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.pid_exists",
+        "cli.interactive_shell.command_registry.watch_cmds.pid_exists",
         lambda _pid: True,
     )
 
@@ -57,7 +57,7 @@ def test_repl_watchdog_end_to_end_demo_script(monkeypatch: pytest.MonkeyPatch) -
         status="running",
         started_at=started_at,
     )
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     session = ReplSession()
     console, buf = _capture()

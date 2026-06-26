@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from app.tools.TemporalTaskQueueTool import TemporalTaskQueueTool
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TemporalTaskQueueTool import TemporalTaskQueueTool
 
 
 class TestTemporalTaskQueueToolContract(BaseToolContract):
@@ -78,7 +78,7 @@ def test_run_happy_path(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "app.tools.TemporalTaskQueueTool.TemporalClient",
+        "tools.TemporalTaskQueueTool.TemporalClient",
         lambda _config: mock_client,
     )
 
@@ -106,7 +106,7 @@ def test_run_returns_error_on_failure(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "app.tools.TemporalTaskQueueTool.TemporalClient",
+        "tools.TemporalTaskQueueTool.TemporalClient",
         lambda _config: mock_client,
     )
 

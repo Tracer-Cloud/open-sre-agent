@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.console import Console
 
-import app.cli.interactive_shell.runtime.execution as execution
-from app.cli.interactive_shell.runtime.session import ReplSession
+import cli.interactive_shell.runtime.execution as execution
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _console() -> Console:

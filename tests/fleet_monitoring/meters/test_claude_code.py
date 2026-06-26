@@ -6,7 +6,7 @@ import pathlib
 
 import pytest
 
-from app.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
+from tools.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
 
 _FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "claude_code_stream.ndjson"
 

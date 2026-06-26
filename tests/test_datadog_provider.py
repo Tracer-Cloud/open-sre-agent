@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.integrations.datadog.correlation.adapter import (
+from integrations.datadog.correlation.adapter import (
     DatadogCorrelationAdapter,
 )
-from app.integrations.datadog.correlation.provider import (
+from integrations.datadog.correlation.provider import (
     DatadogCorrelationQueries,
     DatadogUpstreamEvidenceProvider,
 )

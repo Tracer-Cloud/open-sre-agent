@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
+from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 class FakeConfig:

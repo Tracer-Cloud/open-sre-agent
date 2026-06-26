@@ -13,12 +13,12 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import dispatch_slash
-from app.cli.interactive_shell.runtime.session import (
+from cli.interactive_shell.command_registry import dispatch_slash
+from cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
 )
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry, TaskStatus
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -94,7 +94,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("app.cli.interactive_shell.runtime.tasks.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("cli.interactive_shell.runtime.tasks.secrets.token_hex", _fake_hex)
         session = ReplSession()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)
@@ -117,7 +117,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         reg = TaskRegistry.persistent()
@@ -137,7 +137,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         store_path = tmp_path / "interactive_tasks.json"
@@ -161,7 +161,7 @@ class TestTaskRegistry:
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "app.cli.interactive_shell.runtime.tasks.os.kill",
+            "cli.interactive_shell.runtime.tasks.os.kill",
             lambda _pid, _sig: (_ for _ in ()).throw(ProcessLookupError()),
         )
 
@@ -175,7 +175,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         calls: list[tuple[int, int]] = []
@@ -183,7 +183,7 @@ class TestTaskRegistry:
         def _fake_kill(pid: int, sig: int) -> None:
             calls.append((pid, sig))
 
-        monkeypatch.setattr("app.cli.interactive_shell.runtime.tasks.os.kill", _fake_kill)
+        monkeypatch.setattr("cli.interactive_shell.runtime.tasks.os.kill", _fake_kill)
         reg = TaskRegistry.persistent()
         task = reg.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
         task.mark_running()
@@ -201,7 +201,7 @@ class TestTaskRegistry:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = ReplSession()
@@ -342,7 +342,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -372,7 +372,7 @@ class TestSyntheticSubprocessWatcher:
         cancel_requested branch runs, so terminated_by_watcher stays False.
         The task must be COMPLETED, not CANCELLED — the process succeeded.
         """
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -410,7 +410,7 @@ class TestSyntheticSubprocessWatcher:
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """cancel_requested is set while proc is still running; watcher terminates it."""
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -445,7 +445,7 @@ class TestSyntheticSubprocessWatcher:
         The watcher should mark the task COMPLETED, not CANCELLED, because we
         never called _terminate_child_process — the process was already gone.
         """
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -470,7 +470,7 @@ class TestSyntheticSubprocessWatcher:
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
         """Diagnostic stderr output is included in mark_failed message."""
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         monkeypatch.setattr(ae.threading, "Thread", _ImmediateThread)
 
@@ -493,7 +493,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         _DeferredSyntheticThread.pending.clear()
         monkeypatch.setattr(ae.threading, "Thread", _DeferredSyntheticThread)
@@ -518,7 +518,7 @@ class TestSyntheticSubprocessWatcher:
         monkeypatch: pytest.MonkeyPatch,
         stderr_buf: tempfile.SpooledTemporaryFile,  # type: ignore[type-arg]
     ) -> None:
-        import app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
+        import cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor as ae
 
         _DeferredSyntheticThread.pending.clear()
         monkeypatch.setattr(ae.threading, "Thread", _DeferredSyntheticThread)

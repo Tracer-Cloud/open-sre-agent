@@ -6,14 +6,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.guardrails.audit import AuditLogger
-from app.guardrails.engine import (
+from platform.guardrails.audit import AuditLogger
+from platform.guardrails.engine import (
     GuardrailBlockedError,
     GuardrailEngine,
     get_guardrail_engine,
     reset_guardrail_engine,
 )
-from app.guardrails.rules import GuardrailAction, GuardrailRule
+from platform.guardrails.rules import GuardrailAction, GuardrailRule
 
 
 def _rule(
@@ -334,7 +334,7 @@ class TestEdgeCases:
 
     def test_real_world_api_key_and_aws_access_key_overlap(self) -> None:
         """Exercises the bug class with the exact patterns shipped in the
-        ``_STARTER_CONFIG`` of ``app/guardrails/cli.py``. The
+        ``_STARTER_CONFIG`` of ``platform/guardrails/cli.py``. The
         ``aws_access_key`` pattern ``(?:AKIA|ASIA)[A-Z0-9]{16}`` is a strict
         substring of the ``generic_api_token`` pattern
         ``(api_key|...|secret_key)[\\s=:]+[A-Za-z0-9_\\-]{20,}`` when the value
@@ -478,7 +478,7 @@ class TestSingleton:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("app.guardrails.engine.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
         reset_guardrail_engine()
 
         engine = get_guardrail_engine()
@@ -486,7 +486,7 @@ class TestSingleton:
 
     def test_reset_clears_singleton(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
-            "app.guardrails.engine.get_default_rules_path",
+            "platform.guardrails.engine.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
         reset_guardrail_engine()

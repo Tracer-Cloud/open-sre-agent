@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.openclaw import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.openclaw import (
     OpenClawConfig,
     _tool_result_to_dict,
     build_openclaw_config,
@@ -20,7 +20,7 @@ from app.integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from app.tools.OpenClawMCPTool import (
+from tools.OpenClawMCPTool import (
     call_openclaw_bridge_tool,
     search_openclaw_conversations,
 )
@@ -229,7 +229,7 @@ class TestValidateOpenClawConfig:
         config = self._http_config()
         mock_tools = [{"name": "conversations_get"}, {"name": "conversations_list"}]
 
-        with patch("app.integrations.openclaw.list_openclaw_tools", return_value=mock_tools):
+        with patch("integrations.openclaw.list_openclaw_tools", return_value=mock_tools):
             result = validate_openclaw_config(config)
 
         assert result.ok is True
@@ -243,7 +243,7 @@ class TestValidateOpenClawConfig:
         config = self._http_config()
 
         with patch(
-            "app.integrations.openclaw.list_openclaw_tools",
+            "integrations.openclaw.list_openclaw_tools",
             side_effect=RuntimeError("connection refused"),
         ):
             result = validate_openclaw_config(config)
@@ -268,7 +268,7 @@ class TestValidateOpenClawConfig:
             [RuntimeError("HTTP 404 from POST https://openclaw.example.com/mcp")],
         )
 
-        with patch("app.integrations.openclaw.list_openclaw_tools", side_effect=nested):
+        with patch("integrations.openclaw.list_openclaw_tools", side_effect=nested):
             result = validate_openclaw_config(config)
 
         assert result.ok is False
@@ -296,8 +296,8 @@ class TestValidateOpenClawConfig:
         mock_tools = [{"name": "conversations_list"}]
 
         with (
-            patch("app.integrations.openclaw.shutil.which", return_value="/tmp/openclaw-mcp"),
-            patch("app.integrations.openclaw.list_openclaw_tools", return_value=mock_tools),
+            patch("integrations.openclaw.shutil.which", return_value="/tmp/openclaw-mcp"),
+            patch("integrations.openclaw.list_openclaw_tools", return_value=mock_tools),
         ):
             result = validate_openclaw_config(config)
 
@@ -308,8 +308,8 @@ class TestValidateOpenClawConfig:
         config = OpenClawConfig(mode="stdio", command="openclaw")
 
         with (
-            patch("app.integrations.openclaw.shutil.which", return_value=None),
-            patch("app.integrations.openclaw.list_openclaw_tools") as mock_list_tools,
+            patch("integrations.openclaw.shutil.which", return_value=None),
+            patch("integrations.openclaw.list_openclaw_tools") as mock_list_tools,
         ):
             result = validate_openclaw_config(config)
 
@@ -327,11 +327,9 @@ class TestValidateOpenClawConfig:
         )
 
         with (
-            patch(
-                "app.integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
-            ),
-            patch("app.integrations.openclaw.subprocess.run", return_value=completed),
-            patch("app.integrations.openclaw.list_openclaw_tools") as mock_list_tools,
+            patch("integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"),
+            patch("integrations.openclaw.subprocess.run", return_value=completed),
+            patch("integrations.openclaw.list_openclaw_tools") as mock_list_tools,
         ):
             result = validate_openclaw_config(config)
 
@@ -401,7 +399,7 @@ class TestDescribeOpenClawError:
             stderr="",
         )
 
-        with patch("app.integrations.openclaw.subprocess.run", return_value=completed):
+        with patch("integrations.openclaw.subprocess.run", return_value=completed):
             detail = describe_openclaw_error(RuntimeError("Connection closed"), config)
 
         assert "openclaw gateway status" in detail
@@ -410,7 +408,7 @@ class TestDescribeOpenClawError:
     def test_runtime_unavailable_reason_detects_missing_stdio_command(self) -> None:
         config = OpenClawConfig(mode="stdio", command="openclaw")
 
-        with patch("app.integrations.openclaw.shutil.which", return_value=None):
+        with patch("integrations.openclaw.shutil.which", return_value=None):
             detail = openclaw_runtime_unavailable_reason(config)
 
         assert detail is not None
@@ -432,10 +430,8 @@ class TestDescribeOpenClawError:
         )
 
         with (
-            patch(
-                "app.integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"
-            ),
-            patch("app.integrations.openclaw.subprocess.run", return_value=completed),
+            patch("integrations.openclaw.shutil.which", return_value="/opt/homebrew/bin/openclaw"),
+            patch("integrations.openclaw.subprocess.run", return_value=completed),
         ):
             detail = openclaw_runtime_unavailable_reason(config)
 
@@ -460,7 +456,7 @@ class TestListOpenClawTools:
         mock_tool.inputSchema = {"type": "object"}
 
         with patch(
-            "app.integrations.openclaw._list_tools_async",
+            "integrations.openclaw._list_tools_async",
             new=AsyncMock(return_value=[mock_tool]),
         ):
             tools = list_openclaw_tools(config)
@@ -492,7 +488,7 @@ class TestClassifyOpenClawIntegration:
                 "auth_token": "tok",
             }
         )
-        from app.core.orchestration.node.investigate.tools import availability_view
+        from core.orchestration.node.investigate.tools import availability_view
 
         resolved = _classify_integrations([record])
         assert "openclaw" in resolved

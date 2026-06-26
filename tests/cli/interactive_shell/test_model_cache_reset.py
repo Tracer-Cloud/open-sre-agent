@@ -4,9 +4,9 @@ from typing import Any
 
 
 def test_model_switch_resets_runtime_llm_caches(monkeypatch: Any) -> None:
-    import app.cli.interactive_shell.command_registry.model.switching as model_module
-    import app.services.agent_llm_client as agent_llm_client
-    import app.services.llm_client as llm_client
+    import cli.interactive_shell.command_registry.model.switching as model_module
+    import services.agent_llm_client as agent_llm_client
+    import services.llm_client as llm_client
 
     calls: list[str] = []
 

@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.integrations.hermes.agent`."""
+"""Tests for :mod:`integrations.hermes.agent`."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ import threading
 import time
 from pathlib import Path
 
-from app.integrations.hermes.agent import HermesAgent
-from app.integrations.hermes.classifier import IncidentClassifier
-from app.integrations.hermes.incident import HermesIncident, IncidentSeverity
+from integrations.hermes.agent import HermesAgent
+from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.incident import HermesIncident, IncidentSeverity
 
 
 class TestAgentProcess:

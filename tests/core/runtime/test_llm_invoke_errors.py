@@ -4,8 +4,8 @@ import sys
 from types import ModuleType
 from unittest.mock import patch
 
-from app.core.runtime.llm_invoke_errors import _looks_like_timeout, classify_llm_invoke_failure
-from app.integrations.llm_cli.errors import CLITimeoutError
+from core.runtime.llm_invoke_errors import _looks_like_timeout, classify_llm_invoke_failure
+from integrations.llm_cli.errors import CLITimeoutError
 
 
 def test_timeout_remediation_does_not_repeat_user_message() -> None:
@@ -26,7 +26,7 @@ def test_looks_like_timeout_without_anthropic_sdk() -> None:
 
 def test_classify_returns_none_for_credit_exhausted_so_it_propagates() -> None:
     """LLMCreditExhaustedError must propagate instead of becoming a degraded result."""
-    from app.utils.llm_retry import LLMCreditExhaustedError
+    from services.llm_retry import LLMCreditExhaustedError
 
     err = LLMCreditExhaustedError("OpenAI credit exhausted: insufficient_quota")
     assert classify_llm_invoke_failure(err) is None

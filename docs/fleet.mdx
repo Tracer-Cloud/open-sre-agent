@@ -341,7 +341,7 @@ global FIFO ordering.
 ### Message schema
 
 The wire payload mirrors the shape of `evidence` records in
-`app/state/agent_state.py` so a finding can later be lifted into an
+`core/domain/state/agent_state.py` so a finding can later be lifted into an
 investigation without renaming fields.
 
 | Field | Type | Required | Notes |
@@ -378,7 +378,7 @@ Any process that can speak Unix-domain sockets can publish. The simplest path
 is to import the helper:
 
 ```python
-from app.fleet_monitoring import BusMessage, publish
+from tools.fleet_monitoring import BusMessage, publish
 
 publish(BusMessage(
     agent="claude-code:8421",

@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from app.tools.GitDeployTimelineTool import (
+from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GitDeployTimelineTool import (
     DEFAULT_WINDOW_MINUTES,
     MAX_PER_PAGE,
     MAX_WINDOW_MINUTES,
@@ -13,7 +14,6 @@ from app.tools.GitDeployTimelineTool import (
     _summarize_commit,
     get_git_deploy_timeline,
 )
-from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
 class TestGitDeployTimelineToolContract(BaseToolContract):
@@ -41,7 +41,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_when_no_config() -> None:
-    with patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None):
+    with patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None):
         result = get_git_deploy_timeline(owner="org", repo="repo")
     assert result["available"] is False
     assert result["commits"] == []
@@ -77,9 +77,9 @@ def test_run_happy_path_summarizes_commits() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -116,9 +116,9 @@ def test_run_passes_time_window_and_branch_to_mcp() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
     ):
         get_git_deploy_timeline(
             owner="org",
@@ -151,9 +151,9 @@ def test_run_empty_result_returns_zero_commits() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -183,9 +183,9 @@ def test_run_defensive_against_non_list_structured_content() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -207,9 +207,9 @@ def test_run_passes_per_page_to_mcp() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
     ):
         get_git_deploy_timeline(
             owner="org",
@@ -236,9 +236,9 @@ def test_run_clamps_per_page_to_api_maximum() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -277,9 +277,9 @@ def test_run_flags_window_truncated_when_page_is_full() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -313,9 +313,9 @@ def test_run_flags_window_not_truncated_when_fewer_than_page() -> None:
     }
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -362,9 +362,9 @@ def _run_with_shared_window(
 
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitDeployTimelineTool.call_github_mcp_tool", side_effect=_fake_call),
     ):
         result = get_git_deploy_timeline(
             owner="org",

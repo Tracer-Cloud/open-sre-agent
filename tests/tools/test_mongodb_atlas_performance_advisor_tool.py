@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.MongoDBAtlasPerformanceAdvisorTool import get_mongodb_atlas_performance_advisor
 from tests.tools.conftest import BaseToolContract
+from tools.MongoDBAtlasPerformanceAdvisorTool import get_mongodb_atlas_performance_advisor
 
 
 class TestMongoDBAtlasPerformanceAdvisorToolContract(BaseToolContract):
@@ -30,7 +30,7 @@ def test_run_happy_path() -> None:
         "slow_queries": [],
     }
     with patch(
-        "app.tools.MongoDBAtlasPerformanceAdvisorTool.get_performance_advisor",
+        "tools.MongoDBAtlasPerformanceAdvisorTool.get_performance_advisor",
         return_value=fake_result,
     ):
         result = get_mongodb_atlas_performance_advisor(
@@ -45,7 +45,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.MongoDBAtlasPerformanceAdvisorTool.get_performance_advisor",
+        "tools.MongoDBAtlasPerformanceAdvisorTool.get_performance_advisor",
         return_value={"source": "mongodb_atlas", "available": False, "error": "auth failed"},
     ):
         result = get_mongodb_atlas_performance_advisor(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from app.integrations.airflow import (
+from integrations.airflow import (
     AirflowConfig,
     airflow_config_from_env,
     build_airflow_config,

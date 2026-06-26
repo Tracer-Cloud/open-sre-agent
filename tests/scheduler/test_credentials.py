@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.scheduler.credentials import (
+from platform.scheduler.credentials import (
     resolve_discord_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
@@ -19,7 +19,7 @@ class TestTelegramCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "from_env")
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_telegram_credentials({})
@@ -28,7 +28,7 @@ class TestTelegramCredentials:
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_telegram_credentials({})
@@ -43,7 +43,7 @@ class TestSlackCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-from-env")
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_slack_credentials({})
@@ -53,7 +53,7 @@ class TestSlackCredentials:
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         monkeypatch.delenv("SLACK_ACCESS_TOKEN", raising=False)
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_slack_credentials({})
@@ -68,7 +68,7 @@ class TestDiscordCredentials:
     def test_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "discord_from_env")
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_discord_credentials({})
@@ -77,7 +77,7 @@ class TestDiscordCredentials:
     def test_empty_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
         monkeypatch.setattr(
-            "app.scheduler.credentials._get_integration_credential",
+            "platform.scheduler.credentials._get_integration_credential",
             lambda *_: "",
         )
         creds = resolve_discord_credentials({})

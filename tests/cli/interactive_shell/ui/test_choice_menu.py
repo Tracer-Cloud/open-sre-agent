@@ -7,7 +7,7 @@ import re
 import sys
 from types import SimpleNamespace
 
-from app.cli.interactive_shell.ui import choice_menu
+from cli.interactive_shell.ui import choice_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 

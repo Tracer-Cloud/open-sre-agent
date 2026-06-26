@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, cast
 
-from app.core.runtime import ToolLoopResult, run_tool_calling_loop
-from app.services.agent_llm_client import AgentLLMResponse, ToolCall
-from app.tools.registered_tool import RegisteredTool
+from core.runtime import ToolLoopResult, run_tool_calling_loop
+from services.agent_llm_client import AgentLLMResponse, ToolCall
+from tools.registered_tool import RegisteredTool
 
 
 class FakeLLM:

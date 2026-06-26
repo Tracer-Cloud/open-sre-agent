@@ -1,4 +1,4 @@
-"""Unit tests for app.tools.EC2InstancesByTagTool."""
+"""Unit tests for tools.EC2InstancesByTagTool."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from app.tools.EC2InstancesByTagTool import _is_available, ec2_instances_by_tag
-from app.tools.utils.aws_topology_helper import extract_ec2_instances_params
+from tools.EC2InstancesByTagTool import _is_available, ec2_instances_by_tag
+from tools.utils.aws_topology_helper import extract_ec2_instances_params
 
 
 class _FakeAWSBackend:
@@ -78,7 +78,7 @@ def test_returns_error_when_no_filters_and_no_ids(monkeypatch: pytest.MonkeyPatc
     def _fail(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise AssertionError("execute_aws_sdk_call must not be invoked")
 
-    monkeypatch.setattr("app.tools.EC2InstancesByTagTool.execute_aws_sdk_call", _fail)
+    monkeypatch.setattr("tools.EC2InstancesByTagTool.execute_aws_sdk_call", _fail)
     out = ec2_instances_by_tag()
     assert out["available"] is False
     assert "required" in out["error"]
@@ -136,7 +136,7 @@ def test_real_path_paginates_and_filters_inactive(
             },
         }
 
-    monkeypatch.setattr("app.tools.EC2InstancesByTagTool.execute_aws_sdk_call", _execute)
+    monkeypatch.setattr("tools.EC2InstancesByTagTool.execute_aws_sdk_call", _execute)
     out = ec2_instances_by_tag(vpc_id="vpc-1")
     assert out["available"] is True
     assert out["total_instances"] == 2  # stopped instance dropped
@@ -179,7 +179,7 @@ def test_summary_block_is_agent_friendly(monkeypatch: pytest.MonkeyPatch) -> Non
             },
         }
 
-    monkeypatch.setattr("app.tools.EC2InstancesByTagTool.execute_aws_sdk_call", _execute)
+    monkeypatch.setattr("tools.EC2InstancesByTagTool.execute_aws_sdk_call", _execute)
     out = ec2_instances_by_tag(vpc_id="vpc-1")
     summary = out["summary"]
     assert summary["by_tier_counts"] == {"web": 4, "worker": 1}
@@ -191,7 +191,7 @@ def test_summary_block_is_agent_friendly(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_real_path_propagates_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.tools.EC2InstancesByTagTool.execute_aws_sdk_call",
+        "tools.EC2InstancesByTagTool.execute_aws_sdk_call",
         lambda **_: {"success": False, "error": "AccessDenied"},
     )
     out = ec2_instances_by_tag(tier="web")

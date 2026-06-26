@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from app.core.orchestration.entrypoints import run_investigation
+from core.orchestration.entrypoints import run_investigation
 
 RCA_DIR = Path(__file__).parent
 

@@ -5,7 +5,7 @@ Each scenario provides:
   - openclaw_conversations.json  Fixture conversations served by FixtureOpenClawBackend
   - scenario.json       Expected keywords and description
 
-The runner patches app.integrations.openclaw.call_openclaw_tool and
+The runner patches integrations.openclaw.call_openclaw_tool and
 list_openclaw_tools so the investigation pipeline exercises the full tool
 call path without a live OpenClaw process.
 
@@ -65,7 +65,7 @@ def _check_keywords(root_cause_text: str, keywords: list[str]) -> tuple[bool, li
 
 def run_scenario(scenario: OpenClawScenario) -> dict[str, Any]:
     """Run one scenario and return a result dict."""
-    from app.core.orchestration.entrypoints import run_investigation
+    from core.orchestration.entrypoints import run_investigation
 
     backend = FixtureOpenClawBackend(scenario)
     resolved = _openclaw_resolved_integrations()

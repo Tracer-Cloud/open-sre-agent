@@ -14,15 +14,15 @@ from typing import Any
 
 from rich.console import Console
 
-import app.core.orchestration.node.investigate.tools as investigate_tools
-import app.core.runtime as runtime_module
-import app.services.agent_llm_client as agent_llm_client
-from app.cli.interactive_shell.chat.tool_gathering import (
+import core.orchestration.node.investigate.tools as investigate_tools
+import core.runtime as runtime_module
+import services.agent_llm_client as agent_llm_client
+from cli.interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
     _tool_input_hint,
     gather_tool_evidence,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _console() -> Console:
@@ -156,11 +156,11 @@ def test_format_gathering_progress_line_escapes_display_and_hint_markup(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.chat.tool_gathering.tool_source_label",
+        "cli.interactive_shell.chat.tool_gathering.tool_source_label",
         lambda _name: "Grafana [prod]",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.chat.tool_gathering.tool_short_label",
+        "cli.interactive_shell.chat.tool_gathering.tool_short_label",
         lambda _name, _source: "Mimir",
     )
 

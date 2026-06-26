@@ -7,9 +7,9 @@ from datetime import datetime
 
 import pytest
 
-from app.guardrails.apply import apply_guardrails_to_converse_payload
-from app.services.agent_llm_client import ToolCall
-from app.services.bedrock_converse import (
+from platform.guardrails.apply import apply_guardrails_to_converse_payload
+from services.agent_llm_client import ToolCall
+from services.bedrock_converse import (
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,
@@ -24,7 +24,7 @@ from app.services.bedrock_converse import (
 
 @pytest.fixture(autouse=True)
 def _reset_tool_registry() -> Generator[None]:
-    from app.tools.registry import clear_tool_registry_cache
+    from tools.registry import clear_tool_registry_cache
 
     clear_tool_registry_cache()
     yield
@@ -189,7 +189,7 @@ def test_apply_guardrails_wraps_string_content_in_text_blocks() -> None:
     engine.is_active = True
     engine.apply.side_effect = lambda text: f"guarded:{text}"
 
-    with patch("app.guardrails.engine.get_guardrail_engine", return_value=engine):
+    with patch("platform.guardrails.engine.get_guardrail_engine", return_value=engine):
         messages, system = apply_guardrails_to_converse_payload(
             messages=[{"role": "user", "content": "hello"}],
             system="sys",

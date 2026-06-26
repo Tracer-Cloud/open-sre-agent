@@ -9,10 +9,10 @@ from unittest.mock import patch
 import click
 import pytest
 
-from app.analytics import provider
-from app.analytics.events import Event
-from app.cli.__main__ import _sentry_entrypoint_for_invocation, main
-from app.cli.interactive_shell.config import ReplConfig
+from cli.__main__ import _sentry_entrypoint_for_invocation, main
+from cli.config import ReplConfig
+from platform.analytics import provider
+from platform.analytics.events import Event
 
 
 class _EmptyCatalog:
@@ -47,13 +47,13 @@ def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, obj
 
 
 def test_main_runs_health_command(monkeypatch) -> None:
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     with (
-        patch("app.integrations.verify.verify_integrations") as mock_verify,
-        patch("app.integrations.verify.format_verification_results") as mock_format,
+        patch("integrations.verify.verify_integrations") as mock_verify,
+        patch("integrations.verify.format_verification_results") as mock_format,
     ):
         mock_verify.return_value = [
             {
@@ -78,11 +78,11 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[BaseException] = []
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -95,12 +95,12 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
 def test_main_treats_onboard_abort_as_clean_cancel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.init_sentry", lambda **_kw: None)
     monkeypatch.setattr(
-        "app.cli.wizard.run_wizard",
+        "cli.wizard.run_wizard",
         lambda: (_ for _ in ()).throw(click.Abort()),
     )
 
@@ -110,19 +110,19 @@ def test_main_treats_onboard_abort_as_clean_cancel(
 
 
 def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("cli.__main__.init_sentry", _raise_missing_sentry)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "9999.0.0"
+        "cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "9999.0.0"
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._is_update_available", lambda _c, _l: False
+        "cli.interactive_shell.data_store.update._is_update_available", lambda _c, _l: False
     )
 
     exit_code = main(["update", "--check"])
@@ -132,12 +132,12 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
 
 
 def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> None:
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("app.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("cli.__main__.init_sentry", _raise_missing_sentry)
 
     with pytest.raises(ModuleNotFoundError):
         main(["version"])
@@ -146,12 +146,10 @@ def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> No
 def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
-    )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["--help"])
 
@@ -164,14 +162,12 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
-        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
-    )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -187,14 +183,12 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
-        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
-    )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -210,12 +204,10 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
 def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
-    )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["version"])
 
@@ -226,12 +218,12 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
 
 def test_main_captures_command_metadata_for_version(monkeypatch, capsys) -> None:
     captured: list[dict[str, object] | None] = []
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked",
+        "cli.__main__.capture_cli_invoked",
         lambda properties=None: captured.append(properties),
     )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["version"])
 
@@ -254,13 +246,13 @@ def test_main_captures_command_metadata_for_version(monkeypatch, capsys) -> None
 
 def test_main_captures_command_metadata_for_remote_health(monkeypatch) -> None:
     captured: list[dict[str, object] | None] = []
-    remote_module = importlib.import_module("app.cli.commands.remote")
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    remote_module = importlib.import_module("cli.commands.remote")
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked",
+        "cli.__main__.capture_cli_invoked",
         lambda properties=None: captured.append(properties),
     )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
         remote_module,
         "_load_remote_client",
@@ -281,13 +273,13 @@ def test_main_captures_command_metadata_for_remote_health(monkeypatch) -> None:
 
 def test_main_captures_command_metadata_for_nested_remote_ops(monkeypatch, capsys) -> None:
     captured: list[dict[str, object] | None] = []
-    remote_module = importlib.import_module("app.cli.commands.remote")
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
+    remote_module = importlib.import_module("cli.commands.remote")
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked",
+        "cli.__main__.capture_cli_invoked",
         lambda properties=None: captured.append(properties),
     )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     status = SimpleNamespace(
         provider="railway",
@@ -322,18 +314,18 @@ def test_main_captures_command_metadata_for_nested_remote_ops(monkeypatch, capsy
 
 
 def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
-    debug_module = importlib.import_module("app.cli.commands.debug")
+    debug_module = importlib.import_module("cli.commands.debug")
     captured: list[tuple[tuple[object, ...], dict[str, object]]] = []
     root_init_entrypoints: list[str | None] = []
     flush_calls: list[int] = []
 
     monkeypatch.setattr(
-        "app.cli.__main__.init_sentry",
+        "cli.__main__.init_sentry",
         lambda entrypoint=None: root_init_entrypoints.append(entrypoint),
     )
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
 
@@ -366,11 +358,11 @@ def test_sentry_entrypoint_uses_debug_for_debug_group_invocations() -> None:
 
 
 def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> None:
-    debug_module = importlib.import_module("app.cli.commands.debug")
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    debug_module = importlib.import_module("cli.commands.debug")
+    monkeypatch.setattr("cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: False)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "")
 
@@ -381,11 +373,11 @@ def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> N
 
 
 def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -> None:
-    debug_module = importlib.import_module("app.cli.commands.debug")
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    debug_module = importlib.import_module("cli.commands.debug")
+    monkeypatch.setattr("cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
     monkeypatch.setattr(debug_module, "capture_exception", lambda *_args, **_kw: "event-123")
@@ -414,7 +406,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
     # This test validates analytics event ordering only; avoid real Sentry init
     # side effects (e.g. sdk integration hooks) that are unrelated to the
     # install/cli-invoked event contract.
-    monkeypatch.setattr("app.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.init_sentry", lambda **_kw: None)
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     provider._cached_anonymous_id = None
@@ -450,17 +442,17 @@ def test_main_emits_first_run_install_before_cli_invoked(
         (
             ["onboard"],
             "onboard_started",
-            "app.cli.wizard.run_wizard",
+            "cli.wizard.run_wizard",
         ),
         (
             ["integrations", "list"],
             "integrations_listed",
-            "app.integrations.cli.cmd_list",
+            "integrations.cli.cmd_list",
         ),
         (
             ["tests", "list"],
             "tests_listed",
-            "app.cli.tests.discover.load_test_catalog",
+            "cli.tests.discover.load_test_catalog",
         ),
     ],
 )
@@ -472,15 +464,13 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
 ) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "app.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
     )
-    monkeypatch.setattr(
-        "app.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
-    )
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
-    if setup == "app.cli.wizard.run_wizard":
-        onboard_module = importlib.import_module("app.cli.commands.onboard")
+    if setup == "cli.wizard.run_wizard":
+        onboard_module = importlib.import_module("cli.commands.onboard")
         monkeypatch.setattr(setup, lambda: 0)
         monkeypatch.setattr(
             onboard_module,
@@ -488,8 +478,8 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
             lambda: captured.append(subcommand_event),
         )
         monkeypatch.setattr(onboard_module, "capture_onboard_completed", lambda _cfg: None)
-    elif setup == "app.integrations.cli.cmd_list":
-        integrations_module = importlib.import_module("app.cli.commands.integrations")
+    elif setup == "integrations.cli.cmd_list":
+        integrations_module = importlib.import_module("cli.commands.integrations")
         monkeypatch.setattr(setup, lambda: None)
         monkeypatch.setattr(
             integrations_module,
@@ -497,7 +487,7 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
             lambda: captured.append(subcommand_event),
         )
     else:
-        tests_module = importlib.import_module("app.cli.commands.tests")
+        tests_module = importlib.import_module("cli.commands.tests")
         monkeypatch.setattr(setup, _EmptyCatalog)
 
         def _capture_tests_listed(_category: str, *, search: bool) -> None:
@@ -522,24 +512,24 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     never reaching render_landing().  The fix guards the SystemExit on
     `config.enabled`, so disabled mode falls through to render_landing().
     """
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
 
     # Force the TTY branch so the regression path is actually exercised.
-    monkeypatch.setattr("app.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.sys.stdout.isatty", lambda: True)
 
     # Force disabled interactive config via the loader.  Return a disabled config
     # regardless of how the CLI resolved the flag.
     monkeypatch.setattr(
-        "app.cli.interactive_shell.config.ReplConfig.load",
+        "cli.config.ReplConfig.load",
         classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
     )
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
-        "app.cli.__main__.render_landing",
+        "cli.__main__.render_landing",
         lambda _group: landing_calls.append(1),
     )
 
@@ -547,7 +537,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     def _fail_if_called(**_kw: object) -> int:
         raise AssertionError("run_repl must not run when config.enabled=False")
 
-    with patch("app.cli.interactive_shell.run_repl", side_effect=_fail_if_called):
+    with patch("cli.interactive_shell.run_repl", side_effect=_fail_if_called):
         exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
@@ -561,11 +551,11 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     local run silently rendered the landing page.  Assert the CLI passes
     cli_enabled=True into ReplConfig.load and actually calls run_repl.
     """
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("app.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.sys.stdout.isatty", lambda: True)
 
     load_calls: list[dict] = []
     orig_load = ReplConfig.load
@@ -575,17 +565,17 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
         load_calls.append(kw)
         return orig_load(**kw)
 
-    monkeypatch.setattr("app.cli.interactive_shell.config.ReplConfig.load", spy_load)
+    monkeypatch.setattr("cli.config.ReplConfig.load", spy_load)
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
-        "app.cli.__main__.render_landing",
+        "cli.__main__.render_landing",
         lambda _group: landing_calls.append(1),
     )
 
     with (
-        patch("app.cli.interactive_shell.run_repl", return_value=0),
-        patch("app.cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
+        patch("cli.interactive_shell.run_repl", return_value=0),
+        patch("cli.interactive_shell.runtime.entrypoint.run_repl", return_value=0),
     ):
         exit_code = main([])
 

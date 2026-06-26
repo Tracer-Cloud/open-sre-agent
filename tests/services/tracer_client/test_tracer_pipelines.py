@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.services.tracer_client.tracer_pipelines import (
+from services.tracer_client.tracer_pipelines import (
     PipelineRunSummary,
     PipelineSummary,
     TracerPipelinesMixin,

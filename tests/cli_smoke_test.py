@@ -18,7 +18,7 @@ from threading import Thread
 
 import pytest
 
-from app.version import get_version
+from config.version import get_version
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"
@@ -684,7 +684,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     is accepted before choosing repick. Skips when the CLI binary for each parametrized
     case is not on PATH.
     """
-    from app.cli.wizard.config import SUPPORTED_PROVIDERS
+    from cli.wizard.config import SUPPORTED_PROVIDERS
 
     stagger_j = next(
         (i for i, provider in enumerate(SUPPORTED_PROVIDERS) if provider.value == provider_key),

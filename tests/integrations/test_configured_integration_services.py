@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations import catalog
+from integrations import catalog
 
 
 def test_returns_lowercase_service_keys_deduplicated(monkeypatch: Any) -> None:

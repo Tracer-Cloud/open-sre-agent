@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from app.tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
 
 
 class TestTemporalNamespaceInfoToolContract(BaseToolContract):
@@ -59,7 +59,7 @@ def test_run_happy_path(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "app.tools.TemporalNamespaceInfoTool.TemporalClient",
+        "tools.TemporalNamespaceInfoTool.TemporalClient",
         lambda _config: mock_client,
     )
 
@@ -85,7 +85,7 @@ def test_run_returns_error_on_failure(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "app.tools.TemporalNamespaceInfoTool.TemporalClient",
+        "tools.TemporalNamespaceInfoTool.TemporalClient",
         lambda _config: mock_client,
     )
 

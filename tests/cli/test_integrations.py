@@ -4,16 +4,16 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
-from app.cli.interactive_shell.data_store.constants import SETUP_SERVICES, VERIFY_SERVICES
-from app.integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
+from cli.__main__ import cli
+from cli.interactive_shell.data_store.constants import SETUP_SERVICES, VERIFY_SERVICES
+from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 
 
 def test_integrations_show_redacts_api_token() -> None:
     runner = CliRunner()
 
     with patch(
-        "app.integrations.cli.get_integration",
+        "integrations.cli.get_integration",
         return_value={
             "id": "vercel-1234",
             "service": "vercel",
@@ -35,11 +35,11 @@ def test_integrations_setup_accepts_github() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "github"
         result = runner.invoke(cli, ["integrations", "setup", "github"])
@@ -53,11 +53,11 @@ def test_integrations_setup_accepts_vercel() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=1) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
         mock_setup.return_value = "vercel"
         result = runner.invoke(cli, ["integrations", "setup", "vercel"])
@@ -72,11 +72,11 @@ def test_integrations_setup_accepts_openclaw() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=1) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
         mock_setup.return_value = "openclaw"
         result = runner.invoke(cli, ["integrations", "setup", "openclaw"])
@@ -94,9 +94,9 @@ def test_setup_vercel_saves_credentials(monkeypatch) -> None:
         return next(answers)
 
     saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     monkeypatch.setattr(
-        "app.integrations.cli.upsert_integration",
+        "integrations.cli.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
 
@@ -118,13 +118,13 @@ def test_setup_openclaw_saves_credentials(monkeypatch) -> None:
         return next(answers)
 
     saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     monkeypatch.setattr(
-        "app.integrations.cli.upsert_integration",
+        "integrations.cli.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
     monkeypatch.setattr(
-        "app.integrations.cli.validate_openclaw_config",
+        "integrations.cli.validate_openclaw_config",
         lambda _config: type("Result", (), {"ok": True, "detail": "ok"})(),
     )
 
@@ -151,11 +151,11 @@ def test_integrations_setup_accepts_telegram() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "telegram"
         result = runner.invoke(cli, ["integrations", "setup", "telegram"])
@@ -169,11 +169,11 @@ def test_integrations_setup_accepts_whatsapp() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "whatsapp"
         result = runner.invoke(cli, ["integrations", "setup", "whatsapp"])
@@ -187,11 +187,11 @@ def test_integrations_setup_accepts_twilio() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "twilio"
         result = runner.invoke(cli, ["integrations", "setup", "twilio"])
@@ -205,11 +205,11 @@ def test_integrations_setup_accepts_smtp() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "smtp"
         result = runner.invoke(cli, ["integrations", "setup", "smtp"])
@@ -236,9 +236,9 @@ def test_setup_smtp_saves_credentials(monkeypatch) -> None:
         return next(answers)
 
     saved: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     monkeypatch.setattr(
-        "app.integrations.cli.upsert_integration",
+        "integrations.cli.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
 
@@ -267,11 +267,11 @@ def test_integrations_setup_skips_auto_verify_for_unverifiable_service() -> None
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify") as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify") as mock_verify,
     ):
         # rds is registered in SETUP_SERVICES but intentionally absent from
         # VERIFY_SERVICES, so it exercises the auto-verify-skip path.
@@ -289,8 +289,8 @@ def test_integrations_verify_accepts_github() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "github"])
 
@@ -306,8 +306,8 @@ def test_integrations_verify_accepts_openclaw() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_verify", return_value=1) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=1) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "openclaw"])
 
@@ -323,8 +323,8 @@ def test_integrations_verify_accepts_argocd() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "argocd"])
 
@@ -342,11 +342,11 @@ def test_integrations_setup_accepts_helm() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_setup") as mock_setup,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_setup") as mock_setup,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         mock_setup.return_value = "helm"
         result = runner.invoke(cli, ["integrations", "setup", "helm"])
@@ -364,8 +364,8 @@ def test_integrations_verify_accepts_helm() -> None:
     runner = CliRunner()
 
     with (
-        patch("app.cli.commands.integrations.capture_integration_verified") as mock_capture,
-        patch("app.integrations.cli.cmd_verify", return_value=0) as mock_verify,
+        patch("cli.commands.integrations.capture_integration_verified") as mock_capture,
+        patch("integrations.cli.cmd_verify", return_value=0) as mock_verify,
     ):
         result = runner.invoke(cli, ["integrations", "verify", "helm"])
 

@@ -18,10 +18,10 @@ from typing import Any
 
 from rich.console import Console
 
-from app.cli.interactive_shell.chat import cli_agent
-from app.cli.interactive_shell.chat.action_plan import _parse_action_plan
-from app.cli.interactive_shell.chat.cli_agent import answer_cli_agent
-from app.cli.interactive_shell.chat.system_prompt import (
+from cli.interactive_shell.chat import cli_agent
+from cli.interactive_shell.chat.action_plan import _parse_action_plan
+from cli.interactive_shell.chat.cli_agent import answer_cli_agent
+from cli.interactive_shell.chat.system_prompt import (
     _ACTION_RULE,
     _MARKDOWN_RULE,
     _TERMINOLOGY_RULE,
@@ -29,7 +29,7 @@ from app.cli.interactive_shell.chat.system_prompt import (
     _build_observation_block,
     _build_system_prompt,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -73,8 +73,8 @@ class _FakeLLMClient:
 def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
     # ``answer_cli_agent`` imports ``get_llm_for_reasoning`` lazily from
-    # ``app.services.llm_client``, so we patch the symbol on that module.
-    import app.services.llm_client as llm_module
+    # ``services.llm_client``, so we patch the symbol on that module.
+    import services.llm_client as llm_module
 
     monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: client)
     return client
@@ -148,7 +148,7 @@ class TestSystemPromptAgentsMdGrounding:
         assert "--- Repo map (AGENTS.md) ---" not in prompt
 
     def test_section_absent_in_reference_only_grounded_prompt(self) -> None:
-        from app.cli.interactive_shell.chat.cli_help import _build_grounded_prompt
+        from cli.interactive_shell.chat.cli_help import _build_grounded_prompt
 
         # The reference_only path stays strict — even if AGENTS.md grounding is
         # available elsewhere in the shell, this prompt must not include it.
@@ -392,11 +392,11 @@ class TestAssistantOutputRendering:
                 raise RuntimeError("upstream 503")
                 yield  # pragma: no cover  -- generator marker
 
-        import app.services.llm_client as llm_module
+        import services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
         session = ReplSession()
@@ -422,8 +422,8 @@ class TestAssistantOutputRendering:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+        import cli.wizard.env_sync as env_sync
+        from cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -465,7 +465,7 @@ class TestAssistantOutputRendering:
             '{"actions":[{"action":"switch_llm_provider","provider":"openai","model":"gpt-5.5"}]}',
         )
 
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -501,8 +501,8 @@ class TestAssistantOutputRendering:
             """,
         )
 
-        import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+        import cli.wizard.env_sync as env_sync
+        from cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -542,7 +542,7 @@ class TestStreamingMigration:
                 calls.append("invoke_stream")
                 yield "ok"
 
-        import app.services.llm_client as llm_module
+        import services.llm_client as llm_module
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
 
@@ -566,8 +566,8 @@ class TestStreamingMigration:
             '{"actions":[{"action":"switch_llm_provider","provider":"anthropic"}]}',
         )
 
-        import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
+        import cli.wizard.env_sync as env_sync
+        from cli.interactive_shell.command_registry import repl_data as repl_data_module
 
         class _Fake:
             provider = "anthropic"
@@ -633,9 +633,7 @@ def test_run_interactive_action_queues_setup_command(monkeypatch: Any) -> None:
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
     )
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("can you configure sentry?", session, console)
@@ -651,9 +649,7 @@ def test_run_interactive_action_falls_back_to_guidance_without_tty(monkeypatch: 
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations setup sentry"}]}',
     )
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: False
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: False)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("can you configure sentry?", session, console)
@@ -667,9 +663,7 @@ def test_run_interactive_action_queues_any_registered_opensre_command(monkeypatc
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/integrations remove github"}]}',
     )
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("remove github connection", session, console)
@@ -683,9 +677,7 @@ def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) 
         monkeypatch,
         '{"actions":[{"action":"run_interactive","command":"/not-an-opensre-command now"}]}',
     )
-    monkeypatch.setattr(
-        "app.cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True
-    )
+    monkeypatch.setattr("cli.interactive_shell.ui.choice_menu.repl_tty_interactive", lambda: True)
     session = ReplSession()
     console, buf = _capture()
     answer_cli_agent("do a fake thing", session, console)

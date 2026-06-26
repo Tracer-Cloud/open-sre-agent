@@ -1,32 +1,31 @@
 ---
 description: Investigation pipeline architecture and stage development
 globs:
-    - app/core/orchestration/**
-    - app/core/runtime/**
-    - app/core/domain/state/**
+    - core/orchestration/**
+    - core/runtime/**
+    - core/domain/state/**
     - app/agent/**
-    - app/state/**
 ---
 
 # Investigation pipeline
 
 ## Coordinator
 
-`app/core/orchestration/pipeline.py` runs **resolve integrations → extract alert → investigation agent → deliver**.
+`core/orchestration/pipeline.py` runs **resolve integrations → extract alert → investigation agent → deliver**.
 
-`app/core/orchestration/entrypoints.py` exposes `run_investigation` and async streaming helpers.
+`core/orchestration/entrypoints.py` exposes `run_investigation` and async streaming helpers.
 
 ## Key packages
 
-- `app/core/orchestration/node/` for pipeline stages (extract, investigate, diagnose, publish findings)
-- `app/core/runtime/` for shared LLM tool-calling runtime primitives
-- `app/cli/interactive_shell/chat/` for live REPL conversational assistant
-- `app/state/agent_state.py` for `AgentState` / `InvestigationState` (composes domain runtime slices)
-- `app/core/domain/state/runtime_slices.py` for investigation slice TypedDicts and stage ownership
+- `core/orchestration/node/` for pipeline stages (extract, investigate, diagnose, publish findings)
+- `core/runtime/` for shared LLM tool-calling runtime primitives
+- `cli/interactive_shell/chat/` for live REPL conversational assistant
+- `core/domain/state/agent_state.py` for `AgentState` / `InvestigationState`
+- `core/domain/state/runtime_slices.py` for investigation slice TypedDicts and stage ownership
 
 ## Conventions
 
-- Prefer `@traceable` from `app.utils.tracing` on externally-visible orchestration helpers.
+- Prefer `@traceable` from `utils.tracing` on externally-visible orchestration helpers.
 - Stages read full state and return **partial dict** updates.
 - Use `get_tracker()` for CLI progress when appropriate.
 - Keep new persisted keys in the state `TypedDict` and any matching validators.

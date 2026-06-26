@@ -7,9 +7,9 @@ that derived help command list (and vice versa).
 
 from __future__ import annotations
 
-from app.cli.__main__ import cli
-from app.cli.commands import _COMMANDS
-from app.cli.interactive_shell.ui.layout import _commands_from_group
+from cli.__main__ import cli
+from cli.commands import _COMMANDS
+from cli.interactive_shell.ui.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:
@@ -29,5 +29,5 @@ def test_registered_commands_match_help_table() -> None:
     )
     assert not missing_from_registry, (
         f"Commands shown in the rendered help list but not registered in _COMMANDS: {missing_from_registry}. "
-        "Add the command to _COMMANDS in app/cli/commands/__init__.py."
+        "Add the command to _COMMANDS in cli/commands/__init__.py."
     )

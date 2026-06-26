@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.RedisClientListTool import get_redis_client_list
 from tests.tools.conftest import BaseToolContract
+from tools.RedisClientListTool import get_redis_client_list
 
 
 class TestRedisClientListToolContract(BaseToolContract):
@@ -22,7 +22,7 @@ def test_metadata() -> None:
 
 def test_run_happy_path() -> None:
     fake = {"source": "redis", "available": True, "total_clients": 3, "blocked_clients": 1}
-    with patch("app.tools.RedisClientListTool.get_client_list", return_value=fake) as mock_fn:
+    with patch("tools.RedisClientListTool.get_client_list", return_value=fake) as mock_fn:
         result = get_redis_client_list(host="localhost")
     assert result["available"] is True
     assert result["blocked_clients"] == 1
@@ -31,7 +31,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.RedisClientListTool.get_client_list",
+        "tools.RedisClientListTool.get_client_list",
         return_value={"source": "redis", "available": False, "error": "boom"},
     ):
         result = get_redis_client_list(host="invalid")

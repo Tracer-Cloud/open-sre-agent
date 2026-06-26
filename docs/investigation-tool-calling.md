@@ -9,29 +9,29 @@ CLI-backed, Bedrock, and future clients)—not one vendor.
 The investigation agent does **not** call integration APIs through the LLM. The flow is:
 
 1. **Tools** — `get_registered_tools("investigation")`, filtered with `tool.is_available(...)`.
-2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `app/services/agent_llm_client.py`.
+2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `services/agent_llm_client.py`.
    Each client class shapes schemas for its API (function definitions, tool specs, CLI prompt JSON, etc.).
 3. **Invoke** — `llm.invoke(messages, system=..., tools=tool_schemas)`; the model returns tool calls.
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
 5. **Seed path** — Before the loop, `_build_seed_calls` may inject deterministic tool runs; synthetic
    assistant + tool-result messages must match the active client
-   (`app/core/orchestration/node/investigate/agent.py`).
+   (`core/orchestration/node/investigate/agent.py`).
 
 ```text
 investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
                     ↓
-              app/tools/*  (input_schema, extract_params, run)
+              tools/*  (input_schema, extract_params, run)
 ```
 
 ### Where code lives
 
 | Concern | Location |
 | -------- | -------- |
-| Provider routing | `app/services/agent_llm_client.py` (`get_agent_llm`, client classes) |
-| Chat / non-agent LLM | `app/services/llm_client.py` (separate path—changes here do not fix investigation) |
-| Investigation loop & message dispatch | `app/core/orchestration/node/investigate/` and `app/core/runtime/` |
+| Provider routing | `services/agent_llm_client.py` (`get_agent_llm`, client classes) |
+| Chat / non-agent LLM | `services/llm_client.py` (separate path—changes here do not fix investigation) |
+| Investigation loop & message dispatch | `core/orchestration/node/investigate/` and `core/runtime/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
-| Tool definitions | `app/tools/` (`input_schema`, `public_input_schema`) |
+| Tool definitions | `tools/` (`input_schema`, `public_input_schema`) |
 
 When adding a provider, implement **both** `tool_schemas()` and the message shapes the runtime loop
 already branches on (or extend those branches). Do not assume one vendor’s JSON tool format works elsewhere.
@@ -53,7 +53,7 @@ already branches on (or extend those branches). Do not assume one vendor’s JSO
 
 ## Tool `input_schema` (authoring)
 
-When adding or changing tools under `app/tools/`:
+When adding or changing tools under `tools/`:
 
 - [ ] **Top-level** — Investigation tools use `type: object` with a `properties` dict.
 - [ ] **Single `type`** — Prefer one string per node (`"string"`, `"object"`, `"array"`). Avoid
@@ -85,7 +85,7 @@ Each `*AgentClient` should own:
 | ---------------- | ----- |
 | `tool_schemas(tools)` | Map `RegisteredTool` / `public_input_schema` → API payload. Never pass raw schemas if the API is strict. |
 | `invoke(..., tools=...)` | Attach schemas the API expects; handle retries and map errors to `RuntimeError` with actionable text. |
-| Message compatibility | Investigation builds history via `build_synthetic_assistant_tool_call_message`, `build_assistant_message`, `build_tool_result_messages` in `app/core/runtime/`—each must match your invoke parser. |
+| Message compatibility | Investigation builds history via `build_synthetic_assistant_tool_call_message`, `build_assistant_message`, `build_tool_result_messages` in `core/runtime/`—each must match your invoke parser. |
 
 Checklist when adding or changing a client:
 
@@ -131,6 +131,6 @@ adapter strictness gaps.
 
 ## Related docs
 
-- [app/services/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md) — API provider wiring and env keys
-- [app/integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
+- [services/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/services/AGENTS.md) — API provider wiring and env keys
+- [integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
 - [AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) — repo map and PR checklist

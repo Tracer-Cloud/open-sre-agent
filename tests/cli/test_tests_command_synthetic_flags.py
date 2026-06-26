@@ -7,7 +7,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-# ``app.cli.commands`` imports ``app.fleet_monitoring.probe`` via command registration.
+# ``cli.commands`` imports ``tools.fleet_monitoring.probe`` via command registration.
 # ``probe`` depends on optional ``psutil``; provide a tiny stub so this
 # focused CLI argv-plumbing test remains hermetic in minimal environments.
 if "psutil" not in sys.modules:
@@ -23,8 +23,8 @@ if "psutil" not in sys.modules:
     psutil_stub.AccessDenied = _PsutilStubError
     sys.modules["psutil"] = psutil_stub
 
-from app.cli.__main__ import cli
-from app.cli.commands.tests import _build_openclaw_synthetic_argv, _build_synthetic_argv
+from cli.__main__ import cli
+from cli.commands.tests import _build_openclaw_synthetic_argv, _build_synthetic_argv
 
 
 def test_build_synthetic_argv_with_explicit_report_and_observations_dir() -> None:
@@ -98,7 +98,7 @@ def test_tests_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path: Path) ->
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -151,7 +151,7 @@ def test_tests_synthetic_cli_does_not_pass_observations_dir_when_unset(tmp_path:
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -186,7 +186,7 @@ def test_tests_synthetic_all_defaults_to_parallel_all_levels(tmp_path: Path) -> 
     fake_run_suite.main = _fake_main
 
     with (
-        unittest.mock.patch("app.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch.dict(
             sys.modules,
             {"tests.synthetic.rds_postgres.run_suite": fake_run_suite},
@@ -221,7 +221,7 @@ def test_tests_openclaw_synthetic_cli_forwards_flags_to_run_suite_main(tmp_path:
 
     with (
         unittest.mock.patch(
-            "app.cli.tests.discover.OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
+            "cli.tests.discover.OPENCLAW_SYNTHETIC_SCENARIOS_DIR",
             scenarios_dir,
         ),
         unittest.mock.patch.dict(

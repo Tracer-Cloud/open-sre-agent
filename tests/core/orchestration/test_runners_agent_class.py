@@ -3,8 +3,8 @@
 The investigation pipeline exposes an ``agent_class`` parameter at two
 public surfaces:
 
-  - :func:`app.core.orchestration.entrypoints.run_investigation`
-  - :func:`app.core.orchestration.pipeline.run_connected_investigation`
+  - :func:`core.orchestration.entrypoints.run_investigation`
+  - :func:`core.orchestration.pipeline.run_connected_investigation`
 
 The parameter MUST thread cleanly from the outer ``run_investigation``
 all the way to where the agent is constructed, so callers (e.g. test
@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
+from core.orchestration.node.investigate import ConnectedInvestigationAgent
 
 
 class _SentinelAgent(ConnectedInvestigationAgent):
@@ -51,27 +51,27 @@ def _reset_sentinel() -> None:
 def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     """The pipeline must instantiate the override class, not the default."""
     _reset_sentinel()
-    from app.core.orchestration.pipeline import run_connected_investigation
-    from app.state.factory import make_initial_state
+    from core.domain.state.factory import make_initial_state
+    from core.orchestration.pipeline import run_connected_investigation
 
     state = make_initial_state(raw_alert="alert text")
     # Avoid running real integration/extraction; mock them to no-ops so the
     # test focuses on the agent_class threading specifically.
     with (
         patch(
-            "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+            "core.orchestration.node.resolve_integrations.resolve_integrations",
             return_value={"resolved_integrations": {}},
         ),
         patch(
-            "app.core.orchestration.node.extract_alert.extract_alert",
+            "core.orchestration.node.extract_alert.extract_alert",
             return_value={"is_noise": False},
         ),
-        patch("app.core.orchestration.node.plan_actions.plan_actions", return_value={}),
+        patch("core.orchestration.node.plan_actions.plan_actions", return_value={}),
         patch(
-            "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
             return_value={},
         ),
-        patch("app.core.orchestration.node.publish_findings.deliver", return_value={}),
+        patch("core.orchestration.node.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_SentinelAgent)
 
@@ -83,29 +83,29 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
     """Production behavior is unchanged: omitting ``agent_class`` constructs
     :class:`ConnectedInvestigationAgent` (the default)."""
     _reset_sentinel()
-    from app.core.orchestration.pipeline import run_connected_investigation
-    from app.state.factory import make_initial_state
+    from core.domain.state.factory import make_initial_state
+    from core.orchestration.pipeline import run_connected_investigation
 
     state = make_initial_state(raw_alert="alert text")
     with (
         patch(
-            "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+            "core.orchestration.node.resolve_integrations.resolve_integrations",
             return_value={"resolved_integrations": {}},
         ),
         patch(
-            "app.core.orchestration.node.extract_alert.extract_alert",
+            "core.orchestration.node.extract_alert.extract_alert",
             return_value={"is_noise": False},
         ),
-        patch("app.core.orchestration.node.plan_actions.plan_actions", return_value={}),
+        patch("core.orchestration.node.plan_actions.plan_actions", return_value={}),
         patch(
-            "app.core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
+            "core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
             return_value={},
         ) as mock_run,
         patch(
-            "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
             return_value={},
         ),
-        patch("app.core.orchestration.node.publish_findings.deliver", return_value={}),
+        patch("core.orchestration.node.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state)  # no agent_class kwarg
 
@@ -121,23 +121,23 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
     ``pipeline.run_connected_investigation`` → ``ConnectedInvestigationAgent``.
     """
     _reset_sentinel()
-    from app.core.orchestration.entrypoints import run_investigation
+    from core.orchestration.entrypoints import run_investigation
 
     with (
         patch(
-            "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+            "core.orchestration.node.resolve_integrations.resolve_integrations",
             return_value={"resolved_integrations": {}},
         ),
         patch(
-            "app.core.orchestration.node.extract_alert.extract_alert",
+            "core.orchestration.node.extract_alert.extract_alert",
             return_value={"is_noise": False},
         ),
-        patch("app.core.orchestration.node.plan_actions.plan_actions", return_value={}),
+        patch("core.orchestration.node.plan_actions.plan_actions", return_value={}),
         patch(
-            "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
             return_value={},
         ),
-        patch("app.core.orchestration.node.publish_findings.deliver", return_value={}),
+        patch("core.orchestration.node.publish_findings.deliver", return_value={}),
     ):
         run_investigation(raw_alert={"alert": "test"}, agent_class=_SentinelAgent)
 
@@ -148,8 +148,8 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
 
 
 def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
-    from app.core.orchestration.pipeline import run_connected_investigation
-    from app.state.factory import make_initial_state
+    from core.domain.state.factory import make_initial_state
+    from core.orchestration.pipeline import run_connected_investigation
 
     calls: list[str] = []
 
@@ -165,28 +165,28 @@ def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
     state = make_initial_state(raw_alert="alert text")
     with (
         patch(
-            "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+            "core.orchestration.node.resolve_integrations.resolve_integrations",
             side_effect=lambda _state: (
                 calls.append("resolve_integrations") or {"resolved_integrations": {}}
             ),
         ),
         patch(
-            "app.core.orchestration.node.extract_alert.extract_alert",
+            "core.orchestration.node.extract_alert.extract_alert",
             side_effect=lambda _state: calls.append("extract_alert") or {"is_noise": False},
         ),
         patch(
-            "app.core.orchestration.node.plan_actions.plan_actions",
+            "core.orchestration.node.plan_actions.plan_actions",
             side_effect=lambda _state: calls.append("plan_actions") or {},
         ),
         patch(
-            "app.core.orchestration.node.diagnose.diagnose",
+            "core.orchestration.node.diagnose.diagnose",
             side_effect=lambda _state: calls.append("diagnose") or {},
         ),
         patch(
-            "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+            "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
             return_value={},
         ),
-        patch("app.core.orchestration.node.publish_findings.deliver", return_value={}),
+        patch("core.orchestration.node.publish_findings.deliver", return_value={}),
     ):
         run_connected_investigation(state, agent_class=_OrderAgent)
 

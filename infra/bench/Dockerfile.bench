@@ -56,7 +56,14 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Source - only what the bench needs.
-COPY app/ ./app/
+COPY cli/ ./cli/
+COPY config/ ./config/
+COPY core/ ./core/
+COPY deployment/ ./deployment/
+COPY integrations/ ./integrations/
+COPY platform/ ./platform/
+COPY services/ ./services/
+COPY tools/ ./tools/
 COPY tests/__init__.py ./tests/__init__.py
 COPY tests/benchmarks/ ./tests/benchmarks/
 

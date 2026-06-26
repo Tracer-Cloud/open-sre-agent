@@ -1,11 +1,11 @@
-"""Tests for app.remote.server utility functions."""
+"""Tests for deployment.remote.server utility functions."""
 
 from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
 
-from app.remote.server import _make_id, _safe_investigation_path, _slugify
+from deployment.remote.server import _make_id, _safe_investigation_path, _slugify
 
 
 def test_slugify_converts_text_to_url_safe_format() -> None:

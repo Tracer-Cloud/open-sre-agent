@@ -56,8 +56,8 @@ def _resolve_telemetry_dir(args: argparse.Namespace) -> Path:
         raise SystemExit("Pass --telemetry-dir or --relative PATH")
 
     if args.from_hub:
-        from app.integrations.opensre.constants import OPENSRE_HF_DATASET_ID
-        from app.integrations.opensre.hf_remote import materialize_opensre_telemetry_from_hub
+        from integrations.opensre.constants import OPENSRE_HF_DATASET_ID
+        from integrations.opensre.hf_remote import materialize_opensre_telemetry_from_hub
 
         dataset_id = (args.dataset_id or "").strip() or OPENSRE_HF_DATASET_ID
         return materialize_opensre_telemetry_from_hub(
@@ -114,7 +114,7 @@ def _cmd_raw(root: Path, rel_path: str, limit: int) -> None:
 
 def _csv_backend(root: Path) -> Any:
     """Lazy-construct the CSV Grafana backend after ``sys.path`` is set up."""
-    from app.integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
+    from integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
 
     return OpenSRECsvGrafanaBackend(telemetry_dir=root, alert_fixture={})
 
@@ -135,7 +135,7 @@ def _cmd_traces(root: Path, service: str) -> None:
 
 
 def main() -> None:
-    from app.integrations.opensre.constants import OPENSRE_HF_DATASET_ID
+    from integrations.opensre.constants import OPENSRE_HF_DATASET_ID
 
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(

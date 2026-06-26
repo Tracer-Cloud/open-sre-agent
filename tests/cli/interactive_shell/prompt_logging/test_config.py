@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from app.cli.interactive_shell.prompt_logging.config import PromptLogConfig
+from cli.interactive_shell.prompt_logging.config import PromptLogConfig
 
 
 def _no_file_settings(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
+        "cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
         lambda: {},
     )
 
@@ -43,7 +43,7 @@ def test_load_respects_env_opt_out_of_redaction(monkeypatch) -> None:
 
 def test_load_respects_file_opt_out_of_redaction(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
+        "cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
         lambda: {"redact": False},
     )
     monkeypatch.delenv("OPENSRE_PROMPT_LOG_REDACT", raising=False)
@@ -55,7 +55,7 @@ def test_load_respects_file_opt_out_of_redaction(monkeypatch) -> None:
 
 def test_env_redact_overrides_file_setting(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
+        "cli.interactive_shell.prompt_logging.config.read_prompt_log_settings",
         lambda: {"redact": False},
     )
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "1")

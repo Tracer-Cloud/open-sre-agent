@@ -556,7 +556,7 @@ class CloudOpsBenchAdapter(BenchmarkAdapter):
         honest opensre-vs-pure-LLM comparison.
         """
         # Late import — keeps tests/benchmarks importable without opensre.
-        from app.services.agent_llm_client import get_agent_llm
+        from services.agent_llm_client import get_agent_llm
 
         alert = self.build_alert(case)
         legacy = self._require_case(case)

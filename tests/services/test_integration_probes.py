@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.config_models import CoralogixIntegrationConfig
-from app.services.alertmanager.client import AlertmanagerClient, AlertmanagerConfig
-from app.services.coralogix.client import CoralogixClient
-from app.services.datadog.client import DatadogClient, DatadogConfig
+from integrations.config_models import CoralogixIntegrationConfig
+from services.alertmanager.client import AlertmanagerClient, AlertmanagerConfig
+from services.coralogix.client import CoralogixClient
+from services.datadog.client import DatadogClient, DatadogConfig
 
 
 def test_datadog_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:

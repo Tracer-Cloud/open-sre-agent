@@ -15,8 +15,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.tools.KafkaConsumerGroupTool import get_kafka_consumer_group_lag
 from tests.tools.conftest import BaseToolContract
+from tools.KafkaConsumerGroupTool import get_kafka_consumer_group_lag
 
 # ---------------------------------------------------------------------------
 # Shared fixture data
@@ -156,7 +156,7 @@ class TestKafkaConsumerGroupExtractParams:
 class TestKafkaConsumerGroupRun:
     def test_happy_path_returns_total_lag(self) -> None:
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_LAG_RESPONSE,
         ):
             result = get_kafka_consumer_group_lag(
@@ -171,7 +171,7 @@ class TestKafkaConsumerGroupRun:
 
     def test_happy_path_partition_level_lag_detail(self) -> None:
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_LAG_RESPONSE,
         ):
             result = get_kafka_consumer_group_lag(
@@ -186,7 +186,7 @@ class TestKafkaConsumerGroupRun:
 
     def test_happy_path_zero_lag_healthy_group(self) -> None:
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_ZERO_LAG_RESPONSE,
         ):
             result = get_kafka_consumer_group_lag(
@@ -203,7 +203,7 @@ class TestKafkaConsumerGroupRun:
 
     def test_happy_path_forwards_group_id_to_integration(self) -> None:
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_ZERO_LAG_RESPONSE,
         ) as mock_fn:
             get_kafka_consumer_group_lag(
@@ -216,7 +216,7 @@ class TestKafkaConsumerGroupRun:
 
     def test_happy_path_sasl_ssl_connection(self) -> None:
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             return_value=_CONSUMER_GROUP_LAG_RESPONSE,
         ) as mock_fn:
             result = get_kafka_consumer_group_lag(
@@ -246,9 +246,7 @@ class TestKafkaConsumerGroupRun:
             "available": False,
             "error": "Group 'stale-consumer' does not exist.",
         }
-        with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag", return_value=fake_error
-        ):
+        with patch("tools.KafkaConsumerGroupTool.get_consumer_group_lag", return_value=fake_error):
             result = get_kafka_consumer_group_lag(
                 bootstrap_servers="broker1:9092",
                 group_id="stale-consumer",
@@ -263,7 +261,7 @@ class TestKafkaConsumerGroupRun:
         # the tool should let the exception propagate (no silent swallowing).
         with (
             patch(
-                "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+                "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
                 side_effect=RuntimeError("consumer group timeout"),
             ),
             pytest.raises(RuntimeError, match="consumer group timeout"),
@@ -277,9 +275,9 @@ class TestKafkaConsumerGroupRun:
         # Empty bootstrap_servers → KafkaConfig.is_configured is False.
         # The integration short-circuits before touching confluent_kafka.
         with patch(
-            "app.tools.KafkaConsumerGroupTool.get_consumer_group_lag",
+            "tools.KafkaConsumerGroupTool.get_consumer_group_lag",
             wraps=__import__(
-                "app.integrations.kafka", fromlist=["get_consumer_group_lag"]
+                "integrations.kafka", fromlist=["get_consumer_group_lag"]
             ).get_consumer_group_lag,
         ) as mock_fn:
             result = get_kafka_consumer_group_lag(

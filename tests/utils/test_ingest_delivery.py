@@ -1,11 +1,11 @@
-"""Tests for ``app/utils/ingest_delivery.py``.
+"""Tests for ``utils/ingest_delivery.py``.
 
 Covers payload construction (``_normalize_severity``, ``_resolve_source``,
 ``_resolve_thread_id``, ``build_ingest_payload``) and the ``send_ingest``
 delivery wrapper.
 
-``send_ingest`` tests stub ``app.utils.ingest_delivery.httpx.post`` and
-``app.utils.ingest_delivery.get_tracer_base_url`` so the real network is
+``send_ingest`` tests stub ``platform.notifications.ingest_delivery.httpx.post`` and
+``platform.notifications.ingest_delivery.get_tracer_base_url`` so the real network is
 never touched and the URL resolution is deterministic.
 """
 
@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.utils import ingest_delivery
+from platform.notifications import ingest_delivery
 
 
 @pytest.fixture
@@ -259,7 +259,7 @@ class TestSendIngest:
         monkeypatch.delenv("TRACER_INGEST_TOKEN", raising=False)
         monkeypatch.setenv("TRACER_API_URL", "https://api.example.com")
         monkeypatch.setattr(
-            "app.utils.ingest_delivery.get_tracer_base_url",
+            "platform.notifications.ingest_delivery.get_tracer_base_url",
             lambda: "https://api.example.com",
         )
         called: dict[str, Any] = {}
@@ -268,7 +268,7 @@ class TestSendIngest:
             called["hit"] = True
             return _mock_response()
 
-        monkeypatch.setattr("app.utils.ingest_delivery.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.ingest_delivery.httpx.post", _capture)
         assert ingest_delivery.send_ingest({"thread_id": "t"}) is None
         assert called == {}
 
@@ -281,7 +281,7 @@ class TestSendIngest:
             called["hit"] = True
             return _mock_response()
 
-        monkeypatch.setattr("app.utils.ingest_delivery.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.ingest_delivery.httpx.post", _capture)
         assert ingest_delivery.send_ingest({"raw_alert": {}}) is None
         assert called == {}
 
@@ -295,7 +295,7 @@ class TestSendIngest:
             captured.update(kwargs)
             return _mock_response(json_body={"data": {"investigation_id": "inv-9"}})
 
-        monkeypatch.setattr("app.utils.ingest_delivery.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.ingest_delivery.httpx.post", _capture)
         result = ingest_delivery.send_ingest({"thread_id": "t-1"})
         assert result == "inv-9"
         assert captured["url"] == "https://api.example.com/api/investigations/ingest"
@@ -307,7 +307,7 @@ class TestSendIngest:
         monkeypatch.setenv("TRACER_INGEST_TOKEN", "tok")
         monkeypatch.delenv("TRACER_API_URL", raising=False)
         monkeypatch.setattr(
-            "app.utils.ingest_delivery.get_tracer_base_url",
+            "platform.notifications.ingest_delivery.get_tracer_base_url",
             lambda: "https://fallback.example.com/",
         )
         captured: dict[str, Any] = {}
@@ -316,7 +316,7 @@ class TestSendIngest:
             captured["url"] = url
             return _mock_response(json_body={"data": {"investigation_id": "inv-1"}})
 
-        monkeypatch.setattr("app.utils.ingest_delivery.httpx.post", _capture)
+        monkeypatch.setattr("platform.notifications.ingest_delivery.httpx.post", _capture)
         ingest_delivery.send_ingest({"thread_id": "t-1"})
         assert captured["url"] == "https://fallback.example.com/api/investigations/ingest"
 
@@ -326,7 +326,7 @@ class TestSendIngest:
         monkeypatch.setenv("TRACER_INGEST_TOKEN", "tok")
         monkeypatch.setenv("TRACER_API_URL", "https://api.example.com")
         monkeypatch.setattr(
-            "app.utils.ingest_delivery.httpx.post",
+            "platform.notifications.ingest_delivery.httpx.post",
             lambda *_a, **_kw: _mock_response(json_body={"data": {}}),
         )
         assert ingest_delivery.send_ingest({"thread_id": "t-1"}) is None
@@ -337,7 +337,7 @@ class TestSendIngest:
         monkeypatch.setenv("TRACER_INGEST_TOKEN", "tok")
         monkeypatch.setenv("TRACER_API_URL", "https://api.example.com")
         monkeypatch.setattr(
-            "app.utils.ingest_delivery.httpx.post",
+            "platform.notifications.ingest_delivery.httpx.post",
             lambda *_a, **_kw: _mock_response(status_code=500, text="server err"),
         )
         with caplog.at_level("WARNING"):
@@ -353,15 +353,15 @@ class TestSendIngest:
         def _raise(*_a: Any, **_kw: Any) -> Any:
             raise ConnectionError("dns failure")
 
-        monkeypatch.setattr("app.utils.ingest_delivery.httpx.post", _raise)
+        monkeypatch.setattr("platform.notifications.ingest_delivery.httpx.post", _raise)
         with caplog.at_level("WARNING"):
             assert ingest_delivery.send_ingest({"thread_id": "t-1"}) is None
         assert any("Delivery failed" in r.message for r in caplog.records)
 
     def test_create_investigation_success(self, sample_state):
         with (
-            patch("app.utils.ingest_delivery.send_ingest") as mock_send,
-            patch("app.utils.ingest_delivery.get_investigation_url") as mock_url,
+            patch("platform.notifications.ingest_delivery.send_ingest") as mock_send,
+            patch("platform.notifications.ingest_delivery.get_investigation_url") as mock_url,
         ):
             mock_send.side_effect = ["inv-123", None]
             mock_url.return_value = "https://test/inv-123"
@@ -380,8 +380,8 @@ class TestSendIngest:
 
     def test_create_investigation_first_ingest_failure(self, sample_state):
         with (
-            patch("app.utils.ingest_delivery.send_ingest") as mock_send,
-            patch("app.utils.ingest_delivery.get_investigation_url") as mock_url,
+            patch("platform.notifications.ingest_delivery.send_ingest") as mock_send,
+            patch("platform.notifications.ingest_delivery.get_investigation_url") as mock_url,
         ):
             mock_send.return_value = None
             mock_url.return_value = "https://app.example.com/investigations"
@@ -400,8 +400,8 @@ class TestSendIngest:
 
     def test_create_investigation_second_ingest_failure(self, sample_state):
         with (
-            patch("app.utils.ingest_delivery.send_ingest") as mock_send,
-            patch("app.utils.ingest_delivery.get_investigation_url") as mock_url,
+            patch("platform.notifications.ingest_delivery.send_ingest") as mock_send,
+            patch("platform.notifications.ingest_delivery.get_investigation_url") as mock_url,
         ):
             mock_send.side_effect = ["inv-123", None]
             mock_url.return_value = "https://test/inv-123"

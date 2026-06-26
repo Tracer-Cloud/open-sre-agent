@@ -3,8 +3,8 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.mongodb import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.mongodb import (
     MongoDBConfig,
     build_mongodb_config,
     get_current_ops,
@@ -75,7 +75,7 @@ class TestMongoDBBuild:
 
 
 class TestMongoDBValidation:
-    @patch("app.integrations.mongodb._get_client")
+    @patch("integrations.mongodb._get_client")
     def test_validate_success(self, mock_get_client):
         mock_client = MagicMock()
         mock_client.admin.command.return_value = {"ok": 1}
@@ -90,7 +90,7 @@ class TestMongoDBValidation:
         assert "test" in result.detail
         mock_client.close.assert_called_once()
 
-    @patch("app.integrations.mongodb._get_client")
+    @patch("integrations.mongodb._get_client")
     def test_validate_ping_failure(self, mock_get_client):
         mock_client = MagicMock()
         mock_client.admin.command.return_value = {"ok": 0}
@@ -102,7 +102,7 @@ class TestMongoDBValidation:
         assert result.ok is False
         assert "unexpected result" in result.detail
 
-    @patch("app.integrations.mongodb._get_client", side_effect=Exception("Conn error"))
+    @patch("integrations.mongodb._get_client", side_effect=Exception("Conn error"))
     def test_validate_exception(self, _):
         config = MongoDBConfig(connection_string="mongodb://host")
         result = validate_mongodb_config(config)
@@ -121,8 +121,8 @@ class TestMongoDBAdminUnauthorized:
     def _config(self) -> MongoDBConfig:
         return MongoDBConfig(connection_string="mongodb://host")
 
-    @patch("app.integrations.mongodb._get_client")
-    @patch("app.integrations.mongodb.report_validation_failure")
+    @patch("integrations.mongodb._get_client")
+    @patch("integrations.mongodb.report_validation_failure")
     def test_get_server_status_unauthorized_no_sentry(self, mock_report, mock_client):
         mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
         result = get_server_status(self._config())
@@ -130,8 +130,8 @@ class TestMongoDBAdminUnauthorized:
         assert "clusterMonitor" in result["error"]
         mock_report.assert_not_called()
 
-    @patch("app.integrations.mongodb._get_client")
-    @patch("app.integrations.mongodb.report_validation_failure")
+    @patch("integrations.mongodb._get_client")
+    @patch("integrations.mongodb.report_validation_failure")
     def test_get_current_ops_unauthorized_no_sentry(self, mock_report, mock_client):
         mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
         result = get_current_ops(self._config())
@@ -139,8 +139,8 @@ class TestMongoDBAdminUnauthorized:
         assert "clusterMonitor" in result["error"]
         mock_report.assert_not_called()
 
-    @patch("app.integrations.mongodb._get_client")
-    @patch("app.integrations.mongodb.report_validation_failure")
+    @patch("integrations.mongodb._get_client")
+    @patch("integrations.mongodb.report_validation_failure")
     def test_get_rs_status_unauthorized_no_sentry(self, mock_report, mock_client):
         mock_client.return_value.admin.command.side_effect = self._make_unauthorized()
         result = get_rs_status(self._config())
@@ -148,8 +148,8 @@ class TestMongoDBAdminUnauthorized:
         assert "clusterMonitor" in result["error"]
         mock_report.assert_not_called()
 
-    @patch("app.integrations.mongodb._get_client")
-    @patch("app.integrations.mongodb.report_validation_failure")
+    @patch("integrations.mongodb._get_client")
+    @patch("integrations.mongodb.report_validation_failure")
     def test_get_server_status_other_error_reports_sentry(self, mock_report, mock_client):
         mock_client.return_value.admin.command.side_effect = Exception("connection timeout")
         result = get_server_status(self._config())

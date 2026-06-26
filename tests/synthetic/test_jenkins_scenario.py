@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from app.tools import JenkinsTool
+from tools import JenkinsTool
 
 
 class _FixtureJenkinsClient:
@@ -82,10 +82,10 @@ def fixture_client(monkeypatch: pytest.MonkeyPatch) -> _FixtureJenkinsClient:
 
 def test_jenkins_alert_source_maps_to_tools() -> None:
     """A jenkins-sourced alert auto-seeds and prioritizes the jenkins tools."""
-    from app.core.domain.alerts.alert_source import (
+    from core.domain.alerts.alert_source import (
         ALERT_SOURCE_TO_SEED_TOOL_SOURCES as seed_map,
     )
-    from app.core.domain.alerts.alert_source import (
+    from core.domain.alerts.alert_source import (
         ALERT_SOURCE_TO_TOOL_SOURCES as priority_map,
     )
 
@@ -95,7 +95,7 @@ def test_jenkins_alert_source_maps_to_tools() -> None:
 
 def test_jenkins_tools_are_registered() -> None:
     """The four Jenkins tools are discoverable for investigations and chat."""
-    from app.tools.registry import get_registered_tools
+    from tools.registry import get_registered_tools
 
     names = {t.name for t in get_registered_tools() if t.source == "jenkins"}
     assert names == {

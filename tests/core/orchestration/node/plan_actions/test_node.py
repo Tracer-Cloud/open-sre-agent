@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
-from app.core.domain.types.retrieval import RetrievalControls
-from app.core.orchestration.node.plan_actions.node import plan_actions
-from app.state import AgentState
-from app.tools.registered_tool import RegisteredTool
+from core.domain.state import AgentState
+from core.domain.types.retrieval import RetrievalControls
+from core.orchestration.node.plan_actions.node import plan_actions
+from tools.registered_tool import RegisteredTool
 
 
 def _tool(
@@ -38,7 +38,7 @@ def test_plan_actions_prioritizes_alert_source_tools(monkeypatch: Any) -> None:
         _tool("get_sre_guidance", "knowledge"),
     ]
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
+        "core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
     )
 
     result = plan_actions(
@@ -66,7 +66,7 @@ def test_plan_actions_uses_context_sources_for_generic_alert(monkeypatch: Any) -
         _tool("query_github_commits", "github"),
     ]
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
+        "core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
     )
 
     result = plan_actions(
@@ -94,7 +94,7 @@ def test_plan_actions_applies_budget_and_records_exclusions(monkeypatch: Any) ->
         _tool("query_datadog_traces", "datadog"),
     ]
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
+        "core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
     )
 
     result = plan_actions(
@@ -121,7 +121,7 @@ def test_plan_actions_populates_supported_retrieval_controls(monkeypatch: Any) -
         )
     ]
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
+        "core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
     )
 
     result = plan_actions(
@@ -149,7 +149,7 @@ def test_plan_actions_uses_guidance_fallback_when_nothing_matches(monkeypatch: A
         _tool("get_sre_guidance", "knowledge"),
     ]
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
+        "core.orchestration.node.plan_actions.node.get_registered_tools", lambda _s: tools
     )
 
     result = plan_actions(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.OpsGenieAlertsTool import OpsGenieAlertsTool
+from tools.OpsGenieAlertsTool import OpsGenieAlertsTool
 
 
 def _tool() -> OpsGenieAlertsTool:
@@ -32,7 +32,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["query"] == "status=open"
 
 
-@patch("app.tools.OpsGenieAlertsTool.make_opsgenie_client")
+@patch("tools.OpsGenieAlertsTool.make_opsgenie_client")
 def test_run_returns_alerts_and_open_subset(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_alerts.return_value = {
@@ -52,7 +52,7 @@ def test_run_returns_alerts_and_open_subset(mock_make: MagicMock) -> None:
     assert result["open_alerts"][0]["id"] == "a1"
 
 
-@patch("app.tools.OpsGenieAlertsTool.make_opsgenie_client")
+@patch("tools.OpsGenieAlertsTool.make_opsgenie_client")
 def test_run_empty_alerts_list(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_alerts.return_value = {"success": True, "alerts": [], "total": 0}
@@ -64,7 +64,7 @@ def test_run_empty_alerts_list(mock_make: MagicMock) -> None:
     assert result["open_alerts"] == []
 
 
-@patch("app.tools.OpsGenieAlertsTool.make_opsgenie_client")
+@patch("tools.OpsGenieAlertsTool.make_opsgenie_client")
 def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_alerts.return_value = {"success": False, "error": "HTTP 403"}
@@ -75,14 +75,14 @@ def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     assert "403" in result["error"]
 
 
-@patch("app.tools.OpsGenieAlertsTool.make_opsgenie_client")
+@patch("tools.OpsGenieAlertsTool.make_opsgenie_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="")
     assert result["available"] is False
 
 
-@patch("app.tools.OpsGenieAlertsTool.make_opsgenie_client")
+@patch("tools.OpsGenieAlertsTool.make_opsgenie_client")
 def test_run_passes_query_and_limit(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_alerts.return_value = {"success": True, "alerts": [], "total": 0}

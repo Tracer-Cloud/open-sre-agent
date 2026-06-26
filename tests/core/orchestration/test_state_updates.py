@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.core.orchestration.state_updates import apply_state_updates
-from app.state import AgentState
+from core.domain.state import AgentState
+from core.orchestration.state_updates import apply_state_updates
 
 
 def test_apply_state_updates_last_write_wins() -> None:

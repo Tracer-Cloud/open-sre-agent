@@ -36,8 +36,8 @@ def _state_with_masking() -> dict[str, object]:
 
 
 def test_slack_message_is_unmasked_before_delivery() -> None:
-    from app.core.orchestration.node.publish_findings import node as pub_node
-    from app.core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+    from core.orchestration.node.publish_findings import node as pub_node
+    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
 
     masked_message = "Root cause: <POD_0> crashed in <NAMESPACE_0>. Impact: customer-facing."
 
@@ -55,8 +55,10 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
             "create_investigation_and_attach_url",
             return_value=("inv-123", "https://test/inv-123"),
         ),
-        patch("app.utils.slack_delivery.send_slack_report", return_value=(False, None)),
-        patch("app.utils.slack_delivery.build_action_blocks", return_value=[]),
+        patch(
+            "platform.notifications.slack_delivery.send_slack_report", return_value=(False, None)
+        ),
+        patch("platform.notifications.slack_delivery.build_action_blocks", return_value=[]),
     ):
         result = pub_node.generate_report(_state_with_masking())  # type: ignore[arg-type]
 
@@ -67,8 +69,8 @@ def test_slack_message_is_unmasked_before_delivery() -> None:
 
 
 def test_empty_masking_map_is_passthrough() -> None:
-    from app.core.orchestration.node.publish_findings import node as pub_node
-    from app.core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+    from core.orchestration.node.publish_findings import node as pub_node
+    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
 
     state = _state_with_masking()
     state["masking_map"] = {}
@@ -88,8 +90,10 @@ def test_empty_masking_map_is_passthrough() -> None:
             "create_investigation_and_attach_url",
             return_value=("inv-123", "https://test/inv-123"),
         ),
-        patch("app.utils.slack_delivery.send_slack_report", return_value=(False, None)),
-        patch("app.utils.slack_delivery.build_action_blocks", return_value=[]),
+        patch(
+            "platform.notifications.slack_delivery.send_slack_report", return_value=(False, None)
+        ),
+        patch("platform.notifications.slack_delivery.build_action_blocks", return_value=[]),
     ):
         result = pub_node.generate_report(state)  # type: ignore[arg-type]
 

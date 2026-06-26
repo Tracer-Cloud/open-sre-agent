@@ -27,17 +27,17 @@ from typing import Any
 import httpx
 import pytest
 
-from app.core.domain.alerts.alert_source import (
+from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES as _SEEDING_MAP,
 )
-from app.core.domain.alerts.alert_source import (
+from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
 )
-from app.services.temporal import TemporalClient, TemporalConfig
-from app.tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
-from app.tools.TemporalTaskQueueTool import TemporalTaskQueueTool
-from app.tools.TemporalWorkflowHistoryTool import TemporalWorkflowHistoryTool
-from app.tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from services.temporal import TemporalClient, TemporalConfig
+from tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
+from tools.TemporalTaskQueueTool import TemporalTaskQueueTool
+from tools.TemporalWorkflowHistoryTool import TemporalWorkflowHistoryTool
+from tools.TemporalWorkflowsTool import TemporalWorkflowsTool
 
 pytestmark = pytest.mark.synthetic
 
@@ -260,12 +260,10 @@ def patched_temporal_client(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         return client
 
-    monkeypatch.setattr("app.tools.TemporalNamespaceInfoTool.TemporalClient", _make_patched_client)
-    monkeypatch.setattr("app.tools.TemporalWorkflowsTool.TemporalClient", _make_patched_client)
-    monkeypatch.setattr(
-        "app.tools.TemporalWorkflowHistoryTool.TemporalClient", _make_patched_client
-    )
-    monkeypatch.setattr("app.tools.TemporalTaskQueueTool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.TemporalNamespaceInfoTool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.TemporalWorkflowsTool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.TemporalWorkflowHistoryTool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.TemporalTaskQueueTool.TemporalClient", _make_patched_client)
 
 
 # --- alert source mapping -----------------------------------------------------

@@ -13,9 +13,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.orchestration.entrypoints import run_investigation
-from app.services import llm_client as llm_mod
-from app.state import AgentState, make_initial_state
+from core.domain.state import AgentState, make_initial_state
+from core.orchestration.entrypoints import run_investigation
+from services import llm_client as llm_mod
 from tests.benchmarks.toolcall_model_benchmark.pricing import estimate_run_cost_usd
 from tests.synthetic.rds_postgres.run_suite import _build_resolved_integrations
 from tests.synthetic.rds_postgres.scenario_loader import (

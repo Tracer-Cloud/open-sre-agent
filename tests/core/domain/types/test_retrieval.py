@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.core.domain.types.retrieval import (
+from core.domain.types.retrieval import (
     AggregationSpec,
     FieldSelection,
     FilterCondition,
@@ -246,7 +246,7 @@ class TestToolMetadataRetrieval:
 
     def test_tool_metadata_default_retrieval_controls(self) -> None:
         """ToolMetadata defaults to no retrieval controls."""
-        from app.tools.base import ToolMetadata
+        from tools.base import ToolMetadata
 
         metadata = ToolMetadata(
             name="test_tool",
@@ -258,7 +258,7 @@ class TestToolMetadataRetrieval:
 
     def test_tool_metadata_with_retrieval_controls(self) -> None:
         """ToolMetadata with explicit retrieval controls."""
-        from app.tools.base import ToolMetadata
+        from tools.base import ToolMetadata
 
         controls = RetrievalControls(time_bounds=True, limit=True)
         metadata = ToolMetadata(
@@ -280,8 +280,8 @@ class TestBaseToolRetrieval:
         """BaseTool subclasses default to no retrieval controls."""
         from typing import Any, ClassVar
 
-        from app.core.domain.types.evidence import EvidenceSource
-        from app.tools.base import BaseTool
+        from core.domain.types.evidence import EvidenceSource
+        from tools.base import BaseTool
 
         class SimpleTool(BaseTool):
             name: ClassVar[str] = "simple_tool"
@@ -300,8 +300,8 @@ class TestBaseToolRetrieval:
         """BaseTool subclass can declare supported retrieval controls."""
         from typing import Any, ClassVar
 
-        from app.core.domain.types.evidence import EvidenceSource
-        from app.tools.base import BaseTool
+        from core.domain.types.evidence import EvidenceSource
+        from tools.base import BaseTool
 
         class ControlledTool(BaseTool):
             name: ClassVar[str] = "controlled_tool"
@@ -326,8 +326,8 @@ class TestBaseToolRetrieval:
         """Retrieval controls are preserved through metadata() call."""
         from typing import Any, ClassVar
 
-        from app.core.domain.types.evidence import EvidenceSource
-        from app.tools.base import BaseTool
+        from core.domain.types.evidence import EvidenceSource
+        from tools.base import BaseTool
 
         class ParentTool(BaseTool):
             name: ClassVar[str] = "parent"

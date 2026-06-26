@@ -4,10 +4,10 @@ import json
 import os
 from unittest.mock import MagicMock
 
-from app.cli.wizard import _integration_configurators, _ui, flow
-from app.cli.wizard import store as wizard_store
-from app.cli.wizard.env_sync import sync_provider_env
-from app.cli.wizard.probes import ProbeResult
+from cli.wizard import _integration_configurators, _ui, flow
+from cli.wizard import store as wizard_store
+from cli.wizard.env_sync import sync_provider_env
+from cli.wizard.probes import ProbeResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
@@ -1309,14 +1309,14 @@ def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:
 
 
 def test_credential_line_for_saved_summary_cli_codex() -> None:
-    from app.cli.wizard import config as wizard_config
+    from cli.wizard import config as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
     assert flow._credential_line_for_saved_summary(codex) == ("OpenAI Codex CLI (Run: codex login)")
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
-    from app.cli.wizard import config as wizard_config
+    from cli.wizard import config as wizard_config
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
     assert flow._credential_line_for_saved_summary(claude_code) == (
@@ -1325,7 +1325,7 @@ def test_credential_line_for_saved_summary_cli_claude_code() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
-    from app.cli.wizard import config as wizard_config
+    from cli.wizard import config as wizard_config
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
     assert flow._credential_line_for_saved_summary(gemini_cli) == (
@@ -1334,7 +1334,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_copilot() -> None:
-    from app.cli.wizard import config as wizard_config
+    from cli.wizard import config as wizard_config
 
     copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
     line = flow._credential_line_for_saved_summary(copilot)
@@ -1346,14 +1346,14 @@ def test_credential_line_for_saved_summary_cli_copilot() -> None:
 
 
 def test_credential_line_for_saved_summary_anthropic() -> None:
-    from app.cli.wizard import config as wizard_config
+    from cli.wizard import config as wizard_config
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
     assert flow._credential_line_for_saved_summary(anthropic) == "system keychain"
 
 
 def test_credential_line_for_saved_summary_cli_without_factory() -> None:
-    from app.cli.wizard.config import ModelOption, ProviderOption
+    from cli.wizard.config import ModelOption, ProviderOption
 
     p = ProviderOption(
         value="fakecli",

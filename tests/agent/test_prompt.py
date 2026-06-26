@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.orchestration.node.investigate.prompt import (
+from core.orchestration.node.investigate.prompt import (
     _relevant_sources,
     build_system_prompt,
     format_alert_context,

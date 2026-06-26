@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.remote.slack_context import fetch_slack_thread, parse_slack_thread_ref
+from deployment.remote.slack_context import fetch_slack_thread, parse_slack_thread_ref
 
 
 def test_parse_thread_ref_splits_channel_and_ts() -> None:
@@ -56,7 +56,7 @@ def test_fetch_thread_returns_messages_on_success() -> None:
         ],
     }
 
-    with patch("app.remote.slack_context.httpx.get", return_value=mock_resp):
+    with patch("deployment.remote.slack_context.httpx.get", return_value=mock_resp):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake", limit=10)
 
     assert result["channel"] == "C01234"
@@ -72,7 +72,7 @@ def test_fetch_thread_returns_error_when_ok_false() -> None:
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = {"ok": False, "error": "channel_not_found"}
 
-    with patch("app.remote.slack_context.httpx.get", return_value=mock_resp):
+    with patch("deployment.remote.slack_context.httpx.get", return_value=mock_resp):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake")
 
     assert result == {"error": "channel_not_found"}
@@ -84,8 +84,8 @@ def test_fetch_thread_returns_error_on_http_failure() -> None:
 
     exc = httpx.HTTPStatusError("err", request=MagicMock(), response=mock_resp)
     with (
-        patch("app.remote.slack_context.httpx.get", side_effect=exc),
-        patch("app.remote.slack_context.report_remote_exception") as report,
+        patch("deployment.remote.slack_context.httpx.get", side_effect=exc),
+        patch("deployment.remote.slack_context.report_remote_exception") as report,
     ):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake")
 
@@ -98,8 +98,8 @@ def test_fetch_thread_returns_error_on_http_failure() -> None:
 
 def test_fetch_thread_returns_error_on_unexpected_exception() -> None:
     with (
-        patch("app.remote.slack_context.httpx.get", side_effect=RuntimeError("boom")),
-        patch("app.remote.slack_context.report_remote_exception") as report,
+        patch("deployment.remote.slack_context.httpx.get", side_effect=RuntimeError("boom")),
+        patch("deployment.remote.slack_context.report_remote_exception") as report,
     ):
         result = fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake")
 
@@ -115,7 +115,7 @@ def test_fetch_thread_caps_limit_at_100() -> None:
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = {"ok": True, "messages": []}
 
-    with patch("app.remote.slack_context.httpx.get", return_value=mock_resp) as mock_get:
+    with patch("deployment.remote.slack_context.httpx.get", return_value=mock_resp) as mock_get:
         fetch_slack_thread("C01234", "1712345.000001", "xoxb-fake", limit=500)
 
     params = mock_get.call_args.kwargs["params"]

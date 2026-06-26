@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from app.utils.config import (
+from config.grafana_cloud import (
     apply_otel_env_defaults,
     configure_grafana_cloud,
     validate_grafana_cloud_config,

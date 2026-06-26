@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from app.core.domain.types.retrieval import RetrievalControls
-from app.tools import registry as registry_module
-from app.tools.base import BaseTool
-from app.tools.investigation_registry.actions import get_available_actions
-from app.tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
-from app.tools.tool_decorator import tool
+from core.domain.types.retrieval import RetrievalControls
+from tools import registry as registry_module
+from tools.base import BaseTool
+from tools.investigation_registry.actions import get_available_actions
+from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from tools.tool_decorator import tool
 
 _V2_TOOL_CONTRACT_NAMES = frozenset(
     {
@@ -34,7 +34,7 @@ def _reset_registry_cache() -> Generator[None]:
 
 
 def test_tool_decorator_registers_function_tool_with_inferred_schema() -> None:
-    module: Any = ModuleType("app.tools.fake_function_tool")
+    module: Any = ModuleType("tools.fake_function_tool")
 
     @tool(
         name="lookup_incident",
@@ -61,7 +61,7 @@ def test_tool_decorator_registers_function_tool_with_inferred_schema() -> None:
 
 
 def test_tool_decorator_supports_minimal_single_file_function_tool() -> None:
-    module: Any = ModuleType("app.tools.single_file_status_tool")
+    module: Any = ModuleType("tools.single_file_status_tool")
 
     @tool(source="knowledge")
     def check_status(run_id: str, include_history: bool = False) -> dict[str, object]:
@@ -235,7 +235,7 @@ def test_registered_tool_rejects_unknown_cost_tier() -> None:
 def test_auto_discovery_populates_investigation_and_chat_surfaces(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module: Any = ModuleType("app.tools.fake_discovered_tool")
+    module: Any = ModuleType("tools.fake_discovered_tool")
 
     @tool(
         name="get_incident_metadata",
@@ -268,7 +268,7 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
 def test_resolve_tool_display_name_prefers_registered_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module: Any = ModuleType("app.tools.fake_display_name_tool")
+    module: Any = ModuleType("tools.fake_display_name_tool")
 
     @tool(
         name="get_incident_metadata",
@@ -316,8 +316,8 @@ def test_registry_regression_duplicate_tool_names_across_modules(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test that when two modules export the same tool name, only the first is kept."""
-    module1: Any = ModuleType("app.tools.first_module")
-    module2: Any = ModuleType("app.tools.second_module")
+    module1: Any = ModuleType("tools.first_module")
+    module2: Any = ModuleType("tools.second_module")
 
     first_tool = tool(
         name="shared_tool_name",
@@ -347,7 +347,7 @@ def test_registry_regression_duplicate_tool_names_across_modules(
         lambda _pkg, name: module1 if name == "first_module" else module2,
     )
 
-    with caplog.at_level(logging.WARNING, logger="app.tools.registry"):
+    with caplog.at_level(logging.WARNING, logger="tools.registry"):
         tools = registry_module.get_registered_tools()
 
     tool_names = [t.name for t in tools]
@@ -367,7 +367,7 @@ def test_registry_regression_import_failures(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Test that registry gracefully skips modules with import failures."""
-    module: Any = ModuleType("app.tools.valid_tool")
+    module: Any = ModuleType("tools.valid_tool")
 
     @tool(
         name="valid_tool",
@@ -396,7 +396,7 @@ def test_registry_regression_import_failures(
         mock_import,
     )
 
-    with caplog.at_level(logging.WARNING, logger="app.tools.registry"):
+    with caplog.at_level(logging.WARNING, logger="tools.registry"):
         tools = registry_module.get_registered_tools()
 
     tool_names = [t.name for t in tools]
@@ -404,7 +404,7 @@ def test_registry_regression_import_failures(
     assert "valid_tool" in tool_names
     assert registry_module.get_registered_tool_map()["valid_tool"].run() == {"status": "ok"}
 
-    # Log message now includes the package prefix (``app.tools.``) so the
+    # Log message now includes the package prefix (``tools.``) so the
     # operator can tell WHICH discovery path failed when multiple packages
     # are registered.
     assert any(
@@ -507,14 +507,14 @@ def test_v2_registry_tools_define_output_schema() -> None:
 
 # --------------------------------------------------------------------------- #
 # External tool package registration (extension point for test suites and    #
-# downstream integrators that ship their own tools outside app.tools).        #
+# downstream integrators that ship their own tools outside tools).        #
 # --------------------------------------------------------------------------- #
 
 
 def test_register_external_tool_package_adds_tools_to_registry() -> None:
     """A package registered via :func:`register_external_tool_package` has
-    its top-level submodules walked the same way as ``app.tools.*``. This
-    is the mechanism that lets bench-only tool modules live outside ``app/``
+    its top-level submodules walked the same way as ``tools.*``. This
+    is the mechanism that lets bench-only tool modules live outside ``config/``
     while still being discoverable by the agent loop when the bench is
     actively running."""
     # Importing the cloudopsbench package side-effects registration on its
@@ -594,7 +594,7 @@ def test_register_external_tool_package_is_idempotent() -> None:
 
 def test_production_registry_does_not_include_bench_tools_without_import() -> None:
     """Sanity-check separation: with the bench package *not* imported,
-    only ``app.tools.*`` modules contribute to the registry. The bench
+    only ``tools.*`` modules contribute to the registry. The bench
     tools must be invisible.
 
     We can't fully un-import the bench in a single test process (other
@@ -607,7 +607,7 @@ def test_production_registry_does_not_include_bench_tools_without_import() -> No
         registry_module.clear_tool_registry_cache()
         tools = registry_module.get_registered_tools()
         tool_names = {t.name for t in tools}
-        # GetResources, GetAlerts, etc. are bench-only; not in app/tools.
+        # GetResources, GetAlerts, etc. are bench-only; not in tools.
         assert "GetResources" not in tool_names
         assert "GetAlerts" not in tool_names
     finally:
@@ -652,7 +652,7 @@ def test_registry_canonical_tool_wins_when_external_package_redefines_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """First registration wins for a given tool name. The canonical
-    ``app.tools.*`` package is walked first, so a downstream integrator
+    ``tools.*`` package is walked first, so a downstream integrator
     can't accidentally shadow a production tool with their own version of
     the same name — only a clear log warning, original tool preserved."""
     canonical_tool_name = "ListEKSPodsTool".replace("Tool", "").lower()

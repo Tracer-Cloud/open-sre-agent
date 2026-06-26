@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from config.config import has_credentials_for_active_llm_provider
 from tests.synthetic.rds_postgres.run_suite import run_scenario, score_result
 from tests.synthetic.rds_postgres.scenario_loader import (
     SUITE_DIR,
@@ -290,6 +291,10 @@ def test_score_result_uses_semantic_keyword_matching_for_write_heavy_workload() 
 
 _ALL_SCENARIOS = load_all_scenarios()
 _LLM_ATTEMPTS = 2
+_SYNTHETIC_SKIP_LLM = (
+    "SKIPPED: missing API key for LLM_PROVIDER "
+    "(suite uses mock Grafana/RDS backends; configure the key for your selected provider)"
+)
 
 
 def _by_difficulty(level: int) -> list:
@@ -304,6 +309,9 @@ def _should_assert_trajectory(fixture, actual_category: str) -> bool:
 
 def _run_scenario_test(fixture) -> None:
     """Run scenario with real LLM and mock Grafana backend, then assert scoring."""
+    if not has_credentials_for_active_llm_provider():
+        pytest.skip(_SYNTHETIC_SKIP_LLM)
+
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         final_state, score = run_scenario(fixture, use_mock_grafana=True)

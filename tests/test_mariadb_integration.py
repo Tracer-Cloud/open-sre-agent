@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.mariadb import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.mariadb import (
     _QUERY_TRUNCATE_LEN,
     DEFAULT_MARIADB_PORT,
     MariaDBConfig,
@@ -25,7 +25,7 @@ from app.integrations.mariadb import (
     mariadb_is_available,
     validate_mariadb_config,
 )
-from app.utils.truncation import truncate as _truncate_shared
+from platform.common.truncation import truncate as _truncate_shared
 
 
 def _truncate(text: str, max_len: int = _QUERY_TRUNCATE_LEN) -> str:
@@ -122,7 +122,7 @@ class TestMariaDBBuild:
 
 
 class TestMariaDBValidation:
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_validate_success(self, mock_get_conn):
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -139,7 +139,7 @@ class TestMariaDBValidation:
         assert "test" in result.detail
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("Conn error"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("Conn error"))
     def test_validate_exception(self, _):
         config = MariaDBConfig(host="host", database="test", username="user")
         result = validate_mariadb_config(config)
@@ -313,7 +313,7 @@ class TestGetProcessList:
     def _config(self) -> MariaDBConfig:
         return MariaDBConfig(host="host", database="db", username="user")
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_process_list_on_success(self, mock_get_conn: MagicMock) -> None:
         rows = [(1, "root", "localhost", "mydb", "Query", 5, "executing", "SELECT sleep(5)")]
         mock_conn, _ = _make_mock_conn(fetchall_rows=rows)
@@ -332,7 +332,7 @@ class TestGetProcessList:
         assert proc["query"] == "SELECT sleep(5)"
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_query_text_is_truncated(self, mock_get_conn: MagicMock) -> None:
         long_query = "SELECT " + "x" * 300
         rows = [(1, "root", "localhost", "db", "Query", 1, "", long_query)]
@@ -344,7 +344,7 @@ class TestGetProcessList:
         assert result["processes"][0]["query"].endswith("...")
         assert len(result["processes"][0]["query"]) == 200
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_empty_process_list(self, mock_get_conn: MagicMock) -> None:
         mock_conn, _ = _make_mock_conn(fetchall_rows=[])
         mock_get_conn.return_value = mock_conn
@@ -355,7 +355,7 @@ class TestGetProcessList:
         assert result["total_processes"] == 0
         assert result["processes"] == []
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_max_results_override(self, mock_get_conn: MagicMock) -> None:
         mock_conn, mock_cursor = _make_mock_conn(fetchall_rows=[])
         mock_get_conn.return_value = mock_conn
@@ -365,7 +365,7 @@ class TestGetProcessList:
         sql_call = mock_cursor.execute.call_args
         assert sql_call[0][1] == (10,)
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("timeout"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("timeout"))
     def test_exception_returns_error(self, _: MagicMock) -> None:
         result = get_process_list(self._config())
         assert result["available"] is False
@@ -381,7 +381,7 @@ class TestGetGlobalStatus:
     def _config(self) -> MariaDBConfig:
         return MariaDBConfig(host="host", database="db", username="user")
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_curated_metrics(self, mock_get_conn: MagicMock) -> None:
         all_status = [
             ("Threads_connected", "5"),
@@ -402,7 +402,7 @@ class TestGetGlobalStatus:
         assert "SomeOtherVar" not in result["metrics"]
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_missing_keys_skipped_gracefully(self, mock_get_conn: MagicMock) -> None:
         mock_conn, _ = _make_mock_conn(fetchall_rows=[("Uptime", "3600")])
         mock_get_conn.return_value = mock_conn
@@ -412,7 +412,7 @@ class TestGetGlobalStatus:
         assert result["available"] is True
         assert result["metrics"]["Uptime"] == "3600"
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("access denied"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("access denied"))
     def test_exception_returns_error(self, _: MagicMock) -> None:
         result = get_global_status(self._config())
         assert result["available"] is False
@@ -427,7 +427,7 @@ class TestGetInnoDBStatus:
     def _config(self) -> MariaDBConfig:
         return MariaDBConfig(host="host", database="db", username="user")
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_innodb_status_text(self, mock_get_conn: MagicMock) -> None:
         status_text = "================\nBUFFER POOL AND MEMORY\n================"
         mock_conn, _ = _make_mock_conn(fetchone_row=("InnoDB", "", status_text))
@@ -440,7 +440,7 @@ class TestGetInnoDBStatus:
         assert "BUFFER POOL" in result["innodb_status"]
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_long_status_text_truncated(self, mock_get_conn: MagicMock) -> None:
         long_text = "x" * 5000
         mock_conn, _ = _make_mock_conn(fetchone_row=("InnoDB", "", long_text))
@@ -452,7 +452,7 @@ class TestGetInnoDBStatus:
         assert result["innodb_status"].endswith("(truncated)")
         assert len(result["innodb_status"]) < 5000
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_none_row_returns_empty_string(self, mock_get_conn: MagicMock) -> None:
         mock_conn, _ = _make_mock_conn(fetchone_row=None)
         mock_get_conn.return_value = mock_conn
@@ -462,7 +462,7 @@ class TestGetInnoDBStatus:
         assert result["available"] is True
         assert result["innodb_status"] == ""
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("no privilege"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("no privilege"))
     def test_exception_returns_error(self, _: MagicMock) -> None:
         result = get_innodb_status(self._config())
         assert result["available"] is False
@@ -477,7 +477,7 @@ class TestGetSlowQueries:
     def _config(self) -> MariaDBConfig:
         return MariaDBConfig(host="host", database="mydb", username="user")
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_slow_queries_when_perf_schema_enabled(self, mock_get_conn: MagicMock) -> None:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -500,7 +500,7 @@ class TestGetSlowQueries:
         assert q["rows_examined"] == 1000
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_note_when_perf_schema_disabled(self, mock_get_conn: MagicMock) -> None:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -516,7 +516,7 @@ class TestGetSlowQueries:
         assert "performance_schema" in result["note"]
         assert result["queries"] == []
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("query error"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("query error"))
     def test_exception_returns_error(self, _: MagicMock) -> None:
         result = get_slow_queries(self._config())
         assert result["available"] is False
@@ -531,7 +531,7 @@ class TestGetReplicationStatus:
     def _config(self) -> MariaDBConfig:
         return MariaDBConfig(host="host", database="db", username="user")
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_returns_channels_on_success(self, mock_get_conn: MagicMock) -> None:
         columns = [
             "Slave_IO_Running",
@@ -563,7 +563,7 @@ class TestGetReplicationStatus:
         assert ch["Master_Host"] == "primary.db"
         mock_conn.close.assert_called_once()
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_not_replica_returns_note(self, mock_get_conn: MagicMock) -> None:
         mock_conn, _ = _make_mock_conn(fetchall_rows=[], description=None)
         mock_get_conn.return_value = mock_conn
@@ -574,7 +574,7 @@ class TestGetReplicationStatus:
         assert "not configured as a replica" in result["note"]
         assert result["channels"] == []
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_fallback_to_show_slave_status(self, mock_get_conn: MagicMock) -> None:
         # Stub pymysql so this test does not require PyMySQL at import time (matches the
         # dynamic `import pymysql` inside get_replication_status error handling).
@@ -618,7 +618,7 @@ class TestGetReplicationStatus:
             else:
                 sys.modules.pop("pymysql", None)
 
-    @patch("app.integrations.mariadb._get_connection")
+    @patch("integrations.mariadb._get_connection")
     def test_partial_columns_handled(self, mock_get_conn: MagicMock) -> None:
         columns = ["Slave_IO_Running", "Slave_SQL_Running"]
         mock_conn, _ = _make_mock_conn(
@@ -634,7 +634,7 @@ class TestGetReplicationStatus:
         assert ch["Slave_IO_Running"] == "Yes"
         assert "Master_Host" not in ch
 
-    @patch("app.integrations.mariadb._get_connection", side_effect=Exception("network error"))
+    @patch("integrations.mariadb._get_connection", side_effect=Exception("network error"))
     def test_exception_returns_error(self, _: MagicMock) -> None:
         result = get_replication_status(self._config())
         assert result["available"] is False

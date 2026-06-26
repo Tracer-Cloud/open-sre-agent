@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.llm_cli.cursor import CursorAdapter
+from integrations.llm_cli.cursor import CursorAdapter
 
 
 def _version_proc() -> MagicMock:
@@ -35,8 +35,8 @@ def _fallback_proc() -> MagicMock:
     return proc
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_logged_in_status_with_cursor_key_stays_not_logged_in(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -63,8 +63,8 @@ def test_detect_not_logged_in_status_with_cursor_key_stays_not_logged_in(
     assert "agent login" in probe.detail
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_unclear_status_with_cursor_key_returns_logged_in(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -90,8 +90,8 @@ def test_detect_unclear_status_with_cursor_key_returns_logged_in(
     assert probe.logged_in is True
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in_status_ignores_cursor_key(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -118,8 +118,8 @@ def test_detect_logged_in_status_ignores_cursor_key(
     assert "Logged in as" in probe.detail
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_logged_in_via_status(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "agent"
 
@@ -144,8 +144,8 @@ def test_detect_logged_in_via_status(mock_which: MagicMock, mock_run: MagicMock)
     assert "Logged in as" in probe.detail
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "agent"
 
@@ -169,8 +169,8 @@ def test_detect_not_logged_in(mock_which: MagicMock, mock_run: MagicMock) -> Non
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_status_timeout_without_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "agent"
 
@@ -195,8 +195,8 @@ def test_detect_status_timeout_without_api_key(mock_which: MagicMock, mock_run: 
     assert "status" in probe.detail
 
 
-@patch("app.integrations.llm_cli.cursor.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.cursor.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_status_timeout_with_api_key(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "agent"
 
@@ -222,7 +222,7 @@ def test_detect_status_timeout_with_api_key(mock_which: MagicMock, mock_run: Mag
 
 
 @patch.dict(os.environ, {"CURSOR_API_KEY": ""}, clear=False)
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="agent")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="agent")
 def test_build_adds_trust_workspace_and_model(mock_which: MagicMock) -> None:
     inv = CursorAdapter().build(prompt="hello", model="auto", workspace="/tmp/project")
 
@@ -240,7 +240,7 @@ def test_build_adds_trust_workspace_and_model(mock_which: MagicMock) -> None:
 
 
 @patch.dict(os.environ, {"CURSOR_API_KEY": "ck-headless"}, clear=False)
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="agent")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="agent")
 def test_build_forwards_cursor_api_key(mock_which: MagicMock) -> None:
     """Headless auth must reach the subprocess (same pattern as Codex/OpenCode env overrides)."""
     inv = CursorAdapter().build(prompt="hello", model=None, workspace="/tmp/project")
@@ -250,7 +250,7 @@ def test_build_forwards_cursor_api_key(mock_which: MagicMock) -> None:
 
 
 def test_cursor_cli_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("cursor")
     assert reg is not None
@@ -258,9 +258,9 @@ def test_cursor_cli_registry_entry() -> None:
     assert reg.adapter_factory().name == "cursor"
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_invoke_forwards_cursor_env(mock_run: MagicMock) -> None:
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from integrations.llm_cli.runner import CLIBackedLLMClient
 
     mock_adapter = MagicMock(spec=CursorAdapter)
     mock_adapter.name = "cursor"
@@ -283,7 +283,7 @@ def test_cli_backed_client_invoke_forwards_cursor_env(mock_run: MagicMock) -> No
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
     with (
-        patch("app.guardrails.engine.get_guardrail_engine") as guardrails,
+        patch("platform.guardrails.engine.get_guardrail_engine") as guardrails,
         patch.dict(
             os.environ,
             {

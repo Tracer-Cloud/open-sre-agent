@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.cli.interactive_shell.prompt_logging.config import PromptLogConfig
-from app.cli.interactive_shell.prompt_logging.recorder import LlmRunInfo, PromptRecorder
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.prompt_logging.config import PromptLogConfig
+from cli.interactive_shell.prompt_logging.recorder import LlmRunInfo, PromptRecorder
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: Path) -> None:
@@ -17,7 +17,7 @@ def test_prompt_recorder_start_respects_supported_routes(monkeypatch, tmp_path: 
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     assert PromptRecorder.start(session=session, text="hello", route_kind="slash") is None
@@ -37,10 +37,10 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        "cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = ReplSession()
@@ -60,7 +60,7 @@ def test_prompt_recorder_for_background_task_uses_task_id_as_trace(
 def test_prompt_recorder_for_background_task_disabled_returns_none(monkeypatch) -> None:
     cfg = PromptLogConfig(enabled=False)
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     assert PromptRecorder.for_background_task(session=session, command="x", task_id="t") is None
@@ -77,7 +77,7 @@ def test_prompt_recorder_flush_writes_and_redacts(monkeypatch, tmp_path: Path) -
         log_path=log_path,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     session = ReplSession()
     recorder = PromptRecorder.start(
@@ -107,10 +107,10 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.build_turn_integration_snapshot",
+        "cli.interactive_shell.prompt_logging.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": [],
             "connected_integrations_count": 0,
@@ -119,7 +119,7 @@ def test_prompt_recorder_sends_ai_generation(monkeypatch, tmp_path: Path) -> Non
         },
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        "cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     session = ReplSession()
@@ -151,14 +151,14 @@ def test_prompt_recorder_sends_connected_integrations(monkeypatch, tmp_path: Pat
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        "cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.build_turn_integration_snapshot",
+        "cli.interactive_shell.prompt_logging.recorder.build_turn_integration_snapshot",
         lambda _session: {
             "connected_integrations": ["github"],
             "connected_integrations_count": 1,
@@ -192,10 +192,10 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         log_path=tmp_path / "prompt_log.jsonl",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
+        "cli.interactive_shell.prompt_logging.recorder.PromptLogConfig.load", lambda: cfg
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
+        "cli.interactive_shell.prompt_logging.recorder.capture_ai_generation",
         lambda payload: captured.append(payload),
     )
 
@@ -203,7 +203,7 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
         raise RuntimeError("tool registry blew up")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.prompt_logging.integration_snapshot.get_available_tools",
+        "cli.interactive_shell.prompt_logging.integration_snapshot.get_available_tools",
         _boom,
     )
 

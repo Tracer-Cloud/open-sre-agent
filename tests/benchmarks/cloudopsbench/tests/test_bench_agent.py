@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
-from app.tools.registered_tool import RegisteredTool
+from core.orchestration.node.investigate import ConnectedInvestigationAgent
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
     _ENV_MIN_TOOL_CALLS,
     BenchInvestigationAgent,
     _resolve_min_tool_calls,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def _make_registered_tool(name: str, origin_module: str) -> RegisteredTool:
@@ -123,8 +123,8 @@ def test_production_agent_filter_tools_is_identity() -> None:
     investigations continue to see every available tool. Regressing this
     silently disables tools across the entire product."""
     tools = [
-        _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool"),
-        _make_registered_tool("HermesLogs", "app.tools.HermesLogsTool"),
+        _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool"),
+        _make_registered_tool("HermesLogs", "tools.HermesLogsTool"),
     ]
     assert ConnectedInvestigationAgent()._filter_tools(tools) == tools
 
@@ -135,8 +135,8 @@ def test_bench_agent_filter_keeps_only_bench_package_tools() -> None:
     is by origin_module prefix so a new bench tool added under
     ``tests/benchmarks/cloudopsbench/tools/`` is picked up automatically."""
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
-    prod_hermes = _make_registered_tool("HermesLogs", "app.tools.HermesLogsTool")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool")
+    prod_hermes = _make_registered_tool("HermesLogs", "tools.HermesLogsTool")
     filtered = BenchInvestigationAgent()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool]
 
@@ -147,8 +147,8 @@ def test_bench_agent_filter_drops_everything_when_no_bench_tools_registered() ->
     should return an empty list rather than fall back to production tools.
     The ``run`` loop already logs a warning when no tools are available."""
     only_prod = [
-        _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool"),
-        _make_registered_tool("HermesLogs", "app.tools.HermesLogsTool"),
+        _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool"),
+        _make_registered_tool("HermesLogs", "tools.HermesLogsTool"),
     ]
     assert BenchInvestigationAgent()._filter_tools(only_prod) == []
 
@@ -193,7 +193,7 @@ def test_baseline_agent_uses_same_bench_package_tool_filter_as_bench_agent() -> 
     from tests.benchmarks.cloudopsbench.bench_agent import BaselineLLMAloneAgent
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool")
     inputs = [bench_tool, prod_eks]
     assert BenchInvestigationAgent()._filter_tools(inputs) == BaselineLLMAloneAgent()._filter_tools(
         inputs
@@ -218,7 +218,7 @@ def test_pure_baseline_agent_overrides_system_prompt() -> None:
     opensre's. Pin that the override returns a string distinct from the
     default ``build_system_prompt`` so a future hook removal can't
     silently turn this back into a flavor of BaselineLLMAloneAgent."""
-    from app.core.orchestration.node.investigate.prompt import build_system_prompt
+    from core.orchestration.node.investigate.prompt import build_system_prompt
     from tests.benchmarks.cloudopsbench.bench_agent import PureBaselineAgent
 
     agent = PureBaselineAgent()
@@ -254,7 +254,7 @@ def test_pure_baseline_agent_uses_same_bench_package_tool_filter_as_other_arms()
     )
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool")
     inputs = [bench_tool, prod_eks]
     assert (
         BenchInvestigationAgent()._filter_tools(inputs)
@@ -271,12 +271,12 @@ def test_bench_agent_allowed_prefixes_is_class_attribute_for_override() -> None:
     class _MixedBench(BenchInvestigationAgent):
         ALLOWED_TOOL_MODULE_PREFIXES = (
             "tests.benchmarks.cloudopsbench.tools.",
-            "app.tools.EKSListClustersTool",  # add a single production tool
+            "tools.EKSListClustersTool",  # add a single production tool
         )
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "app.tools.EKSListClustersTool")
-    prod_hermes = _make_registered_tool("HermesLogs", "app.tools.HermesLogsTool")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.EKSListClustersTool")
+    prod_hermes = _make_registered_tool("HermesLogs", "tools.HermesLogsTool")
     filtered = _MixedBench()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool, prod_eks]
 

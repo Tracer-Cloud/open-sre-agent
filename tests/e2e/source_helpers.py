@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.orchestration.node.investigate.tools import availability_view
-from app.tools.registry import get_registered_tools
+from core.orchestration.node.investigate.tools import availability_view
+from tools.registry import get_registered_tools
 
 
 def resolve_available_tool_sources(

@@ -12,8 +12,8 @@ from __future__ import annotations
 import os
 import time
 
-from app.cli.wizard.store import save_named_remote
-from app.deployment.operations.ec2_config import save_remote_outputs
+from cli.wizard.store import save_named_remote
+from deployment.operations.ec2_config import save_remote_outputs
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     create_instance_profile,
     launch_instance,

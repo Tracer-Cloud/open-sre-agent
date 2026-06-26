@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-from app.remote.error_reporting import report_remote_exception
+from deployment.remote.error_reporting import report_remote_exception
 
 
 def test_report_remote_exception_adds_remote_tags() -> None:
     logger = MagicMock(spec=logging.Logger)
     exc = RuntimeError("boom")
 
-    with patch("app.remote.error_reporting.report_exception") as report:
+    with patch("deployment.remote.error_reporting.report_exception") as report:
         report_remote_exception(
             exc,
             logger=logger,

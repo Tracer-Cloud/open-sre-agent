@@ -1,8 +1,8 @@
-"""Direct unit tests for app/fleet_monitoring/conflicts.py."""
+"""Direct unit tests for tools/fleet_monitoring/conflicts.py."""
 
 from __future__ import annotations
 
-from app.fleet_monitoring.conflicts import FileWriteConflict, WriteEvent, detect_conflicts
+from tools.fleet_monitoring.conflicts import FileWriteConflict, WriteEvent, detect_conflicts
 
 OPENSRE_ID = "opensre:1"
 

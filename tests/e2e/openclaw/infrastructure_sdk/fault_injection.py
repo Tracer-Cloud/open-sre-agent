@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import sys
 
-from app.integrations.openclaw import OpenClawConfig
+from integrations.openclaw import OpenClawConfig
 from tests.e2e.openclaw.infrastructure_sdk.local import OpenClawHandle, teardown_openclaw
 
 # Port + URL of OpenClaw's Control UI / Gateway service. ``opensre``
 # users sometimes mistake this for the MCP bridge endpoint —
-# :func:`app.integrations.openclaw._is_probable_openclaw_control_ui_url`
+# :func:`integrations.openclaw._is_probable_openclaw_control_ui_url`
 # detects that misconfiguration and the wrong-endpoint scenario asserts
 # the hint propagates through to the RCA output.
 _CONTROL_UI_URL = "http://127.0.0.1:18789/"
@@ -41,7 +41,7 @@ def inject_gateway_down(handle: OpenClawHandle) -> None:
     After this call, any ``openclaw mcp serve`` bridge spawned by an MCP
     client will fail to reach a Gateway — surfacing the
     ``Connection closed`` / ``ECONNREFUSED`` failure mode that
-    :func:`app.integrations.openclaw._looks_like_openclaw_gateway_unavailable`
+    :func:`integrations.openclaw._looks_like_openclaw_gateway_unavailable`
     detects.
     """
     teardown_openclaw(handle)
@@ -58,7 +58,7 @@ def inject_sleeping_tool_call(handle: OpenClawHandle) -> None:
     Used to verify OpenSRE's tool-call timeout behavior — the
     orchestrator must surface a useful "tool timed out" error rather
     than blocking the investigation pipeline indefinitely.
-    :func:`app.integrations.openclaw._call_tool_async` wraps
+    :func:`integrations.openclaw._call_tool_async` wraps
     ``session.call_tool(...)`` with :func:`asyncio.wait_for` so
     ``OpenClawConfig.timeout_seconds`` applies uniformly across all
     transports (stdio / sse / streamable-http).
@@ -80,7 +80,7 @@ def inject_wrong_endpoint(handle: OpenClawHandle) -> None:
 
     A common user-side misconfiguration: pasting the Gateway URL into
     the MCP integration config. ``validate_openclaw_config`` detects
-    this via :func:`app.integrations.openclaw._is_probable_openclaw_control_ui_url`
+    this via :func:`integrations.openclaw._is_probable_openclaw_control_ui_url`
     and returns the canonical "Use mode `stdio` with command `openclaw`
     and args `mcp serve`" hint. This injector stashes the matching
     misconfigured config on ``handle.extra`` so the use_case driver

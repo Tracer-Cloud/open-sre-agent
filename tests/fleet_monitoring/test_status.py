@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.fleet_monitoring.probe import ProcessSnapshot
-from app.fleet_monitoring.status import Status, compute_status
+from tools.fleet_monitoring.probe import ProcessSnapshot
+from tools.fleet_monitoring.status import Status, compute_status
 
 
 @pytest.mark.parametrize(

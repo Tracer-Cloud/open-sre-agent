@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-import app.constants as const_module
-from app.cli.interactive_shell.runtime.session import (
+import config.constants as const_module
+from cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
     _scenario_id_from_synthetic_label,
 )
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
 
 
 class TestReplSession:

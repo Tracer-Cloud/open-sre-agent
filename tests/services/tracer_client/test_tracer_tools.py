@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.services.tracer_client.tracer_tools import TracerToolsMixin
+from services.tracer_client.tracer_tools import TracerToolsMixin
 
 
 class FakeTracerClient(TracerToolsMixin):
@@ -17,7 +17,7 @@ class FakeTracerClient(TracerToolsMixin):
         """Initialize with dummy values, avoiding side effects from base class."""
         with (
             patch(
-                "app.services.tracer_client.tracer_client_base.extract_org_slug_from_jwt",
+                "services.tracer_client.tracer_client_base.extract_org_slug_from_jwt",
                 return_value="test-slug",
             ),
             patch("httpx.Client"),

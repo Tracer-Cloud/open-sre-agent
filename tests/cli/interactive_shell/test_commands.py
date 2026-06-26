@@ -11,17 +11,17 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.command_registry import repl_data as repl_data_module
-from app.cli.interactive_shell.command_registry.investigation import (
+from cli.config.tool_catalog import ToolCatalogEntry
+from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from cli.interactive_shell.command_registry import repl_data as repl_data_module
+from cli.interactive_shell.command_registry.investigation import (
     _validate_investigate_args,
     _validate_save_args,
 )
-from app.cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
-from app.cli.interactive_shell.config.tool_catalog import ToolCatalogEntry
-from app.cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
+from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -77,7 +77,7 @@ class TestDispatchSlash:
     def test_tty_help_dispatch_uses_interactive_picker(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.cli.interactive_shell.command_registry import help as help_cmd
+        from cli.interactive_shell.command_registry import help as help_cmd
 
         session = ReplSession()
         console, buf = _capture()
@@ -261,7 +261,7 @@ class TestDispatchSlash:
     def test_hermes_slash_command_delegates_to_bare_cli(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity
+        from cli.interactive_shell.command_registry import cli_parity
 
         calls: list[list[str]] = []
 
@@ -287,7 +287,7 @@ class TestDispatchSlash:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
@@ -318,7 +318,7 @@ class TestDispatchSlash:
             lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
         )
         monkeypatch.setattr(
-            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -340,7 +340,7 @@ class TestDispatchSlash:
             lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
         )
         monkeypatch.setattr(
-            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -441,7 +441,7 @@ class TestSpecificListCommands:
         assert "opensre onboard" in buf.getvalue()
 
     def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import tools_cmds as tools_cmd_module
+        from cli.interactive_shell.command_registry import tools_cmds as tools_cmd_module
 
         monkeypatch.setattr(
             tools_cmd_module,
@@ -451,7 +451,7 @@ class TestSpecificListCommands:
                     name="search_github",
                     surfaces=("investigation", "chat"),
                     description="Search GitHub code.",
-                    source_file="app/tools/search_github.py",
+                    source_file="tools/search_github.py",
                     input_schema_summary="query: string",
                 )
             ],
@@ -561,7 +561,7 @@ class TestIntegrationsCommand:
         assert "unknown subcommand" in buf.getvalue()
 
     def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import integrations as m
+        from cli.interactive_shell.command_registry import integrations as m
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
@@ -569,9 +569,9 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import app.analytics.cli as analytics_cli
-        import app.integrations.store as store
-        from app.cli.interactive_shell.command_registry import integrations as m
+        import integrations.store as store
+        import platform.analytics.cli as analytics_cli
+        from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -582,8 +582,8 @@ class TestIntegrationsCommand:
         assert removed == ["slack"]
 
     def test_remove_cancelled_does_not_touch_store(self, monkeypatch: object) -> None:
-        import app.integrations.store as store
-        from app.cli.interactive_shell.command_registry import integrations as m
+        import integrations.store as store
+        from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -619,7 +619,7 @@ class TestMcpCommand:
         assert "github" in buf.getvalue()
 
     def test_connect_delegates_to_cli(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import integrations as m
+        from cli.interactive_shell.command_registry import integrations as m
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
@@ -627,9 +627,9 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import app.analytics.cli as analytics_cli
-        import app.integrations.store as store
-        from app.cli.interactive_shell.command_registry import integrations as m
+        import integrations.store as store
+        import platform.analytics.cli as analytics_cli
+        from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -673,8 +673,8 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry.model import command as model_cmd
+        import cli.wizard.env_sync as env_sync
+        from cli.interactive_shell.command_registry.model import command as model_cmd
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -696,7 +696,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from app.cli.interactive_shell.command_registry.model import command as model_cmd
+        from cli.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         picks = iter(["show", "done"])
@@ -710,7 +710,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from app.cli.interactive_shell.command_registry.model import command as model_cmd
+        from cli.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(
@@ -736,8 +736,8 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
-        from app.services import llm_client
+        import cli.wizard.env_sync as env_sync
+        from services import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         reset_calls: list[str] = []
@@ -770,7 +770,7 @@ class TestModelCommand:
         provider with no usable credential and the next /model show prints
         'LLM settings unavailable'."""
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -807,7 +807,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -831,7 +831,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -854,7 +854,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -877,7 +877,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -901,8 +901,8 @@ class TestModelCommand:
         persisted verbatim and then silently fail availability checks. It must be
         normalized to ``gpt-5.5`` instead."""
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
-        from app.cli.interactive_shell.command_registry import switch_reasoning_model
+        import cli.wizard.env_sync as env_sync
+        from cli.interactive_shell.command_registry import switch_reasoning_model
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -925,7 +925,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -951,7 +951,7 @@ class TestModelCommand:
     ) -> None:
         """`/model set <provider> [model] --toolcall-model <m>` must persist both."""
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -977,7 +977,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1002,7 +1002,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1021,7 +1021,7 @@ class TestModelCommand:
         """Reviewer ask: a missing flag value must say *which* flag, not just
         echo the generic usage line."""
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1040,8 +1040,8 @@ class TestModelCommand:
     ) -> None:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
-        from app.services import llm_client
+        import cli.wizard.env_sync as env_sync
+        from services import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1074,7 +1074,7 @@ class TestModelCommand:
     ) -> None:
         """Providers without a separate toolcall model (codex/claude-code/gemini-cli/ollama)
         must not silently accept toolcall overrides."""
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("LLM_PROVIDER", "codex")
@@ -1088,7 +1088,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import app.cli.wizard.env_sync as env_sync
+        import cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1160,8 +1160,8 @@ class TestInvestigateFileCommand:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
-        # Patch package re-export: slash handler does `from app.cli.investigation import ...`.
-        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
+        # Patch package re-export: slash handler does `from cli.investigation import ...`.
+        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1181,7 +1181,7 @@ class TestInvestigateFileCommand:
             captured.append(template_name)
             return {"root_cause": "sample cause"}
 
-        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1207,7 +1207,7 @@ class TestInvestigateFileCommand:
             return "bg123"
 
         monkeypatch.setattr(
-            "app.cli.interactive_shell.command_registry.investigation.start_background_template_investigation",
+            "cli.interactive_shell.command_registry.investigation.start_background_template_investigation",
             _fake_start_background_template_investigation,
         )
 
@@ -1237,9 +1237,9 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value, input_path))
             return _TrackContext()
 
-        monkeypatch.setattr("app.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "app.cli.investigation.run_sample_alert_for_session",
+            "cli.investigation.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
         )
 
@@ -1266,7 +1266,7 @@ class TestInvestigateFileCommand:
             calls.append(template_name)
             return {"root_cause": "template-wins"}
 
-        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1278,7 +1278,7 @@ class TestInvestigateFileCommand:
     def test_missing_arg_in_tty_opens_interactive_menu(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
+        from cli.interactive_shell.command_registry import investigation as investigation_cmd
 
         picks = iter(["generic"])
         captured: list[str] = []
@@ -1295,7 +1295,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
-        monkeypatch.setattr("app.cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, buf = _capture()
@@ -1315,7 +1315,7 @@ class TestInvestigateFileCommand:
     def test_tty_investigate_menu_browse_path_runs_custom_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.cli.interactive_shell.command_registry import investigation as investigation_cmd
+        from cli.interactive_shell.command_registry import investigation as investigation_cmd
 
         alert_file = tmp_path / "custom_alert.json"
         alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")
@@ -1339,7 +1339,7 @@ class TestInvestigateFileCommand:
             "_prompt_investigate_path",
             lambda _console: str(alert_file),
         )
-        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1376,9 +1376,9 @@ class TestInvestigateFileCommand:
             track_calls.append((entrypoint.value, trigger_mode.value))
             return _TrackContext()
 
-        monkeypatch.setattr("app.analytics.cli.track_investigation", _fake_track)
+        monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "app.cli.investigation.run_investigation_for_session",
+            "cli.investigation.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
         )
         session = ReplSession()
@@ -1411,7 +1411,7 @@ class TestInvestigateFileCommand:
                 "region": "us-east-1",
             }
 
-        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1443,7 +1443,7 @@ class TestInvestigateFileCommand:
             return "bg123"
 
         monkeypatch.setattr(
-            "app.cli.interactive_shell.command_registry.investigation.start_background_text_investigation",
+            "cli.interactive_shell.command_registry.investigation.start_background_text_investigation",
             _fake_start_background_text_investigation,
         )
 
@@ -1460,7 +1460,7 @@ class TestInvestigateFileCommand:
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object
     ) -> None:
-        from app.cli.interactive_shell.error_handling.errors import OpenSREError
+        from cli.interactive_shell.error_handling.errors import OpenSREError
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -1472,7 +1472,7 @@ class TestInvestigateFileCommand:
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
-        monkeypatch.setattr("app.cli.investigation.run_investigation_for_session", _raise)
+        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _raise)
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1496,15 +1496,15 @@ class TestResumeCommand:
         import json
         from unittest.mock import patch
 
-        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
-        from app.cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from cli.interactive_shell.sessions.store import SessionStore
 
         session = ReplSession()
         old_id = session.session_id
         target_id = "old-abc-1234567890"
 
         with patch(
-            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            "cli.interactive_shell.sessions.store._sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1576,7 +1576,7 @@ class TestResumeCommand:
     def test_apply_resume_noop_when_no_messages_or_context(self) -> None:
         """When the session has no conversation, _apply_resume_data must return
         early without rotating the session."""
-        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         session = ReplSession()
         old_id = session.session_id
@@ -1600,8 +1600,8 @@ class TestResumeCommand:
         """History display uses REPL turn order and includes slash commands."""
         from unittest.mock import patch
 
-        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
-        from app.cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from cli.interactive_shell.sessions.store import SessionStore
 
         data = {
             "session_id": "display-test-abc123456789",
@@ -1622,7 +1622,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "app.cli.interactive_shell.sessions.store._sessions_dir",
+            "cli.interactive_shell.sessions.store._sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1641,7 +1641,7 @@ class TestResumeCommand:
         self,
     ) -> None:
         """No-history rendering should not emit orphaned assistant blocks."""
-        from app.cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         data = {
             "session_id": "display-no-history-abc123",
@@ -1672,10 +1672,10 @@ class TestResumeCommand:
         """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
         from unittest.mock import patch
 
-        from app.cli.interactive_shell.routing.handle_message_with_agent.errors import (
+        from cli.interactive_shell.routing.handle_message_with_agent.errors import (
             PlannerLLMError,
         )
-        from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+        from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
             execute_cli_actions,
         )
 
@@ -1686,7 +1686,7 @@ class TestResumeCommand:
             raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions._plan_actions",
+            "cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions._plan_actions",
             side_effect=_raise,
         ):
             execute_cli_actions("check cpu usage", session, console)
@@ -1704,7 +1704,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
@@ -1716,7 +1716,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
@@ -1735,7 +1735,7 @@ class TestHistoryCommand:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        import app.constants as const_module
+        import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         session = ReplSession()
@@ -2029,7 +2029,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2043,7 +2043,7 @@ class TestRunCliCommand:
         ) -> subprocess.CompletedProcess[str]:
             del check, timeout, text, encoding, errors
             assert capture_output is True
-            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[:3] == [sys.executable, "-m", "cli"]
             assert cmd[3:] == ["update"]
             return subprocess.CompletedProcess(
                 cmd,
@@ -2061,7 +2061,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2075,7 +2075,7 @@ class TestRunCliCommand:
         ) -> subprocess.CompletedProcess[str]:
             del check, timeout, text, encoding, errors
             assert capture_output is True
-            assert cmd[:3] == [sys.executable, "-m", "app.cli"]
+            assert cmd[:3] == [sys.executable, "-m", "cli"]
             assert cmd[3:] == ["config", "show"]
             return subprocess.CompletedProcess(
                 cmd,
@@ -2097,7 +2097,7 @@ class TestRunCliCommand:
         when no timeout is set, so non-interactive slash commands like ``/tests
         list`` do not lose their output to the parent stdout FD.
         """
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2129,7 +2129,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         replayed: list[tuple[str, str | None]] = []
 
@@ -2143,7 +2143,7 @@ class TestRunCliCommand:
 
         def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
             raise subprocess.TimeoutExpired(
-                cmd=[sys.executable, "-m", "app.cli", "update"],
+                cmd=[sys.executable, "-m", "cli", "update"],
                 timeout=30.0,
                 output=b"partial stdout\n",
                 stderr=b"partial stderr\n",
@@ -2175,7 +2175,7 @@ class TestCliDelegatedCommands:
     def test_command_delegation(
         self, monkeypatch: object, command: str, expected_args: list[str]
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2194,7 +2194,7 @@ class TestCliDelegatedCommands:
         the wizard's prompt_toolkit Application no longer conflicts with the
         shell's active one.
         """
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2221,7 +2221,7 @@ class TestCliDelegatedCommands:
         output is replayed through the REPL console instead of vanishing onto
         the parent process's stdout FD.
         """
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         captured_kwargs: list[dict[str, object]] = []
 
@@ -2247,7 +2247,7 @@ class TestCliDelegatedCommands:
         the no-subcommand case) and subcommand output bypass ``console.print``
         and never reach the REPL buffer — see issue #2388.
         """
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         captured_kwargs: list[dict[str, object]] = []
 
@@ -2262,7 +2262,7 @@ class TestCliDelegatedCommands:
 
     def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
         """Args passed to ``/onboard`` must be forwarded to the subprocess."""
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2280,7 +2280,7 @@ class TestCliDelegatedCommands:
         assert captured == [["onboard", "local_llm"]]
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         started: list[tuple[str, list[str], TaskKind, bool]] = []
 
@@ -2307,7 +2307,7 @@ class TestCliDelegatedCommands:
                 [
                     sys.executable,
                     "-m",
-                    "app.cli",
+                    "cli",
                     "tests",
                     "synthetic",
                     "--scenario",
@@ -2323,7 +2323,7 @@ class TestCliDelegatedCommands:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         selection_path = tmp_path / "selection.json"
 
@@ -2369,7 +2369,7 @@ class TestCliDelegatedCommands:
         assert not selection_path.exists()
 
     def test_tests_flag_first_invocation_delegates_to_cli(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         delegated: list[list[str]] = []
         monkeypatch.setattr(
@@ -2383,7 +2383,7 @@ class TestCliDelegatedCommands:
         assert delegated == [["tests", "--help"]]
 
     def test_tests_subcommand_typo_suggests_synthetic(self, monkeypatch: object) -> None:
-        from app.cli.interactive_shell.command_registry import cli_parity as m
+        from cli.interactive_shell.command_registry import cli_parity as m
 
         delegated: list[list[str]] = []
         started: list[list[str]] = []

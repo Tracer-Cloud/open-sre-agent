@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.integrations.llm_cli.timeout_utils import resolve_timeout_from_env
+from integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
 
 def test_resolve_timeout_from_env_defaults_when_missing(monkeypatch) -> None:

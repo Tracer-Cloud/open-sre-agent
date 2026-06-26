@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
+from cli.__main__ import cli
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def test_gateway_uses_default_host_and_port(runner: CliRunner) -> None:
 
     assert result.exit_code == 0
     mock_run.assert_called_once_with(
-        "app.remote.server:app",
+        "deployment.remote.server:app",
         host="127.0.0.1",
         port=2024,
         reload=False,
@@ -34,7 +34,7 @@ def test_gateway_allows_host_and_port_overrides(runner: CliRunner) -> None:
 
     assert result.exit_code == 0
     mock_run.assert_called_once_with(
-        "app.remote.server:app",
+        "deployment.remote.server:app",
         host="0.0.0.0",
         port=8080,
         reload=False,

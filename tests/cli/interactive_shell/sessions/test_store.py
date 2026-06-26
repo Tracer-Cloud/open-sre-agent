@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.sessions.store import SessionStore, _sessions_dir
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.sessions.store import SessionStore, _sessions_dir
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ def _read_lines(path: Path) -> list[dict]:
 
 
 def _patch_dir(tmp_path: Path):
-    return patch("app.cli.interactive_shell.sessions.store._sessions_dir", return_value=tmp_path)
+    return patch("cli.interactive_shell.sessions.store._sessions_dir", return_value=tmp_path)
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def tmp_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     on every call, so pointing it at a temp directory exercises the genuine
     filesystem path end to end.
     """
-    monkeypatch.setattr("app.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     return tmp_path
 
 
@@ -65,7 +65,7 @@ def test_open_session_uses_session_id_as_filename(tmp_path: Path) -> None:
 def test_open_session_never_raises_on_bad_path() -> None:
     session = _make_session()
     with patch(
-        "app.cli.interactive_shell.sessions.store._sessions_dir",
+        "cli.interactive_shell.sessions.store._sessions_dir",
         return_value=Path("/nonexistent/cannot/write"),
     ):
         SessionStore.open_session(session)  # must not raise

@@ -13,7 +13,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.dagster import (
+from integrations.dagster import (
     DagsterConfig,
     DagsterValidationResult,
     _compute_run_durations,
@@ -28,7 +28,7 @@ from app.integrations.dagster import (
     list_sensor_ticks,
     validate_dagster_config,
 )
-from app.services.dagster import DagsterClient
+from services.dagster import DagsterClient
 
 # --- helpers ---------------------------------------------------------------
 
@@ -585,8 +585,8 @@ class TestExtractStepFailures:
             ),
         )
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(dagster_module, "_client", lambda _cfg: client)
         result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="abc")
@@ -617,8 +617,8 @@ class TestExtractStepFailures:
             ),
         )
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(dagster_module, "_client", lambda _cfg: client)
         result = helper_get_run_logs(DagsterConfig(endpoint="http://x"), run_id="missing")
@@ -677,8 +677,8 @@ class TestExtractStepFailures:
             captured_cursors.append(cursor)
             return pages.pop(0)
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -700,7 +700,7 @@ class TestExtractStepFailures:
     ) -> None:
         """Load-bearing guarantee: a failure that arrives AFTER the non-failure
         event cap is hit must still be collected and surfaced in the summary."""
-        from app.integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
+        from integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
 
         def _benign(i: int) -> dict[str, Any]:
             return {"__typename": "EngineEvent", "stepKey": None, "timestamp": str(i)}
@@ -749,8 +749,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return pages.pop(0)
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -773,7 +773,7 @@ class TestExtractStepFailures:
         OLDEST events are evicted (FIFO). This keeps the surviving context
         adjacent to failures (which typically land later in the stream),
         rather than at the run's chronological start."""
-        from app.integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
+        from integrations.dagster import MAX_NON_FAILURE_RUN_LOG_EVENTS
 
         def _benign(i: int) -> dict[str, Any]:
             return {"__typename": "EngineEvent", "stepKey": None, "timestamp": str(i)}
@@ -815,8 +815,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return pages.pop(0)
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -883,8 +883,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return page
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -933,8 +933,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return pages.pop(0)
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -965,8 +965,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return {"error": "Request to Dagster failed: connection refused"}
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -1021,8 +1021,8 @@ class TestExtractStepFailures:
         ) -> dict[str, Any]:
             return pages.pop(0)
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -1041,7 +1041,7 @@ class TestExtractStepFailures:
     def test_get_run_logs_page_cap_safety_net(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A server that says ``hasMore=true`` forever must terminate at
         ``MAX_RUN_LOG_PAGES``; ``truncated`` is set to signal incomplete fetch."""
-        from app.integrations.dagster import MAX_RUN_LOG_PAGES
+        from integrations.dagster import MAX_RUN_LOG_PAGES
 
         pages_served = [0]
 
@@ -1066,8 +1066,8 @@ class TestExtractStepFailures:
                 }
             }
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -1105,8 +1105,8 @@ class TestExtractStepFailures:
                 }
             }
 
-        from app.integrations import dagster as dagster_module
-        from app.integrations.dagster import get_run_logs as helper_get_run_logs
+        from integrations import dagster as dagster_module
+        from integrations.dagster import get_run_logs as helper_get_run_logs
 
         monkeypatch.setattr(DagsterClient, "get_run_logs", fake_get_run_logs)
         monkeypatch.setattr(
@@ -1379,7 +1379,7 @@ class TestValidateDagsterConfig:
     def test_happy_path_returns_ok_with_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Patch DagsterClient inside the dagster module so validate_dagster_config
         # builds a mocked client.
-        from app.integrations import dagster as dagster_module
+        from integrations import dagster as dagster_module
 
         original_init = DagsterClient.__init__
 
@@ -1402,7 +1402,7 @@ class TestValidateDagsterConfig:
         assert "1.13.6" in result.detail
 
     def test_probe_failure_returns_not_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from app.integrations import dagster as dagster_module
+        from integrations import dagster as dagster_module
 
         original_init = DagsterClient.__init__
 
@@ -1427,7 +1427,7 @@ class TestValidateDagsterConfig:
     def test_response_without_version_field_returns_not_ok(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.integrations import dagster as dagster_module
+        from integrations import dagster as dagster_module
 
         original_init = DagsterClient.__init__
 
@@ -1455,7 +1455,7 @@ class TestValidateDagsterConfig:
 
 class TestIntegrationHelpers:
     """The list_runs / get_run_logs / list_assets / list_sensor_ticks helpers
-    in app.integrations.dagster are thin wrappers that build a DagsterClient
+    in integrations.dagster are thin wrappers that build a DagsterClient
     and call through. Cover that the routing works."""
 
     def test_list_runs_routes_to_client(self, monkeypatch: pytest.MonkeyPatch) -> None:

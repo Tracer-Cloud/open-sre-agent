@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-import app.fleet_monitoring.sweep as sweep_module
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+import tools.fleet_monitoring.sweep as sweep_module
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 # A PID large enough to never be allocated on Linux/macOS
 # (``kernel.pid_max`` defaults to 32768 or 4194304). Cross-platform
@@ -221,7 +221,7 @@ def test_lockfile_unlink_failure_is_logged_with_exc_info(
 
     with (
         patch.object(Path, "unlink", side_effect=PermissionError("read-only fs")),
-        caplog.at_level("WARNING", logger="app.fleet_monitoring.sweep"),
+        caplog.at_level("WARNING", logger="tools.fleet_monitoring.sweep"),
     ):
         result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 
@@ -254,7 +254,7 @@ def test_lockfile_already_gone_is_silently_idempotent(
 
     with (
         patch.object(Path, "unlink", side_effect=FileNotFoundError("already gone")),
-        caplog.at_level("WARNING", logger="app.fleet_monitoring.sweep"),
+        caplog.at_level("WARNING", logger="tools.fleet_monitoring.sweep"),
     ):
         result = sweep_module.sweep(isolated_registry, lock_dir=lock_dir)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.orchestration.node.publish_findings.renderers.terminal import (
+from core.orchestration.node.publish_findings.renderers.terminal import (
     _rich_line_with_links,
     _strip_mrkdwn,
     _strip_slack_links,

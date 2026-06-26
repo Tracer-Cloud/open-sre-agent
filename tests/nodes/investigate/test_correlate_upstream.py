@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.core.domain.types.upstream import (
+from core.domain.types.upstream import (
     MetricSeries,
     UpstreamEvidenceBundle,
 )
-from app.core.orchestration.node.publish_findings.upstream_correlation.node import (
+from core.orchestration.node.publish_findings.upstream_correlation.node import (
     node_correlate_upstream,
 )
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.S3InspectTool import inspect_s3_object
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.S3InspectTool import inspect_s3_object
 
 
 class TestS3InspectToolContract(BaseToolContract):
@@ -35,7 +35,7 @@ def test_run_returns_error_when_no_bucket_or_key() -> None:
 
 def test_run_not_found() -> None:
     with patch(
-        "app.tools.S3InspectTool.get_object_metadata",
+        "tools.S3InspectTool.get_object_metadata",
         return_value={"success": True, "exists": False},
     ):
         result = inspect_s3_object(bucket="b", key="k")
@@ -54,11 +54,11 @@ def test_run_happy_path() -> None:
     fake_sample = {"is_text": True, "sample": "hello world", "sample_bytes": 11}
     with (
         patch(
-            "app.tools.S3InspectTool.get_object_metadata",
+            "tools.S3InspectTool.get_object_metadata",
             return_value={"success": True, "exists": True, "data": fake_meta},
         ),
         patch(
-            "app.tools.S3InspectTool.get_object_sample",
+            "tools.S3InspectTool.get_object_sample",
             return_value={"success": True, "data": fake_sample},
         ),
     ):
@@ -70,7 +70,7 @@ def test_run_happy_path() -> None:
 
 def test_run_metadata_error() -> None:
     with patch(
-        "app.tools.S3InspectTool.get_object_metadata",
+        "tools.S3InspectTool.get_object_metadata",
         return_value={"success": False, "error": "Forbidden"},
     ):
         result = inspect_s3_object(bucket="b", key="k")

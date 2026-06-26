@@ -1,6 +1,6 @@
 """Unit tests for the Bitbucket integration module."""
 
-from app.integrations.bitbucket import (
+from integrations.bitbucket import (
     BitbucketConfig,
     BitbucketValidationResult,
     bitbucket_config_from_env,

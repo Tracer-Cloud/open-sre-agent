@@ -10,8 +10,8 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-import app.remote as remote_pkg
-from app.cli.commands.general import investigate_command
+import deployment.remote as remote_pkg
+from cli.commands.general import investigate_command
 
 
 def _fake_payload(service: str) -> dict[str, object]:
@@ -37,9 +37,9 @@ def _fake_result() -> dict[str, object]:
 
 @pytest.fixture(autouse=True)
 def _stub_runtime_alert_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    runtime_alert = types.ModuleType("app.remote.runtime_alert")
+    runtime_alert = types.ModuleType("deployment.remote.runtime_alert")
     runtime_alert.build_runtime_alert_payload = lambda *_args, **_kwargs: {}
-    monkeypatch.setitem(sys.modules, "app.remote.runtime_alert", runtime_alert)
+    monkeypatch.setitem(sys.modules, "deployment.remote.runtime_alert", runtime_alert)
     monkeypatch.setattr(remote_pkg, "runtime_alert", runtime_alert, raising=False)
 
 
@@ -48,11 +48,11 @@ def test_service_flag_invokes_runtime_investigation(monkeypatch) -> None:
     runner = CliRunner()
     with (
         patch(
-            "app.remote.runtime_alert.build_runtime_alert_payload",
+            "deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
         patch(
-            "app.cli.investigation.run_investigation_cli",
+            "cli.investigation.run_investigation_cli",
             return_value=_fake_result(),
         ) as mock_run,
     ):
@@ -73,11 +73,11 @@ def test_service_flag_writes_output_file(tmp_path, monkeypatch) -> None:
 
     with (
         patch(
-            "app.remote.runtime_alert.build_runtime_alert_payload",
+            "deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
         patch(
-            "app.cli.investigation.run_investigation_cli",
+            "cli.investigation.run_investigation_cli",
             return_value=_fake_result(),
         ),
     ):
@@ -108,8 +108,8 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
         args.append(conflict_value)
 
     with (
-        patch("app.remote.runtime_alert.build_runtime_alert_payload"),
-        patch("app.cli.investigation.run_investigation_cli"),
+        patch("deployment.remote.runtime_alert.build_runtime_alert_payload"),
+        patch("cli.investigation.run_investigation_cli"),
     ):
         result = runner.invoke(investigate_command, args)
 
@@ -118,16 +118,16 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
 
 
 def test_service_flag_surfaces_errors_from_payload_builder() -> None:
-    from app.cli.interactive_shell.error_handling.errors import OpenSREError
+    from cli.interactive_shell.error_handling.errors import OpenSREError
 
     runner = CliRunner()
     with (
-        patch("app.cli.commands.general.track_investigation") as mock_tracking,
+        patch("cli.commands.general.track_investigation") as mock_tracking,
         patch(
-            "app.remote.runtime_alert.build_runtime_alert_payload",
+            "deployment.remote.runtime_alert.build_runtime_alert_payload",
             side_effect=OpenSREError("unknown service", suggestion="add it"),
         ),
-        patch("app.cli.investigation.run_investigation_cli"),
+        patch("cli.investigation.run_investigation_cli"),
     ):
         result = runner.invoke(investigate_command, ["--service", "missing"])
 
@@ -138,7 +138,7 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
 def test_print_template_does_not_count_as_investigation() -> None:
     runner = CliRunner()
 
-    with patch("app.cli.commands.general.track_investigation") as mock_tracking:
+    with patch("cli.commands.general.track_investigation") as mock_tracking:
         result = runner.invoke(investigate_command, ["--print-template", "generic"])
 
     assert result.exit_code == 0
@@ -161,10 +161,10 @@ def test_slack_thread_without_bot_token_is_rejected(monkeypatch) -> None:
 
     with (
         patch(
-            "app.remote.runtime_alert.build_runtime_alert_payload",
+            "deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
-        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
+        patch("cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,
@@ -181,10 +181,10 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
 
     with (
         patch(
-            "app.remote.runtime_alert.build_runtime_alert_payload",
+            "deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
-        patch("app.cli.investigation.run_investigation_cli", return_value=_fake_result()),
+        patch("cli.investigation.run_investigation_cli", return_value=_fake_result()),
     ):
         result = runner.invoke(
             investigate_command,
@@ -206,11 +206,9 @@ def test_investigate_command_keyboard_interrupt_non_streaming(monkeypatch) -> No
     def fake_run(*args: object, **kwargs: object) -> NoReturn:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("app.cli.investigation.run_investigation_cli", fake_run)
-    monkeypatch.setattr(
-        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
-    )
-    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: True)
+    monkeypatch.setattr("cli.investigation.run_investigation_cli", fake_run)
+    monkeypatch.setattr("cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"})
+    monkeypatch.setattr("cli.commands.general.is_json_output", lambda: True)
 
     result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
     assert result.exit_code == 0
@@ -228,14 +226,12 @@ def test_investigate_command_keyboard_interrupt_streaming(monkeypatch) -> None:
     def fake_streaming(*args: object, **kwargs: object) -> NoReturn:
         raise KeyboardInterrupt
 
-    monkeypatch.setattr("app.cli.investigation.run_investigation_cli_streaming", fake_streaming)
-    monkeypatch.setattr(
-        "app.cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"}
-    )
-    monkeypatch.setattr("app.cli.commands.general.is_json_output", lambda: False)
+    monkeypatch.setattr("cli.investigation.run_investigation_cli_streaming", fake_streaming)
+    monkeypatch.setattr("cli.investigation.payload.load_payload", lambda **_: {"alert_name": "A"})
+    monkeypatch.setattr("cli.commands.general.is_json_output", lambda: False)
 
     # Click's CliRunner patches the real sys.stdout, but
-    # app.cli.commands.general imported sys at module load time.
+    # cli.commands.general imported sys at module load time.
     # Replace it with a fake module whose stdout reports isatty=True
     # so the command takes the streaming path.
     fake_sys = types.ModuleType("sys")
@@ -243,7 +239,7 @@ def test_investigate_command_keyboard_interrupt_streaming(monkeypatch) -> None:
     fake_sys.stdout = MagicMock()
     fake_sys.stdout.isatty.return_value = True
 
-    with patch("app.cli.commands.general.sys", fake_sys):
+    with patch("cli.commands.general.sys", fake_sys):
         result = runner.invoke(investigate_command, ["--input", "/tmp/alert.json"])
 
     assert result.exit_code == 0

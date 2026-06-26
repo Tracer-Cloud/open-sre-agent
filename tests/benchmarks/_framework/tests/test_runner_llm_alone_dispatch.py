@@ -175,7 +175,7 @@ def test_run_inner_accepts_llm_alone_when_adapter_provides_baseline(
         adapter=_AdapterWithBaseline(),
     )
     with patch(
-        "app.core.orchestration.entrypoints.run_investigation",
+        "core.orchestration.entrypoints.run_investigation",
         return_value={"root_cause": "ok", "report": "ok", "evidence_entries": []},
     ):
         outcome = runner.run_without_integrity()
@@ -198,7 +198,7 @@ def test_run_one_cell_llm_alone_calls_build_baseline_tools(tmp_path: Path) -> No
     cases_dir = tmp_path / "cases"
     cases_dir.mkdir(parents=True)
     with patch(
-        "app.core.orchestration.entrypoints.run_investigation",
+        "core.orchestration.entrypoints.run_investigation",
         return_value={"root_cause": "x", "report": "x", "evidence_entries": []},
     ):
         runner._run_one_cell(
@@ -221,7 +221,7 @@ def test_run_one_cell_opensre_mode_calls_build_opensre_integrations(tmp_path: Pa
     cases_dir = tmp_path / "cases"
     cases_dir.mkdir(parents=True)
     with patch(
-        "app.core.orchestration.entrypoints.run_investigation",
+        "core.orchestration.entrypoints.run_investigation",
         return_value={"root_cause": "x", "report": "x", "evidence_entries": []},
     ):
         runner._run_one_cell(
@@ -251,7 +251,7 @@ def test_run_one_cell_passes_baseline_agent_class_when_llm_alone(tmp_path: Path)
         captured.update(kwargs)
         return {"root_cause": "x", "report": "x", "evidence_entries": []}
 
-    with patch("app.core.orchestration.entrypoints.run_investigation", _capture_kwargs):
+    with patch("core.orchestration.entrypoints.run_investigation", _capture_kwargs):
         runner._run_one_cell(
             case=BenchmarkCase(case_id="c1", benchmark_name="with-baseline"),
             mode="llm_alone",
@@ -303,7 +303,7 @@ def test_run_one_cell_llm_alone_pure_uses_baseline_tools_and_pure_agent(
         captured.update(kwargs)
         return {"root_cause": "x", "report": "x", "evidence_entries": []}
 
-    with patch("app.core.orchestration.entrypoints.run_investigation", _capture_kwargs):
+    with patch("core.orchestration.entrypoints.run_investigation", _capture_kwargs):
         runner._run_one_cell(
             case=BenchmarkCase(case_id="c1", benchmark_name="with-baseline"),
             mode="llm_alone_pure",

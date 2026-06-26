@@ -44,8 +44,8 @@ def validate_grafana_telemetry(
         - missing_spans: list (if expected_spans provided)
         - passed: bool (overall validation result)
     """
-    from app.tools.GrafanaLogsTool import query_grafana_logs
-    from app.tools.GrafanaTracesTool import query_grafana_traces
+    from tools.GrafanaLogsTool import query_grafana_logs
+    from tools.GrafanaTracesTool import query_grafana_traces
 
     if wait_seconds > 0:
         print(f"Waiting {wait_seconds}s for telemetry to propagate to Grafana Cloud...")
@@ -168,7 +168,7 @@ def validate_and_report(
 if __name__ == "__main__":
     from pathlib import Path
 
-    from app.utils.config import load_env
+    from config.grafana_cloud import load_env
 
     load_env(Path(__file__).resolve().parent.parent.parent / ".env")
 

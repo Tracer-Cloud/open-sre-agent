@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.utils.truncation import truncate
+from platform.common.truncation import truncate
 
 
 @pytest.mark.parametrize(

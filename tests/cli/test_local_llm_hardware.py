@@ -1,4 +1,4 @@
-"""Unit tests for app/cli/local_llm/hardware.py
+"""Unit tests for cli/local_llm/hardware.py
 
 Covers:
 - _get_total_ram_gb()   — Linux /proc/meminfo, macOS sysctl, and fallback
@@ -34,7 +34,7 @@ LINUX_MEMINFO_16G_10G = (
     "Buffers:        123456 kB\n"
 )
 
-MODULE = "app.cli.local_llm.hardware"
+MODULE = "cli.local_llm.hardware"
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ MODULE = "app.cli.local_llm.hardware"
 
 class TestGetTotalRamGbLinux:
     def _call(self) -> float:
-        from app.cli.local_llm.hardware import _get_total_ram_gb
+        from cli.local_llm.hardware import _get_total_ram_gb
 
         return _get_total_ram_gb()
 
@@ -58,7 +58,7 @@ class TestGetTotalRamGbLinux:
         assert result == pytest.approx(_16_GiB)
 
     def test_returns_fallback_on_open_failure(self) -> None:
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,
@@ -70,7 +70,7 @@ class TestGetTotalRamGbLinux:
 
     def test_returns_fallback_on_parse_failure(self) -> None:
         """MemTotal line present but value is non-numeric."""
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB
 
         bad_meminfo = "MemTotal:       GARBAGE kB\n"
         with (
@@ -83,7 +83,7 @@ class TestGetTotalRamGbLinux:
 
     def test_returns_fallback_when_memtotal_missing(self) -> None:
         """File readable but contains no MemTotal line."""
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB
 
         meminfo_no_total = "MemFree:        8388608 kB\nMemAvailable:   7000000 kB\n"
         with (
@@ -102,7 +102,7 @@ class TestGetTotalRamGbLinux:
 
 class TestGetTotalRamGbMacOS:
     def _call(self) -> float:
-        from app.cli.local_llm.hardware import _get_total_ram_gb
+        from cli.local_llm.hardware import _get_total_ram_gb
 
         return _get_total_ram_gb()
 
@@ -129,7 +129,7 @@ class TestGetTotalRamGbMacOS:
         )
 
     def test_returns_fallback_on_subprocess_failure(self) -> None:
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,
@@ -142,7 +142,7 @@ class TestGetTotalRamGbMacOS:
         assert result == _FALLBACK_RAM_GB
 
     def test_returns_fallback_on_non_integer_output(self) -> None:
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,
@@ -160,7 +160,7 @@ class TestGetTotalRamGbMacOS:
 
 class TestGetAvailableRamGbLinux:
     def _call(self, total: float) -> float:
-        from app.cli.local_llm.hardware import _get_available_ram_gb
+        from cli.local_llm.hardware import _get_available_ram_gb
 
         return _get_available_ram_gb(total)
 
@@ -210,7 +210,7 @@ class TestGetAvailableRamGbLinux:
 
 class TestGetAvailableRamGbMacOS:
     def _call(self, total: float) -> float:
-        from app.cli.local_llm.hardware import _get_available_ram_gb
+        from cli.local_llm.hardware import _get_available_ram_gb
 
         return _get_available_ram_gb(total)
 
@@ -262,7 +262,7 @@ class TestGetAvailableRamGbMacOS:
 
 class TestGetAvailableRamGbUnknownPlatform:
     def test_returns_half_total_on_unrecognised_platform(self) -> None:
-        from app.cli.local_llm.hardware import _get_available_ram_gb
+        from cli.local_llm.hardware import _get_available_ram_gb
 
         with patch(f"{MODULE}.sys") as mock_sys:
             mock_sys.platform = "win32"
@@ -272,7 +272,7 @@ class TestGetAvailableRamGbUnknownPlatform:
 
 class TestGetTotalRamGbUnknownPlatform:
     def test_returns_fallback_on_unrecognised_platform(self) -> None:
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB, _get_total_ram_gb
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB, _get_total_ram_gb
 
         with patch(f"{MODULE}.sys") as mock_sys:
             mock_sys.platform = "win32"
@@ -297,7 +297,7 @@ class TestDetectHardware:
         available_gb: float,
         nvidia: bool,
     ):
-        from app.cli.local_llm.hardware import detect_hardware
+        from cli.local_llm.hardware import detect_hardware
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,
@@ -368,7 +368,7 @@ class TestDetectHardware:
     # --- shutil.which is actually called with "nvidia-smi" ---
 
     def test_nvidia_detection_queries_nvidia_smi(self) -> None:
-        from app.cli.local_llm.hardware import detect_hardware
+        from cli.local_llm.hardware import detect_hardware
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,
@@ -384,7 +384,7 @@ class TestDetectHardware:
     # --- Conservative fallback RAM propagates into profile ---
 
     def test_fallback_ram_propagates(self) -> None:
-        from app.cli.local_llm.hardware import _FALLBACK_RAM_GB, detect_hardware
+        from cli.local_llm.hardware import _FALLBACK_RAM_GB, detect_hardware
 
         with (
             patch(f"{MODULE}.sys") as mock_sys,

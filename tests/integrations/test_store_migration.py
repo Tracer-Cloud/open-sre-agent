@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.store import (
+from integrations.store import (
     _VERSION,
     _load_raw,
     _migrate_record_v1_to_v2,
@@ -92,7 +92,7 @@ def test_migration_persists_on_disk_and_is_idempotent(tmp_path: Path) -> None:
     }
     _write_store(store_file, v1_data)
 
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         first_load = _load_raw()
 
     assert first_load["version"] == _VERSION
@@ -105,7 +105,7 @@ def test_migration_persists_on_disk_and_is_idempotent(tmp_path: Path) -> None:
 
     # Second load is a no-op (idempotent): content stays identical.
     prior_bytes = store_file.read_bytes()
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         second_load = _load_raw()
     assert second_load == first_load
     assert store_file.read_bytes() == prior_bytes
@@ -114,14 +114,14 @@ def test_migration_persists_on_disk_and_is_idempotent(tmp_path: Path) -> None:
 def test_malformed_file_yields_empty_v2_store(tmp_path: Path) -> None:
     store_file = tmp_path / "integrations.json"
     store_file.write_text("this is not json")
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         data = _load_raw()
     assert data == {"version": _VERSION, "integrations": []}
 
 
 def test_missing_file_yields_empty_v2_store(tmp_path: Path) -> None:
     store_file = tmp_path / "does-not-exist.json"
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         data = _load_raw()
     assert data == {"version": _VERSION, "integrations": []}
 
@@ -145,8 +145,8 @@ def test_legacy_store_is_moved_to_opensre_path(tmp_path: Path) -> None:
     )
 
     with (
-        patch("app.integrations.store.STORE_PATH", store_file),
-        patch("app.integrations.store.LEGACY_STORE_PATH", legacy_store_file),
+        patch("integrations.store.STORE_PATH", store_file),
+        patch("integrations.store.LEGACY_STORE_PATH", legacy_store_file),
     ):
         data = _load_raw()
 
@@ -176,7 +176,7 @@ def test_permissions_preserved_after_migration(tmp_path: Path) -> None:
         },
     )
 
-    with patch("app.integrations.store.STORE_PATH", store_file):
+    with patch("integrations.store.STORE_PATH", store_file):
         _load_raw()  # triggers migration + _save
 
     mode = stat.S_IMODE(store_file.stat().st_mode)

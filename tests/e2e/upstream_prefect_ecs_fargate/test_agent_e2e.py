@@ -18,9 +18,9 @@ from datetime import UTC, datetime
 import boto3
 import requests
 
-from app.cli.investigation import run_investigation_cli
-from app.services.grafana import get_grafana_client
-from app.utils.tracing import traceable
+from cli.investigation import run_investigation_cli
+from platform.observability.tracing import traceable
+from services.grafana import get_grafana_client
 from tests.shared.e2e_rca_checks import (
     audit_key_mentioned,
     investigation_text_blob,

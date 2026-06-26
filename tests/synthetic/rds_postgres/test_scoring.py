@@ -15,14 +15,20 @@ from tests.synthetic.rds_postgres.scenario_loader import SUITE_DIR, load_all_sce
 
 
 def test_scoring_module_imports_without_app_pipeline() -> None:
-    """scoring.py must be importable without touching app.core.orchestration."""
-    # Force the import to happen in this test's process; if scoring.py was
-    # already imported earlier that's fine — we just check the invariant holds.
+    """scoring.py must be importable without touching core.orchestration."""
+    existing_pipeline_modules = {k for k in sys.modules if k.startswith("core.orchestration")}
+
+    # Force the import to happen in this test's process; if orchestration modules
+    # were already imported by earlier tests, only fail on newly imported ones.
     from tests.synthetic.rds_postgres.scoring import score_result  # noqa: F401
 
-    app_pipeline_modules = [k for k in sys.modules if k.startswith("app.core.orchestration")]
+    app_pipeline_modules = [
+        k
+        for k in sys.modules
+        if k.startswith("core.orchestration") and k not in existing_pipeline_modules
+    ]
     assert app_pipeline_modules == [], (
-        f"scoring.py transitively imported app.core.orchestration modules: {app_pipeline_modules}"
+        f"scoring.py transitively imported core.orchestration modules: {app_pipeline_modules}"
     )
 
 

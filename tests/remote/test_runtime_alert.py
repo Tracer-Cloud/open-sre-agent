@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.deployment.operations.health import HealthPollStatus
-from app.remote.ops import RemoteOpsError, ServiceStatus
-from app.remote.runtime_alert import build_runtime_alert_payload
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from deployment.operations.health import HealthPollStatus
+from deployment.remote.ops import RemoteOpsError, ServiceStatus
+from deployment.remote.runtime_alert import build_runtime_alert_payload
 
 
 def _status(**overrides: object) -> ServiceStatus:
@@ -31,7 +31,7 @@ def _status(**overrides: object) -> ServiceStatus:
 def _patch_registry(service_name: str, *, configured: bool = True) -> object:
     remotes = {service_name: "https://svc-a.up.railway.app"} if configured else {}
     return patch(
-        "app.remote.runtime_alert.load_named_remotes",
+        "deployment.remote.runtime_alert.load_named_remotes",
         return_value=remotes,
     )
 
@@ -40,14 +40,14 @@ def _patch_ops_config(
     *, provider: str = "railway", project: str = "proj-a", service: str = "svc-a"
 ) -> object:
     return patch(
-        "app.remote.runtime_alert.load_remote_ops_config",
+        "deployment.remote.runtime_alert.load_remote_ops_config",
         return_value={"provider": provider, "project": project, "service": service},
     )
 
 
 def _patch_provider(provider_mock: MagicMock) -> object:
     return patch(
-        "app.remote.runtime_alert.resolve_remote_ops_provider",
+        "deployment.remote.runtime_alert.resolve_remote_ops_provider",
         return_value=provider_mock,
     )
 
@@ -69,7 +69,7 @@ def test_happy_path_returns_payload_with_service_logs_and_health() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             return_value=health_result,
         ),
     ):
@@ -124,7 +124,7 @@ def test_logs_unavailable_is_graceful() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             return_value=HealthPollStatus(
                 url="https://svc-a.up.railway.app/health",
                 attempts=1,
@@ -149,7 +149,7 @@ def test_health_timeout_is_graceful() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             side_effect=TimeoutError("Deployment health check timed out"),
         ),
     ):
@@ -163,11 +163,11 @@ def test_unsupported_provider_raises_friendly_error() -> None:
     with (
         _patch_registry("my-svc"),
         patch(
-            "app.remote.runtime_alert.load_remote_ops_config",
+            "deployment.remote.runtime_alert.load_remote_ops_config",
             return_value={"provider": "unknown-provider", "project": None, "service": None},
         ),
         patch(
-            "app.remote.runtime_alert.resolve_remote_ops_provider",
+            "deployment.remote.runtime_alert.resolve_remote_ops_provider",
             side_effect=RemoteOpsError("Unsupported remote ops provider: unknown-provider"),
         ),
         pytest.raises(OpenSREError, match="Unsupported remote ops provider"),
@@ -207,7 +207,7 @@ def test_slack_thread_included_when_ref_and_token_provided() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             return_value=HealthPollStatus(
                 url="https://svc-a.up.railway.app/health",
                 attempts=1,
@@ -216,7 +216,7 @@ def test_slack_thread_included_when_ref_and_token_provided() -> None:
             ),
         ),
         patch(
-            "app.remote.runtime_alert.fetch_slack_thread",
+            "deployment.remote.runtime_alert.fetch_slack_thread",
             return_value=slack_payload,
         ),
     ):
@@ -240,7 +240,7 @@ def test_slack_thread_captures_parse_error() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             return_value=HealthPollStatus(
                 url="https://svc-a.up.railway.app/health",
                 attempts=1,
@@ -269,7 +269,7 @@ def test_slack_thread_not_included_when_ref_absent() -> None:
         _patch_ops_config(),
         _patch_provider(provider_mock),
         patch(
-            "app.remote.runtime_alert.poll_deployment_health",
+            "deployment.remote.runtime_alert.poll_deployment_health",
             return_value=HealthPollStatus(
                 url="https://svc-a.up.railway.app/health",
                 attempts=1,

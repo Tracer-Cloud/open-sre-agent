@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from app.cli.interactive_shell.references.grounding_diagnostics import (
+from cli.interactive_shell.references.grounding_diagnostics import (
     log_grounding_cache_diagnostics,
 )
 

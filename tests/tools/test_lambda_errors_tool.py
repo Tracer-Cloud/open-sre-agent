@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.LambdaErrorsTool import get_lambda_errors
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.LambdaErrorsTool import get_lambda_errors
 
 
 class TestLambdaErrorsToolContract(BaseToolContract):
@@ -34,7 +34,7 @@ def test_run_delegates_to_invocation_logs_with_filter_errors() -> None:
         "invocations": [],
     }
     with patch(
-        "app.tools.LambdaInvocationLogsTool.get_recent_invocations",
+        "tools.LambdaInvocationLogsTool.get_recent_invocations",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_errors(function_name="my-fn", limit=50)

@@ -9,11 +9,11 @@ records fell through the generic passthrough, leaving ``base_url`` nested under
 
 from __future__ import annotations
 
-from app.core.orchestration.node.investigate.tools import availability_view
-from app.integrations.catalog import classify_integrations
-from app.integrations.temporal import classify
-from app.services.temporal import TemporalConfig
-from app.tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from core.orchestration.node.investigate.tools import availability_view
+from integrations.catalog import classify_integrations
+from integrations.temporal import classify
+from services.temporal import TemporalConfig
+from tools.TemporalWorkflowsTool import TemporalWorkflowsTool
 
 
 class TestClassify:

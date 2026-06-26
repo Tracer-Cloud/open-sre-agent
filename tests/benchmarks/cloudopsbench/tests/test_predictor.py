@@ -555,7 +555,7 @@ class _FlakyLLM:
 def test_emit_paper_predictions_recovers_after_transient_rate_limit(monkeypatch) -> None:
     """Two transient 429s, then success — payload must come back populated."""
     # Don't actually sleep during the test.
-    import app.utils.llm_retry as llm_retry
+    import services.llm_retry as llm_retry
 
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
@@ -581,7 +581,7 @@ def test_emit_paper_predictions_recovers_after_transient_rate_limit(monkeypatch)
 
 def test_emit_paper_predictions_gives_up_after_max_rate_limit_retries(monkeypatch) -> None:
     """If every retry hits the rate limit, return None gracefully (no crash)."""
-    import app.utils.llm_retry as llm_retry
+    import services.llm_retry as llm_retry
 
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 
@@ -600,7 +600,7 @@ def test_emit_paper_predictions_gives_up_after_max_rate_limit_retries(monkeypatc
 
 def test_emit_paper_predictions_does_not_retry_non_rate_limit_errors(monkeypatch) -> None:
     """A 400 / schema error should fail fast — no point retrying a deterministic bug."""
-    import app.utils.llm_retry as llm_retry
+    import services.llm_retry as llm_retry
 
     monkeypatch.setattr(llm_retry.time, "sleep", lambda _s: None)
 

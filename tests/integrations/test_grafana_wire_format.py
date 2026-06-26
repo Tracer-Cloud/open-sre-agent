@@ -1,4 +1,4 @@
-"""Unit tests for app/integrations/opensre/grafana_wire_format.py.
+"""Unit tests for integrations/opensre/grafana_wire_format.py.
 
 All functions are pure data transforms — no I/O, no mocking required.
 
@@ -18,18 +18,16 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Load the module directly, bypassing app/integrations/opensre/__init__.py
+# Load the module directly, bypassing integrations/opensre/__init__.py
 # ---------------------------------------------------------------------------
 
-_MODULE_PATH = (
-    Path(__file__).parent.parent.parent / "app/integrations/opensre/grafana_wire_format.py"
-)
+_MODULE_PATH = Path(__file__).parent.parent.parent / "integrations/opensre/grafana_wire_format.py"
 _spec = importlib.util.spec_from_file_location(
-    "app.integrations.opensre.grafana_wire_format", _MODULE_PATH
+    "integrations.opensre.grafana_wire_format", _MODULE_PATH
 )
 assert _spec is not None and _spec.loader is not None
 _gwf = importlib.util.module_from_spec(_spec)
-sys.modules["app.integrations.opensre.grafana_wire_format"] = _gwf
+sys.modules["integrations.opensre.grafana_wire_format"] = _gwf
 _spec.loader.exec_module(_gwf)  # type: ignore[union-attr]
 
 _dimension_labels = _gwf._dimension_labels

@@ -6,12 +6,12 @@ the actual ``/integrations`` output instead of leaving the user with a raw table
 
 from __future__ import annotations
 
-from app.cli.interactive_shell.command_registry.integrations import (
+from cli.interactive_shell.command_registry.integrations import (
     _MAX_OBSERVATION_DETAIL_CHARS,
     _record_integration_show_observation,
     _record_integrations_observation,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def test_records_status_lines_for_each_service() -> None:

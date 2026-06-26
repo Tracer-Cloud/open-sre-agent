@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.core.domain.types.upstream import (
+from core.domain.types.upstream import (
     CorrelatedSignal,
     UpstreamCandidate,
 )

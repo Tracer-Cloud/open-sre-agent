@@ -6,11 +6,11 @@ from collections.abc import Generator
 
 import pytest
 
-from app.services.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
-from app.tools.registry import clear_tool_registry_cache
+from services.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
 from tests.services.investigation_tool_schema_contract import (
     assert_all_investigation_tools_satisfy_strict_adapter,
 )
+from tools.registry import clear_tool_registry_cache
 
 
 @pytest.fixture(autouse=True)

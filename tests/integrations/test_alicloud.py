@@ -11,7 +11,7 @@ from typing import Any
 
 def test_effective_integrations_field_exists() -> None:
     """``alicloud`` must be a declared field on EffectiveIntegrations."""
-    from app.integrations.effective_models import (
+    from integrations.effective_models import (
         EffectiveIntegrationEntry,
         EffectiveIntegrations,
     )
@@ -28,7 +28,7 @@ def test_effective_integrations_field_exists() -> None:
 
 def test_registry_spec_present() -> None:
     """alicloud must be registered with direct_effective=True."""
-    from app.integrations.registry import DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, INTEGRATION_SPECS
+    from integrations.registry import DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, INTEGRATION_SPECS
 
     spec = next((s for s in INTEGRATION_SPECS if s.service == "alicloud"), None)
     assert spec is not None

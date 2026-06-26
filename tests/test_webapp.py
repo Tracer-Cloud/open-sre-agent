@@ -1,4 +1,4 @@
-"""Lightweight FastAPI smoke + telemetry coverage for ``app.webapp``."""
+"""Lightweight FastAPI smoke + telemetry coverage for ``config.webapp``."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app import webapp
+from config import webapp
 
 
 def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPatch) -> None:
     init_mock = MagicMock()
-    monkeypatch.setattr("app.utils.sentry_sdk.init_sentry", init_mock)
+    monkeypatch.setattr("platform.observability.sentry_sdk.init_sentry", init_mock)
 
     importlib.reload(webapp)
 

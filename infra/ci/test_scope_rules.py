@@ -25,31 +25,30 @@ class PathRule:
 # Matched in list order — more specific prefixes must appear before parents.
 RULES: tuple[PathRule, ...] = (
     # Shared core (always escalate)
-    PathRule("app/core/runtime/", ("tests/core/runtime/",)),
-    PathRule("app/core/domain/", (), always_escalate=True),
-    PathRule("app/core/orchestration/", (), always_escalate=True),
-    PathRule("app/state/", (), always_escalate=True),
-    PathRule("app/utils/", (), always_escalate=True),
+    PathRule("core/runtime/", ("tests/core/runtime/",)),
+    PathRule("core/domain/", (), always_escalate=True),
+    PathRule("core/orchestration/", (), always_escalate=True),
+    PathRule("utils/", (), always_escalate=True),
     # Specific sub-packages before their parent
-    PathRule("app/integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
-    PathRule("app/integrations/opensre/", ("tests/integrations/opensre/",)),
-    PathRule("app/integrations/hermes/", ("tests/hermes/",)),
-    PathRule("app/integrations/", ("tests/integrations/",)),
-    PathRule("app/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
-    PathRule("app/cli/", ("tests/cli/",)),
-    PathRule("app/tools/", ("tests/tools/",)),
-    PathRule("app/services/", ("tests/services/", "tests/tools/")),
-    PathRule("app/analytics/", ("tests/analytics/",)),
-    PathRule("app/guardrails/", ("tests/test_guardrails/",)),
-    PathRule("app/masking/", ("tests/masking/",)),
-    PathRule("app/entrypoints/", ("tests/entrypoints/",)),
-    PathRule("app/remote/", ("tests/remote/",)),
-    PathRule("app/sandbox/", ("tests/sandbox/",)),
-    PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
-    PathRule("app/core/orchestration/node/publish_findings/", ("tests/delivery/",)),
-    PathRule("app/auth/", ("tests/app/auth/",)),
-    PathRule("app/watch_dog/", ("tests/watch_dog/",)),
-    PathRule("app/webapp.py", ("tests/test_webapp.py",)),
+    PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
+    PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
+    PathRule("integrations/hermes/", ("tests/hermes/",)),
+    PathRule("integrations/", ("tests/integrations/",)),
+    PathRule("tools/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
+    PathRule("cli/", ("tests/cli/",)),
+    PathRule("tools/watch_dog/", ("tests/watch_dog/",)),
+    PathRule("tools/", ("tests/tools/",)),
+    PathRule("services/", ("tests/services/", "tests/tools/")),
+    PathRule("platform/analytics/", ("tests/analytics/",)),
+    PathRule("platform/guardrails/", ("tests/test_guardrails/",)),
+    PathRule("platform/masking/", ("tests/masking/",)),
+    PathRule("deployment/entrypoints/", ("tests/entrypoints/",)),
+    PathRule("deployment/remote/", ("tests/remote/",)),
+    PathRule("platform/sandbox/", ("tests/sandbox/",)),
+    PathRule("deployment/", ("tests/deployment/",)),
+    PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
+    PathRule("platform/auth/", ("tests/platform/auth/",)),
+    PathRule("config/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
     PathRule("uv.lock", (), always_escalate=True),
@@ -65,7 +64,11 @@ def _matches(path: str, prefix: str) -> bool:
 
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
-    return parts[1] if len(parts) > 1 and parts[0] == "app" else prefix
+    if len(parts) > 1 and parts[0] == "app":
+        return parts[1]
+    if parts[0] == "deployment":
+        return "deployment"
+    return prefix
 
 
 def classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:

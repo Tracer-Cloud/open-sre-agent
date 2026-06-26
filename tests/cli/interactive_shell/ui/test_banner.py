@@ -6,8 +6,8 @@ import io
 
 from rich.console import Console
 
-from app.cli.interactive_shell.ui import banner as banner_module
-from app.cli.interactive_shell.ui import banner_state as banner_state_module
+from cli.interactive_shell.ui import banner as banner_module
+from cli.interactive_shell.ui import banner_state as banner_state_module
 
 
 def test_banner_shows_ollama_model(monkeypatch: object) -> None:
@@ -40,7 +40,7 @@ def test_get_username_falls_back_to_system_user(monkeypatch: object) -> None:
 
 def test_github_username_reads_saved_credential(monkeypatch: object) -> None:
     monkeypatch.setattr(
-        "app.integrations.store.get_integration",
+        "integrations.store.get_integration",
         lambda service: {"credentials": {"username": "octocat"}} if service == "github" else None,
     )
 
@@ -48,7 +48,7 @@ def test_github_username_reads_saved_credential(monkeypatch: object) -> None:
 
 
 def test_github_username_empty_when_not_configured(monkeypatch: object) -> None:
-    monkeypatch.setattr("app.integrations.store.get_integration", lambda _service: None)
+    monkeypatch.setattr("integrations.store.get_integration", lambda _service: None)
 
     assert banner_module._github_username() == ""
 

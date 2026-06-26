@@ -165,7 +165,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `OSRE_HELM_INTEGRATION` | | Enable Helm integration (1/true/yes) | `integrations/_catalog_impl` |
-| `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `app/core/orchestration/node/publish_findings/gitlab_writeback` |
+| `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `core/orchestration/node/publish_findings/gitlab_writeback` |
 | `OPENSRE_RELEASES_API_URL` | GitHub releases API | Override releases API endpoint | `cli/support/update` |
 
 ## Integration Credentials
@@ -228,7 +228,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |
 | `DISCORD_PUBLIC_KEY` | | Discord public key | `integrations/_catalog_impl` |
 | `DISCORD_DEFAULT_CHANNEL_ID` | | Default Discord channel | `integrations/_catalog_impl` |
-| `TELEGRAM_BOT_TOKEN` | | Telegram bot token | `watch_dog/alarms`, `scheduler/credentials` |
+| `TELEGRAM_BOT_TOKEN` | | Telegram bot token | `tools/watch_dog/alarms`, `scheduler/credentials` |
 | `TELEGRAM_DEFAULT_CHAT_ID` | | Default Telegram chat ID | `integrations/_catalog_impl` |
 | `TWILIO_ACCOUNT_SID` | | Twilio account SID | `integrations/_catalog_impl` |
 | `TWILIO_AUTH_TOKEN` | | Twilio auth token | `integrations/_catalog_impl` |

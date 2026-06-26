@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from app.core.orchestration.entrypoints import astream_investigation
-from app.core.orchestration.node.investigate import ConnectedInvestigationAgent
-from app.core.orchestration.stream_payloads import resolved_integrations_stream_payload
-from app.integrations.config_models import RedisIntegrationConfig
+from core.orchestration.entrypoints import astream_investigation
+from core.orchestration.node.investigate import ConnectedInvestigationAgent
+from core.orchestration.stream_payloads import resolved_integrations_stream_payload
+from integrations.config_models import RedisIntegrationConfig
 
 
 def _agent_run_stub(
@@ -27,15 +27,15 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+        "core.orchestration.node.resolve_integrations.resolve_integrations",
         lambda _state: {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.extract_alert.extract_alert",
+        "core.orchestration.node.extract_alert.extract_alert",
         lambda _state: {"alert_name": "test-alert", "is_noise": False},
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.plan_actions.plan_actions",
+        "core.orchestration.node.plan_actions.plan_actions",
         lambda _state: {"planned_actions": ["query_logs"], "plan_rationale": "logs first"},
     )
     monkeypatch.setattr(
@@ -44,15 +44,15 @@ async def test_astream_investigation_emits_plan_actions_before_agent(
         _agent_run_stub,
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.diagnose.diagnose",
+        "core.orchestration.node.diagnose.diagnose",
         lambda _state: {"root_cause": "unknown", "validity_score": 0.0},
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+        "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
         lambda *_a: {},
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.publish_findings.node.generate_report",
+        "core.orchestration.node.publish_findings.node.generate_report",
         lambda _state, **_kwargs: {"report": "done"},
     )
 

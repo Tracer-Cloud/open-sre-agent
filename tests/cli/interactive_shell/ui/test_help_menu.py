@@ -6,8 +6,8 @@ import io
 import re
 import sys
 
-from app.cli.interactive_shell.command_registry.types import SlashCommand
-from app.cli.interactive_shell.ui import help_menu
+from cli.interactive_shell.command_registry.types import SlashCommand
+from cli.interactive_shell.ui import help_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 

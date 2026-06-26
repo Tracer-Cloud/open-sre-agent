@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 from rich.console import Console
 
-import app.cli.interactive_shell.command_registry.agents.core as agents_shell
-from app.fleet_monitoring.coordination import BranchClaim, BranchClaims
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+import cli.interactive_shell.command_registry.agents.core as agents_shell
+from tools.fleet_monitoring.coordination import BranchClaim, BranchClaims
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @pytest.fixture

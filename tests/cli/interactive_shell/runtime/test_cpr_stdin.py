@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.runtime.cpr_stdin import (
+from cli.interactive_shell.runtime.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,
 )

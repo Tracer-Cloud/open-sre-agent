@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.domain.alerts.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
-from app.tools.SignozLogsTool import query_signoz_logs
-from app.tools.SignozMetricsTool import query_signoz_metrics
-from app.tools.SignozTracesTool import query_signoz_traces
+from core.domain.alerts.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
+from tools.SignozLogsTool import query_signoz_logs
+from tools.SignozMetricsTool import query_signoz_metrics
+from tools.SignozTracesTool import query_signoz_traces
 
 
 class _FixtureSigNozBackend:

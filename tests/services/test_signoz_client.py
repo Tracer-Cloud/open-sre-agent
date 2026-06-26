@@ -6,8 +6,8 @@ from typing import Any
 
 import httpx
 
-from app.integrations.signoz import SigNozConfig
-from app.services.signoz.client import SigNozClient
+from integrations.signoz import SigNozConfig
+from services.signoz.client import SigNozClient
 
 
 class _FakeMetricsResult:
@@ -97,7 +97,7 @@ def test_query_metrics_uses_query_api_when_configured(monkeypatch) -> None:
             }
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:8080", api_key="test-key")
     result = SigNozClient(config).query_metrics(metric_name="cpu_usage", service="payments")
@@ -130,7 +130,7 @@ def test_query_metrics_handles_empty_aggregation_series(monkeypatch) -> None:
             }
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:3301", api_key="test-key")
     result = SigNozClient(config).query_metrics(metric_name="cpu_usage")
@@ -146,7 +146,7 @@ def test_query_metrics_handles_not_found_via_metrics_api(monkeypatch) -> None:
             {"status": "error", "error": {"message": "could not find metric"}},
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:3301", api_key="test-key")
     result = SigNozClient(config).query_metrics(metric_name="cpu_usage")
@@ -192,7 +192,7 @@ def test_query_logs_uses_query_api_when_configured(monkeypatch) -> None:
             }
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:3301", api_key="test-key")
     result = SigNozClient(config).query_logs(service="api", severity="ERROR", limit=5)
@@ -245,7 +245,7 @@ def test_query_traces_uses_query_api_when_configured(monkeypatch) -> None:
             }
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:3301", api_key="test-key")
     result = SigNozClient(config).query_traces(service="api", error_only=True, limit=5)
@@ -289,7 +289,7 @@ def test_query_trace_summary_uses_query_api_when_configured(monkeypatch) -> None
             }
         )
 
-    monkeypatch.setattr("app.services.signoz.client.httpx.post", _fake_post)
+    monkeypatch.setattr("services.signoz.client.httpx.post", _fake_post)
 
     config = SigNozConfig(url="http://localhost:3301", api_key="test-key")
     result = SigNozClient(config).query_trace_summary(service="api")

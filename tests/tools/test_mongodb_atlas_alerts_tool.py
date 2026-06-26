@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.MongoDBAtlasAlertsTool import get_mongodb_atlas_alerts
 from tests.tools.conftest import BaseToolContract
+from tools.MongoDBAtlasAlertsTool import get_mongodb_atlas_alerts
 
 
 class TestMongoDBAtlasAlertsToolContract(BaseToolContract):
@@ -26,7 +26,7 @@ def test_run_happy_path() -> None:
         "total_alerts": 1,
         "alerts": [{"id": "alert-1", "event_type": "OUTSIDE_METRIC_THRESHOLD", "status": "OPEN"}],
     }
-    with patch("app.tools.MongoDBAtlasAlertsTool.get_alerts", return_value=fake_result):
+    with patch("tools.MongoDBAtlasAlertsTool.get_alerts", return_value=fake_result):
         result = get_mongodb_atlas_alerts(
             api_public_key="pub", api_private_key="priv", project_id="proj"
         )
@@ -36,7 +36,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.MongoDBAtlasAlertsTool.get_alerts",
+        "tools.MongoDBAtlasAlertsTool.get_alerts",
         return_value={"source": "mongodb_atlas", "available": False, "error": "auth failed"},
     ):
         result = get_mongodb_atlas_alerts(

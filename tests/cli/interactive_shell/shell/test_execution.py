@@ -7,7 +7,7 @@ from typing import NoReturn
 
 import pytest
 
-from app.cli.interactive_shell.shell.execution import ShellExecutionResult, execute_shell_command
+from cli.interactive_shell.shell.execution import ShellExecutionResult, execute_shell_command
 
 
 def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -19,7 +19,7 @@ def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.Mon
             stderr="partial err\n",
         )
 
-    monkeypatch.setattr("app.cli.interactive_shell.shell.execution.subprocess.run", _raise)
+    monkeypatch.setattr("cli.interactive_shell.shell.execution.subprocess.run", _raise)
 
     result = execute_shell_command(
         command="ignored",
@@ -50,7 +50,7 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
             stderr="err\n",
         )
 
-    monkeypatch.setattr("app.cli.interactive_shell.shell.execution.subprocess.run", _raise)
+    monkeypatch.setattr("cli.interactive_shell.shell.execution.subprocess.run", _raise)
 
     result = execute_shell_command(
         command="sleep 999",

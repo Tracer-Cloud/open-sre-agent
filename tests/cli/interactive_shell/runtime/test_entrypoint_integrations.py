@@ -11,8 +11,8 @@ from typing import Any
 
 from rich.console import Console
 
-from app.cli.interactive_shell.runtime import entrypoint
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime import entrypoint
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _console() -> Console:
@@ -21,7 +21,7 @@ def _console() -> Console:
 
 def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {"gitlab": {}, "datadog": {}},
     )
     session = ReplSession()
@@ -33,7 +33,7 @@ def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -
 
 def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         dict,
     )
     session = ReplSession()
@@ -45,7 +45,7 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         lambda _state: resolved,
     )
     session = ReplSession()
@@ -61,7 +61,7 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
         return {"github": {}}
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -78,7 +78,7 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
         return {}
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -93,11 +93,11 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
     quiet_calls: list[str] = []
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations",
+        "core.orchestration.node.resolve_integrations.resolve_integrations",
         lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         lambda _state: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
@@ -122,7 +122,7 @@ def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
 
 def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {"datadog": {}},
     )
     resolve_calls: list[str] = []
@@ -132,7 +132,7 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
         return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "app.core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -168,7 +168,7 @@ def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
         raise RuntimeError("catalog blew up")
 
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         _boom,
     )
     session = ReplSession()
@@ -181,7 +181,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
     """On an unexpected gate error we must NOT fail open into the REPL unless an
     explicit bypass applies."""
     monkeypatch.setattr(
-        "app.cli.first_launch_github.should_require_github_login",
+        "cli.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: False)
@@ -191,7 +191,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
 
 def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "app.cli.first_launch_github.should_require_github_login",
+        "cli.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: True)

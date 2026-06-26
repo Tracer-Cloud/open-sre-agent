@@ -1,7 +1,7 @@
 """Programmatic parity validation between the Click CLI and the REPL slash commands."""
 
-from app.cli.__main__ import cli
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS
+from cli.__main__ import cli
+from cli.interactive_shell.command_registry import SLASH_COMMANDS
 
 # Commands that are intentionally excluded from the REPL (e.g. they don't make sense in session).
 # 'agent' is excluded because the REPL itself is the agent entry point.

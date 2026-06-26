@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.sentry_mcp import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.sentry_mcp import (
     DEFAULT_SENTRY_MCP_URL,
     SentryMCPConfig,
     build_sentry_mcp_config,
@@ -131,7 +131,7 @@ class TestValidation:
             {"name": "analyze_issue_with_seer", "description": "Seer", "input_schema": {}},
         ]
         with patch(
-            "app.integrations.sentry_mcp.list_sentry_mcp_tools",
+            "integrations.sentry_mcp.list_sentry_mcp_tools",
             return_value=fake_tools,
         ):
             result = validate_sentry_mcp_config(config)
@@ -142,7 +142,7 @@ class TestValidation:
     def test_validation_fails_when_no_tools(self) -> None:
         config = build_sentry_mcp_config({"auth_token": "sntrytok_secret"})
         with patch(
-            "app.integrations.sentry_mcp.list_sentry_mcp_tools",
+            "integrations.sentry_mcp.list_sentry_mcp_tools",
             return_value=[],
         ):
             result = validate_sentry_mcp_config(config)
@@ -152,7 +152,7 @@ class TestValidation:
     def test_validation_handles_exception(self) -> None:
         config = build_sentry_mcp_config({"auth_token": "sntrytok_secret"})
         with patch(
-            "app.integrations.sentry_mcp.list_sentry_mcp_tools",
+            "integrations.sentry_mcp.list_sentry_mcp_tools",
             side_effect=RuntimeError("boom"),
         ):
             result = validate_sentry_mcp_config(config)
@@ -190,7 +190,7 @@ def test_classify_sentry_mcp_credentials() -> None:
             },
         }
     ]
-    from app.core.orchestration.node.investigate.tools import availability_view
+    from core.orchestration.node.investigate.tools import availability_view
 
     resolved = _classify_integrations(records)
     assert "sentry_mcp" in resolved

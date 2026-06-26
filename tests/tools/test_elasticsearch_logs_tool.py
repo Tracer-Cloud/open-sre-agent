@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.ElasticsearchLogsTool import ElasticsearchLogsTool
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.ElasticsearchLogsTool import ElasticsearchLogsTool
 
 
 class TestElasticsearchLogsToolContract(BaseToolContract):
@@ -31,7 +31,7 @@ def test_extract_params_maps_fields() -> None:
 
 def test_run_returns_unavailable_when_no_client() -> None:
     tool = ElasticsearchLogsTool()
-    with patch("app.tools.ElasticsearchLogsTool.make_client", return_value=None):
+    with patch("tools.ElasticsearchLogsTool.make_client", return_value=None):
         result = tool.run(query="test")
     assert result["available"] is False
 
@@ -47,7 +47,7 @@ def test_run_happy_path() -> None:
         ],
         "total": 2,
     }
-    with patch("app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
+    with patch("tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
         result = tool.run(query="*", url="http://localhost:9200")
     assert result["available"] is True
     assert len(result["logs"]) == 2
@@ -58,7 +58,7 @@ def test_run_empty_logs() -> None:
     tool = ElasticsearchLogsTool()
     mock_client = MagicMock()
     mock_client.search_logs.return_value = {"success": True, "logs": [], "total": 0}
-    with patch("app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
+    with patch("tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
         result = tool.run(query="*", url="http://localhost:9200")
     assert result["available"] is True
     assert result["logs"] == []
@@ -68,7 +68,7 @@ def test_run_api_error() -> None:
     tool = ElasticsearchLogsTool()
     mock_client = MagicMock()
     mock_client.search_logs.return_value = {"success": False, "error": "Index not found"}
-    with patch("app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
+    with patch("tools.ElasticsearchLogsTool.make_client", return_value=mock_client):
         result = tool.run(query="*", url="http://localhost:9200")
     assert result["available"] is False
 
@@ -100,7 +100,7 @@ def test_run_forwards_basic_auth_credentials_to_make_client() -> None:
     mock_client.search_logs.return_value = {"success": True, "logs": [], "total": 0}
 
     with patch(
-        "app.tools.ElasticsearchLogsTool.make_client", return_value=mock_client
+        "tools.ElasticsearchLogsTool.make_client", return_value=mock_client
     ) as mock_make_client:
         tool.run(
             query="*",
@@ -117,11 +117,11 @@ def test_run_forwards_basic_auth_credentials_to_make_client() -> None:
 
 def test_make_client_forwards_basic_auth_to_elasticsearch_config() -> None:
     """make_client must pass username/password into ElasticsearchConfig."""
-    from app.tools.ElasticsearchLogsTool._client import make_client
+    from tools.ElasticsearchLogsTool._client import make_client
 
     with (
-        patch("app.tools.ElasticsearchLogsTool._client.ElasticsearchClient") as mock_client_cls,
-        patch("app.tools.ElasticsearchLogsTool._client.ElasticsearchConfig") as mock_config_cls,
+        patch("tools.ElasticsearchLogsTool._client.ElasticsearchClient") as mock_client_cls,
+        patch("tools.ElasticsearchLogsTool._client.ElasticsearchConfig") as mock_config_cls,
     ):
         make_client(
             url="https://my-cluster.example.com",

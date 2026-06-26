@@ -10,7 +10,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from app.tools.registry import get_registered_tools
+from tools.registry import get_registered_tools
 
 # Keys stripped by the strictest investigation schema normalizer in the tree today.
 # When a new adapter is stricter, extend this set and the assertions below together.

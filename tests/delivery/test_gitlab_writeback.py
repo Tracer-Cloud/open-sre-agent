@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.orchestration.node.publish_findings.gitlab_writeback import (
+from core.orchestration.node.publish_findings.gitlab_writeback import (
     _build_mr_note,
     post_gitlab_mr_writeback,
 )
@@ -50,7 +50,7 @@ def test_no_op_when_env_flag_off(state_with_gitlab):
     with (
         patch.dict(os.environ, {"GITLAB_MR_WRITEBACK": "false"}),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
         ) as mock_post,
     ):
         post_gitlab_mr_writeback(state_with_gitlab, "report")
@@ -62,7 +62,7 @@ def test_no_op_when_mr_iid_missing():
     with (
         patch.dict(os.environ, {"GITLAB_MR_WRITEBACK": "true"}),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
         ) as mock_post,
     ):
         post_gitlab_mr_writeback(state, "report")
@@ -74,7 +74,7 @@ def test_no_op_when_project_id_missing():
     with (
         patch.dict(os.environ, {"GITLAB_MR_WRITEBACK": "true"}),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
         ) as mock_post,
     ):
         post_gitlab_mr_writeback(state, "report")
@@ -85,16 +85,14 @@ def test_failure_does_not_propagate(state_with_gitlab):
     with (
         patch.dict(os.environ, {"GITLAB_MR_WRITEBACK": "true"}),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             side_effect=RuntimeError("network error"),
         ),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
+            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
-        patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.logger"
-        ) as mock_logger,
+        patch("core.orchestration.node.publish_findings.gitlab_writeback.logger") as mock_logger,
     ):
         post_gitlab_mr_writeback(state_with_gitlab, "report")
         mock_logger.warning.assert_called_once()
@@ -105,11 +103,11 @@ def test_happy_path_calls_post_mr_note(state_with_gitlab):
     with (
         patch.dict(os.environ, {"GITLAB_MR_WRITEBACK": "true"}),
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
+            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
             return_value=mock_config,
         ) as mock_build,
         patch(
-            "app.core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
+            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note"
         ) as mock_post,
     ):
         post_gitlab_mr_writeback(state_with_gitlab, "the report")

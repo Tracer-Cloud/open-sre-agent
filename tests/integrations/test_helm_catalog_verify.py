@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.catalog import classify_integrations, resolve_effective_integrations
-from app.integrations.models import HelmIntegrationConfig
-from app.integrations.verify import verify_integrations
-from app.services.helm.verifier import verify_helm as _verify_helm
+from integrations.catalog import classify_integrations, resolve_effective_integrations
+from integrations.models import HelmIntegrationConfig
+from integrations.verify import verify_integrations
+from services.helm.verifier import verify_helm as _verify_helm
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +70,7 @@ def test_classify_helm_accepts_alternate_credential_keys() -> None:
 def test_resolve_effective_integrations_includes_helm_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv("OSRE_HELM_INTEGRATION", "1")
     monkeypatch.setenv("HELM_PATH", "helm")
     monkeypatch.setenv("HELM_KUBE_CONTEXT", "kind-test")
@@ -98,8 +98,8 @@ def test_helm_integration_config_validator_strips_whitespace() -> None:
 
 
 def test_verify_helm_passes_with_working_cli(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.probes import ProbeResult
-    from app.services.helm.client import HelmClient
+    from integrations.probes import ProbeResult
+    from services.helm.client import HelmClient
 
     monkeypatch.setattr(
         HelmClient,
@@ -117,8 +117,8 @@ def test_verify_helm_passes_with_working_cli(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_verify_integrations_dispatches_to_helm(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.probes import ProbeResult
-    from app.services.helm.client import HelmClient
+    from integrations.probes import ProbeResult
+    from services.helm.client import HelmClient
 
     monkeypatch.setattr(
         HelmClient,
@@ -128,7 +128,7 @@ def test_verify_integrations_dispatches_to_helm(monkeypatch: pytest.MonkeyPatch)
         ),
     )
     monkeypatch.setattr(
-        "app.integrations.catalog.load_integrations",
+        "integrations.catalog.load_integrations",
         lambda: [
             {
                 "id": "helm-1",

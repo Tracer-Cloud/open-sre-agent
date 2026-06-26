@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.core.domain.stream import StreamEvent
-from app.remote.client import (
+from core.domain.stream import StreamEvent
+from deployment.remote.client import (
     DEFAULT_PORT,
     PreflightResult,
     RemoteAgentClient,
@@ -58,7 +58,7 @@ class TestHealth:
         mock_resp.json.return_value = health_data
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -77,7 +77,7 @@ class TestHealth:
             "Server Error", request=MagicMock(), response=MagicMock()
         )
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -94,7 +94,7 @@ class TestHealth:
         mock_resp.json.side_effect = ValueError("not json")
         mock_resp.text = "ok"
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -113,7 +113,7 @@ class TestCreateThread:
         mock_resp.json.return_value = {"thread_id": "t-123"}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -130,7 +130,7 @@ class TestCreateThread:
         mock_resp.json.return_value = {}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -171,7 +171,7 @@ class TestProbeHealth:
             ],
         }
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -199,7 +199,7 @@ class TestProbeHealth:
         version_resp.status_code = 404
         version_resp.json.return_value = {}
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -226,7 +226,7 @@ class TestProbeHealth:
         version_resp.status_code = 404
         version_resp.json.return_value = {}
 
-        with patch("app.remote.client.httpx.Client") as mock_client_cls:
+        with patch("deployment.remote.client.httpx.Client") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.__enter__ = MagicMock(return_value=mock_client)
             mock_client.__exit__ = MagicMock(return_value=False)
@@ -425,7 +425,7 @@ class TestPreflight:
         http_client = MagicMock()
         http_client.get.side_effect = RuntimeError("version down")
 
-        with patch("app.remote.client.report_remote_exception") as report:
+        with patch("deployment.remote.client.report_remote_exception") as report:
             result = client._fetch_remote_version(http_client, "0.1.0")
 
         assert result == ("0.1.0", "/ok")
@@ -438,7 +438,7 @@ class TestPreflight:
         http_client = MagicMock()
         http_client.get.side_effect = RuntimeError("deep down")
 
-        with patch("app.remote.client.report_remote_exception") as report:
+        with patch("deployment.remote.client.report_remote_exception") as report:
             result = client._fetch_deep_checks(http_client)
 
         assert result == []
@@ -451,7 +451,7 @@ class TestPreflight:
         http_client = MagicMock()
         http_client.get.side_effect = RuntimeError("probe down")
 
-        with patch("app.remote.client.report_remote_exception") as report:
+        with patch("deployment.remote.client.report_remote_exception") as report:
             assert client._endpoint_exists(http_client, "/investigate") is False
 
         report.assert_called_once()
@@ -462,7 +462,7 @@ class TestPreflight:
         client = RemoteAgentClient("http://host:2024")
         with (
             patch.object(client, "health", side_effect=httpx.TimeoutException("timed out")),
-            patch("app.remote.client.report_remote_exception") as report,
+            patch("deployment.remote.client.report_remote_exception") as report,
         ):
             result = client.preflight()
 
@@ -477,7 +477,7 @@ class TestPreflight:
         client = RemoteAgentClient("http://host:2024")
         with (
             patch.object(client, "health", side_effect=httpx.ConnectError("refused")),
-            patch("app.remote.client.report_remote_exception") as report,
+            patch("deployment.remote.client.report_remote_exception") as report,
         ):
             result = client.preflight()
 
@@ -492,7 +492,7 @@ class TestPreflight:
         client = RemoteAgentClient("http://host:2024")
         with (
             patch.object(client, "health", side_effect=RuntimeError("bad shape")),
-            patch("app.remote.client.report_remote_exception") as report,
+            patch("deployment.remote.client.report_remote_exception") as report,
         ):
             result = client.preflight()
 

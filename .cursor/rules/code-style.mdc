@@ -15,7 +15,7 @@ alwaysApply: true
 ## Python Conventions
 
 - Use `from __future__ import annotations` for forward references
-- Absolute imports only: `from app.tools.base import BaseTool`
+- Absolute imports only: `from tools.base import BaseTool`
 - Type hints on all function parameters and return types
 - `TypedDict` for graph state, Pydantic `StrictConfigModel` for configs
 - One clear purpose per file (separation of concerns)

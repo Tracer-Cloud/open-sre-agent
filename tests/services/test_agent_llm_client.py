@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.services.agent_llm_client import (
+from services.agent_llm_client import (
     AnthropicAgentClient,
     BedrockAgentClient,
     OpenAIAgentClient,
@@ -151,7 +151,7 @@ def test_internal_server_error_without_model_data_is_retried(
 ) -> None:
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -177,11 +177,11 @@ def test_anthropic_rate_limit_error_is_retried_then_raises(
     """Rate-limit is transient by design — retry with backoff like 500s do.
     Without retry, a single 429 mid-investigation kills the whole case.
     """
-    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from services.agent_llm_client import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -208,7 +208,7 @@ def test_anthropic_credit_balance_too_low_raises_LLMCreditExhaustedError(
     Distinguish billing exhaustion (fatal, no retry) from real schema errors
     so the bench runner halts on first occurrence instead of wrapping into
     a generic RuntimeError that the cell loop catches as a per-cell failure."""
-    from app.utils.llm_retry import LLMCreditExhaustedError
+    from services.llm_retry import LLMCreditExhaustedError
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
@@ -242,7 +242,7 @@ def test_openai_insufficient_quota_raises_LLMCreditExhaustedError(
     though it lands in our RateLimitError handler (which normally retries),
     the credit check must short-circuit to LLMCreditExhaustedError. This is
     the exact scenario that burned 1h42m on the June-3 run #2."""
-    from app.utils.llm_retry import LLMCreditExhaustedError
+    from services.llm_retry import LLMCreditExhaustedError
 
     fake_openai = _install_fake_openai(monkeypatch)
 
@@ -286,7 +286,7 @@ def test_anthropic_rate_limit_honors_retry_after_header(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "app.services.agent_llm_client.time.sleep",
+        "services.agent_llm_client.time.sleep",
         sleeps.append,
     )
 
@@ -321,11 +321,11 @@ def test_bedrock_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Bedrock shares the Anthropic invoke path; 429 retry applies the same way."""
-    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from services.agent_llm_client import _RETRY_MAX_ATTEMPTS
 
     fake_anthropic = _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("AWS_REGION", "us-west-2")
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -564,10 +564,10 @@ def test_openai_rate_limit_error_is_retried_then_raises(
     Without retry, a single 429 mid-investigation kills the whole case (matters
     especially on tight OpenAI tiers like gpt-4o's 30k TPM).
     """
-    from app.services.agent_llm_client import _RETRY_MAX_ATTEMPTS
+    from services.agent_llm_client import _RETRY_MAX_ATTEMPTS
 
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -601,7 +601,7 @@ def test_openai_rate_limit_honors_body_text_hint(
 
     sleeps: list[float] = []
     monkeypatch.setattr(
-        "app.services.agent_llm_client.time.sleep",
+        "services.agent_llm_client.time.sleep",
         sleeps.append,
     )
 
@@ -635,7 +635,7 @@ def test_openai_permission_denied_error_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_openai = _install_fake_openai(monkeypatch)
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -695,7 +695,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
 ) -> None:
     _install_fake_anthropic(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr("app.services.agent_llm_client.time.sleep", lambda _: None)
+    monkeypatch.setattr("services.agent_llm_client.time.sleep", lambda _: None)
 
     call_count = 0
 
@@ -718,7 +718,7 @@ def test_unrelated_type_error_is_retried_and_wrapped(
 def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.services import agent_llm_client as alc
+    from services import agent_llm_client as alc
 
     captured: dict[str, object] = {}
 
@@ -772,7 +772,7 @@ def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
 def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.services.agent_llm_client import (
+    from services.agent_llm_client import (
         CLIBackedAgentClient,
         get_agent_llm,
         reset_agent_client,
@@ -790,7 +790,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     """CLIBackedAgentClient correctly parses a JSON tool_calls response."""
     import types as _types
 
-    from app.services.agent_llm_client import CLIBackedAgentClient
+    from services.agent_llm_client import CLIBackedAgentClient
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -816,11 +816,11 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
     # Patch CLIBackedLLMClient.invoke to return a known JSON response.
     import unittest.mock as mock
 
-    from app.services.llm_client import LLMResponse
+    from services.llm_client import LLMResponse
 
     json_response = '{"tool_calls": [{"id": "c1", "name": "my_tool", "input": {"x": 1}}]}'
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=json_response),
     ):
         result = client.invoke([{"role": "user", "content": "investigate"}])
@@ -834,7 +834,7 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
 
 def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() -> None:
     """Assistant history must retain tool_calls JSON for multi-turn CLI prompts."""
-    from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
+    from services.agent_llm_client import CLIBackedAgentClient, ToolCall
 
     msg = CLIBackedAgentClient.build_assistant_message(
         "",
@@ -848,7 +848,7 @@ def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() ->
 
 def test_try_parse_tool_call_json_uses_raw_decode_not_greedy_brace_span() -> None:
     """Trailing brace-containing prose after valid JSON must not drop tool_calls."""
-    from app.services import agent_llm_client as alc
+    from services import agent_llm_client as alc
 
     text = '{"tool_calls": [{"id": "a", "name": "t1", "input": {}}]} Here\'s context: {not json}'
     parsed = alc._try_parse_tool_call_json(text)
@@ -859,7 +859,7 @@ def test_try_parse_tool_call_json_uses_raw_decode_not_greedy_brace_span() -> Non
 
 def test_try_parse_tool_call_json_recovers_when_unfenced_preamble_precedes_json() -> None:
     """Unfenced prose before JSON should still allow tool_calls extraction."""
-    from app.services import agent_llm_client as alc
+    from services import agent_llm_client as alc
 
     text = 'Reasoning preamble {draft}\n{"tool_calls": [{"id": "a", "name": "t1", "input": {}}]}'
     parsed = alc._try_parse_tool_call_json(text)
@@ -873,9 +873,9 @@ def test_cli_backed_agent_client_reuses_single_cli_llm_client() -> None:
     import types as _types
     import unittest.mock as mock
 
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
-    from app.services.agent_llm_client import CLIBackedAgentClient
-    from app.services.llm_client import LLMResponse
+    from integrations.llm_cli.runner import CLIBackedLLMClient
+    from services.agent_llm_client import CLIBackedAgentClient
+    from services.llm_client import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -915,8 +915,8 @@ def test_cli_backed_agent_client_plain_text_response() -> None:
     import types as _types
     import unittest.mock as mock
 
-    from app.services.agent_llm_client import CLIBackedAgentClient
-    from app.services.llm_client import LLMResponse
+    from services.agent_llm_client import CLIBackedAgentClient
+    from services.llm_client import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -936,7 +936,7 @@ def test_cli_backed_agent_client_plain_text_response() -> None:
     client = CLIBackedAgentClient(fake_adapter, model=None)
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content="The root cause is a memory leak."),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])
@@ -950,8 +950,8 @@ def test_cli_backed_agent_client_invalid_tool_json_falls_back_to_text_response()
     import types as _types
     import unittest.mock as mock
 
-    from app.services.agent_llm_client import CLIBackedAgentClient
-    from app.services.llm_client import LLMResponse
+    from services.agent_llm_client import CLIBackedAgentClient
+    from services.llm_client import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -972,7 +972,7 @@ def test_cli_backed_agent_client_invalid_tool_json_falls_back_to_text_response()
     raw = '{"tool_calls":"not-a-list"}'
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=raw),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])
@@ -986,8 +986,8 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
     import types as _types
     import unittest.mock as mock
 
-    from app.services.agent_llm_client import CLIBackedAgentClient
-    from app.services.llm_client import LLMResponse
+    from services.agent_llm_client import CLIBackedAgentClient
+    from services.llm_client import LLMResponse
 
     fake_adapter = _types.SimpleNamespace(
         name="codex",
@@ -1008,7 +1008,7 @@ def test_cli_backed_agent_client_filtered_tool_calls_fall_back_to_text_response(
     raw = '{"tool_calls":[{"id":"c1","name":"   ","input":{"x":1}}]}'
 
     with mock.patch(
-        "app.integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
+        "integrations.llm_cli.runner.CLIBackedLLMClient.invoke",
         return_value=LLMResponse(content=raw),
     ):
         result = client.invoke([{"role": "user", "content": "summarise"}])
@@ -1150,7 +1150,7 @@ def test_bedrock_converse_requires_region_env(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
     _stub_boto3_converse(monkeypatch)
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     with pytest.raises(RuntimeError, match="Bedrock requires AWS_REGION or AWS_DEFAULT_REGION"):
         BedrockConverseAgentClient(model=_MISTRAL_MODEL)
@@ -1167,7 +1167,7 @@ def test_bedrock_converse_invoke_parses_tool_use(monkeypatch: pytest.MonkeyPatch
         ),
     )
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
         messages=[{"role": "user", "content": [{"text": "hi"}]}]
@@ -1186,7 +1186,7 @@ def test_get_agent_llm_routes_non_anthropic_bedrock_to_converse(
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     _stub_boto3_converse(monkeypatch)
 
-    from app.services.agent_llm_client import (
+    from services.agent_llm_client import (
         BedrockConverseAgentClient,
         get_agent_llm,
         reset_agent_client,
@@ -1202,7 +1202,7 @@ def test_get_agent_llm_routes_anthropic_bedrock_to_sdk(monkeypatch: pytest.Monke
     monkeypatch.setenv("BEDROCK_REASONING_MODEL", "us.anthropic.claude-sonnet-4-6")
     monkeypatch.setenv("AWS_REGION", "us-east-1")
 
-    from app.services.agent_llm_client import BedrockAgentClient, get_agent_llm, reset_agent_client
+    from services.agent_llm_client import BedrockAgentClient, get_agent_llm, reset_agent_client
 
     reset_agent_client()
     assert isinstance(get_agent_llm(), BedrockAgentClient)
@@ -1236,7 +1236,7 @@ def test_bedrock_converse_throttling_is_retried(monkeypatch: pytest.MonkeyPatch)
         ),
     )
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     result = BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(
         messages=[{"role": "user", "content": [{"text": "hi"}]}]
@@ -1270,7 +1270,7 @@ def test_bedrock_converse_throttling_all_retries_exhausted_raises(
         ),
     )
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     with pytest.raises(RuntimeError, match="rate limit"):
         BedrockConverseAgentClient(model=_MISTRAL_MODEL).invoke(

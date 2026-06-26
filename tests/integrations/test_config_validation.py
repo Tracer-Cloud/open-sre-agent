@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.config_models import SnowflakeIntegrationConfig
-from app.integrations.github_mcp import (
+from integrations.config_models import SnowflakeIntegrationConfig
+from integrations.github_mcp import (
     _remote_github_mcp_session_url,
     build_github_mcp_config,
 )
-from app.integrations.models import (
+from integrations.models import (
     AWSIntegrationConfig,
     BetterStackIntegrationConfig,
     CoralogixIntegrationConfig,
@@ -16,10 +16,10 @@ from app.integrations.models import (
     SlackWebhookConfig,
     TracerIntegrationConfig,
 )
-from app.integrations.sentry import build_sentry_config
-from app.integrations.snowflake import classify as classify_snowflake
-from app.services.datadog.client import DatadogConfig
-from app.services.grafana.config import GrafanaAccountConfig
+from integrations.sentry import build_sentry_config
+from integrations.snowflake import classify as classify_snowflake
+from services.datadog.client import DatadogConfig
+from services.grafana.config import GrafanaAccountConfig
 
 
 def test_betterstack_config_rejects_unknown_fields_with_suggestion() -> None:
@@ -256,7 +256,7 @@ def test_tracer_config_strips_bearer_prefix() -> None:
 
 
 def test_posthog_config_rejects_unknown_fields_with_suggestion() -> None:
-    from app.integrations.posthog import build_posthog_config
+    from integrations.posthog import build_posthog_config
 
     with pytest.raises(ValidationError, match="proejct_id.*project_id"):
         build_posthog_config(

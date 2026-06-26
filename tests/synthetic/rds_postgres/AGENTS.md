@@ -86,4 +86,4 @@ when touching that surface rather than extending the pattern.
 | `scoring.py` | Pure scoring: `score_result`, keyword matching, gates (Phase 3) |
 | `observations.py` | Trajectory metrics, observation builder, artifact writer, console rendering |
 | `reporting.py` | Cross-axis gap report (Phase 3) |
-| `run_suite.py` | Thin orchestration: arg parsing, loop, seam to `app.core.orchestration.entrypoints` |
+| `run_suite.py` | Thin orchestration: arg parsing, loop, seam to `core.orchestration.entrypoints` |

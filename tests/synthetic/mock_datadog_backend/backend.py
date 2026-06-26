@@ -2,7 +2,7 @@
 
 The Protocol defines the minimal Datadog surface the Kubernetes investigation
 agent uses.  FixtureDatadogBackend satisfies it by serving scenario fixture
-data in the exact shape the Datadog tools under ``app/tools/DataDog*/`` return.
+data in the exact shape the Datadog tools under ``tools/DataDog*/`` return.
 
 Usage
 -----
@@ -42,7 +42,7 @@ _ERROR_KEYWORDS = (
 class DatadogBackend(Protocol):
     """Minimal Datadog interface used by the Kubernetes investigation agent.
 
-    Two methods — one per evidence source under ``app/tools/DataDog*/``:
+    Two methods — one per evidence source under ``tools/DataDog*/``:
         query_logs     → DataDogLogsTool response shape
         query_monitors → DataDogMonitorsTool response shape
     """

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.integrations._verifiers_loader import register_all_verifiers
-from app.integrations.registry import (
+from integrations._verifiers_loader import register_all_verifiers
+from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     INTEGRATION_SPECS,
     SKIP_CLASSIFIED_SERVICES,
@@ -11,7 +11,7 @@ from app.integrations.registry import (
     resolve_management_service,
     service_key,
 )
-from app.integrations.verification import list_verifiers
+from integrations.verification import list_verifiers
 
 register_all_verifiers()
 
@@ -50,12 +50,12 @@ def test_every_setup_spec_has_handler() -> None:
     # #2537: a spec with `setup_order` but no matching `_HANDLERS` entry lets
     # Click accept a service that cmd_setup cannot dispatch. Anchor the
     # inverse-drift here.
-    from app.integrations.cli import _HANDLERS
+    from integrations.cli import _HANDLERS
 
     missing = [svc for svc in SUPPORTED_SETUP_SERVICES if svc not in _HANDLERS]
     assert not missing, (
         f"Registry declares setup_order for {missing} but no _HANDLERS entry "
-        "in app/integrations/cli.py. These services are silently dropped from "
+        "in integrations/cli.py. These services are silently dropped from "
         "_SETUP_SERVICES, so `opensre integrations setup <svc>` will reject them "
         "with the 'Usage: setup <service>' error."
     )

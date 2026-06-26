@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from app.services.tracer_client.tracer_logs import TracerLogsMixin
+from services.tracer_client.tracer_logs import TracerLogsMixin
 
 
 class DummyTracerClient(TracerLogsMixin):

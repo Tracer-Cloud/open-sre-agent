@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @pytest.fixture

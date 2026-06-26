@@ -1,4 +1,4 @@
-"""Direct unit tests for app/services/cloudwatch_client.py service functions.
+"""Direct unit tests for services/cloudwatch_client.py service functions.
 
 Tests cover get_metric_statistics, filter_log_events, and get_log_events
 with mocked boto3 client and credential helpers. Tool-registration
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from app.services.cloudwatch_client import (
+from services.cloudwatch_client import (
     filter_log_events,
     get_log_events,
     get_metric_statistics,
@@ -25,21 +25,21 @@ from app.services.cloudwatch_client import (
 
 @pytest.fixture(autouse=True)
 def _mock_creds():
-    with patch("app.services.cloudwatch_client.require_aws_credentials", return_value=None):
+    with patch("services.cloudwatch_client.require_aws_credentials", return_value=None):
         yield
 
 
 @pytest.fixture()
 def mock_cw_client():
     client = MagicMock()
-    with patch("app.services.cloudwatch_client._get_cloudwatch_client", return_value=client):
+    with patch("services.cloudwatch_client._get_cloudwatch_client", return_value=client):
         yield client
 
 
 @pytest.fixture()
 def mock_logs_client():
     client = MagicMock()
-    with patch("app.services.cloudwatch_client._get_cloudwatch_logs_client", return_value=client):
+    with patch("services.cloudwatch_client._get_cloudwatch_logs_client", return_value=client):
         yield client
 
 
@@ -99,7 +99,7 @@ class TestGetMetricStatistics:
         assert "AccessDenied" in result["error"]
 
     def test_returns_error_when_no_client(self):
-        with patch("app.services.cloudwatch_client._get_cloudwatch_client", return_value=None):
+        with patch("services.cloudwatch_client._get_cloudwatch_client", return_value=None):
             result = get_metric_statistics(
                 namespace="AWS/Batch",
                 metric_name="CPUUtilization",
@@ -111,7 +111,7 @@ class TestGetMetricStatistics:
 
     def test_returns_error_when_credentials_missing(self):
         with patch(
-            "app.services.cloudwatch_client.require_aws_credentials",
+            "services.cloudwatch_client.require_aws_credentials",
             return_value={"success": False, "error": "Missing AWS credentials"},
         ):
             result = get_metric_statistics(
@@ -170,14 +170,14 @@ class TestFilterLogEvents:
         assert "ResourceNotFoundException" in result["error"]
 
     def test_returns_error_when_no_client(self):
-        with patch("app.services.cloudwatch_client._get_cloudwatch_logs_client", return_value=None):
+        with patch("services.cloudwatch_client._get_cloudwatch_logs_client", return_value=None):
             result = filter_log_events(log_group_name="/aws/batch/job")
         assert result["success"] is False
         assert "boto3 not available" in result["error"]
 
     def test_returns_error_when_credentials_missing(self):
         with patch(
-            "app.services.cloudwatch_client.require_aws_credentials",
+            "services.cloudwatch_client.require_aws_credentials",
             return_value={"success": False, "error": "Missing AWS credentials"},
         ):
             result = filter_log_events(log_group_name="/aws/batch/job")
@@ -235,7 +235,7 @@ class TestGetLogEvents:
         assert "ResourceNotFoundException" in result["error"]
 
     def test_returns_error_when_no_client(self):
-        with patch("app.services.cloudwatch_client._get_cloudwatch_logs_client", return_value=None):
+        with patch("services.cloudwatch_client._get_cloudwatch_logs_client", return_value=None):
             result = get_log_events(
                 log_group_name="/aws/batch/job",
                 log_stream_name="stream-1",
@@ -245,7 +245,7 @@ class TestGetLogEvents:
 
     def test_returns_error_when_credentials_missing(self):
         with patch(
-            "app.services.cloudwatch_client.require_aws_credentials",
+            "services.cloudwatch_client.require_aws_credentials",
             return_value={"success": False, "error": "Missing AWS credentials"},
         ):
             result = get_log_events(

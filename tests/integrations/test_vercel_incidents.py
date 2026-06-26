@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from app.integrations import vercel_incidents
-from app.remote.vercel_poller import VercelInvestigationCandidate, VercelResolutionError
-from app.services.vercel import VercelConfig
+from deployment.remote.vercel_poller import VercelInvestigationCandidate, VercelResolutionError
+from integrations import vercel_incidents
+from services.vercel import VercelConfig
 
 
 class _Prompt:
@@ -59,15 +59,15 @@ def _candidate(
 
 def test_cmd_vercel_incidents_json_outputs_incidents(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.resolve_vercel_config",
+        "integrations.vercel_incidents.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         lambda **_kwargs: [_candidate()],
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": True}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": True}
     )
 
     vercel_incidents.cmd_vercel_incidents(limit=5)
@@ -85,13 +85,13 @@ def test_cmd_vercel_incidents_exits_on_api_error(monkeypatch, capsys) -> None:
         lambda: [_project()],
     )
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         lambda **_kwargs: (_ for _ in ()).throw(
             VercelResolutionError("Failed to list Vercel projects: HTTP 403: invalidToken")
         ),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
     )
     monkeypatch.setattr(
         vercel_incidents.questionary,
@@ -141,7 +141,7 @@ def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
     answers: list[object] = ["proj_123", "_exit"]
     captured: dict[str, Any] = {}
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
+        "cli.interactive_shell.data_store.context._root_obj", lambda: {"json": False}
     )
     monkeypatch.setattr(
         vercel_incidents,
@@ -157,7 +157,7 @@ def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
         return [_candidate()]
 
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         _fake_collect,
     )
     monkeypatch.setattr(

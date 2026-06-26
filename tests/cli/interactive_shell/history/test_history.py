@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.cli.interactive_shell.command_registry import dispatch_slash
-from app.cli.interactive_shell.history import load_command_history_entries
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.command_registry import dispatch_slash
+from cli.interactive_shell.history import load_command_history_entries
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def _capture() -> tuple[object, object]:
@@ -31,7 +31,7 @@ def test_load_command_history_entries_returns_empty_on_mkdir_oserror(
     mock_parent.mkdir.side_effect = OSError(13, "Permission denied")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.history.storage.prompt_history_path",
+        "cli.interactive_shell.history.storage.prompt_history_path",
         lambda: mock_path,
     )
 
@@ -48,7 +48,7 @@ def test_history_slash_command_does_not_raise_when_history_dir_unwritable(
     mock_parent.mkdir.side_effect = OSError(30, "Read-only file system")
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.history.storage.prompt_history_path",
+        "cli.interactive_shell.history.storage.prompt_history_path",
         lambda: mock_path,
     )
 

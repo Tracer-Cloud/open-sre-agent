@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.AzureSQLWaitStatsTool import get_azure_sql_wait_stats
 from tests.tools.conftest import BaseToolContract
+from tools.AzureSQLWaitStatsTool import get_azure_sql_wait_stats
 
 
 class TestAzureSQLWaitStatsToolContract(BaseToolContract):
@@ -35,7 +35,7 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "app.tools.AzureSQLWaitStatsTool.get_wait_stats",
+        "tools.AzureSQLWaitStatsTool.get_wait_stats",
         return_value=fake_result,
     ):
         result = get_azure_sql_wait_stats(server="myserver.database.windows.net", database="testdb")
@@ -45,7 +45,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.AzureSQLWaitStatsTool.get_wait_stats",
+        "tools.AzureSQLWaitStatsTool.get_wait_stats",
         return_value={"source": "azure_sql", "available": False, "error": "timeout"},
     ):
         result = get_azure_sql_wait_stats(server="invalid", database="testdb")

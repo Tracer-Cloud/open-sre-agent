@@ -1,4 +1,4 @@
-"""Unit tests for ``app.fleet_monitoring.tail``.
+"""Unit tests for ``tools.fleet_monitoring.tail``.
 
 Covers the four invariants the parent issue (#1493) and the design
 review hammered on:
@@ -24,8 +24,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.fleet_monitoring import tail as tail_mod
-from app.fleet_monitoring.tail import (
+from tools.fleet_monitoring import tail as tail_mod
+from tools.fleet_monitoring.tail import (
     DEFAULT_MAX_BYTES,
     AttachSession,
     AttachUnsupported,

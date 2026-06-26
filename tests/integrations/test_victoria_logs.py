@@ -19,10 +19,10 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.integrations._catalog_impl import _classify_service_instance
-from app.integrations.catalog import load_env_integrations
-from app.integrations.config_models import VictoriaLogsIntegrationConfig
-from app.services.victoria_logs.verifier import verify_victoria_logs as _verify_victoria_logs
+from integrations._catalog_impl import _classify_service_instance
+from integrations.catalog import load_env_integrations
+from integrations.config_models import VictoriaLogsIntegrationConfig
+from services.victoria_logs.verifier import verify_victoria_logs as _verify_victoria_logs
 
 
 class TestVictoriaLogsIntegrationConfig:
@@ -181,7 +181,7 @@ class TestVictoriaLogsIntegrationCanonicalShape:
 
     def test_effective_integrations_field_exists(self) -> None:
         """``victoria_logs`` must be a declared field on EffectiveIntegrations."""
-        from app.integrations.effective_models import (
+        from integrations.effective_models import (
             EffectiveIntegrationEntry,
             EffectiveIntegrations,
         )
@@ -196,13 +196,13 @@ class TestVictoriaLogsIntegrationCanonicalShape:
 
     def test_registry_spec_present(self) -> None:
         """Confirm the registry spec is wired so SERVICE_KEY_MAP and verifier dispatch work."""
-        from app.integrations.registry import INTEGRATION_SPECS, SERVICE_KEY_MAP
+        from integrations.registry import INTEGRATION_SPECS, SERVICE_KEY_MAP
 
         spec = next((s for s in INTEGRATION_SPECS if s.service == "victoria_logs"), None)
         assert spec is not None
         assert spec.direct_effective is True
         assert spec.has_verifier
-        from app.integrations.verification import get_verifier
+        from integrations.verification import get_verifier
 
         assert get_verifier("victoria_logs") is _verify_victoria_logs
         # Alias map: both spellings normalize to the canonical service.

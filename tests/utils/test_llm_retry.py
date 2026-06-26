@@ -10,7 +10,7 @@ import pytest
 # the same lookup path as the symbols under test. Satisfies CodeQL
 # "Module imported with both 'import' and 'import from'" (a from-import
 # alongside a module-import flags as mixed-style).
-import app.utils.llm_retry as llm_retry
+import services.llm_retry as llm_retry
 
 # --------------------------------------------------------------------------- #
 # is_rate_limit_error — provider recognizer                                   #

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.DataDogNodePodsTool import get_pods_on_node
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.DataDogNodePodsTool import get_pods_on_node
 
 
 class TestDataDogNodePodsToolContract(BaseToolContract):
@@ -47,7 +47,7 @@ def test_run_happy_path() -> None:
         "pods": [{"pod_name": "my-pod", "namespace": "default"}],
         "total": 1,
     }
-    with patch("app.tools.DataDogNodePodsTool.make_client", return_value=mock_client):
+    with patch("tools.DataDogNodePodsTool.make_client", return_value=mock_client):
         result = get_pods_on_node(node_ip="10.0.1.1", api_key="key", app_key="akey")
     assert result["available"] is True
     assert result["node_ip"] == "10.0.1.1"
@@ -57,6 +57,6 @@ def test_run_happy_path() -> None:
 def test_run_api_error() -> None:
     mock_client = MagicMock()
     mock_client.get_pods_on_node.return_value = {"success": False, "error": "Forbidden"}
-    with patch("app.tools.DataDogNodePodsTool.make_client", return_value=mock_client):
+    with patch("tools.DataDogNodePodsTool.make_client", return_value=mock_client):
         result = get_pods_on_node(node_ip="10.0.1.1", api_key="key", app_key="akey")
     assert result["available"] is False

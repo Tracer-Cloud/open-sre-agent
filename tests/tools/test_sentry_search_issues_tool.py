@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations.sentry import _MAX_SENTRY_QUERY_LEN, _sanitize_sentry_query
-from app.tools.SentrySearchIssuesTool import search_sentry_issues
+from integrations.sentry import _MAX_SENTRY_QUERY_LEN, _sanitize_sentry_query
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.SentrySearchIssuesTool import search_sentry_issues
 
 
 class TestSentrySearchIssuesToolContract(BaseToolContract):
@@ -37,8 +37,8 @@ def test_extract_params_maps_resolved_config_dump_shape() -> None:
     so its keys are ``auth_token`` / ``base_url`` — NOT ``sentry_token`` /
     ``sentry_url``. Hard-indexing ``sentry['sentry_token']`` raised a KeyError
     that aborted every Sentry query in the gather/investigation loop."""
-    from app.integrations.sentry import SentryConfig
-    from app.tools.SentrySearchIssuesTool import _search_issues_extract_params
+    from integrations.sentry import SentryConfig
+    from tools.SentrySearchIssuesTool import _search_issues_extract_params
 
     sources = {
         "sentry": SentryConfig(
@@ -60,7 +60,7 @@ def test_run_returns_unavailable_when_no_config() -> None:
     # Stub env resolution so the test is hermetic: without this, a local .env
     # carrying real SENTRY_* creds makes _resolve_config fall back to them and
     # the tool reports available=True.
-    with patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None):
+    with patch("tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None):
         result = search_sentry_issues(organization_slug="", sentry_token="")
     assert result["available"] is False
     assert result["issues"] == []
@@ -69,8 +69,8 @@ def test_run_returns_unavailable_when_no_config() -> None:
 def test_run_happy_path() -> None:
     fake_issues = [{"id": "1", "title": "TypeError", "status": "unresolved"}]
     with (
-        patch("app.tools.SentrySearchIssuesTool.list_sentry_issues", return_value=fake_issues),
-        patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
+        patch("tools.SentrySearchIssuesTool.list_sentry_issues", return_value=fake_issues),
+        patch("tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
     ):
         result = search_sentry_issues(
             organization_slug="my-org",
@@ -84,8 +84,8 @@ def test_run_happy_path() -> None:
 
 def test_run_empty_issues() -> None:
     with (
-        patch("app.tools.SentrySearchIssuesTool.list_sentry_issues", return_value=[]),
-        patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
+        patch("tools.SentrySearchIssuesTool.list_sentry_issues", return_value=[]),
+        patch("tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
     ):
         result = search_sentry_issues(organization_slug="my-org", sentry_token="tok_test")
     assert result["available"] is True
@@ -141,7 +141,7 @@ def test_sanitize_sentry_query_empty_string() -> None:
 def test_build_issue_list_params_sanitizes_multiline_query() -> None:
     """_build_issue_list_params must collapse multi-line stack traces so the
     Sentry API does not return a 400 Bad Request."""
-    from app.integrations.sentry import SentryConfig, _build_issue_list_params
+    from integrations.sentry import SentryConfig, _build_issue_list_params
 
     config = SentryConfig(organization_slug="my-org", auth_token="tok")
     multiline_query = "TypeError: Cannot read props\n  at src/foo.ts:10"
@@ -154,21 +154,21 @@ def test_build_issue_list_params_sanitizes_multiline_query() -> None:
 
 
 def test_clamp_issue_limit_caps_at_sentry_page_size() -> None:
-    from app.integrations.sentry import _MAX_SENTRY_PAGE_SIZE, _clamp_issue_limit
+    from integrations.sentry import _MAX_SENTRY_PAGE_SIZE, _clamp_issue_limit
 
     assert _clamp_issue_limit(1000) == _MAX_SENTRY_PAGE_SIZE
     assert _clamp_issue_limit(_MAX_SENTRY_PAGE_SIZE) == _MAX_SENTRY_PAGE_SIZE
 
 
 def test_clamp_issue_limit_floors_at_one() -> None:
-    from app.integrations.sentry import _clamp_issue_limit
+    from integrations.sentry import _clamp_issue_limit
 
     assert _clamp_issue_limit(0) == 1
     assert _clamp_issue_limit(-5) == 1
 
 
 def test_clamp_issue_limit_defaults_on_bad_input() -> None:
-    from app.integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT, _clamp_issue_limit
+    from integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT, _clamp_issue_limit
 
     assert _clamp_issue_limit(None) == DEFAULT_SENTRY_ISSUE_LIMIT
     assert _clamp_issue_limit("not-an-int") == DEFAULT_SENTRY_ISSUE_LIMIT  # type: ignore[arg-type]
@@ -176,13 +176,13 @@ def test_clamp_issue_limit_defaults_on_bad_input() -> None:
 
 def test_default_issue_limit_is_full_sentry_page() -> None:
     """Regression: a tiny default limit was why searches "only found one issue"."""
-    from app.integrations.sentry import _MAX_SENTRY_PAGE_SIZE, DEFAULT_SENTRY_ISSUE_LIMIT
+    from integrations.sentry import _MAX_SENTRY_PAGE_SIZE, DEFAULT_SENTRY_ISSUE_LIMIT
 
     assert DEFAULT_SENTRY_ISSUE_LIMIT == _MAX_SENTRY_PAGE_SIZE
 
 
 def test_build_issue_list_params_clamps_limit_into_page_range() -> None:
-    from app.integrations.sentry import (
+    from integrations.sentry import (
         _MAX_SENTRY_PAGE_SIZE,
         SentryConfig,
         _build_issue_list_params,
@@ -194,7 +194,7 @@ def test_build_issue_list_params_clamps_limit_into_page_range() -> None:
 
 
 def test_build_issue_list_params_uses_default_stats_period() -> None:
-    from app.integrations.sentry import (
+    from integrations.sentry import (
         DEFAULT_SENTRY_STATS_PERIOD,
         SentryConfig,
         _build_issue_list_params,
@@ -208,7 +208,7 @@ def test_build_issue_list_params_uses_default_stats_period() -> None:
 def test_build_issue_list_params_explicit_stats_period_wins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.integrations.sentry import SentryConfig, _build_issue_list_params
+    from integrations.sentry import SentryConfig, _build_issue_list_params
 
     monkeypatch.setenv("SENTRY_STATS_PERIOD", "7d")
     config = SentryConfig(organization_slug="my-org", auth_token="tok")
@@ -219,7 +219,7 @@ def test_build_issue_list_params_explicit_stats_period_wins(
 def test_build_issue_list_params_stats_period_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.integrations.sentry import SentryConfig, _build_issue_list_params
+    from integrations.sentry import SentryConfig, _build_issue_list_params
 
     monkeypatch.setenv("SENTRY_STATS_PERIOD", "30d")
     config = SentryConfig(organization_slug="my-org", auth_token="tok")
@@ -229,7 +229,7 @@ def test_build_issue_list_params_stats_period_from_env(
 
 def test_validate_sentry_config_reports_recent_issue_count() -> None:
     """Verify reports a meaningful recent issue count over the 7-day window."""
-    from app.integrations.sentry import SentryConfig, validate_sentry_config
+    from integrations.sentry import SentryConfig, validate_sentry_config
 
     config = SentryConfig(organization_slug="my-org", auth_token="tok")
     captured: dict[str, object] = {}
@@ -238,7 +238,7 @@ def test_validate_sentry_config_reports_recent_issue_count() -> None:
         captured.update(kwargs)
         return [{"id": str(i)} for i in range(30)]
 
-    with patch("app.integrations.sentry.list_sentry_issues", side_effect=_fake_list):
+    with patch("integrations.sentry.list_sentry_issues", side_effect=_fake_list):
         result = validate_sentry_config(config)
 
     assert result.ok is True
@@ -250,7 +250,7 @@ def test_validate_sentry_config_reports_recent_issue_count() -> None:
 def test_validate_sentry_config_saturated_count_uses_plus() -> None:
     """When the page saturates, the count is shown as ``N+`` (honest about
     the page-size cap rather than implying an exact total)."""
-    from app.integrations.sentry import (
+    from integrations.sentry import (
         _MAX_SENTRY_PAGE_SIZE,
         SentryConfig,
         validate_sentry_config,
@@ -258,7 +258,7 @@ def test_validate_sentry_config_saturated_count_uses_plus() -> None:
 
     config = SentryConfig(organization_slug="my-org", auth_token="tok")
     with patch(
-        "app.integrations.sentry.list_sentry_issues",
+        "integrations.sentry.list_sentry_issues",
         return_value=[{"id": str(i)} for i in range(_MAX_SENTRY_PAGE_SIZE)],
     ):
         result = validate_sentry_config(config)
@@ -267,8 +267,8 @@ def test_validate_sentry_config_saturated_count_uses_plus() -> None:
 
 
 def test_search_tool_default_limit_is_full_page() -> None:
-    from app.integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT
-    from app.tools.SentrySearchIssuesTool import _search_issues_extract_params
+    from integrations.sentry import DEFAULT_SENTRY_ISSUE_LIMIT
+    from tools.SentrySearchIssuesTool import _search_issues_extract_params
 
     sources = {
         "sentry": {
@@ -288,8 +288,8 @@ def test_search_tool_forwards_limit_and_period_to_client() -> None:
         return []
 
     with (
-        patch("app.tools.SentrySearchIssuesTool.list_sentry_issues", side_effect=_fake_list),
-        patch("app.tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
+        patch("tools.SentrySearchIssuesTool.list_sentry_issues", side_effect=_fake_list),
+        patch("tools.SentrySearchIssuesTool.sentry_config_from_env", return_value=None),
     ):
         search_sentry_issues(
             organization_slug="my-org",

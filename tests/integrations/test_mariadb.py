@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.mariadb import (
+from integrations.mariadb import (
     MariaDBConfig,
     MariaDBValidationResult,
     build_mariadb_config,

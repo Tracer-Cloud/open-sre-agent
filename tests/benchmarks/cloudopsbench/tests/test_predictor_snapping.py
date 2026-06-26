@@ -217,7 +217,7 @@ def test_snap_fault_object_normalizes_prefix_and_casing(raw: str, expected: str)
 def test_snap_fault_object_does_not_fuzzy_snap_novel_service_name() -> None:
     """``some-novel-service`` could be similar to a real service by
     difflib ratio — but fault_object snapping refuses fuzzy matches. The
-    novel name stays under the inferred ``app/`` prefix so localization
+    novel name stays under the inferred ``config/`` prefix so localization
     accuracy reflects the agent's actual choice."""
     snapped = _snap_fault_object("paymentservice-typo")
     # Should NOT silently rewrite to "app/paymentservice" — keeps the typo

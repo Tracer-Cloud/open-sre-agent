@@ -21,9 +21,9 @@ from typing import Any
 
 import pytest
 
-from app.integrations._verifiers_loader import register_all_verifiers
-from app.integrations.registry import SUPPORTED_VERIFY_SERVICES
-from app.integrations.verification import (
+from integrations._verifiers_loader import register_all_verifiers
+from integrations.registry import SUPPORTED_VERIFY_SERVICES
+from integrations.verification import (
     build_probe_verifier,
     build_validation_verifier,
     get_verifier,
@@ -33,7 +33,7 @@ from app.integrations.verification import (
     register_verifier,
     result,
 )
-from app.integrations.verification.registry import (
+from integrations.verification.registry import (
     _reset_for_testing,
     _restore_for_testing,
     _snapshot_for_testing,
@@ -252,7 +252,7 @@ class TestVerifyWithValidationResult:
     factory don't quietly change the helper's behavior."""
 
     def test_passes_when_validation_ok(self) -> None:
-        from app.integrations.verification import verify_with_validation_result
+        from integrations.verification import verify_with_validation_result
 
         out = verify_with_validation_result(
             "fake",
@@ -269,7 +269,7 @@ class TestVerifyWithValidationResult:
         }
 
     def test_fails_when_validation_not_ok(self) -> None:
-        from app.integrations.verification import verify_with_validation_result
+        from integrations.verification import verify_with_validation_result
 
         out = verify_with_validation_result(
             "fake",
@@ -286,7 +286,7 @@ class TestAlertmanagerRegistration:
     def test_alertmanager_is_registered_via_canonical_name(self) -> None:
         """Import the vendor verifier module and check it's reachable
         through both the registry and the module-level export."""
-        from app.services.alertmanager.verifier import verify_alertmanager
+        from services.alertmanager.verifier import verify_alertmanager
 
         assert get_verifier("alertmanager") is verify_alertmanager
 
@@ -304,8 +304,8 @@ class TestSupabasePreservedArgSwap:
     def test_first_arg_lands_in_service_field_and_source_is_supabase(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from app.integrations import verifiers as _verifiers_pkg
-        from app.integrations.verifiers import supabase as _supabase_verifier
+        from integrations import verifiers as _verifiers_pkg
+        from integrations.verifiers import supabase as _supabase_verifier
 
         # Bypass the real config validation chain — we're testing the
         # verifier's arg routing, not Supabase config parsing.
