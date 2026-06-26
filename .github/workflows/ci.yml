@@ -4,7 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/**"
+      - "cli/**"
+      - "config/**"
+      - "core/**"
+      - "deployment/**"
+      - "integrations/**"
+      - "platform/**"
+      - "services/**"
+      - "tools/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -15,7 +22,14 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "app/**"
+      - "cli/**"
+      - "config/**"
+      - "core/**"
+      - "deployment/**"
+      - "integrations/**"
+      - "platform/**"
+      - "services/**"
+      - "tools/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -28,6 +42,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PYTHON_SOURCE_PATHS: "cli config core deployment integrations platform services tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -65,13 +80,13 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run python -m ruff check app/ tests/
+        run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
 
       - name: Format check
-        run: uv run python -m ruff format --check app/ tests/
+        run: uv run python -m ruff format --check $PYTHON_SOURCE_PATHS tests/
 
       - name: Typecheck
-        run: uv run python -m mypy app/
+        run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
   test:
     name: test (${{ matrix.shard }})
@@ -101,7 +116,6 @@ jobs:
               tests/remote
               tests/agent
               tests/fleet_monitoring
-              tests/app
               tests/analytics
               tests/nodes
               tests/core/orchestration
@@ -209,7 +223,14 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           ${{ matrix.pytest_paths }}
-          --cov=app
+          --cov=cli
+          --cov=config
+          --cov=core
+          --cov=deployment
+          --cov=integrations
+          --cov=platform
+          --cov=services
+          --cov=tools
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
@@ -338,7 +359,7 @@ jobs:
               - "uv.lock"
               - "deployment/**"
               - "integrations/**"
-              - "app/pipeline/**"
+              - "core/orchestration/**"
               - "services/**"
               - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"

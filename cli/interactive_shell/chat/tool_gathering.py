@@ -153,8 +153,9 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     are redacted and bounded before writing; failures are swallowed so logging
     never breaks the turn.
     """
-    from cli.interactive_shell.sessions.store import SessionStore
     from platform.observability.tool_trace import redact_sensitive
+
+    from cli.interactive_shell.sessions.store import SessionStore
 
     for tc, output in executed:
         with contextlib.suppress(Exception):

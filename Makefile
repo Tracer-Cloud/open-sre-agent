@@ -28,6 +28,8 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
+PYTHON_SOURCE_PATHS := cli config core deployment integrations platform services tools
+
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
 	uv sync --frozen --extra dev
@@ -353,7 +355,7 @@ test-full:
 # Keep tests/synthetic excluded here to match GitHub CI; marker filtering alone is
 # not enough because some synthetic tests are collected without the synthetic mark.
 test-cov:
-	$(PYTHON) -m pytest -n auto -v --cov=app --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
+	$(PYTHON) -m pytest -n auto -v $(addprefix --cov=,$(PYTHON_SOURCE_PATHS)) --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
 
 # Run only the tests relevant to files changed on this branch (local use only).
 # Pass ARGS=--dry-run to preview the command without executing it.
@@ -435,19 +437,19 @@ clean:
 
 # Lint code
 lint:
-	$(PYTHON) -m ruff check app/ tests/
+	$(PYTHON) -m ruff check $(PYTHON_SOURCE_PATHS) tests/
 
 # Check formatting (read-only; CI uses this)
 format-check:
-	$(PYTHON) -m ruff format --check app/ tests/
+	$(PYTHON) -m ruff format --check $(PYTHON_SOURCE_PATHS) tests/
 
 # Format code
 format:
-	$(PYTHON) -m ruff format app/ tests/
+	$(PYTHON) -m ruff format $(PYTHON_SOURCE_PATHS) tests/
 
 # Type check
 typecheck:
-	$(PYTHON) -m mypy app/
+	$(PYTHON) -m mypy $(PYTHON_SOURCE_PATHS)
 
 # Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
 check: lint format-check typecheck test-full

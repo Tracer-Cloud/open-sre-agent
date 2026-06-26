@@ -7,11 +7,11 @@ import contextlib
 import logging
 import threading
 from collections.abc import Generator, Iterator
+from platform.observability.tracing import traceable
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from config.config import resolve_llm_settings
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from platform.observability.tracing import traceable
+from config.config import resolve_llm_settings
 
 if TYPE_CHECKING:
     from core.domain.state import AgentState

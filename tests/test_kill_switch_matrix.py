@@ -16,13 +16,12 @@ drop one of the flags.
 from __future__ import annotations
 
 import sys
+from platform.analytics import provider
+from platform.observability import sentry_sdk as sentry_mod
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
-from platform.analytics import provider
-from platform.observability import sentry_sdk as sentry_mod
 
 _ENV_VARS = (
     "OPENSRE_NO_TELEMETRY",

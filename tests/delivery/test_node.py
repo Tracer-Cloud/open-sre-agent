@@ -111,7 +111,9 @@ def test_gitlab_writeback_calls_post_when_enabled(monkeypatch: pytest.MonkeyPatc
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch(
             "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
@@ -141,7 +143,9 @@ def test_gitlab_writeback_skipped_when_env_var_not_set(monkeypatch: pytest.Monke
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch(
             "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
@@ -167,7 +171,9 @@ def test_gitlab_writeback_skipped_when_mr_iid_missing(monkeypatch: pytest.Monkey
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch(
             "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
@@ -189,7 +195,9 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch(
             "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
             side_effect=RuntimeError("network error"),
@@ -218,7 +226,9 @@ def test_generate_report_can_skip_terminal_render_and_editor(
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch("core.orchestration.node.publish_findings.node.render_report", mock_render_report),
         patch("core.orchestration.node.publish_findings.node.open_in_editor", mock_open_in_editor),
     ):
@@ -245,8 +255,12 @@ def test_openclaw_writeback_calls_delivery_when_configured(
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("platform.notifications.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "platform.notifications.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery
+        ),
     ):
         from core.orchestration.node.publish_findings.node import generate_report
 
@@ -274,8 +288,12 @@ def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPat
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
-        patch("platform.notifications.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
+        patch(
+            "platform.notifications.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery
+        ),
     ):
         from core.orchestration.node.publish_findings.node import generate_report
 
@@ -312,7 +330,9 @@ def test_twilio_sms_dispatched_when_enabled(monkeypatch: pytest.MonkeyPatch) -> 
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
         from core.orchestration.node.publish_findings.node import generate_report
@@ -355,7 +375,9 @@ def test_twilio_sms_skipped_when_channel_disabled(monkeypatch: pytest.MonkeyPatc
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
         from core.orchestration.node.publish_findings.node import generate_report
@@ -384,7 +406,9 @@ def test_twilio_sms_skipped_without_recipient(monkeypatch: pytest.MonkeyPatch) -
 
     with (
         patch("platform.notifications.slack_delivery.send_slack_report", mock_send_slack),
-        patch("platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks),
+        patch(
+            "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
+        ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
         from core.orchestration.node.publish_findings.node import generate_report

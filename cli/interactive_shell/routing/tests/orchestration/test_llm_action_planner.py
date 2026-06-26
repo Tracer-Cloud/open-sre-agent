@@ -11,12 +11,6 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from config.config import (
-    DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
-    get_configured_llm_provider,
-    get_llm_provider_api_key_env,
-    resolve_llm_settings_verbose,
-)
 from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
 )
@@ -29,6 +23,12 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_a
 )
 from cli.interactive_shell.routing.router import route_input
 from cli.interactive_shell.runtime.session import ReplSession
+from config.config import (
+    DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
+    get_configured_llm_provider,
+    get_llm_provider_api_key_env,
+    resolve_llm_settings_verbose,
+)
 
 PROMPT_TURN_CONTRACTS_DATASET = Path(__file__).resolve().parents[1] / "prompt_turn_contracts.yml"
 

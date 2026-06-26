@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
+from platform.analytics import provider
+from platform.analytics.events import Event
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,8 +13,6 @@ import pytest
 
 from cli.__main__ import _sentry_entrypoint_for_invocation, main
 from cli.config import ReplConfig
-from platform.analytics import provider
-from platform.analytics.events import Event
 
 
 class _EmptyCatalog:

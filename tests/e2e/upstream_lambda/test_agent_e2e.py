@@ -8,6 +8,7 @@ import json
 import sys
 import time
 from datetime import UTC, datetime
+from platform.observability.tracing import traceable
 
 import boto3
 import requests
@@ -15,7 +16,6 @@ import requests
 from cli.investigation import run_investigation_cli
 from tests.utils.alert_factory import create_alert
 from tests.utils.conftest import UPSTREAM_DOWNSTREAM_CONFIG
-from platform.observability.tracing import traceable
 
 
 def _pick_field(payload: dict, keys: list[str]) -> str | None:

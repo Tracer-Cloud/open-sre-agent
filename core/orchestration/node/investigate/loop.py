@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from platform.common.truncation import truncate
 from typing import Any
 
 from core.domain.state.evidence import EvidenceEntry
 from core.runtime.llm_invoke_errors import LLMInvokeFailure
 from services.agent_llm_client import ToolCall
-from platform.common.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000
 

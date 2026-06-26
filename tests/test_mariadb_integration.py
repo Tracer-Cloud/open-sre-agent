@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import types
+from platform.common.truncation import truncate as _truncate_shared
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,7 +26,6 @@ from integrations.mariadb import (
     mariadb_is_available,
     validate_mariadb_config,
 )
-from platform.common.truncation import truncate as _truncate_shared
 
 
 def _truncate(text: str, max_len: int = _QUERY_TRUNCATE_LEN) -> str:

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
-
 from platform.observability.errors import report_exception
+from typing import Any
 
 REMOTE_SURFACE = "remote_server"
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from cli.interactive_shell.prompt_logging.sinks import posthog_ai
 from platform.analytics.events import Event
+
+from cli.interactive_shell.prompt_logging.sinks import posthog_ai
 
 
 def test_capture_ai_generation_uses_analytics_capture(monkeypatch) -> None:

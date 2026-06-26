@@ -14,28 +14,33 @@ import signal
 import sys
 from contextlib import suppress
 
-import click
-from dotenv import load_dotenv
+from config.platform_bootstrap import ensure_project_platform_package
 
-from config.version import get_version
-from cli.commands import register_commands
-from cli.interactive_shell.error_handling.exception_reporting import (
-    report_exception,
-    should_report_exception,
-)
-from cli.interactive_shell.ui.layout import RichGroup, render_landing
-from cli.interactive_shell.ui.prompt_support import (
-    handle_ctrl_c_press,
-    install_questionary_ctrl_c_double_exit,
-    install_questionary_escape_cancel,
-)
-from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
-from platform.analytics.provider import (
+ensure_project_platform_package()
+
+from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
+from platform.analytics.provider import (  # noqa: E402
     Properties,
     capture_first_run_if_needed,
     shutdown_analytics,
 )
-from platform.observability.sentry_sdk import capture_exception, init_sentry
+from platform.observability.sentry_sdk import capture_exception, init_sentry  # noqa: E402
+
+import click  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+
+from cli.commands import register_commands  # noqa: E402
+from cli.interactive_shell.error_handling.exception_reporting import (  # noqa: E402
+    report_exception,
+    should_report_exception,
+)
+from cli.interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
+from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
+    handle_ctrl_c_press,
+    install_questionary_ctrl_c_double_exit,
+    install_questionary_escape_cancel,
+)
+from config.version import get_version  # noqa: E402
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"

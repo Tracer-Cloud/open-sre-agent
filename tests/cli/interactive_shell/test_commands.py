@@ -569,8 +569,9 @@ class TestIntegrationsCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import integrations.store as store
         import platform.analytics.cli as analytics_cli
+
+        import integrations.store as store
         from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
@@ -627,8 +628,9 @@ class TestMcpCommand:
         assert captured == [["integrations", "setup"]]
 
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
-        import integrations.store as store
         import platform.analytics.cli as analytics_cli
+
+        import integrations.store as store
         from cli.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []

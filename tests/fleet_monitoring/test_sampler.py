@@ -247,12 +247,8 @@ def _stub_token_pipeline(
     touching the disk or psutil.
     """
     monkeypatch.setattr("tools.fleet_monitoring.sampler.provider_for", lambda _record: provider)
-    monkeypatch.setattr(
-        "tools.fleet_monitoring.sampler.get_token_source", lambda _provider: source
-    )
-    monkeypatch.setattr(
-        "tools.fleet_monitoring.sampler.get_token_meter", lambda _provider: meter
-    )
+    monkeypatch.setattr("tools.fleet_monitoring.sampler.get_token_source", lambda _provider: source)
+    monkeypatch.setattr("tools.fleet_monitoring.sampler.get_token_meter", lambda _provider: meter)
 
 
 @pytest.mark.asyncio

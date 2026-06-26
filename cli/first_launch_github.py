@@ -14,14 +14,14 @@ from __future__ import annotations
 
 import os
 import platform
+from platform.analytics.cli import capture_github_login_completed, identify_github_username
+from platform.analytics.source import is_test_run
 
 from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.ui import repl_tty_interactive
 from cli.interactive_shell.ui.theme import DEVICE_CODE
-from platform.analytics.cli import capture_github_login_completed, identify_github_username
-from platform.analytics.source import is_test_run
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _ELIGIBLE_OS = frozenset({"Darwin", "Windows"})

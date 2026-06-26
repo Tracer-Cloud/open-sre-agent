@@ -39,9 +39,7 @@ class TestExecutor:
                 "platform.scheduler.executor.build_message",
                 return_value="Scheduled report",
             ),
-            patch(
-                "platform.scheduler.executor.resolve_telegram_credentials"
-            ) as mock_creds,
+            patch("platform.scheduler.executor.resolve_telegram_credentials") as mock_creds,
             patch("platform.scheduler.executor._deliver_telegram") as mock_deliver,
         ):
             mock_creds.return_value = {"bot_token": "fake_token"}
@@ -66,9 +64,7 @@ class TestExecutor:
                 "platform.scheduler.executor.build_message",
                 return_value="Scheduled report",
             ),
-            patch(
-                "platform.scheduler.executor.resolve_telegram_credentials"
-            ) as mock_creds,
+            patch("platform.scheduler.executor.resolve_telegram_credentials") as mock_creds,
         ):
             mock_creds.return_value = {}
             result = execute_task(task, "2026-01-01T09:00")

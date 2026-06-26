@@ -7,9 +7,12 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-
-from platform.notifications.telegram_delivery import post_telegram_message, truncate_for_telegram_html
 from platform.common.truncation import truncate
+from platform.notifications.telegram_delivery import (
+    post_telegram_message,
+    truncate_for_telegram_html,
+)
+
 from cli.interactive_shell.error_handling.errors import OpenSREError
 
 logger = logging.getLogger(__name__)

@@ -477,9 +477,7 @@ class TestSingleton:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr(
-            "platform.guardrails.engine.get_default_rules_path", lambda: config
-        )
+        monkeypatch.setattr("platform.guardrails.engine.get_default_rules_path", lambda: config)
         reset_guardrail_engine()
 
         engine = get_guardrail_engine()

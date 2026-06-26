@@ -61,6 +61,7 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.llm_client import _emit_usage  # noqa: PLC2701 — bench needs cost tracking
+from services.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _build_system_prompt,
     _build_user_prompt,
@@ -71,7 +72,6 @@ from tests.benchmarks.cloudopsbench.predictor.vocabulary import (
     _TAXONOMY_CATEGORIES,
 )
 from tests.benchmarks.cloudopsbench.taxonomy import taxonomy_for_root_cause
-from services.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 
 logger = logging.getLogger(__name__)
 

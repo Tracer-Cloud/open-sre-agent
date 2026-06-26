@@ -110,7 +110,10 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
     if not bot_token or not task.chat_id:
         return False, "Missing bot_token or chat_id for Telegram", ""
 
-    from platform.notifications.telegram_delivery import post_telegram_message, truncate_for_telegram_html
+    from platform.notifications.telegram_delivery import (
+        post_telegram_message,
+        truncate_for_telegram_html,
+    )
 
     truncated = truncate_for_telegram_html(message, 4096, suffix="…")
     ok, error, msg_id = post_telegram_message(task.chat_id, truncated, bot_token, parse_mode="HTML")

@@ -9,6 +9,9 @@ Verify options: --send-slack-test
 from __future__ import annotations
 
 import sys
+from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
+from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
+from platform.observability.sentry_sdk import init_sentry
 
 from dotenv import load_dotenv
 
@@ -22,9 +25,6 @@ from integrations.cli import (
     cmd_verify,
 )
 from integrations.verify import SUPPORTED_VERIFY_SERVICES
-from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
-from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
-from platform.observability.sentry_sdk import init_sentry
 
 _ENTRYPOINT = "python -m integrations"
 _KNOWN_COMMANDS = ("setup", "list", "show", "remove", "verify")

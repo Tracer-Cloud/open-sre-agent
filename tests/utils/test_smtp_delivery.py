@@ -76,7 +76,9 @@ def test_format_background_rca_email_includes_required_sections() -> None:
 
 def test_verify_smtp_connection_uses_starttls(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_client = _FakeSMTP("smtp.example.com", 587, 15)
-    monkeypatch.setattr("platform.notifications.smtp_delivery.smtplib.SMTP", _return_fake_client(fake_client))
+    monkeypatch.setattr(
+        "platform.notifications.smtp_delivery.smtplib.SMTP", _return_fake_client(fake_client)
+    )
 
     ok, detail = verify_smtp_connection(
         {
@@ -136,7 +138,9 @@ def test_verify_smtp_connection_closes_client_when_setup_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_client = _FailingLoginSMTP("smtp.example.com", 587, 15)
-    monkeypatch.setattr("platform.notifications.smtp_delivery.smtplib.SMTP", _return_fake_client(fake_client))
+    monkeypatch.setattr(
+        "platform.notifications.smtp_delivery.smtplib.SMTP", _return_fake_client(fake_client)
+    )
 
     ok, detail = verify_smtp_connection(
         {

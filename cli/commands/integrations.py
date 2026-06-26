@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-import click
-
-from cli.interactive_shell.data_store.constants import (
-    MANAGED_INTEGRATION_SERVICES,
-    SETUP_SERVICES,
-    VERIFY_SERVICES,
-)
 from platform.analytics.cli import (
     capture_integration_removed,
     capture_integration_setup_completed,
     capture_integration_setup_started,
     capture_integration_verified,
     capture_integrations_listed,
+)
+
+import click
+
+from cli.interactive_shell.data_store.constants import (
+    MANAGED_INTEGRATION_SERVICES,
+    SETUP_SERVICES,
+    VERIFY_SERVICES,
 )
 
 

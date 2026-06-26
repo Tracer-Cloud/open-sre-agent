@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 import json
+from platform.analytics.cli import (
+    capture_test_run_completed,
+    capture_test_run_failed,
+    capture_test_run_started,
+    capture_test_synthetic_completed,
+    capture_test_synthetic_failed,
+    capture_test_synthetic_started,
+    capture_tests_listed,
+    capture_tests_picker_opened,
+)
 from typing import Any
 
 import click
@@ -17,16 +27,6 @@ from core.domain.types.upstream import (
 )
 from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
     build_runtime_correlation,
-)
-from platform.analytics.cli import (
-    capture_test_run_completed,
-    capture_test_run_failed,
-    capture_test_run_started,
-    capture_test_synthetic_completed,
-    capture_test_synthetic_failed,
-    capture_test_synthetic_started,
-    capture_tests_listed,
-    capture_tests_picker_opened,
 )
 
 _TEST_CATEGORIES: tuple[str, ...] = (

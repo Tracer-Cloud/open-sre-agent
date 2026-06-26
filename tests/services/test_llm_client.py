@@ -2372,9 +2372,7 @@ def test_usage_hook_anthropic_invoke_fires_with_correct_token_counts(monkeypatch
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(
-        "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine
-    )
+    monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
 
@@ -2414,9 +2412,7 @@ def test_usage_hook_openai_invoke_fires_with_correct_token_counts(monkeypatch) -
         def __init__(self, **_kwargs) -> None:
             self.chat = _Chat()
 
-    monkeypatch.setattr(
-        "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine
-    )
+    monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(llm_client, "OpenAI", _FakeOpenAIWithUsage)
 
@@ -2430,9 +2426,7 @@ def test_usage_hook_openai_invoke_fires_with_correct_token_counts(monkeypatch) -
 
 
 def test_usage_hook_bedrock_converse_fires_with_correct_token_counts(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine
-    )
+    monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
     response = {
         "output": {"message": {"role": "assistant", "content": [{"text": "ok"}]}},
         "usage": {"inputTokens": 77, "outputTokens": 11},
@@ -2473,9 +2467,7 @@ def test_usage_hook_exception_propagates(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(
-        "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine
-    )
+    monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
 
@@ -2515,9 +2507,7 @@ def test_usage_hook_unset_is_default_noop(monkeypatch) -> None:
         def __init__(self, **_kwargs) -> None:
             self.messages = _Messages()
 
-    monkeypatch.setattr(
-        "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine
-    )
+    monkeypatch.setattr("platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine)
     monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env: "k")
     monkeypatch.setattr(llm_client, "Anthropic", _FakeAnthropicWithUsage)
 

@@ -3,19 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-
-import pytest
-
-from cli.interactive_shell.ui.output import boundary as output_boundary
-from cli.interactive_shell.ui.output import tracker as output_tracker
-from cli.interactive_shell.ui.output.environment import debug_print
-from cli.interactive_shell.ui.output.renderers import (
-    render_completed_investigation_footer,
-    render_investigation_header,
-)
-from cli.interactive_shell.ui.output.tracker import ProgressTracker, get_tracker
-from integrations import port as integrations_port
-from integrations.port import set_remote_integrations_fetcher
 from platform.observability import (
     NoopProgressTracker,
     get_progress_tracker,
@@ -33,6 +20,19 @@ from platform.observability.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
 )
+
+import pytest
+
+from cli.interactive_shell.ui.output import boundary as output_boundary
+from cli.interactive_shell.ui.output import tracker as output_tracker
+from cli.interactive_shell.ui.output.environment import debug_print
+from cli.interactive_shell.ui.output.renderers import (
+    render_completed_investigation_footer,
+    render_investigation_header,
+)
+from cli.interactive_shell.ui.output.tracker import ProgressTracker, get_tracker
+from integrations import port as integrations_port
+from integrations.port import set_remote_integrations_fetcher
 
 
 def _reset_all_ports() -> None:

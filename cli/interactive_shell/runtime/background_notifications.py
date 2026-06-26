@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from platform.notifications.smtp_delivery import format_background_rca_email, send_smtp_report
+
+from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 
 
 def deliver_background_notifications(

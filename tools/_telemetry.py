@@ -18,9 +18,8 @@ tracking because they shape what the agent sees.
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
-
 from platform.observability.errors import report_exception
+from typing import Any, Literal
 
 ToolErrorSeverity = Literal["error", "warning"]
 

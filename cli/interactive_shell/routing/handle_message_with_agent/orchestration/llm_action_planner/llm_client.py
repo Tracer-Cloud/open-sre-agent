@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 def _tool_specs_for_provider(session: Any) -> list[dict[str, Any]]:
-    from config.config import resolve_llm_settings
     from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_registry import (
         REGISTRY,
     )
     from cli.interactive_shell.runtime.session import ReplSession
+    from config.config import resolve_llm_settings
 
     provider = resolve_llm_settings().provider
     base_specs = REGISTRY.tool_specs_for_llm(session or ReplSession())
@@ -67,10 +67,10 @@ def _call_llm(sanitised_text: str, session: Any) -> str | None:
         )
         # Raise a typed error so the caller can surface the reason in the
         # assistant block instead of printing a raw log warning above it.
-        from config.config import llm_provider_error_context
         from cli.interactive_shell.routing.handle_message_with_agent.errors import (
             PlannerLLMError,
         )
+        from config.config import llm_provider_error_context
 
         # Prefix the raw provider error with which provider actually served the
         # request (and whether it was a fallback). This turns a confusing

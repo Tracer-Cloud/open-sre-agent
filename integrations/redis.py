@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from platform.common.coercion import safe_int
 from typing import Any
 
 from pydantic import Field, field_validator
@@ -18,7 +19,6 @@ from pydantic import Field, field_validator
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.config_models import RedisIntegrationConfig
-from platform.common.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

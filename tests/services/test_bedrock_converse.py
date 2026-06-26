@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import datetime
+from platform.guardrails.apply import apply_guardrails_to_converse_payload
 
 import pytest
 
-from platform.guardrails.apply import apply_guardrails_to_converse_payload
 from services.agent_llm_client import ToolCall
 from services.bedrock_converse import (
     build_assistant_tool_use_message,

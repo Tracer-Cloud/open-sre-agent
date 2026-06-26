@@ -32,6 +32,8 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from platform.analytics.cli import capture_repl_execution_policy_decision
+from platform.analytics.provider import Properties
 from typing import Literal
 
 from rich.console import Console
@@ -48,8 +50,6 @@ from cli.interactive_shell.shell import (
     parse_shell_command,
 )
 from cli.interactive_shell.ui import DIM, WARNING
-from platform.analytics.cli import capture_repl_execution_policy_decision
-from platform.analytics.provider import Properties
 
 ExecutionVerdict = Literal["allow", "ask", "deny"]
 

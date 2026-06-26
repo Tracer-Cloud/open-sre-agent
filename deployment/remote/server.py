@@ -25,6 +25,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from platform.analytics.cli import capture_investigation_failed, track_investigation
+from platform.analytics.source import EntrypointSource, TriggerMode
+from platform.observability.sentry_sdk import capture_exception, init_sentry
 from typing import Any
 
 from dotenv import load_dotenv
@@ -44,10 +47,10 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
-from config.version import get_version
 from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
+from config.version import get_version
 from deployment.remote.error_reporting import report_remote_exception
 from deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -55,9 +58,6 @@ from deployment.remote.vercel_poller import (
     VercelResolutionError,
     enrich_remote_alert_from_vercel,
 )
-from platform.analytics.cli import capture_investigation_failed, track_investigation
-from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.observability.sentry_sdk import capture_exception, init_sentry
 
 load_dotenv(override=False)
 init_sentry(entrypoint="remote")
@@ -455,8 +455,8 @@ async def investigate_stream(req: InvestigateRequest) -> Response:
     as a ``.md`` file once the stream completes, matching the behaviour of
     the blocking ``/investigate`` endpoint.
     """
-    from config.config import LLMSettings
     from cli.investigation import resolve_investigation_context
+    from config.config import LLMSettings
     from core.orchestration.entrypoints import astream_investigation
 
     LLMSettings.from_env()

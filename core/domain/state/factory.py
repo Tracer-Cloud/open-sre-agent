@@ -5,13 +5,13 @@ from __future__ import annotations
 import time
 from typing import Any, cast
 
+from core.domain.alerts.normalization import normalize_alert_payload
 from core.domain.state.agent_state import AgentState, AgentStateModel, model_default_payload
 from core.domain.state.types import ChatMessage
 from integrations.opensre.hf_remote import (
     extract_openrca_scoring_points,
     strip_scoring_points_from_alert,
 )
-from core.domain.alerts.normalization import normalize_alert_payload
 
 
 def make_initial_state(

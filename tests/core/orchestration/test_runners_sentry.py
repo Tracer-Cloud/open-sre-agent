@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from platform.observability import errors
+
 import pytest
 
 from core.orchestration import entrypoints as runners
-from platform.observability import errors
 
 
 def test_run_investigation_initializes_sentry_and_captures_unhandled_errors(

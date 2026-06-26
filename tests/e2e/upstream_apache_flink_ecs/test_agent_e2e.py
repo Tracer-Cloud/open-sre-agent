@@ -13,6 +13,7 @@ import json
 import sys
 import time
 from datetime import UTC, datetime
+from platform.observability.tracing import traceable
 
 import boto3
 import requests
@@ -25,7 +26,6 @@ from tests.shared.e2e_rca_checks import (
 )
 from tests.shared.stack_config import get_flink_config
 from tests.utils.alert_factory import create_alert
-from platform.observability.tracing import traceable
 
 # Configuration loaded dynamically from CloudFormation
 CONFIG = get_flink_config()

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import click
-
 from platform.observability.sentry_sdk import (
     capture_exception,
     resolved_sentry_dsn_host,
     sentry_transport_enabled,
 )
+
+import click
 
 
 @click.group(name="debug")

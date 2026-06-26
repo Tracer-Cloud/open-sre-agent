@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from services.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     BenchmarkAdapter,
     BenchmarkCase,
@@ -69,7 +70,6 @@ from tests.benchmarks._framework.llm_dispatch import (
 )
 from tests.benchmarks._framework.provenance import capture_provenance
 from tests.benchmarks._framework.reporting import render_report_dir
-from services.llm_retry import LLMCreditExhaustedError
 
 # --------------------------------------------------------------------------- #
 # Internal types                                                              #

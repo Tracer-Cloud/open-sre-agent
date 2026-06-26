@@ -23,6 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
+from services.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     AlertPayload,
     BenchmarkAdapter,
@@ -37,7 +38,6 @@ from tests.benchmarks._framework.config import BenchmarkConfig
 from tests.benchmarks._framework.cost import CostBudgetExceeded, UnknownModel
 from tests.benchmarks._framework.llm_dispatch import LLM_SPECS
 from tests.benchmarks._framework.runner import BenchmarkRunner
-from services.llm_retry import LLMCreditExhaustedError
 
 
 class _TinyAdapter(BenchmarkAdapter):

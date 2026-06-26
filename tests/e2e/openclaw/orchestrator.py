@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from platform.observability.tracing import traceable
 from typing import Any
 
 from cli.investigation import run_investigation_cli
 from tests.e2e.openclaw.infrastructure_sdk.local import OpenClawHandle
 from tests.utils.alert_factory import create_alert
-from platform.observability.tracing import traceable
 
 _PIPELINE_NAME = "openclaw_mcp_bridge"
 _ALERT_NAME = "OpenClaw MCP integration unreachable"

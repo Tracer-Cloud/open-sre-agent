@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from platform.observability.sentry_sdk import capture_exception
 from typing import Any
 
 import click
 
 from cli.interactive_shell.error_handling.errors import OpenSREError
-from platform.observability.sentry_sdk import capture_exception
 
 
 def should_report_exception(exc: BaseException, *, expected: bool = False) -> bool:

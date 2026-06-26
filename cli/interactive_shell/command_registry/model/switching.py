@@ -66,9 +66,9 @@ def switch_llm_provider(
     *,
     toolcall_model: str | None = None,
 ) -> bool:
-    from config.llm_credentials import has_llm_api_key
     from cli.wizard.config import PROVIDER_BY_VALUE
     from cli.wizard.env_sync import sync_provider_env
+    from config.llm_credentials import has_llm_api_key
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
