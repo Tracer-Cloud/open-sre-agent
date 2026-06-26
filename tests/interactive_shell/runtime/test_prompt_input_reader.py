@@ -109,7 +109,9 @@ async def test_prompt_input_reader_eof_without_dispatch_renders_resume_hint() ->
 
 
 @pytest.mark.asyncio
-async def test_prompt_input_reader_keyboard_interrupt_with_dispatch_running_returns_cancelled() -> None:
+async def test_prompt_input_reader_keyboard_interrupt_with_dispatch_running_returns_cancelled() -> (
+    None
+):
     state, task = _running_state()
     try:
         event = await _reader(

@@ -351,7 +351,6 @@ def test_completion_includes_tab_navigation() -> None:
 
 
 def test_build_prompt_style_tracks_active_theme() -> None:
-
     set_active_theme("amber")
     amber_attrs = _build_prompt_style().get_attrs_for_style_str("class:prompt-frame-line")
     set_active_theme("teal")

@@ -35,4 +35,3 @@ def test_deterministic_command_text_maps_opensre_investigate() -> None:
     assert (
         deterministic_command_text("opensre investigate -i alert.json") == "/investigate alert.json"
     )
-
