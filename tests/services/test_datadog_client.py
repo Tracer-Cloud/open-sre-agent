@@ -26,7 +26,7 @@ def client(config):
 
 @pytest.fixture
 def mock_httpx_client():
-    with patch("services.datadog.client.httpx.Client") as mock:
+    with patch("vendors.datadog.client.httpx.Client") as mock:
         yield mock
 
 

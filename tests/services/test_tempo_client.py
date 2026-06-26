@@ -57,7 +57,7 @@ def _client() -> TempoClient:
 def _patch_client(monkeypatch: Any, *responses: Any) -> _FakeClient:
     fake = _FakeClient(list(responses))
     monkeypatch.setattr(
-        "services.tempo.client.httpx.get",
+        "vendors.tempo.client.httpx.get",
         fake.get,
     )
     return fake

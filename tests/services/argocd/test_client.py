@@ -661,7 +661,7 @@ def test_verify_ssl_false_is_passed_to_http_client(monkeypatch: pytest.MonkeyPat
         def __init__(self, **kwargs: Any) -> None:
             captured.update(kwargs)
 
-    monkeypatch.setattr("services.argocd.client.httpx.Client", FakeClient)
+    monkeypatch.setattr("vendors.argocd.client.httpx.Client", FakeClient)
     client = ArgoCDClient(
         ArgoCDConfig(
             base_url="https://argocd.example.com",

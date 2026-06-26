@@ -94,7 +94,7 @@ class TestCheckSecurity:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
 
-        with patch("services.elasticsearch.client.httpx.get", return_value=mock_resp):
+        with patch("vendors.elasticsearch.client.httpx.get", return_value=mock_resp):
             client = ElasticsearchClient(ElasticsearchConfig(url="http://localhost:9200"))
             result = client.check_security()
 
@@ -105,7 +105,7 @@ class TestCheckSecurity:
         mock_resp = MagicMock()
         mock_resp.status_code = 401
 
-        with patch("services.elasticsearch.client.httpx.get", return_value=mock_resp):
+        with patch("vendors.elasticsearch.client.httpx.get", return_value=mock_resp):
             client = ElasticsearchClient(ElasticsearchConfig(url="http://localhost:9200"))
             result = client.check_security()
 
@@ -114,7 +114,7 @@ class TestCheckSecurity:
 
     def test_check_security_handles_connection_error(self) -> None:
         with patch(
-            "services.elasticsearch.client.httpx.get",
+            "vendors.elasticsearch.client.httpx.get",
             side_effect=Exception("connection refused"),
         ):
             client = ElasticsearchClient(ElasticsearchConfig(url="http://localhost:9200"))
@@ -127,7 +127,7 @@ class TestCheckSecurity:
         mock_resp = MagicMock()
         mock_resp.status_code = 503
 
-        with patch("services.elasticsearch.client.httpx.get", return_value=mock_resp):
+        with patch("vendors.elasticsearch.client.httpx.get", return_value=mock_resp):
             client = ElasticsearchClient(ElasticsearchConfig(url="http://localhost:9200"))
             result = client.check_security()
 

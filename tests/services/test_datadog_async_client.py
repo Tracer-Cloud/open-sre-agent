@@ -26,7 +26,7 @@ def async_client(config):
 
 @pytest.fixture
 def mock_async_httpx():
-    with patch("services.datadog.client.httpx.AsyncClient") as mock:
+    with patch("vendors.datadog.client.httpx.AsyncClient") as mock:
         yield mock
 
 

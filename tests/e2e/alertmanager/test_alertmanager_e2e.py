@@ -227,7 +227,7 @@ class TestAlertmanagerToolSourceAvailability:
 class TestAlertmanagerVerification:
     """Test Alertmanager integration verification flow."""
 
-    @patch("services.alertmanager.client.AlertmanagerClient.get_status")
+    @patch("vendors.alertmanager.client.AlertmanagerClient.get_status")
     def test_verify_alertmanager_success(self, mock_get_status, monkeypatch):
         """Alertmanager verification passes when status endpoint responds successfully."""
         monkeypatch.setenv("ALERTMANAGER_URL", "http://alertmanager.monitoring.svc:9093")
@@ -249,7 +249,7 @@ class TestAlertmanagerVerification:
         assert am_result["status"] == "passed"
         assert "alertmanager" in am_result["detail"].lower()
 
-    @patch("services.alertmanager.client.AlertmanagerClient.get_status")
+    @patch("vendors.alertmanager.client.AlertmanagerClient.get_status")
     def test_verify_alertmanager_failure(self, mock_get_status, monkeypatch):
         """Alertmanager verification fails when status endpoint is unreachable."""
         monkeypatch.setenv("ALERTMANAGER_URL", "http://alertmanager.monitoring.svc:9093")
@@ -356,7 +356,7 @@ class TestAlertmanagerToolsAvailability:
         assert params["bearer_token"] == "tok"
         assert params["active"] is True
 
-    @patch("services.alertmanager.client.AlertmanagerClient.list_alerts")
+    @patch("vendors.alertmanager.client.AlertmanagerClient.list_alerts")
     def test_alertmanager_alerts_tool_run_success(self, mock_list_alerts):
         """AlertmanagerAlertsTool.run returns structured result on success."""
         from vendors.alertmanager import alertmanager_alerts
@@ -396,7 +396,7 @@ class TestAlertmanagerToolsAvailability:
         assert result["available"] is False
         assert "not configured" in result["error"]
 
-    @patch("services.alertmanager.client.AlertmanagerClient.list_silences")
+    @patch("vendors.alertmanager.client.AlertmanagerClient.list_silences")
     def test_alertmanager_silences_tool_run_success(self, mock_list_silences):
         """AlertmanagerSilencesTool.run returns structured result on success."""
         from vendors.alertmanager import alertmanager_silences
