@@ -157,8 +157,8 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     from platform.observability.tool_trace import redact_sensitive
 
     for tc, output in executed:
+        ok = not (isinstance(output, dict) and "error" in output)
         with contextlib.suppress(Exception):
-            ok = not (isinstance(output, dict) and "error" in output)
             body = (
                 output
                 if isinstance(output, str)

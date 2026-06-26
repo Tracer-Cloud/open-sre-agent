@@ -7,13 +7,6 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from cli.interactive_shell.ui.output.console_state import (
-    _capture_footer_snapshot,
-    clear_active_display,
-    set_active_display,
-    set_live_console,
-    unregister_live_console,
-)
 from cli.interactive_shell.ui.output.events import ProgressEvent
 from cli.interactive_shell.ui.output.labels import (
     BADGE_STYLES,
@@ -156,6 +149,11 @@ class _EventLogDisplay:
     def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
         from rich.live import Live
 
+        from cli.interactive_shell.ui.output.console_state import (
+            set_active_display,
+            set_live_console,
+        )
+
         self._model = model
         self._mode = mode
         self._t0 = t0 if t0 is not None else time.monotonic()
@@ -179,6 +177,12 @@ class _EventLogDisplay:
         set_active_display(self)
 
     def stop(self) -> None:
+        from cli.interactive_shell.ui.output.console_state import (
+            _capture_footer_snapshot,
+            clear_active_display,
+            unregister_live_console,
+        )
+
         _capture_footer_snapshot(self)
         if self._live.is_started:
             self._live.stop()

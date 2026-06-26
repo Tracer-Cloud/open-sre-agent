@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard, runtime_checkable
 
 from rich.text import Text
 
@@ -9,7 +9,7 @@ from cli.interactive_shell.ui.output.environment import _safe_print
 
 if TYPE_CHECKING:
     from cli.interactive_shell.ui.output.events import DisplayProtocol
-from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
+    from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from cli.interactive_shell.ui.output.tool_details import (
     build_tool_call_line,
     build_tool_detail_text,
@@ -28,13 +28,21 @@ from cli.interactive_shell.ui.time_format import _elapsed_hms, _fmt_timing
 from tools.registry import resolve_tool_display_name
 
 
+def _is_repl_display(display: object) -> TypeGuard[_ReplEventLogDisplay]:
+    from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
+
+    return isinstance(display, _ReplEventLogDisplay)
+
+
 @runtime_checkable
 class ToolTrackingSupport(Protocol):
     """Interface that concrete classes must satisfy to use :class:`ToolTrackingMixin`."""
 
-    def update_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None: ...
+    def update_subtext(self, node_name: str, text: str, duration: float = 4.0) -> None:
+        raise NotImplementedError
 
-    def print_above_renderable(self, renderable: Any) -> None: ...
+    def print_above_renderable(self, renderable: Any) -> None:
+        raise NotImplementedError
 
 
 class ToolTrackingMixin:
@@ -105,7 +113,7 @@ class ToolTrackingMixin:
     def print_status_hint(self, text: str) -> None:
         if self._silent:
             return
-        if isinstance(self._display, _ReplEventLogDisplay):
+        if _is_repl_display(self._display):
             self._display.animate_hint(text)
             return
         t = Text()
@@ -118,11 +126,7 @@ class ToolTrackingMixin:
         if self._silent:
             return
         self._tool_details_visible = not self._tool_details_visible
-        if (
-            self._rich
-            and self._display is not None
-            and not isinstance(self._display, _ReplEventLogDisplay)
-        ):
+        if self._rich and self._display is not None and not _is_repl_display(self._display):
             self._sync_tool_detail_view(clear=True)
             return
         label = "shown" if self._tool_details_visible else "hidden"
@@ -131,11 +135,7 @@ class ToolTrackingMixin:
             self._flush_tool_details()
 
     def _sync_tool_detail_view(self, *, clear: bool = False) -> None:
-        if (
-            self._rich
-            and self._display is not None
-            and not isinstance(self._display, _ReplEventLogDisplay)
-        ):
+        if self._rich and self._display is not None and not _is_repl_display(self._display):
             self._display.set_tool_details(
                 visible=self._tool_details_visible,
                 records=self._tool_detail_records,
@@ -165,11 +165,7 @@ class ToolTrackingMixin:
         self._tool_detail_records.append(record)
         if not self._tool_details_visible:
             return
-        if (
-            self._rich
-            and self._display is not None
-            and not isinstance(self._display, _ReplEventLogDisplay)
-        ):
+        if self._rich and self._display is not None and not _is_repl_display(self._display):
             self._sync_tool_detail_view()
         else:
             self._print_tool_detail(record)

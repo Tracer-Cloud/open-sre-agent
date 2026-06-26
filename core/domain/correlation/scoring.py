@@ -59,7 +59,8 @@ class OperatorHintScore:
 
 class HintEvidenceScore(Protocol):
     @property
-    def score(self) -> float: ...
+    def score(self) -> float:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)

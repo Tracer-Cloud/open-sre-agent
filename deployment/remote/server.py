@@ -22,7 +22,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -160,8 +160,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     finally:
         if poller_task is not None:
             poller_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await poller_task
+            # Let the poller observe cancellation before FastAPI shutdown completes.
+            await asyncio.gather(poller_task, return_exceptions=True)
 
 
 app = FastAPI(

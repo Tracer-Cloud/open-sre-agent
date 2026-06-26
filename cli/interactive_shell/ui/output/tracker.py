@@ -6,7 +6,6 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from cli.interactive_shell.ui.output.console_state import _get_console
 from cli.interactive_shell.ui.output.environment import (
     _is_silent_output,
     _repl_progress_active,
@@ -15,8 +14,6 @@ from cli.interactive_shell.ui.output.environment import (
 )
 from cli.interactive_shell.ui.output.events import DisplayProtocol, ProgressEvent
 from cli.interactive_shell.ui.output.labels import _humanise_message, _node_label
-from cli.interactive_shell.ui.output.live_display import _EventLogDisplay
-from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
 from cli.interactive_shell.ui.output.toggles import (
     CtrlOToggleWatcher,
     register_tool_detail_toggle,
@@ -24,6 +21,18 @@ from cli.interactive_shell.ui.output.toggles import (
 )
 from cli.interactive_shell.ui.output.tool_tracking import ToolTrackingMixin
 from cli.interactive_shell.ui.time_format import _fmt_timing
+
+
+def _EventLogDisplay(*args: Any, **kwargs: Any) -> DisplayProtocol:
+    from cli.interactive_shell.ui.output.live_display import _EventLogDisplay
+
+    return _EventLogDisplay(*args, **kwargs)
+
+
+def _ReplEventLogDisplay(*args: Any, **kwargs: Any) -> DisplayProtocol:
+    from cli.interactive_shell.ui.output.repl_display import _ReplEventLogDisplay
+
+    return _ReplEventLogDisplay(*args, **kwargs)
 
 
 def _make_event_log_display(*, t0: float) -> DisplayProtocol:
@@ -133,6 +142,8 @@ class ProgressTracker(ToolTrackingMixin):
         if self._display:
             self._display.print_above_renderable(renderable)
         else:
+            from cli.interactive_shell.ui.output.console_state import _get_console
+
             _get_console().print(renderable)
 
     def _finish(
@@ -181,6 +192,9 @@ def _register_with_observability(tracker: ProgressTracker) -> None:
     from platform.observability.progress import set_progress_tracker
 
     set_progress_tracker(tracker)
+    from cli.interactive_shell.ui.output.console_state import set_tracker_toggle_stop_fn
+
+    set_tracker_toggle_stop_fn(_stop_active_tracker_toggle_watcher)
 
 
 def get_tracker(*, reset: bool = False) -> ProgressTracker:

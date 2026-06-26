@@ -10,10 +10,6 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-from cli.interactive_shell.ui.output.console_state import (
-    _capture_footer_snapshot,
-    get_prompt_suppress_fn,
-)
 from cli.interactive_shell.ui.output.events import ProgressEvent
 from cli.interactive_shell.ui.output.labels import (
     _node_phase_label,
@@ -52,6 +48,8 @@ class _ReplEventLogDisplay:
         self._anim_thread: threading.Thread | None = None
 
     def stop(self) -> None:
+        from cli.interactive_shell.ui.output.console_state import _capture_footer_snapshot
+
         self._stop_animation()
         _capture_footer_snapshot(self)
 
@@ -112,6 +110,8 @@ class _ReplEventLogDisplay:
         self._start_animation(prefix)
 
     def step_start(self, node_name: str) -> None:
+        from cli.interactive_shell.ui.output.console_state import get_prompt_suppress_fn
+
         prompt_suppress_fn = get_prompt_suppress_fn()
         if not self._prompt_suppressed and prompt_suppress_fn is not None:
             self._prompt_suppressed = True

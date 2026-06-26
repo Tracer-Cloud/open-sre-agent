@@ -14,11 +14,10 @@ from types import SimpleNamespace
 import pytest
 
 import services.llm_client as llm_client
-from services.llm_client import (
-    _OPENAI_COMPATIBLE_PROVIDERS,
-    OpenAILLMClient,
-    _create_llm_client,
-)
+
+_OPENAI_COMPATIBLE_PROVIDERS = llm_client._OPENAI_COMPATIBLE_PROVIDERS
+OpenAILLMClient = llm_client.OpenAILLMClient
+_create_llm_client = llm_client._create_llm_client
 
 
 def test_registry_entries_are_well_formed() -> None:

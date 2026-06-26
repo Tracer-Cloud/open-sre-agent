@@ -33,6 +33,7 @@ def _safe_print(text: str) -> None:
         with contextlib.suppress(BrokenPipeError):
             print(text.encode(enc, errors="replace").decode(enc))
     except BrokenPipeError:
+        # Downstream closed the pipe; mirror standard CLI behavior and stop writing.
         pass
 
 
