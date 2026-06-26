@@ -123,7 +123,7 @@ Routing live tests always run with live coverage enabled. Do not use deselection
 
 In CI, [`.github/workflows/routing-live.yml`](.github/workflows/routing-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `routing-checks` gate (deterministic routing + fixture integrity, `-m "not live_llm"`) and the sharded `routing-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
 
-`@live` gather scenarios **fail** (not skip) in GitHub Actions when integration credentials are missing; locally they may still skip. Investigation dispatch scenarios skip when `INTERACTIVE_SHELL_INVESTIGATION_ENABLED` is `False` (kill-switch). Require all `routing-checks` and `routing-live shard *` checks on `main` branch protection.
+`@live` gather scenarios **fail** (not skip) in GitHub Actions when integration credentials are missing; locally they may still skip. Natural-language investigation dispatch is **enabled** (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`); investigation routing scenarios run in CI and only skip when the flag is flipped off for emergency rollback. Require all `routing-checks` and `routing-live shard *` checks on `main` branch protection.
 
 ## 7) CI-only tests
 

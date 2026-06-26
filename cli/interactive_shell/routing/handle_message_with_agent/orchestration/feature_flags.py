@@ -7,18 +7,17 @@ LLM, tool runners, or the investigation pipeline.
 
 from __future__ import annotations
 
-# Temporary kill-switch for the natural-language investigation loop in the
-# interactive shell. When ``False`` the planner is NOT offered the
-# ``investigation_start`` tool, so diagnostic / incident-style prompts can no
-# longer trigger the heavyweight RCA pipeline from the REPL -- they fall through
-# to the conversational assistant instead.
+# Natural-language investigation routing in the interactive shell. When ``True``
+# the planner is offered ``investigation_start``, so incident-style prompts can
+# trigger the RCA pipeline from the REPL. When ``False`` (emergency rollback
+# only) those prompts fall through to the conversational assistant instead.
 #
 # Scope: this gates ONLY the planner's natural-language path. The
 # ``/sample-alert`` command and the local alert listener still run
 # investigations; they do not go through ``investigation_start``.
 #
-# Flip to ``True`` to restore natural-language investigation routing (which also
-# re-enables the investigation routing scenarios that skip while this is False).
+# Keep ``True`` while investigation dispatch routing scenarios exist; fixture
+# integrity enforces this in ``routing-checks``.
 INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True
 
 

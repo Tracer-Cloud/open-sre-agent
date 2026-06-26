@@ -36,6 +36,9 @@ notes:
 - 'The investigation alert_text is synthesized from the prompt and varies per run, so planned_actions
   leaves content empty: the planning test asserts an investigation with non-empty alert_text rather than
   an exact string.'
+- 'Gather negative control: connected integrations must route to investigation_start, not the conversational
+  gather loop on the same turn. not_called on Sentry/GitHub/PostHog gather tools proves dispatch won over
+  handoff fan-out (contrast 338, where the same integrations DO gather).'
 route:
   expected_kind: handle_message_with_agent
   expected_command_text: null
@@ -65,3 +68,9 @@ runs: 5
 tool_actions:
 - surface: dispatch
   kind: investigation
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called
