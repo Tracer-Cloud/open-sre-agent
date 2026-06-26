@@ -138,11 +138,9 @@ def _int_env(name: str, default: int, *, minimum: int) -> int:
 
 
 def _split_repo_full_name(value: str) -> tuple[str, str]:
-    cleaned = value.strip().strip("/")
-    if cleaned.count("/") < 1:
-        return "", ""
-    owner, repo = cleaned.split("/", 1)
-    return owner.strip(), repo.strip().removesuffix(".git")
+    from tools.utils.github_repo_scope import split_repo_full_name
+
+    return split_repo_full_name(value)
 
 
 def _extract_meta_field(meta: dict[str, Any], *keys: str) -> str:

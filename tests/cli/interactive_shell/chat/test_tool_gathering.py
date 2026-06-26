@@ -19,6 +19,7 @@ import core.runtime as runtime_module
 import services.agent_llm_client as agent_llm_client
 from cli.interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
+    _resolve_gather_integrations,
     _tool_input_hint,
     gather_tool_evidence,
 )
@@ -216,3 +217,97 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     output = console.file.getvalue()
     assert "Grafana · Mimir — pipeline_runs_total" in output
     assert "Grafana · Mimir (2) — http_errors_total" in output
+
+
+def test_resolve_gather_integrations_enriches_github_from_repo_url() -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {
+        "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
+    }
+
+    resolved = _resolve_gather_integrations(
+        session,
+        "check github issues in https://github.com/Tracer-Cloud/opensre",
+    )
+
+    gh = resolved["github"]
+    assert gh["owner"] == "Tracer-Cloud"
+    assert gh["repo"] == "opensre"
+    assert session.github_repo_scope == ("Tracer-Cloud", "opensre")
+
+
+def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {
+        "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
+    }
+    session.github_repo_scope = ("Tracer-Cloud", "opensre")
+    session.cli_agent_messages = [
+        ("user", "https://github.com/Tracer-Cloud/opensre"),
+        ("assistant", "Got it."),
+    ]
+
+    resolved = _resolve_gather_integrations(session, "do these searches")
+
+    assert resolved["github"]["owner"] == "Tracer-Cloud"
+    assert resolved["github"]["repo"] == "opensre"
+
+
+def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {
+        "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
+    }
+    seen: dict[str, Any] = {}
+
+    def _capture_tools(resolved: dict[str, Any]) -> list[_DummyTool]:
+        seen["resolved"] = resolved
+        gh = resolved.get("github", {})
+        if isinstance(gh, dict) and gh.get("owner") and gh.get("repo"):
+            return [_DummyTool("search_github_issues")]
+        return []
+
+    monkeypatch.setattr(investigate_tools, "get_available_tools", _capture_tools)
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+
+    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+
+    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+
+    gather_tool_evidence(
+        "check github issues in https://github.com/Tracer-Cloud/opensre",
+        session,
+        _console(),
+    )
+
+    gh = seen["resolved"]["github"]
+    assert gh["owner"] == "Tracer-Cloud"
+    assert gh["repo"] == "opensre"
+
+
+def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> None:
+    session = ReplSession()
+    session.resolved_integrations_cache = {}
+    session.cli_agent_messages = [("user", "prior question"), ("assistant", "prior answer")]
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        investigate_tools,
+        "get_available_tools",
+        lambda _resolved: [_DummyTool("search_github_issues")],
+    )
+    monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
+
+    def _fake_loop(**kwargs: Any) -> runtime_module.ToolLoopResult:
+        captured["messages"] = kwargs["messages"]
+        return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
+
+    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+
+    gather_tool_evidence("follow up", session, _console())
+
+    content = captured["messages"][0]["content"]
+    assert "Recent conversation:" in content
+    assert "prior question" in content
+    assert "Current question:\nfollow up" in content

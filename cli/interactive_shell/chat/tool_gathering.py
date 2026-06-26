@@ -23,16 +23,25 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.state.conversation_history import (
+    NO_HISTORY_PLACEHOLDER,
+    format_recent_conversation,
+)
 from cli.interactive_shell.ui import DIM
 from cli.interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
 from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from tools.utils.github_repo_scope import (
+    apply_github_repo_scope,
+    infer_github_repo_scope,
+)
 
 # Keep the gathering loop short: this runs inline on a REPL turn, so it must stay
 # responsive. A handful of iterations is enough to fetch the data needed to
@@ -199,6 +208,29 @@ def _build_gather_system_prompt(session: ReplSession) -> str:
     )
 
 
+def _resolve_gather_integrations(session: ReplSession, message: str) -> dict[str, Any]:
+    """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred."""
+    base = _resolve_session_integrations(session)
+    scope = infer_github_repo_scope(
+        message=message,
+        conversation_messages=session.cli_agent_messages,
+        env=os.environ,
+        cwd=os.getcwd(),
+        cached=session.github_repo_scope,
+    )
+    if scope:
+        session.github_repo_scope = scope
+        return apply_github_repo_scope(base, scope[0], scope[1])
+    return base
+
+
+def _build_gather_user_message(session: ReplSession, message: str) -> str:
+    history = format_recent_conversation(session, max_turns=3)
+    if history == NO_HISTORY_PLACEHOLDER:
+        return message
+    return f"Recent conversation:\n{history}\n\nCurrent question:\n{message}"
+
+
 def gather_tool_evidence(
     message: str,
     session: ReplSession,
@@ -218,7 +250,7 @@ def gather_tool_evidence(
         from core.runtime import run_tool_calling_loop
         from services.agent_llm_client import get_agent_llm
 
-        resolved = _resolve_session_integrations(session)
+        resolved = _resolve_gather_integrations(session, message)
         tools = get_available_tools(resolved)
         if not tools:
             return None
@@ -249,7 +281,7 @@ def gather_tool_evidence(
         result = run_tool_calling_loop(
             llm=llm,
             system=_build_gather_system_prompt(session),
-            messages=[{"role": "user", "content": message}],
+            messages=[{"role": "user", "content": _build_gather_user_message(session, message)}],
             tools=tools,
             resolved_integrations=resolved,
             max_iterations=_MAX_GATHER_ITERATIONS,
