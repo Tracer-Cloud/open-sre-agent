@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import core.orchestration.node.publish_findings.upstream_correlation.node as correlation_node
 from core.domain.state import InvestigationState
-from core.orchestration.node.publish_findings.upstream_correlation.node import (
-    node_correlate_upstream,
-)
 from core.orchestration.node.publish_findings.upstream_correlation.registry import (
     build_upstream_evidence_provider,
 )
@@ -22,4 +20,4 @@ def build_correlation_config(state: InvestigationState | dict[str, Any]) -> dict
 def enrich_upstream_correlation(state: InvestigationState) -> dict[str, Any]:
     """Build upstream-correlation state updates for report generation."""
     config = build_correlation_config(state)
-    return node_correlate_upstream(state, config)
+    return correlation_node.node_correlate_upstream(state, config)

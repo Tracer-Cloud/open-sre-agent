@@ -18,9 +18,6 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from cli.wizard._integration_configurators import (
-    _configure_selected_integrations,
-)
 from cli.wizard._ui import (
     Choice,
     _choose,
@@ -317,7 +314,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
-        configured_integrations, integration_env_path = _configure_selected_integrations()
+        configured_integrations, integration_env_path = (
+            _integration_configurators_module._configure_selected_integrations()
+        )
     except KeyboardInterrupt:
         cancelled = Text()
         cancelled.append(f"\n  {GLYPH_WARNING}  ", style=f"bold {WARNING}")
