@@ -3,7 +3,7 @@ root_packages =
     cli
     config
     core
-    deployment
+    infra
     integrations
     platform
     services

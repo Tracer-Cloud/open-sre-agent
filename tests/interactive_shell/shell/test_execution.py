@@ -23,8 +23,7 @@ def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "interactive_shell.harness.orchestration"
-        ".action_executor.shell_execution.subprocess.run",
+        "interactive_shell.harness.orchestration.action_executor.shell_execution.subprocess.run",
         _raise,
     )
 
@@ -58,8 +57,7 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
         )
 
     monkeypatch.setattr(
-        "interactive_shell.harness.orchestration"
-        ".action_executor.shell_execution.subprocess.run",
+        "interactive_shell.harness.orchestration.action_executor.shell_execution.subprocess.run",
         _raise,
     )
 
