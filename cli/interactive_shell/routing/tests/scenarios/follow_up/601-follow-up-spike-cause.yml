@@ -20,6 +20,8 @@ planned_actions:
 response_contract:
   must_contain_any:
   - incident context
+  - prior rca
+  - disk full
   - spike
   - alert text or json
   must_not_contain:
