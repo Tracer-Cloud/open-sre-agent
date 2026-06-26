@@ -279,7 +279,7 @@ def _comment_map_for_makefile(path: Path) -> dict[str, str]:
 def discover_make_targets() -> list[TestCatalogItem]:
     if not MAKEFILE_PATH.is_file():
         # PyInstaller-bundled builds ship only the ``config/`` tree (see
-        # ``deployment/packaging/opensre.spec``), so the Makefile is absent at runtime.
+        # the release workflow), so the Makefile is absent at runtime.
         # Return an empty catalog slice so ``opensre tests`` still launches
         # against whatever sources *are* bundled.
         return []
@@ -342,7 +342,7 @@ def _discover_rds_synthetic_scenarios() -> list[TestCatalogItem]:
     """One catalog item per RDS synthetic scenario directory.
 
     Bundled (PyInstaller) builds collect only ``config/`` data files (see
-    ``deployment/packaging/opensre.spec``), so ``tests/synthetic/rds_postgres`` is
+    the release workflow), so ``tests/synthetic/rds_postgres`` is
     absent at runtime and ``iterdir()`` would raise ``FileNotFoundError``.
     Skip cleanly in that case — the synthetic-suite catalog entries are
     only meaningful when the scenarios are on disk anyway.

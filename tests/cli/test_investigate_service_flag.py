@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-import deployment.remote as remote_pkg
+import infra.deployment.remote as remote_pkg
 from cli.commands.general import investigate_command
 
 
@@ -37,9 +37,9 @@ def _fake_result() -> dict[str, object]:
 
 @pytest.fixture(autouse=True)
 def _stub_runtime_alert_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    runtime_alert = types.ModuleType("deployment.remote.runtime_alert")
+    runtime_alert = types.ModuleType("infra.deployment.remote.runtime_alert")
     runtime_alert.build_runtime_alert_payload = lambda *_args, **_kwargs: {}
-    monkeypatch.setitem(sys.modules, "deployment.remote.runtime_alert", runtime_alert)
+    monkeypatch.setitem(sys.modules, "infra.deployment.remote.runtime_alert", runtime_alert)
     monkeypatch.setattr(remote_pkg, "runtime_alert", runtime_alert, raising=False)
 
 
@@ -48,7 +48,7 @@ def test_service_flag_invokes_runtime_investigation(monkeypatch) -> None:
     runner = CliRunner()
     with (
         patch(
-            "deployment.remote.runtime_alert.build_runtime_alert_payload",
+            "infra.deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
         patch(
@@ -73,7 +73,7 @@ def test_service_flag_writes_output_file(tmp_path, monkeypatch) -> None:
 
     with (
         patch(
-            "deployment.remote.runtime_alert.build_runtime_alert_payload",
+            "infra.deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
         patch(
@@ -108,7 +108,7 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
         args.append(conflict_value)
 
     with (
-        patch("deployment.remote.runtime_alert.build_runtime_alert_payload"),
+        patch("infra.deployment.remote.runtime_alert.build_runtime_alert_payload"),
         patch("cli.investigation.run_investigation_cli"),
     ):
         result = runner.invoke(investigate_command, args)
@@ -124,7 +124,7 @@ def test_service_flag_surfaces_errors_from_payload_builder() -> None:
     with (
         patch("cli.commands.general.track_investigation") as mock_tracking,
         patch(
-            "deployment.remote.runtime_alert.build_runtime_alert_payload",
+            "infra.deployment.remote.runtime_alert.build_runtime_alert_payload",
             side_effect=OpenSREError("unknown service", suggestion="add it"),
         ),
         patch("cli.investigation.run_investigation_cli"),
@@ -161,7 +161,7 @@ def test_slack_thread_without_bot_token_is_rejected(monkeypatch) -> None:
 
     with (
         patch(
-            "deployment.remote.runtime_alert.build_runtime_alert_payload",
+            "infra.deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ),
         patch("cli.investigation.run_investigation_cli", return_value=_fake_result()),
@@ -181,7 +181,7 @@ def test_slack_thread_passed_to_payload_builder(monkeypatch) -> None:
 
     with (
         patch(
-            "deployment.remote.runtime_alert.build_runtime_alert_payload",
+            "infra.deployment.remote.runtime_alert.build_runtime_alert_payload",
             return_value=_fake_payload("my-svc"),
         ) as mock_build,
         patch("cli.investigation.run_investigation_cli", return_value=_fake_result()),

@@ -15,8 +15,8 @@ from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
 
 if TYPE_CHECKING:
-    from deployment.remote.client import PreflightResult, RemoteAgentClient
-    from deployment.remote.ops import RemoteOpsProvider, RemoteServiceScope
+    from infra.deployment.remote.client import PreflightResult, RemoteAgentClient
+    from infra.deployment.remote.ops import RemoteOpsProvider, RemoteServiceScope
 
 
 def _context_value(ctx: click.Context, key: str) -> str | None:
@@ -38,7 +38,7 @@ def _remote_style(questionary: Any) -> Any:
 
 def _load_remote_client(ctx: click.Context, *, missing_url_hint: str) -> RemoteAgentClient:
     from cli.wizard.store import load_remote_url
-    from deployment.remote.client import RemoteAgentClient
+    from infra.deployment.remote.client import RemoteAgentClient
 
     resolved_url = _context_value(ctx, "url") or load_remote_url()
     if not resolved_url:
@@ -63,7 +63,7 @@ def _parse_alert_json(alert_json: str) -> dict[str, Any]:
 
 
 def _sample_alert_payload() -> dict[str, str]:
-    from deployment.remote.client import SYNTHETIC_ALERT
+    from infra.deployment.remote.client import SYNTHETIC_ALERT
 
     return {
         "alert_name": "etl-daily-orders-failure",
@@ -162,7 +162,7 @@ def _run_preflight(url: str, api_key: str | None, console: Any) -> PreflightResu
     """Run a preflight check with a live status indicator."""
     from rich.status import Status
 
-    from deployment.remote.client import RemoteAgentClient
+    from infra.deployment.remote.client import RemoteAgentClient
 
     client = RemoteAgentClient(url, api_key=api_key)
     with Status("  Connecting...", console=console, spinner="dots"):
@@ -307,7 +307,7 @@ def _build_investigation_choices(
 
 def _resolve_remote_ops_scope(ctx: click.Context) -> tuple[RemoteOpsProvider, RemoteServiceScope]:
     from cli.wizard.store import load_remote_ops_config
-    from deployment.remote.ops import RemoteServiceScope, resolve_remote_ops_provider
+    from infra.deployment.remote.ops import RemoteServiceScope, resolve_remote_ops_provider
 
     stored = load_remote_ops_config()
 
@@ -704,7 +704,7 @@ def remote_ops(
 @click.pass_context
 def remote_ops_status(ctx: click.Context, as_json: bool) -> None:
     """Inspect deployment status and metadata for a hosted service."""
-    from deployment.remote.ops import RemoteOpsError
+    from infra.deployment.remote.ops import RemoteOpsError
 
     try:
         provider, scope = _resolve_remote_ops_scope(ctx)
@@ -750,7 +750,7 @@ def remote_ops_status(ctx: click.Context, as_json: bool) -> None:
 @click.pass_context
 def remote_ops_logs(ctx: click.Context, follow: bool, lines: int) -> None:
     """Tail or stream provider logs for a hosted service."""
-    from deployment.remote.ops import RemoteOpsError
+    from infra.deployment.remote.ops import RemoteOpsError
 
     try:
         provider, scope = _resolve_remote_ops_scope(ctx)
@@ -766,7 +766,7 @@ def remote_ops_logs(ctx: click.Context, follow: bool, lines: int) -> None:
 @click.pass_context
 def remote_ops_restart(ctx: click.Context, yes: bool, as_json: bool) -> None:
     """Request a restart or redeploy for a hosted service."""
-    from deployment.remote.ops import RemoteOpsError
+    from infra.deployment.remote.ops import RemoteOpsError
 
     try:
         provider, scope = _resolve_remote_ops_scope(ctx)

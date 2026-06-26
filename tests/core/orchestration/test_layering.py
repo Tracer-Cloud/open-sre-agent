@@ -32,11 +32,11 @@ _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
 # layering violation regardless of vendor.
 # This guards against future Grafana/AWS/etc. imports without manual edits.
 #
-# ``deployment.remote`` is a transport-layer package (HTTP client, SSE parser). The
+# ``infra.deployment.remote`` is a transport-layer package (HTTP client, SSE parser). The
 # orchestration core must not depend on it — domain types it shares with
 # the remote runner live in ``core.domain`` (see ``StreamEvent``).
 # ``cli`` is the presentation layer; same rule.
-_FORBIDDEN_PREFIXES: tuple[str, ...] = ("services", "deployment.remote", "cli")
+_FORBIDDEN_PREFIXES: tuple[str, ...] = ("services", "infra.deployment.remote", "cli")
 
 
 def _orchestration_pipeline_modules() -> list[Path]:

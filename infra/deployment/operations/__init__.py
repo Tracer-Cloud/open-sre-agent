@@ -4,14 +4,14 @@ Health polling, persisted EC2 stack outputs, and provider config validation for
 dry runs.
 """
 
-from deployment.operations.ec2_config import (
+from infra.deployment.operations.ec2_config import (
     delete_remote_outputs,
     get_remote_outputs_path,
     load_remote_outputs,
     save_remote_outputs,
 )
-from deployment.operations.health import HealthPollStatus, poll_deployment_health
-from deployment.operations.provider_config import (
+from infra.deployment.operations.health import HealthPollStatus, poll_deployment_health
+from infra.deployment.operations.provider_config import (
     ProviderValidationResult,
     dry_run_provider_validation,
     validate_aws_deploy_config,

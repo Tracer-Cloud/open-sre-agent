@@ -4,7 +4,7 @@ from typing import Any
 
 from _pytest.monkeypatch import MonkeyPatch
 
-from deployment.entrypoints.mcp import RunRCAOutput, run_rca
+from infra.deployment.entrypoints.mcp import RunRCAOutput, run_rca
 
 
 def test_run_rca_malformed_input() -> None:
@@ -36,7 +36,7 @@ def test_run_rca_happy_path(monkeypatch: MonkeyPatch) -> None:
             },
         }
 
-    monkeypatch.setattr("deployment.entrypoints.mcp._run_cli", fake_run_cli)
+    monkeypatch.setattr("infra.deployment.entrypoints.mcp._run_cli", fake_run_cli)
 
     payload: dict[str, Any] = {
         "title": "CPU alert",
@@ -74,8 +74,10 @@ def test_run_rca_unexpected_exception_includes_error_type(monkeypatch: MonkeyPat
     def fake_run_cli(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("something went wrong")
 
-    monkeypatch.setattr("deployment.entrypoints.mcp._run_cli", fake_run_cli)
-    monkeypatch.setattr("deployment.entrypoints.mcp.capture_exception", captured_errors.append)
+    monkeypatch.setattr("infra.deployment.entrypoints.mcp._run_cli", fake_run_cli)
+    monkeypatch.setattr(
+        "infra.deployment.entrypoints.mcp.capture_exception", captured_errors.append
+    )
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
     result = run_rca(alert_payload=payload)
@@ -92,7 +94,7 @@ def test_run_rca_error_type_reflects_actual_exception_class(monkeypatch: MonkeyP
     def fake_run_cli(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         raise ValueError("bad value")
 
-    monkeypatch.setattr("deployment.entrypoints.mcp._run_cli", fake_run_cli)
+    monkeypatch.setattr("infra.deployment.entrypoints.mcp._run_cli", fake_run_cli)
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
     result = run_rca(alert_payload=payload)
@@ -104,7 +106,7 @@ def test_run_rca_error_type_reflects_actual_exception_class(monkeypatch: MonkeyP
 def test_run_rca_output_shape_on_success(monkeypatch: MonkeyPatch) -> None:
     """Success response always has ok, result, error, and error_type keys."""
     monkeypatch.setattr(
-        "deployment.entrypoints.mcp._run_cli", lambda *_a, **_kw: {"report": "done"}
+        "infra.deployment.entrypoints.mcp._run_cli", lambda *_a, **_kw: {"report": "done"}
     )
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}
@@ -153,9 +155,11 @@ def test_run_rca_tracks_investigation_source(monkeypatch: MonkeyPatch) -> None:
         track_calls.append((entrypoint.value, trigger_mode.value))
         return _TrackContext()
 
-    monkeypatch.setattr("deployment.entrypoints.mcp.track_investigation", fake_track_investigation)
     monkeypatch.setattr(
-        "deployment.entrypoints.mcp.run_investigation_cli", lambda **_kwargs: {"ok": True}
+        "infra.deployment.entrypoints.mcp.track_investigation", fake_track_investigation
+    )
+    monkeypatch.setattr(
+        "infra.deployment.entrypoints.mcp.run_investigation_cli", lambda **_kwargs: {"ok": True}
     )
 
     payload: dict[str, Any] = {"title": "test", "state": "firing", "alert_source": "grafana"}

@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - "infra/**"
+      - "infra/bench/**"
+      - "infra/docker-compose*.yml"
+      - "infra/install-proxy/**"
+      - "infra/opensre-dataset/**"
+      - "infra/scripts/**"
       - "tests/**"
       - "**/*.md"
       - "**/*.mdx"
@@ -151,7 +155,7 @@ jobs:
 
       - name: Sync release version
         shell: bash
-        run: python deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python .github/scripts/sync-release-version.py --tag "$TAG_NAME"
 
       - name: Build Python distributions
         run: |
@@ -229,14 +233,21 @@ jobs:
       - name: Sync release version
         if: env.RELEASE_CHANNEL == 'release'
         shell: bash
-        run: python deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python .github/scripts/sync-release-version.py --tag "$TAG_NAME"
 
       - name: Install binary build dependencies
         shell: bash
         run: uv sync --frozen --extra release-binary
 
       - name: Build binary
-        run: uv run pyinstaller deployment/packaging/opensre.spec --clean --noconfirm
+        run: >-
+          uv run pyinstaller cli/__main__.py
+          --name opensre
+          --onefile
+          --clean
+          --noconfirm
+          --collect-data cli
+          --collect-data config
 
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'

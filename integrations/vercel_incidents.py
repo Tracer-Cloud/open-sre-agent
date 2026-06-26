@@ -12,7 +12,7 @@ import questionary
 
 from cli.interactive_shell.data_store.context import is_json_output
 from cli.investigation import run_investigation_cli, run_investigation_cli_streaming
-from deployment.remote.vercel_poller import (
+from infra.deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelResolutionError,
     collect_vercel_candidates,

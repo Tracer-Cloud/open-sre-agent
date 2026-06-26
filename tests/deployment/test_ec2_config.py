@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from deployment.operations.ec2_config import (
+from infra.deployment.operations.ec2_config import (
     delete_remote_outputs,
     load_remote_outputs,
     save_remote_outputs,

@@ -17,8 +17,8 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from core.domain.stream import StreamEvent
-from deployment.remote import server as remote_server
-from deployment.remote.server import (
+from infra.deployment.remote import server as remote_server
+from infra.deployment.remote.server import (
     DeepHealthCheck,
     InvestigateRequest,
     _check_disk_health,
@@ -30,7 +30,7 @@ from deployment.remote.server import (
     investigate,
     investigate_stream,
 )
-from deployment.remote.vercel_poller import VercelResolutionError
+from infra.deployment.remote.vercel_poller import VercelResolutionError
 
 
 class _UrlopenResponse:
@@ -131,12 +131,16 @@ def test_investigate_enriches_pasted_vercel_url(monkeypatch: pytest.MonkeyPatch)
             "critical",
         )
 
-    monkeypatch.setattr("deployment.remote.server.enrich_remote_alert_from_vercel", fake_enrich)
     monkeypatch.setattr(
-        "deployment.remote.server._execute_investigation",
+        "infra.deployment.remote.server.enrich_remote_alert_from_vercel", fake_enrich
+    )
+    monkeypatch.setattr(
+        "infra.deployment.remote.server._execute_investigation",
         fake_execute_investigation,
     )
-    monkeypatch.setattr("deployment.remote.server._save_investigation", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "infra.deployment.remote.server._save_investigation", lambda **_kwargs: None
+    )
 
     response = investigate(
         InvestigateRequest(
@@ -155,7 +159,7 @@ def test_investigate_returns_bad_request_for_invalid_vercel_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "deployment.remote.server.enrich_remote_alert_from_vercel",
+        "infra.deployment.remote.server.enrich_remote_alert_from_vercel",
         lambda _raw_alert: (_ for _ in ()).throw(VercelResolutionError("invalid vercel url")),
     )
 
@@ -230,7 +234,7 @@ def test_execute_investigation_tracks_remote_http_source(
         track_calls.append((entrypoint.value, trigger_mode.value))
         return _TrackContext()
 
-    monkeypatch.setattr("deployment.remote.server.track_investigation", fake_track)
+    monkeypatch.setattr("infra.deployment.remote.server.track_investigation", fake_track)
     monkeypatch.setattr(
         "cli.investigation.resolve_investigation_context",
         lambda **_kwargs: ("alert-name", "pipeline-name", "critical"),
@@ -294,7 +298,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
         fake_astream_investigation,
     )
     monkeypatch.setattr(
-        "deployment.remote.server._persist_streamed_result",
+        "infra.deployment.remote.server._persist_streamed_result",
         fake_persist_streamed_result,
     )
 
@@ -390,8 +394,10 @@ async def test_lifespan_starts_and_cancels_vercel_poller(
 
     monkeypatch.setenv("VERCEL_POLL_ENABLED", "true")
     monkeypatch.setenv("VERCEL_POLL_PROJECT_IDS", "proj_123")
-    monkeypatch.setattr("deployment.remote.server.INVESTIGATIONS_DIR", tmp_path)
-    monkeypatch.setattr("deployment.remote.vercel_poller.VercelPoller.run_forever", _run_forever)
+    monkeypatch.setattr("infra.deployment.remote.server.INVESTIGATIONS_DIR", tmp_path)
+    monkeypatch.setattr(
+        "infra.deployment.remote.vercel_poller.VercelPoller.run_forever", _run_forever
+    )
 
     async with _lifespan(object()):
         await asyncio.wait_for(started.wait(), timeout=1)
@@ -542,7 +548,7 @@ def test_imds_token_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         assert _imds_token() is None
         assert _imds_token() is None
 
@@ -569,7 +575,7 @@ def test_imds_token_reports_again_after_success(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr("urllib.request.urlopen", _urlopen)
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         assert _imds_token() is None
         assert _imds_token() is None
         assert _imds_token() == "test-token"
@@ -586,7 +592,7 @@ def test_imds_get_reports_failure_once(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("urllib.request.urlopen", _raise_url_error)
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
 
@@ -613,7 +619,7 @@ def test_imds_get_reports_again_after_success(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("urllib.request.urlopen", _urlopen)
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
         assert _imds_get("latest/meta-data/instance-id", token="test-token") is None
         assert _imds_get("latest/meta-data/instance-id", token="test-token") == "i-123"
@@ -633,7 +639,7 @@ def test_check_llm_connectivity_reports_bedrock_failure(monkeypatch: pytest.Monk
     monkeypatch.setitem(sys.modules, "boto3", _FakeBoto3)
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         result = _check_llm_connectivity()
 
     assert result.status == "failed"
@@ -672,7 +678,7 @@ def test_check_llm_connectivity_reports_again_after_success(
     remote_server._INSTANCE_METADATA["region"] = "us-east-1"
     remote_server._REPORTED_REMOTE_EVENTS.clear()
 
-    with patch("deployment.remote.server.report_remote_exception") as report:
+    with patch("infra.deployment.remote.server.report_remote_exception") as report:
         assert _check_llm_connectivity().status == "failed"
         assert _check_llm_connectivity().status == "failed"
         assert _check_llm_connectivity().status == "passed"
@@ -713,7 +719,7 @@ def test_check_memory_health_returns_passed_when_below_warn_threshold(
         def read_text(self, **_kwargs: object) -> str:
             return "NoiseWithoutSeparator\nMemTotal:       102400 kB\nMemAvailable:    51200 kB\n"
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeHealthyMeminfoPath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeHealthyMeminfoPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -736,7 +742,7 @@ def test_check_memory_health_returns_warn_when_at_threshold(
         def read_text(self, **_kwargs: object) -> str:
             return "MemTotal:       102400 kB\nMemAvailable:    10240 kB\n"
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeHighUsageMeminfoPath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeHighUsageMeminfoPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -756,7 +762,7 @@ def test_check_memory_health_returns_missing_when_proc_file_absent(
         def exists(self) -> bool:
             return False
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeMeminfoPath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeMeminfoPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -778,7 +784,7 @@ def test_check_memory_health_returns_missing_when_memtotal_absent(
         def read_text(self, **_kwargs: object) -> str:
             return "MemAvailable:    8192 kB\n"
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeIncompletePath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeIncompletePath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -800,7 +806,7 @@ def test_check_memory_health_returns_missing_when_memavailable_absent(
         def read_text(self, **_kwargs: object) -> str:
             return "MemTotal:       16384 kB\n"
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeIncompletePath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeIncompletePath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -822,7 +828,7 @@ def test_check_memory_health_returns_missing_on_oserror(
         def read_text(self, **_kwargs: object) -> str:
             raise OSError("permission denied")
 
-    monkeypatch.setattr("deployment.remote.server.Path", _FakeOsErrorPath)
+    monkeypatch.setattr("infra.deployment.remote.server.Path", _FakeOsErrorPath)
     result = _check_memory_health()
 
     assert isinstance(result, DeepHealthCheck)
@@ -915,7 +921,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "deployment.remote.server._persist_streamed_result",
+        "infra.deployment.remote.server._persist_streamed_result",
         lambda **kwargs: persisted.update(kwargs),
     )
 

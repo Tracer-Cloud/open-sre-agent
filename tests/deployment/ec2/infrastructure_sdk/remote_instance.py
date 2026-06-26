@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 
-from deployment.operations.health import poll_deployment_health
+from infra.deployment.operations.health import poll_deployment_health
 from tests.shared.infrastructure_sdk.deployer import (
     DEFAULT_REGION,
     get_boto3_client,
@@ -89,7 +89,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/opensre
-ExecStart=/opt/opensre/.venv/bin/uvicorn deployment.remote.server:app --host 0.0.0.0 --port {SERVER_PORT}
+ExecStart=/opt/opensre/.venv/bin/uvicorn infra.deployment.remote.server:app --host 0.0.0.0 --port {SERVER_PORT}
 Restart=on-failure
 RestartSec=5
 Environment=PATH=/opt/opensre/.venv/bin:/usr/local/bin:/usr/bin:/bin

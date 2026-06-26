@@ -33,7 +33,7 @@ from typing import Any
 import httpx
 import pytest
 
-from deployment.remote.client import PreflightResult, RemoteAgentClient
+from infra.deployment.remote.client import PreflightResult, RemoteAgentClient
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 def _health_url(base_url: str) -> str:
-    """Build the ``/api/health`` URL for the Vercel deployment."""
+    """Build the ``/api/health`` URL for the Vercel infra.deployment."""
     return f"{base_url.rstrip('/')}/api/health"
 
 
@@ -60,7 +60,7 @@ def _ok_url(base_url: str) -> str:
 
 @pytest.mark.e2e
 class TestVercelRemoteConnection:
-    """Exercise the remote-connection flow against a live Vercel deployment.
+    """Exercise the remote-connection flow against a live Vercel infra.deployment.
 
     These tests use the ``vercel_deployment`` session fixture defined in
     ``conftest.py``, which provisions a real Vercel serverless deployment

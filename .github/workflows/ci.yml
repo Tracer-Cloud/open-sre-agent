@@ -7,7 +7,7 @@ on:
       - "cli/**"
       - "config/**"
       - "core/**"
-      - "deployment/**"
+      - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "services/**"
@@ -27,7 +27,7 @@ on:
       - "cli/**"
       - "config/**"
       - "core/**"
-      - "deployment/**"
+      - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "services/**"
@@ -46,7 +46,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "cli config core deployment integrations platform services tools"
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform services tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -230,7 +230,7 @@ jobs:
           --cov=cli
           --cov=config
           --cov=core
-          --cov=deployment
+          --cov=infra.deployment
           --cov=integrations
           --cov=platform
           --cov=services
@@ -361,7 +361,7 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "deployment/**"
+              - "infra/deployment/**"
               - "integrations/**"
               - "core/orchestration/**"
               - "services/**"

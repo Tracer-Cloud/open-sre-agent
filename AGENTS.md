@@ -20,7 +20,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | `app/`                | Core application logic, tools, integrations, services, and runtime state.                          |
-| `deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
+| `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
 | `.github/`            | CI workflows, issue templates, pull request template, and repository automation.                   |
@@ -41,10 +41,10 @@ Main packages one level deeper:
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Interactive terminal (TTY) loop: `cli/interactive_shell/`. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `deployment/` — Single top-level home for deployment-facing code, split by concern:
-    - `deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
-    - `deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
-    - `deployment/remote/` — Remote-hosted runtime operations and integration points.
+- `infra/deployment/` — Single top-level home for deployment-facing code, split by concern:
+    - `infra/deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
+    - `infra/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
+    - `infra/deployment/remote/` — Remote-hosted runtime operations and integration points.
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `integrations/` — Integration config normalization, verification, selectors, store, and catalog logic.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.

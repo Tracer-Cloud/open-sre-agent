@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
-from deployment.remote import system_metrics as system_metrics_module
-from deployment.remote.system_metrics import (
+from infra.deployment.remote import system_metrics as system_metrics_module
+from infra.deployment.remote.system_metrics import (
     _collect_cpu,
     _collect_disk,
     _collect_memory,
@@ -60,8 +60,8 @@ class TestCollectSystemMetrics:
 
         fake_os = SimpleNamespace(getloadavg=_raise_loadavg, cpu_count=lambda: 1)
         with (
-            patch("deployment.remote.system_metrics.os", fake_os),
-            patch("deployment.remote.system_metrics.report_remote_exception") as report,
+            patch("infra.deployment.remote.system_metrics.os", fake_os),
+            patch("infra.deployment.remote.system_metrics.report_remote_exception") as report,
         ):
             assert _collect_cpu() is None
         report.assert_called_once()
@@ -71,7 +71,7 @@ class TestCollectSystemMetrics:
     def test_disk_returns_none_when_unavailable(self) -> None:
         with (
             patch("shutil.disk_usage", side_effect=OSError),
-            patch("deployment.remote.system_metrics.report_remote_exception") as report,
+            patch("infra.deployment.remote.system_metrics.report_remote_exception") as report,
         ):
             assert _collect_disk() is None
         report.assert_called_once()
@@ -86,7 +86,7 @@ class TestCollectSystemMetrics:
         with (
             patch("sys.platform", "linux"),
             patch("builtins.open", side_effect=OSError("no meminfo")),
-            patch("deployment.remote.system_metrics.report_remote_exception") as report,
+            patch("infra.deployment.remote.system_metrics.report_remote_exception") as report,
         ):
             assert _collect_memory() is None
         report.assert_called_once()
@@ -97,7 +97,7 @@ class TestCollectSystemMetrics:
         with (
             patch("sys.platform", "linux"),
             patch("pathlib.Path.read_text", side_effect=OSError("no uptime")),
-            patch("deployment.remote.system_metrics.report_remote_exception") as report,
+            patch("infra.deployment.remote.system_metrics.report_remote_exception") as report,
         ):
             assert _collect_uptime() is None
         report.assert_called_once()
@@ -110,8 +110,8 @@ class TestCollectSystemMetrics:
 
         fake_resource = SimpleNamespace(getrusage=_raise_getrusage, RUSAGE_SELF=object())
         with (
-            patch("deployment.remote.system_metrics._resource", fake_resource),
-            patch("deployment.remote.system_metrics.report_remote_exception") as report,
+            patch("infra.deployment.remote.system_metrics._resource", fake_resource),
+            patch("infra.deployment.remote.system_metrics.report_remote_exception") as report,
         ):
             assert _collect_process() is None
         report.assert_called_once()

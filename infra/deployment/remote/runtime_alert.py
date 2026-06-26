@@ -11,14 +11,14 @@ from typing import Any
 
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.wizard.store import load_named_remotes, load_remote_ops_config
-from deployment.operations.health import poll_deployment_health
-from deployment.remote.ops import (
+from infra.deployment.operations.health import poll_deployment_health
+from infra.deployment.remote.ops import (
     RemoteOpsError,
     RemoteServiceScope,
     ServiceStatus,
     resolve_remote_ops_provider,
 )
-from deployment.remote.slack_context import fetch_slack_thread, parse_slack_thread_ref
+from infra.deployment.remote.slack_context import fetch_slack_thread, parse_slack_thread_ref
 
 _DEFAULT_LOG_LINES = 100
 _HEALTH_MAX_ATTEMPTS = 2

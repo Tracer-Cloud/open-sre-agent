@@ -11,8 +11,8 @@ from typing import Any
 import httpx
 
 from core.domain.stream import StreamEvent
-from deployment.remote.error_reporting import report_remote_exception
-from deployment.remote.stream import parse_sse_stream
+from infra.deployment.remote.error_reporting import report_remote_exception
+from infra.deployment.remote.stream import parse_sse_stream
 
 logger = logging.getLogger(__name__)
 
@@ -516,7 +516,7 @@ class RemoteAgentClient:
         return result
 
     # ------------------------------------------------------------------
-    # Lightweight server endpoints (deployment.remote.server)
+    # Lightweight server endpoints (infra.deployment.remote.server)
     # ------------------------------------------------------------------
 
     def investigate(

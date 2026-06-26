@@ -8,7 +8,7 @@ from click.testing import CliRunner
 
 from cli.__main__ import cli
 from core.domain.stream import StreamEvent
-from deployment.remote.ops import RemoteOpsError, RestartResult, ServiceStatus
+from infra.deployment.remote.ops import RemoteOpsError, RestartResult, ServiceStatus
 
 
 class _AnsweredPrompt:
@@ -51,7 +51,9 @@ def test_remote_health_uses_saved_url_and_persists_normalized_url() -> None:
     with (
         patch.dict(os.environ, {}, clear=True),
         patch("cli.wizard.store.load_remote_url", return_value="10.0.0.1"),
-        patch("deployment.remote.client.RemoteAgentClient", return_value=client) as mock_client_cls,
+        patch(
+            "infra.deployment.remote.client.RemoteAgentClient", return_value=client
+        ) as mock_client_cls,
         patch("cli.wizard.store.save_remote_url") as mock_save_remote_url,
     ):
         result = runner.invoke(cli, ["remote", "health"])
@@ -69,7 +71,7 @@ def test_remote_health_renders_probe_health_output() -> None:
 
     with (
         patch("cli.wizard.store.load_remote_url", return_value="10.0.0.1"),
-        patch("deployment.remote.client.RemoteAgentClient", return_value=client),
+        patch("infra.deployment.remote.client.RemoteAgentClient", return_value=client),
         patch("cli.wizard.store.save_remote_url"),
     ):
         result = runner.invoke(cli, ["remote", "health"])
@@ -90,7 +92,7 @@ def test_remote_trigger_persists_url_after_successful_run() -> None:
 
     with (
         patch("cli.wizard.store.load_remote_url", return_value="10.0.0.1"),
-        patch("deployment.remote.client.RemoteAgentClient", return_value=client),
+        patch("infra.deployment.remote.client.RemoteAgentClient", return_value=client),
         patch("cli.ui.renderer.StreamRenderer", return_value=renderer),
         patch("cli.wizard.store.save_remote_url") as mock_save_remote_url,
     ):
@@ -107,7 +109,7 @@ def test_remote_health_reports_timeout_cleanly() -> None:
     client.base_url = "http://10.0.0.1:2024"
     client.probe_health.side_effect = httpx.TimeoutException("timed out")
 
-    with patch("deployment.remote.client.RemoteAgentClient", return_value=client):
+    with patch("infra.deployment.remote.client.RemoteAgentClient", return_value=client):
         result = runner.invoke(cli, ["remote", "--url", "10.0.0.1", "health"])
 
     assert result.exit_code == 1
@@ -122,7 +124,7 @@ def test_remote_health_json_output() -> None:
     client.probe_health.return_value = _probe_health_report(latency_ms=42)
 
     with (
-        patch("deployment.remote.client.RemoteAgentClient", return_value=client),
+        patch("infra.deployment.remote.client.RemoteAgentClient", return_value=client),
         patch("cli.wizard.store.save_remote_url"),
     ):
         result = runner.invoke(cli, ["remote", "--url", "10.0.0.1", "health", "--json"])
@@ -138,7 +140,7 @@ def test_remote_health_connect_error_is_actionable() -> None:
     client.base_url = "http://10.0.0.1:2024"
     client.probe_health.side_effect = httpx.ConnectError("refused")
 
-    with patch("deployment.remote.client.RemoteAgentClient", return_value=client):
+    with patch("infra.deployment.remote.client.RemoteAgentClient", return_value=client):
         result = runner.invoke(cli, ["remote", "--url", "10.0.0.1", "health"])
 
     assert result.exit_code == 1
@@ -153,7 +155,9 @@ def test_remote_group_passes_api_key_to_client() -> None:
     client.probe_health.return_value = _probe_health_report(latency_ms=11)
 
     with (
-        patch("deployment.remote.client.RemoteAgentClient", return_value=client) as mock_client_cls,
+        patch(
+            "infra.deployment.remote.client.RemoteAgentClient", return_value=client
+        ) as mock_client_cls,
         patch("cli.wizard.store.save_remote_url"),
     ):
         result = runner.invoke(
@@ -186,7 +190,7 @@ def test_remote_ops_status_uses_provider_and_persists_scope() -> None:
             return_value={"provider": None, "project": None, "service": None},
         ),
         patch(
-            "deployment.remote.ops.resolve_remote_ops_provider", return_value=provider
+            "infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider
         ) as mock_resolver,
         patch("cli.wizard.store.save_remote_ops_config") as mock_save_scope,
     ):
@@ -233,7 +237,7 @@ def test_remote_ops_status_prints_json() -> None:
             "cli.wizard.store.load_remote_ops_config",
             return_value={"provider": "railway", "project": "proj-2", "service": "svc-2"},
         ),
-        patch("deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
+        patch("infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
         patch("cli.wizard.store.save_remote_ops_config"),
     ):
         result = runner.invoke(cli, ["remote", "ops", "status", "--json"])
@@ -252,7 +256,7 @@ def test_remote_ops_logs_forwards_follow_and_lines() -> None:
             "cli.wizard.store.load_remote_ops_config",
             return_value={"provider": "railway", "project": "proj-3", "service": "svc-3"},
         ),
-        patch("deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
+        patch("infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
         patch("cli.wizard.store.save_remote_ops_config") as mock_save_scope,
     ):
         result = runner.invoke(cli, ["remote", "ops", "logs", "--follow", "--lines", "50"])
@@ -275,7 +279,7 @@ def test_remote_ops_logs_does_not_persist_scope_on_failure() -> None:
             "cli.wizard.store.load_remote_ops_config",
             return_value={"provider": "railway", "project": "bad-proj", "service": "svc-3"},
         ),
-        patch("deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
+        patch("infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
         patch("cli.wizard.store.save_remote_ops_config") as mock_save_scope,
     ):
         result = runner.invoke(cli, ["remote", "ops", "logs", "--lines", "50"])
@@ -294,7 +298,7 @@ def test_remote_ops_restart_cancelled_without_yes() -> None:
             "cli.wizard.store.load_remote_ops_config",
             return_value={"provider": "railway", "project": "proj-4", "service": "svc-4"},
         ),
-        patch("deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
+        patch("infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
     ):
         result = runner.invoke(cli, ["remote", "ops", "restart"], input="n\n")
 
@@ -320,7 +324,7 @@ def test_remote_ops_restart_yes_requests_redeploy() -> None:
             "cli.wizard.store.load_remote_ops_config",
             return_value={"provider": None, "project": None, "service": None},
         ),
-        patch("deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
+        patch("infra.deployment.remote.ops.resolve_remote_ops_provider", return_value=provider),
         patch("cli.wizard.store.save_remote_ops_config") as mock_save_scope,
     ):
         result = runner.invoke(

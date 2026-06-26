@@ -5,7 +5,10 @@ from typing import Any
 
 import pytest
 
-from deployment.remote.vercel_poller import VercelInvestigationCandidate, VercelResolutionError
+from infra.deployment.remote.vercel_poller import (
+    VercelInvestigationCandidate,
+    VercelResolutionError,
+)
 from integrations import vercel_incidents
 from services.vercel import VercelConfig
 

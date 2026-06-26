@@ -14,7 +14,7 @@ from click.testing import CliRunner
 
 from cli.__main__ import cli
 from cli.wizard.store import load_remote_url
-from deployment.remote.client import RemoteAgentClient, normalize_url
+from infra.deployment.remote.client import RemoteAgentClient, normalize_url
 
 logger = logging.getLogger(__name__)
 

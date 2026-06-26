@@ -13,7 +13,7 @@ import time
 
 from botocore.exceptions import ClientError
 
-from deployment.operations.health import poll_deployment_health
+from infra.deployment.operations.health import poll_deployment_health
 from tests.shared.infrastructure_sdk.deployer import (
     DEFAULT_REGION,
     get_boto3_client,

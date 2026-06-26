@@ -296,7 +296,7 @@ def check_health(deployment_url: str) -> dict[str, Any]:
 
 
 def delete_deployment(deployment_id: str) -> None:
-    """Delete a Vercel deployment."""
+    """Delete a Vercel infra.deployment."""
     logger.info("Deleting Vercel deployment %s...", deployment_id)
     params = _get_team_param()
 

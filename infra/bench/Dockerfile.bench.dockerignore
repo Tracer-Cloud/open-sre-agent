@@ -44,9 +44,11 @@ htmlcov/
 *.sublime-workspace
 
 # ---- Repo-level dirs not needed in the bench image --------------------- #
-infra/
+infra/*
+!infra/__init__.py
+!infra/deployment/
+!infra/deployment/**
 docs/
-deployment/packaging/
 .github/
 .claude/
 .aider*

@@ -10,7 +10,7 @@ import click
 from cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, TEXT, WARNING
 
 if TYPE_CHECKING:
-    from deployment.remote.client import RemoteAgentClient
+    from infra.deployment.remote.client import RemoteAgentClient
 
 
 def _save_remote_base_url(client: RemoteAgentClient) -> None:
@@ -121,7 +121,7 @@ def run_remote_health_check(
 
     resolved_client = client
     if resolved_client is None:
-        from deployment.remote.client import RemoteAgentClient
+        from infra.deployment.remote.client import RemoteAgentClient
 
         resolved_client = RemoteAgentClient(base_url, api_key=api_key)
 

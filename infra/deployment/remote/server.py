@@ -6,7 +6,7 @@ as ``.md`` files for later retrieval.
 
 Start with::
 
-    uvicorn deployment.remote.server:app --host 0.0.0.0 --port 8080
+    uvicorn infra.deployment.remote.server:app --host 0.0.0.0 --port 8080
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_r
 from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from config.version import get_version
-from deployment.remote.error_reporting import report_remote_exception
-from deployment.remote.vercel_poller import (
+from infra.deployment.remote.error_reporting import report_remote_exception
+from infra.deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelPoller,
     VercelResolutionError,

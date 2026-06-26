@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from deployment.remote.ops import (
+from infra.deployment.remote.ops import (
     RailwayRemoteOpsProvider,
     RemoteOpsError,
     RemoteOpsProvider,
@@ -33,7 +33,7 @@ def test_railway_provider_requires_cli_installed() -> None:
     scope = RemoteServiceScope(provider="railway")
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value=None),
+        patch("infra.deployment.remote.ops.shutil.which", return_value=None),
         pytest.raises(RemoteOpsError),
     ):
         provider.status(scope)
@@ -60,8 +60,8 @@ def test_railway_provider_scopes_with_link_when_project_provided() -> None:
         return _Result(1, stderr="unexpected command")
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", side_effect=_fake_run),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", side_effect=_fake_run),
     ):
         status = provider.status(scope)
 
@@ -83,8 +83,8 @@ def test_railway_provider_logs() -> None:
         return _Result(0)
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", side_effect=_run),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", side_effect=_run),
     ):
         provider.logs(scope, lines=10, follow=True)
 
@@ -106,8 +106,8 @@ def test_railway_provider_fetch_logs() -> None:
         return _Result(1)
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", side_effect=_run),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", side_effect=_run),
     ):
         result = provider.fetch_logs(scope, lines=10)
 
@@ -128,8 +128,8 @@ def test_railway_provider_fetch_logs_stderr_only() -> None:
         return _Result(1)
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", side_effect=_run),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", side_effect=_run),
     ):
         result = provider.fetch_logs(scope, lines=10)
 
@@ -149,8 +149,8 @@ def test_railway_provider_restart() -> None:
         return _Result(1)
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", side_effect=_run),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", side_effect=_run),
     ):
         result = provider.restart(scope)
 
@@ -163,9 +163,10 @@ def test_railway_provider_read_json_invalid_json() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
         patch(
-            "deployment.remote.ops.subprocess.run", return_value=_Result(0, stdout="invalid-json")
+            "infra.deployment.remote.ops.subprocess.run",
+            return_value=_Result(0, stdout="invalid-json"),
         ),
         pytest.raises(RemoteOpsError, match="Failed to parse Railway JSON output"),
     ):
@@ -177,8 +178,8 @@ def test_railway_provider_read_json_not_a_dict() -> None:
     scope = RemoteServiceScope(provider="railway", project="proj", service="svc")
 
     with (
-        patch("deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
-        patch("deployment.remote.ops.subprocess.run", return_value=_Result(0, stdout="[]")),
+        patch("infra.deployment.remote.ops.shutil.which", return_value="/usr/local/bin/railway"),
+        patch("infra.deployment.remote.ops.subprocess.run", return_value=_Result(0, stdout="[]")),
         pytest.raises(RemoteOpsError, match="Unexpected Railway JSON output shape"),
     ):
         provider.status(scope)

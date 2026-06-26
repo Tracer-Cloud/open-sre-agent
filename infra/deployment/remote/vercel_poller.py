@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
-from deployment.remote.error_reporting import report_remote_exception
+from infra.deployment.remote.error_reporting import report_remote_exception
 from integrations.verify import resolve_effective_integrations
 from services.vercel import VercelClient, VercelConfig, make_vercel_client
 

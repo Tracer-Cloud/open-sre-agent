@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import platform
-from deployment.remote.error_reporting import report_remote_exception
+from infra.deployment.remote.error_reporting import report_remote_exception
 
 logger = logging.getLogger(__name__)
 _REPORTED_METRIC_EVENTS: set[str] = set()

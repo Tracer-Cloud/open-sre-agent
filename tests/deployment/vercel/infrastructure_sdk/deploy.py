@@ -45,7 +45,7 @@ def deploy() -> dict[str, str]:
     print("Prerequisites OK")
 
     # 1. Create deployment
-    print("Creating Vercel deployment...")
+    print("Creating Vercel infra.deployment...")
     deployment = create_deployment()
     print(f"  - Deployment ID: {deployment['DeploymentId']}")
     print(f"  - URL: {deployment['DeploymentUrl']}")

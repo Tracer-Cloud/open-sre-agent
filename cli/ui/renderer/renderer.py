@@ -35,7 +35,7 @@ from cli.ui.renderer.tools import (
     _tool_source_label,
 )
 from core.domain.stream import StreamEvent
-from deployment.remote.reasoning import reasoning_text
+from infra.deployment.remote.reasoning import reasoning_text
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from platform.observability.tool_trace import format_json_preview

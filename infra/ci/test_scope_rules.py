@@ -42,10 +42,10 @@ RULES: tuple[PathRule, ...] = (
     PathRule("platform/analytics/", ("tests/analytics/",)),
     PathRule("platform/guardrails/", ("tests/test_guardrails/",)),
     PathRule("platform/masking/", ("tests/masking/",)),
-    PathRule("deployment/entrypoints/", ("tests/entrypoints/",)),
-    PathRule("deployment/remote/", ("tests/remote/",)),
+    PathRule("infra/deployment/entrypoints/", ("tests/entrypoints/",)),
+    PathRule("infra/deployment/remote/", ("tests/remote/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
-    PathRule("deployment/", ("tests/deployment/",)),
+    PathRule("infra/deployment/", ("tests/deployment/",)),
     PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("config/webapp.py", ("tests/test_webapp.py",)),
@@ -66,7 +66,7 @@ def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
     if len(parts) > 1 and parts[0] == "app":
         return parts[1]
-    if parts[0] == "deployment":
+    if parts[0] == "deployment" or parts[:2] == ["infra", "deployment"]:
         return "deployment"
     return prefix
 

@@ -46,7 +46,7 @@ on:
       - "cli/**"
       - "config/**"
       - "core/**"
-      - "deployment/**"
+      - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
       - "services/**"

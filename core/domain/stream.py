@@ -6,9 +6,9 @@ callbacks) and consumed by the CLI renderer, the remote runner, and
 any future surface that observes pipeline progress.
 
 It deliberately lives in ``core.domain`` so that the orchestration
-core does not need to import from ``deployment.remote`` (a transport-layer
+core does not need to import from ``infra.deployment.remote`` (a transport-layer
 package). The SSE parser that materializes ``StreamEvent``s from a
-remote HTTP response stays in ``deployment.remote.stream``; the event shape
+remote HTTP response stays in ``infra.deployment.remote.stream``; the event shape
 itself is domain.
 """
 

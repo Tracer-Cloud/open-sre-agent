@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from deployment.remote.error_reporting import report_remote_exception
+from infra.deployment.remote.error_reporting import report_remote_exception
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ import os
 import time
 
 from cli.wizard.store import save_named_remote
-from deployment.operations.ec2_config import save_remote_outputs
+from infra.deployment.operations.ec2_config import save_remote_outputs
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     create_instance_profile,
     launch_instance,

@@ -288,7 +288,7 @@ def test_run_catalog_item_prints_openclaw_preflight_before_execution(
 # ---------------------------------------------------------------------------
 # Bundled-binary degradation for ``opensre tests synthetic`` (regression #1078)
 #
-# ``deployment/packaging/opensre.spec`` excludes the ``tests`` tree from PyInstaller
+# the release PyInstaller build excludes the ``tests`` tree
 # bundles, so ``from tests.synthetic.rds_postgres.run_suite import main``
 # raises ``ModuleNotFoundError`` in a packaged binary. Surface a clean
 # ``OpenSREError`` instead of a raw traceback so users know to run from a

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from deployment.remote.client import RemoteAgentClient, RemoteRunResult
+from infra.deployment.remote.client import RemoteAgentClient, RemoteRunResult
 
 __all__ = ["RemoteAgentClient", "RemoteRunResult"]

@@ -263,7 +263,7 @@ def _run_service_investigation(
     from cli.interactive_shell.data_store.args import write_json
     from cli.interactive_shell.error_handling.errors import OpenSREError
     from cli.investigation import run_investigation_cli
-    from deployment.remote.runtime_alert import build_runtime_alert_payload
+    from infra.deployment.remote.runtime_alert import build_runtime_alert_payload
 
     conflicting = [
         flag
