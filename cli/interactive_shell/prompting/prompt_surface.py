@@ -29,6 +29,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.ca
 )
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import theme as ui_theme
+from cli.interactive_shell.ui.banner_state import integration_display_name
 from cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
 _PROMPT_RULE_CHAR = "─"
@@ -61,10 +62,7 @@ def _prompt_prefix_text(session: ReplSession) -> str:
 
 def _prompt_line_ansi(session: ReplSession) -> ANSI:
     counter = _prompt_counter_text(session)
-    if counter:
-        prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
-    else:
-        prefix = ""
+    prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
     return ANSI(f"{prefix}{ui_theme.PROMPT_ACCENT_ANSI}❯{ui_theme.ANSI_RESET} ")
 
 
@@ -81,8 +79,7 @@ def render_submitted_prompt(console: Console, session: ReplSession, text: str) -
     counter = _prompt_counter_text(session)
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
-    if counter:
-        rendered.append(counter, style=str(ui_theme.DIM))
+    rendered.append(counter, style=str(ui_theme.DIM))
     rendered.append("❯ ", style=f"bold {ui_theme.HIGHLIGHT}")
     rendered.append(lines[0], style=str(ui_theme.TEXT))
     for line in lines[1:]:
@@ -445,13 +442,8 @@ def resolve_idle_hint_ansi(session: ReplSession) -> str:
     """Dim hint line above the prompt rule — shortcuts plus connected integrations."""
     parts = ["/ for commands", "↑↓ history"]
     if session.configured_integrations_known and session.configured_integrations:
-        from cli.interactive_shell.ui.banner_state import _SERVICE_DISPLAY_NAMES
-
         _MAX_SHOWN = 4
-        names = [
-            _SERVICE_DISPLAY_NAMES.get(name, name.replace("_", " ").title())
-            for name in sorted(session.configured_integrations)
-        ]
+        names = [integration_display_name(name) for name in sorted(session.configured_integrations)]
         shown = names[:_MAX_SHOWN]
         overflow = len(names) - len(shown)
         integration_segment = " · ".join(shown)

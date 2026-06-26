@@ -14,7 +14,6 @@ from cli.interactive_shell.prompting.prompt_surface import (
     _prompt_counter_text,
     _prompt_turn_number,
     completion_preview_hint_ansi,
-    render_submitted_prompt,
     resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
