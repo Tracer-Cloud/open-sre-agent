@@ -528,7 +528,7 @@ class TestAssistantOutputRendering:
 
 
 class TestStreamingMigration:
-    """cli_agent must consume invoke_stream and route through the shared streaming renderer."""
+    """cli_agent must consume invoke_stream and send output through the shared streaming renderer."""
 
     def test_response_uses_invoke_stream_not_invoke(self, monkeypatch: Any) -> None:
         calls: list[str] = []

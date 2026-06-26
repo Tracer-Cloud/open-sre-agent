@@ -349,8 +349,7 @@ scenario fixtures follow.
 
 - The no-mocks policy on the LLM path. The planner, classifier, and
   conversational assistant all continue to hit the real LLM in turn tests.
-- The turn-execution oracle structure (`direct turn handoff` →
-  `handle_message_with_agent`).
+- The turn-execution oracle still invokes `handle_message_with_agent` directly.
 - Any existing passing scenario. The `resolved_integrations_override` is opt-in;
   existing scenarios without it keep the current no-op gather behaviour and
   continue to pass.

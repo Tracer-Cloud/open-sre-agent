@@ -81,7 +81,7 @@ class ReplSession:
     """The final AgentState from the most recent investigation, used by follow-ups."""
 
     last_assistant_intent: str | None = None
-    """Intent label set by the runtime after each routed turn.
+    """Intent label set by the runtime after each handled turn.
 
     Values: "slash", "cli_help", "investigation", "follow_up",
     "cli_agent_handled" (actions executed), "cli_agent_denied" (fail-closed),

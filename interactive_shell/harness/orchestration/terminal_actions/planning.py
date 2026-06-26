@@ -1,6 +1,6 @@
 """Second-phase action planning for interactive-shell free text.
 
-Routing has already decided that the turn belongs to the CLI agent. This module
+Every free-text turn reaches the CLI agent path first. This module
 decides whether the turn should execute explicit terminal actions before the
 assistant falls back to a conversational answer.
 """

@@ -1,6 +1,6 @@
 """Facade for second-phase terminal action handling.
 
-The interactive shell routes free text to the CLI-agent path first. Before the
+The interactive shell sends free text to the CLI-agent path first. Before the
 assistant writes a conversational answer, this facade asks the second-phase
 planner whether the user explicitly requested terminal work, then dispatches any
 approved actions through the tool registry.

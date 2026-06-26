@@ -209,7 +209,7 @@ def _run_verify(session: ReplSession, console: Console, service: str | None = No
     return True
 
 
-def _cmd_verify_route(session: ReplSession, console: Console, args: list[str]) -> bool:
+def _cmd_verify(session: ReplSession, console: Console, args: list[str]) -> bool:
     return _cmd_integrations(session, console, ["verify", *args])
 
 
@@ -431,7 +431,7 @@ COMMANDS: list[SlashCommand] = [
     SlashCommand(
         "/verify",
         "Verify configured integration connectivity.",
-        _cmd_verify_route,
+        _cmd_verify,
         usage=("/verify", "/verify <service>"),
         execution_tier=ExecutionTier.ELEVATED,
     ),
