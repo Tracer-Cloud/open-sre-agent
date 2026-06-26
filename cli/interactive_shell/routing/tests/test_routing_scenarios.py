@@ -22,7 +22,10 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_a
     plan_actions_with_llm,
 )
 from cli.interactive_shell.routing.router import RouteKind, route_input
-from cli.interactive_shell.routing.tests._ci_gates import skip_or_fail
+from cli.interactive_shell.routing.tests._ci_gates import (
+    skip_investigation_loop_disabled,
+    skip_or_fail,
+)
 from cli.interactive_shell.routing.tests._oracle_normalize import cli_command_payload_matches
 from cli.interactive_shell.routing.tests._oracle_runtime import (
     LIVE_INTEGRATION_SENTINEL,
@@ -83,11 +86,7 @@ def _expects_investigation(case: ScenarioCase) -> bool:
 
 def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
     if not investigation_loop_enabled() and _expects_investigation(case):
-        pytest.skip(
-            "Natural-language investigation loop is disabled in the interactive shell "
-            "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
-            "this investigation scenario does not apply. Re-enable the flag to run it."
-        )
+        skip_investigation_loop_disabled()
 
 
 def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:

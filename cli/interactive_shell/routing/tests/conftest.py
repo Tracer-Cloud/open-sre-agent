@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from cli.interactive_shell.routing.tests._ci_gates import running_in_github_actions
+from cli.interactive_shell.routing.tests._ci_gates import (
+    is_allowed_live_llm_skip_in_ci,
+    running_in_github_actions,
+)
 from config.config import (
     DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
@@ -116,6 +119,8 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     if report.when != "call" or not report.skipped:
         return
     if "live_llm" not in report.keywords:
+        return
+    if is_allowed_live_llm_skip_in_ci(report.longrepr):
         return
     _LIVE_LLM_SKIPS_IN_CI.append(f"{report.nodeid}: {report.longrepr}")
 
