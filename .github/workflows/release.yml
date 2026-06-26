@@ -239,6 +239,18 @@ jobs:
         shell: bash
         run: uv sync --frozen --extra release-binary
 
+      - name: Stage stdlib platform module for bundling
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The first-party ``platform`` package shadows the stdlib ``platform``
+          # module. PyInstaller does not lay out the stdlib as loose ``.py`` files,
+          # so bundle a copy of the genuine module that platform/__init__.py can
+          # load from ``sys._MEIPASS`` at runtime (see _FROZEN_STDLIB_DIR).
+          rm -rf .stdlib_vendor
+          mkdir -p .stdlib_vendor
+          uv run python -c "import os, shutil, sysconfig; src = os.path.join(sysconfig.get_path('stdlib'), 'platform.py'); shutil.copy(src, os.path.join('.stdlib_vendor', 'platform.py')); print('Staged stdlib platform from ' + src)"
+
       - name: Build binary
         run: >-
           uv run pyinstaller cli/__main__.py
@@ -249,6 +261,7 @@ jobs:
           --collect-data cli
           --collect-data config
           --add-data "platform:platform"
+          --add-data ".stdlib_vendor:_opensre_stdlib_platform"
 
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'

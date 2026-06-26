@@ -17,6 +17,9 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+.stdlib_vendor/
+# PyInstaller generates this from CLI args during the release build.
+opensre.spec
 downloads/
 eggs/
 .eggs/
