@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-import interactive_shell.harness.pipeline as pipeline
+import interactive_shell.harness.turn_pipeline as pipeline
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )

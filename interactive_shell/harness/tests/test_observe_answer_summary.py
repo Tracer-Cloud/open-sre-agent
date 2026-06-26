@@ -15,7 +15,7 @@ from rich.console import Console
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from interactive_shell.harness.pipeline import (
+from interactive_shell.harness.turn_pipeline import (
     handle_message_with_agent,
 )
 from interactive_shell.runtime.core.session import ReplSession

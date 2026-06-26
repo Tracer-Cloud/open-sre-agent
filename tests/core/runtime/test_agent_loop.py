@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, cast
 
-from core.runtime import ToolLoopResult, run_tool_calling_loop
+from core.runtime import AgentLoopResult, run_agent_loop
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from tools.registered_tool import RegisteredTool
 
@@ -92,7 +92,7 @@ def _tool_call_response(call_id: str, name: str) -> AgentLLMResponse:
 def test_immediate_final_answer_executes_no_tools() -> None:
     llm = FakeLLM(iter([_text_response("done immediately")]))
 
-    result = run_tool_calling_loop(
+    result = run_agent_loop(
         llm=llm,
         system="sys",
         messages=[{"role": "user", "content": "hello"}],
@@ -101,7 +101,7 @@ def test_immediate_final_answer_executes_no_tools() -> None:
         max_iterations=5,
     )
 
-    assert isinstance(result, ToolLoopResult)
+    assert isinstance(result, AgentLoopResult)
     assert result.executed == []
     assert result.final_text == "done immediately"
     assert result.hit_iteration_cap is False
@@ -119,7 +119,7 @@ def test_one_tool_round_then_final() -> None:
     )
     messages: list[dict[str, Any]] = [{"role": "user", "content": "hello"}]
 
-    result = run_tool_calling_loop(
+    result = run_agent_loop(
         llm=llm,
         system="sys",
         messages=messages,
@@ -154,7 +154,7 @@ def test_on_event_emits_kinds_in_order() -> None:
     def on_event(kind: str, _data: dict[str, Any]) -> None:
         events.append(kind)
 
-    run_tool_calling_loop(
+    run_agent_loop(
         llm=llm,
         system="sys",
         messages=[{"role": "user", "content": "hello"}],
@@ -164,7 +164,24 @@ def test_on_event_emits_kinds_in_order() -> None:
         on_event=on_event,
     )
 
-    assert events == ["llm_start", "tool_start", "tool_end", "llm_start"]
+    assert events == [
+        "agent_start",
+        "turn_start",
+        "llm_start",
+        "message_start",
+        "message_end",
+        "tool_start",
+        "message_start",
+        "message_end",
+        "tool_end",
+        "turn_end",
+        "turn_start",
+        "llm_start",
+        "message_start",
+        "message_end",
+        "turn_end",
+        "agent_end",
+    ]
 
 
 def test_always_tool_call_hits_iteration_cap() -> None:
@@ -177,7 +194,7 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     max_iterations = 3
     llm = FakeLLM(always_tool_calls())
 
-    result = run_tool_calling_loop(
+    result = run_agent_loop(
         llm=llm,
         system="sys",
         messages=[{"role": "user", "content": "hello"}],

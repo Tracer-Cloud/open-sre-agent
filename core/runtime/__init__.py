@@ -1,8 +1,10 @@
-"""Shared LLM tool-calling runtime.
+"""Shared Pi-style agent runtime.
 
-Provider-agnostic machinery for running a think → call tools → observe loop:
-parallel tool execution, provider-specific message shaping, and context-window
-budget enforcement.
+Provider-agnostic machinery for running the three runtime layers:
+
+* ``agent_loop`` — pure think -> call tools -> observe loop
+* ``agent`` — stateful transcript/run wrapper
+* ``harness`` — session-aware model/tool/resource binding
 
 Consumers:
 
@@ -12,6 +14,13 @@ Consumers:
 
 from __future__ import annotations
 
+from core.runtime.agent import Agent, PendingMessageQueue
+from core.runtime.agent_loop import run_agent_loop
+from core.runtime.agent_messages import (
+    build_assistant_message,
+    build_synthetic_assistant_tool_call_message,
+    build_tool_result_messages,
+)
 from core.runtime.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -19,24 +28,35 @@ from core.runtime.context_budget import (
     trim_lowest_value_tool_pair,
     truncate_content,
 )
-from core.runtime.execution import (
+from core.runtime.events import AgentEventCallback, AgentEventKind
+from core.runtime.harness import AgentHarness
+from core.runtime.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
+from core.runtime.tool_execution import (
     execute_tools,
     public_tool_input,
     summarise,
     tool_source,
 )
-from core.runtime.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
-from core.runtime.loop import LoopEventCallback, ToolLoopResult, run_tool_calling_loop
-from core.runtime.messages import (
-    build_assistant_message,
-    build_synthetic_assistant_tool_call_message,
-    build_tool_result_messages,
+from core.runtime.types import (
+    AgentContext,
+    AgentHarnessContext,
+    AgentLoopResult,
+    AgentMessage,
+    AgentSessionStore,
 )
 
 __all__ = [
-    "LoopEventCallback",
+    "Agent",
+    "AgentContext",
+    "AgentEventCallback",
+    "AgentEventKind",
+    "AgentHarness",
+    "AgentHarnessContext",
+    "AgentLoopResult",
+    "AgentMessage",
+    "AgentSessionStore",
     "LLMInvokeFailure",
-    "ToolLoopResult",
+    "PendingMessageQueue",
     "build_assistant_message",
     "build_synthetic_assistant_tool_call_message",
     "build_tool_result_messages",
@@ -46,7 +66,7 @@ __all__ = [
     "estimate_message_tokens",
     "execute_tools",
     "public_tool_input",
-    "run_tool_calling_loop",
+    "run_agent_loop",
     "summarise",
     "tool_source",
     "trim_lowest_value_tool_pair",

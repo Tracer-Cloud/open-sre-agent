@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.domain.alerts import inbox as _alert_inbox
-from interactive_shell.harness.pipeline import handle_message_with_agent
+from interactive_shell.harness.turn_pipeline import handle_message_with_agent
 from interactive_shell.runtime.background.workers import BackgroundTaskManager
 from interactive_shell.runtime.core.context import (
     ReplRuntimeContext,

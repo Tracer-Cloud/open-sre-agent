@@ -4,7 +4,7 @@ The REPL's conversational assistant (:func:`interactive_shell.chat.cli_agent.ans
 is grounded text generation — it cannot reach integrations on its own. This
 module gives a free-form turn access to the **same registered tools the
 investigation pipeline uses**: it runs a bounded think → call-tools → observe
-loop (:func:`core.runtime.run_tool_calling_loop`) over the available
+loop through the shared :class:`core.runtime.AgentHarness` over the available
 ``"investigation"`` surface tools, then hands the collected tool outputs back to
 ``answer_cli_agent`` as an observation block so it can compose a grounded answer.
 
@@ -246,8 +246,10 @@ def gather_tool_evidence(
     """
     try:
         from core.orchestration.node.investigate.tools import get_available_tools
-        from core.runtime import run_tool_calling_loop
-        from core.runtime.llm.agent_llm_client import get_agent_llm
+        from core.runtime.llm import agent_llm_client
+        from interactive_shell.harness.shell_harness import (
+            create_shell_tool_gathering_harness,
+        )
 
         resolved = _resolve_gather_integrations(session, message)
         tools = get_available_tools(resolved)
@@ -257,7 +259,7 @@ def gather_tool_evidence(
             return None
 
         try:
-            llm = get_agent_llm()
+            llm = agent_llm_client.get_agent_llm()
         except Exception as exc:
             # Tool-calling client unavailable (e.g. unsupported provider): fall
             # back to the text-only assistant rather than failing the turn.
@@ -277,15 +279,15 @@ def gather_tool_evidence(
                 )
                 console.print(f"[{DIM}]{line}[/]")
 
-        result = run_tool_calling_loop(
-            llm=llm,
-            system=_build_gather_system_prompt(session),
-            messages=[{"role": "user", "content": _build_gather_user_message(session, message)}],
+        harness = create_shell_tool_gathering_harness(
+            llm_factory=lambda: llm,
+            system_prompt=_build_gather_system_prompt(session),
             tools=tools,
             resolved_integrations=resolved,
             max_iterations=_MAX_GATHER_ITERATIONS,
             on_event=_on_event,
         )
+        result = harness.prompt(_build_gather_user_message(session, message))
     except KeyboardInterrupt:
         console.print(f"[{DIM}]· gathering cancelled[/]")
         return None

@@ -23,7 +23,6 @@ from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )
-from interactive_shell.harness.pipeline import handle_message_with_agent
 from interactive_shell.harness.tests._oracle_normalize import (
     normalize_history_entry,
     normalize_response_text,
@@ -34,6 +33,7 @@ from interactive_shell.harness.tests.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
+from interactive_shell.harness.turn_pipeline import handle_message_with_agent
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
@@ -361,24 +361,23 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     patch_execution_boundary(monkeypatch, executed)
 
     # Record which registered tools fire during the conversational
-    # gather_tool_evidence pass. gather_tool_evidence imports
-    # run_tool_calling_loop lazily from core.runtime, so patch the name on
-    # that source module (the local import re-binds from there at call time).
-    import core.runtime as _runtime_mod
+    # gather_tool_evidence pass. The shell harness now reaches the shared
+    # runtime through Agent -> agent_loop.run_agent_loop, so patch that boundary.
+    import core.runtime.agent_loop as _agent_loop_mod
 
     gathered_tool_calls: list[str] = []
     gathered_valid_data: set[str] = set()
-    _original_tool_loop = _runtime_mod.run_tool_calling_loop
+    _original_agent_loop = _agent_loop_mod.run_agent_loop
 
-    def _recording_tool_loop(*args: Any, **kwargs: Any) -> Any:
-        result = _original_tool_loop(*args, **kwargs)
+    def _recording_agent_loop(*args: Any, **kwargs: Any) -> Any:
+        result = _original_agent_loop(*args, **kwargs)
         for tc, output in result.executed:
             gathered_tool_calls.append(tc.name)
             if tool_output_returned_valid_data(output):
                 gathered_valid_data.add(tc.name)
         return result
 
-    monkeypatch.setattr(_runtime_mod, "run_tool_calling_loop", _recording_tool_loop)
+    monkeypatch.setattr(_agent_loop_mod, "run_agent_loop", _recording_agent_loop)
 
     console_buffer = io.StringIO()
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)

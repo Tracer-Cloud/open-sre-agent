@@ -26,7 +26,7 @@ from core.orchestration.node.investigate.tools import (
     tool_event_payload,
 )
 from core.runtime import (
-    LoopEventCallback,
+    AgentEventCallback,
     build_assistant_message,
     build_synthetic_assistant_tool_call_message,
     build_tool_result_messages,
@@ -91,7 +91,7 @@ class ConnectedInvestigationAgent:
     def run(
         self,
         state: InvestigationState,
-        on_event: LoopEventCallback | None = None,
+        on_event: AgentEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
         tracker = get_tracker()
