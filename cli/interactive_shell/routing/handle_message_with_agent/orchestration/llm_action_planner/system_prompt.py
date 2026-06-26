@@ -51,6 +51,13 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   NOT explicit investigate (assistant_handoff instead):
   * "Run an investigation." / "Start an investigation." with no subject named
   * "How do I run an investigation?" (how-to/docs)
+  EXPLICIT vs DIAGNOSTIC (common confusion — a trailing "why" does NOT reclassify
+  an investigate instruction):
+  * "investigate why the orders-api keeps OOM-killing its pods" → EXPLICIT →
+    investigation_start ALWAYS (even when CONNECTED INTEGRATIONS is none)
+  * "why is the orders-api OOM-killing its pods?" → DIAGNOSTIC (no investigate
+    verb) → gated on CONNECTED INTEGRATIONS
+  * "figure out why the orders-api keeps OOM-killing its pods" → DIAGNOSTIC → gated
 - DIAGNOSTIC QUESTION asking you to FIND, EXPLAIN, or TRACK DOWN the cause of a
   failure, crash, error, outage, or incident — WITHOUT an explicit investigate
   verb — is an investigation request WHEN there is data to investigate with.
@@ -69,9 +76,10 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   * At least ONE integration connected → emit investigation_start with alert_text
     synthesized from the request (state the failure plus any named sources). Do
     NOT hand off — run the investigation.
-  * "none" or "unknown" → emit assistant_handoff instead; with no connected data
-    source a root-cause run would be empty, so let the assistant answer and
-    suggest connecting an integration.
+  * "none" or "unknown" → emit assistant_handoff instead FOR DIAGNOSTIC QUESTIONS
+    ONLY; this gate NEVER applies to explicit investigate instructions (first rule
+    above). With no connected data source an implicit diagnostic question would be
+    empty, so let the assistant answer and suggest connecting an integration.
 - DATA-RETRIEVAL / ANALYTICS LOOKUP is NOT an investigation. A request to fetch,
   list, show, query, count, search, or look up specific records — events,
   metrics, logs, sessions, traces, persons/users, issues, feature flags,

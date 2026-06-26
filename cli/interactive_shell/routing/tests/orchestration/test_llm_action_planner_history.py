@@ -95,6 +95,7 @@ def test_connected_integrations_block_renders_state() -> None:
         _FakeSession(configured_integrations=(), configured_integrations_known=True)
     )
     assert "none" in none_block
+    assert "explicit investigate instructions still emit investigation_start" in none_block.lower()
     # Known with integrations → sorted listing the planner can gate on.
     listed = _connected_integrations_block(
         _FakeSession(

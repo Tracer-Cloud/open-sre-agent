@@ -31,7 +31,14 @@ def _connected_integrations_block(session: Any | None) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n\n"
+    gate_note = ""
+    if listing in ("none", "unknown"):
+        gate_note = (
+            "This line gates ONLY implicit diagnostic questions (no explicit "
+            "investigate/RCA/diagnose/analyze/root-cause verb). Explicit "
+            "investigate instructions STILL emit investigation_start regardless.\n"
+        )
+    return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
 
 def _recent_conversation_block(session: Any | None) -> str:
