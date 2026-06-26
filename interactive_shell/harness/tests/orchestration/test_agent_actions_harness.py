@@ -1,4 +1,4 @@
-"""Routing execution tests using typed fakes instead of monkeypatch-heavy seams."""
+"""Action-execution tests using typed fakes instead of monkeypatch-heavy seams."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from interactive_shell.harness.orchestration.agent_actions import (
 from interactive_shell.harness.orchestration.terminal_actions.models import (
     ActionPlanningDecision,
 )
-from interactive_shell.harness.tests.orchestration.routing_test_harness import (
+from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
+    ActionExecutionHarness,
     FakeDispatcher,
     FakePlanner,
-    RoutingHarness,
     planned_action,
 )
 from interactive_shell.runtime.core.session import ReplSession
@@ -24,7 +24,7 @@ def test_execute_with_harness_dispatches_slash_action() -> None:
         result=ActionPlanningDecision((planned_action("slash", "/health"),), False, ())
     )
     dispatcher = FakeDispatcher()
-    harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
+    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
 
     result = execute_cli_actions(
         "check health",
@@ -48,7 +48,7 @@ def test_execute_with_harness_hands_off_handoff_only_plan() -> None:
         )
     )
     dispatcher = FakeDispatcher()
-    harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
+    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
 
     result = execute_cli_actions(
         "half actionable prompt",
@@ -68,7 +68,7 @@ def test_execute_with_harness_hands_off_handoff_only_plan() -> None:
 def test_execute_with_harness_handles_planner_unavailable() -> None:
     planner = FakePlanner(result=None)
     dispatcher = FakeDispatcher()
-    harness = RoutingHarness(planner=planner, dispatcher=dispatcher)
+    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
 
     result = execute_cli_actions(
         "planner outage",

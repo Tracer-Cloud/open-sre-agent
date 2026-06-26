@@ -1,4 +1,4 @@
-"""Load routing scenario directories into typed fixtures for pytest."""
+"""Load turn scenario directories into typed fixtures for pytest."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ class Scenario:
 
 
 @dataclass(frozen=True)
-class AnswerRoute:
+class AnswerTurn:
     expected_kind: str
     expected_command_text: str | None
 
@@ -184,7 +184,7 @@ class GatheredToolsContract:
 
 @dataclass(frozen=True)
 class Answer:
-    """Expected behavior for one routing scenario.
+    """Expected behavior for one turn scenario.
 
     A turn can resolve down one of two independent execution paths, and these
     fields only describe the first:
@@ -202,7 +202,7 @@ class Answer:
        ``valid_data``, etc.). ``response_contract`` still covers reply text.
     """
 
-    route: AnswerRoute
+    turn: AnswerTurn
     policy: AnswerPolicy
     planned_actions: tuple[dict[str, Any], ...]
     executed_actions: tuple[dict[str, Any], ...]
@@ -576,7 +576,7 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     raw = yaml.safe_load(answer_path.read_text(encoding="utf-8"))
     data = _require_mapping(raw, label=str(answer_path))
 
-    route_raw = _require_mapping(data.get("route"), label=f"{answer_path} route")
+    turn_raw = _require_mapping(data.get("turn"), label=f"{answer_path} turn")
     policy_raw = _require_mapping(data.get("policy"), label=f"{answer_path} policy")
     response_raw = _require_mapping(
         data.get("response_contract", {}),
@@ -584,12 +584,12 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     )
     history_raw = _require_mapping(data.get("history", {}), label=f"{answer_path} history")
 
-    expected_kind = str(route_raw.get("expected_kind", "")).strip()
-    if expected_kind != "handle_message_with_agent":
-        msg = f"{answer_path}: invalid route.expected_kind {expected_kind!r}."
+    expected_kind = str(turn_raw.get("expected_kind", "")).strip()
+    if expected_kind != "agent":
+        msg = f"{answer_path}: invalid turn.expected_kind {expected_kind!r}."
         raise ValueError(msg)
-    if "expected_signals" in route_raw:
-        msg = f"{answer_path}: route.expected_signals was removed; drop it from the fixture."
+    if "expected_signals" in turn_raw:
+        msg = f"{answer_path}: turn.expected_signals was removed; drop it from the fixture."
         raise ValueError(msg)
 
     for removed_key in ("should_execute", "has_unhandled_clause", "fail_closed"):
@@ -673,7 +673,7 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
         label=f"{answer_path} history.expected",
     )
 
-    command_text = route_raw.get("expected_command_text")
+    command_text = turn_raw.get("expected_command_text")
     expected_command_text = (
         str(command_text).strip()
         if isinstance(command_text, str) and command_text.strip()
@@ -681,7 +681,7 @@ def _parse_answer_yaml(answer_path: Path, *, scenario_id: str) -> Answer:
     )
 
     return Answer(
-        route=AnswerRoute(
+        turn=AnswerTurn(
             expected_kind=expected_kind,
             expected_command_text=expected_command_text,
         ),
@@ -751,14 +751,14 @@ def load_scenarios_for_class(behavior_class: str) -> list[ScenarioCase]:
 
 
 def read_shard_config() -> tuple[int, int]:
-    """Read ROUTING_SHARD_TOTAL and ROUTING_SHARD_INDEX from the environment."""
-    total = int(os.getenv("ROUTING_SHARD_TOTAL", "1"))
-    index = int(os.getenv("ROUTING_SHARD_INDEX", "0"))
+    """Read TURN_SHARD_TOTAL and TURN_SHARD_INDEX from the environment."""
+    total = int(os.getenv("TURN_SHARD_TOTAL", "1"))
+    index = int(os.getenv("TURN_SHARD_INDEX", "0"))
     if total < 1:
-        msg = "ROUTING_SHARD_TOTAL must be >= 1"
+        msg = "TURN_SHARD_TOTAL must be >= 1"
         raise ValueError(msg)
     if index < 0 or index >= total:
-        msg = "ROUTING_SHARD_INDEX must satisfy 0 <= index < ROUTING_SHARD_TOTAL"
+        msg = "TURN_SHARD_INDEX must satisfy 0 <= index < TURN_SHARD_TOTAL"
         raise ValueError(msg)
     return total, index
 
@@ -779,7 +779,7 @@ def iter_scenarios_for_shard(
 __all__ = [
     "Answer",
     "AnswerPolicy",
-    "AnswerRoute",
+    "AnswerTurn",
     "GatheredToolsContract",
     "SCENARIOS_DIR",
     "Scenario",

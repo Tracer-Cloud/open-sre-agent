@@ -13,8 +13,8 @@ available_capabilities:
   synthetic_suites:
   - rds_postgres
 notes: []
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

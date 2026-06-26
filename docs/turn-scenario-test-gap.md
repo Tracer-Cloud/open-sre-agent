@@ -1,10 +1,10 @@
-# Memorandum: Routing Scenario Test Infrastructure Gap
+# Memorandum: Turn Scenario Test Infrastructure Gap
 
 **Date:** 2026-06-18  
 **Concerns:** `complex_shell_prompts` scenario class; oracle coverage of conversational tool-gathering  
 **Status:** Partially addressed (2026-06-26) — gather recording, `tool_actions`, fixture `resolved_integrations`, and `@live` fail-closed CI are in place; many handoff scenarios still rely on text-only contracts
 
-> **Update (2026-06-26):** Natural-language investigation routing is re-enabled
+> **Update (2026-06-26):** Natural-language investigation dispatch is re-enabled
 > (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`). Scenarios **314**, **338**,
 > **339**, and **315** assert gather dispatch via `tool_actions` with fixture
 > integrations; **333–335** and **337** use `@live` for canonical per-integration
@@ -24,7 +24,7 @@
 
 ## Summary
 
-The routing scenario oracle (`_oracle_runtime.py`) does not observe, assert on,
+The turn scenario oracle (`_oracle_runtime.py`) does not observe, assert on,
 or control the conversational tool-gathering path (`gather_tool_evidence` →
 `run_tool_calling_loop`). Every `complex_shell_prompts` scenario passes in CI
 even when zero integrations are queried and the response is entirely hallucinated
@@ -34,7 +34,7 @@ text. The test infrastructure provides confidence that does not exist.
 
 ## 1. The Two Execution Paths — Only One Is Tested
 
-When a REPL turn routes to `handle_message_with_agent`, two independent paths
+When a REPL turn enters `handle_message_with_agent`, two independent paths
 can fire:
 
 | Path | What it does | Oracle coverage |
@@ -112,7 +112,7 @@ was actually checked.
 
 ## 4. The Behaviour Proven by Current Tests
 
-Across all 54 routing scenarios, what passes in CI is:
+Across all 54 turn scenarios, what passes in CI is:
 
 - **Turn-entry correctness** — every turn is handed to the agent entrypoint.
   This is intentionally static; the valuable behavior is downstream dispatch
@@ -157,14 +157,14 @@ still passes. A regression that stops the agent from ever querying GitHub or
 PostHog cannot be caught by the current test suite.
 
 **Risk 3: The no-mocks policy blocks the obvious fix.**  
-`AGENTS.md` and `test_routing_fixture_integrity.py` enforce a hard no-mocks
-rule on the routing oracle:
+`AGENTS.md` and `test_turn_fixture_integrity.py` enforce a hard no-mocks
+rule on the turn oracle:
 
 > "Do not use `unittest.mock`, `patch`, `MagicMock`, or equivalent mocking
-> primitives in routing tests."
+> primitives in turn tests."
 
 The intent of this rule is correct — it prevents tests from faking the LLM and
-making routing assertions against synthetic planner output. But it accidentally
+making action-planning assertions against synthetic planner output. But it accidentally
 also blocks injecting a controlled integration config into the gather loop,
 which does not involve the LLM at all. The rule currently prevents the fix.
 
@@ -177,7 +177,7 @@ The docstring in `scenario_loader.py` acknowledges the gap explicitly:
 ```python
 # Answer docstring, path 2:
 # "Deeper 'did it actually query the integration?' assertions belong in
-# execution-layer tests, not these routing fixtures."
+# execution-layer tests, not these turn fixtures."
 ```
 
 That execution-layer test does not exist. `tests/interactive_shell/runtime/
@@ -308,10 +308,10 @@ test immediately.
 
 ### 7.4 — Update the no-mocks rule scope
 
-Amend the "no mocks" policy in `AGENTS.md` and `test_routing_fixture_integrity.py`
+Amend the "no mocks" policy in `AGENTS.md` and `test_turn_fixture_integrity.py`
 to distinguish between two separate things:
 
-- **Mocking the LLM** — prohibited. Routing oracle must exercise the real LLM.
+- **Mocking the LLM** — prohibited. Turn oracle must exercise the real LLM.
 - **Injecting fixture integration configs** — permitted. This is equivalent to
   providing test credentials and does not involve the LLM.
 
@@ -348,8 +348,8 @@ scenario fixtures follow.
 ## 9. What Does Not Change
 
 - The no-mocks policy on the LLM path. The planner, classifier, and
-  conversational assistant all continue to hit the real LLM in routing tests.
-- The turn-execution oracle structure (`execute_routed_turn` →
+  conversational assistant all continue to hit the real LLM in turn tests.
+- The turn-execution oracle structure (`direct turn handoff` →
   `handle_message_with_agent`).
 - Any existing passing scenario. The `resolved_integrations_override` is opt-in;
   existing scenarios without it keep the current no-op gather behaviour and

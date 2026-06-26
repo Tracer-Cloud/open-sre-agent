@@ -27,8 +27,8 @@ notes:
   text. valid_data_any (not must_call_all on a single tool) lets the gather LLM pick whichever Datadog tool
   fits "monitors in an alerting state" without over-pinning the exact tool. A valid empty result still
   proves the end-to-end path; the scenario skips (never fails) when no @live Datadog credentials resolve.'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

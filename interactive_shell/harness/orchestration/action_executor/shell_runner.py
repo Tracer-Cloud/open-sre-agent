@@ -1,4 +1,4 @@
-"""Shell command runner — execute, route builtins, and record results."""
+"""Shell command runner: execute builtins and record results."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from interactive_shell.harness.orchestration.execution_policy import (
     plan_shell_execution,
 )
 from interactive_shell.harness.orchestration.shell_policy import (
-    argv_for_repl_builtin_routing,
+    argv_for_repl_builtin_detection,
     parse_shell_command,
 )
 from interactive_shell.runtime import ReplSession
@@ -58,7 +58,7 @@ def run_shell_command(
 
     console.print(f"[bold]$ {escape(command)}[/bold]")
 
-    argv_builtin = argv_for_repl_builtin_routing(
+    argv_builtin = argv_for_repl_builtin_detection(
         parsed=parsed, is_windows=_intent_parser.IS_WINDOWS
     )
 

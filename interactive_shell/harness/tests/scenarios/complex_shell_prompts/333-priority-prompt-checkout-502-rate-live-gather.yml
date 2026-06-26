@@ -14,8 +14,8 @@ notes:
   asserts the conversational gather loop reaches live Datadog and returns valid data via query_datadog_logs
   or query_datadog_all (316-style), not merely that a tool was invoked despite auth/transport errors.
 - 'P0 priority prompt (http_5xx_or_latency_after_deploy #1).'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

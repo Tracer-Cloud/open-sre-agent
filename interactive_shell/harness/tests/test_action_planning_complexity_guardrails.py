@@ -1,4 +1,4 @@
-"""Static complexity guardrails for routing policy modules."""
+"""Static complexity guardrails for action-planning modules."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _complexity(node: ast.AST) -> int:
     return 1 + sum(1 for child in ast.walk(node) if isinstance(child, _DECISION_NODES))
 
 
-def test_routing_module_complexity_guardrails() -> None:
+def test_action_planning_complexity_guardrails() -> None:
     repo_root = _repo_root()
     violations: list[str] = []
 

@@ -41,8 +41,8 @@ notes:
 - 'Cross-integration negative control: PostHog and Datadog are NOT configured, so list_posthog_tools and
   query_datadog_all/query_datadog_logs must never fire. Asserting them not_called catches a gather loop that
   reaches for an unconfigured integration.'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: false

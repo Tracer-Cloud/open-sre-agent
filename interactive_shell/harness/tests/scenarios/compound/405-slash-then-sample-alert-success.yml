@@ -15,8 +15,8 @@ available_capabilities:
 notes:
 - Both actions are valid and of compatible kinds. Verifies that a compound request with two supported
   sequential actions executes successfully without fail-closing.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

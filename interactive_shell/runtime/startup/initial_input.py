@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from interactive_shell.runtime.controller import execute_routed_turn
+from interactive_shell.harness.pipeline import handle_message_with_agent
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.ui import render_banner
 from interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
+from interactive_shell.utils.telemetry import PromptRecorder
+from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
+
+_TURN_KIND = "agent"
 
 
 def run_initial_input(
@@ -26,7 +30,19 @@ def run_initial_input(
         if not stripped:
             continue
         render_submitted_prompt(console, session, stripped)
-        execute_routed_turn(stripped, session, console, is_tty=False)
+        session_token = bind_cli_session_id(session.session_id)
+        try:
+            recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
+            handle_message_with_agent(
+                stripped,
+                session,
+                console,
+                recorder=recorder,
+                confirm_fn=None,
+                is_tty=False,
+            )
+        finally:
+            reset_cli_session_id(session_token)
     return 0
 
 

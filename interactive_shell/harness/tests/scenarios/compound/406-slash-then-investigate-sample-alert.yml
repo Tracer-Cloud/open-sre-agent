@@ -16,8 +16,8 @@ notes:
 - Sibling of 405 using the "investigate a sample test alert" phrasing. Verifies the sample alert is fired
   as its OWN alert_sample tool call (a separate tool from /health), even though the clause leads with
   the verb "investigate". The sample alert must be LLM-decided, not folded into investigation_start.
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

@@ -1,4 +1,4 @@
-# Routing Policy Architecture (ADR)
+# Interactive Shell Action Policy (ADR)
 
 ## Status
 Superseded — Jun 18, 2026. The declarative-rule-pack deterministic mapper and
@@ -7,7 +7,7 @@ decision have been removed. See "Decision (current): LLM is the sole tool
 selector" below. The original decision is retained for historical context.
 
 ## Context
-The interactive-shell routing policy had grown through layered heuristics in
+The interactive-shell action policy had grown through layered heuristics in
 single modules: a regex/keyword deterministic mapper inferred tools from
 free-form text, and planner postprocessing rewrote the model's chosen actions
 with more regex. These heuristics competed with the LLM and caused
@@ -16,7 +16,7 @@ informational question instead of running the sample alert), and they were a
 recurring source of precedence drift.
 
 ## Decision (current): LLM is the sole tool selector
-1. There is no regex/keyword intent inference in routing. Non-command turns are
+1. There is no regex/keyword intent inference. Non-command turns are
    planned entirely by the LLM action planner via native tool-calling.
 2. Tool selection is driven by the planner system prompt
    (`.../llm_action_planner/constants.py`) and the per-tool descriptions in the
@@ -40,7 +40,7 @@ recurring source of precedence drift.
   the relevant tool description — never add a regex.
 - To add a new tool, add it to the tool catalog with a clear, self-describing
   `description` and `input_schema`; the planner selects it from that text.
-- Live routing scenarios under
+- Live turn scenarios under
   `interactive_shell/harness/tests/scenarios/` are the regression
   surface for planner behavior. Deterministic scenarios (`intent_class:
   deterministic`) assert literal command dispatch only.
@@ -51,7 +51,7 @@ recurring source of precedence drift.
 3. Planner postprocessing ran as pure transforms over a typed `PlannerState`.
 4. Fail-closed policy transforms and normalization transforms were registered separately and executed in one ordered list.
 5. Legacy planner-result tuple compatibility was collapsed behind a single adapter.
-6. Routing contracts included policy-trace artifacts to detect silent precedence drift.
+6. Planner contracts included policy-trace artifacts to detect silent precedence drift.
 
 ## Integration awareness and LLM-driven read-only discovery
 
@@ -60,7 +60,7 @@ Addendum — Jun 18, 2026.
 Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
-1. Context grounding (not routing). At REPL boot, `repl_main`
+1. Context grounding (not action planning). At REPL boot, `repl_main`
    (`interactive_shell/runtime/entrypoint.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
@@ -158,8 +158,8 @@ Removed as part of this change: the `denied` field on `ActionPlanningDecision`,
 `enforce_plan_fail_closed_policy` (replaced by `normalize_terminal_plan`, which
 only strips `assistant_handoff` markers), `render_plan_denied`, the
 `mark_unhandled` planner tool, and the `UNHANDLED:` convention. The
-`fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fields were
-also removed from routing scenario fixtures, since the oracle never asserted on
+`fail_closed`, `has_unhandled_clause`, and `turn.expected_signals` fields were
+also removed from turn scenario fixtures, since the oracle never asserted on
 them; the fixture `policy` block now carries a single `executes_terminal_action`
 `boolean` (true only when a planned terminal action is expected to run through
 the dispatch gate).

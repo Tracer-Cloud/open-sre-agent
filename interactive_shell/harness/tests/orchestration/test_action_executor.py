@@ -719,7 +719,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
     assert task.status == TaskStatus.FAILED
     assert len(captured) == 1
     props = captured[0]
-    assert props["cli_route_kind"] == "background_task"
+    assert props["cli_turn_kind"] == "background_task"
     assert props["$ai_trace_id"] == task.task_id
     ai_input = props["$ai_input"]
     assert isinstance(ai_input, list)

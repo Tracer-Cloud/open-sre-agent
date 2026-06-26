@@ -12,8 +12,11 @@ from collections.abc import Callable
 from rich.console import Console
 
 from config.llm_reasoning_effort import apply_reasoning_effort
+from interactive_shell.chat.cli_agent import answer_cli_agent
+from interactive_shell.chat.tool_gathering import gather_tool_evidence
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
+    execute_cli_actions,
 )
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
@@ -28,15 +31,18 @@ def handle_message_with_agent(
     recorder: PromptRecorder | None,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-    execute_actions: Callable[..., TerminalActionExecutionResult],
-    answer_agent: Callable[..., LlmRunInfo | None],
+    execute_actions: Callable[..., TerminalActionExecutionResult] | None = None,
+    answer_agent: Callable[..., LlmRunInfo | None] | None = None,
 ) -> None:
     """Handle one interactive-shell turn end to end."""
+    execute = execute_cli_actions if execute_actions is None else execute_actions
+    answer = answer_cli_agent if answer_agent is None else answer_agent
+
     # Clear any observation left by a prior turn so we only summarize discovery
     # output produced by *this* planner turn.
     session.last_command_observation = None
 
-    turn = execute_actions(
+    turn = execute(
         text,
         session,
         console,
@@ -66,7 +72,7 @@ def handle_message_with_agent(
             # (e.g. "is sentry installed?"). Feed its output back to the assistant
             # so the user gets a direct answer instead of only a raw table.
             with apply_reasoning_effort(session.reasoning_effort):
-                run = answer_agent(
+                run = answer(
                     text,
                     session,
                     console,
@@ -91,7 +97,26 @@ def handle_message_with_agent(
         return
 
     with apply_reasoning_effort(session.reasoning_effort):
-        run = answer_agent(text, session, console, confirm_fn=confirm_fn, is_tty=is_tty)
+        gathered = gather_tool_evidence(text, session, console, is_tty=is_tty)
+        if gathered:
+            run = answer(
+                text,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                tool_observation=gathered,
+                tool_observation_on_screen=False,
+            )
+        else:
+            run = answer(
+                text,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                tool_observation=None,
+            )
     assistant_text = run.response_text if run is not None and run.response_text else ""
     if recorder is not None:
         recorder.set_response(assistant_text, run)

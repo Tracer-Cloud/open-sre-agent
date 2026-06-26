@@ -7,7 +7,7 @@ subdirectories. The repo-root `AGENTS.md` still applies.
 
 `interactive_shell/` owns the interactive OpenSRE terminal: the REPL
 loop, slash-command surface, local alert ingestion, LLM-backed help/chat,
-action planning, shell execution, session state, history, routing, and Rich /
+action planning, shell execution, session state, history, and Rich /
 prompt-toolkit UI.
 
 Design for a terminal user who may be in the middle of an incident: behavior
@@ -20,9 +20,8 @@ should be predictable, interruptible, explainable, and safe by default.
 | `runtime/controller.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | `ReplSession`, background tasks, lifecycle state | UI rendering and prompt text |
-| `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
-| `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | LLM classification and raw UI formatting |
-| `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command routing |
+| `orchestration/` | action planning, execution policy, action executor, deterministic command detection, and interaction models | raw UI formatting |
+| `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command execution |
 | `chat/` | assistant/help/follow-up answer surfaces and shared LLM prompt rules | direct mutation of runtime state outside the action executor |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
@@ -57,7 +56,7 @@ owning area rather than adding more logic to the caller.
   module. Keep handlers small: parse args, call focused helpers, render result.
 - **REPL + CLI parity (required):** Every command in `SLASH_COMMANDS` must have a
   matching `_MCP_BY_COMMAND` entry in
-  `command_registry/slash_catalog.py`. That catalog feeds LLM routing (`slash_invoke`),
+  `command_registry/slash_catalog.py`. That catalog feeds the LLM planner (`slash_invoke`),
   planner tool specs, and compact help text. Without it, CI fails
   (`test_slash_catalog_covers_all_registered_commands`).
   - **New REPL-only slash command:** add `SlashCommand` in the owning
@@ -78,7 +77,7 @@ owning area rather than adding more logic to the caller.
     process-control commands.
 - Use `validate_args` for cheap pre-policy validation so bad arguments do not
   trigger confirmations or side effects.
-- Route command execution through the central dispatch and execution-policy
+- Send command execution through the central dispatch and execution-policy
   helpers. Do not bypass `execution_policy.py` for new commands.
 - **Default-allow execution policy (current behavior):** the REPL is
   default-allow. `execution_policy.py` resolves every action to `allow` with **no
@@ -125,7 +124,7 @@ owning area rather than adding more logic to the caller.
     `_INTERACTIVE_PICKER_MENUS` / `_INTERACTIVE_PICKER_SUBCOMMANDS` in
     `orchestration/tools/slash_tool.py`.
 
-## Routing and action execution
+## Action Planning And Execution
 
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
   action planner never denies a turn. Because every terminal action is read-only,
@@ -135,13 +134,13 @@ owning area rather than adding more logic to the caller.
   tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
   message because they caused frequent false denials (e.g. a conversational
   question that embedded a quoted, list-style directive) with no safety upside.
-  Details and rationale live in `routing/AGENTS.md` ("Important routing decisions
-  (locked)"). If mutating actions are ever introduced, gate them with the
+  Details and rationale live in `interactive_shell/harness/AGENTS.md`. If
+  mutating actions are ever introduced, gate them with the
   execution-stage confirmation policy (`orchestration/execution_policy.py`), not a
   planner-stage denial.
-- Keep deterministic parsing in `orchestration/`; use LLM classification only where the
-  deterministic rules cannot reasonably decide.
-- Route uncertainty to a safe surface: help/chat or a clarification, not direct
+- Keep deterministic command detection in `orchestration/`; use the LLM planner
+  for natural-language action selection.
+- Send uncertainty to a safe surface: help/chat or a clarification, not direct
   mutation or shell execution.
 - LLM-generated text must never execute directly. Convert proposed actions into
   explicit planned actions, show them to the user when appropriate, then execute
@@ -235,7 +234,7 @@ owning area rather than adding more logic to the caller.
 ## Testing expectations
 
 - Put tests under `tests/interactive_shell/`, mirroring the package area
-  when useful (`routing/`, `orchestration/`, `ui/`, etc.). Never add tests under
+  when useful (`orchestration/`, `ui/`, etc.). Never add tests under
   `app/`.
 - For focused changes, run the closest tests, for example:
   - `uv run python -m pytest tests/core/domain/alerts/test_inbox.py`
@@ -248,7 +247,7 @@ owning area rather than adding more logic to the caller.
   fake sessions, fake consoles, monkeypatched subprocesses, and small fixtures.
 - For UI work, test pure formatting/rendering helpers where possible and keep
   full REPL-loop tests minimal.
-- For routing or execution-policy changes, test both safe fallback behavior and
+- For action-planning or execution-policy changes, test both safe fallback behavior and
   the intended positive path.
 
 ## Change checklist
@@ -257,7 +256,7 @@ Before considering an interactive-shell change complete, check:
 
 1. Is the logic in the right submodule, with import-time side effects avoided?
 2. Is user-facing behavior preserved or intentionally documented?
-3. Are unsafe actions routed through execution policy with the correct tier?
+3. Are unsafe actions sent through execution policy with the correct tier?
 4. Are external inputs bounded, escaped, redacted, and timeout-protected?
 5. Do background resources shut down deterministically?
 6. Are focused tests added or updated under `tests/interactive_shell/`?

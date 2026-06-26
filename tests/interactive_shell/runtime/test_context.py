@@ -17,7 +17,7 @@ from interactive_shell.runtime.core.context import (
     create_repl_runtime_context,
 )
 from interactive_shell.runtime.core.session import ReplSession
-from interactive_shell.runtime.core.state import ReplState, SpinnerState
+from interactive_shell.runtime.core.state import ReplState, SpinnerState, create_repl_mutable_state
 from interactive_shell.runtime.core.tasks import TaskRegistry
 
 
@@ -79,6 +79,37 @@ def test_context_supports_lightweight_bootstrap_for_unit_seams(
 
     assert context.session.active_theme_name == "green"
     assert isinstance(context.state, ReplState)
+    assert isinstance(context.spinner, SpinnerState)
+
+
+def test_create_repl_mutable_state_returns_fresh_initial_state() -> None:
+    first = create_repl_mutable_state()
+    second = create_repl_mutable_state()
+
+    assert isinstance(first.state, ReplState)
+    assert isinstance(first.spinner, SpinnerState)
+    assert first.state is not second.state
+    assert first.spinner is not second.spinner
+    assert first.state.exit_requested is False
+    assert first.state.is_dispatch_running() is False
+    assert first.state.is_awaiting_confirmation() is False
+    assert first.spinner.streaming is False
+
+
+def test_context_uses_canonical_initial_mutable_state() -> None:
+    context = ReplRuntimeContext(session=ReplSession())
+
+    assert isinstance(context.state, ReplState)
+    assert isinstance(context.spinner, SpinnerState)
+    assert context.state.exit_requested is False
+    assert context.spinner.streaming is False
+
+
+def test_context_preserves_explicit_partial_mutable_state() -> None:
+    state = ReplState()
+    context = ReplRuntimeContext(session=ReplSession(), state=state)
+
+    assert context.state is state
     assert isinstance(context.spinner, SpinnerState)
 
 

@@ -157,4 +157,30 @@ class SpinnerState:
         )
 
 
-__all__ = ["PROMPT_REFRESH_INTERVAL_S", "ReplState", "SpinnerState"]
+@dataclass(frozen=True)
+class ReplMutableState:
+    """Initial mutable state bundle shared by the interactive runtime."""
+
+    state: ReplState
+    spinner: SpinnerState
+
+
+def create_repl_mutable_state(
+    *,
+    state: ReplState | None = None,
+    spinner: SpinnerState | None = None,
+) -> ReplMutableState:
+    """Return the canonical initial mutable state objects for a REPL runtime."""
+    return ReplMutableState(
+        state=state if state is not None else ReplState(),
+        spinner=spinner if spinner is not None else SpinnerState(),
+    )
+
+
+__all__ = [
+    "PROMPT_REFRESH_INTERVAL_S",
+    "ReplMutableState",
+    "ReplState",
+    "SpinnerState",
+    "create_repl_mutable_state",
+]

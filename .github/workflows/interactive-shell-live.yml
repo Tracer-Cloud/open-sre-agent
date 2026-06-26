@@ -1,4 +1,4 @@
-name: Routing Live (PR + post-merge)
+name: Interactive Shell Live (PR + post-merge)
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ on:
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/routing-live.yml"
+      - ".github/workflows/interactive-shell-live.yml"
   push:
     branches: [main]
     paths:
@@ -30,7 +30,7 @@ on:
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/routing-live.yml"
+      - ".github/workflows/interactive-shell-live.yml"
   workflow_dispatch:
     inputs:
       shard_indexes:
@@ -42,12 +42,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: routing-live-${{ github.event.pull_request.number || github.sha }}
+  group: interactive-shell-live-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  routing-checks:
-    name: routing-checks (no-LLM)
+  turn-checks:
+    name: turn-checks (no-LLM)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -74,20 +74,20 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Deterministic routing + fixture integrity
+      - name: Deterministic turn handling + fixture integrity
         run: >-
           uv run python -m pytest -n auto -v
           interactive_shell/harness/tests/
           -m "not live_llm"
 
-  routing-live:
+  turn-live:
     # Run on push to main, manual dispatch, and same-repo PRs. Fork PRs have no
-    # secrets, so they skip the live job (the no-LLM routing-checks job above
+    # secrets, so they skip the live job (the no-LLM turn-checks job above
     # still gates them) instead of failing the credential-validation step.
     if: >-
       github.repository == 'Tracer-Cloud/opensre' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
-    name: routing-live shard ${{ matrix.shard_index }}
+    name: turn-live shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -100,8 +100,8 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       LLM_PROVIDER: openai
       OPENSRE_DISABLE_KEYRING: "1"
-      ROUTING_SHARD_TOTAL: "8"
-      ROUTING_SHARD_INDEX: ${{ matrix.shard_index }}
+      TURN_SHARD_TOTAL: "8"
+      TURN_SHARD_INDEX: ${{ matrix.shard_index }}
       PYTHONUTF8: "1"
       # @live gather scenarios (316, 333–335, 337) require these secrets in CI.
       # Missing values fail the job in preflight and via skip_or_fail in tests.
@@ -134,7 +134,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Validate live routing credentials
+      - name: Validate live turn credentials
         run: |
           missing=()
           if [ -z "${OPENAI_API_KEY}" ]; then
@@ -150,13 +150,13 @@ jobs:
             missing+=(DD_APP_KEY)
           fi
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing secrets for live routing tests: ${missing[*]}"
+            echo "::error::Missing secrets for live turn tests: ${missing[*]}"
             exit 1
           fi
 
-      - name: Run sharded live routing suite
+      - name: Run sharded live turn suite
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          interactive_shell/harness/tests/test_routing_scenarios.py
+          interactive_shell/harness/tests/test_turn_scenarios.py
           -k "test_live_turn_execution_oracle or test_live_action_planning"

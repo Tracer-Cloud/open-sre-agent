@@ -11,9 +11,8 @@ In simple terms:
 - `entrypoint.py` starts the interactive session and handles startup/shutdown.
 - `startup/first_launch_github.py` owns the first-launch GitHub sign-in gate.
 - `controller.py` owns the `InteractiveShellController` orchestration class,
-  including prompt input, submitted prompt routing, queued turn consumption,
-  prompt-mediated confirmation waits, one-turn pipeline handoff, CLI action
-  execution seams, tool-backed answers, background output draining, and
+  including prompt input, submitted prompt handling, queued turn consumption,
+  prompt-mediated confirmation waits, one-turn pipeline handoff, background output draining, and
   shutdown.
 - `core/prompt_manager.py` owns prompt-toolkit setup and prompt rendering.
 - `input/` owns prompt input event conversion: EOF, Ctrl-C, CPR cleanup, and
@@ -43,10 +42,9 @@ The runtime package is intentionally split into focused concerns:
 - `core/turn_detection.py` — pure prompt text classification only.
 - `utils/input_policy.py` — terminal stdin/spinner gating decisions only.
 - `controller.py` — stable async entrypoint and async prompt runtime/event loop
-  orchestration, submitted prompt routing, queued-turn consumption,
-  prompt-mediated confirmation waits, route telemetry, one-turn pipeline
-  handoff, CLI action execution seams, tool-backed answer helpers, background
-  output draining, and shutdown only.
+  orchestration, submitted prompt handling, queued-turn consumption,
+  prompt-mediated confirmation waits, turn telemetry, one-turn pipeline
+  handoff, background output draining, and shutdown only.
 - `core/prompt_manager.py` — prompt-toolkit setup and prompt rendering only.
 - `input/` — prompt input event conversion and terminal-input cleanup only.
 - `background/workers.py` — background worker startup and turn-start drain hooks
@@ -71,9 +69,9 @@ The interactive runtime must keep this shape:
 1. `entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
 2. `entrypoint.repl_main` creates `InteractiveShellController`.
 3. `InteractiveShellController.start_interactive_shell` owns prompt lifecycle,
-   submitted input routing, queued-turn consumption, and per-turn task
+   submitted input handling, queued-turn consumption, and per-turn task
    scheduling.
-4. `controller.execute_routed_turn` performs the one-turn shell pipeline handoff.
+4. `InteractiveShellController._run_queued_turn` performs the one-turn shell pipeline handoff.
 
 Do not invert this dependency direction.
 
@@ -83,7 +81,7 @@ Do not invert this dependency direction.
 flowchart TD
   runRepl["entrypoint.run_repl"] --> replMain["entrypoint.repl_main"]
   replMain --> controller["controller.InteractiveShellController"]
-  controller --> executeTurn["controller.execute_routed_turn"]
+  controller --> executeTurn["controller._run_queued_turn"]
   executeTurn --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
   controller --> replState["core.state.ReplState"]
   controller --> spinnerState["core.state.SpinnerState"]
@@ -106,7 +104,7 @@ flowchart TD
 ## Turn execution rules
 
 - Do not reintroduce `dispatch.py` or any compatibility-only forwarding module.
-- `controller.execute_routed_turn` owns route telemetry and the handoff into
+- `InteractiveShellController._run_queued_turn` owns turn telemetry and the handoff into
   `handle_message_with_agent`.
 - Put cancel/confirm/correction text classifiers in `core/turn_detection.py`.
 - Put stdin blocking and spinner decisions in `utils/input_policy.py`.
@@ -117,14 +115,15 @@ flowchart TD
 - `controller.py` owns:
   - `InteractiveShellController`
   - `start_interactive_shell` shell lifecycle orchestration
+  - `_run_prompt_loop` — read and handle user input until exit
+  - `_run_turn_queue_loop` — consume queued turns until exit
   - prompt input acceptance until exit
-  - submitted prompt rendering and cancel/confirm/queue routing
+  - submitted prompt rendering and cancel/confirm/queue handling
   - queued turn consumption
   - per-turn task lifecycle
   - dispatch start/finish state transitions
   - prompt-mediated confirmation waiting
-  - route telemetry and `handle_message_with_agent` invocation
-  - reusable helper seams for CLI action execution and tool-backed answer generation
+  - turn telemetry and `handle_message_with_agent` invocation
   - current turn cancellation helpers
   - coordination between prompt, background, and shutdown helpers
 - `core/prompt_manager.py` owns:
@@ -174,9 +173,9 @@ flowchart TD
 
 ## Refactor guardrails
 
-- No behavior changes to routing policy should be introduced from
+- No behavior changes to action-planning policy should be introduced from
   `runtime/` refactors.
 - Keep interruption semantics unchanged:
   - Esc or bare cancel commands interrupt active dispatch
   - confirmation prompts are cancel-safe and never silently auto-confirm
-- Preserve observability semantics (route decision capture, turn summaries).
+- Preserve observability semantics (turn telemetry and turn summaries).

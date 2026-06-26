@@ -22,8 +22,8 @@ notes:
 - 'Sentry is connected so the integration-backed investigation gate (>=1 connected integration, added
   in #2871) is satisfied. With a data source connected, the explicit quoted directive dispatches an investigation
   instead of handing off to suggest connecting one. Contrast with 313 (incident, no integrations -> handoff).'
-route:
-  expected_kind: handle_message_with_agent
+turn:
+  expected_kind: agent
   expected_command_text: null
 policy:
   executes_terminal_action: true

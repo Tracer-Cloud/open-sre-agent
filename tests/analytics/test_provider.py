@@ -296,7 +296,7 @@ def test_set_persistent_property_merges_into_subsequent_captures(
     analytics.capture(Event.CLI_INVOKED)
     analytics.set_persistent_property("github_username", "octocat")
     analytics.capture(Event.ONBOARD_STARTED, {"entrypoint": "cli"})
-    analytics.capture(Event.INTERACTIVE_SHELL_ROUTE_DECISION, {"route": "agent"})
+    analytics.capture(Event.TERMINAL_TURN_SUMMARIZED, {"turn": "agent"})
     analytics.shutdown(flush=True)
 
     assert len(posted_payloads) == 3
@@ -307,7 +307,7 @@ def test_set_persistent_property_merges_into_subsequent_captures(
     assert "github_username" not in props_before
     assert props_after_1["github_username"] == "octocat"
     assert props_after_2["github_username"] == "octocat"
-    assert props_after_2["route"] == "agent"
+    assert props_after_2["turn"] == "agent"
 
 
 def test_set_persistent_property_noop_when_telemetry_disabled(

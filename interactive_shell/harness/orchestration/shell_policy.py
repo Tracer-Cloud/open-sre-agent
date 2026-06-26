@@ -312,13 +312,13 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
     return ParsedShellCommand(command=stripped, argv=argv, passthrough=False)
 
 
-def argv_for_repl_builtin_routing(
+def argv_for_repl_builtin_detection(
     *, parsed: ParsedShellCommand, is_windows: bool
 ) -> list[str] | None:
     """Argv tokens for detecting ``cd`` / ``pwd`` REPL builtins.
 
     Safe-mode parses populate ``parsed.argv``. Passthrough (``!``) leaves it unset
-    until ``shlex`` split here so builtin routing matches the user's intent without
+    until ``shlex`` split here so builtin detection matches the user's intent without
     a second parsing site in the action runner.
     """
     if parsed.argv is not None:
@@ -432,7 +432,7 @@ def evaluate_policy(*, parsed: ParsedShellCommand) -> PolicyDecision:
 __all__ = [
     "ParsedShellCommand",
     "PolicyDecision",
-    "argv_for_repl_builtin_routing",
+    "argv_for_repl_builtin_detection",
     "classify_command",
     "evaluate_policy",
     "parse_shell_command",

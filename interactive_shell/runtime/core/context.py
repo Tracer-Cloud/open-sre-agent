@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, 
 
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.runtime.core.session import ReplSession
-from interactive_shell.runtime.core.state import ReplState, SpinnerState
+from interactive_shell.runtime.core.state import ReplState, SpinnerState, create_repl_mutable_state
 from interactive_shell.runtime.core.tasks import TaskRegistry
 
 
@@ -54,10 +54,28 @@ class ReplRuntimeContext(BaseModel):
     )
 
     session: InstanceOf[ReplSession]
-    state: InstanceOf[ReplState] = Field(default_factory=ReplState)
-    spinner: InstanceOf[SpinnerState] = Field(default_factory=SpinnerState)
+    state: InstanceOf[ReplState]
+    spinner: InstanceOf[SpinnerState]
     pt_session: PromptSession[str] | None = None
     inbox: _alert_inbox.AlertInbox | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def apply_initial_mutable_state(cls, data: object) -> object:
+        """Set the paired mutable state defaults through one canonical factory."""
+        if not isinstance(data, dict):
+            return data
+        if "state" in data and "spinner" in data:
+            return data
+        mutable_state = create_repl_mutable_state(
+            state=data.get("state"),
+            spinner=data.get("spinner"),
+        )
+        return {
+            **data,
+            "state": mutable_state.state,
+            "spinner": mutable_state.spinner,
+        }
 
     @model_validator(mode="after")
     def bind_prompt_history_backend(self) -> Self:
@@ -111,10 +129,11 @@ def create_repl_runtime_context(
         hydrate_integrations=hydrate_integrations,
         persistent_tasks=persistent_tasks,
     )
+    mutable_state = create_repl_mutable_state(state=state, spinner=spinner)
     return ReplRuntimeContext(
         session=prepared_session,
-        state=state or ReplState(),
-        spinner=spinner or SpinnerState(),
+        state=mutable_state.state,
+        spinner=mutable_state.spinner,
         pt_session=pt_session,
         inbox=inbox,
     )

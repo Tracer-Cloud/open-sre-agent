@@ -483,10 +483,14 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
 def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 
-    def _fake_execute_routed_turn(*args: object, **kwargs: object) -> None:
+    def _fake_handle_message_with_agent(*args: object, **kwargs: object) -> None:
         calls.append(kwargs)
 
-    monkeypatch.setattr(startup_initial_input, "execute_routed_turn", _fake_execute_routed_turn)
+    monkeypatch.setattr(
+        startup_initial_input,
+        "handle_message_with_agent",
+        _fake_handle_message_with_agent,
+    )
 
     assert startup_initial_input.run_initial_input("/remote", ReplSession()) == 0
     assert len(calls) == 1
@@ -1204,7 +1208,7 @@ class TestRequestConfirmationViaPrompt:
         """
         state = loop_state.ReplState()
         # Active dispatch must have a cancel event parked; in production
-        # ``InteractiveShellController._execute_single_turn`` allocates this before invoking the
+        # ``InteractiveShellController._run_queued_turn`` allocates this before invoking the
         # confirm_fn. Never set in this test.
         state.current_cancel_event = threading.Event()
 

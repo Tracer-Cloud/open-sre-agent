@@ -21,7 +21,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | `core/`               | Investigation orchestration, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
 | `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
-| `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, routing harness, and terminal UI. |
+| `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, and the Hermes log pipeline. |
 | `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
@@ -46,7 +46,7 @@ Main packages one level deeper:
 - `platform/analytics/` — Analytics event plumbing and install helpers used by the onboarding flow.
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
-- `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help routing, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
+- `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `infra/deployment/` — Single top-level home for deployment-facing code, split by concern:
     - `infra/deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
@@ -170,11 +170,11 @@ Basic steps:
 
 ## 4. Testing
 
-Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
+Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testing with `ReplDriver`: **[TESTING.md](TESTING.md)**.
 
 ## 5. Footguns (common mistakes to avoid)
 
-- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `interactive_shell/harness/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`interactive_shell/harness/orchestration/execution_policy.py`), not the planner.
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `interactive_shell/harness/AGENTS.md` and `docs/interactive-shell-action-policy.md`. If mutating actions are ever added, gate them at the execution stage (`interactive_shell/harness/orchestration/execution_policy.py`), not the planner.
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
