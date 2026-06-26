@@ -1,4 +1,4 @@
-"""Metamorphic routing invariants for the single-branch agent entrypoint."""
+"""Metamorphic invariants for deterministic command dispatch."""
 
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ import pytest
 from interactive_shell.harness.orchestration.command_dispatch import (
     deterministic_command_text,
 )
-from interactive_shell.harness.router import RouteKind, route_input
-from interactive_shell.runtime.core.session import ReplSession
 
 
 @pytest.mark.parametrize(
@@ -20,8 +18,6 @@ from interactive_shell.runtime.core.session import ReplSession
     ],
 )
 def test_help_alias_variants_dispatch_slash_help(prompt: str) -> None:
-    decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
     assert deterministic_command_text(prompt) == "/help"
 
 
@@ -34,8 +30,6 @@ def test_help_alias_variants_dispatch_slash_help(prompt: str) -> None:
     ],
 )
 def test_opensre_investigate_variants_dispatch_deterministically(prompt: str) -> None:
-    decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
     command_text = deterministic_command_text(prompt)
     assert command_text is not None
     assert command_text.startswith("/investigate")
@@ -50,6 +44,4 @@ def test_opensre_investigate_variants_dispatch_deterministically(prompt: str) ->
     ],
 )
 def test_non_command_variants_have_no_deterministic_command(prompt: str) -> None:
-    decision = route_input(prompt, ReplSession())
-    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
     assert deterministic_command_text(prompt) is None

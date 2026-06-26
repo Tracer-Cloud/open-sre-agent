@@ -155,7 +155,7 @@ def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
 
 def _repl_write_buffer(rendered: str) -> None:
     """Flush pre-rendered Rich output with CRLF line endings (patch_stdout safe)."""
-    from interactive_shell.runtime.ui.cpr_stdin import strip_cpr_escape_sequences
+    from interactive_shell.ui.components.cpr_stdin import strip_cpr_escape_sequences
 
     normalized = strip_cpr_escape_sequences(rendered.replace("\r\n", "\n").replace("\n", "\r\n"))
     token = _REPL_OUTPUT_PREPARED.set(True)
@@ -223,7 +223,7 @@ def refresh_welcome_poster(
     theme_notice: str | None = None,
 ) -> None:
     """Clear scrollback and redraw splash art + welcome panel with the active theme."""
-    from interactive_shell.runtime.ui.cpr_stdin import drain_stale_cpr_bytes
+    from interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 
     repl_clear_screen()
     # ``repl_clear_screen`` can trigger a toolbar DSR/CPR exchange; drain before writing.

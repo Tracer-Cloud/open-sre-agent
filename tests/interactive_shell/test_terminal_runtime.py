@@ -22,15 +22,14 @@ from prompt_toolkit.output import DummyOutput
 
 from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from interactive_shell.runtime import dispatch as loop_dispatch
-from interactive_shell.runtime import execution as loop_execution
-from interactive_shell.runtime import state as loop_state
+from interactive_shell.runtime.core import execution as loop_execution
+from interactive_shell.runtime.core import state as loop_state
 from interactive_shell.runtime.core.session import ReplSession
-from interactive_shell.runtime.ui.cpr_stdin import (
+from interactive_shell.ui import input_prompt
+from interactive_shell.ui.components.cpr_stdin import (
     strip_cpr_escape_sequences,
     strip_cpr_sequences,
 )
-from interactive_shell.runtime.ui.streaming_console import StreamingConsole
-from interactive_shell.ui import input_prompt
 from interactive_shell.ui.input_prompt import completion as prompt_completion
 from interactive_shell.ui.input_prompt.completion import ShellCompleter
 from interactive_shell.ui.input_prompt.key_bindings import (
@@ -42,6 +41,7 @@ from interactive_shell.ui.input_prompt.lexer import ReplInputLexer
 from interactive_shell.ui.input_prompt.rendering import _prompt_message
 from interactive_shell.ui.input_prompt.style import _build_prompt_style
 from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from interactive_shell.ui.streaming.console import StreamingConsole
 from platform.terminal.theme import (
     ANSI_RESET,
     PROMPT_ACCENT_ANSI,
@@ -465,7 +465,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         return "bg123"
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.background_runner.start_background_text_investigation",
+        "interactive_shell.runtime.background.runner.start_background_text_investigation",
         _fake_start_background_text_investigation,
     )
 
@@ -1156,7 +1156,7 @@ class TestReplState:
         a previous turn's worker-thread observation get clobbered by
         the next turn's ``Event.clear()``.
 
-        The fix: each ``_run_one_dispatch`` allocates a fresh
+        The fix: each dispatch processor turn allocates a fresh
         ``threading.Event`` and parks it at ``state.current_cancel_event``.
         The previous turn's worker keeps a strong reference to its OWN
         event; a new turn replacing the parked one never resets the
@@ -1293,7 +1293,7 @@ class TestRouteConfirmThroughPrompt:
         """
         state = loop_state.ReplState()
         # Active dispatch must have a cancel event parked; in production
-        # ``_run_one_dispatch`` allocates this before invoking the
+        # ``DispatchProcessor.run_one`` allocates this before invoking the
         # confirm_fn. Never set in this test.
         state.current_cancel_event = threading.Event()
 

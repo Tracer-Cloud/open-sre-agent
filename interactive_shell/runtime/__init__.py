@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from interactive_shell.runtime.background import (
+from interactive_shell.runtime.background.models import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )

@@ -90,15 +90,15 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 - Do **not** use `unittest.mock`, `patch`, `MagicMock`, or equivalent mocking
   primitives in routing tests.
 - Do **not** stub or monkeypatch the LLM client path in routing tests.
-- Harness contract tests must exercise the real routing stack
-  (`route_input` -> `handle_message_with_agent`) and rely on curated prompts
-  instead of synthetic mocked return values.
+- Harness contract tests must exercise the real turn-execution stack
+  (`execute_routed_turn` -> `handle_message_with_agent`) and rely on curated
+  prompts instead of synthetic mocked return values.
 
 ## Important routing decisions (locked)
 
-- Keep `route_input` as a **single-branch** entrypoint: every turn returns a
-  `handle_message_with_agent` decision. Do **not** add command/slash/help/alert
-  branches or any other top-level routing phases here.
+- There is no top-level router: every turn is handed to
+  `handle_message_with_agent`. Do **not** add command/slash/help/alert branches
+  or any other top-level routing phases before the agent.
 - Deterministic command dispatch is an **internal fast path of the agent**, not
   a routing branch. `handle_message_with_agent` detects literal slash commands,
   bare command aliases, and `opensre investigate` quick-starts via
@@ -154,7 +154,8 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 
 - Routing tests are part of the default CI/CD flow; do **not** move them to
   optional-only jobs.
-- Keep deterministic routing contracts (`test_routing_scenarios.py::test_deterministic_routing` and
+- Keep deterministic dispatch contracts
+  (`test_routing_scenarios.py::test_deterministic_command_dispatch` and
   `test_routing_fixture_integrity.py`) in the default PR CI flow. These run as
   the no-LLM `routing-checks` job in `.github/workflows/routing-live.yml`
   (`pytest interactive_shell/harness/tests/ -m "not live_llm"`), which

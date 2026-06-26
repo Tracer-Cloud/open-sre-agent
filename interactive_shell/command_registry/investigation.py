@@ -11,11 +11,10 @@ from rich.markup import escape
 from config.llm_reasoning_effort import apply_reasoning_effort
 from interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.background_runner import (
+from interactive_shell.runtime.background.runner import (
     start_background_template_investigation,
     start_background_text_investigation,
 )
-from interactive_shell.runtime.ui.foreground_investigation import run_foreground_investigation
 from interactive_shell.ui import (
     DIM,
     ERROR,
@@ -27,6 +26,7 @@ from interactive_shell.ui.components.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
+from interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from platform.common.task_types import TaskRecord
 

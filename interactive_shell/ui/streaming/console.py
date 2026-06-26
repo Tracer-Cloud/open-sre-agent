@@ -5,12 +5,18 @@ from __future__ import annotations
 import sys
 import threading
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from rich.console import Console
 from rich.file_proxy import FileProxy
 
-from interactive_shell.runtime.core.state import SpinnerState
+
+class _PromptSpinner(Protocol):
+    bytes_in: int
+    streaming: bool
+
+    def stop(self) -> None:
+        ...
 
 
 class StreamingConsole(Console):
@@ -18,7 +24,7 @@ class StreamingConsole(Console):
 
     def __init__(
         self,
-        spinner: SpinnerState,
+        spinner: _PromptSpinner,
         cancel_event: threading.Event,
         *,
         prompt_invalidator: Callable[[], None] | None = None,

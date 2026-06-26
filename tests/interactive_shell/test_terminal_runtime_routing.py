@@ -24,7 +24,7 @@ from interactive_shell.harness.orchestration.tools import (
     slash_tool as _slash_tool,
 )
 from interactive_shell.runtime import dispatch as loop_dispatch
-from interactive_shell.runtime import execution as loop_execution
+from interactive_shell.runtime.core import execution as loop_execution
 from interactive_shell.runtime.core.session import ReplSession
 
 

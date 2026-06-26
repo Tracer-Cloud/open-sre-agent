@@ -114,8 +114,9 @@ was actually checked.
 
 Across all 54 routing scenarios, what passes in CI is:
 
-- **Routing correctness** — `route_input` returns the right `route_kind`. This
-  is genuine and valuable.
+- **Turn-entry correctness** — every turn is handed to the agent entrypoint.
+  This is intentionally static; the valuable behavior is downstream dispatch
+  and planning.
 - **Deterministic command dispatch** — slash commands and aliases resolve
   correctly. This is genuine and valuable.
 - **Planned terminal action shape** — when a planner action fires (slash, shell,
@@ -348,7 +349,8 @@ scenario fixtures follow.
 
 - The no-mocks policy on the LLM path. The planner, classifier, and
   conversational assistant all continue to hit the real LLM in routing tests.
-- The routing oracle structure (`route_input` → `execute_routed_turn`).
+- The turn-execution oracle structure (`execute_routed_turn` →
+  `handle_message_with_agent`).
 - Any existing passing scenario. The `resolved_integrations_override` is opt-in;
   existing scenarios without it keep the current no-op gather behaviour and
   continue to pass.

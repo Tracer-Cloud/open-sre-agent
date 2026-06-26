@@ -4,11 +4,10 @@ import io
 
 from rich.console import Console
 
-from interactive_shell.harness.domain.types import RouteDecision, RouteKind
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from interactive_shell.runtime import execution
+from interactive_shell.runtime.core import execution
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo
 
@@ -54,14 +53,12 @@ def test_execute_routed_turn_cli_agent_empty_response_prints_deterministic_fallb
     session = ReplSession()
     session.configured_integrations_known = True
     session.configured_integrations = ()
-    decision = RouteDecision(RouteKind.HANDLE_MESSAGE_WITH_AGENT, 0.9, ())
     output = io.StringIO()
     execution.execute_routed_turn(
         "show datadog integration details",
         session,
         Console(file=output, force_terminal=False, highlight=False),
         on_exit=lambda: None,
-        decision=decision,
     )
 
     rendered = output.getvalue().lower()

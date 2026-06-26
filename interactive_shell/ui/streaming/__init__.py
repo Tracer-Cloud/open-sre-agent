@@ -19,8 +19,7 @@ attributes on the ``console``: ``update_streaming_progress(bytes)`` is
 called per chunk (throttled to ~10/s) so the bottom-toolbar token
 counter updates live, and ``cancel_requested`` is polled between chunks
 so an Esc press in the prompt cancels promptly. The ``getattr``
-indirection keeps this module decoupled from the UI runtime's
-``StreamingConsole`` shim.
+indirection keeps this module decoupled from the ``StreamingConsole`` adapter.
 """
 
 from __future__ import annotations
@@ -37,6 +36,7 @@ from interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
+from interactive_shell.ui.streaming.console import StreamingConsole
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
@@ -288,6 +288,7 @@ def stream_to_console(
 
 
 __all__ = [
+    "StreamingConsole",
     "STREAM_LABEL_ANSWER",
     "STREAM_LABEL_ASSISTANT",
     "format_token_count_short",

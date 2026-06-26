@@ -23,7 +23,6 @@ from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
 )
-from interactive_shell.harness.router import route_input
 from interactive_shell.harness.tests._oracle_normalize import (
     normalize_history_entry,
     normalize_response_text,
@@ -382,7 +381,6 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)
 
     prompt = case.scenario.input.prompt
-    decision = route_input(prompt, session)
     history_start = len(session.history)
 
     execute_routed_turn(
@@ -391,7 +389,6 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         console,
         on_exit=lambda: None,
         confirm_fn=lambda _prompt: "y",
-        decision=decision,
     )
 
     answer = case.answer

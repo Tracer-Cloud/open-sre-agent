@@ -12,7 +12,7 @@ from rich.console import Console
 from config.repl_config import ReplConfig
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.harness.state.sessions.store import SessionStore
-from interactive_shell.runtime.core.dispatch import run_initial_input
+from interactive_shell.runtime.dispatch import run_initial_input
 from interactive_shell.runtime.loop import run_interactive
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.runtime.tasks import TaskRegistry
@@ -134,7 +134,7 @@ def _maybe_require_github_login(console: Console) -> bool:
     escape hatch so a real outage can never permanently lock them out.
     """
     try:
-        from interactive_shell.runtime.first_launch_github import (
+        from interactive_shell.runtime.startup.first_launch_github import (
             require_github_login_on_first_launch,
             should_require_github_login,
         )

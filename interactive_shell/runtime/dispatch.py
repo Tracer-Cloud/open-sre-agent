@@ -10,7 +10,6 @@ from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from rich.console import Console
 
-from interactive_shell.harness import router as _router
 from interactive_shell.harness.orchestration.command_dispatch import (
     deterministic_command_text,
 )
@@ -157,7 +156,6 @@ def dispatch_one_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
 ) -> None:
-    decision = _router.route_input(text, session)
     execute_routed_turn(
         text,
         session,
@@ -165,7 +163,6 @@ def dispatch_one_turn(
         on_exit=on_exit,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
-        decision=decision,
     )
 
 

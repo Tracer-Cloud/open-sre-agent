@@ -11,8 +11,8 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.runtime import entrypoint
 from interactive_shell.runtime.core.session import ReplSession
+from interactive_shell.runtime.startup import entrypoint
 
 
 def _console() -> Console:
@@ -181,7 +181,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
     """On an unexpected gate error we must NOT fail open into the REPL unless an
     explicit bypass applies."""
     monkeypatch.setattr(
-        "interactive_shell.runtime.first_launch_github.should_require_github_login",
+        "interactive_shell.runtime.startup.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: False)
@@ -191,7 +191,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
 
 def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "interactive_shell.runtime.first_launch_github.should_require_github_login",
+        "interactive_shell.runtime.startup.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: True)

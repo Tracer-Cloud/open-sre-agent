@@ -24,7 +24,7 @@ def _refresh_prompt_style(session: ReplSession) -> None:
 
 def _settle_and_drain_cpr() -> None:
     """Let in-flight terminal CPR replies land, then discard them from stdin."""
-    from interactive_shell.runtime.ui.cpr_stdin import drain_stale_cpr_bytes
+    from interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 
     time.sleep(0.05)
     drain_stale_cpr_bytes()

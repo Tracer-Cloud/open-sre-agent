@@ -10,7 +10,6 @@ import pytest
 from rich.console import Console
 
 from interactive_shell.runtime.core.state import SpinnerState
-from interactive_shell.runtime.ui.streaming_console import StreamingConsole
 from interactive_shell.ui.components.rendering import (
     _repl_write_buffer,
     print_repl_json,
@@ -19,6 +18,7 @@ from interactive_shell.ui.components.rendering import (
     repl_render_launch_poster,
     repl_table,
 )
+from interactive_shell.ui.streaming.console import StreamingConsole
 from interactive_shell.ui.tables import (
     print_planned_actions,
     render_integrations_table,
@@ -212,7 +212,7 @@ def test_refresh_welcome_poster_drains_cpr_after_clear(monkeypatch: pytest.Monke
         lambda: drains.append("clear"),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.ui.cpr_stdin.drain_stale_cpr_bytes",
+        "interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
         lambda: drains.append("drain"),
     )
     monkeypatch.setattr(

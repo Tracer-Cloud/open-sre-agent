@@ -14,7 +14,7 @@ from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.harness.pipeline import (
     handle_message_with_agent,
 )
-from interactive_shell.harness.domain.types import RouteDecision
+from interactive_shell.harness.domain.types import RouteDecision, RouteKind
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 from platform.analytics.events import Event
@@ -76,9 +76,9 @@ def execute_routed_turn(
     on_exit: Callable[[], None],
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-    decision: RouteDecision,
 ) -> None:
     """Record route telemetry and hand the turn to the agent."""
+    decision = RouteDecision(RouteKind.HANDLE_MESSAGE_WITH_AGENT, 1.0)
     session_token = bind_cli_session_id(session.session_id)
     try:
         recorder = PromptRecorder.start(

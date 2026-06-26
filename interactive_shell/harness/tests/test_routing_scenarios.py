@@ -21,7 +21,6 @@ from interactive_shell.harness.orchestration.interaction_models import (
 from interactive_shell.harness.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
-from interactive_shell.harness.router import RouteKind, route_input
 from interactive_shell.harness.tests._ci_gates import (
     skip_investigation_loop_disabled,
     skip_or_fail,
@@ -41,7 +40,6 @@ from interactive_shell.harness.tests.scenario_loader import (
     load_all_scenarios,
     read_shard_config,
 )
-from interactive_shell.runtime.core.session import ReplSession
 
 
 class ExpectedAction(TypedDict):
@@ -220,31 +218,16 @@ def test_shard_selection_is_non_empty() -> None:
     skip_or_fail(f"No routing cases selected for shard {index}/{total}.")
 
 
-def test_deterministic_routing(deterministic_case: ScenarioCase) -> None:
-    session = ReplSession()
+def test_deterministic_command_dispatch(deterministic_case: ScenarioCase) -> None:
     prompt = deterministic_case.scenario.input.prompt
     answer = deterministic_case.answer
-
-    # Routing is single-branch: every turn is handed to the agent.
-    decision = route_input(prompt, session)
-    assert decision.route_kind is RouteKind.HANDLE_MESSAGE_WITH_AGENT
 
     # Deterministic command dispatch is the agent's pre-LLM fast path; it must
     # reproduce the normalized slash command the scenario expects.
     assert deterministic_command_text(prompt) == answer.route.expected_command_text
 
 
-def test_help_route_decision_has_structured_shape() -> None:
-    session = ReplSession()
-    decision = route_input("/help", session)
-
-    assert decision.to_event_payload() == {
-        "route_kind": "handle_message_with_agent",
-        "confidence": 1.0,
-        "matched_signals": "",
-        "fallback_reason": "",
-    }
-    # The agent fast path dispatches the literal slash command deterministically.
+def test_help_dispatches_slash_help_deterministically() -> None:
     assert deterministic_command_text("/help") == "/help"
 
 
@@ -260,9 +243,6 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     )
     prompt = case.scenario.input.prompt
     answer = case.answer
-
-    decision = route_input(prompt, session)
-    assert decision.route_kind.value == answer.route.expected_kind
 
     llm_plan = plan_actions_with_llm(prompt, session=session)
     assert llm_plan is not None, "Live LLM action planner did not return a parseable plan."
@@ -325,7 +305,7 @@ def test_live_action_planning(
     if passed_count >= required:
         return
 
-    artifact_dir = tmp_path_factory.mktemp("router_live_action_planning")
+    artifact_dir = tmp_path_factory.mktemp("routing_live_action_planning")
     artifact_file = Path(artifact_dir) / f"{live_planning_case.scenario.id}.json"
     artifact_file.write_text(
         json.dumps(failures, indent=2, ensure_ascii=True),
@@ -362,7 +342,7 @@ def test_live_turn_execution_oracle(
         return
 
     failed_details = [item.details for item in run_results if not item.passed]
-    artifact_dir = tmp_path_factory.mktemp("router_live_action_oracles")
+    artifact_dir = tmp_path_factory.mktemp("routing_live_action_oracles")
     artifact_file = Path(artifact_dir) / f"{live_oracle_case.scenario.id}.json"
     artifact_file.write_text(
         json.dumps([item.details for item in run_results], indent=2, ensure_ascii=True),

@@ -12,7 +12,7 @@ from interactive_shell.harness.orchestration.execution_policy import (
     plan_investigation_execution,
 )
 from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.ui.foreground_investigation import run_foreground_investigation
+from interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from platform.common.task_types import TaskRecord
 
 
@@ -42,7 +42,7 @@ def run_sample_alert(
 
     console.print(f"[bold]sample alert:[/bold] {escape(template_name)}")
     if session.background_mode_enabled:
-        from interactive_shell.runtime.background_runner import (
+        from interactive_shell.runtime.background.runner import (
             start_background_template_investigation,
         )
 
@@ -104,7 +104,7 @@ def run_text_investigation(
 
     console.print(f"[bold]investigation:[/bold] {escape(alert_text)}")
     if session.background_mode_enabled:
-        from interactive_shell.runtime.background_runner import (
+        from interactive_shell.runtime.background.runner import (
             start_background_text_investigation,
         )
 

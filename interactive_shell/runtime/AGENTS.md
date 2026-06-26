@@ -3,16 +3,24 @@
 ## Human summary
 
 The `runtime` package is the interactive shell runtime for OpenSRE. It keeps
-the prompt alive, accepts user input turn by turn, routes each turn to the
-right handler, executes actions, and keeps the terminal responsive while work
-is running.
+the prompt alive, accepts user input turn by turn, hands each turn to
+execution, and keeps the terminal responsive while work is running.
 
 In simple terms:
 
-- `entrypoint.py` starts the interactive session and handles startup/shutdown.
-- `loop.py` runs the async prompt loop, queue, and cancellation wiring.
+- `startup/entrypoint.py` starts the interactive session and handles startup/shutdown.
+- `startup/first_launch_github.py` owns the first-launch GitHub sign-in gate.
+- `loop.py` owns the stable `run_interactive` entrypoint and the
+  `InteractiveShellLoop` orchestration class.
+- `prompt_manager.py` owns prompt-toolkit setup and prompt rendering.
+- `dispatch_processor.py` owns queue consumption and per-turn dispatch tasks.
+- `background/workers.py` owns alert watching, spinner ticking, sampler startup,
+  and turn-start background output drains.
+- `background/` also owns background investigation records, launchers, and
+  completion notification delivery.
+- `shutdown.py` owns clean cancellation and task-gather logging.
+- `dispatch.py` — control-plane handoff for one turn (top-level; orchestrates `core/` execution)
 - `core/` holds the core runtime engine:
-  - `dispatch.py` — control-plane router for one turn
   - `execution.py` — side effects (slash commands, agent/help/follow-up, investigations)
   - `state.py` — shared runtime state (`ReplState`, `SpinnerState`)
   - `session.py` — per-REPL-process `ReplSession`
@@ -28,10 +36,21 @@ subdirectories. Parent `AGENTS.md` files still apply.
 The runtime package is intentionally split into focused concerns:
 
 - `core/state.py` — runtime state and transition helpers only.
-- `core/dispatch.py` — control-plane routing/input gating only.
+- `dispatch.py` — control-plane input gating only.
 - `core/execution.py` — side-effectful execution only.
-- `loop.py` — async prompt runtime/event loop orchestration only.
-- `entrypoint.py` — process/bootstrap boundary only.
+- `loop.py` — stable async entrypoint and async prompt runtime/event loop
+  orchestration only.
+- `prompt_manager.py` — prompt-toolkit setup and prompt rendering only.
+- `dispatch_processor.py` — dispatch queue consumption and per-turn task
+  lifecycle only.
+- `background/workers.py` — background worker startup and turn-start drain hooks
+  only.
+- `background/models.py` — background investigation record and preferences only.
+- `background/runner.py` — session-local background investigation launchers only.
+- `background/notifications.py` — background RCA completion notification delivery only.
+- `shutdown.py` — cancellation and shutdown logging only.
+- `startup/entrypoint.py` — process/bootstrap boundary only.
+- `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `core/session.py` — session-scoped REPL state only.
 - `tasks.py` — task registry + persistence only.
 - `core/token_accounting.py` — session-scoped LLM token accounting and run metadata only.
@@ -43,10 +62,12 @@ owner module instead of broadening module responsibilities.
 
 The interactive runtime must keep this shape:
 
-1. `entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
-2. `loop.run_interactive` owns queueing, prompt lifecycle, and task scheduling.
-3. `core.dispatch.dispatch_one_turn` computes control decisions and delegates.
-4. `core.execution.execute_routed_turn` performs side effects.
+1. `startup.entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
+2. `loop.run_interactive` creates `InteractiveShellLoop`.
+3. `InteractiveShellLoop` owns queueing, prompt lifecycle, and task scheduling
+   through focused runtime helpers.
+4. `dispatch.dispatch_one_turn` computes control decisions and delegates.
+5. `core.execution.execute_routed_turn` performs side effects.
 
 Do not invert this dependency direction.
 
@@ -54,13 +75,14 @@ Do not invert this dependency direction.
 
 ```mermaid
 flowchart TD
-  runRepl["entrypoint.run_repl"] --> replMain["entrypoint.repl_main"]
+  runRepl["startup.entrypoint.run_repl"] --> replMain["startup.entrypoint.repl_main"]
   replMain --> runInteractive["loop.run_interactive"]
-  runInteractive --> dispatchTurn["core.dispatch.dispatch_one_turn"]
+  runInteractive --> shellLoop["loop.InteractiveShellLoop"]
+  shellLoop --> dispatchTurn["dispatch.dispatch_one_turn"]
   dispatchTurn --> executeTurn["core.execution.execute_routed_turn"]
   executeTurn --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
-  runInteractive --> replState["core.state.ReplState"]
-  runInteractive --> spinnerState["core.state.SpinnerState"]
+  shellLoop --> replState["core.state.ReplState"]
+  shellLoop --> spinnerState["core.state.SpinnerState"]
 ```
 
 ## State ownership rules
@@ -78,13 +100,13 @@ flowchart TD
 
 ## Dispatch rules
 
-- `core/dispatch.py` must remain control-plane only:
-  - route input
+- `dispatch.py` must remain control-plane only:
+  - hand input to execution
   - correction/cancel/confirm gating
-  - command normalization for slash decisions
+  - command normalization for terminal-UI gating only
   - delegation to execution
 - Do not add analytics emission, LLM calls, investigation execution, or slash
-  side effects to `core/dispatch.py`.
+  side effects to `dispatch.py`.
 
 ## Execution rules
 
@@ -93,29 +115,42 @@ flowchart TD
   - cli help/agent/follow-up responses
   - investigation launch and error handling
   - route decision analytics emission
-- `execute_routed_turn` must receive a `RouteDecision` from dispatch/runtime;
-  execution should not re-route user input.
+- `execute_routed_turn` constructs the static `handle_message_with_agent`
+  telemetry decision itself; dispatch/runtime should not carry route decisions.
 
 ## Loop rules
 
 - `loop.py` owns:
+  - `run_interactive`
+  - `InteractiveShellLoop`
+  - main prompt loop orchestration
+  - cancellation and confirmation wiring through `ReplState`
+  - coordination between prompt, dispatch, background, and shutdown helpers
+- `prompt_manager.py` owns:
   - prompt-toolkit wiring
+  - prompt rendering callbacks
+  - pending prompt defaults and autosubmit handling
+- `dispatch_processor.py` owns:
   - queue processor
   - dispatch task lifecycle
+  - per-dispatch cancellation event allocation
+- `background/workers.py` owns:
   - alert watcher lifecycle
-  - cancellation and confirmation wiring through `ReplState`
+  - spinner ticker lifecycle
+  - sampler startup
+  - background notice drains at turn start
 - Keep prompt rendering concerns in runtime/prompting modules, not in
   dispatch/execution.
 
 ## Entry-point rules
 
-- `entrypoint.py` owns:
+- `startup/entrypoint.py` owns:
   - startup sweep
   - TTY/non-TTY gate
   - banner display for interactive runs
   - alert listener setup/teardown
   - async boundary (`asyncio.run`)
-- Do not move per-turn dispatch/runtime logic back into entrypoint.
+- Do not move per-turn dispatch/runtime logic back into startup entrypoint.
 
 ## Compatibility surface policy
 
@@ -128,9 +163,9 @@ flowchart TD
 ## Test seam policy
 
 - Prefer patching canonical module seams:
-  - `runtime.core.dispatch.*` for control-plane behavior
+  - `runtime.dispatch.*` for control-plane behavior
   - `runtime.core.execution.*` for side effects
-  - `runtime.entrypoint.*` for process/bootstrap behavior
+  - `runtime.startup.entrypoint.*` for process/bootstrap behavior
   - `runtime.core.state.*` for state-specific behavior
   - `runtime.loop.*` for prompt-loop / streaming console behavior
 - Avoid adding new tests that monkeypatch package-root internals in

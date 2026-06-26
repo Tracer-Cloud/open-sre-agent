@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.markup import escape
 
-from interactive_shell.runtime import ReplSession, TaskKind
-from interactive_shell.ui import ERROR, WARNING
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from platform.common.errors import OpenSREError
-from platform.common.task_types import TaskRecord
+from platform.common.task_types import TaskKind, TaskRecord
+from platform.terminal.theme import ERROR, WARNING
+
+if TYPE_CHECKING:
+    from interactive_shell.runtime.core.session import ReplSession
 
 
 def run_foreground_investigation(
@@ -64,8 +66,8 @@ def run_foreground_investigation(
     # (ESC[row;colR) arrive in stdin while read_key_unix is blocking. Even with the
     # CSI-drain fix in read_key_unix, racing with an active Application is unsafe:
     # skip the feedback menu and avoid the stdin conflict entirely.
-    from interactive_shell.ui.feedback import prompt_investigation_feedback
     from interactive_shell.ui.components.key_reader import restore_stdin_terminal
+    from interactive_shell.ui.feedback import prompt_investigation_feedback
 
     pt_app = getattr(session, "pt_style_app", None)
     pt_app_running = pt_app is not None and getattr(pt_app, "is_running", False)

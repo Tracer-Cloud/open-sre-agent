@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from core.domain.alerts.inbox import IncomingAlert
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
-from interactive_shell.runtime.background import (
+from interactive_shell.runtime.background.models import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )

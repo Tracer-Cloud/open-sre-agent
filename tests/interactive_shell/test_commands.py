@@ -19,7 +19,7 @@ from interactive_shell.command_registry.investigation import (
     _validate_save_args,
 )
 from interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
-from interactive_shell.runtime.background import BackgroundInvestigationRecord
+from interactive_shell.runtime.background.models import BackgroundInvestigationRecord
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 from platform.common.task_types import TaskKind, TaskStatus
