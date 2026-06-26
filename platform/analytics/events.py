@@ -28,6 +28,7 @@ class Event(StrEnum):
     INVESTIGATION_FIRST_HYPOTHESIS_RENDERED = "investigation_first_hypothesis_rendered"
     INVESTIGATION_ABANDONED = "investigation_abandoned"
     INVESTIGATION_FEEDBACK_SUBMITTED = "investigation_feedback_submitted"
+    INVESTIGATION_MISS_CLASSIFIED = "investigation_miss_classified"
     DIAGNOSIS_CATEGORY_MISMATCH = "diagnosis_category_mismatch"
     INTERACTIVE_SHELL_ROUTE_DECISION = "interactive_shell_route_decision"
 

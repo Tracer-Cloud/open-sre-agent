@@ -179,6 +179,15 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
         "User asks about Telegram pairing, messaging allowlist, or messaging status",
     ),
+    "/misses": _mcp(
+        "Triage investigation misses and export them as benchmark regression scenarios. "
+        "Subcommands: list, stats, export --out <dir>, convert <miss_id>.",
+        "User asks about investigation misses, miss triage, or miss trends",
+        "User asks to convert recent misses into regression scenarios or evals",
+        anti_examples=(
+            "User asks for raw feedback ratings without taxonomy (read ~/.opensre/feedback.jsonl directly)",
+        ),
+    ),
     "/model": _mcp(
         "Show or change active LLM provider and models. Subcommands: show, set, restore, toolcall.",
         "User asks to show current model or provider settings",

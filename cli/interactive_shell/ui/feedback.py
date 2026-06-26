@@ -143,6 +143,28 @@ def _emit_analytics(record: dict[str, Any]) -> None:
         get_analytics().capture(Event.INVESTIGATION_FEEDBACK_SUBMITTED, props)
 
 
+def _emit_miss_classified(miss_record: dict[str, Any]) -> None:
+    """Emit a follow-up event so PostHog dashboards can chart category trends."""
+    from app.analytics.events import Event
+    from app.analytics.provider import get_analytics
+
+    with contextlib.suppress(Exception):
+        props: dict[str, Any] = {
+            "miss_id": miss_record.get("miss_id", ""),
+            "feedback_id": miss_record.get("feedback_id", ""),
+            "taxonomy": miss_record.get("taxonomy", ""),
+            "rating": miss_record.get("rating", ""),
+            "has_detail": bool(miss_record.get("taxonomy_detail")),
+        }
+        for key in ("run_id", "alert_name", "root_cause_category", "pipeline_name"):
+            if miss_record.get(key):
+                props[key] = miss_record[key]
+        for key in ("user_id", "org_id"):
+            if miss_record.get(key):
+                props[key] = miss_record[key]
+        get_analytics().capture(Event.INVESTIGATION_MISS_CLASSIFIED, props)
+
+
 # ── context display ───────────────────────────────────────────────────────────
 
 
@@ -294,6 +316,24 @@ def _pick_rating(*, console: Console | None) -> str | None:
     return _run_select(_CHOICES)
 
 
+def _pick_taxonomy(*, console: Console | None) -> str | None:
+    """Show the miss-taxonomy picker after a partial/inaccurate rating."""
+    from app.feedback import taxonomy_choices
+
+    choices = taxonomy_choices()
+
+    if console is not None:
+        from cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
+
+        if not repl_tty_interactive():
+            return None
+        return repl_choose_one(title="Where did this miss come from?", choices=choices)
+
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+    return _run_select(choices)
+
+
 def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return
@@ -350,10 +390,73 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     _store(record)
     _emit_analytics(record)
 
+    # Closed-loop learning: classify partial/inaccurate outcomes so they can be
+    # tracked over time and replayed as benchmark regressions.
+    miss_record: dict[str, Any] | None = None
+    if rating in ("partial", "inaccurate"):
+        miss_record = _classify_miss(record, final_state=final_state, console=console)
+
     if console is not None:
         console.print(f"[{BRAND}]✓ Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
+        if miss_record is not None:
+            from app.feedback import misses_path
+
+            console.print(f"[{DIM}]  Miss recorded → {misses_path()}[/]")
     else:
-        _write_raw(f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n\n")
+        message = f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n"
+        if miss_record is not None:
+            from app.feedback import misses_path
+
+            message += f"  {_D}Miss recorded → {misses_path()}{_R}\n"
+        _write_raw(f"{message}\n")
+
+
+def _classify_miss(
+    record: dict[str, Any],
+    *,
+    final_state: dict[str, Any],
+    console: Console | None,
+) -> dict[str, Any] | None:
+    """Prompt for taxonomy classification and persist a miss record.
+
+    Returns the miss record on success, ``None`` if the user cancels the
+    taxonomy picker (the rating + note are still kept in feedback.jsonl).
+    """
+    from app.feedback import MissTaxonomy, record_miss
+    from cli.interactive_shell.ui.theme import BRAND, DIM
+
+    if console is not None:
+        console.print(
+            f"\n[{BRAND}]Where did this miss come from?[/] [{DIM}]↑↓ · Enter · Esc to skip[/]"
+        )
+    else:
+        sys.stdout.write(
+            f"\n{_H}Where did this miss come from?{_R}  {_D}↑↓ · Enter · Esc to skip{_R}\n\n"
+        )
+        sys.stdout.flush()
+
+    taxonomy_key = _pick_taxonomy(console=console)
+    if not taxonomy_key:
+        return None
+
+    try:
+        taxonomy = MissTaxonomy(taxonomy_key)
+    except ValueError:
+        taxonomy = MissTaxonomy.UNKNOWN
+
+    persisted = record_miss(
+        record,
+        taxonomy=taxonomy,
+        taxonomy_detail=record.get("note", ""),
+        final_state=final_state,
+    )
+    if persisted is None:
+        # record_miss already surfaced the OSError to stderr; suppress the
+        # "saved" confirmation and analytics so the user is not misled.
+        return None
+    miss_record: dict[str, Any] = dict(persisted)
+    _emit_miss_classified(miss_record)
+    return miss_record
 
 
 def prompt_investigation_feedback(

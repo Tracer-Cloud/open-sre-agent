@@ -13,7 +13,7 @@ import re
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
 if TYPE_CHECKING:
     from integrations.llm_cli.registry import CLIProviderRegistration
@@ -40,13 +40,19 @@ from pydantic import BaseModel, ValidationError
 from config.config import (
     ANTHROPIC_LLM_CONFIG,
     DEEPSEEK_BASE_URL,
+    DEEPSEEK_LLM_CONFIG,
     GEMINI_BASE_URL,
+    GEMINI_LLM_CONFIG,
     GROQ_BASE_URL,
     GROQ_LLM_CONFIG,
     MINIMAX_BASE_URL,
+    MINIMAX_LLM_CONFIG,
     NVIDIA_BASE_URL,
+    NVIDIA_LLM_CONFIG,
     OPENAI_LLM_CONFIG,
     OPENROUTER_BASE_URL,
+    OPENROUTER_LLM_CONFIG,
+    LLMModelConfig,
     resolve_llm_settings,
 )
 from config.llm_credentials import resolve_llm_api_key
@@ -1283,6 +1289,36 @@ def _select_model(settings: Any, provider_prefix: str, model_type: ModelType) ->
     return str(getattr(settings, attr))
 
 
+@dataclass(frozen=True)
+class _OpenAICompatibleProvider:
+    """An OpenAI-wire-compatible provider that differs only by data."""
+
+    config: LLMModelConfig
+    base_url: str
+    api_key_env: str
+    temperature: float | None = None
+
+
+# Providers reached through ``OpenAILLMClient`` with identical construction
+# logic, differing only in base URL, API-key env var, and (for MiniMax)
+# temperature. Adding one is a single row here instead of another near-duplicate
+# branch in ``_create_llm_client``.
+_OPENAI_COMPATIBLE_PROVIDERS: Final[dict[str, _OpenAICompatibleProvider]] = {
+    "openrouter": _OpenAICompatibleProvider(
+        OPENROUTER_LLM_CONFIG, OPENROUTER_BASE_URL, "OPENROUTER_API_KEY"
+    ),
+    "deepseek": _OpenAICompatibleProvider(
+        DEEPSEEK_LLM_CONFIG, DEEPSEEK_BASE_URL, "DEEPSEEK_API_KEY"
+    ),
+    "gemini": _OpenAICompatibleProvider(GEMINI_LLM_CONFIG, GEMINI_BASE_URL, "GEMINI_API_KEY"),
+    "nvidia": _OpenAICompatibleProvider(NVIDIA_LLM_CONFIG, NVIDIA_BASE_URL, "NVIDIA_API_KEY"),
+    "minimax": _OpenAICompatibleProvider(
+        MINIMAX_LLM_CONFIG, MINIMAX_BASE_URL, "MINIMAX_API_KEY", temperature=1.0
+    ),
+    "groq": _OpenAICompatibleProvider(GROQ_LLM_CONFIG, GROQ_BASE_URL, "GROQ_API_KEY"),
+}
+
+
 def _create_llm_client(model_type: ModelType) -> _LLMClientType:
     try:
         settings = resolve_llm_settings()
@@ -1306,70 +1342,14 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             model_fallback=_fallback_model("openai"),
             max_tokens=config.max_tokens,
         )
-    elif provider == "openrouter":
-        from config.config import OPENROUTER_LLM_CONFIG
-
-        config = OPENROUTER_LLM_CONFIG
+    elif (compat := _OPENAI_COMPATIBLE_PROVIDERS.get(provider)) is not None:
         return OpenAILLMClient(
-            model=_select_model(settings, "openrouter", model_type),
-            model_fallback=_fallback_model("openrouter"),
-            max_tokens=config.max_tokens,
-            base_url=OPENROUTER_BASE_URL,
-            api_key_env="OPENROUTER_API_KEY",
-        )
-    elif provider == "deepseek":
-        from config.config import DEEPSEEK_LLM_CONFIG
-
-        config = DEEPSEEK_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "deepseek", model_type),
-            model_fallback=_fallback_model("deepseek"),
-            max_tokens=config.max_tokens,
-            base_url=DEEPSEEK_BASE_URL,
-            api_key_env="DEEPSEEK_API_KEY",
-        )
-    elif provider == "gemini":
-        from config.config import GEMINI_LLM_CONFIG
-
-        config = GEMINI_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "gemini", model_type),
-            model_fallback=_fallback_model("gemini"),
-            max_tokens=config.max_tokens,
-            base_url=GEMINI_BASE_URL,
-            api_key_env="GEMINI_API_KEY",
-        )
-    elif provider == "nvidia":
-        from config.config import NVIDIA_LLM_CONFIG
-
-        config = NVIDIA_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "nvidia", model_type),
-            model_fallback=_fallback_model("nvidia"),
-            max_tokens=config.max_tokens,
-            base_url=NVIDIA_BASE_URL,
-            api_key_env="NVIDIA_API_KEY",
-        )
-    elif provider == "minimax":
-        from config.config import MINIMAX_LLM_CONFIG
-
-        config = MINIMAX_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "minimax", model_type),
-            model_fallback=_fallback_model("minimax"),
-            max_tokens=config.max_tokens,
-            base_url=MINIMAX_BASE_URL,
-            api_key_env="MINIMAX_API_KEY",
-            temperature=1.0,
-        )
-    elif provider == "groq":
-        config = GROQ_LLM_CONFIG
-        return OpenAILLMClient(
-            model=_select_model(settings, "groq", model_type),
-            model_fallback=_fallback_model("groq"),
-            max_tokens=config.max_tokens,
-            base_url=GROQ_BASE_URL,
-            api_key_env="GROQ_API_KEY",
+            model=_select_model(settings, provider, model_type),
+            model_fallback=_fallback_model(provider),
+            max_tokens=compat.config.max_tokens,
+            base_url=compat.base_url,
+            api_key_env=compat.api_key_env,
+            temperature=compat.temperature,
         )
     elif provider == "ollama":
         from config.config import OLLAMA_LLM_CONFIG
