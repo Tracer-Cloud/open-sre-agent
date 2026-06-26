@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
+import cli.wizard.env_sync as env_sync
+import cli.wizard.store as wizard_store
 from cli.interactive_shell.command_registry import dispatch_slash
 from cli.interactive_shell.command_registry import repl_data as repl_data_module
 from cli.interactive_shell.runtime.session import ReplSession
-import cli.wizard.env_sync as env_sync
-import cli.wizard.store as wizard_store
 from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
 
 
