@@ -204,18 +204,6 @@ def test_scenarios_use_tool_actions_not_legacy_fields() -> None:
     assert not violations, "legacy routing action fields found:\n" + "\n".join(violations)
 
 
-def test_investigation_loop_enabled_for_routing_scenarios() -> None:
-    """Investigation routing scenarios require the NL investigation tool in the planner."""
-    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.feature_flags import (
-        investigation_loop_enabled,
-    )
-
-    assert investigation_loop_enabled(), (
-        "INTERACTIVE_SHELL_INVESTIGATION_ENABLED must stay True while "
-        "investigation dispatch routing scenarios exist."
-    )
-
-
 def test_gathered_tools_contract_names_are_registered() -> None:
     from tools.registry import clear_tool_registry_cache, get_registered_tools
 

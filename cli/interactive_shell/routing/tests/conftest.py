@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -103,30 +104,28 @@ def _repl_execution_policy_auto_yes(monkeypatch: pytest.MonkeyPatch) -> None:
 _LIVE_LLM_SKIPS_IN_CI: list[str] = []
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo[object]
-) -> Iterator[None]:
-    """Fail the run if any live_llm test skips in CI (belt-and-suspenders)."""
-    outcome = yield
-    report = outcome.get_result()  # type: ignore[attr-defined]
-    if (
-        running_in_github_actions()
-        and report.when == "call"
-        and report.skipped
-        and item.get_closest_marker("live_llm") is not None
-    ):
-        _LIVE_LLM_SKIPS_IN_CI.append(f"{item.nodeid}: {report.longrepr}")
+def _is_xdist_worker() -> bool:
+    """True on pytest-xdist worker processes (not the controller)."""
+    return os.getenv("PYTEST_XDIST_WORKER") is not None
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Fail the run if any live_llm test skips in CI (controller-only under xdist)."""
+    if _is_xdist_worker() or not running_in_github_actions():
+        return
+    if report.when != "call" or not report.skipped:
+        return
+    if "live_llm" not in report.keywords:
+        return
+    _LIVE_LLM_SKIPS_IN_CI.append(f"{report.nodeid}: {report.longrepr}")
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    if not _LIVE_LLM_SKIPS_IN_CI:
+    if _is_xdist_worker() or not _LIVE_LLM_SKIPS_IN_CI:
         return
     terminal = session.config.pluginmanager.get_plugin("terminalreporter")
     if terminal is not None:
-        terminal.write_line(
-            "live_llm tests must not skip in CI (fix credentials, flags, or shard config):"
-        )
+        terminal.write_line("live_llm tests must not skip in CI (fix credentials or shard config):")
         for line in _LIVE_LLM_SKIPS_IN_CI:
             terminal.write_line(f"  - {line}")
     session.exitstatus = 1

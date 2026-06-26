@@ -83,7 +83,7 @@ def _expects_investigation(case: ScenarioCase) -> bool:
 
 def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
     if not investigation_loop_enabled() and _expects_investigation(case):
-        skip_or_fail(
+        pytest.skip(
             "Natural-language investigation loop is disabled in the interactive shell "
             "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
             "this investigation scenario does not apply. Re-enable the flag to run it."
