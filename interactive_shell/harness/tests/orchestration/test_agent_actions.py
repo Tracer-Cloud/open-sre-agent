@@ -953,7 +953,7 @@ def test_execute_cli_actions_cd_preserves_windows_paths(monkeypatch: object) -> 
     ]
 
 
-def test_execute_cli_actions_cd_routes_case_insensitively(monkeypatch: object) -> None:
+def test_execute_cli_actions_cd_dispatches_case_insensitively(monkeypatch: object) -> None:
     changed_directories: list[Path] = []
 
     def _fake_chdir(target: Path) -> None:
@@ -1130,7 +1130,7 @@ def test_execute_cli_actions_runs_passthrough_with_shell_true(monkeypatch: objec
     assert "ok" in output
 
 
-def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object) -> None:
+def test_execute_cli_actions_dispatches_bang_cd_through_builtin(monkeypatch: object) -> None:
     dirs: list[Path] = []
 
     def _fake_chdir(target: Path) -> None:
@@ -1153,7 +1153,7 @@ def test_execute_cli_actions_routes_bang_cd_through_builtin(monkeypatch: object)
     assert "explicit shell passthrough enabled" not in captured
 
 
-def test_execute_cli_actions_routes_bang_pwd_through_builtin(monkeypatch: object) -> None:
+def test_execute_cli_actions_dispatches_bang_pwd_through_builtin(monkeypatch: object) -> None:
     def _fake_cwd(_: type[Path]) -> PurePosixPath:
         return PurePosixPath("/shown")
 
@@ -1360,10 +1360,10 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     assert captured_executed == [(1, 1, 1)]
 
 
-def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
+def test_execute_cli_actions_bang_prefix_dispatches_to_shell_bypassing_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """!cmd prefix must be routed deterministically to shell execution without calling
+    """!cmd prefix must be dispatched deterministically to shell execution without calling
     the LLM planner.  Regression: bare `!cmd` (and multiline `!cmd\\n   args`) was
     passed to the LLM which misidentified it as a pasted snippet and returned
     assistant_handoff instead of shell_run.
@@ -1399,10 +1399,10 @@ def test_execute_cli_actions_bang_prefix_routes_to_shell_bypassing_llm(
     assert "explicit shell passthrough enabled" in buf.getvalue()
 
 
-def test_execute_cli_actions_bang_prefix_single_line_routes_to_shell(
+def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Single-line !cmd routes to shell execution without any LLM involvement."""
+    """Single-line !cmd dispatches to shell execution without any LLM involvement."""
     calls: list[tuple[str, dict[str, object]]] = []
 
     def _fake_run(command: str, **kwargs: object) -> subprocess.CompletedProcess[str]:

@@ -1,4 +1,4 @@
-"""OpenSRE CLI command runner — route subcommands to foreground or background."""
+"""OpenSRE CLI command runner: send subcommands to foreground or background."""
 
 from __future__ import annotations
 
@@ -330,7 +330,7 @@ def run_opensre_cli_command_result(
     handed-off/executed states without overloading ``bool``.
 
     ``confirm_fn`` is forwarded to :func:`execution_allowed` so the
-    interactive REPL can route mid-dispatch ``Proceed? [y/N]`` prompts
+    interactive REPL can handle mid-dispatch ``Proceed? [y/N]`` prompts
     through its active prompt_toolkit input — the stdlib ``input()``
     deadlocks against the running ``prompt_async``.
     """

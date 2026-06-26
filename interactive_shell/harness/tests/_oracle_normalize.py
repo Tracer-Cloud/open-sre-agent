@@ -1,4 +1,4 @@
-"""Normalization helpers for routing action oracle tests."""
+"""Normalization helpers for turn action oracle tests."""
 
 from __future__ import annotations
 

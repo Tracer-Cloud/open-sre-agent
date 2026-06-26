@@ -11,8 +11,7 @@ loop (:func:`core.runtime.run_tool_calling_loop`) over the available
 Design notes:
 
 * Tools are read-only data fetches, so calls run autonomously (no per-call
-  confirmation) exactly like the investigation agent — see the routing decision
-  recorded for this feature.
+  confirmation) exactly like the investigation agent.
 * When no integrations are configured (no tools available), gathering is a fast
   no-op and the normal text-only assistant path runs unchanged.
 * Integration resolution is cached on the session so repeated turns don't

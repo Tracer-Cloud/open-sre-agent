@@ -92,7 +92,7 @@ class TestSummarizeLastState:
 class TestAnswerFollowUpMarkupSafety:
     """Regression: LLM output with bracket sequences (e.g. [OOMKilled]) was
     being silently truncated by Rich's markup parser. The streaming renderer
-    routes text through Markdown so brackets in plain prose survive."""
+    sends text through Markdown so brackets in plain prose survive."""
 
     def _run_with_response(self, monkeypatch: object, response_text: str) -> str:
         monkeypatch.setattr(  # type: ignore[attr-defined]

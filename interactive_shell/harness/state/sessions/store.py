@@ -32,9 +32,9 @@ _TRIGGER_MAX_CHARS = 200
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50
 
-# Turn kinds that represent user-initiated chat messages.  session.record() is
-# called with the route kind, not a normalised "chat" label, so this set must
-# cover all routes that produce conversational turns.
+# Turn kinds that represent user-initiated chat messages. session.record() is
+# called with the turn kind, not a normalized "chat" label, so this set must
+# cover all kinds that produce conversational turns.
 _CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "cli_help", "follow_up"})
 
 

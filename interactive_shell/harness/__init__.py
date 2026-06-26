@@ -1,3 +1,3 @@
-"""Interactive-shell input routing: deterministic rules, LLM classification, fallback."""
+"""Interactive-shell action planning, execution policy, and turn harness support."""
 
 from __future__ import annotations
