@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.PostgreSQLSlowQueriesTool import get_postgresql_slow_queries
+from tools.postgresql_slow_queries_tool import get_postgresql_slow_queries
 
 
 class TestPostgreSQLSlowQueriesToolContract(BaseToolContract):
@@ -53,7 +53,7 @@ def test_run_happy_path_with_extension() -> None:
             },
         ],
     }
-    with patch("tools.PostgreSQLSlowQueriesTool.get_slow_queries", return_value=fake_result):
+    with patch("tools.postgresql_slow_queries_tool.get_slow_queries", return_value=fake_result):
         result = get_postgresql_slow_queries(host="localhost", database="testdb", threshold_ms=500)
     assert result["extension_available"] is True
     assert result["threshold_ms"] == 500
@@ -75,7 +75,7 @@ def test_run_extension_not_available() -> None:
         ),
         "queries": [],
     }
-    with patch("tools.PostgreSQLSlowQueriesTool.get_slow_queries", return_value=fake_result):
+    with patch("tools.postgresql_slow_queries_tool.get_slow_queries", return_value=fake_result):
         result = get_postgresql_slow_queries(host="localhost", database="testdb")
     assert result["extension_available"] is False
     assert "note" in result
@@ -84,7 +84,7 @@ def test_run_extension_not_available() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.PostgreSQLSlowQueriesTool.get_slow_queries",
+        "tools.postgresql_slow_queries_tool.get_slow_queries",
         return_value={
             "source": "postgresql",
             "available": False,
@@ -98,7 +98,7 @@ def test_run_error_propagated() -> None:
 
 def test_default_db_warning_present_when_database_omitted() -> None:
     with patch(
-        "tools.PostgreSQLSlowQueriesTool.get_slow_queries",
+        "tools.postgresql_slow_queries_tool.get_slow_queries",
         return_value={"source": "postgresql", "available": True, "queries": []},
     ):
         result = get_postgresql_slow_queries(host="localhost")
@@ -108,7 +108,7 @@ def test_default_db_warning_present_when_database_omitted() -> None:
 
 def test_no_default_db_warning_when_database_provided() -> None:
     with patch(
-        "tools.PostgreSQLSlowQueriesTool.get_slow_queries",
+        "tools.postgresql_slow_queries_tool.get_slow_queries",
         return_value={"source": "postgresql", "available": True, "queries": []},
     ):
         result = get_postgresql_slow_queries(host="localhost", database="mydb")

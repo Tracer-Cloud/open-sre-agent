@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from services.tracer_client import PipelineRunSummary
 from tests.tools.conftest import BaseToolContract
-from tools.TracerFailedRunTool import fetch_failed_run
+from tools.tracer_failed_run_tool import fetch_failed_run
 
 
 class TestTracerFailedRunToolContract(BaseToolContract):
@@ -25,7 +25,7 @@ def test_run_no_failed_run_found() -> None:
     mock_client.get_pipelines.return_value = [MagicMock(pipeline_name="pipeline-1")]
     mock_client.get_pipeline_runs.return_value = []
     mock_client.organization_slug = "my-org"
-    with patch("tools.TracerFailedRunTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.tracer_failed_run_tool.get_tracer_web_client", return_value=mock_client):
         result = fetch_failed_run()
     assert result["found"] is False
 
@@ -50,7 +50,7 @@ def test_run_finds_failed_run() -> None:
     mock_client.get_pipelines.return_value = [MagicMock(pipeline_name="pipeline-1")]
     mock_client.get_pipeline_runs.return_value = [mock_run]
     mock_client.organization_slug = "my-org"
-    with patch("tools.TracerFailedRunTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.tracer_failed_run_tool.get_tracer_web_client", return_value=mock_client):
         result = fetch_failed_run()
     assert result["found"] is True
     assert result["trace_id"] == "trace-abc"
@@ -61,7 +61,7 @@ def test_run_with_pipeline_name_filter() -> None:
     mock_client = MagicMock()
     mock_client.get_pipeline_runs.return_value = []
     mock_client.organization_slug = "my-org"
-    with patch("tools.TracerFailedRunTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.tracer_failed_run_tool.get_tracer_web_client", return_value=mock_client):
         result = fetch_failed_run(pipeline_name="specific-pipeline")
     assert result["found"] is False
     mock_client.get_pipelines.assert_not_called()

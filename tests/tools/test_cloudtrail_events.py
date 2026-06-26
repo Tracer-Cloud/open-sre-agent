@@ -18,7 +18,7 @@ from integrations.cloudtrail import (
     cloudtrail_is_available,
 )
 from tests.tools.conftest import BaseToolContract
-from tools.CloudTrailEventsTool import lookup_cloudtrail_events
+from tools.cloudtrail_events_tool import lookup_cloudtrail_events
 
 _RT = lookup_cloudtrail_events.__opensre_registered_tool__
 
@@ -160,7 +160,7 @@ def test_extract_params_forwards_backend() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_lookup_success_and_shaping(mock_call) -> None:
     detail = json.dumps(
         {"awsRegion": "us-east-1", "sourceIPAddress": "1.2.3.4", "errorCode": "AccessDenied"}
@@ -201,7 +201,7 @@ def test_lookup_success_and_shaping(mock_call) -> None:
     assert event["error_code"] == "AccessDenied"
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_filter_priority_prefers_resource_name(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -215,7 +215,7 @@ def test_filter_priority_prefers_resource_name(mock_call) -> None:
     assert sent["LookupAttributes"] == [{"AttributeKey": "ResourceName", "AttributeValue": "sg-1"}]
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_filter_priority_username_over_event_source(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -225,7 +225,7 @@ def test_filter_priority_username_over_event_source(mock_call) -> None:
     assert sent["LookupAttributes"] == [{"AttributeKey": "Username", "AttributeValue": "alice"}]
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_no_filter_omits_lookup_attributes(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -238,7 +238,7 @@ def test_no_filter_omits_lookup_attributes(mock_call) -> None:
     assert result["filter"] is None
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_duration_clamped_and_window_built(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -250,7 +250,7 @@ def test_duration_clamped_and_window_built(mock_call) -> None:
     assert result["duration_minutes"] == 90 * 24 * 60
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_max_results_clamped(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -259,7 +259,7 @@ def test_max_results_clamped(mock_call) -> None:
     assert mock_call.call_args.kwargs["parameters"]["MaxResults"] == 50
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_truncated_when_next_token_present(mock_call) -> None:
     mock_call.return_value = {
         "success": True,
@@ -273,7 +273,7 @@ def test_truncated_when_next_token_present(mock_call) -> None:
     assert result["next_token"] == "tok-abc"
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_not_truncated_without_next_token(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -283,7 +283,7 @@ def test_not_truncated_without_next_token(mock_call) -> None:
     assert result["next_token"] is None
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_next_token_forwarded_to_api(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -292,7 +292,7 @@ def test_next_token_forwarded_to_api(mock_call) -> None:
     assert mock_call.call_args.kwargs["parameters"]["NextToken"] == "tok-page-2"
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_lookup_failure(mock_call) -> None:
     mock_call.return_value = {"success": False, "error": "ThrottlingException"}
 
@@ -302,7 +302,7 @@ def test_lookup_failure(mock_call) -> None:
     assert result["error"] == "Failed to look up CloudTrail events. Check server logs for details."
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_short_circuits_to_aws_backend(mock_call) -> None:
     backend = _FakeAWSBackend(
         response={
@@ -334,7 +334,7 @@ def test_short_circuits_to_aws_backend(mock_call) -> None:
     ]
 
 
-@patch("tools.CloudTrailEventsTool.execute_aws_sdk_call")
+@patch("tools.cloudtrail_events_tool.execute_aws_sdk_call")
 def test_harness_shaped_aws_source_short_circuits_off_real_aws(mock_call) -> None:
     """Regression: the synthetic harness injects the backend as aws['ec2_backend'].
 

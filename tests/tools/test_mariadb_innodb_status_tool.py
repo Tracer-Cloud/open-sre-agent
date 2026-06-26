@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MariaDBInnoDBStatusTool import get_mariadb_innodb_status
+from tools.mariadb_innodb_status_tool import get_mariadb_innodb_status
 
 
 class TestMariaDBInnoDBStatusToolContract(BaseToolContract):
@@ -25,7 +25,7 @@ def test_run_happy_path() -> None:
         "available": True,
         "innodb_status": "=====================================\nBUFFER POOL AND MEMORY\n=====================================",
     }
-    with patch("tools.MariaDBInnoDBStatusTool.get_innodb_status", return_value=fake_result):
+    with patch("tools.mariadb_innodb_status_tool.get_innodb_status", return_value=fake_result):
         result = get_mariadb_innodb_status(host="localhost", database="test", username="user")
     assert result["available"] is True
     assert "innodb_status" in result
@@ -33,7 +33,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MariaDBInnoDBStatusTool.get_innodb_status",
+        "tools.mariadb_innodb_status_tool.get_innodb_status",
         return_value={"source": "mariadb", "available": False, "error": "connection timeout"},
     ):
         result = get_mariadb_innodb_status(host="invalid", database="test", username="user")

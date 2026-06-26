@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from tests.tools.conftest import BaseToolContract
-from tools.BitbucketSearchCodeTool import search_bitbucket_code
+from tools.bitbucket_search_code_tool import search_bitbucket_code
 
 
 def _registered_tool() -> Any:
@@ -78,7 +78,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_without_credentials() -> None:
-    with patch("tools.BitbucketSearchCodeTool.bitbucket_config_from_env", return_value=None):
+    with patch("tools.bitbucket_search_code_tool.bitbucket_config_from_env", return_value=None):
         result = search_bitbucket_code(query="error OR exception")
 
     assert result == {
@@ -105,7 +105,7 @@ def test_run_happy_path() -> None:
     }
 
     with patch(
-        "tools.BitbucketSearchCodeTool.search_code", return_value=mock_result
+        "tools.bitbucket_search_code_tool.search_code", return_value=mock_result
     ) as mocked_search_code:
         result = search_bitbucket_code(
             query="error OR exception",

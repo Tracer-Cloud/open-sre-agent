@@ -34,10 +34,10 @@ from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
 )
 from services.temporal import TemporalClient, TemporalConfig
-from tools.TemporalNamespaceInfoTool import TemporalNamespaceInfoTool
-from tools.TemporalTaskQueueTool import TemporalTaskQueueTool
-from tools.TemporalWorkflowHistoryTool import TemporalWorkflowHistoryTool
-from tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from tools.temporal_namespace_info_tool import TemporalNamespaceInfoTool
+from tools.temporal_task_queue_tool import TemporalTaskQueueTool
+from tools.temporal_workflow_history_tool import TemporalWorkflowHistoryTool
+from tools.temporal_workflows_tool import TemporalWorkflowsTool
 
 pytestmark = pytest.mark.synthetic
 
@@ -260,10 +260,10 @@ def patched_temporal_client(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         return client
 
-    monkeypatch.setattr("tools.TemporalNamespaceInfoTool.TemporalClient", _make_patched_client)
-    monkeypatch.setattr("tools.TemporalWorkflowsTool.TemporalClient", _make_patched_client)
-    monkeypatch.setattr("tools.TemporalWorkflowHistoryTool.TemporalClient", _make_patched_client)
-    monkeypatch.setattr("tools.TemporalTaskQueueTool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.temporal_namespace_info_tool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.temporal_workflows_tool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.temporal_workflow_history_tool.TemporalClient", _make_patched_client)
+    monkeypatch.setattr("tools.temporal_task_queue_tool.TemporalClient", _make_patched_client)
 
 
 # --- alert source mapping -----------------------------------------------------

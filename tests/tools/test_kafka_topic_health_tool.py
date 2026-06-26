@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from tests.tools.conftest import BaseToolContract
-from tools.KafkaTopicHealthTool import get_kafka_topic_health
+from tools.kafka_topic_health_tool import get_kafka_topic_health
 
 # ---------------------------------------------------------------------------
 # Shared fixture data
@@ -167,7 +167,7 @@ class TestKafkaTopicHealthExtractParams:
 class TestKafkaTopicHealthRun:
     def test_happy_path_all_topics(self) -> None:
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             return_value=_TOPIC_HEALTH_RESPONSE,
         ):
             result = get_kafka_topic_health(bootstrap_servers="broker1:9092")
@@ -179,7 +179,7 @@ class TestKafkaTopicHealthRun:
 
     def test_happy_path_reports_under_replicated_partitions(self) -> None:
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             return_value=_TOPIC_HEALTH_RESPONSE,
         ):
             result = get_kafka_topic_health(bootstrap_servers="broker1:9092")
@@ -190,7 +190,7 @@ class TestKafkaTopicHealthRun:
 
     def test_happy_path_forwards_limit_arg(self) -> None:
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             return_value=_TOPIC_HEALTH_RESPONSE,
         ) as mock_fn:
             get_kafka_topic_health(bootstrap_servers="broker1:9092", limit=5)
@@ -222,7 +222,7 @@ class TestKafkaTopicHealthRun:
             ],
         }
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             return_value=single_topic_response,
         ) as mock_fn:
             result = get_kafka_topic_health(
@@ -238,7 +238,7 @@ class TestKafkaTopicHealthRun:
 
     def test_happy_path_sasl_ssl_connection(self) -> None:
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             return_value=_TOPIC_HEALTH_RESPONSE,
         ) as mock_fn:
             result = get_kafka_topic_health(
@@ -267,7 +267,7 @@ class TestKafkaTopicHealthRun:
             "available": False,
             "error": "Connection refused by broker.",
         }
-        with patch("tools.KafkaTopicHealthTool.get_topic_health", return_value=fake_error):
+        with patch("tools.kafka_topic_health_tool.get_topic_health", return_value=fake_error):
             result = get_kafka_topic_health(bootstrap_servers="bad-host:9092")
 
         assert result["available"] is False
@@ -279,7 +279,7 @@ class TestKafkaTopicHealthRun:
         # the tool should let the exception propagate (no silent swallowing).
         with (
             patch(
-                "tools.KafkaTopicHealthTool.get_topic_health",
+                "tools.kafka_topic_health_tool.get_topic_health",
                 side_effect=RuntimeError("broker timeout"),
             ),
             pytest.raises(RuntimeError, match="broker timeout"),
@@ -290,7 +290,7 @@ class TestKafkaTopicHealthRun:
         # Empty bootstrap_servers → KafkaConfig.is_configured is False.
         # The integration short-circuits before touching confluent_kafka.
         with patch(
-            "tools.KafkaTopicHealthTool.get_topic_health",
+            "tools.kafka_topic_health_tool.get_topic_health",
             wraps=__import__("integrations.kafka", fromlist=["get_topic_health"]).get_topic_health,
         ) as mock_fn:
             result = get_kafka_topic_health(bootstrap_servers="")

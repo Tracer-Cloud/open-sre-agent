@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.AzureMonitorLogsTool import query_azure_monitor_logs
-from tools.BitbucketSearchCodeTool import _resolve_config
-from tools.OpenObserveLogsTool import query_openobserve_logs
-from tools.OpenSearchAnalyticsTool import query_opensearch_analytics
-from tools.SnowflakeQueryHistoryTool import query_snowflake_history
+from tools.azure_monitor_logs_tool import query_azure_monitor_logs
+from tools.bitbucket_search_code_tool import _resolve_config
+from tools.openobserve_logs_tool import query_openobserve_logs
+from tools.opensearch_analytics_tool import query_opensearch_analytics
+from tools.snowflake_query_history_tool import query_snowflake_history
 
 
 class _MockResponse:
@@ -50,7 +50,7 @@ def test_snowflake_tool_enforces_bounded_limit(monkeypatch: Any) -> None:
         captured["timeout"] = timeout
         return _MockResponse({"data": [{"id": idx} for idx in range(20)]})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -95,7 +95,7 @@ def test_azure_tool_enforces_bounded_take_clause(monkeypatch: Any) -> None:
             }
         )
 
-    monkeypatch.setattr("tools.AzureMonitorLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.azure_monitor_logs_tool.httpx.post", _fake_post)
 
     result = query_azure_monitor_logs(
         workspace_id="workspace-1",
@@ -121,7 +121,7 @@ def test_openobserve_tool_caps_size_and_output(monkeypatch: Any) -> None:
         captured["sql"] = json["query"]["sql"]
         return _MockResponse({"hits": [{"message": f"m{idx}"} for idx in range(12)]})
 
-    monkeypatch.setattr("tools.OpenObserveLogsTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.openobserve_logs_tool.httpx.post", _fake_post)
 
     result = query_openobserve_logs(
         base_url="https://openobserve.example.invalid",
@@ -156,7 +156,7 @@ def test_opensearch_tool_caps_limit_before_client_query(monkeypatch: Any) -> Non
         return {"success": True, "logs": [{"message": f"log-{idx}"} for idx in range(12)]}
 
     monkeypatch.setattr(
-        "tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
+        "tools.opensearch_analytics_tool.ElasticsearchClient.search_logs",
         _fake_search_logs,
     )
 
@@ -208,11 +208,11 @@ def test_opensearch_tool_forwards_basic_auth_to_elasticsearch_config(monkeypatch
         return {"success": True, "logs": []}
 
     monkeypatch.setattr(
-        "tools.OpenSearchAnalyticsTool.ElasticsearchConfig",
+        "tools.opensearch_analytics_tool.ElasticsearchConfig",
         _FakeConfig,
     )
     monkeypatch.setattr(
-        "tools.OpenSearchAnalyticsTool.ElasticsearchClient.search_logs",
+        "tools.opensearch_analytics_tool.ElasticsearchClient.search_logs",
         _fake_search_logs,
     )
 
@@ -235,7 +235,7 @@ def test_opensearch_tool_extract_params_reads_basic_auth() -> None:
     configures Basic Auth, and the registered tool's runtime kwargs must
     include them so they reach ElasticsearchConfig.
     """
-    from tools.OpenSearchAnalyticsTool import _opensearch_extract_params
+    from tools.opensearch_analytics_tool import _opensearch_extract_params
 
     sources = {
         "opensearch": {

@@ -9,9 +9,9 @@ import pytest
 
 from services.groundcover.client import GroundcoverToolResult
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GroundcoverLogsTool import query_groundcover_logs
-from tools.GroundcoverQueryReferenceTool import get_groundcover_query_reference
-from tools.GroundcoverTracesTool import query_groundcover_traces
+from tools.groundcover_logs_tool import query_groundcover_logs
+from tools.groundcover_query_reference_tool import get_groundcover_query_reference
+from tools.groundcover_traces_tool import query_groundcover_traces
 
 
 def _ok(data: Any, notes: list[str] | None = None) -> GroundcoverToolResult:

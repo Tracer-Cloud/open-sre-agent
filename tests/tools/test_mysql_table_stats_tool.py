@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MySQLTableStatsTool import get_mysql_table_stats
+from tools.mysql_table_stats_tool import get_mysql_table_stats
 
 
 class TestMySQLTableStatsToolContract(BaseToolContract):
@@ -52,7 +52,7 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.MySQLTableStatsTool.get_table_stats", return_value=fake_result):
+    with patch("tools.mysql_table_stats_tool.get_table_stats", return_value=fake_result):
         result = get_mysql_table_stats(host="localhost", database="application_db")
     assert result["database"] == "application_db"
     assert result["total_tables"] == 3
@@ -64,7 +64,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MySQLTableStatsTool.get_table_stats",
+        "tools.mysql_table_stats_tool.get_table_stats",
         return_value={
             "source": "mysql",
             "available": False,

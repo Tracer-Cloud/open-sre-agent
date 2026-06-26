@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.PostgreSQLTableStatsTool import get_postgresql_table_stats
+from tools.postgresql_table_stats_tool import get_postgresql_table_stats
 
 
 class TestPostgreSQLTableStatsToolContract(BaseToolContract):
@@ -118,7 +118,7 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.PostgreSQLTableStatsTool.get_table_stats", return_value=fake_result):
+    with patch("tools.postgresql_table_stats_tool.get_table_stats", return_value=fake_result):
         result = get_postgresql_table_stats(
             host="localhost", database="testdb", schema_name="public"
         )
@@ -171,7 +171,7 @@ def test_run_custom_schema() -> None:
             },
         ],
     }
-    with patch("tools.PostgreSQLTableStatsTool.get_table_stats", return_value=fake_result):
+    with patch("tools.postgresql_table_stats_tool.get_table_stats", return_value=fake_result):
         result = get_postgresql_table_stats(
             host="localhost", database="testdb", schema_name="analytics"
         )
@@ -182,7 +182,7 @@ def test_run_custom_schema() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.PostgreSQLTableStatsTool.get_table_stats",
+        "tools.postgresql_table_stats_tool.get_table_stats",
         return_value={
             "source": "postgresql",
             "available": False,

@@ -13,7 +13,7 @@ from core.orchestration.node.investigate.tools import availability_view
 from integrations.catalog import classify_integrations
 from integrations.temporal import classify
 from services.temporal import TemporalConfig
-from tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from tools.temporal_workflows_tool import TemporalWorkflowsTool
 
 
 class TestClassify:

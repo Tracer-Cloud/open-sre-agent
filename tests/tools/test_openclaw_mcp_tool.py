@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.OpenClawMCPTool import (
+from tools.openclaw_mcp_tool import (
     call_openclaw_bridge_tool,
     get_openclaw_conversation,
     list_openclaw_bridge_tools,
@@ -141,7 +141,7 @@ def test_get_conversation_extract_params_maps_conversation_id() -> None:
 
 
 def test_list_openclaw_tools_returns_unavailable_without_config() -> None:
-    with patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None):
+    with patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None):
         result = list_openclaw_bridge_tools()
 
     assert result["available"] is False
@@ -155,11 +155,11 @@ def test_list_openclaw_tools_happy_path() -> None:
     mock_config.url = ""
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.list_openclaw_mcp_tools",
+            "tools.openclaw_mcp_tool.list_openclaw_mcp_tools",
             return_value=[{"name": "messages_read", "description": "", "input_schema": {}}],
         ),
     ):
@@ -185,11 +185,11 @@ def test_list_openclaw_tools_filters_by_name() -> None:
     mock_config.url = ""
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.list_openclaw_mcp_tools",
+            "tools.openclaw_mcp_tool.list_openclaw_mcp_tools",
             return_value=[
                 {"name": "messages_read", "description": "Read", "input_schema": {}},
                 {"name": "events_list", "description": "Events", "input_schema": {}},
@@ -210,11 +210,11 @@ def test_call_openclaw_tool_happy_path() -> None:
     mock_config = MagicMock()
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+            "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
                 "tool": "messages_read",
@@ -242,11 +242,11 @@ def test_call_openclaw_tool_returns_error_payload() -> None:
     mock_config = MagicMock()
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+            "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": True,
                 "tool": "messages_send",
@@ -278,11 +278,11 @@ def test_search_openclaw_conversations_happy_path() -> None:
     mock_config = MagicMock()
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+            "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
                 "tool": "conversations_list",
@@ -308,11 +308,11 @@ def test_get_openclaw_conversation_happy_path() -> None:
     mock_config = MagicMock()
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+            "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
                 "tool": "conversations_get",
@@ -338,11 +338,11 @@ def test_send_openclaw_message_happy_path() -> None:
     mock_config = MagicMock()
 
     with (
-        patch("tools.OpenClawMCPTool.openclaw_config_from_env", return_value=None),
-        patch("tools.OpenClawMCPTool.build_openclaw_config", return_value=mock_config),
-        patch("tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason", return_value=None),
+        patch("tools.openclaw_mcp_tool.openclaw_config_from_env", return_value=None),
+        patch("tools.openclaw_mcp_tool.build_openclaw_config", return_value=mock_config),
+        patch("tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason", return_value=None),
         patch(
-            "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+            "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
             return_value={
                 "is_error": False,
                 "tool": "message_send",

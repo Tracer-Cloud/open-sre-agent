@@ -609,7 +609,7 @@ class TestOpenClawConnectionVerifiedBug:
 
     def test_bridge_tools_available_when_connection_verified_present(self) -> None:
         """All three bridge tools report is_available=True when connection_verified=True."""
-        from tools.OpenClawMCPTool import (
+        from tools.openclaw_mcp_tool import (
             call_openclaw_bridge_tool,
             list_openclaw_bridge_tools,
             search_openclaw_conversations,
@@ -625,7 +625,7 @@ class TestOpenClawConnectionVerifiedBug:
 
     def test_bridge_tools_unavailable_when_connection_verified_absent(self) -> None:
         """Without connection_verified, all bridge tools must report is_available=False."""
-        from tools.OpenClawMCPTool import (
+        from tools.openclaw_mcp_tool import (
             call_openclaw_bridge_tool,
             list_openclaw_bridge_tools,
             search_openclaw_conversations,
@@ -651,7 +651,7 @@ class TestOpenClawConnectionVerifiedBug:
         Bug 2 regression: _openclaw_extract_params must read 'url' (model_dump() key),
         not 'openclaw_url' (the old incorrect key that caused all params to arrive as None).
         """
-        from tools.OpenClawMCPTool import call_openclaw_bridge_tool
+        from tools.openclaw_mcp_tool import call_openclaw_bridge_tool
 
         params = call_openclaw_bridge_tool.__opensre_registered_tool__.extract_params(
             {

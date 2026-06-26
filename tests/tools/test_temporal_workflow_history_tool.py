@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.TemporalWorkflowHistoryTool import TemporalWorkflowHistoryTool
+from tools.temporal_workflow_history_tool import TemporalWorkflowHistoryTool
 
 
 class TestTemporalWorkflowHistoryToolContract(BaseToolContract):
@@ -84,7 +84,7 @@ def test_run_happy_path(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.TemporalWorkflowHistoryTool.TemporalClient",
+        "tools.temporal_workflow_history_tool.TemporalClient",
         lambda _config: mock_client,
     )
 
@@ -119,7 +119,7 @@ def test_run_returns_error_on_failure(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.TemporalWorkflowHistoryTool.TemporalClient",
+        "tools.temporal_workflow_history_tool.TemporalClient",
         lambda _config: mock_client,
     )
 

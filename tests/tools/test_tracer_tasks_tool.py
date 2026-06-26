@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.TracerTasksTool import get_tracer_tasks
+from tools.tracer_tasks_tool import get_tracer_tasks
 
 
 class TestTracerTasksToolContract(BaseToolContract):
@@ -29,7 +29,7 @@ def test_run_returns_task_result() -> None:
     mock_client = MagicMock()
     mock_result = MagicMock()
     mock_client.get_run_tasks.return_value = mock_result
-    with patch("tools.TracerTasksTool.get_tracer_client", return_value=mock_client):
+    with patch("tools.tracer_tasks_tool.get_tracer_client", return_value=mock_client):
         result = get_tracer_tasks(run_id="run-123")
     assert result is mock_result
     mock_client.get_run_tasks.assert_called_once_with("run-123")

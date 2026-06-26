@@ -7,7 +7,7 @@ from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GitLabFileTool import get_gitlab_file_contents
+from tools.gitlab_file_tool import get_gitlab_file_contents
 
 
 def _registered_tool() -> Any:
@@ -73,7 +73,7 @@ def test_extract_params_defaults_ref_to_main() -> None:
 
 
 def test_run_returns_unavailable_when_config_missing() -> None:
-    with patch("tools.GitLabFileTool._resolve_config", return_value=None):
+    with patch("tools.gitlab_file_tool._resolve_config", return_value=None):
         result = get_gitlab_file_contents(project_id="42", file_path="src/main.py")
     assert result == {
         "source": "gitlab",
@@ -94,8 +94,8 @@ def test_run_happy_path_decodes_base64_content() -> None:
         "content": encoded,
     }
     with (
-        patch("tools.GitLabFileTool._resolve_config", return_value=MagicMock()),
-        patch("tools.GitLabFileTool.get_gitlab_file", return_value=fake_response),
+        patch("tools.gitlab_file_tool._resolve_config", return_value=MagicMock()),
+        patch("tools.gitlab_file_tool.get_gitlab_file", return_value=fake_response),
     ):
         result = get_gitlab_file_contents(project_id="42", file_path="src/main.py")
     assert result["available"] is True
@@ -106,8 +106,8 @@ def test_run_happy_path_decodes_base64_content() -> None:
 def test_run_returns_unavailable_for_oversized_file() -> None:
     fake_response = {"size": 75_000, "content": "ignored"}
     with (
-        patch("tools.GitLabFileTool._resolve_config", return_value=MagicMock()),
-        patch("tools.GitLabFileTool.get_gitlab_file", return_value=fake_response),
+        patch("tools.gitlab_file_tool._resolve_config", return_value=MagicMock()),
+        patch("tools.gitlab_file_tool.get_gitlab_file", return_value=fake_response),
     ):
         result = get_gitlab_file_contents(project_id="42", file_path="big.bin")
     assert result["available"] is False
@@ -126,8 +126,8 @@ def test_run_returns_unavailable_for_binary_file() -> None:
         "content": encoded,
     }
     with (
-        patch("tools.GitLabFileTool._resolve_config", return_value=MagicMock()),
-        patch("tools.GitLabFileTool.get_gitlab_file", return_value=fake_response),
+        patch("tools.gitlab_file_tool._resolve_config", return_value=MagicMock()),
+        patch("tools.gitlab_file_tool.get_gitlab_file", return_value=fake_response),
     ):
         result = get_gitlab_file_contents(project_id="42", file_path="blob.bin")
     assert result["available"] is False
@@ -143,8 +143,8 @@ def test_run_handles_empty_content() -> None:
         "content": "",
     }
     with (
-        patch("tools.GitLabFileTool._resolve_config", return_value=MagicMock()),
-        patch("tools.GitLabFileTool.get_gitlab_file", return_value=fake_response),
+        patch("tools.gitlab_file_tool._resolve_config", return_value=MagicMock()),
+        patch("tools.gitlab_file_tool.get_gitlab_file", return_value=fake_response),
     ):
         result = get_gitlab_file_contents(project_id="42", file_path="empty.txt")
     assert result["available"] is True

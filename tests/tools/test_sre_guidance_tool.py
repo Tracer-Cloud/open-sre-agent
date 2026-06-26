@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tests.tools.conftest import BaseToolContract
-from tools.SREGuidanceTool import get_sre_guidance
+from tools.sre_guidance_tool import get_sre_guidance
 
 
 class TestSREGuidanceToolContract(BaseToolContract):

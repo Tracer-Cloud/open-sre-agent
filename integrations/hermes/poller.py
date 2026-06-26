@@ -1,7 +1,7 @@
 """Efficient, cursor-based polling primitive for Hermes log files.
 
 This module is the **shared engine** behind both the agent-facing
-``HermesLogsTool`` (``tools.HermesLogsTool``) and the test helper
+``HermesLogsTool`` (``tools.hermes_logs_tool``) and the test helper
 (``tests.utils.hermes_logs_helper``). Centralising the cursor logic
 here means the production tool and the test suite never drift.
 

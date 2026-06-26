@@ -6,8 +6,8 @@ import logging
 from typing import Any
 from unittest.mock import patch
 
-from tools.RDSDescribeInstanceTool import describe_rds_instance
-from tools.RDSEventsTool import describe_rds_events
+from tools.rds_describe_instance_tool import describe_rds_instance
+from tools.rds_events_tool import describe_rds_events
 
 
 class _FakeAWSBackend:
@@ -45,7 +45,7 @@ class _FakeAWSBackend:
         return self.events_response
 
 
-@patch("tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+@patch("tools.rds_describe_instance_tool.execute_aws_sdk_call")
 def test_describe_rds_instance_success(mock_call) -> None:
     mock_call.return_value = {
         "success": True,
@@ -77,7 +77,7 @@ def test_describe_rds_instance_success(mock_call) -> None:
     assert result["endpoint"]["port"] == 5432
 
 
-@patch("tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+@patch("tools.rds_describe_instance_tool.execute_aws_sdk_call")
 def test_describe_rds_instance_not_found(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"DBInstances": []}}
 
@@ -86,7 +86,7 @@ def test_describe_rds_instance_not_found(mock_call) -> None:
     assert "No RDS instance" in result["error"]
 
 
-@patch("tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+@patch("tools.rds_describe_instance_tool.execute_aws_sdk_call")
 def test_describe_rds_instance_aws_failure(mock_call) -> None:
     mock_call.return_value = {"success": False, "error": "AccessDenied"}
 
@@ -95,7 +95,7 @@ def test_describe_rds_instance_aws_failure(mock_call) -> None:
     assert result["error"] == "Failed to describe the RDS instance. Check server logs for details."
 
 
-@patch("tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+@patch("tools.rds_describe_instance_tool.execute_aws_sdk_call")
 def test_describe_rds_instance_multiple_instances_warns(mock_call, caplog) -> None:
     """When AWS returns >1 instance, use the first and emit a warning."""
     mock_call.return_value = {
@@ -128,7 +128,7 @@ def test_describe_rds_instance_multiple_instances_warns(mock_call, caplog) -> No
     assert "returned 2 instances" in caplog.text
 
 
-@patch("tools.RDSEventsTool.execute_aws_sdk_call")
+@patch("tools.rds_events_tool.execute_aws_sdk_call")
 def test_describe_rds_events_success(mock_call) -> None:
     mock_call.return_value = {
         "success": True,
@@ -150,7 +150,7 @@ def test_describe_rds_events_success(mock_call) -> None:
     assert result["events"][0]["categories"] == ["failover"]
 
 
-@patch("tools.RDSEventsTool.execute_aws_sdk_call")
+@patch("tools.rds_events_tool.execute_aws_sdk_call")
 def test_describe_rds_events_no_events(mock_call) -> None:
     mock_call.return_value = {"success": True, "data": {"Events": []}}
 
@@ -160,7 +160,7 @@ def test_describe_rds_events_no_events(mock_call) -> None:
     assert result["events"] == []
 
 
-@patch("tools.RDSEventsTool.execute_aws_sdk_call")
+@patch("tools.rds_events_tool.execute_aws_sdk_call")
 def test_describe_rds_events_failure(mock_call) -> None:
     mock_call.return_value = {"success": False, "error": "ThrottlingException"}
 
@@ -177,7 +177,7 @@ def test_describe_rds_events_failure(mock_call) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@patch("tools.RDSDescribeInstanceTool.execute_aws_sdk_call")
+@patch("tools.rds_describe_instance_tool.execute_aws_sdk_call")
 def test_describe_rds_instance_short_circuits_to_aws_backend(mock_call) -> None:
     backend = _FakeAWSBackend(
         db_response={
@@ -201,7 +201,7 @@ def test_describe_rds_instance_short_circuits_to_aws_backend(mock_call) -> None:
     assert result["engine"] == "mysql"
 
 
-@patch("tools.RDSEventsTool.execute_aws_sdk_call")
+@patch("tools.rds_events_tool.execute_aws_sdk_call")
 def test_describe_rds_events_short_circuits_to_aws_backend(mock_call) -> None:
     backend = _FakeAWSBackend(
         db_response={},

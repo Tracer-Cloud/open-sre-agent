@@ -181,7 +181,7 @@ class TestRabbitMQPipelineFlow:
         API response and verify the evidence dict shape the pipeline expects."""
 
         from integrations import rabbitmq as rmq_module
-        from tools.RabbitMQQueueBacklogTool import get_rabbitmq_queue_backlog
+        from tools.rabbitmq_queue_backlog_tool import get_rabbitmq_queue_backlog
 
         def fake_client(config: RabbitMQConfig) -> httpx.Client:
             queues_payload: list[dict[str, Any]] = [

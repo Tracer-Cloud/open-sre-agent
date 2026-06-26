@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tests.tools.conftest import BaseToolContract, MockHttpxResponse
-from tools.SnowflakeQueryHistoryTool import query_snowflake_history
+from tools.snowflake_query_history_tool import query_snowflake_history
 
 # ---------------------------------------------------------------------------
 # Contract — metadata, is_available, extract_params surface
@@ -147,7 +147,7 @@ def test_default_query_used_when_query_blank(monkeypatch: pytest.MonkeyPatch) ->
         captured["headers"] = headers
         return MockHttpxResponse({"data": []})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -172,7 +172,7 @@ def test_user_query_gets_limit_appended_if_missing(monkeypatch: pytest.MonkeyPat
         captured["statement"] = json["statement"]
         return MockHttpxResponse({"data": []})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -195,7 +195,7 @@ def test_user_query_with_existing_limit_is_left_untouched(
         captured["statement"] = json["statement"]
         return MockHttpxResponse({"data": []})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -219,7 +219,7 @@ def test_optional_session_params_only_included_when_set(
         captured["payload"] = json
         return MockHttpxResponse({"data": []})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -248,7 +248,7 @@ def test_optional_session_params_omitted_when_blank(
         captured["payload"] = json
         return MockHttpxResponse({"data": []})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -267,7 +267,7 @@ def test_bounded_limit_caps_caller_request(monkeypatch: pytest.MonkeyPatch) -> N
         # Server returns 20 rows — tool must trim to effective_limit (6)
         return MockHttpxResponse({"data": [{"id": idx} for idx in range(20)]})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -300,7 +300,7 @@ def test_normalizes_dict_rows_passthrough(monkeypatch: pytest.MonkeyPatch) -> No
             }
         )
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -334,7 +334,7 @@ def test_normalizes_tabular_rows_using_result_set_metadata(
             }
         )
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -355,7 +355,7 @@ def test_normalizes_to_empty_when_payload_unrecognized(
     def _fake_post(*_args: Any, **_kwargs: Any) -> MockHttpxResponse:
         return MockHttpxResponse({"unexpected": "shape"})
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -379,7 +379,7 @@ def test_returns_unavailable_on_http_error_status(monkeypatch: pytest.MonkeyPatc
             raise_for_status_error=RuntimeError("HTTP 500 from Snowflake"),
         )
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _fake_post)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _fake_post)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",
@@ -395,7 +395,7 @@ def test_returns_unavailable_on_request_exception(monkeypatch: pytest.MonkeyPatc
     def _raise(*_args: Any, **_kwargs: Any) -> None:
         raise ConnectionError("connection refused")
 
-    monkeypatch.setattr("tools.SnowflakeQueryHistoryTool.httpx.post", _raise)
+    monkeypatch.setattr("tools.snowflake_query_history_tool.httpx.post", _raise)
 
     result = query_snowflake_history(
         account_identifier="xy12345.us-east-1",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MariaDBReplicationTool import get_mariadb_replication_status
+from tools.mariadb_replication_tool import get_mariadb_replication_status
 
 
 class TestMariaDBReplicationToolContract(BaseToolContract):
@@ -27,7 +27,7 @@ def test_run_happy_path() -> None:
             {"Slave_IO_Running": "Yes", "Slave_SQL_Running": "Yes", "Connection_name": ""},
         ],
     }
-    with patch("tools.MariaDBReplicationTool.get_replication_status", return_value=fake_result):
+    with patch("tools.mariadb_replication_tool.get_replication_status", return_value=fake_result):
         result = get_mariadb_replication_status(host="localhost", database="test", username="user")
     assert result["available"] is True
     assert len(result["channels"]) == 1
@@ -35,7 +35,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MariaDBReplicationTool.get_replication_status",
+        "tools.mariadb_replication_tool.get_replication_status",
         return_value={"source": "mariadb", "available": False, "error": "connection timeout"},
     ):
         result = get_mariadb_replication_status(host="invalid", database="test", username="user")
