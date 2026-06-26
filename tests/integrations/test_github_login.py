@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from integrations import github_login
+from integrations.github_identity import saved_github_username
 from integrations.github_login import GitHubLoginResult
 from integrations.github_mcp import GitHubMCPValidationResult
 from integrations.github_mcp_oauth import GitHubDeviceToken
@@ -86,10 +87,10 @@ def test_saved_github_username_reads_integration_store(monkeypatch: pytest.Monke
         lambda service: {"credentials": {"username": "octocat"}} if service == "github" else None,
     )
 
-    assert github_login.saved_github_username() == "octocat"
+    assert saved_github_username() == "octocat"
 
 
 def test_saved_github_username_empty_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("integrations.store.get_integration", lambda _service: None)
 
-    assert github_login.saved_github_username() == ""
+    assert saved_github_username() == ""

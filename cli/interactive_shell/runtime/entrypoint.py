@@ -98,14 +98,21 @@ def _github_login_explicitly_bypassed() -> bool:
     documented bypasses directly:
 
     * ``OPENSRE_SKIP_GITHUB_LOGIN`` — the user-facing escape hatch.
-    * CI/CD and test harnesses — detected via :func:`platform.analytics.source.is_test_run`.
+    * CI/CD and test harnesses — env vars only (no analytics import).
     * Non-interactive stdin — scripted / piped runs have no prompt to drive.
     """
     if os.getenv("OPENSRE_SKIP_GITHUB_LOGIN", "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
-    from platform.analytics.source import is_test_run
-
-    if is_test_run():
+    if os.getenv("OPENSRE_INVESTIGATION_SOURCE", "").strip().lower() == "test":
+        return True
+    if os.getenv("OPENSRE_IS_TEST", "0").strip() == "1":
+        return True
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+    if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true":
+        return True
+    ci_value = os.getenv("CI", "").strip().lower()
+    if ci_value in {"1", "true", "yes"}:
         return True
     try:
         return not sys.stdin.isatty()
