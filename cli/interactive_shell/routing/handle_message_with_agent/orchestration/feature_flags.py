@@ -16,8 +16,9 @@ from __future__ import annotations
 # ``/sample-alert`` command and the local alert listener still run
 # investigations; they do not go through ``investigation_start``.
 #
-# Keep ``True`` while investigation dispatch routing scenarios exist; fixture
-# integrity enforces this in ``routing-checks``.
+# Keep ``True`` as the shipped default. Set ``False`` only for emergency rollback;
+# investigation dispatch routing scenarios then skip in ``routing-live`` (they do
+# not fail ``routing-checks``).
 INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True
 
 
