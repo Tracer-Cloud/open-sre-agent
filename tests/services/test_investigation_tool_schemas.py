@@ -6,6 +6,7 @@ from collections.abc import Generator
 
 import pytest
 
+from services.agent_llm_client import build_openai_tool_specs
 from services.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
 from tests.services.investigation_tool_schema_contract import (
     assert_all_investigation_tools_satisfy_strict_adapter,
@@ -30,4 +31,12 @@ def test_all_investigation_tool_schemas_satisfy_strict_adapter_invariants() -> N
     assert_all_investigation_tools_satisfy_strict_adapter(
         normalize_schema=normalize_tool_input_schema,
         build_tool_specs=build_converse_tool_specs,
+    )
+
+
+def test_all_investigation_tool_schemas_satisfy_openai_compat_adapter() -> None:
+    """OpenAI-compatible providers (DeepSeek native API, etc.) require explicit ``type`` on every schema node."""
+    assert_all_investigation_tools_satisfy_strict_adapter(
+        normalize_schema=normalize_tool_input_schema,
+        build_tool_specs=build_openai_tool_specs,
     )
