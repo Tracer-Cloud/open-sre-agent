@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.feedback import (
+from cli.feedback import (
     MissRecord,
     MissTaxonomy,
     compute_recurrence,
@@ -17,7 +17,7 @@ from app.feedback import (
     record_miss,
     to_benchmark_scenario,
 )
-from app.feedback.misses import (
+from cli.feedback.misses import (
     export_scenarios,
     filter_top_misses,
     misses_path,

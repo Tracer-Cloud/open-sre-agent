@@ -1,4 +1,4 @@
-"""Closed-loop learning: capture investigation misses and convert them into evals.
+"""Closed-loop learning helpers for CLI feedback and miss triage.
 
 The feedback prompt collects an accuracy rating after every investigation. When
 a user marks a result as ``partial`` or ``inaccurate`` we additionally classify
@@ -9,7 +9,7 @@ recurrence, and reproducible benchmark scenarios.
 
 from __future__ import annotations
 
-from app.feedback.misses import (
+from cli.feedback.misses import (
     MissRecord,
     MissTaxonomy,
     compute_recurrence,

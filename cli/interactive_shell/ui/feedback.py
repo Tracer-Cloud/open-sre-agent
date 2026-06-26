@@ -318,7 +318,7 @@ def _pick_rating(*, console: Console | None) -> str | None:
 
 def _pick_taxonomy(*, console: Console | None) -> str | None:
     """Show the miss-taxonomy picker after a partial/inaccurate rating."""
-    from app.feedback import taxonomy_choices
+    from cli.feedback import taxonomy_choices
 
     choices = taxonomy_choices()
 
@@ -399,13 +399,13 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     if console is not None:
         console.print(f"[{BRAND}]✓ Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
         if miss_record is not None:
-            from app.feedback import misses_path
+            from cli.feedback import misses_path
 
             console.print(f"[{DIM}]  Miss recorded → {misses_path()}[/]")
     else:
         message = f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n"
         if miss_record is not None:
-            from app.feedback import misses_path
+            from cli.feedback import misses_path
 
             message += f"  {_D}Miss recorded → {misses_path()}{_R}\n"
         _write_raw(f"{message}\n")
@@ -422,7 +422,7 @@ def _classify_miss(
     Returns the miss record on success, ``None`` if the user cancels the
     taxonomy picker (the rating + note are still kept in feedback.jsonl).
     """
-    from app.feedback import MissTaxonomy, record_miss
+    from cli.feedback import MissTaxonomy, record_miss
     from cli.interactive_shell.ui.theme import BRAND, DIM
 
     if console is not None:

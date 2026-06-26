@@ -136,7 +136,6 @@ azure_sql = [
 
 [tool.setuptools.packages.find]
 include = [
-  "app*",
   "cli*",
   "config*",
   "core*",
@@ -157,11 +156,9 @@ include = [
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools"]
+paths = ["cli", "core", "deployment", "integrations", "platform", "services", "tools"]
 exclude = [
   "tools/simple_tools.py",          # explicitly skipped by the registry
-  "app/dockerfile_test.py",
-  "app/**/*_test.py",                   # inline pytest modules
 ]
 ignore_decorators = [
   "@*.command",          # Click / Typer subcommands
