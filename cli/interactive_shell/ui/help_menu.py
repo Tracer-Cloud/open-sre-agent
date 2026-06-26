@@ -12,7 +12,6 @@ from rich.markup import escape
 from rich.table import Table
 
 from cli.interactive_shell.command_registry.types import SlashCommand
-from platform.terminal import theme as ui_theme
 from cli.interactive_shell.ui.choice_menu import (
     erase_menu_lines,
     menu_columns,
@@ -20,6 +19,7 @@ from cli.interactive_shell.ui.choice_menu import (
     write_menu_line,
 )
 from cli.interactive_shell.ui.rendering import print_repl_table, repl_print, repl_table
+from platform.terminal import theme as ui_theme
 
 HelpSection = tuple[str, Sequence[SlashCommand]]
 _HELP_VIEW_ROWS = 21

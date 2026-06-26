@@ -5,11 +5,11 @@ from __future__ import annotations
 import click
 from dotenv import load_dotenv
 
-from platform.terminal.prompt_support import install_questionary_escape_cancel
 from cli.wizard.flow import run_wizard
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
 from platform.observability.sentry_sdk import init_sentry
+from platform.terminal.prompt_support import install_questionary_escape_cancel
 
 _ENTRYPOINT = "python -m cli.wizard"
 

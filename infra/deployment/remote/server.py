@@ -44,8 +44,8 @@ from nacl.signing import VerifyKey
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
-from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from cli.error_mapping import reraise_cli_runtime_error
+from cli.interactive_shell.ui.output.boundary import install_product_adapters
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from config.version import get_version
 from infra.deployment.remote.error_reporting import report_remote_exception

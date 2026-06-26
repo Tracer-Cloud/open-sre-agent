@@ -6,8 +6,8 @@ import sys
 from typing import Any
 
 from cli.interactive_shell.ui.output import get_output_format
-from platform.terminal.theme import BRAND
 from cli.ui.renderer.constants import _BOLD, _CYAN, _DIM, _RESET
+from platform.terminal.theme import BRAND
 
 
 def _print_connection_banner() -> None:

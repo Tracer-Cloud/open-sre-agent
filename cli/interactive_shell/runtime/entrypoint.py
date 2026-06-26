@@ -36,8 +36,8 @@ def _hydrate_configured_integrations(session: ReplSession) -> None:
 
 
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
-    from platform.terminal.theme import get_active_theme_name
     from platform.analytics.cli import identify_saved_github_username
+    from platform.terminal.theme import get_active_theme_name
 
     identify_saved_github_username()
 

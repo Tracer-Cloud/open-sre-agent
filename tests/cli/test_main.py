@@ -118,12 +118,8 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     monkeypatch.setattr("cli.__main__.init_sentry", _raise_missing_sentry)
-    monkeypatch.setattr(
-        "cli.lifecycle.update._fetch_latest_version", lambda: "9999.0.0"
-    )
-    monkeypatch.setattr(
-        "cli.lifecycle.update._is_update_available", lambda _c, _l: False
-    )
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "9999.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._is_update_available", lambda _c, _l: False)
 
     exit_code = main(["update", "--check"])
 

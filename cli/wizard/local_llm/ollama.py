@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from platform.terminal.theme import DIM, WARNING
 from config.config import DEFAULT_OLLAMA_HOST
+from platform.terminal.theme import DIM, WARNING
 
 if TYPE_CHECKING:
     from rich.console import Console

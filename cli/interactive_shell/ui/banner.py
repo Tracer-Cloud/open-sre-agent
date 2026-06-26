@@ -43,6 +43,8 @@ from rich.text import Text
 from cli.interactive_shell.ui.banner_art import _render_art
 from cli.interactive_shell.ui.banner_state import _build_ambient_right_column
 from cli.interactive_shell.ui.provider import detect_provider_model
+from config.repl_config import WHATS_NEW
+from config.version import get_version
 from platform.terminal.theme import (
     BRAND,
     DIM,
@@ -51,8 +53,6 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
-from config.repl_config import WHATS_NEW
-from config.version import get_version
 
 
 def _is_first_run() -> bool:

@@ -8,7 +8,6 @@ from typing import Any
 
 from rich.console import Console
 
-from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
 from cli.tests.catalog import TestCatalog, TestCatalogItem
 from cli.tests.runner import (
     format_command,
@@ -16,6 +15,7 @@ from cli.tests.runner import (
     run_catalog_item,
     run_catalog_items,
 )
+from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
 
 _questionary_module: Any
 _questionary_choice: Any

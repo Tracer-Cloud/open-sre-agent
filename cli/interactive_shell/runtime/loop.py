@@ -41,12 +41,12 @@ from cli.interactive_shell.runtime.streaming_console import StreamingConsole
 from cli.interactive_shell.ui import ERROR, WARNING
 from cli.interactive_shell.ui import prompt_surface as _prompt_surface
 from cli.interactive_shell.ui.incoming_alerts import drain_and_render_incoming
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from core.domain.alerts import inbox as _alert_inbox
 from platform.terminal.prompt_support import (
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,
 )
-from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
-from core.domain.alerts import inbox as _alert_inbox
 from tools.fleet_monitoring.sampler import start_sampler
 
 log = logging.getLogger(__name__)

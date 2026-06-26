@@ -111,8 +111,7 @@ def test_plan_actions_with_llm_result_hands_off_on_prompt_overflow(overflow_mess
         raise PlannerLLMError(overflow_message)
 
     with patch(
-        "cli.interactive_shell.harness.orchestration."
-        "llm_action_planner.planner._call_llm",
+        "cli.interactive_shell.harness.orchestration.llm_action_planner.planner._call_llm",
         side_effect=_raise_overflow,
     ):
         result = plan_actions_with_llm_result(message)
@@ -128,8 +127,7 @@ def test_plan_actions_with_llm_result_hands_off_on_prompt_overflow(overflow_mess
 def test_plan_actions_with_llm_result_re_raises_non_overflow_planner_errors() -> None:
     with (
         patch(
-            "cli.interactive_shell.harness.orchestration."
-            "llm_action_planner.planner._call_llm",
+            "cli.interactive_shell.harness.orchestration.llm_action_planner.planner._call_llm",
             side_effect=PlannerLLMError("codex: quota or rate limit exceeded (exit 1)"),
         ),
         pytest.raises(PlannerLLMError, match="quota"),
@@ -140,8 +138,7 @@ def test_plan_actions_with_llm_result_re_raises_non_overflow_planner_errors() ->
 def test_plan_actions_with_llm_result_re_raises_timeout_too_long_errors() -> None:
     with (
         patch(
-            "cli.interactive_shell.harness.orchestration."
-            "llm_action_planner.planner._call_llm",
+            "cli.interactive_shell.harness.orchestration.llm_action_planner.planner._call_llm",
             side_effect=PlannerLLMError("The request took too long to complete"),
         ),
         pytest.raises(PlannerLLMError, match="too long"),

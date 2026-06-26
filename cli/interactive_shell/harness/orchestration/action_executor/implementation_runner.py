@@ -30,9 +30,7 @@ from .task_streaming import (
     terminate_child_process,
 )
 
-_ACTION_EXECUTOR_MODULE = (
-    "cli.interactive_shell.harness.orchestration.action_executor"
-)
+_ACTION_EXECUTOR_MODULE = "cli.interactive_shell.harness.orchestration.action_executor"
 
 
 def _get_claude_code_adapter_cls() -> type[Any]:

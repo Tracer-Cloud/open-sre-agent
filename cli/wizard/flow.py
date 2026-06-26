@@ -10,14 +10,6 @@ import questionary
 from rich.text import Text
 
 import cli.wizard._integration_configurators as _integration_configurators_module
-from platform.terminal.theme import (
-    ERROR,
-    GLYPH_ERROR,
-    GLYPH_WARNING,
-    SECONDARY,
-    TEXT,
-    WARNING,
-)
 from cli.wizard._ui import (
     Choice,
     _choose,
@@ -41,6 +33,14 @@ from cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_targ
 from cli.wizard.store import get_store_path, save_local_config
 from cli.wizard.validation import build_demo_action_response as _build_demo_action_response
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
+from platform.terminal.theme import (
+    ERROR,
+    GLYPH_ERROR,
+    GLYPH_WARNING,
+    SECONDARY,
+    TEXT,
+    WARNING,
+)
 
 DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
 DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL

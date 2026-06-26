@@ -10,7 +10,6 @@ import click
 
 import platform
 from cli.constants import ALERT_TEMPLATE_CHOICES
-from platform.common.runtime_flags import is_json_output, is_yes
 from config.version import get_version
 from platform.analytics.cli import (
     capture_update_completed,
@@ -20,6 +19,7 @@ from platform.analytics.cli import (
 )
 from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.common.exit_codes import ERROR, SUCCESS
+from platform.common.runtime_flags import is_json_output, is_yes
 
 
 @click.command(name="uninstall")

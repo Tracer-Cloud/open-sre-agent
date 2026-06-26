@@ -27,8 +27,8 @@ import typing as t
 import click
 from rich.console import Console
 
-from platform.terminal.errors import render_error
 from platform.common.errors import OpenSREError as _OpenSREError
+from platform.terminal.errors import render_error
 
 
 class OpenSREError(_OpenSREError, click.ClickException):

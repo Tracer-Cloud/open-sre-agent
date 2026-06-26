@@ -24,9 +24,7 @@ from cli.interactive_shell.utils.error_handling.exception_reporting import repor
 # look up patchable names from the parent namespace at call time so that tests
 # using ``monkeypatch.setattr("…action_executor.X", fake)`` take effect even
 # when the implementation lives in a submodule.
-_ACTION_EXECUTOR_MODULE = (
-    "cli.interactive_shell.harness.orchestration.action_executor"
-)
+_ACTION_EXECUTOR_MODULE = "cli.interactive_shell.harness.orchestration.action_executor"
 
 
 def _ae_resolve(name: str, default: Any) -> Any:

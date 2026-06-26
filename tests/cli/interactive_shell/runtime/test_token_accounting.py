@@ -136,10 +136,7 @@ class _FakeLLMClient:
         yield self._content
 
 
-_PLANNER_LLM_CLIENT = (
-    "cli.interactive_shell.harness"
-    ".orchestration.llm_action_planner.llm_client"
-)
+_PLANNER_LLM_CLIENT = "cli.interactive_shell.harness.orchestration.llm_action_planner.llm_client"
 
 
 def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:

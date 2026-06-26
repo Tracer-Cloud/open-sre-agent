@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from platform.analytics.source import EntrypointSource
 from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
@@ -10,7 +11,6 @@ from platform.terminal.theme import (
     HIGHLIGHT_ANSI,
     TEXT_ANSI,
 )
-from platform.analytics.source import EntrypointSource
 
 _RESET = ANSI_RESET
 _DIM = ANSI_DIM

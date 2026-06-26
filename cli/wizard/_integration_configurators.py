@@ -4,15 +4,6 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from platform.terminal.theme import (
-    DEVICE_CODE,
-    DIM,
-    ERROR,
-    GLYPH_ERROR,
-    HIGHLIGHT,
-    SECONDARY,
-    WARNING,
-)
 from cli.wizard._ui import (
     Choice,
     _choose,
@@ -64,6 +55,15 @@ from cli.wizard.onboard_integrations import (
 )
 from integrations.sentry import get_sentry_auth_recommendations
 from integrations.store import remove_integration, upsert_integration
+from platform.terminal.theme import (
+    DEVICE_CODE,
+    DIM,
+    ERROR,
+    GLYPH_ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    WARNING,
+)
 
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
 DEFAULT_GITHUB_MCP_MODE = "streamable-http"

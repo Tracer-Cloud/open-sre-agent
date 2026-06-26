@@ -18,9 +18,9 @@ from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.ui import repl_tty_interactive
-from platform.terminal.theme import DEVICE_CODE
 from platform.analytics.cli import capture_github_login_completed
 from platform.analytics.source import is_test_run
+from platform.terminal.theme import DEVICE_CODE
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
