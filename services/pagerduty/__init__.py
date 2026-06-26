@@ -1,4 +1,4 @@
-from services.pagerduty.client import (
+from vendors.pagerduty.client import (
     PagerDutyClient,
     PagerDutyConfig,
     make_pagerduty_client,

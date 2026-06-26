@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
-from services.grafana.tempo import TempoMixin
+from vendors.grafana.tempo import TempoMixin
 
 
 class FakeGrafanaClient(TempoMixin):

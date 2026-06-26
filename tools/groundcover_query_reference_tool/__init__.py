@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from services.groundcover import GroundcoverClient
 from tools.tool_decorator import tool
 from tools.utils.availability import groundcover_available_or_backend
 from tools.utils.groundcover import base_extract_params
+from vendors.groundcover.client import GroundcoverClient
 
 _SOURCE = "groundcover_query_reference"
 

@@ -7,11 +7,11 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
-from services.eks.eks_k8s_client import build_k8s_clients
 from tools._telemetry import report_run_error
 from tools.tool_decorator import tool
 from tools.utils.availability import eks_available_or_backend
 from tools.utils.eks_workload_helper import extract_workload_params
+from vendors.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +165,7 @@ def list_eks_pods(
             e,
             tool_name="list_eks_pods",
             source="eks",
-            component="tools.eks_list_pods_tool",
+            component="vendors.eks",
             method="core_v1.list_namespaced_pod",
             logger=logger,
             extras={"cluster_name": cluster_name, "namespace": namespace, "region": region},

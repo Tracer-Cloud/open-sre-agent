@@ -7,7 +7,7 @@ groundcover OpenSRE tool depends on. All MCP/JSON-RPC/SSE wire details live in
 
 from __future__ import annotations
 
-from services.groundcover.client import (
+from vendors.groundcover.client import (
     GroundcoverClient,
     GroundcoverConfig,
     GroundcoverToolResult,

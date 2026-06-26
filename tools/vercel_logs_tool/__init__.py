@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.vercel import make_vercel_client
 from tools.base import BaseTool
+from vendors.vercel.client import make_vercel_client
 
 _ERROR_KEYWORDS = ("error", "failed", "exception", "fatal", "crash", "panic", "unhandled")
 

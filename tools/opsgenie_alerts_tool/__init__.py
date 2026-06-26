@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.opsgenie import make_opsgenie_client
 from tools.base import BaseTool
+from vendors.opsgenie.client import make_opsgenie_client
 
 _OPEN_STATUSES = {"open"}
 

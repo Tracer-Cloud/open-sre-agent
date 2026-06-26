@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from services.groundcover import GroundcoverClient, GroundcoverConfig, GroundcoverToolResult
+from vendors.groundcover.client import GroundcoverClient, GroundcoverConfig, GroundcoverToolResult
 
 # Default row cap embedded in seed/example queries. The model can override it,
 # but every gcQL example must carry an explicit ``| limit N``.

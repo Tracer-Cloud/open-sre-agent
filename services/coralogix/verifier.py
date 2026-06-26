@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from integrations.config_models import CoralogixIntegrationConfig
 from integrations.verification import register_probe_verifier
-from services.coralogix import CoralogixClient
+from vendors.coralogix.client import CoralogixClient
 
 verify_coralogix = register_probe_verifier(
     "coralogix",

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.victoria_logs import make_victoria_logs_client
 from tools.base import BaseTool
+from vendors.victoria_logs.client import make_victoria_logs_client
 
 
 class VictoriaLogsTool(BaseTool):

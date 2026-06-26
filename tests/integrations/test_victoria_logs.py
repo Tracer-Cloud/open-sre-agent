@@ -22,7 +22,7 @@ import pytest
 from integrations._catalog_impl import _classify_service_instance
 from integrations.catalog import load_env_integrations
 from integrations.config_models import VictoriaLogsIntegrationConfig
-from services.victoria_logs.verifier import verify_victoria_logs as _verify_victoria_logs
+from vendors.victoria_logs.verifier import verify_victoria_logs as _verify_victoria_logs
 
 
 class TestVictoriaLogsIntegrationConfig:

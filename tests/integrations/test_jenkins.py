@@ -20,13 +20,13 @@ from integrations.jenkins import (
     jenkins_config_from_env,
     validate_jenkins_config,
 )
-from services.jenkins import make_jenkins_client
-from services.jenkins.client import (
+from vendors.jenkins.client import (
     JenkinsClient,
     _iso_from_ms,
     _job_api_path,
     _safe_job_name,
     _status_from_color,
+    make_jenkins_client,
 )
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class TestHelpers:
         assert _safe_job_name("") is None
 
     def test_coerce_build_number(self) -> None:
-        from services.jenkins.client import _coerce_build_number
+        from vendors.jenkins.client import _coerce_build_number
 
         assert _coerce_build_number(4) == 4
         assert _coerce_build_number("7") == 7
@@ -536,21 +536,21 @@ class _FakeToolClient:
 
 class TestTools:
     def test_availability_requires_verified_connection(self) -> None:
-        from tools.jenkins_tool import _jenkins_available
+        from vendors.jenkins import _jenkins_available
 
         assert not _jenkins_available({"jenkins": {}})
         assert not _jenkins_available({"jenkins": {"connection_verified": False}})
         assert _jenkins_available({"jenkins": {"connection_verified": True}})
 
     def test_build_tool_extract_params_soft_defaults_job_name(self) -> None:
-        from tools.jenkins_tool import _list_jenkins_builds_extract_params
+        from vendors.jenkins import _list_jenkins_builds_extract_params
 
         # job_name absent from sources -> empty default (LLM supplies it as a tool arg)
         params = _list_jenkins_builds_extract_params({"jenkins": {"connection_verified": True}})
         assert params["job_name"] == ""
 
     def test_creds_mapping_from_source_dict(self) -> None:
-        from tools.jenkins_tool import _jenkins_creds
+        from vendors.jenkins import _jenkins_creds
 
         creds = _jenkins_creds({"base_url": "http://x", "username": "u", "api_token": "t"})
         assert creds == {"jenkins_url": "http://x", "jenkins_user": "u", "jenkins_token": "t"}

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from integrations.signoz import SigNozConfig
-from services.signoz.client import SigNozClient
+from vendors.signoz.client import SigNozClient
 
 
 class _FakeMetricsResult:

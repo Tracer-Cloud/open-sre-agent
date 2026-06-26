@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from integrations.models import CoralogixIntegrationConfig
-from services.coralogix.client import (
+from vendors.coralogix.client import (
     CoralogixClient,
     build_coralogix_logs_query,
 )

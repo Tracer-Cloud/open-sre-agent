@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.incident_io import make_incident_io_client
 from tools.base import BaseTool
+from vendors.incident_io.client import make_incident_io_client
 
 
 class IncidentIoIncidentsTool(BaseTool):

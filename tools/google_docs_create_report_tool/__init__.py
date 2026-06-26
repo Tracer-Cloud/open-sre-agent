@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.models import GoogleDocsIntegrationConfig
-from services.google_docs import GoogleDocsClient
 from tools._telemetry import report_run_error
 from tools.tool_decorator import tool
+from vendors.google_docs.client import GoogleDocsClient
 
 
 def _is_available(sources: dict[str, dict]) -> bool:
@@ -201,7 +201,7 @@ def create_google_docs_incident_report(
             exc,
             tool_name="create_google_docs_incident_report",
             source="google_docs",
-            component="tools.google_docs_create_report_tool",
+            component="vendors.google_docs",
             method="GoogleDocsClient.create_incident_report",
             extras={"title": title, "severity": severity, "folder_id": folder_id},
         )

@@ -7,10 +7,10 @@ import concurrent.futures
 import re
 from typing import Any
 
-from tools.datadog_logs_tool import _ERROR_KEYWORDS
-from tools.datadog_logs_tool._client import make_async_client
 from tools.tool_decorator import tool
 from tools.utils.compaction import compact_logs, summarize_counts
+from vendors.datadog import _ERROR_KEYWORDS
+from vendors.datadog._client import make_async_client
 
 
 def _run_in_thread(coro: Any) -> Any:

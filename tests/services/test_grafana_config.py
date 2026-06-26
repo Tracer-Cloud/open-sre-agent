@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.grafana.config import GrafanaAccountConfig
+from vendors.grafana.config import GrafanaAccountConfig
 
 
 def test_grafana_config_normalizes_instance_url() -> None:

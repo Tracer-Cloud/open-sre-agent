@@ -7,10 +7,10 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from services.eks.eks_client import EKSClient
 from tools._telemetry import report_run_error
 from tools.tool_decorator import tool
 from tools.utils.eks_workload_helper import extract_cluster_params
+from vendors.eks.eks_client import EKSClient
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def list_eks_clusters(
             e,
             tool_name="list_eks_clusters",
             source="eks",
-            component="tools.eks_list_clusters_tool",
+            component="vendors.eks",
             method="EKSClient.list_clusters",
             severity="warning",
             extras={"role_arn": role_arn, "region": region},
@@ -89,7 +89,7 @@ def list_eks_clusters(
             e,
             tool_name="list_eks_clusters",
             source="eks",
-            component="tools.eks_list_clusters_tool",
+            component="vendors.eks",
             method="EKSClient.list_clusters",
             extras={"role_arn": role_arn, "region": region},
         )

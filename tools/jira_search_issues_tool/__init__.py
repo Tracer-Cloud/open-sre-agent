@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.jira import make_jira_client
 from tools.base import BaseTool
+from vendors.jira.client import make_jira_client
 
 
 class JiraSearchIssuesTool(BaseTool):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from integrations.config_models import HelmIntegrationConfig
-from services.helm.client import HelmClient
+from vendors.helm.client import HelmClient
 
 HelmConfig = HelmIntegrationConfig
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.tempo import TempoConfig, tempo_extract_params
-from services.tempo.client import TempoClient
 from tools.tool_decorator import tool
 from tools.utils.availability import tempo_available_or_backend
+from vendors.tempo.client import TempoClient
 
 _VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")
 

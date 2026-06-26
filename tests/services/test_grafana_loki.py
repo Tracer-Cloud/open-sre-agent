@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.grafana.loki import LokiMixin
+from vendors.grafana.loki import LokiMixin
 
 # ---------------------------------------------------------------------------
 # Test host

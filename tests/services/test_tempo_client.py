@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from integrations.tempo import TempoConfig
-from services.tempo.client import TempoClient
+from vendors.tempo.client import TempoClient
 
 
 class _FakeResponse:

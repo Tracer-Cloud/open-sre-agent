@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.models import HoneycombIntegrationConfig
-from services.honeycomb import HoneycombClient
 from tools.base import BaseTool
+from vendors.honeycomb.client import HoneycombClient
 
 
 def _honeycomb_available(sources: dict) -> bool:

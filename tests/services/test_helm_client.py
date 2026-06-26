@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from integrations.config_models import HelmIntegrationConfig
-from services.helm.client import HelmClient, _helm_client_major_version
+from vendors.helm.client import HelmClient, _helm_client_major_version
 
 _HELM_V3_VERSION_STDOUT = (
     'Client: version.BuildInfo{Version:"v3.14.0", GitCommit:"abc", GoVersion:"go1.22"}\n'

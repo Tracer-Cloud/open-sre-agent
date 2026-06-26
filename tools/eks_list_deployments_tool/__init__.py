@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from services.eks.eks_k8s_client import build_k8s_clients
 from tools._telemetry import report_run_error
 from tools.tool_decorator import tool
 from tools.utils.availability import eks_available_or_backend
 from tools.utils.eks_workload_helper import extract_workload_params
+from vendors.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def list_eks_deployments(
             e,
             tool_name="list_eks_deployments",
             source="eks",
-            component="tools.eks_list_deployments_tool",
+            component="vendors.eks",
             method="apps_v1.list_namespaced_deployment",
             logger=logger,
             extras={"cluster_name": cluster_name, "namespace": namespace},

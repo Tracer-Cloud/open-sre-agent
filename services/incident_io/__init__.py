@@ -1,4 +1,4 @@
-from services.incident_io.client import (
+from vendors.incident_io.client import (
     IncidentIoClient,
     IncidentIoConfig,
     make_incident_io_client,

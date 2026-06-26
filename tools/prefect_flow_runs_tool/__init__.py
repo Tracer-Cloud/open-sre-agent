@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.prefect import make_prefect_client
 from tools.base import BaseTool
+from vendors.prefect.client import make_prefect_client
 
 _ERROR_KEYWORDS = ("error", "failed", "exception", "fatal", "crash", "traceback", "exitcode")
 _FAILED_STATES = {"FAILED", "CRASHED", "CANCELLED", "CANCELLING"}

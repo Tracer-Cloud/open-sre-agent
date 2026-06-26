@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.alertmanager import make_alertmanager_client
 from tools.base import BaseTool
+from vendors.alertmanager.client import make_alertmanager_client
 
 
 class AlertmanagerSilencesTool(BaseTool):

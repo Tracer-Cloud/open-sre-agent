@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.argocd import make_argocd_client
 from tools.base import BaseTool
+from vendors.argocd.client import make_argocd_client
 
 
 class ArgoCDApplicationDiffTool(BaseTool):

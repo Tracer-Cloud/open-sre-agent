@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.temporal import TemporalClient, TemporalConfig
 from tools.base import BaseTool
+from vendors.temporal.client import TemporalClient, TemporalConfig
 
 
 class TemporalWorkflowsTool(BaseTool):

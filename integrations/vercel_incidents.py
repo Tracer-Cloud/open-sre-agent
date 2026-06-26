@@ -19,7 +19,7 @@ from infra.deployment.remote.vercel_poller import (
     resolve_vercel_config,
 )
 from integrations.store import STORE_PATH
-from services.vercel import make_vercel_client
+from vendors.vercel.client import make_vercel_client
 
 _INCIDENT_CACHE_DIR: Path = STORE_PATH.parent / "investigations" / "vercel"
 

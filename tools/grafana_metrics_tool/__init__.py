@@ -6,13 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from tools.grafana_logs_tool import (
+from tools.tool_decorator import tool
+from vendors.grafana import (
     _grafana_available,
     _grafana_creds,
     _grafana_source,
     _resolve_grafana_client,
 )
-from tools.tool_decorator import tool
 
 
 class QueryGrafanaMetricsInput(BaseModel):

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from integrations.config_models import AlertmanagerIntegrationConfig
-from services.alertmanager.client import (
+from vendors.alertmanager.client import (
     AlertmanagerClient,
     make_alertmanager_client,
 )

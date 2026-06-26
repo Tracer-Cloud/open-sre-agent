@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.eks.eks_k8s_client import build_k8s_clients
 from tools._telemetry import report_run_error
-from tools.eks_list_clusters_tool import _eks_available, _eks_creds
 from tools.tool_decorator import tool
+from vendors.eks import _eks_available, _eks_creds
+from vendors.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def list_eks_namespaces(
             e,
             tool_name="list_eks_namespaces",
             source="eks",
-            component="tools.eks_list_namespaces_tool",
+            component="vendors.eks",
             method="core_v1.list_namespace",
             logger=logger,
             extras={"cluster_name": cluster_name},

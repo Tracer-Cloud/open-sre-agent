@@ -9,7 +9,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from services.argocd import ArgoCDClient, ArgoCDConfig, make_argocd_client
+from vendors.argocd.client import ArgoCDClient, ArgoCDConfig, make_argocd_client
 
 
 def _application_payload(name: str = "payments-api") -> dict[str, Any]:

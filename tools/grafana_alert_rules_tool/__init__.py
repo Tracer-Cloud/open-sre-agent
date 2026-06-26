@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.grafana_logs_tool import (
+from tools.tool_decorator import tool
+from vendors.grafana import (
     _grafana_available,
     _grafana_creds,
     _grafana_source,
     _resolve_grafana_client,
 )
-from tools.tool_decorator import tool
 
 
 def _query_grafana_alert_rules_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

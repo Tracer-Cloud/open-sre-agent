@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from services.vercel.client import (
+from vendors.vercel.client import (
     _MAX_VERCEL_PATH_SEGMENT_LEN,
     VercelClient,
     VercelConfig,

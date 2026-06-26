@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any, cast
 
 from integrations.signoz import SigNozConfig, signoz_extract_params
-from services.signoz.client import SigNozClient
 from tools.tool_decorator import tool
 from tools.utils.availability import signoz_available_or_backend
 from tools.utils.compaction import compact_logs, summarize_counts
+from vendors.signoz.client import SigNozClient
 
 
 def _logs_is_available(sources: dict[str, dict]) -> bool:

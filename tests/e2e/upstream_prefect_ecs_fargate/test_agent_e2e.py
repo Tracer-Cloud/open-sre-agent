@@ -20,7 +20,6 @@ import requests
 
 from cli.investigation import run_investigation_cli
 from platform.observability.tracing import traceable
-from services.grafana import get_grafana_client
 from tests.shared.e2e_rca_checks import (
     audit_key_mentioned,
     investigation_text_blob,
@@ -29,6 +28,7 @@ from tests.shared.e2e_rca_checks import (
 from tests.shared.stack_config import get_prefect_config
 from tests.shared.tracer_ingest import StepTimer, emit_tool_event
 from tests.utils.alert_factory import create_alert
+from vendors.grafana.client import get_grafana_client
 
 # Configuration loaded dynamically from CloudFormation
 CONFIG = get_prefect_config()

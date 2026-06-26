@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from integrations.verification import register_probe_verifier
-from services.temporal import TemporalClient, TemporalConfig
+from vendors.temporal.client import TemporalClient, TemporalConfig
 
 verify_temporal = register_probe_verifier(
     "temporal",

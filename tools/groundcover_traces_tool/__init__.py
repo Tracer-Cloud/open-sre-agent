@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.groundcover import GroundcoverClient
 from tools.tool_decorator import tool
 from tools.utils.availability import groundcover_available_or_backend
 from tools.utils.groundcover import (
@@ -13,6 +12,7 @@ from tools.utils.groundcover import (
     base_extract_params,
     run_signal_query,
 )
+from vendors.groundcover.client import GroundcoverClient
 
 _SOURCE = "groundcover_traces"
 _MCP_TOOL = "query_traces"

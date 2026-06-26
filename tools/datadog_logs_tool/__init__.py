@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from tools.datadog_logs_tool._client import make_client, unavailable
 from tools.tool_decorator import tool
 from tools.utils.availability import datadog_available_or_backend
 from tools.utils.compaction import compact_logs, summarize_counts
+from vendors.datadog._client import make_client, unavailable
 
 _ERROR_KEYWORDS = (
     "error",

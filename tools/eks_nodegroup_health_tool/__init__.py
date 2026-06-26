@@ -6,10 +6,10 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from services.eks.eks_client import EKSClient
 from tools._telemetry import report_run_error
-from tools.eks_list_clusters_tool import _eks_available, _eks_creds
 from tools.tool_decorator import tool
+from vendors.eks import _eks_available, _eks_creds
+from vendors.eks.eks_client import EKSClient
 
 
 def _nodegroup_is_available(sources: dict[str, dict]) -> bool:
@@ -99,7 +99,7 @@ def get_eks_nodegroup_health(
             e,
             tool_name="get_eks_nodegroup_health",
             source="eks",
-            component="tools.eks_nodegroup_health_tool",
+            component="vendors.eks",
             method="EKSClient.describe_nodegroup",
             severity="warning",
             extras={
@@ -114,7 +114,7 @@ def get_eks_nodegroup_health(
             e,
             tool_name="get_eks_nodegroup_health",
             source="eks",
-            component="tools.eks_nodegroup_health_tool",
+            component="vendors.eks",
             method="EKSClient.describe_nodegroup",
             extras={
                 "cluster_name": cluster_name,

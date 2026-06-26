@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.datadog_logs_tool import _dd_creds
-from tools.datadog_logs_tool._client import make_client, unavailable
 from tools.tool_decorator import tool
+from vendors.datadog import _dd_creds
+from vendors.datadog._client import make_client, unavailable
 
 
 def _node_pods_is_available(sources: dict[str, dict]) -> bool:

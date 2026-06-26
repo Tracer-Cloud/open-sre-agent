@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.grafana import get_grafana_client_from_credentials
 from tools.tool_decorator import tool
 from tools.utils.compaction import summarize_counts
 from tools.utils.log_compaction import build_error_taxonomy, deduplicate_logs
+from vendors.grafana.client import get_grafana_client_from_credentials
 
 
 def _map_pipeline_to_service_name(pipeline_name: str) -> str:

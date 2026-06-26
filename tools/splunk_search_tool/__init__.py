@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from tools.base import BaseTool
-from tools.splunk_search_tool._client import make_client, unavailable
 from tools.utils.compaction import compact_logs, summarize_counts
+from vendors.splunk._client import make_client, unavailable
 
 _ERROR_KEYWORDS = (
     "error",

@@ -6,14 +6,14 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from services.grafana.base import _epoch_ms_to_iso, _map_annotation
-from tools.grafana_logs_tool import (
+from tools.tool_decorator import tool
+from vendors.grafana import (
     _grafana_available,
     _grafana_creds,
     _grafana_source,
     _resolve_grafana_client,
 )
-from tools.tool_decorator import tool
+from vendors.grafana.base import _epoch_ms_to_iso, _map_annotation
 
 
 def _query_grafana_annotations_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

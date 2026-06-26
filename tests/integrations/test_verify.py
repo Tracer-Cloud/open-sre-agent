@@ -17,10 +17,10 @@ from integrations.verify import (
     verification_exit_code,
     verify_integrations,
 )
-from services.coralogix.verifier import verify_coralogix as _verify_coralogix
-from services.datadog.verifier import verify_datadog as _verify_datadog
-from services.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
-from services.vercel.verifier import verify_vercel as _verify_vercel
+from vendors.coralogix.verifier import verify_coralogix as _verify_coralogix
+from vendors.datadog.verifier import verify_datadog as _verify_datadog
+from vendors.honeycomb.verifier import verify_honeycomb as _verify_honeycomb
+from vendors.vercel.verifier import verify_vercel as _verify_vercel
 
 
 class _FakeResponse:
@@ -346,7 +346,7 @@ def test_verify_grafana_passes_with_supported_datasource(monkeypatch: pytest.Mon
 
 def test_verify_datadog_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.datadog.client import DatadogClient
+    from vendors.datadog.client import DatadogClient
 
     monkeypatch.setattr(
         DatadogClient,
@@ -395,7 +395,7 @@ def test_verify_snowflake_requires_token() -> None:
 
 def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.honeycomb import HoneycombClient
+    from vendors.honeycomb.client import HoneycombClient
 
     monkeypatch.setattr(
         HoneycombClient,
@@ -416,7 +416,7 @@ def test_verify_honeycomb_uses_auth_and_query(monkeypatch: pytest.MonkeyPatch) -
 
 def test_verify_coralogix_reports_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.coralogix import CoralogixClient
+    from vendors.coralogix.client import CoralogixClient
 
     monkeypatch.setattr(
         CoralogixClient,
@@ -640,7 +640,7 @@ def test_verification_exit_code_requires_core_success() -> None:
 
 def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.vercel.client import VercelClient
+    from vendors.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,
@@ -658,7 +658,7 @@ def test_verify_vercel_passes_with_valid_token(monkeypatch: pytest.MonkeyPatch) 
 
 def test_verify_vercel_fails_on_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.vercel.client import VercelClient
+    from vendors.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,
@@ -679,7 +679,7 @@ def test_verify_vercel_missing_token() -> None:
 
 def test_verify_integrations_dispatches_to_vercel(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.vercel.client import VercelClient
+    from vendors.vercel.client import VercelClient
 
     monkeypatch.setattr(
         VercelClient,

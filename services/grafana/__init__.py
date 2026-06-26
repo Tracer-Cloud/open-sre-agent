@@ -6,8 +6,8 @@ Credentials come from the user's integration stored in the Tracer web app DB.
 
 import logging
 
-from services.grafana.client import GrafanaClient
-from services.grafana.config import GrafanaAccountConfig
+from vendors.grafana.client import GrafanaClient
+from vendors.grafana.config import GrafanaAccountConfig
 
 logger = logging.getLogger(__name__)
 

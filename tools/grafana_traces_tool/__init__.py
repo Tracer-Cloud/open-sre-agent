@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.grafana_logs_tool import (
+from tools.tool_decorator import tool
+from tools.utils.compaction import DEFAULT_TRACE_LIMIT, compact_traces, summarize_counts
+from vendors.grafana import (
     _grafana_available,
     _grafana_creds,
     _grafana_source,
     _resolve_grafana_client,
 )
-from tools.tool_decorator import tool
-from tools.utils.compaction import DEFAULT_TRACE_LIMIT, compact_traces, summarize_counts
 
 
 def _extract_pipeline_spans(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.jenkins import jenkins_config_from_env
-from services.jenkins import JenkinsClient, make_jenkins_client
 from tools.tool_decorator import tool
+from vendors.jenkins.client import JenkinsClient, make_jenkins_client
 
 
 def _jenkins_available(sources: dict) -> bool:

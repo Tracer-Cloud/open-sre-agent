@@ -15,7 +15,7 @@ def test_evidence_source_includes_elasticsearch() -> None:
 
 # ── Config tests ─────────────────────────────────────────────────────────────
 
-from services.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
+from vendors.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 
 
 class TestElasticsearchConfig:
@@ -332,8 +332,8 @@ class TestGetClusterHealth:
 
 
 def test_package_exports() -> None:
-    from services.elasticsearch import ElasticsearchClient as C
-    from services.elasticsearch import ElasticsearchConfig as Cfg
+    from vendors.elasticsearch.client import ElasticsearchClient as C
+    from vendors.elasticsearch.client import ElasticsearchConfig as Cfg
 
     assert C is not None
     assert Cfg is not None
@@ -343,22 +343,22 @@ def test_package_exports() -> None:
 
 
 def test_make_client_returns_none_without_url() -> None:
-    from tools.elasticsearch_logs_tool._client import make_client
+    from vendors.elasticsearch._client import make_client
 
     assert make_client(None) is None
     assert make_client("") is None
 
 
 def test_make_client_returns_client_with_url() -> None:
-    from services.elasticsearch import ElasticsearchClient
-    from tools.elasticsearch_logs_tool._client import make_client
+    from vendors.elasticsearch._client import make_client
+    from vendors.elasticsearch.client import ElasticsearchClient
 
     client = make_client("http://localhost:9200")
     assert isinstance(client, ElasticsearchClient)
 
 
 def test_make_client_passes_api_key() -> None:
-    from tools.elasticsearch_logs_tool._client import make_client
+    from vendors.elasticsearch._client import make_client
 
     client = make_client("http://localhost:9200", api_key="abc123")
     assert client is not None
@@ -366,7 +366,7 @@ def test_make_client_passes_api_key() -> None:
 
 
 def test_unavailable_response_shape() -> None:
-    from tools.elasticsearch_logs_tool._client import unavailable
+    from vendors.elasticsearch._client import unavailable
 
     result = unavailable("elasticsearch_logs", "logs", "not configured")
     assert result["available"] is False
@@ -379,7 +379,7 @@ def test_unavailable_response_shape() -> None:
 
 
 def test_tool_name_and_source() -> None:
-    from tools.elasticsearch_logs_tool import ElasticsearchLogsTool
+    from vendors.elasticsearch import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     assert t.name == "query_elasticsearch_logs"
@@ -387,7 +387,7 @@ def test_tool_name_and_source() -> None:
 
 
 def test_tool_is_available_when_connection_verified() -> None:
-    from tools.elasticsearch_logs_tool import ElasticsearchLogsTool
+    from vendors.elasticsearch import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     sources = {"elasticsearch": {"connection_verified": True, "url": "http://localhost:9200"}}
@@ -395,14 +395,14 @@ def test_tool_is_available_when_connection_verified() -> None:
 
 
 def test_tool_is_not_available_without_source() -> None:
-    from tools.elasticsearch_logs_tool import ElasticsearchLogsTool
+    from vendors.elasticsearch import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     assert t.is_available({}) is False
 
 
 def test_tool_run_returns_unavailable_without_url() -> None:
-    from tools.elasticsearch_logs_tool import ElasticsearchLogsTool
+    from vendors.elasticsearch import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     result = t.run(query="error", url=None)
@@ -411,7 +411,7 @@ def test_tool_run_returns_unavailable_without_url() -> None:
 
 
 def test_tool_run_returns_logs_on_success() -> None:
-    from tools.elasticsearch_logs_tool import ElasticsearchLogsTool
+    from vendors.elasticsearch import ElasticsearchLogsTool
 
     t = ElasticsearchLogsTool()
     mock_client = MagicMock()
@@ -422,7 +422,7 @@ def test_tool_run_returns_logs_on_success() -> None:
         "query": "error",
     }
 
-    with patch("tools.elasticsearch_logs_tool.make_client", return_value=mock_client):
+    with patch("vendors.elasticsearch.make_client", return_value=mock_client):
         result = t.run(query="error", url="http://localhost:9200")
 
     assert result["available"] is True

@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from services.eks.eks_k8s_client import build_k8s_clients
 from tools._telemetry import report_run_error
-from tools.eks_list_clusters_tool import _eks_creds
 from tools.tool_decorator import tool
 from tools.utils.availability import eks_available_or_backend
+from vendors.eks import _eks_creds
+from vendors.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ def get_eks_node_health(
             e,
             tool_name="get_eks_node_health",
             source="eks",
-            component="tools.eks_node_health_tool",
+            component="vendors.eks",
             method="core_v1.list_node",
             logger=logger,
             extras={"cluster_name": cluster_name, "region": region},

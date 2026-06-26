@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.models import CoralogixIntegrationConfig
-from services.coralogix import (
+from tools.base import BaseTool
+from vendors.coralogix.client import (
     CoralogixClient,
     build_coralogix_logs_query,
 )
-from tools.base import BaseTool
 
 _ERROR_KEYWORDS = (
     "error",

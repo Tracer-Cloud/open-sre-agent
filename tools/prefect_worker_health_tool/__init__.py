@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.prefect import make_prefect_client
 from tools.base import BaseTool
+from vendors.prefect.client import make_prefect_client
 
 _UNHEALTHY_WORKER_STATUSES = {"OFFLINE", "UNHEALTHY"}
 _UNHEALTHY_POOL_STATUSES = {"NOT_READY", "PAUSED"}

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.pagerduty import make_pagerduty_client
 from tools.base import BaseTool
+from vendors.pagerduty.client import make_pagerduty_client
 
 
 class PagerDutyServicesTool(BaseTool):

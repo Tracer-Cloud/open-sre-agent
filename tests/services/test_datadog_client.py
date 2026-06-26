@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from services.datadog.client import DatadogClient, DatadogConfig
+from vendors.datadog.client import DatadogClient, DatadogConfig
 
 # -------------------------
 # Fixtures

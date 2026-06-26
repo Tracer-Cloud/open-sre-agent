@@ -6,10 +6,10 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from services.eks.eks_client import EKSClient
 from tools._telemetry import report_run_error
-from tools.eks_list_clusters_tool import _eks_available, _eks_creds
 from tools.tool_decorator import tool
+from vendors.eks import _eks_available, _eks_creds
+from vendors.eks.eks_client import EKSClient
 
 
 def _addon_is_available(sources: dict[str, dict]) -> bool:
@@ -81,7 +81,7 @@ def describe_eks_addon(
             e,
             tool_name="describe_eks_addon",
             source="eks",
-            component="tools.eks_describe_addon_tool",
+            component="vendors.eks",
             method="EKSClient.describe_addon",
             severity="warning",
             extras={
@@ -102,7 +102,7 @@ def describe_eks_addon(
             e,
             tool_name="describe_eks_addon",
             source="eks",
-            component="tools.eks_describe_addon_tool",
+            component="vendors.eks",
             method="EKSClient.describe_addon",
             extras={
                 "cluster_name": cluster_name,

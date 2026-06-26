@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.eks.eks_k8s_client import build_k8s_clients
-from tools.eks_list_clusters_tool import _eks_available, _eks_creds
 from tools.tool_decorator import tool
+from vendors.eks import _eks_available, _eks_creds
+from vendors.eks.eks_k8s_client import build_k8s_clients
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from services.grafana.mimir import MimirMixin
+from vendors.grafana.mimir import MimirMixin
 
 
 class DummyMimirClient(MimirMixin):

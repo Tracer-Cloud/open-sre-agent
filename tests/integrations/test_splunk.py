@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from integrations.models import SplunkIntegrationConfig
-from services.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
+from vendors.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
 
 # ── SplunkIntegrationConfig ───────────────────────────────────────────────────
 

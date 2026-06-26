@@ -18,7 +18,6 @@ from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure
-from services.supabase.client import supabase_http_get
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +144,10 @@ def _make_request(
 
     Returns (status_code, response_body). Caller handles error inspection.
     """
+    from vendors.supabase.client import (
+        supabase_http_get,  # lazy import to avoid circular dependency
+    )
+
     return supabase_http_get(
         config.url,
         path,

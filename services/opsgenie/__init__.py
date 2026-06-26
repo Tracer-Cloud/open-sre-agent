@@ -1,4 +1,4 @@
-from services.opsgenie.client import (
+from vendors.opsgenie.client import (
     OpsGenieClient,
     OpsGenieConfig,
     make_opsgenie_client,
