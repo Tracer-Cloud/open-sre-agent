@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import platform
-
-from app.cli.__main__ import main
-from app.version import get_version
+from cli.__main__ import main
+from config.version import get_version
 
 
 def test_version_subcommand(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("app.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("app.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("app.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
     rc = main(["version"])
     assert rc == 0

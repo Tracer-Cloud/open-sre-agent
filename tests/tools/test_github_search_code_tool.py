@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.GitHubSearchCodeTool import search_github_code
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GitHubSearchCodeTool import search_github_code
 
 
 class TestGitHubSearchCodeToolContract(BaseToolContract):
@@ -32,7 +32,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_when_no_config() -> None:
-    with patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None):
+    with patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None):
         result = search_github_code(owner="org", repo="repo", query="error")
     assert result == {
         "source": "github",
@@ -55,9 +55,9 @@ def test_run_happy_path() -> None:
 
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitHubSearchCodeTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitHubSearchCodeTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = search_github_code(
             owner="org",
@@ -82,9 +82,9 @@ def test_run_tool_error() -> None:
 
     mock_config = MagicMock()
     with (
-        patch("app.tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
-        patch("app.tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("app.tools.GitHubSearchCodeTool.call_github_mcp_tool", return_value=fake_result),
+        patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
+        patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
+        patch("tools.GitHubSearchCodeTool.call_github_mcp_tool", return_value=fake_result),
     ):
         result = search_github_code(
             owner="org",

@@ -1,11 +1,11 @@
-"""Tests for app.integrations.rds helpers."""
+"""Tests for integrations.rds helpers."""
 
 from __future__ import annotations
 
 import os
 from unittest.mock import patch
 
-from app.integrations.rds import (
+from integrations.rds import (
     DEFAULT_RDS_REGION,
     RDSConfig,
     build_rds_config,
@@ -127,7 +127,7 @@ def test_rds_config_from_env_uses_rds_region_when_aws_region_unset() -> None:
 
 def test_load_env_integrations_skips_rds_when_db_id_missing() -> None:
     """Gap #1 — negative: with no RDS_DB_INSTANCE_IDENTIFIER, no rds record."""
-    from app.integrations._catalog_impl import load_env_integrations
+    from integrations._catalog_impl import load_env_integrations
 
     with patch.dict(os.environ, {"AWS_REGION": "us-west-2"}, clear=True):
         env_records = load_env_integrations()
@@ -138,7 +138,7 @@ def test_load_env_integrations_skips_rds_when_db_id_missing() -> None:
 def test_classify_service_instance_rds_remote_store_returns_flat_shape() -> None:
     """Gap #2 — remote-store path: a stored RDS record must classify to a flat
     shape, not the generic {credentials: ...} fallback that broke rds_is_available."""
-    from app.integrations._catalog_impl import _classify_service_instance
+    from integrations._catalog_impl import _classify_service_instance
 
     credentials = {
         "db_instance_identifier": "remote-db",
@@ -148,10 +148,10 @@ def test_classify_service_instance_rds_remote_store_returns_flat_shape() -> None
 
     assert resolved_key == "rds"
     assert flat is not None
-    assert flat["db_instance_identifier"] == "remote-db"
-    assert flat["region"] == "ap-southeast-2"
-    assert flat["integration_id"] == "store-record-42"
-    assert "credentials" not in flat, (
+    assert flat.db_instance_identifier == "remote-db"
+    assert flat.region == "ap-southeast-2"
+    assert flat.integration_id == "store-record-42"
+    assert not hasattr(flat, "credentials"), (
         "remote-store rds must NOT nest fields under 'credentials' — "
         "rds_is_available reads sources['rds']['db_instance_identifier'] directly"
     )
@@ -159,7 +159,7 @@ def test_classify_service_instance_rds_remote_store_returns_flat_shape() -> None
 
 def test_classify_service_instance_rds_skips_when_db_id_missing() -> None:
     """Gap #2 — negative: an unconfigured rds record must classify to (None, None)."""
-    from app.integrations._catalog_impl import _classify_service_instance
+    from integrations._catalog_impl import _classify_service_instance
 
     flat, resolved_key = _classify_service_instance(
         "rds", {"region": "us-east-1"}, record_id="incomplete"

@@ -43,9 +43,16 @@ on:
       - "infra/bench/Dockerfile.bench.dockerignore"
       - "pyproject.toml"
       - "uv.lock"
-      - "app/**"
+      - "cli/**"
+      - "config/**"
+      - "core/**"
+      - "deployment/**"
+      - "integrations/**"
+      - "platform/**"
+      - "services/**"
+      - "tools/**"
       - "tests/benchmarks/**"
-      - ".github/workflows/bench-image.yml"
+      - ".github/workflows/benchmark-image.yml"
 
 permissions:
   contents: read

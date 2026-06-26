@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.analytics.source import (
+from platform.analytics.source import (
     INVESTIGATION_EVENT_SCHEMA_VERSION,
     EntrypointSource,
     TriggerMode,

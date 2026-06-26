@@ -6,14 +6,14 @@ from unittest.mock import patch
 
 import pytest
 
-from app.scheduler.runner import (
+from platform.scheduler.runner import (
     _compute_fire_time,
     _make_trigger,
     _on_job_submitted,
     _pending_fire_times,
     run_task_now,
 )
-from app.scheduler.types import Provider, ScheduledTask, TaskKind
+from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 class TestMakeTrigger:
@@ -109,7 +109,7 @@ class TestComputeFireTime:
 class TestRunTaskNow:
     def test_nonexistent_task(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "app.scheduler.runner.get_task",
+            "platform.scheduler.runner.get_task",
             lambda _task_id: None,
         )
         assert run_task_now("nonexistent") is False
@@ -122,9 +122,9 @@ class TestRunTaskNow:
             provider=Provider.TELEGRAM,
             chat_id="-100",
         )
-        monkeypatch.setattr("app.scheduler.runner.get_task", lambda _task_id: task)
+        monkeypatch.setattr("platform.scheduler.runner.get_task", lambda _task_id: task)
 
-        with patch("app.scheduler.runner.execute_task") as mock_exec:
+        with patch("platform.scheduler.runner.execute_task") as mock_exec:
             mock_exec.return_value = True
             result = run_task_now("run_now_test")
 

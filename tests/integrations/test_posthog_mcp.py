@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.posthog_mcp import (
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
     PostHogMCPConfig,
     build_posthog_mcp_config,
@@ -151,7 +151,7 @@ class TestValidation:
             {"name": "feature-flag-list", "description": "List flags", "input_schema": {}},
         ]
         with patch(
-            "app.integrations.posthog_mcp.list_posthog_mcp_tools",
+            "integrations.posthog_mcp.list_posthog_mcp_tools",
             return_value=fake_tools,
         ):
             result = validate_posthog_mcp_config(config)
@@ -162,7 +162,7 @@ class TestValidation:
     def test_validation_fails_when_no_tools(self) -> None:
         config = build_posthog_mcp_config({"auth_token": "phx_secret"})
         with patch(
-            "app.integrations.posthog_mcp.list_posthog_mcp_tools",
+            "integrations.posthog_mcp.list_posthog_mcp_tools",
             return_value=[],
         ):
             result = validate_posthog_mcp_config(config)
@@ -172,7 +172,7 @@ class TestValidation:
     def test_validation_handles_exception(self) -> None:
         config = build_posthog_mcp_config({"auth_token": "phx_secret"})
         with patch(
-            "app.integrations.posthog_mcp.list_posthog_mcp_tools",
+            "integrations.posthog_mcp.list_posthog_mcp_tools",
             side_effect=RuntimeError("boom"),
         ):
             result = validate_posthog_mcp_config(config)
@@ -210,8 +210,12 @@ def test_classify_posthog_mcp_credentials() -> None:
             },
         }
     ]
+    from core.orchestration.node.investigate.tools import availability_view
+
     resolved = _classify_integrations(records)
     assert "posthog_mcp" in resolved
-    assert resolved["posthog_mcp"]["connection_verified"] is True
-    assert resolved["posthog_mcp"]["auth_token"] == "phx_secret"
-    assert resolved["posthog_mcp"]["project_id"] == "12345"
+    assert resolved["posthog_mcp"].auth_token == "phx_secret"
+    assert resolved["posthog_mcp"].project_id == "12345"
+    # connection_verified is set at the tool-availability boundary
+    view = availability_view(resolved)
+    assert view["posthog_mcp"]["connection_verified"] is True

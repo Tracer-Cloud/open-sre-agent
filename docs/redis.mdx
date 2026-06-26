@@ -80,7 +80,7 @@ Set `REDIS_SSL=true` to connect over TLS. Confirm the server has TLS enabled (e.
 
 ## Investigation tools
 
-When OpenSRE investigates a Redis-related alert, four read-only diagnostic tools are available:
+When OpenSRE investigates a Redis-related alert, seven read-only diagnostic tools are available:
 
 ### Server info
 
@@ -100,6 +100,22 @@ Counts keys matching a glob pattern and samples their TTL and type.
 
 <Info>
 Key discovery uses the non-blocking `SCAN` cursor — never `KEYS` — so it is safe to run against large production keyspaces. Total iteration is capped (10,000 keys) and TTL/type sampling is bounded, so a wide pattern can never run unbounded.
+</Info>
+
+### Client list
+
+Summarizes connected clients via `CLIENT LIST`: total connections, how many are blocked (waiting on `BLPOP`/`BRPOP`/`XREAD`), how many are in pub/sub mode, the longest idle time, and breakdowns by source address and last command. Surfaces connection-pool exhaustion and stuck or blocked clients. Aggregate counts cover every client; the per-client sample is bounded.
+
+### List/queue depth
+
+Reports a list key's depth via `LLEN`, with an optional bounded head/tail sample via `LRANGE`. Useful for job-queue backlogs and stuck workers (Sidekiq, Celery, Bull, Resque-style queues). The key's `TYPE` is checked first, so a missing key reports `exists: false` and a non-list key returns a clear message rather than a `WRONGTYPE` error. Each sampled element is length-capped.
+
+### Latency doctor
+
+Runs `LATENCY DOCTOR` for a human-readable diagnosis of recent latency spikes (fork/RDB save, AOF rewrite, blocking commands, slow disk) and lists the latest monitored events via `LATENCY LATEST`; an optional `event` argument adds `LATENCY HISTORY` for that event.
+
+<Info>
+Latency monitoring must be enabled for events to be recorded — set `latency-monitor-threshold` to a value greater than `0` (in milliseconds). The tool reads this threshold via `CONFIG GET`, so `monitoring_active` reflects whether monitoring is *enabled* (a healthy, enabled-but-quiet server reports `monitoring_active: true` with no events). When the threshold is `0`, `monitoring_active` is `false` and `monitoring_threshold_ms` is `0`; the `report` field still carries Redis's raw `LATENCY DOCTOR` output (Redis itself does not emit a special "disabled" message).
 </Info>
 
 ## Verify
@@ -122,7 +138,7 @@ Detail: Connected to Redis 7.2.4 at localhost:6379; database 0.
 | --- | --- |
 | **Connection refused** | Verify the host/port, check firewalls, and ensure Redis is running and bound to a reachable interface (`protected-mode`). |
 | **Authentication failed (NOAUTH/WRONGPASS)** | Set `REDIS_PASSWORD`. For ACL users, also set `REDIS_USERNAME`. |
-| **No permissions (NOPERM)** | Grant the user read access to the `INFO`, `SLOWLOG`, and `SCAN`/`TTL`/`TYPE` commands. |
+| **No permissions (NOPERM)** | Grant the user read access to the diagnostic commands it needs: `INFO`, `CLIENT`, `SLOWLOG`, `LATENCY`, `TYPE`, `LLEN`/`LRANGE`, `SCAN`/`TTL` (and `CONFIG GET` for the latency-monitoring threshold). |
 | **TLS handshake failed** | Set `REDIS_SSL=true`; confirm the server has TLS enabled. |
 | **Empty replication / no replicas** | Expected for a standalone instance — the role is reported as `master` with no replicas. |
 

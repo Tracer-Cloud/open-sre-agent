@@ -16,7 +16,7 @@ pip install 'opensre[opensre-hub]'
 **Investigations** still hide the rubric from the agent when **`--evaluate` is off**: `make_initial_state` strips `scoring_points` from the in-graph `raw_alert` after load. With **`--evaluate`**, the rubric is copied to `opensre_eval_rubric`, then stripped from `raw_alert` for the agent, then the judge runs at the end.
 
 ```python
-from app.integrations.opensre import stream_opensre_query_alerts
+from integrations.opensre import stream_opensre_query_alerts
 
 for alert in stream_opensre_query_alerts(
     query_alerts_prefix="Market/cloudbed-1/query_alerts",
@@ -60,7 +60,7 @@ Download one alert JSON to a temp file:
 export OPENSRE_HF_DATASET_ID=tracer-cloud/opensre
 python - <<'PY'
 import json, tempfile, pathlib
-from app.integrations.opensre import stream_opensre_query_alerts
+from integrations.opensre import stream_opensre_query_alerts
 alert = next(stream_opensre_query_alerts(query_alerts_prefix="Market/cloudbed-1/query_alerts"))
 path = pathlib.Path(tempfile.gettempdir()) / "opensre-hub-alert.json"
 path.write_text(json.dumps(alert, indent=2))

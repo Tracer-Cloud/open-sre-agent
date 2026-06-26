@@ -3,7 +3,7 @@ title: "LLM Providers"
 description: "Supported LLM APIs and CLIs, environment variables, and how to switch between them."
 ---
 
-OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with per-provider API key and model overrides. Defaults are tracked in [`app/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/config.py) and routing lives in [`app/services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/llm_client.py).
+OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with per-provider API key and model overrides. Defaults are tracked in [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) and routing lives in [`services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/services/llm_client.py).
 
 ## Quick reference
 
@@ -175,7 +175,7 @@ No API key — auth uses the AWS credential chain (environment variables, shared
 - **Other Bedrock foundation models** (for example Mistral, Meta Llama, Amazon Titan IDs you enable in your account) use the **Bedrock Converse** API via `boto3`, so you can set `BEDROCK_REASONING_MODEL` to a non-Claude model ID when your use case requires it.
 - **Application inference profile** ARNs (`…:application-inference-profile/…`) do not encode the vendor in the ID; those are always sent through **Converse**, which works for any backing model in the profile.
 
-Defaults in `app/config.py` are US cross-region inference profile IDs for Anthropic Claude; override with IDs or ARNs that are **inference-access enabled** in your account and region.
+Defaults in `config/config.py` are US cross-region inference profile IDs for Anthropic Claude; override with IDs or ARNs that are **inference-access enabled** in your account and region.
 
 ### Ollama (local)
 
@@ -303,7 +303,7 @@ CLI adapters.
 > **Not to be confused with `groq`.** The `grok-cli` provider is xAI's Grok Build CLI. The
 > separate `groq` provider is the Groq HTTP API (a different company); the two are unrelated.
 
-See [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
+See [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) for the adapter pattern used to add new CLI providers.
 
 ## Reasoning effort (interactive shell)
 
@@ -322,7 +322,7 @@ Outside the REPL, optional defaults use the environment variable:
 export OPENSRE_REASONING_EFFORT=high   # low | medium | high | xhigh
 ```
 
-Session `/effort` overrides this for interactive runs. Implementation: [`app/llm_reasoning_effort.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/llm_reasoning_effort.py).
+Session `/effort` overrides this for interactive runs. Implementation: [`config/llm_reasoning_effort.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/llm_reasoning_effort.py).
 
 ## Provider fallback and diagnostics
 
@@ -354,11 +354,11 @@ To remove a fallback, either set the missing key for your configured provider or
 
 ## Switching providers at runtime
 
-OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `app.services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
+OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
 
 ## Where this lives in the code
 
-- Provider literals and defaults: [`app/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/config.py) (`LLMProvider`, `LLMSettings`).
-- Runtime routing: [`app/services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/llm_client.py) (`_create_llm_client`).
-- API-backed provider guide: [`app/services/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/services/AGENTS.md).
-- CLI-backed provider guide: [`app/integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/app/integrations/llm_cli/AGENTS.md).
+- Provider literals and defaults: [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) (`LLMProvider`, `LLMSettings`).
+- Runtime routing: [`services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/services/llm_client.py) (`_create_llm_client`).
+- API-backed provider guide: [`services/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/services/AGENTS.md).
+- CLI-backed provider guide: [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md).

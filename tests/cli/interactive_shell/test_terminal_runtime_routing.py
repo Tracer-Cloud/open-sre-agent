@@ -7,22 +7,25 @@ import io
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+    LlmActionPlanResult,
+)
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
     investigation_tool as _investigation_tool,
 )
-from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
     slash_tool as _slash_tool,
 )
-from app.cli.interactive_shell.routing.types import RouteKind
-from app.cli.interactive_shell.runtime import dispatch as loop_dispatch
-from app.cli.interactive_shell.runtime import execution as loop_execution
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.routing.types import RouteKind
+from cli.interactive_shell.runtime import dispatch as loop_dispatch
+from cli.interactive_shell.runtime import execution as loop_execution
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 def test_dispatch_one_turn_typoed_bare_alias_dispatches_canonical_slash(
@@ -73,9 +76,23 @@ def test_dispatch_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/mcp", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/model", session) is True
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/theme", session) is True
 
     assert loop_dispatch.dispatch_needs_exclusive_stdin("/integrations list", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/theme blue", session) is True
     assert loop_dispatch.dispatch_needs_exclusive_stdin("integrations list", session) is False
+
+
+def test_dispatch_needs_exclusive_stdin_false_for_investigate_with_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued menu selections run as ``/investigate <target>`` without blocking the prompt."""
+    monkeypatch.setattr(loop_dispatch, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate generic", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("/investigate alert.json", session) is False
+    assert loop_dispatch.dispatch_needs_exclusive_stdin("investigate generic", session) is False
 
 
 def test_dispatch_needs_exclusive_stdin_for_exit_commands(
@@ -250,15 +267,15 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        loop_execution._agent_actions,
-        "_plan_actions",
-        lambda _message, _session: (
-            [
+        "cli.interactive_shell.routing.handle_message_with_agent.orchestration"
+        ".terminal_actions.planning.plan_actions_with_llm_result",
+        lambda _message, *, session=None: LlmActionPlanResult(  # noqa: ARG005
+            actions=(
                 PlannedAction(kind="slash", content="/remote", position=0),
                 PlannedAction(kind="investigation", content="hello world", position=1),
-            ],
-            False,
-            False,
+            ),
+            has_unhandled_clause=False,
+            policy_trace=("fake_planner",),
         ),
     )
     monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)

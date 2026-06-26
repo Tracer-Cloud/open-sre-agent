@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from app.cli.commands import doctor
+from cli.commands import doctor
 
 
 def test_check_python_version_ok(monkeypatch) -> None:
@@ -62,7 +62,7 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
 def test_check_llm_provider_not_set(monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
@@ -73,7 +73,7 @@ def test_check_llm_provider_not_set(monkeypatch) -> None:
 def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
+        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
@@ -84,7 +84,7 @@ def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
 def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
     monkeypatch.setattr(
-        "app.config.get_llm_provider_api_key",
+        "config.config.get_llm_provider_api_key",
         lambda _provider: ("GEMINI_API_KEY", "keyring-backed-key"),
     )
 
@@ -115,7 +115,7 @@ def test_check_llm_provider_claude_code_ready(monkeypatch) -> None:
         detail="Authenticated via Claude subscription.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "claude-code" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -133,7 +133,7 @@ def test_check_llm_provider_claude_code_auth_unclear(monkeypatch) -> None:
         detail="claude auth status failed: unknown command",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "claude-code" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -152,7 +152,7 @@ def test_check_llm_provider_cli_branch_follows_registry_not_hardcoded_ids(monkey
         detail="CLI OK.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "hypothetical-cli" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -170,7 +170,7 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
         detail="Authenticated via Gemini CLI.",
     )
     monkeypatch.setattr(
-        "app.integrations.llm_cli.registry.get_cli_provider_registration",
+        "integrations.llm_cli.registry.get_cli_provider_registration",
         lambda provider: reg if provider == "gemini-cli" else None,
     )
     ok, detail = doctor._check_llm_provider()
@@ -180,10 +180,8 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
 
 def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
-    monkeypatch.setattr(
-        "app.integrations.store.list_integrations", lambda: [{"service": "grafana"}]
-    )
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.list_integrations", lambda: [{"service": "grafana"}])
 
     ok, detail = doctor._check_integrations()
 
@@ -195,8 +193,8 @@ def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
 def test_check_integrations_empty_store(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
     store_path.write_text('{"version": 2, "integrations": []}\n', encoding="utf-8")
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
-    monkeypatch.setattr("app.integrations.store.list_integrations", lambda: [])
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.list_integrations", lambda: [])
 
     ok, detail = doctor._check_integrations()
 
@@ -207,9 +205,9 @@ def test_check_integrations_empty_store(monkeypatch, tmp_path) -> None:
 def test_check_integrations_reports_configured_services(monkeypatch, tmp_path) -> None:
     store_path = tmp_path / "integrations.json"
     store_path.write_text('{"version": 2, "integrations": []}\n', encoding="utf-8")
-    monkeypatch.setattr("app.integrations.store.STORE_PATH", store_path)
+    monkeypatch.setattr("integrations.store.STORE_PATH", store_path)
     monkeypatch.setattr(
-        "app.integrations.store.list_integrations",
+        "integrations.store.list_integrations",
         lambda: [{"service": "grafana"}, {"service": "datadog"}],
     )
 
@@ -223,11 +221,11 @@ def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch
     fetch_latest_version = MagicMock(return_value="9.9.9")
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
+        "cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
         lambda c: f"{c} (editable install; skipped comparing to latest release)",
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
+        "cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
     )
 
     ok, detail = doctor._check_version_freshness()
@@ -242,14 +240,14 @@ def test_check_version_freshness_up_to_date(monkeypatch) -> None:
     is_update_available = MagicMock(return_value=False)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
+        "cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
         lambda _c: None,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
+        "cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._is_update_available", is_update_available
+        "cli.interactive_shell.data_store.update._is_update_available", is_update_available
     )
 
     ok, detail = doctor._check_version_freshness()
@@ -265,14 +263,14 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
     is_update_available = MagicMock(return_value=True)
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
+        "cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
         lambda _c: None,
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
+        "cli.interactive_shell.data_store.update._fetch_latest_version", fetch_latest_version
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update._is_update_available", is_update_available
+        "cli.interactive_shell.data_store.update._is_update_available", is_update_available
     )
 
     ok, detail = doctor._check_version_freshness()
@@ -287,14 +285,14 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
 def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
     monkeypatch.setattr(doctor, "get_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "app.cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
+        "cli.interactive_shell.data_store.update.development_install_doctor_version_detail",
         lambda _c: None,
     )
 
     def _raise() -> str:
         raise RuntimeError("rate limited")
 
-    monkeypatch.setattr("app.cli.interactive_shell.data_store.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("cli.interactive_shell.data_store.update._fetch_latest_version", _raise)
 
     ok, detail = doctor._check_version_freshness()
 

@@ -76,7 +76,7 @@ calls the investigation pipeline (gated on
 - Parent issue: [#1484](https://github.com/Tracer-Cloud/opensre/issues/1484)
 - Existing patterns: `tests/e2e/crashloop/test_local.py`,
   `tests/e2e/upstream_lambda/test_agent_e2e.py`
-- OpenClaw integration code: `app/integrations/openclaw.py`
+- OpenClaw integration code: `integrations/openclaw.py`
 - Existing unit coverage (do not duplicate):
   `tests/test_openclaw_integration.py`
 - Test conventions: `tests/AGENTS.md`

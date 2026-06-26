@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.utils.cfg_helpers import CfgHelpers
+from config.helpers import CfgHelpers
 
 
 def test_get_clean_env_value_strips_whitespace(monkeypatch) -> None:

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from app.integrations.models import CoralogixIntegrationConfig
-from app.services.coralogix.client import (
+from integrations.models import CoralogixIntegrationConfig
+from services.coralogix.client import (
     CoralogixClient,
     build_coralogix_logs_query,
 )
@@ -73,7 +73,7 @@ def test_query_logs_success_parses_ndjson_rows(client: CoralogixClient) -> None:
     mock_response = MagicMock(text=_make_ndjson_success_line())
     mock_response.raise_for_status = MagicMock()
 
-    with patch("app.services.coralogix.client.httpx.post", return_value=mock_response) as mock_post:
+    with patch("services.coralogix.client.httpx.post", return_value=mock_response) as mock_post:
         result = client.query_logs("source logs")
         mock_post.assert_called_once()
 
@@ -94,7 +94,7 @@ def test_query_logs_http_error_returns_failure_envelope(client: CoralogixClient)
         response=mock_response,
     )
 
-    with patch("app.services.coralogix.client.httpx.post", return_value=mock_response):
+    with patch("services.coralogix.client.httpx.post", return_value=mock_response):
         result = client.query_logs("source logs")
 
     assert result["success"] is False
@@ -105,7 +105,7 @@ def test_query_logs_empty_response_returns_zero_logs(client: CoralogixClient) ->
     mock_response = MagicMock(text="")
     mock_response.raise_for_status = MagicMock()
 
-    with patch("app.services.coralogix.client.httpx.post", return_value=mock_response):
+    with patch("services.coralogix.client.httpx.post", return_value=mock_response):
         result = client.query_logs("source logs")
 
     assert result["success"] is True
@@ -117,7 +117,7 @@ def test_query_logs_invalid_json_lines_silently_skipped(client: CoralogixClient)
     mock_response = MagicMock(text="not json\n{bad json\n")
     mock_response.raise_for_status = MagicMock()
 
-    with patch("app.services.coralogix.client.httpx.post", return_value=mock_response):
+    with patch("services.coralogix.client.httpx.post", return_value=mock_response):
         result = client.query_logs("source logs")
 
     assert result["success"] is True
@@ -129,7 +129,7 @@ def test_query_logs_network_exception_returns_failure_envelope(
     client: CoralogixClient,
 ) -> None:
     with patch(
-        "app.services.coralogix.client.httpx.post",
+        "services.coralogix.client.httpx.post",
         side_effect=httpx.RequestError("connection refused"),
     ):
         result = client.query_logs("source logs")
@@ -247,7 +247,7 @@ def test_parse_user_data_counts_successes_and_failures_symmetrically(
     100 good userData blobs + 5 broken ones would compute as 5/5 = 100% skip
     instead of 5/105 = ~5%, firing a false alert on every response.
     """
-    from app.services._streaming import StreamingParseStats
+    from services._streaming import StreamingParseStats
 
     stats = StreamingParseStats()
     # A JSON-string userData that parses cleanly.

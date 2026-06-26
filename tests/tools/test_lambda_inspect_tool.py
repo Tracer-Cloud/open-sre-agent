@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.LambdaInspectTool import inspect_lambda_function
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.LambdaInspectTool import inspect_lambda_function
 
 
 class TestLambdaInspectToolContract(BaseToolContract):
@@ -49,7 +49,7 @@ def test_run_happy_path_no_code() -> None:
         "layers": [],
     }
     with patch(
-        "app.tools.LambdaInspectTool.get_function_configuration",
+        "tools.LambdaInspectTool.get_function_configuration",
         return_value={"success": True, "data": fake_config},
     ):
         result = inspect_lambda_function(function_name="my-fn", include_code=False)
@@ -76,11 +76,11 @@ def test_run_happy_path_with_code() -> None:
     fake_code = {"file_count": 2, "files": {"handler.py": "def main(): pass"}}
     with (
         patch(
-            "app.tools.LambdaInspectTool.get_function_configuration",
+            "tools.LambdaInspectTool.get_function_configuration",
             return_value={"success": True, "data": fake_config},
         ),
         patch(
-            "app.tools.LambdaInspectTool.get_function_code",
+            "tools.LambdaInspectTool.get_function_code",
             return_value={"success": True, "data": fake_code},
         ),
     ):
@@ -91,7 +91,7 @@ def test_run_happy_path_with_code() -> None:
 
 def test_run_config_error() -> None:
     with patch(
-        "app.tools.LambdaInspectTool.get_function_configuration",
+        "tools.LambdaInspectTool.get_function_configuration",
         return_value={"success": False, "error": "Not found"},
     ):
         result = inspect_lambda_function(function_name="unknown-fn")

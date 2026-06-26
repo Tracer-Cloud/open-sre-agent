@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.masking.policy import ALL_KINDS, MaskingPolicy
 
 
 def test_default_policy_is_disabled() -> None:

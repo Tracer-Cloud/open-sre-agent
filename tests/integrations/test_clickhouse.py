@@ -1,6 +1,6 @@
 """Unit tests for the ClickHouse integration module."""
 
-from app.integrations.clickhouse import (
+from integrations.clickhouse import (
     ClickHouseConfig,
     ClickHouseValidationResult,
     build_clickhouse_config,

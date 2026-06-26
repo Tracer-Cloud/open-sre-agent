@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.GrafanaLogsTool import query_grafana_logs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GrafanaLogsTool import query_grafana_logs
 
 
 class TestGrafanaLogsToolContract(BaseToolContract):
@@ -21,6 +21,23 @@ def test_is_available_requires_grafana_creds() -> None:
     assert rt.is_available({"grafana_local": {"endpoint": "http://localhost:3000"}}) is True
     assert rt.is_available({"grafana": {}}) is False
     assert rt.is_available({}) is False
+
+
+def test_is_available_accepts_classified_grafana_model() -> None:
+    from integrations.config_models import GrafanaIntegrationConfig
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    assert (
+        rt.is_available(
+            {
+                "grafana": GrafanaIntegrationConfig(
+                    endpoint="https://tracerbio.grafana.net",
+                    api_key="glsa_test",
+                )
+            }
+        )
+        is True
+    )
 
 
 def test_extract_params_maps_fields() -> None:
@@ -47,6 +64,22 @@ def test_extract_params_accepts_catalog_grafana_shape() -> None:
     assert params["grafana_api_key"] == "glsa_test"
 
 
+def test_extract_params_accepts_classified_grafana_model() -> None:
+    from integrations.config_models import GrafanaIntegrationConfig
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    params = rt.extract_params(
+        {
+            "grafana": GrafanaIntegrationConfig(
+                endpoint="https://tracerbio.grafana.net",
+                api_key="glsa_test",
+            )
+        }
+    )
+    assert params["grafana_endpoint"] == "https://tracerbio.grafana.net"
+    assert params["grafana_api_key"] == "glsa_test"
+
+
 def test_run_with_backend_returns_logs() -> None:
     mock_backend = MagicMock()
     mock_backend.query_logs.return_value = {
@@ -69,7 +102,7 @@ def test_run_returns_unavailable_when_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -82,7 +115,7 @@ def test_run_no_loki_datasource() -> None:
     mock_client.is_configured = True
     mock_client.loki_datasource_uid = None
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -102,7 +135,7 @@ def test_run_happy_path() -> None:
         "total_logs": 2,
     }
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc", grafana_endpoint="https://grafana.example.com"
@@ -123,7 +156,7 @@ def test_run_fallback_to_pipeline_name() -> None:
         {"success": True, "logs": [{"message": "pipeline log"}], "total_logs": 1},
     ]
     with patch(
-        "app.tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials", return_value=mock_client
     ):
         result = query_grafana_logs(
             service_name="svc",

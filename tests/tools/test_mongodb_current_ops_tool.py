@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.MongoDBCurrentOpsTool import get_mongodb_current_ops
 from tests.tools.conftest import BaseToolContract
+from tools.MongoDBCurrentOpsTool import get_mongodb_current_ops
 
 
 class TestMongoDBCurrentOpsToolContract(BaseToolContract):
@@ -21,7 +21,7 @@ def test_metadata() -> None:
 
 def test_run_happy_path() -> None:
     fake_result = {"ops": [{"opid": 1, "secs_running": 5000, "ns": "mydb.users"}]}
-    with patch("app.tools.MongoDBCurrentOpsTool.get_current_ops", return_value=fake_result):
+    with patch("tools.MongoDBCurrentOpsTool.get_current_ops", return_value=fake_result):
         result = get_mongodb_current_ops(
             connection_string="mongodb://localhost:27017",
             threshold_ms=1000,
@@ -31,7 +31,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.MongoDBCurrentOpsTool.get_current_ops", return_value={"error": "auth failed"}
+        "tools.MongoDBCurrentOpsTool.get_current_ops", return_value={"error": "auth failed"}
     ):
         result = get_mongodb_current_ops(connection_string="mongodb://invalid")
     assert "error" in result

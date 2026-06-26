@@ -1,11 +1,11 @@
-"""Tests for app.integrations._validation_helpers."""
+"""Tests for integrations._validation_helpers."""
 
 from __future__ import annotations
 
 import logging
 from unittest.mock import MagicMock, patch
 
-from app.integrations._validation_helpers import report_validation_failure
+from integrations._validation_helpers import report_validation_failure
 
 
 def _mock_logger() -> MagicMock:
@@ -16,7 +16,7 @@ class TestReportValidationFailure:
     def test_default_severity_is_warning(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("boom")
-        with patch("app.utils.errors.capture_exception"):
+        with patch("platform.observability.errors.capture_exception"):
             report_validation_failure(
                 exc,
                 logger=mock_log,
@@ -28,7 +28,7 @@ class TestReportValidationFailure:
 
     def test_message_includes_integration_and_method(self) -> None:
         mock_log = _mock_logger()
-        with patch("app.utils.errors.capture_exception"):
+        with patch("platform.observability.errors.capture_exception"):
             report_validation_failure(
                 RuntimeError("x"),
                 logger=mock_log,
@@ -41,7 +41,7 @@ class TestReportValidationFailure:
     def test_tags_have_expected_shape(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("boom")
-        with patch("app.utils.errors.capture_exception") as mock_cap:
+        with patch("platform.observability.errors.capture_exception") as mock_cap:
             report_validation_failure(
                 exc,
                 logger=mock_log,
@@ -56,7 +56,7 @@ class TestReportValidationFailure:
 
     def test_extras_pass_through_unprefixed(self) -> None:
         mock_log = _mock_logger()
-        with patch("app.utils.errors.capture_exception") as mock_cap:
+        with patch("platform.observability.errors.capture_exception") as mock_cap:
             report_validation_failure(
                 RuntimeError("x"),
                 logger=mock_log,
@@ -73,7 +73,7 @@ class TestReportValidationFailure:
 
     def test_severity_override_routes_to_logger(self) -> None:
         mock_log = _mock_logger()
-        with patch("app.utils.errors.capture_exception"):
+        with patch("platform.observability.errors.capture_exception"):
             report_validation_failure(
                 RuntimeError("x"),
                 logger=mock_log,
@@ -87,7 +87,7 @@ class TestReportValidationFailure:
     def test_default_suppresses_terminal_traceback(self) -> None:
         """Validator failures must not dump a stack trace into the REPL by default."""
         mock_log = _mock_logger()
-        with patch("app.utils.errors.capture_exception"):
+        with patch("platform.observability.errors.capture_exception"):
             report_validation_failure(
                 RuntimeError("boom"),
                 logger=mock_log,
@@ -99,7 +99,7 @@ class TestReportValidationFailure:
     def test_traceback_included_when_explicitly_requested(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("boom")
-        with patch("app.utils.errors.capture_exception"):
+        with patch("platform.observability.errors.capture_exception"):
             report_validation_failure(
                 exc,
                 logger=mock_log,
@@ -112,7 +112,7 @@ class TestReportValidationFailure:
     def test_captures_to_sentry_exactly_once(self) -> None:
         mock_log = _mock_logger()
         exc = RuntimeError("once")
-        with patch("app.utils.errors.capture_exception") as mock_cap:
+        with patch("platform.observability.errors.capture_exception") as mock_cap:
             report_validation_failure(
                 exc,
                 logger=mock_log,

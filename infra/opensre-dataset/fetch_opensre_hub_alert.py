@@ -76,7 +76,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from app.integrations.opensre.hf_remote import stream_opensre_query_alerts
+    from integrations.opensre.hf_remote import stream_opensre_query_alerts
 
     stream = stream_opensre_query_alerts(
         query_alerts_prefix=args.prefix,

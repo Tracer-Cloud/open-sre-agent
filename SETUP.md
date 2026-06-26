@@ -32,7 +32,7 @@ Without Make (equivalent to `make install`):
 
 ```bash
 uv sync --frozen --extra dev
-uv run python -m app.analytics.install
+uv run python -m platform.analytics.install
 ```
 
 4. Verify:
@@ -92,7 +92,7 @@ Run equivalents from the repo root (same shell where `uv` is on `PATH`). Prefer 
 
 ```bash
 uv sync --frozen --extra dev
-uv run python -m app.analytics.install
+uv run python -m platform.analytics.install
 
 uv run ruff check app/ tests/
 uv run ruff format --check app/ tests/

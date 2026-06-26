@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.GrafanaAnnotationsTool import (
+from tests.tools.conftest import BaseToolContract, mock_agent_state
+from tools.GrafanaAnnotationsTool import (
     _iso_to_epoch_ms,
     query_grafana_annotations,
 )
-from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
 class TestGrafanaAnnotationsToolContract(BaseToolContract):
@@ -58,9 +58,7 @@ def test_run_with_backend_maps_wire_shape() -> None:
 def test_run_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_annotations(grafana_endpoint="http://grafana")
     assert result["available"] is False
     assert result["annotations"] == []
@@ -72,9 +70,7 @@ def test_run_happy_path_defaults_now_window() -> None:
     mock_client.query_annotations.return_value = [
         {"time": "2026-05-30T14:41:09Z", "text": "deploy", "tags": ["deployment"]}
     ]
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_annotations(grafana_endpoint="http://grafana", time_range_minutes=60)
     assert result["available"] is True
     assert result["total"] == 1
@@ -88,9 +84,7 @@ def test_run_with_explicit_from_to_override() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_annotations.return_value = []
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_annotations(
             grafana_endpoint="http://grafana",
             **{"from": "2026-05-30T14:00:00Z", "to": "2026-05-30T15:00:00Z"},
@@ -110,9 +104,7 @@ def test_run_forwards_tags_filter() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_annotations.return_value = []
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_annotations(grafana_endpoint="http://grafana", tags=["deployment"])
     assert result["tags_filter"] == ["deployment"]
     assert mock_client.query_annotations.call_args.kwargs["tags"] == ["deployment"]
@@ -121,9 +113,7 @@ def test_run_forwards_tags_filter() -> None:
 def test_run_invalid_timestamp_returns_error() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_annotations(
             grafana_endpoint="http://grafana", **{"from": "not-a-date"}
         )
@@ -172,7 +162,7 @@ def test_run_forwards_basic_auth_to_client() -> None:
     mock_client.is_configured = True
     mock_client.query_annotations.return_value = []
     with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
+        "tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
     ) as resolve:
         query_grafana_annotations(
             grafana_endpoint="http://grafana",
@@ -187,9 +177,7 @@ def test_run_to_only_anchors_window_before_to() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_annotations.return_value = []
-    with patch(
-        "app.tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client
-    ):
+    with patch("tools.GrafanaAnnotationsTool._resolve_grafana_client", return_value=mock_client):
         query_grafana_annotations(
             grafana_endpoint="http://grafana",
             time_range_minutes=30,

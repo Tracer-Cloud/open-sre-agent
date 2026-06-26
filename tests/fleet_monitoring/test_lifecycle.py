@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from app.fleet_monitoring.lifecycle import TerminateResult, terminate
+from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
 
 # Windows ``os.kill`` / ``signal.SIGTERM`` delivery to a Python ``Popen`` child
 # does not match POSIX (handlers may not run; escalation differs). These tests

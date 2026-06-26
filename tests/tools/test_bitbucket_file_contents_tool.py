@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.tools.BitbucketFileContentsTool import get_bitbucket_file_contents
 from tests.tools.conftest import BaseToolContract
+from tools.BitbucketFileContentsTool import get_bitbucket_file_contents
 
 
 def _registered_tool() -> Any:
@@ -117,7 +117,7 @@ def test_run_happy_path() -> None:
     }
 
     with patch(
-        "app.tools.BitbucketFileContentsTool.get_file_contents",
+        "tools.BitbucketFileContentsTool.get_file_contents",
         return_value=mock_result,
     ) as mocked_get_file_contents:
         result = get_bitbucket_file_contents(
@@ -144,7 +144,7 @@ def test_run_happy_path() -> None:
 
 def test_run_returns_unavailable_without_credentials() -> None:
     # Prevent loading real env config in CI/local runs
-    with patch("app.tools.BitbucketSearchCodeTool.bitbucket_config_from_env", return_value=None):
+    with patch("tools.BitbucketSearchCodeTool.bitbucket_config_from_env", return_value=None):
         result = get_bitbucket_file_contents(repo_slug="backend-service", path="src/main.py")
 
     assert result["available"] is False

@@ -9,18 +9,19 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.command_registry import agents as agents_mod
-from app.cli.interactive_shell.command_registry.agents import _slice_to_utf8_boundary
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.fleet_monitoring import config as config_mod
-from app.fleet_monitoring.conflicts import (
+from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from cli.interactive_shell.command_registry.agents import core as agents_core
+from cli.interactive_shell.command_registry.agents import trace as agents_trace
+from cli.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
+from cli.interactive_shell.runtime.session import ReplSession
+from tools.fleet_monitoring import config as config_mod
+from tools.fleet_monitoring.conflicts import (
     DEFAULT_WINDOW_SECONDS,
     FileWriteConflict,
     render_conflicts,
 )
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
-from app.fleet_monitoring.tail import AttachUnsupported, TailBuffer
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.fleet_monitoring.tail import AttachUnsupported, TailBuffer
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -36,9 +37,10 @@ def _isolate_registry(monkeypatch: pytest.MonkeyPatch, path: Path) -> AgentRegis
     """
     registry = AgentRegistry(path=path)
 
-    monkeypatch.setattr(agents_mod, "AgentRegistry", lambda: AgentRegistry(path=path))
+    monkeypatch.setattr(agents_core, "AgentRegistry", lambda: AgentRegistry(path=path))
+    monkeypatch.setattr(agents_trace, "AgentRegistry", lambda: AgentRegistry(path=path))
     monkeypatch.setattr(
-        agents_mod,
+        agents_core,
         "registered_and_discovered_agents",
         lambda _registry=None: AgentRegistry(path=path).list(),
     )
@@ -65,8 +67,8 @@ def _clear_sampler_module_state() -> None:
     probe snapshots, the token rate tracker, and the per-tick caches
     all live as module globals and can leak across test files.
     """
-    from app.fleet_monitoring import sampler as sampler_mod
-    from app.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
+    from tools.fleet_monitoring import sampler as sampler_mod
+    from tools.fleet_monitoring.token_rate import TOKEN_RATE_TRACKER
 
     sampler_mod._latest.clear()
     sampler_mod._TickCache.registry_snapshot = {}
@@ -140,10 +142,8 @@ class TestAgentsDispatch:
         assert "9133" in out
 
     def test_no_subcommand_renders_discovered_agents(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from app.cli.interactive_shell.command_registry import agents as agents_mod
-
         monkeypatch.setattr(
-            agents_mod,
+            agents_core,
             "registered_and_discovered_agents",
             lambda _registry=None: [
                 AgentRecord(
@@ -524,7 +524,7 @@ class TestAgentsTrace:
         def _refuse(_pid: int) -> _FakeSession:
             raise AttachUnsupported("stdout is on a terminal; live tail not supported")
 
-        monkeypatch.setattr(agents_mod, "attach", _refuse)
+        monkeypatch.setattr(agents_trace, "attach", _refuse)
 
         sess_obj = ReplSession()
         console, buf = _capture()
@@ -539,7 +539,7 @@ class TestAgentsTrace:
     ) -> None:
         # Header says "pid <n>" when the pid is not in the registry.
         _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
-        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(chunks=[]))
+        monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(chunks=[]))
 
         sess_obj = ReplSession()
         console, buf = _capture()
@@ -553,7 +553,7 @@ class TestAgentsTrace:
     ) -> None:
         registry = _isolate_registry(monkeypatch, tmp_path / "agents.jsonl")
         registry.register(AgentRecord(name="claude-code", pid=8421, command="claude"))
-        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(chunks=[]))
+        monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(chunks=[]))
 
         sess_obj = ReplSession()
         console, buf = _capture()
@@ -567,7 +567,7 @@ class TestAgentsTrace:
         # to the buffer and feed Live.update; the rendered text should
         # land in the captured console output.
         monkeypatch.setattr(
-            agents_mod,
+            agents_trace,
             "attach",
             lambda _pid: _FakeSession(chunks=[b"hello ", b"world\n"]),
         )
@@ -584,7 +584,7 @@ class TestAgentsTrace:
         # ``dispatch_slash`` — the REPL should return to its prompt.
         # This is the kubectl-logs-style UX, deliberately different from
         # ``stream_to_console``'s double-press pattern.
-        monkeypatch.setattr(agents_mod, "attach", lambda _pid: _FakeSession(raise_ki=True))
+        monkeypatch.setattr(agents_trace, "attach", lambda _pid: _FakeSession(raise_ki=True))
 
         sess_obj = ReplSession()
         console, buf = _capture()
@@ -600,7 +600,7 @@ class TestAgentsTrace:
         # of whether the iteration completed naturally or was stopped
         # by a Ctrl+C.
         fake = _FakeSession(raise_ki=True)
-        monkeypatch.setattr(agents_mod, "attach", lambda _pid: fake)
+        monkeypatch.setattr(agents_trace, "attach", lambda _pid: fake)
 
         sess_obj = ReplSession()
         console, _ = _capture()
@@ -614,7 +614,7 @@ class TestAgentsTrace:
         # surface that explicitly so an unattended trace doesn't look
         # the same as a Ctrl+C abort.
         monkeypatch.setattr(
-            agents_mod,
+            agents_trace,
             "attach",
             lambda _pid: _FakeSession(chunks=[b"goodbye\n"], producer_exited=True),
         )
@@ -631,7 +631,7 @@ class TestAgentsTrace:
         # Producer is alive, user pressed Ctrl+C: only "trace ended"
         # should appear; "process exited" would be misleading.
         monkeypatch.setattr(
-            agents_mod,
+            agents_trace,
             "attach",
             lambda _pid: _FakeSession(raise_ki=True, producer_exited=False),
         )

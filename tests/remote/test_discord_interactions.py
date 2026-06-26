@@ -1,4 +1,4 @@
-"""Tests for Discord interaction endpoint in app/remote/server.py."""
+"""Tests for Discord interaction endpoint in deployment/remote/server.py."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ _INTERACTION_TOKEN = "test-interaction-token"
 
 def _make_client() -> TestClient:
     """Import app lazily so env patching applied before module-level reads."""
-    from app.remote.server import app
+    from deployment.remote.server import app
 
     return TestClient(app, raise_server_exceptions=False)
 
@@ -45,7 +45,7 @@ def _sign_body(
 
 
 def test_discord_interactions_rejects_missing_public_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.remote.server._DISCORD_PUBLIC_KEY", "")
+    monkeypatch.setattr("deployment.remote.server._DISCORD_PUBLIC_KEY", "")
     client = _make_client()
 
     body = json.dumps({"type": 1}).encode()
@@ -65,7 +65,7 @@ def test_discord_interactions_rejects_missing_public_key(monkeypatch: pytest.Mon
 def test_discord_interactions_rejects_bad_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     signing_key = SigningKey.generate()
     valid_public_key = signing_key.verify_key.encode().hex()
-    monkeypatch.setattr("app.remote.server._DISCORD_PUBLIC_KEY", valid_public_key)
+    monkeypatch.setattr("deployment.remote.server._DISCORD_PUBLIC_KEY", valid_public_key)
     client = _make_client()
 
     body = json.dumps({"type": 1}).encode()
@@ -90,7 +90,7 @@ def test_discord_interactions_rejects_bad_signature(monkeypatch: pytest.MonkeyPa
 def test_discord_interactions_ping_returns_type_1(monkeypatch: pytest.MonkeyPatch) -> None:
     signing_key = SigningKey.generate()
     monkeypatch.setattr(
-        "app.remote.server._DISCORD_PUBLIC_KEY",
+        "deployment.remote.server._DISCORD_PUBLIC_KEY",
         signing_key.verify_key.encode().hex(),
     )
     client = _make_client()
@@ -108,10 +108,10 @@ def test_discord_interactions_do_not_require_api_key_when_remote_auth_configured
 ) -> None:
     signing_key = SigningKey.generate()
     monkeypatch.setattr(
-        "app.remote.server._DISCORD_PUBLIC_KEY",
+        "deployment.remote.server._DISCORD_PUBLIC_KEY",
         signing_key.verify_key.encode().hex(),
     )
-    monkeypatch.setattr("app.remote.server._AUTH_KEY", "secret-key")
+    monkeypatch.setattr("deployment.remote.server._AUTH_KEY", "secret-key")
     client = _make_client()
 
     body = json.dumps({"type": 1}).encode()
@@ -132,7 +132,7 @@ def test_discord_interactions_command_returns_deferred_type_5(
 ) -> None:
     signing_key = SigningKey.generate()
     monkeypatch.setattr(
-        "app.remote.server._DISCORD_PUBLIC_KEY",
+        "deployment.remote.server._DISCORD_PUBLIC_KEY",
         signing_key.verify_key.encode().hex(),
     )
     client = _make_client()
@@ -147,7 +147,7 @@ def test_discord_interactions_command_returns_deferred_type_5(
     body = json.dumps(payload).encode()
     headers = _sign_body(signing_key, body)
 
-    with patch("app.remote.server._run_discord_investigation", new_callable=AsyncMock):
+    with patch("deployment.remote.server._run_discord_investigation", new_callable=AsyncMock):
         resp = client.post("/discord/interactions", content=body, headers=headers)
 
     assert resp.status_code == 200
@@ -157,7 +157,7 @@ def test_discord_interactions_command_returns_deferred_type_5(
 def test_discord_interactions_unsupported_type_returns_400(monkeypatch: pytest.MonkeyPatch) -> None:
     signing_key = SigningKey.generate()
     monkeypatch.setattr(
-        "app.remote.server._DISCORD_PUBLIC_KEY",
+        "deployment.remote.server._DISCORD_PUBLIC_KEY",
         signing_key.verify_key.encode().hex(),
     )
     client = _make_client()
@@ -179,7 +179,7 @@ def test_discord_interactions_unsupported_type_returns_400(monkeypatch: pytest.M
 async def test_run_discord_investigation_posts_followup_on_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.remote.server import DiscordInteraction, _run_discord_investigation
+    from deployment.remote.server import DiscordInteraction, _run_discord_investigation
 
     interaction = DiscordInteraction(
         type=2,
@@ -205,8 +205,8 @@ async def test_run_discord_investigation_posts_followup_on_success(
     ) -> None:
         posted_followups.append({"app_id": app_id, "token": tok, "embeds": embeds})
 
-    monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
-    monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr("deployment.remote.server._execute_investigation", _fake_execute)
+    monkeypatch.setattr("deployment.remote.server._discord_post_followup", _fake_followup)
 
     await _run_discord_investigation(interaction)
 
@@ -221,7 +221,7 @@ async def test_run_discord_investigation_posts_followup_on_success(
 async def test_run_discord_investigation_parses_plain_text_alert(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.remote.server import DiscordInteraction, _run_discord_investigation
+    from deployment.remote.server import DiscordInteraction, _run_discord_investigation
 
     interaction = DiscordInteraction(
         type=2,
@@ -241,8 +241,8 @@ async def test_run_discord_investigation_parses_plain_text_alert(
             "",
         )
 
-    monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
-    monkeypatch.setattr("app.remote.server._discord_post_followup", lambda *_a, **_kw: None)
+    monkeypatch.setattr("deployment.remote.server._execute_investigation", _fake_execute)
+    monkeypatch.setattr("deployment.remote.server._discord_post_followup", lambda *_a, **_kw: None)
 
     await _run_discord_investigation(interaction)
 
@@ -256,7 +256,7 @@ async def test_run_discord_investigation_parses_plain_text_alert(
 async def test_run_discord_investigation_posts_failure_message_on_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.remote.server import DiscordInteraction, _run_discord_investigation
+    from deployment.remote.server import DiscordInteraction, _run_discord_investigation
 
     interaction = DiscordInteraction(
         type=2,
@@ -273,8 +273,8 @@ async def test_run_discord_investigation_posts_failure_message_on_exception(
     def _fake_followup(_app_id: str, _token: str, *, content: str = "", **_kw: Any) -> None:
         failure_messages.append(content)
 
-    monkeypatch.setattr("app.remote.server._execute_investigation", _raise)
-    monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr("deployment.remote.server._execute_investigation", _raise)
+    monkeypatch.setattr("deployment.remote.server._discord_post_followup", _fake_followup)
 
     await _run_discord_investigation(interaction)
 
@@ -286,7 +286,7 @@ async def test_run_discord_investigation_posts_failure_message_on_exception(
 async def test_run_discord_investigation_noise_uses_grey_color(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.remote.server import DiscordInteraction, _run_discord_investigation
+    from deployment.remote.server import DiscordInteraction, _run_discord_investigation
 
     interaction = DiscordInteraction(
         type=2,
@@ -306,8 +306,8 @@ async def test_run_discord_investigation_noise_uses_grey_color(
         if embeds:
             posted_embeds.extend(embeds)
 
-    monkeypatch.setattr("app.remote.server._execute_investigation", _fake_execute)
-    monkeypatch.setattr("app.remote.server._discord_post_followup", _fake_followup)
+    monkeypatch.setattr("deployment.remote.server._execute_investigation", _fake_execute)
+    monkeypatch.setattr("deployment.remote.server._discord_post_followup", _fake_followup)
 
     await _run_discord_investigation(interaction)
 
@@ -320,7 +320,7 @@ async def test_run_discord_investigation_noise_uses_grey_color(
 
 
 def test_discord_post_followup_sends_embeds(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.remote.server import _discord_post_followup
+    from deployment.remote.server import _discord_post_followup
 
     captured: dict[str, Any] = {}
 
@@ -341,7 +341,7 @@ def test_discord_post_followup_sends_embeds(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_discord_post_followup_warns_on_non_200(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.remote.server import _discord_post_followup
+    from deployment.remote.server import _discord_post_followup
 
     def _fake_post(*_a: Any, **_kw: Any) -> MagicMock:
         resp = MagicMock()

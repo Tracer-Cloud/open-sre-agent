@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.config_models import PagerDutyIntegrationConfig
+from integrations.config_models import PagerDutyIntegrationConfig
 
 
 class TestPagerDutyIntegrationConfig:
@@ -43,7 +43,7 @@ class TestCatalogClassify:
     """Tests for _classify_service_instance handling of 'pagerduty' key."""
 
     def test_classify_valid_pagerduty(self) -> None:
-        from app.integrations._catalog_impl import _classify_service_instance
+        from integrations._catalog_impl import _classify_service_instance
 
         config, source = _classify_service_instance(
             "pagerduty",
@@ -52,10 +52,10 @@ class TestCatalogClassify:
         )
         assert source == "pagerduty"
         assert config is not None
-        assert config["api_key"] == "pd-key"
+        assert config.api_key == "pd-key"
 
     def test_classify_missing_api_key_returns_none(self) -> None:
-        from app.integrations._catalog_impl import _classify_service_instance
+        from integrations._catalog_impl import _classify_service_instance
 
         config, source = _classify_service_instance(
             "pagerduty",
@@ -66,7 +66,7 @@ class TestCatalogClassify:
         assert source is None
 
     def test_classify_uses_default_base_url(self) -> None:
-        from app.integrations._catalog_impl import _classify_service_instance
+        from integrations._catalog_impl import _classify_service_instance
 
         config, source = _classify_service_instance(
             "pagerduty",
@@ -75,7 +75,7 @@ class TestCatalogClassify:
         )
         assert source == "pagerduty"
         assert config is not None
-        assert config["base_url"] == "https://api.pagerduty.com"
+        assert config.base_url == "https://api.pagerduty.com"
 
 
 class TestEnvLoader:
@@ -83,7 +83,7 @@ class TestEnvLoader:
 
     @patch.dict("os.environ", {"PAGERDUTY_API_KEY": "env-key"}, clear=False)
     def test_env_loader_picks_up_api_key(self) -> None:
-        from app.integrations._catalog_impl import load_env_integrations
+        from integrations._catalog_impl import load_env_integrations
 
         integrations = load_env_integrations()
         pd_records = [r for r in integrations if r.get("service") == "pagerduty"]
@@ -95,7 +95,7 @@ class TestEnvLoader:
         import os
 
         os.environ.pop("PAGERDUTY_API_KEY", None)
-        from app.integrations._catalog_impl import load_env_integrations
+        from integrations._catalog_impl import load_env_integrations
 
         integrations = load_env_integrations()
         pd_records = [r for r in integrations if r.get("service") == "pagerduty"]

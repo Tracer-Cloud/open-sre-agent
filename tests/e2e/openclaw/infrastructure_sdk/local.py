@@ -7,7 +7,7 @@ SIGTERM, waits 5s, escalates to SIGKILL if needed.
 
 The MCP bridge (``openclaw mcp serve``) is **not** spawned here — it's a
 stdio-only MCP server owned by whichever ``mcp.client.stdio.stdio_client``
-context spawns it (see ``app.integrations.openclaw._open_openclaw_session``).
+context spawns it (see ``integrations.openclaw._open_openclaw_session``).
 Fault injectors and use-case drivers spawn it themselves per-call.
 """
 
@@ -53,7 +53,7 @@ _GATEWAY_READY_MARKER = b"[gateway] ready"
 _ANSI_ESCAPE_RE = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
 
 # SIGTERM grace before escalating to SIGKILL — matches the pattern used
-# by ``app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.terminate_child_process``.
+# by ``cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor.terminate_child_process``.
 _TEARDOWN_GRACE_S = 5.0
 
 

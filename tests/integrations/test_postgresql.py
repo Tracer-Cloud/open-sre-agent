@@ -1,6 +1,6 @@
 """Unit tests for the PostgreSQL integration module."""
 
-from app.integrations.postgresql import (
+from integrations.postgresql import (
     PostgreSQLConfig,
     PostgreSQLValidationResult,
     build_postgresql_config,

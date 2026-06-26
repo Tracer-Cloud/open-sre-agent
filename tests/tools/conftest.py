@@ -171,6 +171,11 @@ def mock_agent_state(overrides: dict | None = None) -> dict[str, Any]:
             "default_query": 'index=main "NullPointerException" | head 50',
             "time_range_minutes": 60,
         },
+        "temporal": {
+            "base_url": "http://localhost:7233",
+            "api_key": "",
+            "namespace": "default",
+        },
     }
     if overrides:
         for key, value in overrides.items():
@@ -213,7 +218,7 @@ class MockHttpxResponse:
         def _fake_post(url, headers, json, timeout):
             return MockHttpxResponse({"data": []})
 
-        monkeypatch.setattr("app.tools.MyTool.httpx.post", _fake_post)
+        monkeypatch.setattr("tools.MyTool.httpx.post", _fake_post)
     """
 
     def __init__(
@@ -255,7 +260,7 @@ class BaseToolContract:
 
     Example for function-based tool::
 
-        from app.tools.MyTool import my_func
+        from tools.MyTool import my_func
 
         class TestMyTool(BaseToolContract):
             def get_tool_under_test(self):

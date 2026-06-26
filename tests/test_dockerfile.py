@@ -39,7 +39,7 @@ def test_dockerfile_installs_dependencies(dockerfile_path: Path) -> None:
 def test_dockerfile_runs_uvicorn_webapp(dockerfile_path: Path) -> None:
     """The Dockerfile must start the FastAPI app with uvicorn."""
     content = dockerfile_path.read_text()
-    assert "uvicorn app.webapp:app" in content, "Should start the FastAPI application"
+    assert "uvicorn config.webapp:app" in content, "Should start the FastAPI application"
 
 
 def test_dockerfile_exposes_port_8000(dockerfile_path: Path) -> None:

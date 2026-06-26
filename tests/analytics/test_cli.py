@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.analytics import cli
-from app.analytics.events import Event
-from app.analytics.source import EntrypointSource, TriggerMode
+from platform.analytics import cli
+from platform.analytics.events import Event
+from platform.analytics.source import EntrypointSource, TriggerMode
 
 
 def _assert_investigation_events_have_source(

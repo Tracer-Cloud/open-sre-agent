@@ -9,7 +9,7 @@ from zipfile import ZipFile
 import pytest
 from botocore.exceptions import ClientError
 
-from app.services.lambda_client import (
+from services.lambda_client import (
     get_function_code,
     get_function_configuration,
     get_invocation_logs_by_request_id,
@@ -21,13 +21,13 @@ from app.services.lambda_client import (
 
 @pytest.fixture(autouse=True)
 def mock_aws_credentials():
-    with patch("app.services.lambda_client.require_aws_credentials", return_value=None):
+    with patch("services.lambda_client.require_aws_credentials", return_value=None):
         yield
 
 
 @pytest.fixture
 def mock_lambda_client():
-    with patch("app.services.lambda_client._get_lambda_client") as mock:
+    with patch("services.lambda_client._get_lambda_client") as mock:
         client = MagicMock()
         mock.return_value = client
         yield client
@@ -35,7 +35,7 @@ def mock_lambda_client():
 
 @pytest.fixture
 def mock_logs_client():
-    with patch("app.services.lambda_client._get_cloudwatch_logs_client") as mock:
+    with patch("services.lambda_client._get_cloudwatch_logs_client") as mock:
         client = MagicMock()
         mock.return_value = client
         yield client

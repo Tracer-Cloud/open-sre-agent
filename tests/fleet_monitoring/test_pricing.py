@@ -6,8 +6,8 @@ import logging
 
 import pytest
 
-from app.fleet_monitoring.meters import TokenUsage
-from app.fleet_monitoring.pricing import (
+from tools.fleet_monitoring.meters import TokenUsage
+from tools.fleet_monitoring.pricing import (
     MODEL_PRICES,
     PriceOverride,
     normalize_model_name,
@@ -107,7 +107,7 @@ class TestUsdForUsage:
 
     def test_codex_cached_input_clamp_logs_debug(self, caplog: pytest.LogCaptureFixture) -> None:
         usage = TokenUsage(input_tokens=100, cached_input_tokens=500)
-        with caplog.at_level(logging.DEBUG, logger="app.fleet_monitoring.pricing"):
+        with caplog.at_level(logging.DEBUG, logger="tools.fleet_monitoring.pricing"):
             usd_for_usage(usage, "gpt-5-codex")
 
         assert "cached_input_tokens exceeded input_tokens" in caplog.text
@@ -161,7 +161,7 @@ class TestFamilyFallbackCoherence:
     """Drift guards on ``_FAMILY_FALLBACKS`` ↔ ``MODEL_PRICES``."""
 
     def test_family_fallbacks_are_longest_prefix_first(self) -> None:
-        from app.fleet_monitoring.pricing import _FAMILY_FALLBACKS
+        from tools.fleet_monitoring.pricing import _FAMILY_FALLBACKS
 
         lengths = [len(prefix) for prefix, _canonical_id in _FAMILY_FALLBACKS]
         assert lengths == sorted(lengths, reverse=True)
@@ -171,7 +171,7 @@ class TestFamilyFallbackCoherence:
         # canonical id would silently break the family-prefix path:
         # ``_lookup_price`` would return ``None`` for what looks like
         # a known model and the dashboard would render ``-``.
-        from app.fleet_monitoring.pricing import _FAMILY_FALLBACKS
+        from tools.fleet_monitoring.pricing import _FAMILY_FALLBACKS
 
         for prefix, canonical_id in _FAMILY_FALLBACKS:
             assert canonical_id in MODEL_PRICES, (

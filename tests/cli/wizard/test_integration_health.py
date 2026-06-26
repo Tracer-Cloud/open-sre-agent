@@ -7,7 +7,7 @@ from importlib import import_module
 import httpx
 import pytest
 
-from app.cli.wizard.integration_health import (
+from cli.wizard.integration_health import (
     validate_aws_integration,
     validate_betterstack_integration,
     validate_coralogix_integration,
@@ -23,12 +23,12 @@ from app.cli.wizard.integration_health import (
     validate_telegram_bot,
     validate_vercel_integration,
 )
-from app.integrations.betterstack import BetterStackValidationResult
-from app.integrations.github_mcp import GitHubMCPValidationResult
+from integrations.betterstack import BetterStackValidationResult
+from integrations.github_mcp import GitHubMCPValidationResult
 
 
 def test_legacy_integration_health_import_surface_still_exports_validators() -> None:
-    module = import_module("app.cli.wizard.integration_health")
+    module = import_module("cli.wizard.integration_health")
 
     expected_exports = {
         "IntegrationHealthResult",
@@ -85,7 +85,7 @@ class _FakeDatadogClient:
 
 def test_validate_grafana_integration_succeeds_when_datasources_are_discovered(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.get_grafana_client_from_credentials",
+        "cli.wizard.integration_validators.client_validators.get_grafana_client_from_credentials",
         lambda **_kwargs: _FakeGrafanaClient({"loki_uid": "loki-1", "tempo_uid": "tempo-1"}),
     )
 
@@ -97,7 +97,7 @@ def test_validate_grafana_integration_succeeds_when_datasources_are_discovered(m
 
 def test_validate_grafana_integration_fails_when_no_datasources_are_found(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.get_grafana_client_from_credentials",
+        "cli.wizard.integration_validators.client_validators.get_grafana_client_from_credentials",
         lambda **_kwargs: _FakeGrafanaClient({}),
     )
 
@@ -109,7 +109,7 @@ def test_validate_grafana_integration_fails_when_no_datasources_are_found(monkey
 
 def test_validate_datadog_integration_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.DatadogClient",
+        "cli.wizard.integration_validators.client_validators.DatadogClient",
         lambda _config: _FakeDatadogClient({"success": True, "total": 7}),
     )
 
@@ -121,7 +121,7 @@ def test_validate_datadog_integration_succeeds(monkeypatch) -> None:
 
 def test_validate_datadog_integration_fails(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.DatadogClient",
+        "cli.wizard.integration_validators.client_validators.DatadogClient",
         lambda _config: _FakeDatadogClient({"success": False, "error": "HTTP 403"}),
     )
 
@@ -133,11 +133,11 @@ def test_validate_datadog_integration_fails(monkeypatch) -> None:
 
 def test_validate_honeycomb_integration_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.HoneycombClient.validate_access",
+        "cli.wizard.integration_validators.client_validators.HoneycombClient.validate_access",
         lambda _self: {"success": True, "environment": {"slug": "prod"}},
     )
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.HoneycombClient.run_query",
+        "cli.wizard.integration_validators.client_validators.HoneycombClient.run_query",
         lambda _self, *_args, **_kwargs: {"success": True, "results": [{}]},
     )
 
@@ -166,7 +166,7 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
             return {"success": True}
 
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.IncidentIoClient",
+        "cli.wizard.integration_validators.client_validators.IncidentIoClient",
         _FakeIncidentIoClient,
     )
 
@@ -178,7 +178,7 @@ def test_validate_incident_io_integration_succeeds(monkeypatch) -> None:
 
 def test_validate_coralogix_integration_fails(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.CoralogixClient.validate_access",
+        "cli.wizard.integration_validators.client_validators.CoralogixClient.validate_access",
         lambda _self: {"success": False, "error": "HTTP 401"},
     )
 
@@ -199,7 +199,7 @@ def test_validate_slack_webhook_succeeds_for_allowed_probe_statuses(
     status_code: int,
 ) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        "cli.wizard.integration_validators.http_probe_validators.httpx.get",
         lambda *_args, **_kwargs: types.SimpleNamespace(status_code=status_code),
     )
 
@@ -212,7 +212,7 @@ def test_validate_slack_webhook_succeeds_for_allowed_probe_statuses(
 
 def test_validate_slack_webhook_fails_for_not_found(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        "cli.wizard.integration_validators.http_probe_validators.httpx.get",
         lambda *_args, **_kwargs: types.SimpleNamespace(status_code=404),
     )
 
@@ -230,7 +230,7 @@ def test_validate_slack_webhook_fails_for_httpx_request_error(monkeypatch) -> No
         )
 
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.http_probe_validators.httpx.get",
+        "cli.wizard.integration_validators.http_probe_validators.httpx.get",
         _raise_request_error,
     )
 
@@ -325,7 +325,7 @@ def test_validate_aws_integration_fails_when_boto3_client_raises(monkeypatch) ->
 
 def test_validate_github_mcp_integration_uses_shared_validator(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.mcp_validators.validate_github_mcp_config",
+        "cli.wizard.integration_validators.mcp_validators.validate_github_mcp_config",
         lambda _config, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail="OK @ghuser; repos=1; owners=o; examples=o/r; mcp_tools=1",
@@ -353,7 +353,7 @@ def test_validate_github_mcp_integration_uses_shared_validator(monkeypatch) -> N
 
 def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.validate_sentry_config",
+        "cli.wizard.integration_validators.client_validators.validate_sentry_config",
         lambda _config: types.SimpleNamespace(ok=True, detail="Sentry ok"),
     )
 
@@ -370,7 +370,7 @@ def test_validate_sentry_integration_uses_shared_validator(monkeypatch) -> None:
 
 def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.validate_dagster_config",
+        "cli.wizard.integration_validators.client_validators.validate_dagster_config",
         lambda _config: types.SimpleNamespace(
             ok=True, detail="Connected to Dagster version mock-1.0."
         ),
@@ -387,7 +387,7 @@ def test_validate_dagster_integration_uses_shared_validator(monkeypatch) -> None
 
 def test_validate_dagster_integration_surfaces_failure(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.validate_dagster_config",
+        "cli.wizard.integration_validators.client_validators.validate_dagster_config",
         lambda _config: types.SimpleNamespace(
             ok=False, detail="Dagster GraphQL probe failed: HTTP 401"
         ),
@@ -418,7 +418,7 @@ class _FakeVercelClient:
 
 def test_validate_vercel_integration_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.VercelClient",
+        "cli.wizard.integration_validators.client_validators.VercelClient",
         lambda _config: _FakeVercelClient(
             {"success": True, "projects": [{"id": "p1"}], "total": 1}
         ),
@@ -447,7 +447,7 @@ def test_validate_vercel_integration_succeeds_with_team_id(monkeypatch) -> None:
             return {"success": True, "projects": [], "total": 0}
 
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.VercelClient",
+        "cli.wizard.integration_validators.client_validators.VercelClient",
         _CapturingClient,
     )
 
@@ -459,7 +459,7 @@ def test_validate_vercel_integration_succeeds_with_team_id(monkeypatch) -> None:
 
 def test_validate_vercel_integration_fails_on_api_error(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.VercelClient",
+        "cli.wizard.integration_validators.client_validators.VercelClient",
         lambda _config: _FakeVercelClient({"success": False, "error": "HTTP 401: unauthorized"}),
     )
 
@@ -481,7 +481,7 @@ def test_validate_vercel_integration_surfaces_exception(monkeypatch) -> None:
         raise RuntimeError("network unreachable")
 
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.VercelClient",
+        "cli.wizard.integration_validators.client_validators.VercelClient",
         _raise,
     )
 
@@ -613,7 +613,7 @@ def test_validate_telegram_bot_network_error(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_validate_betterstack_integration_succeeds(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.validate_betterstack_config",
+        "cli.wizard.integration_validators.client_validators.validate_betterstack_config",
         lambda _config: BetterStackValidationResult(ok=True, detail="Connected."),
     )
     result = validate_betterstack_integration(
@@ -628,7 +628,7 @@ def test_validate_betterstack_integration_succeeds(monkeypatch) -> None:
 
 def test_validate_betterstack_integration_forwards_failure_detail(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.integration_validators.client_validators.validate_betterstack_config",
+        "cli.wizard.integration_validators.client_validators.validate_betterstack_config",
         lambda _config: BetterStackValidationResult(
             ok=False, detail="Better Stack authentication failed."
         ),

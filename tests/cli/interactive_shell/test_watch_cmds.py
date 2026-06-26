@@ -10,14 +10,14 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from app.cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from app.cli.interactive_shell.command_registry.watch_cmds import (
+from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from cli.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
-from app.watch_dog.alarms import AlarmCredentials
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from tools.watch_dog.alarms import AlarmCredentials
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -56,11 +56,11 @@ def test_dispatch_watch_creates_watchdog_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
+        "cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
         lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.pid_exists",
+        "cli.interactive_shell.command_registry.watch_cmds.pid_exists",
         lambda _pid: True,
     )
 
@@ -68,7 +68,7 @@ def test_dispatch_watch_creates_watchdog_task(
         return None
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        "cli.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
         _fake_start,
     )
 
@@ -91,11 +91,11 @@ def test_dispatch_watch_creates_watchdog_task(
 
 def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
+        "cli.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
         lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.pid_exists",
+        "cli.interactive_shell.command_registry.watch_cmds.pid_exists",
         lambda _pid: True,
     )
 
@@ -109,7 +109,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         task.mark_cancelled()
 
     monkeypatch.setattr(
-        "app.cli.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        "cli.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
         lambda **kw: threading.Thread(target=_slow_watchdog, kwargs=kw, daemon=True).start(),
     )
 
@@ -146,9 +146,9 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from app.cli.interactive_shell.runtime.tasks import TaskRegistry
-    from app.fleet_monitoring.probe import ProcessSnapshot
-    from app.watch_dog.monitor import run_watchdog
+    from cli.interactive_shell.runtime.tasks import TaskRegistry
+    from tools.fleet_monitoring.probe import ProcessSnapshot
+    from tools.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
     task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
@@ -167,7 +167,7 @@ def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
         started_at=started_at,
     )
 
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     thread = threading.Thread(
         target=run_watchdog,
@@ -195,9 +195,9 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from app.cli.interactive_shell.runtime.tasks import TaskRegistry
-    from app.fleet_monitoring.probe import ProcessSnapshot
-    from app.watch_dog.monitor import run_watchdog
+    from cli.interactive_shell.runtime.tasks import TaskRegistry
+    from tools.fleet_monitoring.probe import ProcessSnapshot
+    from tools.watch_dog.monitor import run_watchdog
 
     reg = TaskRegistry()
     task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
@@ -215,7 +215,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
         status="running",
         started_at=started_at,
     )
-    monkeypatch.setattr("app.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
+    monkeypatch.setattr("tools.watch_dog.monitor.probe", lambda *_a, **_kw: snap)
 
     run_watchdog(
         task=task,

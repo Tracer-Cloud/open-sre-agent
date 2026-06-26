@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.catalog import load_env_integrations as _load_env_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.catalog import load_env_integrations as _load_env_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -207,7 +207,7 @@ class TestVictoriaLogsVerification:
         mock_response.raise_for_status.return_value = None
 
         with patch("httpx.Client.get", return_value=mock_response):
-            from app.integrations.verify import verify_integrations
+            from integrations.verify import verify_integrations
 
             results = verify_integrations(service="victoria_logs")
 
@@ -233,7 +233,7 @@ class TestVictoriaLogsVerification:
         )
 
         with patch("httpx.Client.get", return_value=mock_response):
-            from app.integrations.verify import verify_integrations
+            from integrations.verify import verify_integrations
 
             results = verify_integrations(service="victoria_logs")
 
@@ -246,7 +246,7 @@ class TestVictoriaLogsVerification:
         """No URL configured returns status=missing (not failed)."""
         monkeypatch.delenv("VICTORIA_LOGS_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="victoria_logs")
 
@@ -258,7 +258,7 @@ class TestVictoriaLogsVerification:
         """Verify result has the canonical {service, source, status, detail} shape."""
         monkeypatch.delenv("VICTORIA_LOGS_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="victoria_logs")
         for result in results:
@@ -271,7 +271,7 @@ class TestVictoriaLogsToolAvailability:
     """VictoriaLogsTool importability + executor-path contract."""
 
     def test_tool_importable(self) -> None:
-        from app.tools.VictoriaLogsTool import VictoriaLogsTool, victoria_logs_query
+        from tools.VictoriaLogsTool import VictoriaLogsTool, victoria_logs_query
 
         assert victoria_logs_query is not None
         assert isinstance(victoria_logs_query, VictoriaLogsTool)
@@ -279,14 +279,14 @@ class TestVictoriaLogsToolAvailability:
         assert victoria_logs_query.source == "victoria_logs"
 
     def test_tool_unavailable_without_source(self) -> None:
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         assert not victoria_logs_query.is_available({})
         assert not victoria_logs_query.is_available({"victoria_logs": {}})
         assert not victoria_logs_query.is_available({"victoria_logs": {"base_url": ""}})
 
     def test_tool_available_with_configured_source(self) -> None:
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         sources = {"victoria_logs": {"base_url": "http://vmlogs:9428"}}
         assert victoria_logs_query.is_available(sources)
@@ -296,7 +296,7 @@ class TestVictoriaLogsToolAvailability:
         surface every kwarg run() declares; otherwise the tool is permanently inert
         from the executor path. This is the regression that broke prior PRs #663/#1060.
         """
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         sources = {
             "victoria_logs": {
@@ -313,10 +313,10 @@ class TestVictoriaLogsToolAvailability:
         assert "limit" in params
         assert "start" in params
 
-    @patch("app.tools.VictoriaLogsTool.make_victoria_logs_client")
+    @patch("tools.VictoriaLogsTool.make_victoria_logs_client")
     def test_tool_run_via_executor_path(self, mock_factory) -> None:
         """Full executor flow: extract_params → run(**params) → success."""
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         mock_client = mock_factory.return_value
         mock_client.__enter__.return_value = mock_client
@@ -349,7 +349,7 @@ class TestVictoriaLogsToolAvailability:
         mock_factory.assert_called_once_with("http://vmlogs.monitoring.svc:9428", tenant_id=None)
 
     def test_tool_run_missing_base_url(self) -> None:
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         result = victoria_logs_query.run(base_url="")
 
@@ -361,7 +361,7 @@ class TestVictoriaLogsToolAvailability:
         like SplunkSearchTool, not investigation-only (the registry default for
         class-based tools without explicit ``surfaces``).
         """
-        from app.tools.VictoriaLogsTool import victoria_logs_query
+        from tools.VictoriaLogsTool import victoria_logs_query
 
         assert "investigation" in victoria_logs_query.surfaces
         assert "chat" in victoria_logs_query.surfaces
@@ -418,7 +418,7 @@ class TestVictoriaLogsIntegrationConfig:
     """``VictoriaLogsIntegrationConfig`` model validation."""
 
     def test_config_creation(self) -> None:
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(
             base_url="http://vmlogs:9428",
@@ -430,14 +430,14 @@ class TestVictoriaLogsIntegrationConfig:
         assert config.integration_id == "vl-1"
 
     def test_config_url_normalization(self) -> None:
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         config = VictoriaLogsIntegrationConfig(base_url="  http://vmlogs.example.com:9428/  ")
         assert config.base_url == "http://vmlogs.example.com:9428"
 
     def test_config_empty_tenant_normalizes_to_none(self) -> None:
         """Empty/whitespace tenant_id collapses to None so AccountID header is omitted."""
-        from app.integrations.models import VictoriaLogsIntegrationConfig
+        from integrations.models import VictoriaLogsIntegrationConfig
 
         for empty in ("", "   ", None):
             config = VictoriaLogsIntegrationConfig(

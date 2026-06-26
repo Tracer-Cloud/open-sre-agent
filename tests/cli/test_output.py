@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from app.cli.interactive_shell.ui import output
-from app.cli.interactive_shell.ui.output import (
+from cli.interactive_shell.ui import output
+from cli.interactive_shell.ui.output import (
     ProgressEvent,
     ProgressTracker,
     _fmt_timing,
@@ -18,11 +18,11 @@ from app.cli.interactive_shell.ui.output import (
     suppress_stdin_watchers,
     toggle_active_tool_details,
 )
-from app.cli.interactive_shell.ui.output import environment as output_environment
-from app.cli.interactive_shell.ui.output import repl_display as output_repl
-from app.cli.interactive_shell.ui.output import toggles as output_toggles
-from app.cli.interactive_shell.ui.output import tracker as output_tracker
-from app.cli.interactive_shell.ui.output.labels import _humanise_message
+from cli.interactive_shell.ui.output import environment as output_environment
+from cli.interactive_shell.ui.output import repl_display as output_repl
+from cli.interactive_shell.ui.output import toggles as output_toggles
+from cli.interactive_shell.ui.output import tracker as output_tracker
+from cli.interactive_shell.ui.output.labels import _humanise_message
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -190,7 +190,7 @@ def test_tracker_uses_repl_append_display_under_repl_safe_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
-    from app.cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         tracker = ProgressTracker()
@@ -226,7 +226,7 @@ def test_repl_display_buffers_subtext_until_step_complete(
 
 @pytest.mark.asyncio
 async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
-    from app.cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
+    from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         assert await asyncio.to_thread(output_environment._repl_progress_active) is True
@@ -486,6 +486,66 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     assert attrs[6][_Termios.VDISCARD] == b"\x00"
 
 
+def test_ctrl_o_watcher_stop_restores_canonical_echo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _TTY:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            return 0
+
+    class _Termios:
+        ICANON = 0x0002
+        ECHO = 0x0008
+        IEXTEN = 0x0400
+        VMIN = 6
+        VTIME = 5
+        VDISCARD = 13
+        TCSADRAIN = 1
+        TCIFLUSH = 0
+        final_attrs: list[int] | None = None
+
+        @classmethod
+        def tcgetattr(cls, _fd: int) -> list[Any]:
+            lflags = cls.ICANON | cls.ECHO | cls.IEXTEN
+            if cls.final_attrs is not None:
+                lflags = cls.final_attrs[3]
+            return [0, 0, 0, lflags, 0, 0, [0] * 20]
+
+        @classmethod
+        def tcsetattr(cls, _fd: int, _when: int, attrs: list[Any]) -> None:
+            cls.final_attrs = attrs[3]
+
+        @classmethod
+        def tcflush(cls, _fd: int, _queue: int) -> None:
+            return None
+
+    class _Select:
+        @staticmethod
+        def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
+            return [], [], []
+
+    from cli.interactive_shell.ui import key_reader
+
+    monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
+    monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
+    monkeypatch.setattr(output_toggles, "select", _Select)
+    monkeypatch.setattr(output_toggles, "termios", _Termios)
+    monkeypatch.setattr(output_toggles.os, "fpathconf", lambda _fd, _name: 0)
+    monkeypatch.setattr(key_reader, "termios", _Termios, raising=False)
+    monkeypatch.setattr(key_reader.sys, "stdin", _TTY())
+
+    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher.start()
+    watcher.stop()
+
+    assert _Termios.final_attrs is not None
+    assert _Termios.final_attrs & _Termios.ICANON
+    assert _Termios.final_attrs & _Termios.ECHO
+
+
 def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -684,7 +744,7 @@ def test_progress_event_independent_default_lists() -> None:
 
 
 def test_safe_print_passes_utf8_strings_unchanged(capsys: pytest.CaptureFixture[str]) -> None:
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     _safe_print("hello world")
     assert capsys.readouterr().out.strip() == "hello world"
@@ -694,7 +754,7 @@ def test_safe_print_survives_encode_error(monkeypatch: pytest.MonkeyPatch) -> No
     """Simulate Windows cp1252 stdout that can't encode ● (U+25CF)."""
     from io import StringIO
 
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     class _NarrowWriter(StringIO):
         encoding = "ascii"
@@ -716,7 +776,7 @@ def test_finish_text_mode_survives_non_ascii_mark(
     """Regression: _finish in text mode must not raise UnicodeEncodeError for ●."""
     from io import StringIO
 
-    from app.cli.interactive_shell.ui.output import _safe_print
+    from cli.interactive_shell.ui.output import _safe_print
 
     # Verify _safe_print itself is robust; _finish delegates to it.
     class _AsciiWriter(StringIO):

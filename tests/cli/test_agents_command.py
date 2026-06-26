@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
-from app.cli.commands import agent as agent_cmd_mod
-from app.fleet_monitoring.discovery import DiscoveredAgent
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from cli.__main__ import cli
+from cli.commands import agent as agent_cmd_mod
+from tools.fleet_monitoring.discovery import DiscoveredAgent
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 @pytest.fixture

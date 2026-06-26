@@ -12,7 +12,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.integrations.rabbitmq import (
+from integrations.rabbitmq import (
     DEFAULT_RABBITMQ_MANAGEMENT_PORT,
     DEFAULT_RABBITMQ_VHOST,
     RabbitMQConfig,
@@ -55,7 +55,7 @@ def patched_client(monkeypatch: pytest.MonkeyPatch):
 
     Returns a callable (responses: dict) that installs the desired mock.
     """
-    from app.integrations import rabbitmq as rmq_module
+    from integrations import rabbitmq as rmq_module
 
     def install(responses: dict[str, Any]) -> None:
         def _fake_client(config: RabbitMQConfig) -> httpx.Client:

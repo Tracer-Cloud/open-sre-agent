@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.integrations.openclaw import (
+from integrations.openclaw import (
     OpenClawConfig,
     call_openclaw_tool,
     describe_openclaw_error,
@@ -26,7 +26,7 @@ from tests.e2e.openclaw.infrastructure_sdk.local import OpenClawHandle
 # Tool we call to exercise the bridge. ``conversations_list`` is the
 # OpenClaw MCP tool name (``search_openclaw_conversations`` is the
 # OpenSRE-side wrapper name in
-# :mod:`app.tools.OpenClawMCPTool`). We hit it raw here so the test
+# :mod:`tools.OpenClawMCPTool`). We hit it raw here so the test
 # exercises the same code path as a real investigation, without going
 # through the agent's tool selection.
 _PROBE_TOOL = "conversations_list"

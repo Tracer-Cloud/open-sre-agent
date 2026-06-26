@@ -14,10 +14,10 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from app.integrations.catalog import (
+from integrations.catalog import (
     classify_integrations as _classify_integrations,
 )
-from app.integrations.catalog import (
+from integrations.catalog import (
     load_env_integrations as _load_env_integrations,
 )
 from tests.e2e.source_helpers import resolve_available_tool_sources
@@ -227,7 +227,7 @@ class TestAlertmanagerToolSourceAvailability:
 class TestAlertmanagerVerification:
     """Test Alertmanager integration verification flow."""
 
-    @patch("app.services.alertmanager.client.AlertmanagerClient.get_status")
+    @patch("services.alertmanager.client.AlertmanagerClient.get_status")
     def test_verify_alertmanager_success(self, mock_get_status, monkeypatch):
         """Alertmanager verification passes when status endpoint responds successfully."""
         monkeypatch.setenv("ALERTMANAGER_URL", "http://alertmanager.monitoring.svc:9093")
@@ -239,7 +239,7 @@ class TestAlertmanagerVerification:
             },
         }
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -249,7 +249,7 @@ class TestAlertmanagerVerification:
         assert am_result["status"] == "passed"
         assert "alertmanager" in am_result["detail"].lower()
 
-    @patch("app.services.alertmanager.client.AlertmanagerClient.get_status")
+    @patch("services.alertmanager.client.AlertmanagerClient.get_status")
     def test_verify_alertmanager_failure(self, mock_get_status, monkeypatch):
         """Alertmanager verification fails when status endpoint is unreachable."""
         monkeypatch.setenv("ALERTMANAGER_URL", "http://alertmanager.monitoring.svc:9093")
@@ -258,7 +258,7 @@ class TestAlertmanagerVerification:
             "error": "Connection refused",
         }
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -270,7 +270,7 @@ class TestAlertmanagerVerification:
         """Alertmanager verification returns 'missing' when not configured."""
         monkeypatch.delenv("ALERTMANAGER_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
 
@@ -282,7 +282,7 @@ class TestAlertmanagerVerification:
         """Verify integrations result has expected fields for alertmanager."""
         monkeypatch.delenv("ALERTMANAGER_URL", raising=False)
 
-        from app.integrations.verify import verify_integrations
+        from integrations.verify import verify_integrations
 
         results = verify_integrations(service="alertmanager")
         assert isinstance(results, list)
@@ -300,7 +300,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_importable(self):
         """AlertmanagerAlertsTool can be imported and is correctly typed."""
-        from app.tools.AlertmanagerAlertsTool import AlertmanagerAlertsTool, alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import AlertmanagerAlertsTool, alertmanager_alerts
 
         assert alertmanager_alerts is not None
         assert isinstance(alertmanager_alerts, AlertmanagerAlertsTool)
@@ -309,7 +309,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_silences_tool_importable(self):
         """AlertmanagerSilencesTool can be imported and is correctly typed."""
-        from app.tools.AlertmanagerSilencesTool import (
+        from tools.AlertmanagerSilencesTool import (
             AlertmanagerSilencesTool,
             alertmanager_silences,
         )
@@ -321,7 +321,7 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_not_available_without_source(self):
         """AlertmanagerAlertsTool reports unavailable when source has no connection_verified."""
-        from app.tools.AlertmanagerAlertsTool import alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import alertmanager_alerts
 
         assert not alertmanager_alerts.is_available({})
         assert not alertmanager_alerts.is_available({"alertmanager": {}})
@@ -331,14 +331,14 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_available_with_verified_source(self):
         """AlertmanagerAlertsTool is available when alertmanager source is connection_verified."""
-        from app.tools.AlertmanagerAlertsTool import alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import alertmanager_alerts
 
         sources = {"alertmanager": {"connection_verified": True, "base_url": "http://am:9093"}}
         assert alertmanager_alerts.is_available(sources)
 
     def test_alertmanager_alerts_tool_extract_params(self):
         """AlertmanagerAlertsTool.extract_params returns correct fields from source."""
-        from app.tools.AlertmanagerAlertsTool import alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import alertmanager_alerts
 
         sources = {
             "alertmanager": {
@@ -356,10 +356,10 @@ class TestAlertmanagerToolsAvailability:
         assert params["bearer_token"] == "tok"
         assert params["active"] is True
 
-    @patch("app.services.alertmanager.client.AlertmanagerClient.list_alerts")
+    @patch("services.alertmanager.client.AlertmanagerClient.list_alerts")
     def test_alertmanager_alerts_tool_run_success(self, mock_list_alerts):
         """AlertmanagerAlertsTool.run returns structured result on success."""
-        from app.tools.AlertmanagerAlertsTool import alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import alertmanager_alerts
 
         mock_list_alerts.return_value = {
             "success": True,
@@ -389,17 +389,17 @@ class TestAlertmanagerToolsAvailability:
 
     def test_alertmanager_alerts_tool_run_missing_base_url(self):
         """AlertmanagerAlertsTool.run returns unavailable when base_url is empty."""
-        from app.tools.AlertmanagerAlertsTool import alertmanager_alerts
+        from tools.AlertmanagerAlertsTool import alertmanager_alerts
 
         result = alertmanager_alerts.run(base_url="")
 
         assert result["available"] is False
         assert "not configured" in result["error"]
 
-    @patch("app.services.alertmanager.client.AlertmanagerClient.list_silences")
+    @patch("services.alertmanager.client.AlertmanagerClient.list_silences")
     def test_alertmanager_silences_tool_run_success(self, mock_list_silences):
         """AlertmanagerSilencesTool.run returns structured result on success."""
-        from app.tools.AlertmanagerSilencesTool import alertmanager_silences
+        from tools.AlertmanagerSilencesTool import alertmanager_silences
 
         mock_list_silences.return_value = {
             "success": True,
@@ -496,7 +496,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_creation(self):
         """AlertmanagerIntegrationConfig validates correctly with all fields."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.monitoring.svc:9093",
@@ -512,7 +512,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_url_normalization(self):
         """AlertmanagerIntegrationConfig strips whitespace and trailing slash from base_url."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="  http://alertmanager.example.com:9093/  ",
@@ -522,7 +522,7 @@ class TestAlertmanagerIntegrationConfig:
 
     def test_alertmanager_config_basic_auth(self):
         """AlertmanagerIntegrationConfig stores basic auth credentials."""
-        from app.integrations.models import AlertmanagerIntegrationConfig
+        from integrations.models import AlertmanagerIntegrationConfig
 
         config = AlertmanagerIntegrationConfig(
             base_url="http://alertmanager.example.com:9093",

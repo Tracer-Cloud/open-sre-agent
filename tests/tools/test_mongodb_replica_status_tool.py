@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.MongoDBReplicaStatusTool import get_mongodb_replica_status
 from tests.tools.conftest import BaseToolContract
+from tools.MongoDBReplicaStatusTool import get_mongodb_replica_status
 
 
 class TestMongoDBReplicaStatusToolContract(BaseToolContract):
@@ -24,7 +24,7 @@ def test_run_happy_path() -> None:
         "set": "rs0",
         "members": [{"name": "rs0:27017", "stateStr": "PRIMARY", "health": 1}],
     }
-    with patch("app.tools.MongoDBReplicaStatusTool.get_rs_status", return_value=fake_result):
+    with patch("tools.MongoDBReplicaStatusTool.get_rs_status", return_value=fake_result):
         result = get_mongodb_replica_status(connection_string="mongodb://localhost:27017")
     assert "members" in result
     assert result["set"] == "rs0"
@@ -32,7 +32,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "app.tools.MongoDBReplicaStatusTool.get_rs_status",
+        "tools.MongoDBReplicaStatusTool.get_rs_status",
         return_value={"error": "not a replica set"},
     ):
         result = get_mongodb_replica_status(connection_string="mongodb://localhost:27017")

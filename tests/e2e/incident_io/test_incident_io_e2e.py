@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from app.services.incident_io import make_incident_io_client
+from services.incident_io import make_incident_io_client
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("INCIDENT_IO_API_KEY"),

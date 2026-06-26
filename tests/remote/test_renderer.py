@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.cli.ui.renderer import StreamRenderer, _canonical_node_name
-from app.remote.stream import StreamEvent
+from cli.ui.renderer import StreamRenderer, _canonical_node_name
+from core.domain.stream import StreamEvent
 
 
 def _make_event(
@@ -483,6 +483,27 @@ class TestStreamRendererCleanupOnException:
         assert renderer.final_state.get("alert_name") == "interrupted-alert"
 
 
+class TestStreamRendererStdinWatcher:
+    @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
+    def test_starts_only_one_stdin_watcher(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from cli.interactive_shell.ui.output import toggles as toggles_module
+
+        starts = 0
+        original_start = toggles_module.CtrlOToggleWatcher.start
+
+        def counting_start(self: toggles_module.CtrlOToggleWatcher) -> None:
+            nonlocal starts
+            starts += 1
+            original_start(self)
+
+        monkeypatch.setattr(toggles_module.CtrlOToggleWatcher, "start", counting_start)
+
+        renderer = StreamRenderer(local=True)
+        renderer.render_stream(_investigation_events())
+
+        assert starts == 1
+
+
 def _diagnose_streaming_events() -> Iterator[StreamEvent]:
     """Simulate the diagnose node emitting token deltas before chain end."""
     yield _make_event("metadata", data={"run_id": "r-d"})
@@ -554,8 +575,8 @@ class TestStreamRendererDiagnoseStreaming:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from app.cli.ui.renderer import diagnose as diagnose_module
-        from app.cli.ui.renderer import renderer as renderer_module
+        from cli.ui.renderer import diagnose as diagnose_module
+        from cli.ui.renderer import renderer as renderer_module
 
         monkeypatch.setattr(diagnose_module, "_repl_progress_active", lambda: True)
         monkeypatch.setattr(renderer_module, "_repl_progress_active", lambda: True)
@@ -563,7 +584,7 @@ class TestStreamRendererDiagnoseStreaming:
         renderer.render_stream(_diagnose_streaming_events())
 
         assert renderer._diagnose._live is None
-        assert renderer._toggle_watcher is None
+        assert renderer._toggle_unregister is None
 
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "text"})
     def test_diagnose_text_mode_replays_buffer_at_finish(self, capfd) -> None:
@@ -744,8 +765,8 @@ class TestStreamRendererDiagnoseStreaming:
 class TestStreamRendererFocusedUXAndParsing:
     """Focused tests for deterministic report parsing."""
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_with_structured_sections(
         self, _mock_display, _mock_live, capfd
@@ -771,8 +792,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Active connections" in out
         assert "Scale database connections to 200" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_with_numbered_lists(self, _mock_display, _mock_live, capfd) -> None:
         """Report content with numbered lists is rendered via the terminal renderer."""
@@ -796,8 +817,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Active connections" in out
         assert "Scale database connections to 200" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_fallback_to_verbs_if_no_section(
         self, _mock_display, _mock_live, capfd
@@ -819,8 +840,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Check transaction isolation levels" in out
         assert "Restart the backend container" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_ignores_prose_evidence(self, _mock_display, _mock_live, capfd) -> None:
         """Report content including evidence items is rendered via the terminal renderer."""
@@ -838,8 +859,8 @@ class TestStreamRendererFocusedUXAndParsing:
         out, _ = capfd.readouterr()
         assert "Saturated pool connections count" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_mid_sentence_prose_not_misclassified(
         self, _mock_display, _mock_live, capfd
@@ -864,8 +885,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Investigating root cause further" in out
         assert "Skip next steps for now" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_verb_fallback_ignores_consumed_lines(self, _mock_display, _mock_live, capfd) -> None:
         """Verb-fallback does not pick up diagnostic prose that was already consumed by another section."""
@@ -881,8 +902,8 @@ class TestStreamRendererFocusedUXAndParsing:
         out, _ = capfd.readouterr()
         assert "Next Actions" not in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_rich_rca_includes_parsed_report_root_cause_body(
         self, _mock_display, _mock_live, capfd
@@ -905,8 +926,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Stale transactions" in out
         assert "Idle timeout" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parses_markdown_hash_and_emphasis_headers(
         self, _mock_display, _mock_live, capfd
@@ -931,8 +952,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "synthetic lookup" in out.lower()
         assert "Enable debug logging" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_root_cause_verbs_do_not_promote_to_next_actions(
         self, _mock_display, _mock_live, capfd
@@ -954,8 +975,8 @@ class TestStreamRendererFocusedUXAndParsing:
         assert "Review the pool settings" in out
         assert "idle timeout" in out.lower()
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_rich_rca_confidence_invalid_score_shows_na(
         self, _mock_display, _mock_live, capfd
@@ -970,8 +991,8 @@ class TestStreamRendererFocusedUXAndParsing:
         out, _ = capfd.readouterr()
         assert "Incident summary" in out
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_report_parsing_mid_list_transition_guard(
         self, _mock_display, _mock_live, capfd
@@ -994,7 +1015,7 @@ class TestStreamRendererFocusedUXAndParsing:
 
     def test_strip_outer_quotes_does_not_fire_on_linux(self) -> None:
         """Windows-only outer quote normalization does not alter POSIX shlex tokens."""
-        from app.cli.interactive_shell.shell.policy import parse_shell_command
+        from cli.interactive_shell.shell.policy import parse_shell_command
 
         parsed = parse_shell_command('run "cat /tmp/file.txt"', is_windows=False)
         assert parsed.argv == ["run", "cat /tmp/file.txt"]
@@ -1054,7 +1075,7 @@ class TestStreamRendererDiagnoseThrottle:
 
         Returns ``(fake_time, parse_count)`` mutable cells the test drives.
         """
-        from app.cli.ui.renderer import diagnose as renderer_module
+        from cli.ui.renderer import diagnose as renderer_module
 
         fake_time = [0.0]
         parse_count = [0]
@@ -1069,8 +1090,8 @@ class TestStreamRendererDiagnoseThrottle:
         monkeypatch.setattr(renderer_module, "Markdown", _SpyMarkdown)
         return fake_time, parse_count
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_chunks_in_one_window_collapse_to_a_single_final_flush(
         self, _mock_display, _mock_live, monkeypatch
@@ -1101,14 +1122,14 @@ class TestStreamRendererDiagnoseThrottle:
         # silence unused-var while keeping the fixture wired.
         assert fake_time[0] == 0.0
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_chunks_across_multiple_windows_render_periodically(
         self, _mock_display, _mock_live, monkeypatch
     ) -> None:
         """Chunks spaced past the throttle interval render multiple times."""
-        from app.cli.ui.renderer import diagnose as renderer_module
+        from cli.ui.renderer import diagnose as renderer_module
 
         fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
         interval = renderer_module._DIAGNOSE_RENDER_INTERVAL_S
@@ -1128,14 +1149,14 @@ class TestStreamRendererDiagnoseThrottle:
         # Throttle's purpose: parse count must stay << total chunks.
         assert parse_count[0] < 50
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_final_flush_renders_chunks_pending_in_last_window(
         self, _mock_display, _mock_live, monkeypatch
     ) -> None:
         """Chunks arriving in the trailing throttle window must still appear."""
-        from app.cli.ui.renderer import diagnose as renderer_module
+        from cli.ui.renderer import diagnose as renderer_module
 
         fake_time, parse_count = self._install_clock_and_spy(monkeypatch)
         interval = renderer_module._DIAGNOSE_RENDER_INTERVAL_S
@@ -1155,8 +1176,8 @@ class TestStreamRendererDiagnoseThrottle:
         # Two parses: one in-loop render at "early " + one final flush.
         assert parse_count[0] == 2
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_anthropic_block_chunks_throttle_correctly(
         self, _mock_display, _mock_live, monkeypatch
@@ -1180,8 +1201,8 @@ class TestStreamRendererDiagnoseThrottle:
         assert "c19" in "".join(renderer._diagnose.buffer)
         assert fake_time[0] == 0.0
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_diagnose_start_stops_progress_tracker_display(self, _mock_display, _mock_live) -> None:
         """Calling _begin_diagnose safely stops the active ProgressTracker display and sets it to None."""
@@ -1202,8 +1223,8 @@ class TestStreamRendererPrintAboveRenderable:
     otherwise falls back to the tracker.
     """
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_print_above_renderable_routes_to_live_console_when_started(
         self, _mock_display, _mock_live
@@ -1224,8 +1245,8 @@ class TestStreamRendererPrintAboveRenderable:
         # Should print directly via active Live console
         mock_console.print.assert_called_once_with(panel)
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_print_above_renderable_falls_back_to_tracker_when_live_not_started(
         self, _mock_display, _mock_live
@@ -1243,13 +1264,13 @@ class TestStreamRendererPrintAboveRenderable:
         # Should fall back to tracker
         mock_tracker_print.assert_called_once_with(panel)
 
-    @patch("app.cli.ui.renderer.diagnose.Live")
-    @patch("app.cli.interactive_shell.ui.output.tracker._EventLogDisplay")
+    @patch("cli.ui.renderer.diagnose.Live")
+    @patch("cli.interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
     def test_print_above_renderable_falls_back_to_console_when_tracker_stopped(
         self, _mock_display, _mock_live
     ) -> None:
-        from app.cli.ui.renderer import StreamRenderer
+        from cli.ui.renderer import StreamRenderer
 
         renderer = StreamRenderer()
 
@@ -1270,7 +1291,8 @@ class TestStreamRendererPrintAboveRenderable:
 
     def test_merge_chain_start_input_eagerly_updates_metadata(self) -> None:
         """_merge_chain_start_input should pull 'input' payload from data into _final_state."""
-        from app.cli.ui.renderer import StreamEvent, StreamRenderer
+        from cli.ui.renderer import StreamRenderer
+        from core.domain.stream import StreamEvent
 
         renderer = StreamRenderer()
         assert "alert_name" not in renderer._final_state

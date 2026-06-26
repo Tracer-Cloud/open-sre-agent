@@ -46,7 +46,7 @@ htmlcov/
 # ---- Repo-level dirs not needed in the bench image --------------------- #
 infra/
 docs/
-packaging/
+deployment/packaging/
 .github/
 .claude/
 .aider*

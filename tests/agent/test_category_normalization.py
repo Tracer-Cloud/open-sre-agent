@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.category_normalization import (
+from core.domain.state.diagnosis import (
     normalize_root_cause_category,
     root_cause_category_instruction_for_source,
     taxonomy_categories_for_alert_source,

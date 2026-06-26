@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from app.integrations.posthog import (
+from integrations.posthog import (
     BounceRateAlert,
     check_bounce_rate_alert,
     posthog_config_from_env,

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.integrations.llm_cli.errors import CLITimeoutError
+from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from integrations.llm_cli.errors import CLITimeoutError
 
 
 def test_anthropic_model_not_found_raises_opensre_error() -> None:

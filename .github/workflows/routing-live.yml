@@ -4,11 +4,11 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "app/cli/interactive_shell/routing/**"
-      - "app/cli/interactive_shell/chat/**"
-      - "app/cli/interactive_shell/runtime/**"
-      - "app/cli/interactive_shell/commands.py"
-      - "app/agent/tool_loop.py"
+      - "cli/interactive_shell/routing/**"
+      - "cli/interactive_shell/chat/**"
+      - "cli/interactive_shell/runtime/**"
+      - "cli/interactive_shell/commands.py"
+      - "core/runtime/**"
       - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
@@ -17,11 +17,11 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/cli/interactive_shell/routing/**"
-      - "app/cli/interactive_shell/chat/**"
-      - "app/cli/interactive_shell/runtime/**"
-      - "app/cli/interactive_shell/commands.py"
-      - "app/agent/tool_loop.py"
+      - "cli/interactive_shell/routing/**"
+      - "cli/interactive_shell/chat/**"
+      - "cli/interactive_shell/runtime/**"
+      - "cli/interactive_shell/commands.py"
+      - "core/runtime/**"
       - "tests/cli/interactive_shell/routing/**"
       - "pytest.ini"
       - "pyproject.toml"
@@ -73,7 +73,7 @@ jobs:
       - name: Deterministic routing + fixture integrity
         run: >-
           uv run python -m pytest -n auto -v
-          app/cli/interactive_shell/routing/tests/
+          cli/interactive_shell/routing/tests/
           -m "not live_llm"
 
   routing-live:
@@ -108,6 +108,13 @@ jobs:
       SENTRY_ORG_SLUG: tracer-30
       SENTRY_PROJECT_SLUG: python
       SENTRY_URL: https://sentry.io
+      # Optional: live-gather incident scenarios (333–335) resolve real Datadog
+      # credentials. When absent the scenarios skip (no DD_API_KEY/DD_APP_KEY).
+      DD_API_KEY: ${{ secrets.DD_API_KEY }}
+      DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+      DD_SITE: datadoghq.com
+      GRAFANA_READ_TOKEN: ${{ secrets.GRAFANA_READ_TOKEN }}
+      GRAFANA_INSTANCE_URL: ${{ secrets.GRAFANA_INSTANCE_URL }}
 
     steps:
       - uses: actions/checkout@v5
@@ -139,5 +146,5 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          app/cli/interactive_shell/routing/tests/test_routing_scenarios.py
+          cli/interactive_shell/routing/tests/test_routing_scenarios.py
           -k "test_live_turn_execution_oracle or test_live_action_planning"

@@ -7,7 +7,7 @@ import re
 import sys
 from types import SimpleNamespace
 
-from app.cli.interactive_shell.ui import choice_menu
+from cli.interactive_shell.ui import choice_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 
@@ -88,6 +88,30 @@ def test_read_action_treats_right_arrow_as_enter(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "msvcrt", SimpleNamespace(getch=lambda: next(keys)))
 
     assert choice_menu._read_action() == "enter"
+
+
+def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
+    out = io.StringIO()
+    actions = iter(["enter"])
+    monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(
+        "cli.interactive_shell.runtime.cpr_stdin.drain_stale_cpr_bytes",
+        lambda: None,
+    )
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(choice_menu, "_cols", lambda: 80)
+    monkeypatch.setattr(choice_menu, "_read_action", lambda: next(actions))
+
+    result = choice_menu.repl_choose_one(
+        title="theme",
+        breadcrumb="/theme",
+        choices=[("green", "green"), ("blue", "blue (current)"), ("pink", "pink")],
+        initial_value="blue",
+    )
+
+    assert result == "blue"
+    plain = _ANSI_RE.sub("", out.getvalue())
+    assert "> blue (current)" in plain
 
 
 def test_read_action_ignores_left_arrow(monkeypatch) -> None:

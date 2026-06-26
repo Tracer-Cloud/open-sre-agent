@@ -3,6 +3,7 @@
 import json
 
 from adapters.s3 import read_json, write_json
+
 from config import LANDING_BUCKET, PIPELINE_RUN_ID, PROCESSED_BUCKET, staging_key
 
 

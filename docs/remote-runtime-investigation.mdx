@@ -68,7 +68,7 @@ The thread's messages, users, timestamps, and reactions are fetched via Slack's 
 
 ## Extending to other providers
 
-The `RemoteOpsProvider` abstract class (in `app/remote/ops.py`) defines the provider interface. To add support for another provider (EC2, ECS, Vercel, etc.), implement a new subclass with `status()`, `logs()`, `fetch_logs()`, and `restart()` methods, then register it in `resolve_remote_ops_provider()`.
+The `RemoteOpsProvider` abstract class (in `deployment/remote/ops.py`) defines the provider interface. To add support for another provider (EC2, ECS, Vercel, etc.), implement a new subclass with `status()`, `logs()`, `fetch_logs()`, and `restart()` methods, then register it in `resolve_remote_ops_provider()`.
 
 ## Known limitations
 

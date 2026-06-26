@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.fleet_monitoring.meters import NullMeter, null_meter
-from app.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
-from app.fleet_monitoring.meters.codex import CodexMeter
-from app.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY, get_token_meter
+from tools.fleet_monitoring.meters import NullMeter, null_meter
+from tools.fleet_monitoring.meters.claude_code import ClaudeCodeMeter
+from tools.fleet_monitoring.meters.codex import CodexMeter
+from tools.fleet_monitoring.meters.registry import TOKEN_METER_REGISTRY, get_token_meter
 
 
 def test_claude_code_resolves_to_real_meter() -> None:
@@ -51,14 +51,14 @@ def test_registry_keys_cover_known_providers() -> None:
     to ``null_meter`` — correct fallback behavior, but masks the
     wiring bug.
     """
-    from app.fleet_monitoring.providers import KNOWN_PROVIDERS
+    from tools.fleet_monitoring.providers import KNOWN_PROVIDERS
 
     assert set(TOKEN_METER_REGISTRY) >= KNOWN_PROVIDERS
 
 
 def test_registry_provider_names_are_lowercase_kebab() -> None:
     """Convention: provider identifiers in this codebase are
-    lowercase-with-hyphen (matches ``app/integrations/llm_cli/registry.py``)."""
+    lowercase-with-hyphen (matches ``integrations/llm_cli/registry.py``)."""
     for name in TOKEN_METER_REGISTRY:
         assert name == name.lower(), f"{name!r} must be lowercase"
         assert " " not in name, f"{name!r} must not contain spaces"

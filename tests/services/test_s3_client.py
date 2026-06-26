@@ -1,4 +1,4 @@
-"""Tests for app.services.s3_client -- direct unit tests with mocked boto3."""
+"""Tests for services.s3_client -- direct unit tests with mocked boto3."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from app.services import s3_client
+from services import s3_client
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -44,8 +44,8 @@ def mock_s3() -> Generator[MagicMock]:
     Tests configure call-return values / side effects on this mock directly.
     """
     client = MagicMock()
-    p1 = patch("app.services.s3_client.make_boto3_client", return_value=client)
-    p2 = patch("app.services.s3_client.require_aws_credentials", return_value=None)
+    p1 = patch("services.s3_client.make_boto3_client", return_value=client)
+    p2 = patch("services.s3_client.require_aws_credentials", return_value=None)
     p1.start()
     p2.start()
     yield client
@@ -497,7 +497,7 @@ class TestBoto3NotAvailable:
     def _no_boto3(self) -> Generator[None]:
         """Patch make_boto3_client to return None; do NOT patch credentials
         (the early-return should fire before credentials are checked)."""
-        p = patch("app.services.s3_client.make_boto3_client", return_value=None)
+        p = patch("services.s3_client.make_boto3_client", return_value=None)
         p.start()
         yield
         p.stop()

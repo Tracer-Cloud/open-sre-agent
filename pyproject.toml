@@ -83,7 +83,7 @@ Issues = "https://github.com/Tracer-Cloud/opensre/issues"
 Changelog = "https://github.com/Tracer-Cloud/opensre/releases"
 
 [project.scripts]
-opensre = "app.cli.__main__:main"
+opensre = "cli.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -135,10 +135,21 @@ azure_sql = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*", "tests*"]
+include = [
+  "app*",
+  "cli*",
+  "config*",
+  "core*",
+  "deployment*",
+  "integrations*",
+  "platform*",
+  "services*",
+  "tests*",
+  "tools*",
+]
 
 [tool.setuptools.package-data]
-"app.cli" = ["fixtures/*.json"]
+"cli" = ["fixtures/*.json"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.
@@ -146,9 +157,9 @@ include = ["app*", "tests*"]
 data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
-paths = ["app"]
+paths = ["app", "cli", "core", "deployment", "integrations", "platform", "services", "tools"]
 exclude = [
-  "app/tools/simple_tools.py",          # explicitly skipped by the registry
+  "tools/simple_tools.py",          # explicitly skipped by the registry
   "app/dockerfile_test.py",
   "app/**/*_test.py",                   # inline pytest modules
 ]
@@ -163,7 +174,7 @@ ignore_decorators = [
   "@validator",
   "@cache",
   "@lru_cache",
-  "@tool",               # @app.tools.tool_decorator.tool registrations
+  "@tool",               # @tools.tool_decorator.tool registrations
   "@mcp.tool",
   "@register*",
 ]

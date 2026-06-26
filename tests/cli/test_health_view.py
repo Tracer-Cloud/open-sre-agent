@@ -5,13 +5,13 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from app.cli.interactive_shell.ui.health_view import (
+from cli.interactive_shell.ui.health_view import (
     _summary_counts,
     render_health_json,
     render_health_report,
     status_badge,
 )
-from app.cli.interactive_shell.ui.theme import ERROR, HIGHLIGHT, WARNING
+from cli.interactive_shell.ui.theme import ERROR, HIGHLIGHT, WARNING
 
 
 def test_status_badge() -> None:
@@ -129,7 +129,7 @@ def test_render_health_json(capsys) -> None:
     assert data["results"][1]["status"] == "failed"
 
 
-@patch("app.guardrails.rules.get_default_rules_path")
+@patch("platform.guardrails.rules.get_default_rules_path")
 def test_render_health_report_action_messages(mock_rules_path: MagicMock) -> None:
     mock_rules_path.return_value = Path("/nonexistent/rules")
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.RabbitMQNodeHealthTool import get_rabbitmq_node_health
 from tests.tools.conftest import BaseToolContract
+from tools.RabbitMQNodeHealthTool import get_rabbitmq_node_health
 
 
 class TestRabbitMQNodeHealthToolContract(BaseToolContract):
@@ -31,7 +31,7 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "app.tools.RabbitMQNodeHealthTool.get_node_health",
+        "tools.RabbitMQNodeHealthTool.get_node_health",
         return_value=fake_result,
     ):
         result = get_rabbitmq_node_health(host="rmq", username="admin")

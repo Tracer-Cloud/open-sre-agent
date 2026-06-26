@@ -9,7 +9,7 @@ from pathlib import Path
 import psutil
 import pytest
 
-from app.fleet_monitoring.token_sources.codex import CodexRolloutSource
+from tools.fleet_monitoring.token_sources.codex import CodexRolloutSource
 
 
 @pytest.fixture
@@ -37,19 +37,19 @@ def _default_open_rollouts(monkeypatch: pytest.MonkeyPatch, codex_home: Path) ->
         return tuple(codex_home.rglob("rollout-*.jsonl"))
 
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.codex.open_files_for_pid", _all_rollouts
+        "tools.fleet_monitoring.token_sources.codex.open_files_for_pid", _all_rollouts
     )
 
 
 def _patch_create_time(monkeypatch: pytest.MonkeyPatch, started_at_epoch: float) -> None:
     """Stub :func:`started_at_for_pid` at the source's import site.
 
-    The source uses :func:`app.fleet_monitoring.probe.started_at_for_pid` (the
+    The source uses :func:`tools.fleet_monitoring.probe.started_at_for_pid` (the
     psutil-fenced helper) rather than ``psutil.Process`` directly, so
     the unit test patches that helper.
     """
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.codex.started_at_for_pid",
+        "tools.fleet_monitoring.token_sources.codex.started_at_for_pid",
         lambda _pid: started_at_epoch,
     )
 
@@ -63,7 +63,7 @@ def _patch_create_time_raises(monkeypatch: pytest.MonkeyPatch, exc: type[BaseExc
     """
     del exc
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.codex.started_at_for_pid",
+        "tools.fleet_monitoring.token_sources.codex.started_at_for_pid",
         lambda _pid: None,
     )
 
@@ -120,7 +120,7 @@ class TestFirstCallResolution:
         newer = _write_rollout(rollout_dir, "rollout-002.jsonl", "newer\n", mtime=started_at + 50)
         _patch_create_time(monkeypatch, started_at)
         monkeypatch.setattr(
-            "app.fleet_monitoring.token_sources.codex.open_files_for_pid",
+            "tools.fleet_monitoring.token_sources.codex.open_files_for_pid",
             lambda _pid: (older, newer),
         )
 
@@ -144,7 +144,7 @@ class TestFirstCallResolution:
         _write_rollout(rollout_dir, "rollout-other.jsonl", "other session\n", mtime=started_at + 50)
         _patch_create_time(monkeypatch, started_at)
         monkeypatch.setattr(
-            "app.fleet_monitoring.token_sources.codex.open_files_for_pid",
+            "tools.fleet_monitoring.token_sources.codex.open_files_for_pid",
             lambda _pid: (),
         )
 
@@ -166,7 +166,7 @@ class TestFirstCallResolution:
         _write_rollout(rollout_dir, "rollout-others.jsonl", "others\n", mtime=started_at + 50)
         _patch_create_time(monkeypatch, started_at)
         monkeypatch.setattr(
-            "app.fleet_monitoring.token_sources.codex.open_files_for_pid",
+            "tools.fleet_monitoring.token_sources.codex.open_files_for_pid",
             lambda _pid: (mine,),
         )
 
@@ -318,7 +318,7 @@ class TestCodexHomeOverride:
         # fixture, so override ``open_files_for_pid`` to point at the
         # rollout actually written here.
         monkeypatch.setattr(
-            "app.fleet_monitoring.token_sources.codex.open_files_for_pid",
+            "tools.fleet_monitoring.token_sources.codex.open_files_for_pid",
             lambda _pid: (rollout,),
         )
 

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-import app.constants as const_module
-from app.cli.interactive_shell.runtime.session import (
+import config.constants as const_module
+from cli.interactive_shell.runtime.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
     _scenario_id_from_synthetic_label,
 )
-from app.cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
+from cli.interactive_shell.runtime.tasks import TaskKind, TaskRegistry
 
 
 class TestReplSession:
@@ -108,6 +108,7 @@ class TestReplSession:
     def test_clear_preserves_trust_mode(self) -> None:
         session = ReplSession()
         session.trust_mode = True
+        session.background_notification_preferences.set_channels(["email"])
         session.accumulated_context["service"] = "api"
         session.record("alert", "something")
         session.last_state = {"foo": "bar"}
@@ -126,6 +127,7 @@ class TestReplSession:
         assert session.task_registry.list_recent() == []
         assert session.ctrl_c_intervention_count == 0
         assert session.correction_intervention_count == 0
+        assert session.background_notification_preferences.channels == ("email",)
         assert session.trust_mode is True  # preserved intentionally
 
     def test_clear_keeps_persisted_task_history_file(

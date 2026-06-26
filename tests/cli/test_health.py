@@ -2,13 +2,13 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
+from cli.__main__ import cli
 
 
 def test_health_command_runs() -> None:
     runner = CliRunner()
 
-    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+    with patch("integrations.verify.verify_integrations") as mock_verify:
         mock_verify.return_value = [
             {
                 "service": "aws",
@@ -32,7 +32,7 @@ def test_health_command_runs() -> None:
 def test_health_command_uses_real_datadog_verification_path(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
-        "app.integrations.verify.resolve_effective_integrations",
+        "integrations.verify.resolve_effective_integrations",
         lambda: {
             "datadog": {
                 "source": "local store",
@@ -58,7 +58,7 @@ def test_health_command_uses_real_datadog_verification_path(monkeypatch) -> None
 def test_health_command_exits_zero_when_all_integrations_missing() -> None:
     runner = CliRunner()
 
-    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+    with patch("integrations.verify.verify_integrations") as mock_verify:
         mock_verify.return_value = [
             {
                 "service": svc,
@@ -78,7 +78,7 @@ def test_health_command_exits_zero_when_all_integrations_missing() -> None:
 def test_health_command_exits_one_when_any_integration_failed() -> None:
     runner = CliRunner()
 
-    with patch("app.integrations.verify.verify_integrations") as mock_verify:
+    with patch("integrations.verify.verify_integrations") as mock_verify:
         mock_verify.return_value = [
             {
                 "service": "aws",

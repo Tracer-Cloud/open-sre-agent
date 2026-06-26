@@ -10,6 +10,20 @@ automerge_pr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(automerge_pr)
 
 
+def test_squash_commit_subject_appends_pr_number() -> None:
+    assert (
+        automerge_pr._squash_commit_subject("fix(cli): show full root cause", "3025")
+        == "fix(cli): show full root cause (#3025)"
+    )
+
+
+def test_squash_commit_subject_avoids_duplicate_pr_number() -> None:
+    assert (
+        automerge_pr._squash_commit_subject("fix(cli): example (#3025)", "3025")
+        == "fix(cli): example (#3025)"
+    )
+
+
 def test_checks_are_green_for_completed_check_runs() -> None:
     green, reason = automerge_pr._checks_are_green(
         [

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.integrations.catalog import classify_integrations, resolve_effective_integrations
-from app.integrations.models import ArgoCDIntegrationConfig
-from app.integrations.verify import _verify_argocd, verify_integrations
+from integrations.catalog import classify_integrations, resolve_effective_integrations
+from integrations.models import ArgoCDIntegrationConfig
+from integrations.verify import verify_integrations
+from services.argocd.verifier import verify_argocd as _verify_argocd
 
 
 @pytest.fixture(autouse=True)
@@ -42,11 +43,11 @@ def test_classify_argocd_store_record() -> None:
         ]
     )
 
-    assert resolved["argocd"]["base_url"] == "https://argocd.example.com"
-    assert resolved["argocd"]["bearer_token"] == "tok_store"
-    assert resolved["argocd"]["project"] == "default"
-    assert resolved["argocd"]["app_namespace"] == "argocd"
-    assert resolved["argocd"]["integration_id"] == "argocd-store-1"
+    assert resolved["argocd"].base_url == "https://argocd.example.com"
+    assert resolved["argocd"].bearer_token == "tok_store"
+    assert resolved["argocd"].project == "default"
+    assert resolved["argocd"].app_namespace == "argocd"
+    assert resolved["argocd"].integration_id == "argocd-store-1"
 
 
 def test_classify_argocd_rejects_plain_http_remote() -> None:
@@ -105,7 +106,7 @@ def test_argocd_integration_config_only_strips_bearer_prefix_from_token() -> Non
 def test_resolve_effective_integrations_includes_argocd_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv("ARGOCD_BASE_URL", "https://argocd.example.com/")
     monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "Bearer tok_env")
     monkeypatch.setenv("ARGOCD_PROJECT", "payments")
@@ -127,7 +128,7 @@ def test_resolve_effective_integrations_includes_argocd_from_env(
 def test_resolve_effective_integrations_ignores_invalid_argocd_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv("ARGOCD_BASE_URL", "https://argocd.example.com")
     monkeypatch.setenv("ARGOCD_AUTH_TOKEN", "tok_env")
     monkeypatch.setenv("ARGOCD_USERNAME", "admin")
@@ -137,7 +138,7 @@ def test_resolve_effective_integrations_ignores_invalid_argocd_env(
 
 
 def test_argocd_multi_instance_env_is_propagated(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.integrations.catalog.load_integrations", lambda: [])
+    monkeypatch.setattr("integrations.catalog.load_integrations", lambda: [])
     monkeypatch.setenv(
         "ARGOCD_INSTANCES",
         """
@@ -156,8 +157,8 @@ def test_argocd_multi_instance_env_is_propagated(monkeypatch: pytest.MonkeyPatch
 
 
 def test_verify_argocd_passes_with_reachable_api(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.probes import ProbeResult
-    from app.services.argocd.client import ArgoCDClient
+    from integrations.probes import ProbeResult
+    from services.argocd.client import ArgoCDClient
 
     monkeypatch.setattr(
         ArgoCDClient,
@@ -182,8 +183,8 @@ def test_verify_argocd_reports_missing_auth() -> None:
 
 
 def test_verify_integrations_dispatches_to_argocd(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.integrations.probes import ProbeResult
-    from app.services.argocd.client import ArgoCDClient
+    from integrations.probes import ProbeResult
+    from services.argocd.client import ArgoCDClient
 
     monkeypatch.setattr(
         ArgoCDClient,
@@ -193,7 +194,7 @@ def test_verify_integrations_dispatches_to_argocd(monkeypatch: pytest.MonkeyPatc
         ),
     )
     monkeypatch.setattr(
-        "app.integrations.catalog.load_integrations",
+        "integrations.catalog.load_integrations",
         lambda: [
             {
                 "id": "argocd-1",

@@ -3,7 +3,7 @@ title: 'Assistant with Connected Tools'
 description: 'How the interactive shell assistant pulls live data from your connected integrations to answer free-form questions'
 ---
 
-When you ask the OpenSRE interactive shell a free-form question, the assistant can pull **live data from your connected integrations** before answering — instead of replying from text alone. If a question is answerable from an integration you have configured (GitHub, Datadog, Sentry, Grafana, cloud APIs, and more), the assistant transparently calls the same tools the investigation pipeline uses, gathers the results, and answers from that real data.
+When you ask the OpenSRE interactive shell a free-form question, the assistant can pull **live data from your connected integrations** before answering — instead of replying from text alone. If a question is answerable from an integration you have configured (GitHub, Datadog, Sentry, Grafana, cloud services, and more), the assistant transparently calls the same tools the investigation pipeline uses, gathers the results, and answers from that real data.
 
 This happens automatically. You do not run a slash command or pick a tool — just describe what you want to know.
 
@@ -11,19 +11,19 @@ This happens automatically. You do not run a slash command or pick a tool — ju
 
 ```text
 > can you check the github issues for the windows crashes?
-· gathering data via search_github_issues…
+· gathering via GitHub · search issues — windows crashes…
 There are 3 open issues mentioning Windows crashes. The most recent, #482
 "App crashes on launch (Windows 11)", reports a startup segfault after the
 2.4.0 update and has 6 reactions…
 ```
 
-The dim `· gathering data via <tool>…` line shows which integration the assistant reached for while it works.
+The dim `· gathering via <source> · <tool> — <query hint>…` line shows which integration the assistant reached for while it works. When the same tool runs more than once, a `(2)`, `(3)`, … suffix and the query hint distinguish each call.
 
 More questions that trigger live gathering:
 
 | You ask | The assistant gathers from |
 | --- | --- |
-| "check the github issues for the windows crashes" | GitHub issues |
+| "check the GitHub issues for the Windows crashes" | GitHub issues |
 | "what do the datadog logs say about the payment service?" | Datadog logs |
 | "are there recent Sentry errors on checkout?" | Sentry |
 | "what's the recent error rate in grafana for prod-api?" | Grafana |

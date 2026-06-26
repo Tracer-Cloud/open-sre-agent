@@ -1,7 +1,7 @@
 import pytest
 from _pytest.outcomes import Skipped
 
-from app.services.grafana import get_grafana_client
+from services.grafana import get_grafana_client
 from tests.e2e.grafana_validation.env_requirements import require_grafana_query_env
 
 

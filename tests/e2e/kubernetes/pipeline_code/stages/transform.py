@@ -3,8 +3,9 @@
 import json
 
 from adapters.s3 import read_json, write_json
-from config import LANDING_BUCKET, REQUIRED_FIELDS, staging_key
 from domain import validate_and_transform
+
+from config import LANDING_BUCKET, REQUIRED_FIELDS, staging_key
 
 
 def main() -> None:

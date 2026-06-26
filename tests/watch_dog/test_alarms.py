@@ -1,4 +1,4 @@
-"""Tests for app/watch_dog/alarms.py."""
+"""Tests for tools/watch_dog/alarms.py."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.watch_dog.alarms import (
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from tools.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
     load_credentials_from_env,
@@ -40,7 +40,7 @@ def _stub_telegram(
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
-        "app.watch_dog.alarms.post_telegram_message",
+        "tools.watch_dog.alarms.post_telegram_message",
         _fake_post,
     )
     return calls
@@ -66,7 +66,7 @@ def _isolate_credential_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     ``~/.opensre`` store and make tests depend on local machine state.
     """
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {},
     )
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
@@ -75,7 +75,7 @@ def _isolate_credential_sources(monkeypatch: pytest.MonkeyPatch) -> None:
 def _patch_store(monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]) -> None:
     """Point the store-backed Telegram config at *config*."""
     monkeypatch.setattr(
-        "app.integrations.catalog.resolve_effective_integrations",
+        "integrations.catalog.resolve_effective_integrations",
         lambda: {"telegram": {"source": "local store", "config": config}},
     )
 
@@ -238,7 +238,7 @@ def test_load_credentials_from_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "chat-1")
     monkeypatch.setattr(
-        "app.llm_credentials.resolve_llm_api_key",
+        "config.llm_credentials.resolve_llm_api_key",
         lambda env_var: "keyring-tok" if env_var == "TELEGRAM_BOT_TOKEN" else "",
     )
 
@@ -255,7 +255,7 @@ def test_load_credentials_store_failure_falls_back_to_env(
     def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("store is locked")
 
-    monkeypatch.setattr("app.integrations.catalog.resolve_effective_integrations", _boom)
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", _boom)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-tok")
     monkeypatch.setenv("TELEGRAM_DEFAULT_CHAT_ID", "env-chat")
 

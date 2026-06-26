@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.tools.SREGuidanceTool import get_sre_guidance
 from tests.tools.conftest import BaseToolContract
+from tools.SREGuidanceTool import get_sre_guidance
 
 
 class TestSREGuidanceToolContract(BaseToolContract):

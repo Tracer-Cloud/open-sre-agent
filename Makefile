@@ -28,10 +28,12 @@ USER_BASE := $(shell $(PYTHON) -m site --user-base)
 USER_BIN := $(if $(filter Windows_NT,$(OS)),$(USER_BASE)/Scripts,$(USER_BASE)/bin)
 export PATH := $(if $(wildcard .venv/bin),$(CURDIR)/.venv/bin:,$(if $(wildcard .venv/Scripts),$(CURDIR)/.venv/Scripts:))$(USER_BIN):$(PATH)
 
+PYTHON_SOURCE_PATHS := cli config core deployment integrations platform services tools
+
 # Create venv and install dependencies (requires https://docs.astral.sh/uv/)
 install:
 	uv sync --frozen --extra dev
-	uv run python -m app.analytics.install
+	uv run python -m platform.analytics.install
 
 build:
 	$(PYTHON) -m build
@@ -95,13 +97,13 @@ check-docker:
 	@docker info >/dev/null 2>&1 || { echo "Docker is installed, but the Docker daemon is not running. Start Docker Desktop, OrbStack, or Colima, then rerun this target."; exit 1; }
 
 grafana-local-up: check-docker
-	docker compose -f app/cli/wizard/local_grafana_stack/docker-compose.yml up -d
+	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml up -d
 
 grafana-local-down: check-docker
-	docker compose -f app/cli/wizard/local_grafana_stack/docker-compose.yml down
+	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml down
 
 grafana-local-seed:
-	$(PYTHON) -m app.cli.wizard.grafana_seed
+	$(PYTHON) -m cli.wizard.grafana_seed
 
 # Run CloudWatch demo
 cloudwatch-demo:
@@ -274,7 +276,7 @@ run:
 	opensre investigate
 
 dev:
-	@echo "Run the health app with: uv run uvicorn app.webapp:app --reload --host 0.0.0.0 --port 8000"
+	@echo "Run the health app with: uv run uvicorn config.webapp:app --reload --host 0.0.0.0 --port 8000"
 
 docs-dev:
 	cd docs && mint dev
@@ -353,7 +355,7 @@ test-full:
 # Keep tests/synthetic excluded here to match GitHub CI; marker filtering alone is
 # not enough because some synthetic tests are collected without the synthetic mark.
 test-cov:
-	$(PYTHON) -m pytest -n auto -v --cov=app --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
+	$(PYTHON) -m pytest -n auto -v $(addprefix --cov=,$(PYTHON_SOURCE_PATHS)) --cov-report=term-missing --ignore=tests/e2e/kubernetes_local_alert_simulation --ignore=tests/synthetic -m "not synthetic"
 
 # Run only the tests relevant to files changed on this branch (local use only).
 # Pass ARGS=--dry-run to preview the command without executing it.
@@ -419,7 +421,7 @@ test-rabbitmq-real:
 	RABBITMQ_USERNAME=sre_admin \
 	RABBITMQ_PASSWORD=sre_password \
 	RABBITMQ_VHOST=/orders \
-	$(PYTHON) -c "from app.integrations.rabbitmq import rabbitmq_config_from_env, validate_rabbitmq_config, get_queue_backlog, get_broker_overview; \
+	$(PYTHON) -c "from integrations.rabbitmq import rabbitmq_config_from_env, validate_rabbitmq_config, get_queue_backlog, get_broker_overview; \
 cfg = rabbitmq_config_from_env(); \
 print('validate:', validate_rabbitmq_config(cfg)); \
 print('overview:', get_broker_overview(cfg)); \
@@ -435,19 +437,19 @@ clean:
 
 # Lint code
 lint:
-	$(PYTHON) -m ruff check app/ tests/
+	$(PYTHON) -m ruff check $(PYTHON_SOURCE_PATHS) tests/
 
 # Check formatting (read-only; CI uses this)
 format-check:
-	$(PYTHON) -m ruff format --check app/ tests/
+	$(PYTHON) -m ruff format --check $(PYTHON_SOURCE_PATHS) tests/
 
 # Format code
 format:
-	$(PYTHON) -m ruff format app/ tests/
+	$(PYTHON) -m ruff format $(PYTHON_SOURCE_PATHS) tests/
 
 # Type check
 typecheck:
-	$(PYTHON) -m mypy app/
+	$(PYTHON) -m mypy $(PYTHON_SOURCE_PATHS)
 
 # Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
 check: lint format-check typecheck test-full

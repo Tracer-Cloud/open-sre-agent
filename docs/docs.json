@@ -99,11 +99,13 @@
             "pages": [
               "integrations-overview",
               "remote-runtime-investigation",
+              "background-investigations",
               "masking",
               "interactive-shell-privacy",
               "sessions",
               "fleet",
               "cron",
+              "closed-loop-learning",
               "multi-instance-integrations"
             ]
           },
@@ -164,6 +166,7 @@
             "expanded": true,
             "pages": [
               "messaging/index",
+              "smtp",
               "messaging/slack",
               "messaging/discord",
               "messaging/telegram",
@@ -191,7 +194,9 @@
               "rds",
               "snowflake",
               "supabase",
-              "redis"
+              "redis",
+              "rds",
+              "temporal"
             ]
           }
         ]

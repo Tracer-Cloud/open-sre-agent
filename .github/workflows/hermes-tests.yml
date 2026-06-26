@@ -6,7 +6,7 @@ on:
       - "tests/synthetic/hermes_rca/**"
       - "tests/e2e/hermes/**"
       - "tests/synthetic/mock_hermes_backend/**"
-      - "app/tools/HermesSessionEvidenceTool/**"
+      - "tools/HermesSessionEvidenceTool/**"
       - ".github/workflows/hermes-tests.yml"
       - "Makefile"
       - "pytest.ini"

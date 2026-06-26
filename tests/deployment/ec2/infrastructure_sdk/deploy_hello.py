@@ -34,7 +34,7 @@ from tests.shared.infrastructure_sdk.resources.vpc import (
     get_public_subnets,
 )
 
-STACK_NAME = "tracer-ec2-hello"
+STACK_NAME = "opensre-ec2-hello"
 REGION = DEFAULT_REGION
 HELLO_WORLD_DIR = Path(__file__).resolve().parent.parent / "hello_world"
 ECR_REPO_NAME = "opensre"

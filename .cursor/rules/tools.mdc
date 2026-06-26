@@ -1,7 +1,7 @@
 ---
 description: Tool development patterns for investigation and chat tools
 globs:
-  - app/tools/**
+  - tools/**
 ---
 
 # Tool Development
@@ -10,10 +10,10 @@ globs:
 
 ### 1. Function + `@tool` decorator (preferred for simple tools)
 
-Single file under `app/tools/` with a decorated function. The registry auto-discovers it.
+Single file under `tools/` with a decorated function. The registry auto-discovers it.
 
 ```python
-from app.tools.tool_decorator import tool
+from tools.tool_decorator import tool
 
 @tool(
     name="my_tool_name",
@@ -32,10 +32,10 @@ def my_tool_name(param: str) -> dict:
 
 ### 2. `BaseTool` subclass (for complex tools with helpers)
 
-PascalCase directory: `app/tools/MyToolName/__init__.py`. Instantiate at module level.
+PascalCase directory: `tools/MyToolName/__init__.py`. Instantiate at module level.
 
 ```python
-from app.tools.base import BaseTool
+from tools.base import BaseTool
 
 class MyToolName(BaseTool):
     name = "my_tool_name"
@@ -59,9 +59,9 @@ my_tool_name = MyToolName()
 
 ## Rules
 
-- `source` is **required** — must be a valid `EvidenceSource` literal from `app/state.py`
+- `source` is **required** — must be a valid `EvidenceSource` literal from `core/domain/types/evidence.py`
 - Tool directories use **PascalCase + `Tool`** suffix (`GrafanaLogsTool/`, `S3ListTool/`)
-- The registry in `app/tools/registry.py` auto-discovers via `pkgutil.iter_modules`
+- The registry in `tools/registry.py` auto-discovers via `pkgutil.iter_modules`
 - Do NOT add your module to `_SKIP_MODULE_NAMES` in `registry.py`
 - Module names ending in `_test` are auto-skipped by the registry
 - `surfaces` defaults to `("investigation",)` — add `"chat"` explicitly if needed

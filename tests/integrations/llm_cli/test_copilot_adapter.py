@@ -9,15 +9,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.llm_cli.copilot import CopilotAdapter
-from app.integrations.llm_cli.runner import CLIBackedLLMClient
+from integrations.llm_cli.copilot import CopilotAdapter
+from integrations.llm_cli.runner import CLIBackedLLMClient
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 
 @pytest.fixture(autouse=True)
 def _copilot_detect_treats_which_hits_as_runnable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests mock ``which`` to ``/usr/bin/copilot`` without creating a real file on disk."""
-    import app.integrations.llm_cli.binary_resolver as br
+    import integrations.llm_cli.binary_resolver as br
 
     real_runnable = br.is_runnable_binary
     shim = "/usr/bin/copilot"
@@ -90,9 +90,9 @@ def _clean_copilot_env(monkeypatch: pytest.MonkeyPatch, *, home: Path | None = N
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_with_token_env_is_logged_in(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -120,9 +120,9 @@ def test_detect_with_token_env_is_logged_in(
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_logged_in_yields_true(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -151,9 +151,9 @@ def test_detect_gh_logged_in_yields_true(
     assert "gh" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_auth_status_uses_hostname_when_copilot_gh_host_set(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -185,9 +185,9 @@ def test_detect_gh_auth_status_uses_hostname_when_copilot_gh_host_set(
     assert captured and captured[0][-2:] == ["--hostname", "acme.ghe.com"]
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_logged_in_via_token_line_fine_grained_pat(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -218,9 +218,9 @@ def test_detect_gh_logged_in_via_token_line_fine_grained_pat(
     assert probe.logged_in is True
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_logged_out_yields_false(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -249,9 +249,9 @@ def test_detect_gh_logged_out_yields_false(
     assert "not logged in" in probe.detail.lower() or "gh auth login" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_timeout_maps_to_unknown_auth(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -280,9 +280,9 @@ def test_detect_gh_timeout_maps_to_unknown_auth(
     assert "Could not verify" in probe.detail
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_gh_not_installed_falls_through(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -303,9 +303,9 @@ def test_detect_gh_not_installed_falls_through(
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_config_json_plaintext_not_used_for_auth(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -335,9 +335,9 @@ def test_detect_config_json_plaintext_not_used_for_auth(
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_with_unrelated_files_is_not_logged_in(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -361,7 +361,7 @@ def test_detect_with_unrelated_files_is_not_logged_in(
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_detect_when_binary_not_found(
     _mock_which: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -372,8 +372,8 @@ def test_detect_when_binary_not_found(
     assert "not found" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_when_version_fails(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -397,9 +397,9 @@ def test_detect_when_version_fails(
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.copilot.shutil.which")
-@patch("app.integrations.llm_cli.copilot.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.copilot.shutil.which")
+@patch("integrations.llm_cli.copilot.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_no_creds_no_token_is_unclear(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -425,7 +425,7 @@ def test_detect_no_creds_no_token_is_unclear(
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
 def test_build_argv_uses_non_interactive_flags(
     mock_which: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -446,7 +446,7 @@ def test_build_argv_uses_non_interactive_flags(
     mock_which.assert_called()
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
 def test_build_uses_workspace_when_provided(
     _mock_which: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -459,7 +459,7 @@ def test_build_uses_workspace_when_provided(
     assert inv.cwd == str(ws)
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
 def test_build_adds_model_flag_when_provided(
     _mock_which: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -471,7 +471,7 @@ def test_build_adds_model_flag_when_provided(
     assert inv.argv[idx + 1] == "claude-sonnet-4.6"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
 def test_build_forwards_token_env_keys(
     _mock_which: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -487,7 +487,7 @@ def test_build_forwards_token_env_keys(
     assert inv.env["GITHUB_TOKEN"] == "ghp_c"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/copilot")
 def test_build_forwards_copilot_config_envs(
     _mock_which: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
@@ -509,11 +509,9 @@ def test_build_forwards_copilot_config_envs(
 def test_build_raises_when_binary_unresolved(monkeypatch: pytest.MonkeyPatch) -> None:
     _clean_copilot_env(monkeypatch)
     with (
+        patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None) as mock_which,
         patch(
-            "app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None
-        ) as mock_which,
-        patch(
-            "app.integrations.llm_cli.copilot._fallback_copilot_paths",
+            "integrations.llm_cli.copilot._fallback_copilot_paths",
             return_value=[],
         ),
         pytest.raises(RuntimeError, match="Copilot CLI not found"),
@@ -577,7 +575,7 @@ def test_explain_failure_truncates_long_output() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_invokes_copilot_and_forwards_token_env(
     mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -608,7 +606,7 @@ def test_cli_backed_client_invokes_copilot_and_forwards_token_env(
 
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model=None, max_tokens=256)
         resp = client.invoke("hello")
@@ -626,7 +624,7 @@ def test_cli_backed_client_invokes_copilot_and_forwards_token_env(
 
 
 def test_registry_resolves_copilot_provider() -> None:
-    from app.integrations.llm_cli.registry import (
+    from integrations.llm_cli.registry import (
         CLI_PROVIDER_REGISTRY,
         get_cli_provider_registration,
     )
@@ -648,7 +646,7 @@ def test_subprocess_env_does_not_leak_copilot_token_via_prefix_allowlist(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``COPILOT_*`` must NOT be a prefix entry — COPILOT_GITHUB_TOKEN is a PAT."""
-    from app.integrations.llm_cli.subprocess_env import build_cli_subprocess_env
+    from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 
     monkeypatch.setenv("COPILOT_HOME", "/x/copilot")
     monkeypatch.setenv("COPILOT_MODEL", "gpt-5.2")

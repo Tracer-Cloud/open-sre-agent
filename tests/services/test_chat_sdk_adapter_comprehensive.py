@@ -47,7 +47,7 @@ import openai.types.chat as oai
 import openai.types.chat.chat_completion_message_tool_call as oai_tc_mod
 import pytest
 
-from app.services.chat_sdk_adapter import (
+from services.chat_sdk_adapter import (
     _AnthropicChatAdapter,
     _normalize_messages_for_anthropic,
     _normalize_messages_for_openai,
@@ -280,7 +280,7 @@ def test_openai_tools_key_absent_when_no_registered_tools(monkeypatch: pytest.Mo
 
     with (
         patch("openai.OpenAI") as cls,
-        patch("app.services.chat_sdk_adapter.get_registered_tools", return_value=[]),
+        patch("services.chat_sdk_adapter.get_registered_tools", return_value=[]),
     ):
         client = MagicMock()
         client.chat.completions.create.return_value = _openai_response("ok")
@@ -664,7 +664,7 @@ def test_anthropic_tools_key_absent_when_no_registered_tools(
 
     with (
         patch("anthropic.Anthropic") as cls,
-        patch("app.services.chat_sdk_adapter.get_registered_tools", return_value=[]),
+        patch("services.chat_sdk_adapter.get_registered_tools", return_value=[]),
     ):
         client = MagicMock()
         client.messages.create.return_value = _anthropic_response(text="ok")

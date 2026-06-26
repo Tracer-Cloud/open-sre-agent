@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.integrations.catalog import classify_integrations as _classify_integrations
-from app.integrations.verify import verify_integrations
+from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.verify import verify_integrations
 from tests.e2e.source_helpers import resolve_available_tool_sources
 
 
@@ -119,7 +119,7 @@ class TestRedisToolSourceAvailability:
 class TestRedisVerification:
     """Test Redis integration verification flow."""
 
-    @patch("app.integrations.redis._get_client")
+    @patch("integrations.redis._get_client")
     def test_verify_redis_success(self, mock_get_client):
         """Redis verification succeeds with valid config."""
         mock_client = MagicMock()
@@ -155,28 +155,60 @@ class TestRedisVerification:
 class TestRedisToolsAvailability:
     """Test Redis tools are available and configured."""
 
+    @pytest.fixture(autouse=True)
+    def _clear_registry_cache(self):
+        """Force fresh tool discovery so registry assertions never depend on a
+        cache populated by a prior test (per the ``tests/`` convention that any
+        test calling ``get_registered_tools()`` clears the cache in a fixture)."""
+        from tools.registry import clear_tool_registry_cache
+
+        clear_tool_registry_cache()
+        yield
+        clear_tool_registry_cache()
+
     def test_redis_tools_exist_as_modules(self):
         """Redis tools modules exist and are properly structured."""
         try:
             # Tools are defined as decorated functions within __init__ modules
-            from app.tools import (
+            from tools import (
+                RedisClientListTool,
                 RedisKeyScanTool,
+                RedisLatencyDoctorTool,
+                RedisListDepthTool,
                 RedisReplicationTool,
                 RedisServerInfoTool,
                 RedisSlowlogTool,
             )
 
-            # All 4 tool modules should be importable
+            # All 7 tool modules should be importable (4 baseline + 3 P1)
             assert RedisServerInfoTool is not None
             assert RedisSlowlogTool is not None
             assert RedisReplicationTool is not None
             assert RedisKeyScanTool is not None
+            assert RedisClientListTool is not None
+            assert RedisListDepthTool is not None
+            assert RedisLatencyDoctorTool is not None
         except ImportError as e:
             pytest.fail(f"Failed to import Redis tool modules: {e}")
 
+    def test_p1_tools_registered_on_investigation_surface(self):
+        """The three new P1 tools are discoverable on the investigation and chat surfaces."""
+        from tools.registry import get_registered_tools
+
+        p1_tools = {
+            "get_redis_client_list",
+            "get_redis_list_depth",
+            "get_redis_latency_doctor",
+        }
+        for surface in ("investigation", "chat"):
+            names = {t.name for t in get_registered_tools(surface) if t.source == "redis"}
+            assert p1_tools <= names, (
+                f"missing P1 redis tools on {surface} surface: {p1_tools - names}"
+            )
+
     def test_redis_integration_config_has_required_fields(self):
         """Redis integration provides required fields in resolved config."""
-        from app.integrations.models import RedisIntegrationConfig
+        from integrations.models import RedisIntegrationConfig
 
         config = RedisIntegrationConfig(
             host="localhost",
@@ -194,6 +226,76 @@ class TestRedisToolsAvailability:
         assert config.db == 0
         assert config.ssl is True
         assert config.integration_id == "test-id"
+
+
+class TestRedisP1ToolPaths:
+    """Exercise each new P1 tool end-to-end: tool fn -> helper -> client -> shape.
+
+    The Redis client is mocked at the transport boundary so the full tool path
+    (config build, command issue, response shaping, bounded sampling) is
+    covered without a live Redis, mirroring how a real investigation would call
+    these tools with credentials resolved from the integration config.
+    """
+
+    @patch("integrations.redis._get_client")
+    def test_client_list_tool_path(self, mock_get_client):
+        from tools.RedisClientListTool import get_redis_client_list
+
+        mock_client = MagicMock()
+        mock_client.client_list.return_value = [
+            {"id": "1", "addr": "10.0.0.1:5000", "flags": "N", "idle": "0", "cmd": "get"},
+            {"id": "2", "addr": "10.0.0.1:5001", "flags": "b", "idle": "5", "cmd": "blpop"},
+        ]
+        mock_get_client.return_value = mock_client
+
+        result = get_redis_client_list(host="prod-cache.redis.internal", port=6379, db=0)
+
+        assert result["available"] is True
+        assert result["total_clients"] == 2
+        assert result["blocked_clients"] == 1
+        assert result["address_breakdown"]["10.0.0.1"] == 2
+
+    @patch("integrations.redis._get_client")
+    def test_list_depth_tool_path(self, mock_get_client):
+        from tools.RedisListDepthTool import get_redis_list_depth
+
+        mock_client = MagicMock()
+        mock_client.type.return_value = "list"
+        mock_client.pipeline.return_value.execute.return_value = [1500, ["job-1"], ["job-1500"]]
+        mock_get_client.return_value = mock_client
+
+        result = get_redis_list_depth(
+            key="sidekiq:queue:default",
+            host="prod-cache.redis.internal",
+            head=1,
+            tail=1,
+        )
+
+        assert result["available"] is True
+        assert result["depth"] == 1500  # a real backlog
+        assert result["head"] == ["job-1"]
+        assert result["tail"] == ["job-1500"]
+
+    @patch("integrations.redis._get_client")
+    def test_latency_doctor_tool_path(self, mock_get_client):
+        from tools.RedisLatencyDoctorTool import get_redis_latency_doctor
+
+        mock_client = MagicMock()
+        mock_client.execute_command.return_value = "I detected spikes caused by fork."
+        mock_client.latency_latest.return_value = [["fork", 1700000000, 480, 1200]]
+        # Explicitly configure CONFIG GET so monitoring_active is driven by the
+        # real threshold (> 0) — not MagicMock's implicit __int__ == 1, which
+        # would make the assertion pass even if the threshold logic regressed.
+        mock_client.config_get.return_value = {"latency-monitor-threshold": "100"}
+        mock_get_client.return_value = mock_client
+
+        result = get_redis_latency_doctor(host="prod-cache.redis.internal")
+
+        assert result["available"] is True
+        assert result["monitoring_active"] is True
+        assert result["monitoring_threshold_ms"] == 100
+        assert result["latest"][0]["event"] == "fork"
+        assert "fork" in result["report"]
 
 
 class TestRedisAlertFixture:

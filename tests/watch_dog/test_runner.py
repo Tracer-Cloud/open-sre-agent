@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.interactive_shell.error_handling.errors import OpenSREError
-from app.cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
-from app.watch_dog.config import WatchdogConfig
-from app.watch_dog.process_monitor import ProcessSample
-from app.watch_dog.runner import run_watchdog
+from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
+from tools.watch_dog.config import WatchdogConfig
+from tools.watch_dog.process_monitor import ProcessSample
+from tools.watch_dog.runner import run_watchdog
 
 
 class _FakeSampler:
@@ -115,7 +115,7 @@ def test_missing_credentials_fail_fast_before_sampling(
         raise OpenSREError("missing telegram credentials")
 
     monkeypatch.setattr(
-        "app.watch_dog.runner.load_credentials_from_env",
+        "tools.watch_dog.runner.load_credentials_from_env",
         _raise_missing_credentials,
     )
 

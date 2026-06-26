@@ -4,22 +4,40 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/**"
+      - "cli/**"
+      - "config/**"
+      - "core/**"
+      - "deployment/**"
+      - "integrations/**"
+      - "platform/**"
+      - "services/**"
+      - "tools/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
       - "pytest.ini"
+      - "ruff.toml"
+      - "mypy.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
 
   pull_request:
     branches: [main]
     paths:
-      - "app/**"
+      - "cli/**"
+      - "config/**"
+      - "core/**"
+      - "deployment/**"
+      - "integrations/**"
+      - "platform/**"
+      - "services/**"
+      - "tools/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
       - "pytest.ini"
+      - "ruff.toml"
+      - "mypy.ini"
       - "Makefile"
       - ".github/workflows/ci.yml"
 
@@ -28,6 +46,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PYTHON_SOURCE_PATHS: "cli config core deployment integrations platform services tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -65,13 +84,13 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run python -m ruff check app/ tests/
+        run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
 
       - name: Format check
-        run: uv run python -m ruff format --check app/ tests/
+        run: uv run python -m ruff format --check $PYTHON_SOURCE_PATHS tests/
 
       - name: Typecheck
-        run: uv run python -m mypy app/
+        run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
   test:
     name: test (${{ matrix.shard }})
@@ -87,7 +106,7 @@ jobs:
               tests/services
               tests/utils
               tests/masking
-              tests/types
+              tests/core/domain/types
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime
@@ -101,10 +120,9 @@ jobs:
               tests/remote
               tests/agent
               tests/fleet_monitoring
-              tests/app
               tests/analytics
               tests/nodes
-              tests/pipeline
+              tests/core/orchestration
               tests/delivery
               tests/entrypoints
               tests/sandbox
@@ -117,7 +135,6 @@ jobs:
               tests/deployment
               tests/benchmarks
               tests/chaos_engineering
-              tests/packaging
               tests/shared
               tests/test_guardrails
               tests/cli_smoke_test.py
@@ -210,7 +227,14 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           ${{ matrix.pytest_paths }}
-          --cov=app
+          --cov=cli
+          --cov=config
+          --cov=core
+          --cov=deployment
+          --cov=integrations
+          --cov=platform
+          --cov=services
+          --cov=tools
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
@@ -337,12 +361,11 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "app/deployment/**"
-              - "app/integrations/**"
-              - "app/pipeline/**"
-              - "app/remote/**"
-              - "app/services/**"
-              - "app/tools/**"
+              - "deployment/**"
+              - "integrations/**"
+              - "core/orchestration/**"
+              - "services/**"
+              - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"
               - "tests/e2e/upstream_prefect_ecs_fargate/**"

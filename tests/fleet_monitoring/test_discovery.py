@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from app.fleet_monitoring import discovery
-from app.fleet_monitoring.discovery import (
+from tools.fleet_monitoring import discovery
+from tools.fleet_monitoring.discovery import (
     ProcessRow,
     classify_command_provider,
     discover_agents,
     registered_and_discovered_agents,
 )
-from app.fleet_monitoring.registry import AgentRecord, AgentRegistry
+from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry
 
 
 def _patch_codex_rollout_owners(monkeypatch: pytest.MonkeyPatch, owners: set[int]) -> None:
@@ -924,7 +924,7 @@ def test_registered_records_win_over_discovered_pid(
     )
 
     monkeypatch.setattr(
-        "app.fleet_monitoring.discovery.discover_agents",
+        "tools.fleet_monitoring.discovery.discover_agents",
         lambda: [
             AgentRecord(
                 name="claude-code",
@@ -949,7 +949,7 @@ def test_registered_and_discovered_agents_returns_sorted_rows(
     registry.register(AgentRecord(name="z-manual", pid=20, command="manual"))
 
     monkeypatch.setattr(
-        "app.fleet_monitoring.discovery.discover_agents",
+        "tools.fleet_monitoring.discovery.discover_agents",
         lambda: [
             AgentRecord(name="aider", pid=10, command="aider", source="discovered"),
         ],

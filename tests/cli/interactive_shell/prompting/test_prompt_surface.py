@@ -8,17 +8,17 @@ from dataclasses import dataclass
 import pytest
 from prompt_toolkit.completion import Completion
 
-from app.cli.interactive_shell.prompting import prompt_surface
-from app.cli.interactive_shell.prompting.prompt_surface import (
+from cli.interactive_shell.prompting import prompt_surface
+from cli.interactive_shell.prompting.prompt_surface import (
     _DEFAULT_PLACEHOLDER_TEXT,
     completion_preview_hint_ansi,
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
     wire_prompt_refresh,
 )
-from app.cli.interactive_shell.runtime import state as loop_state
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.runtime.tasks import TaskKind
+from cli.interactive_shell.runtime import state as loop_state
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.tasks import TaskKind
 
 
 def _strip_ansi(text: str) -> str:

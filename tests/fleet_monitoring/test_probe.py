@@ -15,10 +15,14 @@ from unittest.mock import patch
 import psutil
 import pytest
 
-from app.fleet_monitoring.probe import ProcessSnapshot, probe, process_has_open_codex_rollout
+from tools.fleet_monitoring.probe import (
+    ProcessSnapshot,
+    probe,
+    process_has_open_codex_rollout,
+)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_PROBE_MODULE = _REPO_ROOT / "app" / "fleet_monitoring" / "probe.py"
+_PROBE_MODULE = _REPO_ROOT / "app" / "tools" / "fleet_monitoring" / "probe.py"
 
 
 @pytest.fixture
@@ -107,7 +111,7 @@ def test_process_has_open_codex_rollout_returns_false_when_inaccessible() -> Non
 
 def test_psutil_is_not_imported_outside_probe_module() -> None:
     """Acceptance criterion #3: ``psutil`` must stay confined to
-    ``app/fleet_monitoring/probe.py`` so the dependency surface is explicit. A
+    ``tools/fleet_monitoring/probe.py`` so the dependency surface is explicit. A
     static scan over ``app/**/*.py`` catches future regressions
     deterministically — runtime import-graph checks would be flaky
     against lazy-import patterns the codebase already uses elsewhere.
@@ -123,7 +127,7 @@ def test_psutil_is_not_imported_outside_probe_module() -> None:
                 break
 
     assert not leaks, (
-        "psutil leaked into modules other than app/fleet_monitoring/probe.py:\n  "
+        "psutil leaked into modules other than tools/fleet_monitoring/probe.py:\n  "
         + "\n  ".join(leaks)
     )
 

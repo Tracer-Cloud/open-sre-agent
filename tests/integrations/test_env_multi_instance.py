@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app.integrations.catalog import load_env_integrations
+from integrations.catalog import load_env_integrations
 
 
 def _clear_env(monkeypatch) -> None:
@@ -94,7 +94,7 @@ def test_bad_json_logs_warning_and_falls_through_to_legacy(
 
     import logging
 
-    with caplog.at_level(logging.WARNING, logger="app.integrations.catalog"):
+    with caplog.at_level(logging.WARNING, logger="integrations.catalog"):
         records = load_env_integrations()
     grafana_records = [r for r in records if r.get("service") == "grafana"]
     assert len(grafana_records) == 1

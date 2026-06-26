@@ -1,4 +1,4 @@
-"""Direct unit tests for app/services/aws_sdk_client.py."""
+"""Direct unit tests for services/aws_sdk_client.py."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
 
-from app.services.aws_sdk_client import (
+from services.aws_sdk_client import (
     MAX_LIST_ITEMS,
     _is_operation_allowed,
     _sanitize_response,
@@ -196,7 +196,7 @@ class TestSanitizeResponseMisc:
 def mock_boto3_client():
     fake_client = MagicMock()
     fake_client.meta.region_name = "us-east-1"
-    with patch("app.services.aws_sdk_client.boto3.client", return_value=fake_client):
+    with patch("services.aws_sdk_client.boto3.client", return_value=fake_client):
         yield fake_client
 
 
@@ -225,7 +225,7 @@ class TestExecuteAwsSdkCallHappyPath:
 
     def test_region_override(self, mock_boto3_client) -> None:
         mock_boto3_client.list_clusters.return_value = {"ClusterArns": []}
-        with patch("app.services.aws_sdk_client.boto3.client", return_value=mock_boto3_client) as m:
+        with patch("services.aws_sdk_client.boto3.client", return_value=mock_boto3_client) as m:
             execute_aws_sdk_call("ecs", "list_clusters", region="eu-west-1")
             m.assert_called_once_with("ecs", region_name="eu-west-1")
 
@@ -253,7 +253,7 @@ class TestExecuteAwsSdkCallValidation:
         assert "not allowed" in result["error"].lower()
 
     def test_rejected_operation_does_not_create_client(self) -> None:
-        with patch("app.services.aws_sdk_client.boto3.client") as client:
+        with patch("services.aws_sdk_client.boto3.client") as client:
             result = execute_aws_sdk_call("ec2", "terminate_instances")
 
         assert result["success"] is False
@@ -272,7 +272,7 @@ class TestExecuteAwsSdkCallMissingOperation:
 class TestExecuteAwsSdkCallCredentialErrors:
     def test_no_credentials_error_when_creating_client(self) -> None:
         with patch(
-            "app.services.aws_sdk_client.boto3.client",
+            "services.aws_sdk_client.boto3.client",
             side_effect=NoCredentialsError(),
         ):
             result = execute_aws_sdk_call("ec2", "describe_instances")

@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.guardrails.audit import AuditLogger
-from app.guardrails.cli import cmd_audit, cmd_init, cmd_rules, cmd_test
+from platform.guardrails.audit import AuditLogger
+from platform.guardrails.cli import cmd_audit, cmd_init, cmd_rules, cmd_test
 
 
 class TestCmdInit:
@@ -17,7 +17,7 @@ class TestCmdInit:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         rules_path = tmp_path / "guardrails.yml"
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: rules_path)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: rules_path)
 
         cmd_init()
         out = capsys.readouterr().out
@@ -37,7 +37,7 @@ class TestCmdInit:
     ) -> None:
         rules_path = tmp_path / "guardrails.yml"
         rules_path.write_text("existing content", encoding="utf-8")
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: rules_path)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: rules_path)
 
         cmd_init()
         out = capsys.readouterr().out
@@ -53,7 +53,7 @@ class TestCmdTest:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setattr(
-            "app.guardrails.cli.get_default_rules_path",
+            "platform.guardrails.cli.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
         cmd_test("any text")
@@ -76,7 +76,7 @@ class TestCmdTest:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: config)
 
         cmd_test("key=AKIAIOSFODNN7EXAMPLE")
         out = capsys.readouterr().out
@@ -101,7 +101,7 @@ class TestCmdTest:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: config)
 
         cmd_test("this is forbidden data")
         out = capsys.readouterr().out
@@ -125,7 +125,7 @@ class TestCmdTest:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: config)
 
         cmd_test("nothing sensitive")
         assert "No matches" in capsys.readouterr().out
@@ -155,7 +155,7 @@ class TestCmdRules:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr("app.guardrails.cli.get_default_rules_path", lambda: config)
+        monkeypatch.setattr("platform.guardrails.cli.get_default_rules_path", lambda: config)
 
         cmd_rules()
         out = capsys.readouterr().out
@@ -172,7 +172,7 @@ class TestCmdRules:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         monkeypatch.setattr(
-            "app.guardrails.cli.get_default_rules_path",
+            "platform.guardrails.cli.get_default_rules_path",
             lambda: tmp_path / "missing.yml",
         )
         cmd_rules()
@@ -188,7 +188,7 @@ class TestCmdAudit:
     ) -> None:
         audit = AuditLogger(path=tmp_path / "audit.jsonl")
         audit.log(rule_name="r1", action="redact", matched_text_preview="secret")
-        monkeypatch.setattr("app.guardrails.cli.AuditLogger", lambda: audit)
+        monkeypatch.setattr("platform.guardrails.cli.AuditLogger", lambda: audit)
 
         cmd_audit(limit=10)
         out = capsys.readouterr().out
@@ -202,7 +202,7 @@ class TestCmdAudit:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         audit = AuditLogger(path=tmp_path / "empty.jsonl")
-        monkeypatch.setattr("app.guardrails.cli.AuditLogger", lambda: audit)
+        monkeypatch.setattr("platform.guardrails.cli.AuditLogger", lambda: audit)
 
         cmd_audit(limit=10)
         assert "No audit entries" in capsys.readouterr().out

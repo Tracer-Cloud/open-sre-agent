@@ -8,13 +8,13 @@ from collections.abc import Iterator
 
 from rich.console import Console
 
-from app.cli.interactive_shell.prompting.follow_up import (
+from cli.interactive_shell.prompting.follow_up import (
     _record_follow_up_turn,
     _summarize_evidence,
     _summarize_last_state,
     answer_follow_up,
 )
-from app.cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.runtime.session import ReplSession
 
 
 class _StreamingClient:
@@ -96,7 +96,7 @@ class TestAnswerFollowUpMarkupSafety:
 
     def _run_with_response(self, monkeypatch: object, response_text: str) -> str:
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             lambda: _StreamingClient(response_text),
         )
 
@@ -129,11 +129,11 @@ class TestAnswerFollowUpMarkupSafety:
             raise RuntimeError("config error: missing [api_key] in [datadog] section")
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             _boom,
         )
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -166,7 +166,7 @@ class TestAnswerFollowUpGroundingContract:
                 yield "Success"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             lambda: _SpyClient(),
         )
 
@@ -213,7 +213,7 @@ class TestFollowUpMultiTurn:
     def test_first_follow_up_records_to_follow_up_messages(self, monkeypatch: object) -> None:
         captured: list[str] = []
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             lambda: self._make_spy_client(captured, "It was a cache miss."),
         )
         session = self._session_with_state()
@@ -240,7 +240,7 @@ class TestFollowUpMultiTurn:
                 yield f"Answer {call_count}"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             _SequentialClient,
         )
         session = self._session_with_state()
@@ -260,7 +260,7 @@ class TestFollowUpMultiTurn:
 
     def test_empty_response_not_recorded(self, monkeypatch: object) -> None:
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             lambda: self._make_spy_client([], ""),
         )
         session = self._session_with_state()
@@ -296,7 +296,7 @@ class TestFollowUpMultiTurn:
                 yield "Follow-up answer"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "app.services.llm_client.get_llm_for_reasoning",
+            "services.llm_client.get_llm_for_reasoning",
             _SpyClient,
         )
         session = self._session_with_state()

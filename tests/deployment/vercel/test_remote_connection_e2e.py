@@ -33,7 +33,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.remote.client import PreflightResult, RemoteAgentClient
+from deployment.remote.client import PreflightResult, RemoteAgentClient
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,38 @@
+id: 500-connect-local-llama-fail-closed
+title: Connect local llama fail-closed
+intent_class: remote
+input:
+  prompt: please connect to local llama
+session:
+  has_prior_state: false
+  configured_integrations: []
+  resolved_integrations: {}
+notes: []
+route:
+  expected_kind: handle_message_with_agent
+  expected_command_text: null
+policy:
+  executes_terminal_action: false
+planned_actions: []
+response_contract:
+  must_contain_any:
+  - local llama
+  - local llm
+  - provider
+  - /model
+  - /onboard
+  - local-model connection tool
+  must_not_contain:
+  - $ /
+history:
+  expected:
+  - type: cli_agent
+    ok: true
+runs: 3
+tool_actions:
+- surface: gather
+  tools:
+  - search_sentry_issues
+  - search_github_issues
+  - list_posthog_tools
+  expect: not_called

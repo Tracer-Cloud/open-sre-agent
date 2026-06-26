@@ -31,7 +31,7 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-from app.integrations.airflow import (
+from integrations.airflow import (
     DEFAULT_AIRFLOW_BASE_URL,
     build_airflow_config,
     get_airflow_dag_runs,
@@ -170,7 +170,7 @@ def test_airflow_investigation_e2e():
     """
     _require_env()
 
-    from app.cli.investigation import run_investigation_cli
+    from cli.investigation import run_investigation_cli
 
     fixture_path = FIXTURES_DIR / "airflow_task_failure_alert.json"
     raw_alert = json.loads(fixture_path.read_text())

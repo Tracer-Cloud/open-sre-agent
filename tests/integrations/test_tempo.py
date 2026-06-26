@@ -1,7 +1,7 @@
 """Unit tests for the Grafana Tempo integration module."""
 
-from app.integrations.catalog import load_env_integrations
-from app.integrations.tempo import (
+from integrations.catalog import load_env_integrations
+from integrations.tempo import (
     TempoConfig,
     build_tempo_config,
     tempo_config_from_env,
@@ -103,7 +103,7 @@ class TestTempoValidation:
             captured["headers"] = kwargs.get("headers")
             return _FakeResponse()
 
-        monkeypatch.setattr("app.integrations.tempo.httpx.get", _fake_get)
+        monkeypatch.setattr("integrations.tempo.httpx.get", _fake_get)
 
         result = validate_tempo_config(TempoConfig(url="http://localhost:3200"))
         assert result.ok is True

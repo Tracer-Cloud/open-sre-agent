@@ -41,7 +41,7 @@ recurring source of precedence drift.
 - To add a new tool, add it to the tool catalog with a clear, self-describing
   `description` and `input_schema`; the planner selects it from that text.
 - Live routing scenarios under
-  `app/cli/interactive_shell/routing/tests/scenarios/` are the regression
+  `cli/interactive_shell/routing/tests/scenarios/` are the regression
   surface for planner behavior. Deterministic scenarios (`intent_class:
   deterministic`) assert literal command dispatch only.
 
@@ -61,12 +61,12 @@ Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
 1. Context grounding (not routing). At REPL boot, `repl_main`
-   (`app/cli/interactive_shell/runtime/entrypoint.py`) hydrates
+   (`cli/interactive_shell/runtime/entrypoint.py`) hydrates
    `session.configured_integrations` from the shared
-   `configured_integration_services()` helper in `app/integrations/catalog.py`
+   `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat
    assistant prompt (`_build_environment_block` in
-   `app/cli/interactive_shell/chat/cli_agent.py`) lists the configured set as
+   `cli/interactive_shell/chat/cli_agent.py`) lists the configured set as
    facts, letting the model answer directly when state is already known.
 2. LLM-driven discovery. The planner system prompt
    (`.../llm_action_planner/constants.py`) lets the model, at its own
@@ -93,7 +93,7 @@ output:
 1. Read-only discovery slash commands stash a compact text view of what they
    found on `session.last_command_observation`
    (`_record_integrations_observation` in
-   `app/cli/interactive_shell/command_registry/integrations.py`).
+   `cli/interactive_shell/command_registry/integrations.py`).
 2. `handle_message_with_agent` resets that field at the start of every planner
    turn and, when a discovery command produced an observation and succeeded,
    calls the conversational assistant with `tool_observation=...`

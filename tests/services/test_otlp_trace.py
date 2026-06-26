@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.otlp_trace import extract_span_attributes, parse_otlp_trace
+from services.otlp_trace import extract_span_attributes, parse_otlp_trace
 
 
 def test_extract_span_attributes_value_kinds() -> None:

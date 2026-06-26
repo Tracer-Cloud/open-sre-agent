@@ -10,7 +10,7 @@
 > non-empty = allowlist) instead of disabling slash/cli/synthetic by default, and
 > the dead `risk_level`/`tier`/`remote_connected`/`surface` fields were removed.
 > See the "Scenario schema and `available_capabilities` semantics" section of
-> `app/cli/interactive_shell/routing/AGENTS.md` for the canonical contract.
+> `cli/interactive_shell/routing/AGENTS.md` for the canonical contract.
 
 ---
 
@@ -51,7 +51,7 @@ copy and the REPL status bar. It does not control which integrations are
 entirely:
 
 ```python
-# app/cli/interactive_shell/chat/tool_gathering.py
+# cli/interactive_shell/chat/tool_gathering.py
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
@@ -236,7 +236,21 @@ monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _recording_loop)
 The oracle result gains `gathered_tool_calls: list[str]` and the OracleRunResult
 exposes this for contract assertions.
 
-### 7.3 — Add `gathered_tools_contract` to the scenario schema
+### 7.3 — Add ``tool_actions`` gather entries to the scenario schema
+
+Fixtures now use a unified ``tool_actions`` list with ``surface: gather`` and
+``expect`` modes instead of a separate ``gathered_tools_contract`` block.
+Example:
+
+```yaml
+tool_actions:
+  - surface: gather
+    tool: search_sentry_issues
+    expect: valid_data
+  - surface: gather
+    tools: [search_github_issues, list_posthog_tools]
+    expect: not_called
+```
 
 Extend the YAML schema with an optional section that the scenario loader
 validates and the oracle asserts:
@@ -301,7 +315,7 @@ Add an AST check that specifically permits `monkeypatch.setattr` on
 
 **313** (`configured_integrations: []`) does not test complex shell prompts
 with live data — it tests the text-only fallback when no integration is
-configured. It should either be moved to `docs_no_execute` or its notes updated
+configured. It should either be moved to `chat_handoff` or its notes updated
 to reflect that it covers the no-integration fallback path only, not the
 data-gathering path.
 

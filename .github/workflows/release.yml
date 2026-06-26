@@ -151,7 +151,7 @@ jobs:
 
       - name: Sync release version
         shell: bash
-        run: python packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
 
       - name: Build Python distributions
         run: |
@@ -229,14 +229,14 @@ jobs:
       - name: Sync release version
         if: env.RELEASE_CHANNEL == 'release'
         shell: bash
-        run: python packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
 
       - name: Install binary build dependencies
         shell: bash
         run: uv sync --frozen --extra release-binary
 
       - name: Build binary
-        run: uv run pyinstaller packaging/opensre.spec --clean --noconfirm
+        run: uv run pyinstaller deployment/packaging/opensre.spec --clean --noconfirm
 
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'

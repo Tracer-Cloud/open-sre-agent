@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.metadata
 
-from app import version as version_module
+from config import version as version_module
 
 
 def _raise_package_not_found(_: str) -> str:

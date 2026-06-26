@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.integrations.github_issue_comments import (
+from integrations.github_issue_comments import (
     build_slack_payload,
     main,
     notification_from_issue_comment_event,
@@ -81,7 +81,7 @@ def test_main_posts_notification(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GITHUB_REPOSITORY", "Tracer-Cloud/opensre")
     monkeypatch.setenv("SLACK_GITHUB_ISSUES_WEBHOOK_URL", "https://hooks.slack.test/abc")
     monkeypatch.setattr(
-        "app.integrations.github_issue_comments.send_slack_webhook",
+        "integrations.github_issue_comments.send_slack_webhook",
         _fake_send,
     )
 

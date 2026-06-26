@@ -12,4 +12,4 @@ alwaysApply: true
 - Scenario failures should be resolved by correcting planner/tool behavior or by intentional
   fixture updates approved as behavior changes.
 - Prefer full live routing commands such as:
-  - `uv run python -m pytest app/cli/interactive_shell/routing/tests/test_routing_scenarios.py`
+  - `uv run python -m pytest cli/interactive_shell/routing/tests/test_routing_scenarios.py`

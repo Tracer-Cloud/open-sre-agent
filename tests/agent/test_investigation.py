@@ -8,28 +8,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.agent.stages.investigate import (
+from core.orchestration.node.investigate import (
     ConnectedInvestigationAgent,
 )
-from app.agent.stages.investigate.agent import _tools_for_plan
-from app.agent.stages.investigate.loop import (
+from core.orchestration.node.investigate.agent import _tools_for_plan
+from core.orchestration.node.investigate.loop import (
     CachedToolResult,
     InvestigationToolCallCache,
     duplicate_call_result,
     tool_call_signature,
 )
-from app.agent.stages.investigate.tools import availability_view
-from app.agent.tool_loop import (
-    _build_synthetic_assistant_tool_call_msg,
-    _context_budget_ceiling_for_model,
-    _enforce_context_budget,
-    _estimate_message_tokens,
-    _run_parallel,
-    _trim_oldest_tool_pair,
+from core.orchestration.node.investigate.tools import availability_view
+from core.runtime import (
+    build_synthetic_assistant_tool_call_message,
+    context_budget_ceiling_for_model,
+    enforce_context_budget,
+    estimate_message_tokens,
+    execute_tools,
+    trim_lowest_value_tool_pair,
 )
-from app.integrations.llm_cli.errors import CLITimeoutError
-from app.services.agent_llm_client import CLIBackedAgentClient, ToolCall
-from app.tools.registered_tool import RegisteredTool
+from integrations.llm_cli.errors import CLITimeoutError
+from services.agent_llm_client import CLIBackedAgentClient, ToolCall
+from tools.registered_tool import RegisteredTool
 
 
 def _registered_tool(name: str, source: str) -> RegisteredTool:
@@ -102,7 +102,7 @@ def test_build_synthetic_assistant_json_for_cli_backed_client() -> None:
         explain_failure=lambda **_kw: "",
     )
     llm = CLIBackedAgentClient(fake_adapter, model=None)
-    msg = _build_synthetic_assistant_tool_call_msg(
+    msg = build_synthetic_assistant_tool_call_message(
         llm,
         [ToolCall(id="seed_t", name="query_eks", input={"cluster": "c"})],
     )
@@ -122,8 +122,8 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -154,8 +154,8 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -178,8 +178,8 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -209,8 +209,8 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         result = agent.run(
@@ -246,8 +246,8 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -281,8 +281,8 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
     ):
         agent = ConnectedInvestigationAgent()
         state = {
@@ -303,8 +303,41 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     assert result["causal_chain"]
 
 
-def test_run_parallel_handles_interpreter_shutdown() -> None:
-    """When pool.submit raises RuntimeError (interpreter shutdown), _run_parallel
+def test_execute_tools_uses_availability_view_for_classified_integrations() -> None:
+    from integrations.config_models import GrafanaIntegrationConfig
+    from tools.GrafanaLogsTool import query_grafana_logs
+
+    rt = query_grafana_logs.__opensre_registered_tool__
+    mock_client = MagicMock()
+    mock_client.is_configured = True
+    mock_client.loki_datasource_uid = "loki-uid"
+    mock_client.query_loki.return_value = {"success": True, "logs": [], "total_logs": 0}
+
+    resolved = {
+        "grafana": GrafanaIntegrationConfig(
+            endpoint="https://tracerbio.grafana.net",
+            api_key="glsa_test",
+        )
+    }
+    tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
+
+    with patch(
+        "tools.GrafanaLogsTool.get_grafana_client_from_credentials",
+        return_value=mock_client,
+    ) as mock_factory:
+        results = execute_tools(tool_calls, [rt], resolved)
+
+    assert results[0]["available"] is True
+    mock_factory.assert_called_once_with(
+        endpoint="https://tracerbio.grafana.net",
+        api_key="glsa_test",
+        username="",
+        password="",
+    )
+
+
+def testexecute_tools_handles_interpreter_shutdown() -> None:
+    """When pool.submit raises RuntimeError (interpreter shutdown), execute_tools
     must fall back to sequential execution and still return results for all slots."""
     mock_tool = MagicMock()
     mock_tool.name = "good_tool"
@@ -319,14 +352,14 @@ def test_run_parallel_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("app.agent.tool_loop.execution.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("core.runtime.execution.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
         mock_pool.submit.side_effect = RuntimeError(shutdown_msg)
         mock_executor_cls.return_value = mock_pool
 
-        results = _run_parallel(tool_calls, [mock_tool], {})
+        results = execute_tools(tool_calls, [mock_tool], {})
 
     # The concurrent path raises RuntimeError; fallback sequential execution succeeds
     assert len(results) == 2
@@ -346,13 +379,13 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
         ),
     )
 
-    from app.services.agent_llm_client import BedrockConverseAgentClient
+    from services.agent_llm_client import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
     calls = [
         ToolCall(id="abc12def3", name="query_logs", input={"query": "error"}),
     ]
-    msg = _build_synthetic_assistant_tool_call_msg(llm, calls)
+    msg = build_synthetic_assistant_tool_call_message(llm, calls)
 
     assert msg["role"] == "assistant"
     assert msg["content"][0]["toolUse"]["toolUseId"] == "abc12def3"
@@ -373,11 +406,11 @@ def test_estimate_tokens_counts_string_and_block_content() -> None:
     ]
 
     # ~0.25 tokens/char; ceiling-style estimate, exact value not asserted.
-    assert _estimate_message_tokens(messages) > 100
-    assert _estimate_message_tokens([]) == 0
+    assert estimate_message_tokens(messages) > 100
+    assert estimate_message_tokens([]) == 0
 
 
-def test_trim_oldest_tool_pair_drops_assistant_and_following_user_turn() -> None:
+def testtrim_lowest_value_tool_pair_drops_assistant_and_following_user_turn() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -398,7 +431,7 @@ def test_trim_oldest_tool_pair_drops_assistant_and_following_user_turn() -> None
         },
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     # The first tool_use AND its paired tool_result must be removed together,
     # otherwise Anthropic rejects the conversation.
@@ -407,17 +440,17 @@ def test_trim_oldest_tool_pair_drops_assistant_and_following_user_turn() -> None
     assert messages[1]["content"][0]["id"] == "t2"
 
 
-def test_trim_oldest_tool_pair_returns_false_when_no_tool_use_remains() -> None:
+def testtrim_lowest_value_tool_pair_returns_false_when_no_tool_use_remains() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {"role": "assistant", "content": [{"type": "text", "text": "plain reply"}]},
     ]
 
-    assert _trim_oldest_tool_pair(messages) is False
+    assert trim_lowest_value_tool_pair(messages) is False
     assert len(messages) == 2
 
 
-def test_trim_oldest_tool_pair_skips_pinned_anthropic_tool_exchange() -> None:
+def testtrim_lowest_value_tool_pair_skips_pinned_anthropic_tool_exchange() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -440,7 +473,7 @@ def test_trim_oldest_tool_pair_skips_pinned_anthropic_tool_exchange() -> None:
         },
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "seed"
@@ -448,7 +481,7 @@ def test_trim_oldest_tool_pair_skips_pinned_anthropic_tool_exchange() -> None:
     assert all("later" not in json.dumps(message) for message in messages)
 
 
-def test_trim_oldest_tool_pair_returns_false_when_only_pinned_pairs_remain() -> None:
+def testtrim_lowest_value_tool_pair_returns_false_when_only_pinned_pairs_remain() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -464,11 +497,13 @@ def test_trim_oldest_tool_pair_returns_false_when_only_pinned_pairs_remain() -> 
     ]
     snapshot = [message.copy() for message in messages]
 
-    assert _trim_oldest_tool_pair(messages) is False
+    assert trim_lowest_value_tool_pair(messages) is False
     assert messages == snapshot
 
 
-def test_trim_oldest_tool_pair_evicts_duplicate_exchange_before_large_normal_exchange() -> None:
+def testtrim_lowest_value_tool_pair_evicts_duplicate_exchange_before_large_normal_exchange() -> (
+    None
+):
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -491,14 +526,14 @@ def test_trim_oldest_tool_pair_evicts_duplicate_exchange_before_large_normal_exc
         },
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "normal"
     assert all("dupe" not in json.dumps(message) for message in messages)
 
 
-def test_trim_oldest_tool_pair_evicts_larger_non_seed_exchange_before_tiny_oldest() -> None:
+def testtrim_lowest_value_tool_pair_evicts_larger_non_seed_exchange_before_tiny_oldest() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -519,7 +554,7 @@ def test_trim_oldest_tool_pair_evicts_larger_non_seed_exchange_before_tiny_oldes
         },
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "tiny"
@@ -535,7 +570,7 @@ def test_trim_oldest_tool_pair_evicts_larger_non_seed_exchange_before_tiny_oldes
 # --------------------------------------------------------------------------- #
 
 
-def test_trim_oldest_tool_pair_drops_openai_assistant_and_following_tool_messages() -> None:
+def testtrim_lowest_value_tool_pair_drops_openai_assistant_and_following_tool_messages() -> None:
     """OpenAI shape: assistant has top-level ``tool_calls`` and the results
     arrive as separate ``role: "tool"`` messages with matching call_ids.
     The trimmer must drop the assistant + ALL its matched tool followers."""
@@ -561,7 +596,7 @@ def test_trim_oldest_tool_pair_drops_openai_assistant_and_following_tool_message
         {"role": "tool", "tool_call_id": "call_2", "content": "result"},
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     # Drops the OLDEST assistant + both of its tool followers (variable-length
     # exchange, since one assistant turn can issue multiple tool_calls).
@@ -571,7 +606,7 @@ def test_trim_oldest_tool_pair_drops_openai_assistant_and_following_tool_message
     assert messages[2]["tool_call_id"] == "call_2"
 
 
-def test_trim_oldest_tool_pair_skips_pinned_openai_tool_exchange() -> None:
+def testtrim_lowest_value_tool_pair_skips_pinned_openai_tool_exchange() -> None:
     messages = [
         {"role": "user", "content": "alert"},
         {
@@ -595,7 +630,7 @@ def test_trim_oldest_tool_pair_skips_pinned_openai_tool_exchange() -> None:
         {"role": "tool", "tool_call_id": "later", "content": "later"},
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     assert len(messages) == 4
     assert messages[1]["tool_calls"][0]["id"] == "seed_a"
@@ -604,7 +639,9 @@ def test_trim_oldest_tool_pair_skips_pinned_openai_tool_exchange() -> None:
     assert all("later" not in json.dumps(message) for message in messages)
 
 
-def test_trim_oldest_tool_pair_stops_at_unrelated_tool_message_after_openai_assistant() -> None:
+def testtrim_lowest_value_tool_pair_stops_at_unrelated_tool_message_after_openai_assistant() -> (
+    None
+):
     """Defensive: if a non-matching ``role: "tool"`` message appears after an
     OpenAI assistant turn (shouldn't happen in practice but we don't trust
     upstream message hygiene), we stop walking and drop only the assistant
@@ -623,7 +660,7 @@ def test_trim_oldest_tool_pair_stops_at_unrelated_tool_message_after_openai_assi
         {"role": "tool", "tool_call_id": "orphan", "content": "huh"},
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
 
     # Dropped the assistant + the matching tool, but NOT the orphan
     assert len(messages) == 2
@@ -631,7 +668,7 @@ def test_trim_oldest_tool_pair_stops_at_unrelated_tool_message_after_openai_assi
     assert messages[1]["tool_call_id"] == "orphan"
 
 
-def test_trim_oldest_tool_pair_drops_openai_assistant_when_no_tool_messages_follow() -> None:
+def testtrim_lowest_value_tool_pair_drops_openai_assistant_when_no_tool_messages_follow() -> None:
     """Edge: assistant turn issued tool_calls but the follow-up tool
     messages haven't been appended yet (truncated mid-iteration). Drop just
     the assistant — keeps the conversation valid for the next trim cycle."""
@@ -646,12 +683,12 @@ def test_trim_oldest_tool_pair_drops_openai_assistant_when_no_tool_messages_foll
         },
     ]
 
-    assert _trim_oldest_tool_pair(messages) is True
+    assert trim_lowest_value_tool_pair(messages) is True
     assert len(messages) == 1
     assert messages[0]["content"] == "alert"
 
 
-def test_trim_oldest_tool_pair_skips_openai_assistant_with_empty_tool_calls() -> None:
+def testtrim_lowest_value_tool_pair_skips_openai_assistant_with_empty_tool_calls() -> None:
     """An assistant message with ``tool_calls: []`` (empty list — e.g. a
     plain reply with no tool requests) must NOT be picked up as trimmable.
     Pin this so a future code path that initializes tool_calls=[] for a
@@ -661,7 +698,7 @@ def test_trim_oldest_tool_pair_skips_openai_assistant_with_empty_tool_calls() ->
         {"role": "assistant", "content": "plain reply", "tool_calls": []},
     ]
 
-    assert _trim_oldest_tool_pair(messages) is False
+    assert trim_lowest_value_tool_pair(messages) is False
     assert len(messages) == 2
 
 
@@ -679,20 +716,20 @@ def test_trim_oldest_tool_pair_skips_openai_assistant_with_empty_tool_calls() ->
         ("", 112_000),
     ],
 )
-def test_context_budget_ceiling_for_model(model: str | None, expected: int) -> None:
+def testcontext_budget_ceiling_for_model(model: str | None, expected: int) -> None:
     """The trim ceiling must track the ACTIVE model's window. A flat ceiling
     overflowed gpt-4o (128k) because it was tuned for Anthropic's 200k — this
     is the regression guard for that bug."""
-    assert _context_budget_ceiling_for_model(model) == expected
+    assert context_budget_ceiling_for_model(model) == expected
 
 
 def test_gpt4o_ceiling_is_below_its_hard_limit() -> None:
     """The whole point: gpt-4o's ceiling must leave headroom under 128k so the
     trimmed prompt + response never trips context_length_exceeded."""
-    assert _context_budget_ceiling_for_model("gpt-4o-2024-11-20") < 128_000
+    assert context_budget_ceiling_for_model("gpt-4o-2024-11-20") < 128_000
 
 
-def test_enforce_context_budget_respects_explicit_model_ceiling() -> None:
+def testenforce_context_budget_respects_explicit_model_ceiling() -> None:
     """A payload that fits a 200k Anthropic ceiling but not a 112k gpt-4o
     ceiling must be trimmed when the gpt-4o ceiling is passed."""
     big = "x" * 300_000  # ~150k tokens at 0.5/char — over 112k, under 184k
@@ -715,13 +752,13 @@ def test_enforce_context_budget_respects_explicit_model_ceiling() -> None:
             "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "small"}],
         },
     ]
-    _enforce_context_budget(messages, ceiling=_context_budget_ceiling_for_model("gpt-4o"))
+    enforce_context_budget(messages, ceiling=context_budget_ceiling_for_model("gpt-4o"))
     # Oldest big pair trimmed; the small t2 pair survives.
     assert len(messages) == 3
     assert all("t1" not in json.dumps(m) for m in messages)
 
 
-def test_enforce_context_budget_noop_when_under_ceiling() -> None:
+def testenforce_context_budget_noop_when_under_ceiling() -> None:
     messages: list[dict] = [
         {"role": "user", "content": "short alert"},
         {
@@ -735,7 +772,7 @@ def test_enforce_context_budget_noop_when_under_ceiling() -> None:
     ]
     snapshot = [m.copy() for m in messages]
 
-    _enforce_context_budget(messages)
+    enforce_context_budget(messages)
 
     assert messages == snapshot
 
@@ -798,8 +835,8 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=mock_tracker),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=mock_tracker),
         pytest.raises(ValueError, match="_should_accept_conclusion returned"),
     ):
         agent.run(state)
@@ -830,7 +867,7 @@ def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
     assert nudge is None
 
 
-def test_enforce_context_budget_trims_when_over_ceiling() -> None:
+def testenforce_context_budget_trims_when_over_ceiling() -> None:
     # Each tool turn carries ~1 MB of text (~250k token estimate). One pair
     # is enough to push messages past the 180k ceiling; the function should
     # trim it.
@@ -855,14 +892,14 @@ def test_enforce_context_budget_trims_when_over_ceiling() -> None:
         },
     ]
 
-    _enforce_context_budget(messages)
+    enforce_context_budget(messages)
 
     # Oldest pair (t1 with the big payload) must be gone; the t2 pair survives.
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "t2"
 
 
-def test_enforce_context_budget_preserves_pinned_seed_pair_before_truncation() -> None:
+def testenforce_context_budget_preserves_pinned_seed_pair_before_truncation() -> None:
     ceiling = 50_000
     big_seed_payload = "s" * 200_000
     messages = [
@@ -889,14 +926,14 @@ def test_enforce_context_budget_preserves_pinned_seed_pair_before_truncation() -
         },
     ]
 
-    _enforce_context_budget(messages, ceiling=ceiling)
+    enforce_context_budget(messages, ceiling=ceiling)
 
     assert len(messages) == 3
     assert messages[1]["content"][0]["id"] == "seed"
     assert messages[2]["content"][0]["tool_use_id"] == "seed"
     assert messages[2]["content"][0]["content"].endswith(_MARKER)
     assert all("later" not in json.dumps(message) for message in messages)
-    assert _estimate_message_tokens(messages) <= ceiling
+    assert estimate_message_tokens(messages) <= ceiling
 
 
 # --------------------------------------------------------------------------- #
@@ -909,37 +946,37 @@ def test_enforce_context_budget_preserves_pinned_seed_pair_before_truncation() -
 _MARKER = "…[truncated to fit context budget]"
 
 
-def test_enforce_context_budget_truncates_oversized_string_base_prompt() -> None:
+def testenforce_context_budget_truncates_oversized_string_base_prompt() -> None:
     """A huge initial user message (string content) with no trimmable tool pair
     must be truncated, not left to overflow."""
     ceiling = 50_000
     big = "x" * 1_000_000  # ~500k token estimate at 0.5 tokens/char — alone over ceiling
     messages = [{"role": "user", "content": big}]
 
-    _enforce_context_budget(messages, ceiling=ceiling)
+    enforce_context_budget(messages, ceiling=ceiling)
 
-    assert _estimate_message_tokens(messages) <= ceiling
+    assert estimate_message_tokens(messages) <= ceiling
     assert len(messages[0]["content"]) < len(big)
     assert messages[0]["content"].endswith(_MARKER)
 
 
-def test_enforce_context_budget_truncates_oversized_list_content_base_prompt() -> None:
+def testenforce_context_budget_truncates_oversized_list_content_base_prompt() -> None:
     """A user message whose list content (Anthropic text blocks) is over budget
     and isn't part of a tool pair must be truncated in place, structure intact."""
     ceiling = 50_000
     big = "y" * 1_000_000
     messages = [{"role": "user", "content": [{"type": "text", "text": big}]}]
 
-    _enforce_context_budget(messages, ceiling=ceiling)
+    enforce_context_budget(messages, ceiling=ceiling)
 
-    assert _estimate_message_tokens(messages) <= ceiling
+    assert estimate_message_tokens(messages) <= ceiling
     block = messages[0]["content"][0]
     assert block["type"] == "text"  # structure preserved
     assert len(block["text"]) < len(big)
     assert block["text"].endswith(_MARKER)
 
 
-def test_enforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None:
+def testenforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None:
     """Mixed: a trimmable tool pair AND an oversized base alert. The trimmer drops
     the pair first; truncation then shrinks the remaining oversized alert."""
     ceiling = 50_000
@@ -956,9 +993,9 @@ def test_enforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None
         },
     ]
 
-    _enforce_context_budget(messages, ceiling=ceiling)
+    enforce_context_budget(messages, ceiling=ceiling)
 
-    assert _estimate_message_tokens(messages) <= ceiling
+    assert estimate_message_tokens(messages) <= ceiling
     # The t1 tool pair was trimmed away entirely.
     assert all(
         not (
@@ -975,7 +1012,7 @@ def test_enforce_context_budget_trims_pairs_then_truncates_base_prompt() -> None
     assert messages[0]["content"].endswith(_MARKER)
 
 
-def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> None:
+def testenforce_context_budget_returns_when_only_untruncatable_overhead() -> None:
     """If system+tools alone exceed the ceiling and messages have no shrinkable
     text, the function must return (no infinite loop) and let the API surface it.
     """
@@ -986,7 +1023,7 @@ def test_enforce_context_budget_returns_when_only_untruncatable_overhead() -> No
     messages = [{"role": "user", "content": "tiny"}]
 
     # Must terminate quickly rather than spin.
-    _enforce_context_budget(messages, tools=tools, ceiling=ceiling)
+    enforce_context_budget(messages, tools=tools, ceiling=ceiling)
 
     assert messages == [{"role": "user", "content": "tiny"}]
 
@@ -1117,9 +1154,9 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch("app.agent.stages.investigate.agent.get_agent_llm", return_value=mock_llm),
-        patch("app.agent.stages.investigate.agent.get_tracker", return_value=MagicMock()),
-        patch("app.agent.stages.investigate.agent.get_available_tools", return_value=tools),
+        patch("core.orchestration.node.investigate.agent.get_agent_llm", return_value=mock_llm),
+        patch("core.orchestration.node.investigate.agent.get_tracker", return_value=MagicMock()),
+        patch("core.orchestration.node.investigate.agent.get_available_tools", return_value=tools),
     ):
         result = ConnectedInvestigationAgent().run(state)
     return result, mock_llm
@@ -1197,14 +1234,14 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
     """List content with several text slots is shrunk proportionally so the whole
     message lands near the budget instead of zeroing the first slot only."""
-    from app.agent.tool_loop import _truncate_content
+    from core.runtime import truncate_content
 
     content = [
         {"type": "text", "text": "a" * 100_000},
         {"type": "tool_result", "tool_use_id": "t", "content": "b" * 100_000},
     ]
 
-    new_content, changed = _truncate_content(content, max_chars=10_000)
+    new_content, changed = truncate_content(content, max_chars=10_000)
 
     assert changed is True
     total = len(new_content[0]["text"]) + len(new_content[1]["content"])

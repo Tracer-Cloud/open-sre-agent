@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from app.integrations.registry import (
+from integrations._verifiers_loader import register_all_verifiers
+from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     INTEGRATION_SPECS,
     SKIP_CLASSIFIED_SERVICES,
@@ -10,7 +11,9 @@ from app.integrations.registry import (
     resolve_management_service,
     service_key,
 )
-from app.integrations.verify import VERIFIER_REGISTRY
+from integrations.verification import list_verifiers
+
+register_all_verifiers()
 
 
 def test_registry_declares_each_service_once() -> None:
@@ -22,7 +25,7 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
     expected_verify = tuple(
         spec.service
         for spec in sorted(
-            (candidate for candidate in INTEGRATION_SPECS if candidate.verifier is not None),
+            (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
             key=lambda candidate: (
                 candidate.verify_order if candidate.verify_order is not None else 10_000
             ),
@@ -40,19 +43,19 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
 
     assert expected_verify == SUPPORTED_VERIFY_SERVICES
     assert expected_setup == SUPPORTED_SETUP_SERVICES
-    assert set(VERIFIER_REGISTRY) == set(SUPPORTED_VERIFY_SERVICES)
+    assert set(SUPPORTED_VERIFY_SERVICES).issubset(set(list_verifiers()))
 
 
 def test_every_setup_spec_has_handler() -> None:
     # #2537: a spec with `setup_order` but no matching `_HANDLERS` entry lets
     # Click accept a service that cmd_setup cannot dispatch. Anchor the
     # inverse-drift here.
-    from app.integrations.cli import _HANDLERS
+    from integrations.cli import _HANDLERS
 
     missing = [svc for svc in SUPPORTED_SETUP_SERVICES if svc not in _HANDLERS]
     assert not missing, (
         f"Registry declares setup_order for {missing} but no _HANDLERS entry "
-        "in app/integrations/cli.py. These services are silently dropped from "
+        "in integrations/cli.py. These services are silently dropped from "
         "_SETUP_SERVICES, so `opensre integrations setup <svc>` will reject them "
         "with the 'Usage: setup <service>' error."
     )

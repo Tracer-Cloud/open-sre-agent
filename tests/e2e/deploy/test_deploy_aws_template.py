@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.deployment.operations.provider_config import (
+from deployment.operations.provider_config import (
     dry_run_provider_validation,
     validate_aws_deploy_config,
 )

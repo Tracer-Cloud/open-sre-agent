@@ -69,6 +69,14 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
+def _squash_commit_subject(title: str, pr_number: str) -> str:
+    suffix = f"(#{pr_number})"
+    stripped = title.rstrip()
+    if stripped.endswith(suffix):
+        return stripped
+    return f"{stripped} {suffix}"
+
+
 def _checks_are_green(status_rollup: list[dict[str, Any]]) -> tuple[bool, str]:
     if not status_rollup:
         return False, "no status checks reported yet"
@@ -148,7 +156,7 @@ def main() -> int:
             "--squash",
             "--delete-branch",
             "--subject",
-            title,
+            _squash_commit_subject(title, pr_number),
         ],
         check=True,
     )

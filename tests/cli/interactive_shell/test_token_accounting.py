@@ -10,16 +10,16 @@ from unittest.mock import patch
 
 from rich.console import Console
 
-from app.cli.interactive_shell.chat.cli_agent import answer_cli_agent
-from app.cli.interactive_shell.runtime.session import ReplSession
-from app.cli.interactive_shell.token_accounting import (
+from cli.interactive_shell.chat.cli_agent import answer_cli_agent
+from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
     format_token_total,
     record_llm_turn,
 )
-from app.cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from app.services.llm_client import LLMResponse
+from cli.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from services.llm_client import LLMResponse
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -110,7 +110,7 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from app.services.llm_client import _coerce_usage_tokens
+    from services.llm_client import _coerce_usage_tokens
 
     assert _coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
@@ -137,14 +137,14 @@ class _FakeLLMClient:
 
 
 _PLANNER_LLM_CLIENT = (
-    "app.cli.interactive_shell.routing.handle_message_with_agent"
+    "cli.interactive_shell.routing.handle_message_with_agent"
     ".orchestration.llm_action_planner.llm_client"
 )
 
 
 def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("app.services.llm_client.get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("services.llm_client.get_llm_for_reasoning", lambda: client)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_cli_agent("hello", session, console)
@@ -154,7 +154,7 @@ def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
 
 
 def test_planner_call_llm_records_provider_token_usage() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 
@@ -172,7 +172,7 @@ def test_planner_call_llm_records_provider_token_usage() -> None:
             )
 
     with (
-        patch("app.services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
+        patch("services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
         patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
     ):
         result = _call_llm("check cpu", session)
@@ -189,7 +189,7 @@ def test_planner_call_llm_records_provider_token_usage() -> None:
 
 
 def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> None:
-    from app.cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
+    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner.llm_client import (
         _call_llm,
     )
 
@@ -203,7 +203,7 @@ def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> No
             return LLMResponse(content='{"tool_calls": []}')
 
     with (
-        patch("app.services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
+        patch("services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
         patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
     ):
         _call_llm("check cpu", session)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.tools.PagerDutyIncidentsTool import PagerDutyIncidentsTool
+from tools.PagerDutyIncidentsTool import PagerDutyIncidentsTool
 
 
 def _tool() -> PagerDutyIncidentsTool:
@@ -32,7 +32,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["base_url"] == "https://api.pagerduty.com"
 
 
-@patch("app.tools.PagerDutyIncidentsTool.make_pagerduty_client")
+@patch("tools.PagerDutyIncidentsTool.make_pagerduty_client")
 def test_run_returns_incidents_and_active_subset(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_incidents.return_value = {
@@ -54,7 +54,7 @@ def test_run_returns_incidents_and_active_subset(mock_make: MagicMock) -> None:
     assert result["active_incidents"][1]["id"] == "P2"
 
 
-@patch("app.tools.PagerDutyIncidentsTool.make_pagerduty_client")
+@patch("tools.PagerDutyIncidentsTool.make_pagerduty_client")
 def test_run_empty_incidents_list(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_incidents.return_value = {"success": True, "incidents": [], "total": 0}
@@ -66,7 +66,7 @@ def test_run_empty_incidents_list(mock_make: MagicMock) -> None:
     assert result["active_incidents"] == []
 
 
-@patch("app.tools.PagerDutyIncidentsTool.make_pagerduty_client")
+@patch("tools.PagerDutyIncidentsTool.make_pagerduty_client")
 def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_incidents.return_value = {"success": False, "error": "HTTP 401: Unauthorized"}
@@ -77,14 +77,14 @@ def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     assert "401" in result["error"]
 
 
-@patch("app.tools.PagerDutyIncidentsTool.make_pagerduty_client")
+@patch("tools.PagerDutyIncidentsTool.make_pagerduty_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="")
     assert result["available"] is False
 
 
-@patch("app.tools.PagerDutyIncidentsTool.make_pagerduty_client")
+@patch("tools.PagerDutyIncidentsTool.make_pagerduty_client")
 def test_run_passes_filter_params(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.list_incidents.return_value = {"success": True, "incidents": [], "total": 0}
