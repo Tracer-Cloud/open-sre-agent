@@ -11,7 +11,7 @@ import click
 import platform
 from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
 from cli.interactive_shell.data_store.context import is_json_output, is_yes
-from cli.interactive_shell.error_handling.exit_codes import ERROR, SUCCESS
+from cli.interactive_shell.utils.error_handling.exit_codes import ERROR, SUCCESS
 from config.version import get_version
 from platform.analytics.cli import (
     capture_update_completed,
@@ -206,7 +206,7 @@ def investigate_command(
         )
         return
     if slack_thread:
-        from cli.interactive_shell.error_handling.errors import OpenSREError
+        from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 
         raise OpenSREError(
             "--slack-thread requires --service.",
@@ -274,7 +274,7 @@ def _run_service_investigation(
     import os
 
     from cli.interactive_shell.data_store.args import write_json
-    from cli.interactive_shell.error_handling.errors import OpenSREError
+    from cli.interactive_shell.utils.error_handling.errors import OpenSREError
     from cli.investigation import run_investigation_cli
     from infra.deployment.remote.runtime_alert import build_runtime_alert_payload
 

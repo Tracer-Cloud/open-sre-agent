@@ -7,7 +7,7 @@ from rich.markup import escape
 
 from cli.interactive_shell.command_registry.types import SlashCommand
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.token_accounting import format_token_total
+from cli.interactive_shell.runtime.token_accounting import format_token_total
 from cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -38,9 +38,9 @@ def _status_provider_display() -> str:
 
 
 def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> bool:
-    import cli.interactive_shell.references.cli_reference  # noqa: F401
-    import cli.interactive_shell.references.docs_reference  # noqa: F401
-    from cli.interactive_shell.references.grounding_diagnostics import iter_grounding_sources
+    import cli.interactive_shell.chat.grounding.cli_reference  # noqa: F401
+    import cli.interactive_shell.chat.grounding.docs_reference  # noqa: F401
+    from cli.interactive_shell.chat.grounding.grounding_diagnostics import iter_grounding_sources
 
     table = repl_table(title="Session status\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
@@ -48,7 +48,7 @@ def _cmd_status(session: ReplSession, console: Console, _args: list[str]) -> boo
     table.add_row("interactions", str(len(session.history)))
 
     if session.incoming_alerts:
-        from cli.interactive_shell.alert_renderer import time_ago
+        from cli.interactive_shell.alerts.renderer import time_ago
 
         most_recent = session.incoming_alerts[-1]
         age_str = time_ago(most_recent.received_at)

@@ -7,22 +7,22 @@ import io
 import pytest
 from rich.console import Console
 
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
     PlannedAction,
 )
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_action_planner import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.llm_action_planner import (
     LlmActionPlanResult,
 )
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools import (
     investigation_tool as _investigation_tool,
 )
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tools import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tools import (
     slash_tool as _slash_tool,
 )
-from cli.interactive_shell.routing.types import RouteKind
+from cli.interactive_shell.harness.types import RouteKind
 from cli.interactive_shell.runtime import dispatch as loop_dispatch
 from cli.interactive_shell.runtime import execution as loop_execution
 from cli.interactive_shell.runtime.session import ReplSession
@@ -270,7 +270,7 @@ def test_dispatch_one_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "cli.interactive_shell.routing.handle_message_with_agent.orchestration"
+        "cli.interactive_shell.harness.handle_message_with_agent.orchestration"
         ".terminal_actions.planning.plan_actions_with_llm_result",
         lambda _message, *, session=None: LlmActionPlanResult(  # noqa: ARG005
             actions=(

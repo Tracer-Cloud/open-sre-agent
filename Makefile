@@ -453,14 +453,14 @@ typecheck:
 
 # Import graph: cycles + layering + forbidden direct edges (one command).
 check-imports:
-	$(PYTHON) scripts/check_imports.py
+	$(PYTHON) infra/ci/check_imports.py
 
 # Deprecated aliases — use ``check-imports`` instead.
 check-cycles check-layers: check-imports
 
 # Optional: full transitive layer contracts (when .importlinter.strict exists).
 check-imports-strict:
-	$(PYTHON) scripts/check_imports.py --strict
+	$(PYTHON) infra/ci/check_imports.py --strict
 
 check-layers-strict: check-imports-strict
 

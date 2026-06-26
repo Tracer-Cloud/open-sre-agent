@@ -23,13 +23,13 @@ should be predictable, interruptible, explainable, and safe by default.
 | `routing/` | route selection/classification, LLM intent classifier, and fallback behavior | direct action execution |
 | `orchestration/` | action planning, execution policy, action executor, deterministic parsing, and interaction models | LLM classification and raw UI formatting |
 | `shell/` | shell command parsing, allow/deny policy, subprocess execution | slash-command routing |
-| `chat/` | assistant/help answer surfaces | direct mutation of runtime state outside the action executor |
-| `prompting/` | reusable prompt rules and follow-up wording | docs/source retrieval |
+| `chat/` | assistant/help/follow-up answer surfaces and shared LLM prompt rules | direct mutation of runtime state outside the action executor |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
-| `history/` | REPL history policy and persistence | prompt rendering |
+| `state/` | conversation context helpers and shared state persistence | prompt rendering |
+| `history/` | prompt history policy and persistence | prompt rendering |
 | `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output | business logic or network calls |
-| `alert_inbox.py` / `alert_renderer.py` | local alert receiver, queue, and alert presentation | general HTTP framework behavior |
+| `alerts/` | alert presentation in the REPL (`renderer.py`). The receiver, queue, and listener lifecycle live in `core.domain.alerts.inbox` | general HTTP framework behavior |
 
 When a change crosses these boundaries, prefer extracting a small helper in the
 owning area rather than adding more logic to the caller.
@@ -161,7 +161,7 @@ owning area rather than adding more logic to the caller.
   rather than inventing steps.
 - Do not include secrets in prompts. Redact or omit tokens, auth headers, env
   values, local credentials, and raw integration config.
-- Keep prompt rules reusable in `prompting/` so chat/help/action surfaces use
+- Keep prompt rules reusable in `chat/` so chat/help/action surfaces use
   consistent terminology and formatting.
 - Reference caches should be deterministic, invalidatable when source files
   change, and cheap to rebuild in tests.
@@ -213,8 +213,9 @@ owning area rather than adding more logic to the caller.
 
 ## External input and local listener safety
 
-- Network-ish local surfaces such as `alert_inbox.py` must validate cheap request
-  metadata before blocking reads or expensive parsing.
+- Network-ish local surfaces such as `core.domain.alerts.inbox` (started by the
+  REPL entrypoint) must validate cheap request metadata before blocking reads or
+  expensive parsing.
 - Never perform unbounded request-body reads. For alert POSTs specifically,
   validate `Content-Length` first, and only then read the bounded body:
   - non-numeric `Content-Length` values make `int(...)` raise `ValueError`;
@@ -238,7 +239,7 @@ owning area rather than adding more logic to the caller.
   when useful (`routing/`, `orchestration/`, `ui/`, etc.). Never add tests under
   `app/`.
 - For focused changes, run the closest tests, for example:
-  - `uv run python -m pytest tests/cli/interactive_shell/test_alert_inbox.py`
+  - `uv run python -m pytest tests/core/domain/alerts/test_inbox.py`
   - `uv run python -m pytest tests/cli/interactive_shell/<area>/`
   - `uv run python -m pytest tests/cli/interactive_shell/`
 - Add regression tests for incident-prone edges: platform socket behavior,

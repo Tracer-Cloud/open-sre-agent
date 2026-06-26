@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import questionary
 
-from cli.local_llm.ollama import (
+from cli.wizard.local_llm.ollama import (
     install,
     is_installed,
     start_server,
@@ -20,12 +20,14 @@ from cli.local_llm.ollama import (
 
 
 def test_is_installed_returns_true_when_ollama_on_path(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/ollama")
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/ollama"
+    )
     assert is_installed() is True
 
 
 def test_is_installed_returns_false_when_ollama_not_on_path(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: None)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.shutil.which", lambda _: None)
     assert is_installed() is False
 
 
@@ -42,7 +44,7 @@ def test_start_server_opens_popen_with_ollama_serve(monkeypatch) -> None:
         popen_calls.append((args, kwargs))
         return fake_proc
 
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.subprocess.Popen", fake_popen)
     result = start_server()
 
     assert result is fake_proc
@@ -59,8 +61,8 @@ def test_start_server_opens_popen_with_ollama_serve(monkeypatch) -> None:
 
 
 def test_wait_for_server_returns_true_on_first_attempt(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.is_server_running", lambda _: True)
-    monkeypatch.setattr("cli.local_llm.ollama.time.sleep", lambda _: None)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.is_server_running", lambda _: True)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.time.sleep", lambda _: None)
     assert wait_for_server("http://localhost:11434") is True
 
 
@@ -71,17 +73,17 @@ def test_wait_for_server_returns_true_after_retries(monkeypatch) -> None:
         attempt["count"] += 1
         return attempt["count"] >= 3  # fails twice, then succeeds
 
-    monkeypatch.setattr("cli.local_llm.ollama.is_server_running", flaky_check)
-    monkeypatch.setattr("cli.local_llm.ollama.time.sleep", lambda _: None)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.is_server_running", flaky_check)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.time.sleep", lambda _: None)
 
     assert wait_for_server("http://localhost:11434", timeout_s=5) is True
     assert attempt["count"] == 3
 
 
 def test_wait_for_server_returns_false_on_timeout(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.is_server_running", lambda _: False)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.is_server_running", lambda _: False)
     sleep_calls: list[float] = []
-    monkeypatch.setattr("cli.local_llm.ollama.time.sleep", lambda s: sleep_calls.append(s))
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.time.sleep", lambda s: sleep_calls.append(s))
 
     assert wait_for_server("http://localhost:11434", timeout_s=3) is False
     assert len(sleep_calls) == 3
@@ -93,11 +95,13 @@ def test_wait_for_server_returns_false_on_timeout(monkeypatch) -> None:
 
 
 def test_install_macos_brew_present_user_confirms_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "darwin")
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "darwin")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
     fake_result = MagicMock()
     fake_result.returncode = 0
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result)
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result
+    )
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: True))
 
     console = MagicMock()
@@ -105,8 +109,8 @@ def test_install_macos_brew_present_user_confirms_succeeds(monkeypatch) -> None:
 
 
 def test_install_macos_brew_present_user_declines_returns_false(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "darwin")
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "darwin")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: False))
 
     console = MagicMock()
@@ -114,8 +118,8 @@ def test_install_macos_brew_present_user_declines_returns_false(monkeypatch) -> 
 
 
 def test_install_macos_brew_absent_returns_false_and_prints_link(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "darwin")
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: None)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "darwin")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.shutil.which", lambda _: None)
 
     console = MagicMock()
     assert install(console) is False
@@ -124,11 +128,13 @@ def test_install_macos_brew_absent_returns_false_and_prints_link(monkeypatch) ->
 
 
 def test_install_macos_brew_present_subprocess_fails_returns_false(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "darwin")
-    monkeypatch.setattr("cli.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "darwin")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.shutil.which", lambda _: "/usr/local/bin/brew")
     fake_result = MagicMock()
     fake_result.returncode = 1
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result)
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result
+    )
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: True))
 
     console = MagicMock()
@@ -141,10 +147,12 @@ def test_install_macos_brew_present_subprocess_fails_returns_false(monkeypatch) 
 
 
 def test_install_linux_user_confirms_succeeds(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "linux")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "linux")
     fake_result = MagicMock()
     fake_result.returncode = 0
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result)
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result
+    )
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: True))
 
     console = MagicMock()
@@ -152,7 +160,7 @@ def test_install_linux_user_confirms_succeeds(monkeypatch) -> None:
 
 
 def test_install_linux_user_declines_returns_false(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "linux")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "linux")
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: False))
 
     console = MagicMock()
@@ -160,10 +168,12 @@ def test_install_linux_user_declines_returns_false(monkeypatch) -> None:
 
 
 def test_install_linux_subprocess_fails_returns_false(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "linux")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "linux")
     fake_result = MagicMock()
     fake_result.returncode = 2
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result)
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result
+    )
     monkeypatch.setattr(questionary, "confirm", lambda *_a, **_kw: MagicMock(ask=lambda: True))
 
     console = MagicMock()
@@ -176,7 +186,7 @@ def test_install_linux_subprocess_fails_returns_false(monkeypatch) -> None:
 
 
 def test_install_windows_returns_false(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.sys.platform", "win32")
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.sys.platform", "win32")
 
     console = MagicMock()
     assert install(console) is False

@@ -28,10 +28,10 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.ui import DIM
 from cli.interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 
 # Keep the gathering loop short: this runs inline on a REPL turn, so it must stay
@@ -153,7 +153,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     are redacted and bounded before writing; failures are swallowed so logging
     never breaks the turn.
     """
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
     from platform.observability.tool_trace import redact_sensitive
 
     for tc, output in executed:

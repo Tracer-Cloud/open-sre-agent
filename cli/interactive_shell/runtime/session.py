@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from prompt_toolkit.history import History
 
-    from cli.interactive_shell.alert_inbox import IncomingAlert
+    from core.domain.alerts.inbox import IncomingAlert
 
 from cli.interactive_shell.runtime.background import (
     BackgroundInvestigationRecord,
@@ -361,7 +361,7 @@ class ReplSession:
 
         self.history.append(entry)
 
-        from cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.state.sessions.store import SessionStore
 
         SessionStore.append_turn(self, kind, text)
 
@@ -374,7 +374,7 @@ class ReplSession:
         """
         # Record to history with alert text
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
-        from cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.state.sessions.store import SessionStore
 
         SessionStore.append_turn(self, "incoming_alert", alert.text)
 
@@ -529,7 +529,7 @@ class ReplSession:
         This prevents CLI-agent turns from an earlier interaction from bleeding
         into the follow-up grounding context of a new investigation.
         """
-        from cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.state.sessions.store import SessionStore
 
         self.last_state = state
         self.follow_up_messages.clear()

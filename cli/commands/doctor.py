@@ -32,8 +32,6 @@ from rich.text import Text
 
 import platform
 from cli.interactive_shell.data_store.context import is_json_output
-from cli.interactive_shell.error_handling.exit_codes import ERROR as EXIT_ERROR
-from cli.interactive_shell.error_handling.exit_codes import SUCCESS
 from cli.interactive_shell.ui.theme import (
     DIM,
     ERROR,
@@ -45,6 +43,8 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
+from cli.interactive_shell.utils.error_handling.exit_codes import ERROR as EXIT_ERROR
+from cli.interactive_shell.utils.error_handling.exit_codes import SUCCESS
 from config.version import get_version
 
 

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from cli.interactive_shell.alert_inbox import get_current_inbox
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import print_repl_table, repl_table
 from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
+from core.domain.alerts.inbox import get_current_inbox
 
 
 def _cmd_alerts(_session: ReplSession, console: Console, _args: list[str]) -> bool:

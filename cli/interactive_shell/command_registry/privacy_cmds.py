@@ -7,16 +7,16 @@ from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.command_registry.types import SlashCommand
-from cli.interactive_shell.history import (
+from cli.interactive_shell.runtime import ReplSession
+from cli.interactive_shell.state.history import (
     clear_persisted_history,
     load_command_history_entries,
     prompt_history_path,
 )
-from cli.interactive_shell.history.policy import (
+from cli.interactive_shell.state.history.policy import (
     DEFAULT_REDACTION_RULES,
     RedactingFileHistory,
 )
-from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,

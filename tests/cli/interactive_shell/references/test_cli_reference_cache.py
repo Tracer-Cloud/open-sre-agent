@@ -6,8 +6,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from cli.interactive_shell.references import cli_reference as cli_reference_module
-from cli.interactive_shell.references.cli_reference import (
+from cli.interactive_shell.chat.grounding import cli_reference as cli_reference_module
+from cli.interactive_shell.chat.grounding.cli_reference import (
     build_cli_reference_text,
     get_cli_reference_cache_stats,
     invalidate_cli_reference_cache,

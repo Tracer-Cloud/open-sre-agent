@@ -20,7 +20,7 @@ from cli.interactive_shell.ui.time_format import format_repl_duration, format_re
 def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     entries = SessionStore.load_recent(20)
     if not entries:

@@ -10,15 +10,15 @@ import sys
 from rich.console import Console
 
 import platform
-from cli.config import ReplConfig
-from cli.interactive_shell import alert_inbox as _alert_inbox
-from cli.interactive_shell.prompting import prompt_surface as _prompt_surface
 from cli.interactive_shell.runtime.dispatch import run_initial_input
 from cli.interactive_shell.runtime.loop import run_interactive
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskRegistry
-from cli.interactive_shell.sessions.store import SessionStore
+from cli.interactive_shell.state.sessions.store import SessionStore
 from cli.interactive_shell.ui import DIM, render_banner
+from cli.interactive_shell.ui import prompt_surface as _prompt_surface
+from config.repl_config import ReplConfig
+from core.domain.alerts import inbox as _alert_inbox
 from tools.fleet_monitoring.sweep import run_startup_sweep
 
 log = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ def _maybe_require_github_login(console: Console) -> bool:
     escape hatch so a real outage can never permanently lock them out.
     """
     try:
-        from cli.first_launch_github import (
+        from cli.interactive_shell.runtime.first_launch_github import (
             require_github_login_on_first_launch,
             should_require_github_login,
         )

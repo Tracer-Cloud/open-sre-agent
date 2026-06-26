@@ -10,14 +10,14 @@ from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from rich.console import Console
 
-from cli.interactive_shell.prompting import prompt_surface as _prompt_surface
-from cli.interactive_shell.routing import router as _router
-from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch import (
+from cli.interactive_shell.harness import router as _router
+from cli.interactive_shell.harness.handle_message_with_agent.command_dispatch import (
     deterministic_command_text,
 )
 from cli.interactive_shell.runtime.execution import execute_routed_turn
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.state import PROMPT_REFRESH_INTERVAL_S, ReplState
+from cli.interactive_shell.ui import prompt_surface as _prompt_surface
 from cli.interactive_shell.ui import render_banner
 from cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 

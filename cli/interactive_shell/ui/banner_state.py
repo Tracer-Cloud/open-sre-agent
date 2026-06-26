@@ -77,7 +77,7 @@ def _load_integration_health() -> list[tuple[str, str]]:
 def _is_alert_listener_active() -> bool:
     """Return True if the alert listener is enabled in config. Never raises."""
     try:
-        from cli.config import ReplConfig
+        from config.repl_config import ReplConfig
 
         return ReplConfig.load(apply_active_theme=False).alert_listener_enabled
     except Exception:

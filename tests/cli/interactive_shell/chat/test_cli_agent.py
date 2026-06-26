@@ -396,7 +396,7 @@ class TestAssistantOutputRendering:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
         session = ReplSession()

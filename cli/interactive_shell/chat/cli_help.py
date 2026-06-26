@@ -17,20 +17,20 @@ import time
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
-from cli.interactive_shell.prompt_logging import LlmRunInfo
-from cli.interactive_shell.prompting.prompt_rules import (
+from cli.interactive_shell.chat.grounding.cli_reference import build_cli_reference_text
+from cli.interactive_shell.chat.grounding.docs_reference import build_docs_reference_text
+from cli.interactive_shell.chat.grounding.grounding_diagnostics import (
+    log_grounding_cache_diagnostics,
+)
+from cli.interactive_shell.chat.prompt_rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
-from cli.interactive_shell.references.cli_reference import build_cli_reference_text
-from cli.interactive_shell.references.docs_reference import build_docs_reference_text
-from cli.interactive_shell.references.grounding_diagnostics import (
-    log_grounding_cache_diagnostics,
-)
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.token_accounting import build_llm_run_info
+from cli.interactive_shell.runtime.token_accounting import build_llm_run_info
 from cli.interactive_shell.ui import DIM, ERROR, STREAM_LABEL_ASSISTANT, stream_to_console
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from cli.interactive_shell.utils.telemetry import LlmRunInfo
 
 # Match the cli_agent terminology / formatting rules so docs answers feel
 # consistent with the rest of the interactive shell.

@@ -11,8 +11,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.error_handling.errors import OpenSREError
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime import (
     BackgroundInvestigationRecord,
     ReplSession,
@@ -22,6 +20,8 @@ from cli.interactive_shell.runtime.background_notifications import (
     deliver_background_notifications,
 )
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 BackgroundRunFn = Callable[..., dict[str, Any]]
 

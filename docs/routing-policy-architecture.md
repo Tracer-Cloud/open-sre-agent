@@ -41,7 +41,7 @@ recurring source of precedence drift.
 - To add a new tool, add it to the tool catalog with a clear, self-describing
   `description` and `input_schema`; the planner selects it from that text.
 - Live routing scenarios under
-  `cli/interactive_shell/routing/tests/scenarios/` are the regression
+  `cli/interactive_shell/harness/tests/scenarios/` are the regression
   surface for planner behavior. Deterministic scenarios (`intent_class:
   deterministic`) assert literal command dispatch only.
 

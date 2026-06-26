@@ -33,7 +33,7 @@ def _record_resume_slash(
 
 def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     entries = [e for e in SessionStore.load_recent(10) if e["session_id"] != session.session_id]
     if not entries:
@@ -171,7 +171,7 @@ def _apply_resume_data(
 
     from datetime import datetime
 
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     target_sid = sid
     if session.session_id != target_sid:
@@ -227,7 +227,7 @@ def _do_resume(
     slash_command: str | None = None,
 ) -> bool:
     """Load session by ID prefix and restore context into the running session."""
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     data = SessionStore.load_session(prefix)
     if data is None:
@@ -263,7 +263,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         _record_resume_slash(session, args)
         return True
 
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     data = SessionStore.load_session(prefix)
     if data is None and len(prefix) >= 3:

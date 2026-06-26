@@ -24,7 +24,7 @@ def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
     accumulated_context so a resumed or in-progress conversation continues
     seamlessly in a fresh session file.
     """
-    from cli.interactive_shell.sessions.store import SessionStore
+    from cli.interactive_shell.state.sessions.store import SessionStore
 
     saved_messages = list(session.cli_agent_messages)
     saved_context = dict(session.accumulated_context)

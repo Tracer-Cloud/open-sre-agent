@@ -18,7 +18,7 @@ def test_bundled_demo_alert_fixture_exists() -> None:
     path = bundled_demo_alert_path()
     assert path is not None
     assert path.is_file()
-    assert path.parent.name == "fixtures"
+    assert path.parent.name == "sample_alerts"
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["pipeline_name"] == "payments_etl"
     assert path.name == "alert.json"

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from cli.local_llm.hardware import HardwareProfile, recommend_model
-from cli.local_llm.ollama import is_model_present, normalize_model_tag, pull_model
 from cli.wizard.config import PROVIDER_BY_VALUE
+from cli.wizard.local_llm.hardware import HardwareProfile, recommend_model
+from cli.wizard.local_llm.ollama import is_model_present, normalize_model_tag, pull_model
 from cli.wizard.validation import validate_provider_credentials
 
 # ---------------------------------------------------------------------------
@@ -150,10 +150,10 @@ def test_is_model_present_preserves_explicit_tags(monkeypatch) -> None:
 
 
 def test_pull_model_skips_download_if_already_present(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.is_model_present", lambda *_a, **_kw: True)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.is_model_present", lambda *_a, **_kw: True)
     run_called = []
     monkeypatch.setattr(
-        "cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: run_called.append(True)
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: run_called.append(True)
     )
     console = MagicMock()
     result = pull_model("llama3.1:8b", console)
@@ -162,10 +162,12 @@ def test_pull_model_skips_download_if_already_present(monkeypatch) -> None:
 
 
 def test_pull_model_runs_ollama_pull_when_not_present(monkeypatch) -> None:
-    monkeypatch.setattr("cli.local_llm.ollama.is_model_present", lambda *_a, **_kw: False)
+    monkeypatch.setattr("cli.wizard.local_llm.ollama.is_model_present", lambda *_a, **_kw: False)
     fake_result = MagicMock()
     fake_result.returncode = 0
-    monkeypatch.setattr("cli.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result)
+    monkeypatch.setattr(
+        "cli.wizard.local_llm.ollama.subprocess.run", lambda *_a, **_kw: fake_result
+    )
     console = MagicMock()
     console.status.return_value.__enter__ = lambda s: s
     console.status.return_value.__exit__ = MagicMock(return_value=False)

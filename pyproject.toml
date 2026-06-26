@@ -149,7 +149,7 @@ include = [
 ]
 
 [tool.setuptools.package-data]
-"cli" = ["fixtures/*.json"]
+"cli" = ["investigation/sample_alerts/*.json"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.

@@ -26,7 +26,7 @@ def _load_local_config() -> dict[str, Any]:
 def _run_onboarding_command(
     run_command: RunCommand, *, load_config: ConfigLoader = _load_local_config
 ) -> None:
-    from cli.interactive_shell.error_handling.errors import OpenSREError
+    from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 
     capture_onboard_started()
     try:
@@ -63,6 +63,6 @@ def onboard(ctx: click.Context) -> None:
 @onboard.command(name="local_llm")
 def onboard_local_llm() -> None:
     """Zero-config local LLM setup via Ollama. No API key required."""
-    from cli.local_llm.command import run_local_llm_setup
+    from cli.wizard.local_llm.command import run_local_llm_setup
 
     _run_onboarding_command(run_local_llm_setup)

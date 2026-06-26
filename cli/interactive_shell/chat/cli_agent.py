@@ -16,6 +16,17 @@ from cli.interactive_shell.chat.action_plan import (
     _parse_action_plan,
     _registered_interactive_command,
 )
+from cli.interactive_shell.chat.follow_up import _summarize_last_state
+from cli.interactive_shell.chat.grounding.agents_md_reference import (
+    build_agents_md_reference_text,
+)
+from cli.interactive_shell.chat.grounding.cli_reference import build_cli_reference_text
+from cli.interactive_shell.chat.grounding.grounding_diagnostics import (
+    log_grounding_cache_diagnostics,
+)
+from cli.interactive_shell.chat.grounding.investigation_flow_reference import (
+    build_investigation_flow_reference_text,
+)
 from cli.interactive_shell.chat.message_classifier import (
     _load_synthetic_observation_text,
     _user_message_requests_synthetic_failure_explanation,
@@ -25,25 +36,12 @@ from cli.interactive_shell.chat.system_prompt import (
     _build_observation_block,
     _build_system_prompt,
 )
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
-from cli.interactive_shell.prompt_logging import LlmRunInfo
-from cli.interactive_shell.prompting.conversation_history import (
+from cli.interactive_shell.runtime import ReplSession
+from cli.interactive_shell.runtime.token_accounting import build_llm_run_info
+from cli.interactive_shell.state.conversation_history import (
     MAX_CONVERSATION_MESSAGES,
     format_recent_conversation,
 )
-from cli.interactive_shell.prompting.follow_up import _summarize_last_state
-from cli.interactive_shell.references.agents_md_reference import (
-    build_agents_md_reference_text,
-)
-from cli.interactive_shell.references.cli_reference import build_cli_reference_text
-from cli.interactive_shell.references.grounding_diagnostics import (
-    log_grounding_cache_diagnostics,
-)
-from cli.interactive_shell.references.investigation_flow_reference import (
-    build_investigation_flow_reference_text,
-)
-from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.token_accounting import build_llm_run_info
 from cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -53,6 +51,8 @@ from cli.interactive_shell.ui import (
     WARNING,
     stream_to_console,
 )
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from cli.interactive_shell.utils.telemetry import LlmRunInfo
 from integrations.llm_cli.errors import CLITimeoutError
 
 
@@ -77,7 +77,7 @@ def _execute_action_plan(
         switch_llm_provider,
         switch_toolcall_model,
     )
-    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
+    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
         evaluate_llm_runtime_switch,
         evaluate_slash_tier,
         execution_allowed,
@@ -226,7 +226,7 @@ def _execute_action_plan(
                     "in this session.[/]"
                 )
                 continue
-            from cli.interactive_shell.routing.handle_message_with_agent.orchestration.action_executor import (
+            from cli.interactive_shell.harness.handle_message_with_agent.orchestration.action_executor import (
                 run_opensre_cli_command,
             )
 

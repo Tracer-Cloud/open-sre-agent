@@ -12,7 +12,6 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from cli.config.tool_catalog import ToolCatalogEntry
 from cli.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from cli.interactive_shell.command_registry import repl_data as repl_data_module
 from cli.interactive_shell.command_registry.investigation import (
@@ -23,6 +22,7 @@ from cli.interactive_shell.command_registry.tasks_cmds import _validate_cancel_a
 from cli.interactive_shell.runtime.background import BackgroundInvestigationRecord
 from cli.interactive_shell.runtime.session import ReplSession
 from cli.interactive_shell.runtime.tasks import TaskKind, TaskStatus
+from cli.interactive_shell.ui.tool_catalog import ToolCatalogEntry
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -319,7 +319,7 @@ class TestDispatchSlash:
             lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
         )
         monkeypatch.setattr(
-            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -341,7 +341,7 @@ class TestDispatchSlash:
             lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
         )
         monkeypatch.setattr(
-            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -1541,7 +1541,7 @@ class TestInvestigateFileCommand:
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object
     ) -> None:
-        from cli.interactive_shell.error_handling.errors import OpenSREError
+        from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -1578,14 +1578,14 @@ class TestResumeCommand:
         from unittest.mock import patch
 
         from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
-        from cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.state.sessions.store import SessionStore
 
         session = ReplSession()
         old_id = session.session_id
         target_id = "old-abc-1234567890"
 
         with patch(
-            "cli.interactive_shell.sessions.store._sessions_dir",
+            "cli.interactive_shell.state.sessions.store._sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1682,7 +1682,7 @@ class TestResumeCommand:
         from unittest.mock import patch
 
         from cli.interactive_shell.command_registry.session_cmds import _apply_resume_data
-        from cli.interactive_shell.sessions.store import SessionStore
+        from cli.interactive_shell.state.sessions.store import SessionStore
 
         data = {
             "session_id": "display-test-abc123456789",
@@ -1703,7 +1703,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "cli.interactive_shell.sessions.store._sessions_dir",
+            "cli.interactive_shell.state.sessions.store._sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1753,10 +1753,10 @@ class TestResumeCommand:
         """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
         from unittest.mock import patch
 
-        from cli.interactive_shell.routing.handle_message_with_agent.errors import (
+        from cli.interactive_shell.harness.handle_message_with_agent.errors import (
             PlannerLLMError,
         )
-        from cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions import (
+        from cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions import (
             execute_cli_actions,
         )
 
@@ -1767,7 +1767,7 @@ class TestResumeCommand:
             raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions._plan_actions",
+            "cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions._plan_actions",
             side_effect=_raise,
         ):
             execute_cli_actions("check cpu usage", session, console)

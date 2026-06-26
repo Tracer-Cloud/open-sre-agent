@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from cli.config.tool_catalog import build_tool_catalog
 from cli.interactive_shell.command_registry.types import (
     ExecutionTier,
     SlashCommand,
@@ -12,6 +11,7 @@ from cli.interactive_shell.command_registry.types import (
 )
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import render_tools_table
+from cli.interactive_shell.ui.tool_catalog import build_tool_catalog
 
 
 def _list_tools(_session: ReplSession, console: Console, _args: list[str]) -> bool:

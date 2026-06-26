@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.runtime.background_runner import (
     start_background_template_investigation,
@@ -28,6 +27,7 @@ from cli.interactive_shell.ui.choice_menu import (
     repl_section_break,
     repl_tty_interactive,
 )
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from config.llm_reasoning_effort import apply_reasoning_effort
 
 

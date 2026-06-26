@@ -64,7 +64,7 @@ def _actions_allowed_by_capabilities(
     actions: list[dict[str, object]], session: ReplSession
 ) -> list[dict[str, object]]:
     """Drop actions whose capability surface is explicitly disabled for *session*."""
-    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.tool_contracts import (
+    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.tool_contracts import (
         capability_not_explicitly_disabled,
     )
 

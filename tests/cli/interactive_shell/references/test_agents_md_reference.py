@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from cli.interactive_shell.references import agents_md_reference
-from cli.interactive_shell.references.agents_md_reference import (
+from cli.interactive_shell.chat.grounding import agents_md_reference
+from cli.interactive_shell.chat.grounding.agents_md_reference import (
     AgentsMdFile,
     _excerpt,
     build_agents_md_reference_text,

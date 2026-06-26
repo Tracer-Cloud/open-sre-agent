@@ -1007,7 +1007,9 @@ class TestStreamRendererFocusedUXAndParsing:
 
     def test_strip_outer_quotes_does_not_fire_on_linux(self) -> None:
         """Windows-only outer quote normalization does not alter POSIX shlex tokens."""
-        from cli.interactive_shell.shell.policy import parse_shell_command
+        from cli.interactive_shell.harness.handle_message_with_agent.orchestration.shell_policy import (
+            parse_shell_command,
+        )
 
         parsed = parse_shell_command('run "cat /tmp/file.txt"', is_windows=False)
         assert parsed.argv == ["run", "cat /tmp/file.txt"]

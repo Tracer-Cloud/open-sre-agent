@@ -289,7 +289,7 @@ def test_render_mcp_table_renders_content(
 
 
 def test_print_planned_actions_formats_kinds() -> None:
-    from cli.interactive_shell.routing.handle_message_with_agent.orchestration.interaction_models import (
+    from cli.interactive_shell.harness.handle_message_with_agent.orchestration.interaction_models import (
         PlannedAction,
     )
 

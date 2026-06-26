@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from cli.__main__ import cli
-from cli.feedback import MissTaxonomy, record_miss
+from cli.interactive_shell.runtime.feedback import MissTaxonomy, record_miss
 
 
 @pytest.fixture

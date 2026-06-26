@@ -7,16 +7,16 @@ from typing import cast
 
 from rich.console import Console
 
-import cli.interactive_shell.routing.handle_message_with_agent.orchestration.agent_actions as _agent_actions
+import cli.interactive_shell.harness.handle_message_with_agent.orchestration.agent_actions as _agent_actions
 from cli.interactive_shell.chat import cli_agent as _cli_agent
 from cli.interactive_shell.chat.tool_gathering import gather_tool_evidence
 from cli.interactive_shell.command_registry import dispatch_slash
-from cli.interactive_shell.prompt_logging import LlmRunInfo, PromptRecorder
-from cli.interactive_shell.routing.handle_message_with_agent.pipeline import (
+from cli.interactive_shell.harness.handle_message_with_agent.pipeline import (
     handle_message_with_agent,
 )
-from cli.interactive_shell.routing.types import RouteDecision
+from cli.interactive_shell.harness.types import RouteDecision
 from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 from platform.analytics.events import Event
 from platform.analytics.provider import JsonValue, get_analytics
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id

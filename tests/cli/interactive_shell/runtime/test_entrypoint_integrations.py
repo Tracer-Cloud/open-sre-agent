@@ -181,7 +181,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
     """On an unexpected gate error we must NOT fail open into the REPL unless an
     explicit bypass applies."""
     monkeypatch.setattr(
-        "cli.first_launch_github.should_require_github_login",
+        "cli.interactive_shell.runtime.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: False)
@@ -191,7 +191,7 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
 
 def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "cli.first_launch_github.should_require_github_login",
+        "cli.interactive_shell.runtime.first_launch_github.should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
     monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: True)

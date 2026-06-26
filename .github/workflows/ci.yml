@@ -20,7 +20,7 @@ on:
       - "mypy.ini"
       - "Makefile"
       - ".importlinter"
-      - "scripts/**"
+      - "infra/ci/**"
       - ".github/workflows/ci.yml"
 
   pull_request:
@@ -42,7 +42,7 @@ on:
       - "mypy.ini"
       - "Makefile"
       - ".importlinter"
-      - "scripts/**"
+      - "infra/ci/**"
       - ".github/workflows/ci.yml"
 
 permissions:
@@ -97,7 +97,7 @@ jobs:
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
       - name: Import graph
-        run: uv run python scripts/check_imports.py
+        run: uv run python infra/ci/check_imports.py
 
   test:
     name: test (${{ matrix.shard }})

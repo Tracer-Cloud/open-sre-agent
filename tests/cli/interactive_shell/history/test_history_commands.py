@@ -9,10 +9,10 @@ import pytest
 from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 
-from cli.interactive_shell import history as history_module
 from cli.interactive_shell.command_registry import dispatch_slash
-from cli.interactive_shell.history.policy import RedactingFileHistory
 from cli.interactive_shell.runtime.session import ReplSession
+from cli.interactive_shell.state import history as history_module
+from cli.interactive_shell.state.history.policy import RedactingFileHistory
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -23,7 +23,7 @@ def _capture() -> tuple[Console, io.StringIO]:
 def _redirect_history_path(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
     """Point ``prompt_history_path()`` at a tmp file across all importers."""
     from cli.interactive_shell.command_registry import privacy_cmds as privacy_cmds_module
-    from cli.interactive_shell.history import storage as history_storage
+    from cli.interactive_shell.state.history import storage as history_storage
 
     monkeypatch.setattr(history_module, "prompt_history_path", lambda: target)
     monkeypatch.setattr(privacy_cmds_module, "prompt_history_path", lambda: target)

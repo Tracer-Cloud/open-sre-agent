@@ -9,7 +9,7 @@ from typing import cast
 import psutil
 import pytest
 
-from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from tools.watch_dog.config import WatchdogConfig
 from tools.watch_dog.process_monitor import ProcessMonitor
 

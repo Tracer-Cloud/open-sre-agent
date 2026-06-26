@@ -8,11 +8,11 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.error_handling.errors import OpenSREError
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime import ReplSession, TaskKind
 from cli.interactive_shell.runtime.tasks import TaskRecord
 from cli.interactive_shell.ui import ERROR, WARNING
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 
 def run_foreground_investigation(

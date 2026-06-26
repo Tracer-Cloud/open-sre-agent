@@ -22,6 +22,8 @@ In simple terms:
   context, trust mode, interaction counters).
 - `tasks.py` owns the cross-session task registry surfaced via `/tasks` and
   `/cancel`.
+- `token_accounting.py` records LLM token usage onto `ReplSession` and assembles
+  per-call run metadata (`LlmRunInfo`) for prompt logging and the `/cost` view.
 
 These instructions apply to `cli/interactive_shell/runtime/` and all
 subdirectories. Parent `AGENTS.md` files still apply.
@@ -37,6 +39,7 @@ The runtime package is intentionally split into focused concerns:
 - `entrypoint.py` — process/bootstrap boundary only.
 - `session.py` — session-scoped REPL state only.
 - `tasks.py` — task registry + persistence only.
+- `token_accounting.py` — session-scoped LLM token accounting and run metadata only.
 
 Keep these boundaries strict. If a change crosses concerns, move code to the
 owner module instead of broadening module responsibilities.

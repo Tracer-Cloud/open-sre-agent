@@ -51,7 +51,7 @@ from cli.interactive_shell.command_registry.theme import COMMANDS as THEME_COMMA
 from cli.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from cli.interactive_shell.command_registry.types import SlashCommand
 from cli.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
-from cli.interactive_shell.routing.handle_message_with_agent.orchestration.execution_policy import (
+from cli.interactive_shell.harness.handle_message_with_agent.orchestration.execution_policy import (
     evaluate_slash_tier,
     execution_allowed,
     resolve_slash_execution_tier,

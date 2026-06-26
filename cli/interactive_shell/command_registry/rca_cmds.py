@@ -13,9 +13,8 @@ from cli.interactive_shell.command_registry.investigation import (
     write_investigation_export,
 )
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
-from cli.interactive_shell.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.sessions.store import SessionStore
+from cli.interactive_shell.state.sessions.store import SessionStore
 from cli.interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
@@ -33,6 +32,7 @@ from cli.interactive_shell.ui.choice_menu import (
     repl_tty_interactive,
 )
 from cli.interactive_shell.ui.time_format import format_repl_timestamp
+from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 _RCA_ROOT = "/rca"
 _RCA_LATEST = "__latest__"

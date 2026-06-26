@@ -11,8 +11,8 @@ import click
 
 from cli.commands.remote_health import _save_remote_base_url, run_remote_health_check
 from cli.interactive_shell.data_store.context import is_interactive_env, is_json_output, is_yes
-from cli.interactive_shell.error_handling.errors import OpenSREError
 from cli.interactive_shell.ui.theme import BRAND, DIM, ERROR, HIGHLIGHT, WARNING
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 
 if TYPE_CHECKING:
     from infra.deployment.remote.client import PreflightResult, RemoteAgentClient

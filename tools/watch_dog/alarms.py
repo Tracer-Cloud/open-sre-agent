@@ -8,7 +8,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.common.truncation import truncate
 from platform.notifications.telegram_delivery import (
     post_telegram_message,

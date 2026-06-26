@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.wizard.store import load_named_remotes, load_remote_ops_config
 from infra.deployment.operations.health import poll_deployment_health
 from infra.deployment.remote.ops import (

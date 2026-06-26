@@ -4,8 +4,8 @@ from typing import Any, NoReturn
 
 import pytest
 
-from cli.interactive_shell.error_handling.cli_error_mapping import reraise_cli_runtime_error
-from cli.interactive_shell.error_handling.errors import OpenSREError
+from cli.interactive_shell.utils.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.investigation import (
     resolve_investigation_context,
     run_investigation_cli,

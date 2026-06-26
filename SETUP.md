@@ -141,8 +141,7 @@ uv run pytest -n auto -v --cov=app --cov-report=term-missing \
 `make install` installs this repo in **editable** mode into `.venv`, but another **`opensre`** may appear earlier on **`PATH`** (installer binary, version manager, `~/.local/bin`, etc.).
 
 1. Prefer **`uv run opensre …`** from the repository root.
-2. Or run **`eval "$(./scripts/dev-path.sh)"`** then **`hash -r`** (see script for behavior).
-3. Or prepend the venv: `export PATH="$(pwd)/.venv/bin:$PATH"` (macOS/Linux), then **`hash -r`** / new shell, and confirm **`which opensre`** points at **`<repo>/.venv/bin/opensre`**.
+2. Or prepend the venv: `export PATH="$(pwd)/.venv/bin:$PATH"` (macOS/Linux), then **`hash -r`** / new shell, and confirm **`which opensre`** points at **`<repo>/.venv/bin/opensre`**.
 
 ---
 

@@ -1,4 +1,4 @@
-"""Tests for ``cli.interactive_shell.references.source_chunker``."""
+"""Tests for ``cli.interactive_shell.chat.grounding.source_chunker``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.interactive_shell.references.source_chunker import (
+from cli.interactive_shell.chat.grounding.source_chunker import (
     SourceChunk,
     chunk_markdown_file,
     chunk_path,

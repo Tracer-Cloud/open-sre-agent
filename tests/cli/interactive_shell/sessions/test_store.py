@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from cli.interactive_shell.runtime.session import ReplSession
-from cli.interactive_shell.sessions.store import SessionStore, _sessions_dir
+from cli.interactive_shell.state.sessions.store import SessionStore, _sessions_dir
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ def _read_lines(path: Path) -> list[dict]:
 
 
 def _patch_dir(tmp_path: Path):
-    return patch("cli.interactive_shell.sessions.store._sessions_dir", return_value=tmp_path)
+    return patch("cli.interactive_shell.state.sessions.store._sessions_dir", return_value=tmp_path)
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ def test_open_session_uses_session_id_as_filename(tmp_path: Path) -> None:
 def test_open_session_never_raises_on_bad_path() -> None:
     session = _make_session()
     with patch(
-        "cli.interactive_shell.sessions.store._sessions_dir",
+        "cli.interactive_shell.state.sessions.store._sessions_dir",
         return_value=Path("/nonexistent/cannot/write"),
     ):
         SessionStore.open_session(session)  # must not raise

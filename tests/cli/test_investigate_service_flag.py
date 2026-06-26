@@ -118,7 +118,7 @@ def test_service_flag_rejects_other_input_modes(conflict_flag, conflict_value) -
 
 
 def test_service_flag_surfaces_errors_from_payload_builder() -> None:
-    from cli.interactive_shell.error_handling.errors import OpenSREError
+    from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 
     runner = CliRunner()
     with (

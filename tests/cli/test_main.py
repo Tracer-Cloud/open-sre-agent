@@ -10,7 +10,7 @@ import click
 import pytest
 
 from cli.__main__ import _sentry_entrypoint_for_invocation, main
-from cli.config import ReplConfig
+from config.repl_config import ReplConfig
 from platform.analytics import provider
 from platform.analytics.events import Event
 
@@ -82,7 +82,7 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -167,7 +167,7 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -188,7 +188,7 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+        "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -523,7 +523,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     # Force disabled interactive config via the loader.  Return a disabled config
     # regardless of how the CLI resolved the flag.
     monkeypatch.setattr(
-        "cli.config.ReplConfig.load",
+        "config.repl_config.ReplConfig.load",
         classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
     )
 
@@ -565,7 +565,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
         load_calls.append(kw)
         return orig_load(**kw)
 
-    monkeypatch.setattr("cli.config.ReplConfig.load", spy_load)
+    monkeypatch.setattr("config.repl_config.ReplConfig.load", spy_load)
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
@@ -619,7 +619,7 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
         load_calls.append(kw)
         return ReplConfig(enabled=True, layout="classic", theme="blue")
 
-    monkeypatch.setattr("cli.config.ReplConfig.load", spy_load)
+    monkeypatch.setattr("config.repl_config.ReplConfig.load", spy_load)
 
     with (
         patch("cli.interactive_shell.run_repl", return_value=0),

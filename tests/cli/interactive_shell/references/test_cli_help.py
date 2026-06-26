@@ -15,8 +15,8 @@ from cli.interactive_shell.chat.cli_help import (
     _build_grounded_prompt,
     answer_cli_help,
 )
-from cli.interactive_shell.references import docs_reference
-from cli.interactive_shell.references.docs_reference import invalidate_docs_cache
+from cli.interactive_shell.chat.grounding import docs_reference
+from cli.interactive_shell.chat.grounding.docs_reference import invalidate_docs_cache
 from cli.interactive_shell.runtime.session import ReplSession
 
 
@@ -182,7 +182,7 @@ class TestAnswerCliHelp:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "cli.interactive_shell.error_handling.exception_reporting.capture_exception",
+            "cli.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 

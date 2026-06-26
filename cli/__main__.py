@@ -22,10 +22,6 @@ import click  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from cli.commands import register_commands  # noqa: E402
-from cli.interactive_shell.error_handling.exception_reporting import (  # noqa: E402
-    report_exception,
-    should_report_exception,
-)
 from cli.interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
 from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
     handle_ctrl_c_press,
@@ -33,6 +29,10 @@ from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
     install_questionary_escape_cancel,
 )
 from cli.interactive_shell.ui.theme import list_theme_names  # noqa: E402
+from cli.interactive_shell.utils.error_handling.exception_reporting import (  # noqa: E402
+    report_exception,
+    should_report_exception,
+)
 from config.version import get_version  # noqa: E402
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
 from platform.analytics.provider import (  # noqa: E402
@@ -180,7 +180,7 @@ def cli(
     if verbose or debug:
         os.environ["TRACER_VERBOSE"] = "1"
 
-    from cli.config import ReplConfig
+    from config.repl_config import ReplConfig
 
     _capture_accepted_cli_invocation(ctx)
 
