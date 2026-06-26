@@ -30,15 +30,18 @@ from interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
 )
-from interactive_shell.runtime.core.turn_detection import (
-    looks_like_cancel_request,
-    looks_like_confirmation_answer,
-)
 from interactive_shell.runtime.input import (
-    InputCancelled,
-    InputClosed,
-    InputSubmitted,
     PromptInputReader,
+)
+from interactive_shell.runtime.input.actions import (
+    CancelTurn,
+    CloseShell,
+    DeliverConfirmation,
+    IgnoreInput,
+    InputAction,
+    ShellInputSnapshot,
+    SubmitTurn,
+    decide_input_action,
 )
 from interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
@@ -213,41 +216,44 @@ class InteractiveShellController:
             if self.background is not None:
                 self.background.drain_turn_start_output(self.echo_console)
             event = await self.input_reader.read()
-            match event:
-                case InputSubmitted(text):
-                    if self.state.exit_requested or not text:
-                        continue
+            action = decide_input_action(
+                event,
+                ShellInputSnapshot(
+                    exit_requested=self.state.exit_requested,
+                    dispatch_running=self.state.is_dispatch_running(),
+                    awaiting_confirmation=self.state.is_awaiting_confirmation(),
+                ),
+                needs_exclusive_stdin=lambda text: turn_needs_exclusive_stdin(
+                    text,
+                    self.session,
+                ),
+            )
+            should_continue = await self._apply_input_action(action)
+            if not should_continue:
+                return
 
-                    if self.state.is_dispatch_running() and looks_like_cancel_request(text):
-                        stripped = (text or "").strip()
-                        self.prompt.render_submitted_prompt(self.echo_console, stripped)
-                        self._cancel_current_turn()
-                        continue
-
-                    stripped = (text or "").strip()
-                    if not stripped:
-                        continue
-
-                    if self.state.is_awaiting_confirmation():
-                        if looks_like_confirmation_answer(text):
-                            self.state.deliver_confirmation(text or "")
-                            continue
-                        self.echo_console.print(
-                            "[dim](type y/N to confirm the pending action; your input has been queued for after)[/]"
-                        )
-                        self.prompt.render_submitted_prompt(self.echo_console, stripped)
-                        await self._submit_turn(stripped)
-                        continue
-
-                    self.prompt.render_submitted_prompt(self.echo_console, stripped)
-                    wait_for_turn = turn_needs_exclusive_stdin(stripped, self.session)
-                    await self._submit_turn(stripped)
-                    if wait_for_turn:
-                        await self._wait_until_idle()
-                case InputCancelled():
-                    self._cancel_current_turn()
-                case InputClosed():
-                    return
+    async def _apply_input_action(self, action: InputAction) -> bool:
+        match action:
+            case IgnoreInput():
+                return True
+            case CloseShell():
+                return False
+            case CancelTurn(submitted_text=text):
+                if text:
+                    self.prompt.render_submitted_prompt(self.echo_console, text)
+                self._cancel_current_turn()
+                return True
+            case DeliverConfirmation(text=text):
+                self.state.deliver_confirmation(text)
+                return True
+            case SubmitTurn(text=text, wait_until_idle=wait, warning=warning):
+                if warning:
+                    self.echo_console.print(warning)
+                self.prompt.render_submitted_prompt(self.echo_console, text)
+                await self._submit_turn(text)
+                if wait:
+                    await self._wait_until_idle()
+                return True
 
     async def _submit_turn(self, text: str) -> None:
         await self.state.queue.put(text)

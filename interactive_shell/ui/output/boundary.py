@@ -24,6 +24,9 @@ def install_product_adapters() -> None:
     - remote integrations fetcher: empty default → Tracer Cloud adapter
     """
     from integrations.port import set_remote_integrations_fetcher
+    from integrations.tracer.integrations_adapter import (
+        fetch_tracer_remote_integrations,
+    )
     from interactive_shell.ui.output.environment import debug_print
     from interactive_shell.ui.output.renderers import (
         render_completed_investigation_footer,
@@ -36,9 +39,6 @@ def install_product_adapters() -> None:
         set_investigation_header_renderer,
     )
     from platform.observability.progress import set_progress_tracker_factory
-    from integrations.tracer.integrations_adapter import (
-        fetch_tracer_remote_integrations,
-    )
 
     set_debug_printer(debug_print)
     set_investigation_header_renderer(render_investigation_header)

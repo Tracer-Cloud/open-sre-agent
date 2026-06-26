@@ -9,6 +9,7 @@ on:
       - "core/**"
       - "infra/deployment/**"
       - "integrations/**"
+      - "interactive_shell/**"
       - "platform/**"
       - "tools/**"
       - "tests/**"
@@ -30,6 +31,7 @@ on:
       - "core/**"
       - "infra/deployment/**"
       - "integrations/**"
+      - "interactive_shell/**"
       - "platform/**"
       - "tools/**"
       - "tests/**"
@@ -48,7 +50,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform tools"
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations interactive_shell platform tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -238,6 +240,7 @@ jobs:
           --cov=core
           --cov=infra.deployment
           --cov=integrations
+          --cov=interactive_shell
           --cov=platform
           --cov=tools
           --cov-report=

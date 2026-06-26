@@ -10,20 +10,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 PYPROJECT_PATH = ROOT / "pyproject.toml"
 APP_CONSTANTS_OPENSRE_PATH = ROOT / "config" / "constants" / "opensre.py"
+# Dated stable tags carry the v0.1 line prefix, e.g. v0.1.2026.6.26. Month and
+# day are bounded (1-12, 1-31) so a malformed dispatch tag fails here rather
+# than producing a nonsensical version string.
+PREFIXED_CALENDAR_VERSION_PATTERN = re.compile(
+    r"v?(?P<version>\d+\.\d+\.\d{4}\.(?:1[0-2]|[1-9])\.(?:3[01]|[12]\d|[1-9]))"
+)
 CALENDAR_VERSION_PATTERN = re.compile(r"v?(?P<version>\d{4}\.\d{1,2}\.\d{1,2})")
 SEMVER_VERSION_PATTERN = re.compile(r"v?(?P<version>\d+\.\d+(?:\.\d+)?)")
 
 
 def _normalize_release_version(raw_value: str) -> str:
     value = raw_value.strip()
-    for pattern in (CALENDAR_VERSION_PATTERN, SEMVER_VERSION_PATTERN):
+    for pattern in (
+        PREFIXED_CALENDAR_VERSION_PATTERN,
+        CALENDAR_VERSION_PATTERN,
+        SEMVER_VERSION_PATTERN,
+    ):
         match = pattern.fullmatch(value)
         if match is not None:
             return match.group("version")
 
     msg = (
-        "Release tag must look like 'vYYYY.M.D', 'YYYY.M.D', 'v0.1', or '0.1.0'; "
-        f"got {raw_value!r}."
+        "Release tag must look like 'v0.1.YYYY.M.D', 'vYYYY.M.D', 'YYYY.M.D', "
+        f"'v0.1', or '0.1.0'; got {raw_value!r}."
     )
     raise ValueError(msg)
 
@@ -85,7 +95,7 @@ def main() -> None:
     parser.add_argument(
         "--tag",
         required=True,
-        help="Release tag to sync from, e.g. v2026.4.13 or v0.1.",
+        help="Release tag to sync from, e.g. v0.1.2026.6.26 or v0.1.",
     )
     args = parser.parse_args()
 

@@ -13,6 +13,8 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # Keep in sync with ci.yml — single source of truth for lint/typecheck/coverage targets.
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform tools"
 
 concurrency:
   group: ci-labels-windows-${{ github.ref }}
@@ -46,13 +48,13 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run python -m ruff check cli config core deployment integrations platform tools tests/
+        run: uv run python -m ruff check ${{ env.PYTHON_SOURCE_PATHS }} tests/
 
       - name: Format check
-        run: uv run python -m ruff format --check cli config core deployment integrations platform tools tests/
+        run: uv run python -m ruff format --check ${{ env.PYTHON_SOURCE_PATHS }} tests/
 
       - name: Typecheck
-        run: uv run python -m mypy cli config core deployment integrations platform tools
+        run: uv run python -m mypy ${{ env.PYTHON_SOURCE_PATHS }}
 
   windows-test:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
@@ -99,7 +101,7 @@ jobs:
       - name: Run full tests
         run: >-
           uv run python -m pytest -n auto -v
-          --cov=cli --cov=config --cov=core --cov=deployment --cov=integrations --cov=platform --cov=tools
+          --cov=cli --cov=config --cov=core --cov=infra/deployment --cov=integrations --cov=platform --cov=tools
           --cov-report=term-missing
           --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation

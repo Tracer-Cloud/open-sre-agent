@@ -25,6 +25,8 @@ def test_release_paths_resolve_from_moved_infra_location() -> None:
 @pytest.mark.parametrize(
     ("raw_value", "expected"),
     [
+        ("v0.1.2026.6.26", "0.1.2026.6.26"),
+        ("0.1.2026.6.26", "0.1.2026.6.26"),
         ("v2026.4.13", "2026.4.13"),
         ("2026.4.13", "2026.4.13"),
         ("v0.1", "0.1"),
@@ -38,6 +40,7 @@ def test_normalize_release_version_accepts_calendar_and_semver(
     assert _normalize_release_version(raw_value) == expected
 
 
-def test_normalize_release_version_rejects_unknown_shapes() -> None:
+@pytest.mark.parametrize("raw_value", ["not-a-version", "v0.1.2026.99.99"])
+def test_normalize_release_version_rejects_unknown_shapes(raw_value: str) -> None:
     with pytest.raises(ValueError, match="Release tag must look like"):
-        _normalize_release_version("not-a-version")
+        _normalize_release_version(raw_value)

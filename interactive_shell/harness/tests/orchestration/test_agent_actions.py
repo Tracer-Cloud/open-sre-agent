@@ -41,8 +41,7 @@ from interactive_shell.runtime.core.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 
 _PLANNER_RESULT_PATCH = (
-    "interactive_shell.harness.orchestration"
-    ".terminal_actions.planning.plan_actions_with_llm_result"
+    "interactive_shell.harness.orchestration.terminal_actions.planning.plan_actions_with_llm_result"
 )
 
 

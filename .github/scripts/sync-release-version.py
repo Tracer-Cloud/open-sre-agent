@@ -52,7 +52,7 @@ def sync_release_version(tag: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag", required=True, help="Release tag, e.g. v2026.6.26 or v0.1")
+    parser.add_argument("--tag", required=True, help="Release tag, e.g. v0.1.2026.6.26 or v0.1")
     args = parser.parse_args()
     version = sync_release_version(args.tag)
     print(f"Synced release version to {version}")

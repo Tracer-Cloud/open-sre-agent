@@ -11,8 +11,8 @@ from interactive_shell.command_registry.types import (
     ExecutionTier,
     SlashCommand,
 )
-from interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from interactive_shell.harness.state.history import load_command_history_entries
+from interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
 from interactive_shell.ui import (
     BOLD_BRAND,
     DIM,
