@@ -451,8 +451,13 @@ format:
 typecheck:
 	$(PYTHON) -m mypy $(PYTHON_SOURCE_PATHS)
 
-# Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
-check: lint format-check typecheck test-full
+# Detect first-party import cycles (Tarjan SCC over top-level imports only).
+# Exits 1 if any cycle is found — wired into ``check`` for CI parity.
+check-cycles:
+	$(PYTHON) scripts/check_import_cycles.py
+
+# Run all checks (lint + format read-only check + types + cycles + full tests; mirrors CI quality gates)
+check: lint format-check typecheck check-cycles test-full
 
 # ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
 deploy-vercel:

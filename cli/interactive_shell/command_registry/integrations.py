@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.command_registry import repl_data
+import cli.interactive_shell.command_registry.repl_data as repl_data
 from cli.interactive_shell.command_registry.cli_parity import run_cli_command
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession

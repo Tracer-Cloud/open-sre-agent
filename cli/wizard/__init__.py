@@ -1,13 +1,11 @@
-"""Quickstart wizard entrypoints."""
+"""Quickstart wizard entrypoints.
+
+Public callers should import directly from the submodule that owns the
+behaviour they need (``cli.wizard.flow`` for the top-level
+``run_wizard`` entry, ``cli.wizard.store`` for local-config helpers,
+etc.). This ``__init__`` no longer re-exports anything so the package
+load is side-effect-free and the legacy ``cli.wizard ↔ cli.wizard.flow``
+import cycle is gone.
+"""
 
 from __future__ import annotations
-
-
-def run_wizard(*args, **kwargs):
-    """Import the wizard flow lazily to keep package import side effects small."""
-    from cli.wizard.flow import run_wizard as _run_wizard
-
-    return _run_wizard(*args, **kwargs)
-
-
-__all__ = ["run_wizard"]

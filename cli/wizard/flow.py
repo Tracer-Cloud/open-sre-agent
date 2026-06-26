@@ -9,6 +9,7 @@ from typing import Literal
 import questionary
 from rich.text import Text
 
+import cli.wizard._integration_configurators as _integration_configurators_module
 from cli.interactive_shell.ui.theme import (
     ERROR,
     GLYPH_ERROR,
@@ -17,7 +18,6 @@ from cli.interactive_shell.ui.theme import (
     TEXT,
     WARNING,
 )
-from cli.wizard import _integration_configurators as _integration_configurators_module
 from cli.wizard._integration_configurators import (
     _configure_selected_integrations,
 )
