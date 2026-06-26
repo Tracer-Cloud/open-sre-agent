@@ -61,7 +61,7 @@ def run_foreground_investigation(
     #
     # Safety check: only read stdin when prompt_async is NOT running.
     # When the investigation was dispatched without exclusive stdin (e.g. an
-    # LLM-agent-routed free-text message), prompt_async is already active and its
+    # LLM-agent free-text message), prompt_async is already active and its
     # Application periodically sends ESC[6n CPR queries. Those terminal responses
     # (ESC[row;colR) arrive in stdin while read_key_unix is blocking. Even with the
     # CSI-drain fix in read_key_unix, racing with an active Application is unsafe:

@@ -33,7 +33,7 @@ class SlashCommand:
     validate_args: Callable[[list[str]], str | None] | None = None
     #: Multi-sentence description for LLM planners; falls back to ``description``.
     llm_description: str = ""
-    #: Natural-language triggers that should route to this command.
+    #: Natural-language triggers that should select this command.
     use_cases: tuple[str, ...] = ()
     #: Requests that look similar but should NOT use this command.
     anti_examples: tuple[str, ...] = ()

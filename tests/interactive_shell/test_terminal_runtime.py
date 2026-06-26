@@ -629,7 +629,7 @@ class TestLooksLikeCancelRequest:
 
     The recognizer is the gate that lets the prompt loop intercept
     ``/cancel``-style slashes typed while a dispatch is parked
-    (e.g. on a ``Proceed? [y/N]`` confirmation) and route them through
+    (e.g. on a ``Proceed? [y/N]`` confirmation) and send them through
     ``state.cancel_current_dispatch()`` instead of queueing them
     behind the dispatch they're trying to interrupt.
     """
@@ -1011,9 +1011,9 @@ class TestReplState:
 
         asyncio.run(_scenario())
 
-    def test_cancel_from_worker_thread_routes_through_call_soon_threadsafe(self) -> None:
+    def test_cancel_from_worker_thread_uses_call_soon_threadsafe(self) -> None:
         """``Task.cancel`` is not thread-safe; ``cancel_current_dispatch``
-        must route the cancel via ``loop.call_soon_threadsafe`` when
+        must send the cancel via ``loop.call_soon_threadsafe`` when
         invoked from a worker thread (the ``/exit`` slash handler runs
         in ``asyncio.to_thread`` and reaches us through
         :func:`_request_exit`).
@@ -1230,7 +1230,7 @@ class TestRequestConfirmationViaPrompt:
         assert state.confirm_prompt_text == ""
 
     def test_raises_dispatch_cancelled_when_cancel_event_fires(self) -> None:
-        """Esc / ``/cancel`` **user-facing** path: routes through
+        """Esc / ``/cancel`` **user-facing** path: goes through
         ``state.cancel_current_dispatch()``, which sets BOTH
         ``current_cancel_event`` AND ``confirm_event``. The worker
         wakes from ``response_event.wait`` because ``confirm_event``
