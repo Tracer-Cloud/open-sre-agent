@@ -14,7 +14,6 @@ from config.config import resolve_llm_settings
 from platform.observability.tracing import traceable
 
 if TYPE_CHECKING:
-    from core.domain.state import AgentState
     from core.domain.stream import StreamEvent
 
 _logger = logging.getLogger(__name__)
@@ -62,56 +61,6 @@ def _reraise_investigation_failure(exc: BaseException) -> NoReturn:
     reraise_cli_runtime_error(exc)
 
 
-def _call_run_investigation(
-    *,
-    raw_alert: dict[str, Any],
-    opensre_evaluate: bool = False,
-    investigation_metadata: tuple[str, str, str] | None = None,
-) -> AgentState:
-    """Import the heavy investigation runner only when execution starts."""
-    from core.orchestration.entrypoints import run_investigation
-
-    return run_investigation(
-        raw_alert,
-        opensre_evaluate=opensre_evaluate,
-        investigation_metadata=investigation_metadata,
-    )
-
-
-def resolve_investigation_context(
-    *,
-    raw_alert: dict[str, Any],
-    alert_name: str | None,
-    pipeline_name: str | None,
-    severity: str | None,
-) -> tuple[str, str, str]:
-    """Resolve investigation metadata from CLI overrides and payload defaults."""
-    labels = raw_alert.get("commonLabels") or raw_alert.get("labels") or {}
-    labels = labels if isinstance(labels, dict) else {}
-    canonical = raw_alert.get("canonical_alert")
-    canonical = canonical if isinstance(canonical, dict) else {}
-    return (
-        alert_name
-        or raw_alert.get("alert_name")
-        or raw_alert.get("title")
-        or canonical.get("alert_name")
-        or labels.get("alertname")
-        or "Incident",
-        pipeline_name
-        or raw_alert.get("pipeline_name")
-        or canonical.get("pipeline_name")
-        or labels.get("pipeline_name")
-        or labels.get("pipeline")
-        or labels.get("service")
-        or "unknown",
-        severity
-        or raw_alert.get("severity")
-        or canonical.get("severity")
-        or labels.get("severity")
-        or "warning",
-    )
-
-
 @traceable(name="investigation")
 def run_investigation_cli(
     *,
@@ -121,46 +70,26 @@ def run_investigation_cli(
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload.
 
+    Thin CLI wrapper over :func:`core.orchestration.entrypoints.run_investigation_payload`:
+    it adds the CLI-only precondition check (LLM settings) and maps runtime failures to
+    structured ``OpenSREError`` messages. The run itself and the result shaping live in
+    ``core`` so non-CLI surfaces can reuse them without importing ``cli``.
+
     ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
     tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
     """
     _check_llm_settings()
+    # Import the heavy investigation runner only when execution starts.
+    from core.orchestration.entrypoints import run_investigation_payload
+
     try:
-        state = _call_run_investigation(
+        return run_investigation_payload(
             raw_alert=raw_alert,
             opensre_evaluate=opensre_evaluate,
             investigation_metadata=investigation_metadata,
         )
     except Exception as exc:
         _reraise_investigation_failure(exc)
-    slack_message = state["slack_message"]
-    out: dict[str, Any] = {
-        "report": slack_message,
-        "problem_md": state["problem_md"],
-        "root_cause": state["root_cause"],
-        "is_noise": state.get("is_noise", False),
-        "validity_score": state.get("validity_score", 0.0),
-    }
-    if state.get("evidence_entries"):
-        out["tool_calls"] = state["evidence_entries"]
-    if opensre_evaluate:
-        ev = state.get("opensre_llm_eval")
-        if isinstance(ev, dict) and ev:
-            out["opensre_llm_eval"] = ev
-        elif not (state.get("opensre_eval_rubric") or "").strip():
-            out["opensre_llm_eval"] = {
-                "skipped": True,
-                "reason": (
-                    "No scoring_points on this alert — nothing to judge against "
-                    "(not a scoring_points rubric payload, or field missing)."
-                ),
-            }
-        else:
-            out["opensre_llm_eval"] = {
-                "skipped": True,
-                "reason": "Evaluate was enabled but no judge output was recorded.",
-            }
-    return out
 
 
 def stream_investigation_cli(

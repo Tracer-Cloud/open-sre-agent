@@ -37,16 +37,13 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
     {
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
-        # Watch-dog still shares the CLI OpenSREError type (#error-split pending).
-        "tools.watch_dog.alarms -> cli.interactive_shell.utils.error_handling.errors",
-        "tools.watch_dog.process_monitor -> cli.interactive_shell.utils.error_handling.errors",
         # Integration setup UX still reaches into the REPL for prompts/theme.
-        "integrations.cli -> cli.interactive_shell.data_store.context",
+        "integrations.cli -> cli.interactive_shell.state.data_store.context",
         "integrations.cli -> cli.interactive_shell.ui.theme",
         "integrations.cli -> cli.wizard.integration_health",
         "integrations.__main__ -> cli.interactive_shell.ui.prompt_support",
         "integrations.github_mcp -> cli.interactive_shell.ui.theme",
-        "integrations.vercel_incidents -> cli.interactive_shell.data_store.context",
+        "integrations.vercel_incidents -> cli.interactive_shell.state.data_store.context",
         "integrations.vercel_incidents -> cli.investigation",
     }
 )

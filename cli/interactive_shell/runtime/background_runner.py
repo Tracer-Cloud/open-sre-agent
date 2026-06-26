@@ -20,8 +20,8 @@ from cli.interactive_shell.runtime.background_notifications import (
     deliver_background_notifications,
 )
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from platform.common.errors import OpenSREError
 
 BackgroundRunFn = Callable[..., dict[str, Any]]
 

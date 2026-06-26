@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -27,16 +28,13 @@ from cli.interactive_shell.chat.grounding.grounding_diagnostics import (
 from cli.interactive_shell.chat.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
-from cli.interactive_shell.chat.message_classifier import (
-    _load_synthetic_observation_text,
-    _user_message_requests_synthetic_failure_explanation,
-)
 from cli.interactive_shell.chat.system_prompt import (
     _build_environment_block,
     _build_observation_block,
     _build_system_prompt,
 )
 from cli.interactive_shell.runtime import ReplSession
+from cli.interactive_shell.runtime.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from cli.interactive_shell.runtime.token_accounting import build_llm_run_info
 from cli.interactive_shell.state.conversation_history import (
     MAX_CONVERSATION_MESSAGES,
@@ -54,6 +52,36 @@ from cli.interactive_shell.ui import (
 from cli.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from cli.interactive_shell.utils.telemetry import LlmRunInfo
 from integrations.llm_cli.errors import CLITimeoutError
+
+_MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
+
+
+def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
+    """True when the user is likely asking about a failed synthetic benchmark."""
+    m = message.strip().lower()
+    if not m:
+        return False
+    suggested = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST.lower().rstrip("?")
+    if m.rstrip("?") == suggested:
+        return True
+    if "why" in m and "fail" in m:
+        return True
+    return "what went wrong" in m
+
+
+def _load_synthetic_observation_text(
+    path_str: str, *, max_chars: int = _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS
+) -> str:
+    try:
+        raw = Path(path_str).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if len(raw) > max_chars:
+        return (
+            raw[:max_chars]
+            + f"\n… [truncated for prompt size; observation is {len(raw)} characters total]"
+        )
+    return raw
 
 
 def _execute_action_plan(

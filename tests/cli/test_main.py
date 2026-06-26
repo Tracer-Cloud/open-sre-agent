@@ -119,10 +119,10 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
 
     monkeypatch.setattr("cli.__main__.init_sentry", _raise_missing_sentry)
     monkeypatch.setattr(
-        "cli.interactive_shell.data_store.update._fetch_latest_version", lambda: "9999.0.0"
+        "cli.interactive_shell.state.data_store.update._fetch_latest_version", lambda: "9999.0.0"
     )
     monkeypatch.setattr(
-        "cli.interactive_shell.data_store.update._is_update_available", lambda _c, _l: False
+        "cli.interactive_shell.state.data_store.update._is_update_available", lambda _c, _l: False
     )
 
     exit_code = main(["update", "--check"])

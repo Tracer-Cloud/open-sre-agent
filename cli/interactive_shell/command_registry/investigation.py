@@ -32,7 +32,7 @@ from platform.common.task_types import TaskRecord
 
 
 def _interactive_template_menu(session: ReplSession, console: Console) -> bool:
-    from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+    from cli.interactive_shell.state.data_store.constants import ALERT_TEMPLATE_CHOICES
 
     root = "/template"
     choices: list[tuple[str, str]] = [(c, c) for c in ALERT_TEMPLATE_CHOICES]
@@ -60,7 +60,7 @@ def _queue_investigate_target(session: ReplSession, target: str) -> None:
 
 
 def _interactive_investigate_menu(session: ReplSession, console: Console) -> bool:
-    from cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
+    from cli.interactive_shell.state.data_store.constants import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
     choices: list[tuple[str, str]] = [
@@ -101,7 +101,7 @@ def _prompt_investigate_path(console: Console) -> str | None:
 
 
 def _cmd_template(session: ReplSession, console: Console, args: list[str]) -> bool:
-    from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+    from cli.interactive_shell.state.data_store.constants import ALERT_TEMPLATE_CHOICES
     from cli.investigation.alert_templates import build_alert_template
 
     if not args and repl_tty_interactive():
@@ -145,7 +145,7 @@ def _validate_save_args(args: list[str]) -> str | None:
 
 
 def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str]) -> bool:
-    from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+    from cli.interactive_shell.state.data_store.constants import ALERT_TEMPLATE_CHOICES
     from cli.investigation import run_investigation_for_session, run_sample_alert_for_session
     from cli.investigation.payload import resolve_alert_path
     from platform.analytics.cli import track_investigation

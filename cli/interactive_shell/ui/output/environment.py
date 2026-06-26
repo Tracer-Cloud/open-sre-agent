@@ -41,7 +41,7 @@ def _is_verbose() -> bool:
     if os.getenv("TRACER_VERBOSE", "").lower() in ("1", "true", "yes"):
         return True
     try:
-        from cli.interactive_shell.data_store.context import is_debug, is_verbose
+        from cli.interactive_shell.state.data_store.context import is_debug, is_verbose
 
         return is_verbose() or is_debug()
     except Exception:

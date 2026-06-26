@@ -1,7 +1,6 @@
 """Investigation CLI: load raw alert payloads and run the connected agent loop."""
 
 from cli.investigation.investigate import (
-    resolve_investigation_context,
     run_investigation_cli,
     run_investigation_cli_streaming,
     run_investigation_for_session,
@@ -12,7 +11,6 @@ from cli.investigation.investigate import (
 )
 
 __all__ = [
-    "resolve_investigation_context",
     "run_investigation_cli",
     "run_investigation_cli_streaming",
     "run_investigation_for_session_background",

@@ -106,6 +106,107 @@ def run_investigation(
         return _run(initial, agent_class=agent_class)
 
 
+def resolve_investigation_context(
+    *,
+    raw_alert: dict[str, Any],
+    alert_name: str | None,
+    pipeline_name: str | None,
+    severity: str | None,
+) -> tuple[str, str, str]:
+    """Resolve ``(alert_name, pipeline_name, severity)`` from overrides and payload defaults.
+
+    Pure helper shared by every delivery surface (CLI, HTTP server, MCP); overrides win,
+    then the raw alert's own fields, then common labels, then sensible fallbacks.
+    """
+    labels = raw_alert.get("commonLabels") or raw_alert.get("labels") or {}
+    labels = labels if isinstance(labels, dict) else {}
+    canonical = raw_alert.get("canonical_alert")
+    canonical = canonical if isinstance(canonical, dict) else {}
+    return (
+        alert_name
+        or raw_alert.get("alert_name")
+        or raw_alert.get("title")
+        or canonical.get("alert_name")
+        or labels.get("alertname")
+        or "Incident",
+        pipeline_name
+        or raw_alert.get("pipeline_name")
+        or canonical.get("pipeline_name")
+        or labels.get("pipeline_name")
+        or labels.get("pipeline")
+        or labels.get("service")
+        or "unknown",
+        severity
+        or raw_alert.get("severity")
+        or canonical.get("severity")
+        or labels.get("severity")
+        or "warning",
+    )
+
+
+def build_investigation_payload(
+    state: AgentState,
+    *,
+    opensre_evaluate: bool = False,
+) -> dict[str, Any]:
+    """Project a finished investigation ``AgentState`` into the public result payload.
+
+    Shared by every delivery surface so the serializable result shape stays identical
+    regardless of how the run was triggered (CLI, HTTP server, MCP, integration webhook).
+    """
+    out: dict[str, Any] = {
+        "report": state["slack_message"],
+        "problem_md": state["problem_md"],
+        "root_cause": state["root_cause"],
+        "is_noise": state.get("is_noise", False),
+        "validity_score": state.get("validity_score", 0.0),
+    }
+    if state.get("evidence_entries"):
+        out["tool_calls"] = state["evidence_entries"]
+    if opensre_evaluate:
+        ev = state.get("opensre_llm_eval")
+        if isinstance(ev, dict) and ev:
+            out["opensre_llm_eval"] = ev
+        elif not (state.get("opensre_eval_rubric") or "").strip():
+            out["opensre_llm_eval"] = {
+                "skipped": True,
+                "reason": (
+                    "No scoring_points on this alert — nothing to judge against "
+                    "(not a scoring_points rubric payload, or field missing)."
+                ),
+            }
+        else:
+            out["opensre_llm_eval"] = {
+                "skipped": True,
+                "reason": "Evaluate was enabled but no judge output was recorded.",
+            }
+    return out
+
+
+def run_investigation_payload(
+    *,
+    raw_alert: str | dict[str, Any],
+    opensre_evaluate: bool = False,
+    investigation_metadata: tuple[str, str, str] | None = None,
+) -> dict[str, Any]:
+    """Run an investigation and return the serializable result payload.
+
+    The headless counterpart used by surfaces that do not render a live terminal
+    stream (HTTP server, MCP, integration webhooks). It returns the same ``dict`` the
+    CLI produces without depending on the ``cli`` package, so callers no longer have
+    to reach up into ``cli.investigation`` to run an investigation.
+
+    ``investigation_metadata`` is an optional ``(alert_name, pipeline_name, severity)``
+    tuple for initial state (e.g. HTTP request overrides) without mutating ``raw_alert``.
+    """
+    state = run_investigation(
+        raw_alert,
+        opensre_evaluate=opensre_evaluate,
+        investigation_metadata=investigation_metadata,
+    )
+    return build_investigation_payload(state, opensre_evaluate=opensre_evaluate)
+
+
 async def astream_investigation(
     raw_alert: str | dict[str, Any],
     *,

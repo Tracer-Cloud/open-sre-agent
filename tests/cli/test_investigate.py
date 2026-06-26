@@ -139,7 +139,7 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
 
 
 def test_parse_args_evaluate_flag() -> None:
-    from cli.interactive_shell.data_store.args import parse_args
+    from cli.interactive_shell.state.data_store.args import parse_args
 
     assert parse_args(["--input", "a.json"]).evaluate is False
     assert parse_args(["--input", "a.json", "--evaluate"]).evaluate is True

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
+from cli.interactive_shell.state.data_store.constants import ALERT_TEMPLATE_CHOICES
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

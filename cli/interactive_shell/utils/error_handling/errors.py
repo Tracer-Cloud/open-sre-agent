@@ -1,26 +1,22 @@
-"""Structured CLI error with optional suggestion and docs URL.
+"""CLI rendering for structured OpenSRE errors.
 
-Follows the pattern from `clig.dev <https://clig.dev/>`_ and flyctl's
-error system: every user-facing error can carry a human-readable
-suggestion (what to do next) and a docs link.
+The frontend-agnostic error contract lives in :mod:`platform.common.errors`.
+This module adds the CLI presentation layer: a ``click.ClickException``
+subclass whose :meth:`show` renders a clean, traceback-free panel via
+:func:`render_error`. CLI code raises this subclass so Click's error path
+renders it; non-CLI code (tools, integrations) raises the platform base, and
+:mod:`cli.__main__` renders that. Catch ``platform.common.errors.OpenSREError``
+to handle both.
 
 render_error()
 --------------
-Catches any exception and displays a clean, terminal-safe error panel
-without ever surfacing a raw Python traceback. Format:
+Catches any exception and displays a clean, terminal-safe error panel without
+ever surfacing a raw Python traceback. Format:
 
   ✗  ExceptionType                       ← ERROR
      message text                        ← TEXT
      path/to/file.py:42 in fn_name      ← DIM
      Run opensre doctor to diagnose      ← SECONDARY hint
-
-Example rendered output (colour roles):
-  ┌──────────────────────────────────────────────────────┐ [DIM]
-  │  ✗  ValueError                                       │ [ERROR glyph + type]
-  │     argument must be positive                        │ [TEXT message]
-  │     app/nodes/plan_actions/node.py:88 in _build      │ [DIM location]
-  │     Run opensre doctor to diagnose connection issues  │ [SECONDARY hint]
-  └──────────────────────────────────────────────────────┘ [DIM]
 """
 
 from __future__ import annotations
@@ -32,9 +28,10 @@ import click
 from rich.console import Console
 
 from cli.interactive_shell.ui.errors import render_error
+from platform.common.errors import OpenSREError as _OpenSREError
 
 
-class OpenSREError(click.ClickException):
+class OpenSREError(_OpenSREError, click.ClickException):
     """A CLI error that renders with an optional suggestion and docs URL."""
 
     def __init__(
@@ -45,18 +42,15 @@ class OpenSREError(click.ClickException):
         docs_url: str | None = None,
         exit_code: int = 1,
     ) -> None:
-        super().__init__(message)
-        self.suggestion = suggestion
-        self.docs_url = docs_url
-        self.exit_code = exit_code
+        # The platform base sets ``message``/``suggestion``/``docs_url``/
+        # ``exit_code`` — all Click needs to render and exit, so we don't call
+        # ``ClickException.__init__`` and avoid cooperative-MRO ambiguity.
+        _OpenSREError.__init__(
+            self, message, suggestion=suggestion, docs_url=docs_url, exit_code=exit_code
+        )
 
     def format_message(self) -> str:
-        parts = [self.message]
-        if self.suggestion:
-            parts.append(f"\nSuggestion: {self.suggestion}")
-        if self.docs_url:
-            parts.append(f"Docs: {self.docs_url}")
-        return "\n".join(parts)
+        return _OpenSREError.format_message(self)
 
     def show(self, file: t.IO[t.Any] | None = None) -> None:
         _file = file if file is not None else sys.stderr

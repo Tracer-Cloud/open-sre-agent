@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import click
 
-from cli.interactive_shell.data_store.constants import (
+from cli.interactive_shell.state.data_store.constants import (
     MANAGED_INTEGRATION_SERVICES,
     SETUP_SERVICES,
     VERIFY_SERVICES,

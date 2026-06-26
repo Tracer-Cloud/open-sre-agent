@@ -9,8 +9,8 @@ import time
 import click
 
 import platform
-from cli.interactive_shell.data_store.constants import ALERT_TEMPLATE_CHOICES
-from cli.interactive_shell.data_store.context import is_json_output, is_yes
+from cli.interactive_shell.state.data_store.constants import ALERT_TEMPLATE_CHOICES
+from cli.interactive_shell.state.data_store.context import is_json_output, is_yes
 from config.version import get_version
 from platform.analytics.cli import (
     capture_update_completed,
@@ -26,7 +26,7 @@ from platform.common.exit_codes import ERROR, SUCCESS
 @click.option("--yes", "-y", "local_yes", is_flag=True, help="Skip the confirmation prompt.")
 def uninstall_command(local_yes: bool) -> None:
     """Remove opensre and all local data from this machine."""
-    from cli.interactive_shell.data_store.uninstall import run_uninstall
+    from cli.interactive_shell.state.data_store.uninstall import run_uninstall
 
     raise SystemExit(run_uninstall(yes=local_yes or is_yes()))
 
@@ -41,7 +41,7 @@ def uninstall_command(local_yes: bool) -> None:
 @click.option("--yes", "-y", "local_yes", is_flag=True, help="Skip the confirmation prompt.")
 def update_command(check_only: bool, local_yes: bool) -> None:
     """Check for a newer version and update if one is available."""
-    from cli.interactive_shell.data_store.update import run_update
+    from cli.interactive_shell.state.data_store.update import run_update
 
     capture_update_started(check_only=check_only)
     try:
@@ -273,7 +273,7 @@ def _run_service_investigation(
     """Run a runtime investigation for a deployed service by name."""
     import os
 
-    from cli.interactive_shell.data_store.args import write_json
+    from cli.interactive_shell.state.data_store.args import write_json
     from cli.interactive_shell.utils.error_handling.errors import OpenSREError
     from cli.investigation import run_investigation_cli
     from infra.deployment.remote.runtime_alert import build_runtime_alert_payload

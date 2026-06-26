@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from cli.interactive_shell.data_store.constants import SAMPLE_ALERT_OPTIONS
+from cli.interactive_shell.state.data_store.constants import SAMPLE_ALERT_OPTIONS
 from cli.investigation.payload import load_payload
 
 

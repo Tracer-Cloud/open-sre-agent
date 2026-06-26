@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from cli.interactive_shell.utils.error_handling.errors import OpenSREError
+from platform.common.errors import OpenSREError
 from tools.watch_dog.alarms import (
     AlarmCredentials,
     AlarmDispatcher,
