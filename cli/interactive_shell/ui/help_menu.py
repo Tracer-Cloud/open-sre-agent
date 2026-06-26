@@ -12,7 +12,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from cli.interactive_shell.command_registry.types import SlashCommand
-from cli.interactive_shell.ui import theme as ui_theme
+from platform.terminal import theme as ui_theme
 from cli.interactive_shell.ui.choice_menu import (
     erase_menu_lines,
     menu_columns,

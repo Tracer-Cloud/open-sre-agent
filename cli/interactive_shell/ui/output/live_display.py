@@ -15,7 +15,7 @@ from cli.interactive_shell.ui.output.labels import (
     _node_label,
     _node_phase_label,
 )
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BRAND,
     DIM,
     ERROR,
@@ -245,7 +245,7 @@ class _EventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from cli.interactive_shell.ui.theme import MARKDOWN_THEME
+        from platform.terminal.theme import MARKDOWN_THEME
 
         with self._live.console.use_theme(MARKDOWN_THEME):
             self._live.console.print(Markdown(text, code_theme="ansi_dark"))

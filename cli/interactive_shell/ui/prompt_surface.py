@@ -28,7 +28,7 @@ from cli.interactive_shell.harness.command_dispatch.catalog import (
 )
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.state.history import load_prompt_history
-from cli.interactive_shell.ui import theme as ui_theme
+from platform.terminal import theme as ui_theme
 from cli.interactive_shell.ui.banner_state import integration_display_name
 from cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 

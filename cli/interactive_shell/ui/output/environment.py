@@ -5,7 +5,7 @@ import os
 import sys
 
 from cli.interactive_shell.runtime.repl_progress import repl_safe_progress_requested
-from cli.interactive_shell.ui.theme import SECONDARY
+from platform.terminal.theme import SECONDARY
 from platform.observability.output_format import get_output_format
 
 
@@ -41,7 +41,7 @@ def _is_verbose() -> bool:
     if os.getenv("TRACER_VERBOSE", "").lower() in ("1", "true", "yes"):
         return True
     try:
-        from cli.interactive_shell.state.data_store.context import is_debug, is_verbose
+        from platform.common.runtime_flags import is_debug, is_verbose
 
         return is_verbose() or is_debug()
     except Exception:

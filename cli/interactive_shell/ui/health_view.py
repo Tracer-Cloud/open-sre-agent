@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BOLD_BRAND,
     BRAND,
     ERROR,

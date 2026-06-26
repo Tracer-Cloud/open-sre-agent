@@ -8,9 +8,9 @@ from rich.console import Console
 
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.ui import theme as ui_theme
+from platform.terminal import theme as ui_theme
 from cli.interactive_shell.ui.choice_menu import repl_choose_one, repl_tty_interactive
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     get_active_theme_name,
     list_theme_names,
     set_active_theme,

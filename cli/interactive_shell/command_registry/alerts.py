@@ -7,7 +7,7 @@ from rich.console import Console
 from cli.interactive_shell.command_registry.types import ExecutionTier, SlashCommand
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import print_repl_table, repl_table
-from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
+from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT, WARNING
 from core.domain.alerts.inbox import get_current_inbox
 
 

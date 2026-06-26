@@ -83,7 +83,7 @@ def _render_resumed_session_history(
     from rich.markdown import Markdown
 
     from cli.interactive_shell.ui.streaming import render_response_header
-    from cli.interactive_shell.ui.theme import MARKDOWN_THEME
+    from platform.terminal.theme import MARKDOWN_THEME
 
     if not history and not messages:
         return

@@ -2235,7 +2235,7 @@ class TestRunCliCommand:
 
         console, buf = _capture()
         assert m.run_cli_command(console, ["update"], subprocess_timeout=30.0) is True
-        from cli.interactive_shell.ui.theme import ERROR
+        from platform.terminal.theme import ERROR
 
         assert replayed == [("partial stdout\n", None), ("partial stderr\n", ERROR)]
         assert "timed out" in buf.getvalue()

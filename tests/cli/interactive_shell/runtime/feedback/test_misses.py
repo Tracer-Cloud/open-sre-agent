@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.interactive_shell.runtime.feedback import (
+from core.domain.feedback import (
     MissRecord,
     MissTaxonomy,
     compute_recurrence,
@@ -17,7 +17,7 @@ from cli.interactive_shell.runtime.feedback import (
     record_miss,
     to_benchmark_scenario,
 )
-from cli.interactive_shell.runtime.feedback.misses import (
+from core.domain.feedback.misses import (
     export_scenarios,
     filter_top_misses,
     misses_path,

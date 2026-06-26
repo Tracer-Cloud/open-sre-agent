@@ -22,7 +22,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from cli.interactive_shell.ui.rendering import print_repl_table, repl_table
-from cli.interactive_shell.ui.theme import BOLD_BRAND
+from platform.terminal.theme import BOLD_BRAND
 from tools.fleet_monitoring.registry import AgentRecord
 from tools.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
 from tools.fleet_monitoring.status import Status, compute_status

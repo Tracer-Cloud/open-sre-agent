@@ -16,7 +16,7 @@ from cli.interactive_shell.ui.output.labels import (
     _node_phase_label,
     build_progress_step_text,
 )
-from cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
+from platform.terminal.theme import BRAND, DIM, SECONDARY
 from cli.interactive_shell.ui.time_format import _elapsed_hms
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
@@ -202,7 +202,7 @@ class _ReplEventLogDisplay:
             return
         from rich.markdown import Markdown
 
-        from cli.interactive_shell.ui.theme import MARKDOWN_THEME
+        from platform.terminal.theme import MARKDOWN_THEME
 
         with self._console.use_theme(MARKDOWN_THEME):
             self._emit(Markdown(text, code_theme="ansi_dark"))

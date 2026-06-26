@@ -17,7 +17,7 @@ def render_error(
     hint: str | None = None,
 ) -> None:
     """Display a clean, user-facing error without a raw traceback."""
-    from cli.interactive_shell.ui.theme import (
+    from platform.terminal.theme import (
         DIM,
         ERROR,
         GLYPH_ERROR,

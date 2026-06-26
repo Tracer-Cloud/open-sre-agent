@@ -36,7 +36,7 @@ from cli.interactive_shell.ui.tables import (
     render_table,
     render_tools_table,
 )
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     ANSI_DIM,
     ANSI_RESET,
     BG,

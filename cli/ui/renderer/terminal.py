@@ -6,7 +6,7 @@ import sys
 from typing import Any
 
 from cli.interactive_shell.ui.output import get_output_format
-from cli.interactive_shell.ui.theme import BRAND
+from platform.terminal.theme import BRAND
 from cli.ui.renderer.constants import _BOLD, _CYAN, _DIM, _RESET
 
 
@@ -28,7 +28,7 @@ def _print_section(title: str, content: str, console: Any | None = None) -> None
         from rich.padding import Padding
         from rich.rule import Rule
 
-        from cli.interactive_shell.ui.theme import MARKDOWN_THEME
+        from platform.terminal.theme import MARKDOWN_THEME
 
         c = console or Console(highlight=False)
         c.print()

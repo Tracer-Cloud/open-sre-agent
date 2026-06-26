@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from rich.markup import escape
 from rich.table import Table
 
-import cli.interactive_shell.ui.theme as ui_theme
+import platform.terminal.theme as ui_theme
 from cli.interactive_shell.ui.rendering import repl_table
 from tools.fleet_monitoring.conflicts import FileWriteConflict
 

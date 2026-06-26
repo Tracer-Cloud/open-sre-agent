@@ -4,7 +4,7 @@ import re
 
 from rich.text import Text
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BRAND,
     DIM,
     ERROR,

@@ -27,7 +27,7 @@ import typing as t
 import click
 from rich.console import Console
 
-from cli.interactive_shell.ui.errors import render_error
+from platform.terminal.errors import render_error
 from platform.common.errors import OpenSREError as _OpenSREError
 
 

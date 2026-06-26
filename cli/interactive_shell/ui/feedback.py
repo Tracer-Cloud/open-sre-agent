@@ -204,7 +204,7 @@ def _print_context(final_state: dict[str, Any], *, console: Console | None) -> N
 
     from rich.markup import escape
 
-    from cli.interactive_shell.ui.theme import BRAND, DIM, SECONDARY
+    from platform.terminal.theme import BRAND, DIM, SECONDARY
 
     if console is not None:
         console.print()
@@ -285,7 +285,7 @@ def _run_select(choices: list[tuple[str, str]]) -> str | None:
 
 
 def _read_note(*, console: Console | None) -> str:
-    from cli.interactive_shell.ui.theme import DIM, SECONDARY
+    from platform.terminal.theme import DIM, SECONDARY
 
     restore_stdin_terminal()
     if console is not None:
@@ -318,7 +318,7 @@ def _pick_rating(*, console: Console | None) -> str | None:
 
 def _pick_taxonomy(*, console: Console | None) -> str | None:
     """Show the miss-taxonomy picker after a partial/inaccurate rating."""
-    from cli.interactive_shell.runtime.feedback import taxonomy_choices
+    from core.domain.feedback import taxonomy_choices
 
     choices = taxonomy_choices()
 
@@ -342,7 +342,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
 
     _print_context(final_state, console=console)
 
-    from cli.interactive_shell.ui.theme import BRAND, DIM
+    from platform.terminal.theme import BRAND, DIM
 
     if console is not None:
         console.print(
@@ -399,13 +399,13 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
     if console is not None:
         console.print(f"[{BRAND}]✓ Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
         if miss_record is not None:
-            from cli.interactive_shell.runtime.feedback import misses_path
+            from core.domain.feedback import misses_path
 
             console.print(f"[{DIM}]  Miss recorded → {misses_path()}[/]")
     else:
         message = f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n"
         if miss_record is not None:
-            from cli.interactive_shell.runtime.feedback import misses_path
+            from core.domain.feedback import misses_path
 
             message += f"  {_D}Miss recorded → {misses_path()}{_R}\n"
         _write_raw(f"{message}\n")
@@ -422,8 +422,8 @@ def _classify_miss(
     Returns the miss record on success, ``None`` if the user cancels the
     taxonomy picker (the rating + note are still kept in feedback.jsonl).
     """
-    from cli.interactive_shell.runtime.feedback import MissTaxonomy, record_miss
-    from cli.interactive_shell.ui.theme import BRAND, DIM
+    from core.domain.feedback import MissTaxonomy, record_miss
+    from platform.terminal.theme import BRAND, DIM
 
     if console is not None:
         console.print(

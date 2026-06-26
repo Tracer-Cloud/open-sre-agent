@@ -155,7 +155,7 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
 
-    from cli.interactive_shell.ui.theme import set_active_theme
+    from platform.terminal.theme import set_active_theme
 
     set_active_theme("blue")
     console = Console(

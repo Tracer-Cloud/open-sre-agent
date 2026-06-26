@@ -10,7 +10,6 @@ from typing import Any
 
 import questionary
 
-from cli.interactive_shell.state.data_store.context import is_json_output
 from core.orchestration.entrypoints import run_investigation_payload
 from infra.deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
@@ -19,6 +18,7 @@ from infra.deployment.remote.vercel_poller import (
     resolve_vercel_config,
 )
 from integrations.store import STORE_PATH
+from platform.common.runtime_flags import is_json_output
 from vendors.vercel.client import make_vercel_client
 
 _INCIDENT_CACHE_DIR: Path = STORE_PATH.parent / "investigations" / "vercel"

@@ -8,7 +8,7 @@ import sys
 
 from cli.interactive_shell.command_registry.types import SlashCommand
 from cli.interactive_shell.ui import help_menu
-from cli.interactive_shell.ui import theme as ui_theme
+from platform.terminal import theme as ui_theme
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 
@@ -233,7 +233,7 @@ def test_command_rows_highlight_only_unselected_command_name() -> None:
 
 
 def test_help_menu_command_rows_track_active_theme() -> None:
-    from cli.interactive_shell.ui.theme import set_active_theme
+    from platform.terminal.theme import set_active_theme
 
     set_active_theme("green")
     green_highlight = ui_theme.HIGHLIGHT_ANSI

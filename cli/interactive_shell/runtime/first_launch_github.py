@@ -18,7 +18,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.ui import repl_tty_interactive
-from cli.interactive_shell.ui.theme import DEVICE_CODE
+from platform.terminal.theme import DEVICE_CODE
 from platform.analytics.cli import capture_github_login_completed
 from platform.analytics.source import is_test_run
 

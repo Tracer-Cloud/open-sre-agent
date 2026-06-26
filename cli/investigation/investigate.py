@@ -9,7 +9,7 @@ import threading
 from collections.abc import Generator, Iterator
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from cli.interactive_shell.utils.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.error_mapping import reraise_cli_runtime_error
 from config.config import resolve_llm_settings
 from platform.observability.tracing import traceable
 

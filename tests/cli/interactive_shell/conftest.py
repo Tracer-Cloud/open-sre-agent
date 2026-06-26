@@ -22,9 +22,9 @@ def _reset_active_theme() -> None:
     """Reset the active theme to green before each test.
 
     ``set_active_theme()`` mutates module-level state in
-    ``cli.interactive_shell.ui.theme``, which persists across tests
+    ``platform.terminal.theme``, which persists across tests
     and can cause order-dependent failures.
     """
-    from cli.interactive_shell.ui.theme import set_active_theme
+    from platform.terminal.theme import set_active_theme
 
     set_active_theme("green")

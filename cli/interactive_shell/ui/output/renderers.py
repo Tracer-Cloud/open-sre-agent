@@ -12,7 +12,7 @@ from cli.interactive_shell.ui.output.environment import (
     get_output_format,
 )
 from cli.interactive_shell.ui.output.labels import BADGE_STYLES
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BRAND,
     DIM,
     ERROR,

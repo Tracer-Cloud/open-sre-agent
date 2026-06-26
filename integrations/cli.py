@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import questionary
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,
@@ -1367,7 +1367,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from cli.interactive_shell.state.data_store.context import is_json_output
+    from platform.common.runtime_flags import is_json_output
 
     items = list_integrations()
 
@@ -1400,7 +1400,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from cli.interactive_shell.state.data_store.context import is_yes
+    from platform.common.runtime_flags import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -1421,7 +1421,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from cli.interactive_shell.state.data_store.context import is_json_output
+    from platform.common.runtime_flags import is_json_output
 
     if service:
         service = resolve_management_service(service)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     DEVICE_CODE,
     DIM,
     ERROR,

@@ -20,11 +20,11 @@ from questionary.prompts.common import (
 from questionary.question import Question
 from questionary.styles import merge_styles_default
 
-from cli.interactive_shell.ui.prompt_support import (
+from platform.terminal.prompt_support import (
     _HardQuitInterrupt,
     _with_ctrl_c_double_exit,
 )
-from cli.interactive_shell.ui.theme import GLYPH_PROMPT
+from platform.terminal.theme import GLYPH_PROMPT
 
 
 class _SelectControl(InquirerControl):

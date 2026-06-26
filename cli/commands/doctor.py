@@ -31,8 +31,8 @@ from rich.rule import Rule
 from rich.text import Text
 
 import platform
-from cli.interactive_shell.state.data_store.context import is_json_output
-from cli.interactive_shell.ui.theme import (
+from platform.common.runtime_flags import is_json_output
+from platform.terminal.theme import (
     DIM,
     ERROR,
     GLYPH_ERROR,
@@ -122,7 +122,7 @@ def _check_integrations() -> tuple[bool, str]:
 
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_version()
-    from cli.interactive_shell.state.data_store.update import (
+    from cli.lifecycle.update import (
         _fetch_latest_version,
         _is_update_available,
         development_install_doctor_version_detail,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     ANSI_BOLD,
     ANSI_DIM,
     ANSI_RESET,

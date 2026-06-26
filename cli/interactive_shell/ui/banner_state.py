@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from cli.interactive_shell.ui.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, WARNING
+from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, SECONDARY, WARNING
 
 # Display-name overrides for known integration service slugs.
 _SERVICE_DISPLAY_NAMES: dict[str, str] = {

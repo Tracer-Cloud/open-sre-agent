@@ -11,7 +11,7 @@ from cli.interactive_shell.ui.health_view import (
     render_health_report,
     status_badge,
 )
-from cli.interactive_shell.ui.theme import ERROR, HIGHLIGHT, WARNING
+from platform.terminal.theme import ERROR, HIGHLIGHT, WARNING
 
 
 def test_status_badge() -> None:

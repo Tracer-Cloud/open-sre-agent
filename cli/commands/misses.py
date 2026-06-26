@@ -17,14 +17,14 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from cli.interactive_shell.runtime.feedback import (
+from core.domain.feedback import (
     MissTaxonomy,
     compute_stats,
     load_misses,
     misses_path,
     to_benchmark_scenario,
 )
-from cli.interactive_shell.runtime.feedback.misses import (
+from core.domain.feedback.misses import (
     export_scenarios,
     filter_top_misses,
     parse_since,

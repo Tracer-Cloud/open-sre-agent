@@ -4,7 +4,7 @@ from typing import Any, NoReturn
 
 import pytest
 
-from cli.interactive_shell.utils.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from cli.investigation import run_investigation_cli, stream_investigation_cli
 from core.domain.stream import StreamEvent
@@ -141,7 +141,7 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
 
 
 def test_parse_args_evaluate_flag() -> None:
-    from cli.interactive_shell.state.data_store.args import parse_args
+    from cli.args import parse_args
 
     assert parse_args(["--input", "a.json"]).evaluate is False
     assert parse_args(["--input", "a.json", "--evaluate"]).evaluate is True

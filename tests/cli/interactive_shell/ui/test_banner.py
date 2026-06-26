@@ -26,7 +26,7 @@ def test_banner_shows_ollama_model(monkeypatch: object) -> None:
 
 
 def test_ready_box_uses_active_theme_palette() -> None:
-    from cli.interactive_shell.ui.theme import set_active_theme
+    from platform.terminal.theme import set_active_theme
 
     set_active_theme("pink")
     pink_rgb = "255;179;217"

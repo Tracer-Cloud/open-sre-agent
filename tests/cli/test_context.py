@@ -1,110 +1,95 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import click
 
-from cli.interactive_shell.state.data_store.context import (
+from cli.runtime_flags import sync_runtime_flags_from_click
+from platform.common.runtime_flags import (
+    configure_runtime_flags,
     is_debug,
     is_json_output,
     is_verbose,
     is_yes,
+    reset_runtime_flags,
 )
 
 
 def test_is_json_output_true() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"json": True}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_json_output() is True
+    reset_runtime_flags()
+    configure_runtime_flags(json=True)
+    assert is_json_output() is True
 
 
 def test_is_json_output_false() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"json": False}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_json_output() is False
+    reset_runtime_flags()
+    configure_runtime_flags(json=False)
+    assert is_json_output() is False
 
 
 def test_is_verbose_true() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"verbose": True}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_verbose() is True
+    reset_runtime_flags()
+    configure_runtime_flags(verbose=True)
+    assert is_verbose() is True
 
 
 def test_is_verbose_false() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"verbose": False}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_verbose() is False
+    reset_runtime_flags()
+    configure_runtime_flags(verbose=False)
+    assert is_verbose() is False
 
 
 def test_is_debug_true() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"debug": True}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_debug() is True
+    reset_runtime_flags()
+    configure_runtime_flags(debug=True)
+    assert is_debug() is True
 
 
 def test_is_debug_false() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"debug": False}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_debug() is False
+    reset_runtime_flags()
+    configure_runtime_flags(debug=False)
+    assert is_debug() is False
 
 
 def test_is_yes_true() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"yes": True}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_yes() is True
+    reset_runtime_flags()
+    configure_runtime_flags(yes=True)
+    assert is_yes() is True
 
 
 def test_is_yes_false() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = {"yes": False}
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_yes() is False
+    reset_runtime_flags()
+    configure_runtime_flags(yes=False)
+    assert is_yes() is False
 
 
-def test_no_context() -> None:
-    with patch("click.get_current_context", return_value=None) as mock_get_ctx:
-        assert is_json_output() is False
-        assert is_verbose() is False
-        assert is_debug() is False
-        assert is_yes() is False
-        # Verify that we call it with silent=True so it doesn't raise RuntimeError
-        mock_get_ctx.assert_called_with(silent=True)
+def test_defaults_without_configuration() -> None:
+    reset_runtime_flags()
+    assert is_json_output() is False
+    assert is_verbose() is False
+    assert is_debug() is False
+    assert is_yes() is False
 
 
-def test_root_traversal() -> None:
-    root_ctx = MagicMock(spec=click.Context)
-    root_ctx.parent = None
-    root_ctx.obj = {"json": True}
+def test_sync_runtime_flags_from_click_root() -> None:
+    reset_runtime_flags()
+    root_ctx = click.Context(click.Command("root"))
+    root_ctx.obj = {"json": True, "verbose": False, "debug": True, "yes": True}
 
-    child_ctx = MagicMock(spec=click.Context)
-    child_ctx.parent = root_ctx
-    child_ctx.obj = {"json": False}  # Should be ignored
+    child_ctx = click.Context(click.Command("child"), parent=root_ctx)
+    child_ctx.obj = {"json": False}
 
-    with patch("click.get_current_context", return_value=child_ctx):
-        assert is_json_output() is True
+    sync_runtime_flags_from_click(child_ctx)
+    assert is_json_output() is True
+    assert is_verbose() is False
+    assert is_debug() is True
+    assert is_yes() is True
 
 
-def test_none_obj() -> None:
-    mock_ctx = MagicMock(spec=click.Context)
-    mock_ctx.parent = None
-    mock_ctx.obj = None
-    with patch("click.get_current_context", return_value=mock_ctx):
-        assert is_json_output() is False
-        assert is_verbose() is False
-        assert is_debug() is False
-        assert is_yes() is False
+def test_sync_runtime_flags_from_click_none_obj() -> None:
+    reset_runtime_flags()
+    ctx = click.Context(click.Command("root"))
+    ctx.obj = None
+    sync_runtime_flags_from_click(ctx)
+    assert is_json_output() is False
+    assert is_verbose() is False
+    assert is_debug() is False
+    assert is_yes() is False

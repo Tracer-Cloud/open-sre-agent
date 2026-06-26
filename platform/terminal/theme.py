@@ -18,7 +18,7 @@ Token reference
 
 Usage
 -----
-  from cli.interactive_shell.ui.theme import HIGHLIGHT, ERROR, DIM
+  from platform.terminal.theme import HIGHLIGHT, ERROR, DIM
   console.print(f"[{HIGHLIGHT}]✓ success[/]")
   console.print(f"[{ERROR}]✗ failed[/]")
 """

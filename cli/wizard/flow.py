@@ -10,7 +10,7 @@ import questionary
 from rich.text import Text
 
 import cli.wizard._integration_configurators as _integration_configurators_module
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     ERROR,
     GLYPH_ERROR,
     GLYPH_WARNING,

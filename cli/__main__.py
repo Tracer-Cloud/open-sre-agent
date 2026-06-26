@@ -23,12 +23,6 @@ from dotenv import load_dotenv  # noqa: E402
 
 from cli.commands import register_commands  # noqa: E402
 from cli.interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
-from cli.interactive_shell.ui.prompt_support import (  # noqa: E402
-    handle_ctrl_c_press,
-    install_questionary_ctrl_c_double_exit,
-    install_questionary_escape_cancel,
-)
-from cli.interactive_shell.ui.theme import list_theme_names  # noqa: E402
 from cli.interactive_shell.utils.error_handling.exception_reporting import (  # noqa: E402
     report_exception,
     should_report_exception,
@@ -42,6 +36,12 @@ from platform.analytics.provider import (  # noqa: E402
 )
 from platform.common.errors import OpenSREError as _StructuredError  # noqa: E402
 from platform.observability.sentry_sdk import capture_exception, init_sentry  # noqa: E402
+from platform.terminal.prompt_support import (  # noqa: E402
+    handle_ctrl_c_press,
+    install_questionary_ctrl_c_double_exit,
+    install_questionary_escape_cancel,
+)
+from platform.terminal.theme import list_theme_names  # noqa: E402
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
@@ -178,6 +178,10 @@ def cli(
     ctx.obj["yes"] = yes
     ctx.obj["interactive"] = interactive
 
+    from cli.runtime_flags import sync_runtime_flags_from_click
+
+    sync_runtime_flags_from_click(ctx)
+
     if verbose or debug:
         os.environ["TRACER_VERBOSE"] = "1"
 
@@ -290,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         # show() does (clean panel, no traceback) and exit with its code.
         from rich.console import Console
 
-        from cli.interactive_shell.ui.errors import render_error
+        from platform.terminal.errors import render_error
 
         hint: str | None = None
         if exc.suggestion:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from cli.interactive_shell.utils.error_handling.cli_error_mapping import reraise_cli_runtime_error
+from cli.error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from integrations.llm_cli.errors import CLITimeoutError
 

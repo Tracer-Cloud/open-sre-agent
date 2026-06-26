@@ -43,7 +43,7 @@ from rich.text import Text
 from cli.interactive_shell.ui.banner_art import _render_art
 from cli.interactive_shell.ui.banner_state import _build_ambient_right_column
 from cli.interactive_shell.ui.provider import detect_provider_model
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BRAND,
     DIM,
     HIGHLIGHT,

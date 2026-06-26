@@ -5,7 +5,7 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 
-from cli.interactive_shell.ui.theme import DIM, ERROR, HIGHLIGHT, WARNING
+from platform.terminal.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from cli.wizard.config import PROVIDER_BY_VALUE
 from cli.wizard.env_sync import sync_env_values, sync_provider_env
 from cli.wizard.local_llm.hardware import detect_hardware, recommend_model

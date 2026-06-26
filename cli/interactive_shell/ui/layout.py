@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.text import Text
 
 from cli.interactive_shell.ui.banner import build_ready_panel
-from cli.interactive_shell.ui.theme import BRAND, DIM, TEXT
+from platform.terminal.theme import BRAND, DIM, TEXT
 
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
     (

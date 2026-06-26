@@ -23,7 +23,7 @@ from cli.interactive_shell.ui.rendering import (
     repl_print,
     repl_table,
 )
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     BOLD_BRAND,
     DIM,
     ERROR,

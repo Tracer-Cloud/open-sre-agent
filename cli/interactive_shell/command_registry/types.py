@@ -13,7 +13,7 @@ from cli.interactive_shell.harness.orchestration.execution_tier import (
     ExecutionTier,
 )
 from cli.interactive_shell.runtime import ReplSession
-from cli.interactive_shell.ui.theme import ERROR
+from platform.terminal.theme import ERROR
 
 
 @dataclass(frozen=True)

@@ -5,7 +5,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from cli.__main__ import cli
-from cli.interactive_shell.state.data_store.constants import SETUP_SERVICES, VERIFY_SERVICES
+from cli.constants import SETUP_SERVICES, VERIFY_SERVICES
 from integrations.cli import _HANDLERS, _setup_openclaw, _setup_smtp, _setup_vercel
 
 

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from cli.interactive_shell.ui.rendering import repl_table
-from cli.interactive_shell.ui.theme import BOLD_BRAND, DIM, HIGHLIGHT
+from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT
 from tools.fleet_monitoring.discovery import (
     classify_command_provider,
     discover_agent_processes,

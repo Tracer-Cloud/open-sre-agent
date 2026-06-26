@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
 
-from cli.interactive_shell.ui.theme import (
+from platform.terminal.theme import (
     DIM,
     INCOMING_ALERT_ACCENT,
     TEXT,

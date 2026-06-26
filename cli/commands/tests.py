@@ -7,7 +7,7 @@ from typing import Any
 
 import click
 
-from cli.interactive_shell.state.data_store.context import is_json_output, is_yes
+from platform.common.runtime_flags import is_json_output, is_yes
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
 from core.domain.types.upstream import (
     LogSignal,

@@ -32,7 +32,7 @@ from collections.abc import Iterator
 from rich.console import Console
 from rich.markdown import Markdown
 
-import cli.interactive_shell.ui.theme as ui_theme
+import platform.terminal.theme as ui_theme
 from cli.interactive_shell.ui.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
