@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.pipeline_spans import extract_pipeline_spans
 from integrations.opensre.grafana_backend_queries import query_traces_from_backend
 from platform.common.evidence_compaction import (
     DEFAULT_TRACE_LIMIT,
@@ -18,20 +19,11 @@ from tools.GrafanaLogsTool import (
 )
 from tools.tool_decorator import tool
 
-
-def _extract_pipeline_spans(traces: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    pipeline_spans: list[dict[str, Any]] = []
-    for trace in traces:
-        for span in trace.get("spans", []):
-            if span.get("name") in ["extract_data", "validate_data", "transform_data", "load_data"]:
-                pipeline_spans.append(
-                    {
-                        "span_name": span.get("name"),
-                        "execution_run_id": span.get("attributes", {}).get("execution.run_id"),
-                        "record_count": span.get("attributes", {}).get("record_count"),
-                    }
-                )
-    return pipeline_spans
+# Backward-compat shim: this module historically defined
+# ``_extract_pipeline_spans``. Existing tests/callers import the private
+# name; the canonical implementation now lives in
+# ``core.domain.pipeline_spans``.
+_extract_pipeline_spans = extract_pipeline_spans
 
 
 def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.pipeline_spans import extract_pipeline_spans
 from integrations.opensre.csv_grafana_backend import OpenSRECsvGrafanaBackend
 from integrations.opensre.grafana_backend_queries import (
     query_logs_from_backend,
@@ -74,6 +75,10 @@ def merge_opensre_seed_into_state(
                 service_name="",
                 execution_run_id=None,
                 limit=50,
+                # Without this, ``pipeline_spans`` is always ``[]`` and
+                # ``_map_grafana_traces`` strips ``grafana_pipeline_spans``
+                # from seeded evidence — regression flagged by Greptile.
+                extract_pipeline_spans=extract_pipeline_spans,
             )
         )
     )
