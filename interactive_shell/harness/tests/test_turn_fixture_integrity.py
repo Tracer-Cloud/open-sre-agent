@@ -256,6 +256,5 @@ def test_turn_tests_are_fully_colocated() -> None:
     )
     assert not unexpected, (
         "Turn tests must be colocated under interactive_shell/harness/tests/. "
-        "No turn tests should remain under split legacy test directories: "
-        + ", ".join(unexpected)
+        "No turn tests should remain under split legacy test directories: " + ", ".join(unexpected)
     )
