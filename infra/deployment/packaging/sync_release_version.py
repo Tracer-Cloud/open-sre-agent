@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 PYPROJECT_PATH = ROOT / "pyproject.toml"
 APP_CONSTANTS_OPENSRE_PATH = ROOT / "config" / "constants" / "opensre.py"
 CALENDAR_VERSION_PATTERN = re.compile(r"v?(?P<version>\d{4}\.\d{1,2}\.\d{1,2})")
