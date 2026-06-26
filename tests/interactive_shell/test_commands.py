@@ -2171,7 +2171,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``capture_output=True`` must route child stdout through ``console`` even
+        """``capture_output=True`` must send child stdout through ``console`` even
         when no timeout is set, so non-interactive slash commands like ``/tests
         list`` do not lose their output to the parent stdout FD.
         """
