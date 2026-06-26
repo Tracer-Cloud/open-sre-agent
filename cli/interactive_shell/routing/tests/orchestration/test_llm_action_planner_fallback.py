@@ -67,6 +67,8 @@ def test_system_prompt_gates_diagnostic_dispatch_on_connected_integrations() -> 
     assert "regardless of" in prompt
     assert "oom-killing its pods" in prompt
     assert "not gated on connected integrations" in prompt
+    assert "run an investigation." in prompt
+    assert "elevated 500s and latency after deploy" in prompt
     # The figure-out / query-sources phrasing is now a dispatch candidate, not a
     # hardcoded handoff.
     assert "figure out why x is crashing" in prompt
