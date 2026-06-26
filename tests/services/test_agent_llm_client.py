@@ -715,6 +715,24 @@ def test_unrelated_type_error_is_retried_and_wrapped(
     assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
 
 
+def test_build_openai_tool_specs_preserves_additional_properties_false() -> None:
+    from services.agent_llm_client import build_openai_tool_specs
+
+    tool = types.SimpleNamespace(
+        name="strict_object_tool",
+        description="tool with closed object schema",
+        public_input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+
+    parameters = build_openai_tool_specs([tool])[0]["function"]["parameters"]
+    assert parameters["additionalProperties"] is False
+
+
 def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
     from services.agent_llm_client import build_openai_tool_specs
     from tests.services.investigation_tool_schema_contract import assert_strict_tool_schema_node

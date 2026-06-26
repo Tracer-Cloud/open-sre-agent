@@ -12,27 +12,13 @@ import os
 import secrets
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
-# Keys that Converse toolSpec.inputSchema.json rejects or cannot resolve.
-_UNSUPPORTED_SCHEMA_KEYS = frozenset(
-    {
-        "title",
-        "$schema",
-        "$defs",
-        "definitions",
-        "$ref",
-        "not",
-        "nullable",  # OpenAPI nullable — Converse uses explicit types; anyOf/oneOf are flattened instead
-        # Non-Anthropic Bedrock models (Mistral, Llama, etc.) reject additionalProperties even
-        # when it carries a valid boolean value such as false.  Tool calling never relies on this
-        # constraint, so stripping it is safe and avoids HTTP 400 ValidationException errors.
-        "additionalProperties",
-    }
+from services.tool_schema_normalize import (
+    BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
+    normalize_object_tool_input_schema,
+    sanitize_strict_tool_schema,
 )
 
-# Injected when a tool exposes ``type: array`` without ``items``.
-_DEFAULT_ARRAY_ITEMS: dict[str, str] = {"type": "string"}
+logger = logging.getLogger(__name__)
 
 
 def require_aws_region() -> str:
@@ -48,131 +34,9 @@ def new_tool_use_id() -> str:
     return secrets.token_hex(5)
 
 
-def _pick_non_null_schema_variant(variants: list[Any]) -> dict[str, Any] | None:
-    """Return the first ``anyOf`` / ``oneOf`` branch with a concrete non-null type."""
-    for item in variants:
-        if not isinstance(item, dict):
-            continue
-        branch_type = item.get("type")
-        if branch_type and branch_type != "null":
-            return item
-        # Accept an implicit object schema (properties present, no explicit type).
-        if "properties" in item:
-            return item
-    return None
-
-
-def _merge_all_of_subschemas(variants: list[Any]) -> dict[str, Any]:
-    """Merge ``allOf`` branches (e.g. Pydantic constrained fields) into one schema dict."""
-    merged: dict[str, Any] = {}
-    for item in variants:
-        if not isinstance(item, dict):
-            continue
-        for key, value in item.items():
-            if key == "properties" and isinstance(value, dict):
-                props = merged.setdefault("properties", {})
-                if isinstance(props, dict):
-                    props.update(value)
-                else:
-                    merged["properties"] = dict(value)
-            elif key == "required" and isinstance(value, list):
-                required = merged.setdefault("required", [])
-                if isinstance(required, list):
-                    for name in value:
-                        if name not in required:
-                            required.append(name)
-            elif key not in merged:
-                merged[key] = value
-    return merged
-
-
-def _flatten_composite_keywords(schema: dict[str, Any]) -> dict[str, Any]:
-    """Resolve ``allOf`` / ``anyOf`` / ``oneOf`` into explicit ``type`` fields."""
-    flattened = dict(schema)
-    if "allOf" in flattened:
-        variants = flattened.pop("allOf")
-        if isinstance(variants, list):
-            for key, value in _merge_all_of_subschemas(variants).items():
-                if key == "properties" and isinstance(value, dict):
-                    existing = flattened.get("properties")
-                    if isinstance(existing, dict):
-                        existing.update(value)
-                    else:
-                        flattened["properties"] = dict(value)
-                elif key not in flattened:
-                    flattened[key] = value
-    for composite in ("anyOf", "oneOf"):
-        if composite not in flattened:
-            continue
-        variants = flattened.pop(composite)
-        if not isinstance(variants, list):
-            continue
-        picked = _pick_non_null_schema_variant(variants)
-        if picked:
-            for key, value in picked.items():
-                flattened.setdefault(key, value)
-        elif "type" not in flattened:
-            flattened["type"] = "string"
-    return flattened
-
-
 def sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Return a Converse-compatible copy of *schema* with required ``type`` / ``items`` filled in."""
-    cleaned: dict[str, Any] = {}
-    for key, value in _flatten_composite_keywords(schema).items():
-        if key in _UNSUPPORTED_SCHEMA_KEYS:
-            continue
-        if isinstance(value, dict):
-            cleaned[key] = sanitize_converse_schema(value)
-        elif isinstance(value, list):
-            cleaned[key] = [
-                sanitize_converse_schema(item) if isinstance(item, dict) else item for item in value
-            ]
-        else:
-            cleaned[key] = value
-
-    _ensure_schema_node(cleaned)
-    return cleaned
-
-
-def _coerce_schema_type(node: dict[str, Any]) -> str | None:
-    """Return a single Converse-compatible ``type`` string (Bedrock rejects ``type`` arrays)."""
-    schema_type = node.get("type")
-    if isinstance(schema_type, list):
-        for candidate in schema_type:
-            if isinstance(candidate, str) and candidate != "null":
-                node["type"] = candidate
-                return candidate
-        node["type"] = "string"
-        return "string"
-    if isinstance(schema_type, str):
-        return schema_type
-    return None
-
-
-def _ensure_schema_node(node: dict[str, Any]) -> None:
-    """Mutate *node* so Bedrock's strict JSON Schema validation receives explicit types."""
-    if "properties" in node and "type" not in node:
-        node["type"] = "object"
-
-    schema_type = _coerce_schema_type(node)
-    if schema_type == "object" and "properties" not in node:
-        node["properties"] = {}
-
-    if schema_type == "array":
-        items = node.get("items")
-        if items is None:
-            node["items"] = dict(_DEFAULT_ARRAY_ITEMS)
-        elif isinstance(items, dict):
-            if "type" not in items and "properties" not in items:
-                node["items"] = dict(_DEFAULT_ARRAY_ITEMS)
-            else:
-                _ensure_schema_node(items)
-        return
-
-    items = node.get("items")
-    if isinstance(items, dict):
-        _ensure_schema_node(items)
+    return sanitize_strict_tool_schema(schema, unsupported_keys=BEDROCK_UNSUPPORTED_SCHEMA_KEYS)
 
 
 def normalize_tool_input_schema(schema: dict[str, Any] | None) -> dict[str, Any]:
@@ -181,12 +45,10 @@ def normalize_tool_input_schema(schema: dict[str, Any] | None) -> dict[str, Any]
     Converse tool inputs must be JSON objects at the top level. Non-object roots are
     replaced with an empty object schema so validation stays strict but safe.
     """
-    cleaned = sanitize_converse_schema(dict(schema or {}))
-    if cleaned.get("type") != "object":
-        return {"type": "object", "properties": {}}
-    if "properties" not in cleaned:
-        cleaned["properties"] = {}
-    return cleaned
+    return normalize_object_tool_input_schema(
+        schema,
+        unsupported_keys=BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
+    )
 
 
 def build_converse_tool_specs(tools: list[Any]) -> list[dict[str, Any]]:

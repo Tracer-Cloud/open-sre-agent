@@ -16,12 +16,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.bedrock_converse import normalize_tool_input_schema
 from services.llm_retry import (
     LLMCreditExhaustedError,
     extract_retry_after_seconds,
     is_credit_exhausted_error,
 )
+from services.tool_schema_normalize import normalize_openai_tool_input_schema
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def _openai_tool_schema(tool: Any) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": normalize_tool_input_schema(tool.public_input_schema),
+            "parameters": normalize_openai_tool_input_schema(tool.public_input_schema),
         },
     }
 
