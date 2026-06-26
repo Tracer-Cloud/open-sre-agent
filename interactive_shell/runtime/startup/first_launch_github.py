@@ -12,7 +12,9 @@ is also auto-bypassed in CI/test environments and when stdin is not a TTY.
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 
 from rich.console import Console
 from rich.markup import escape
@@ -28,6 +30,27 @@ _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 def _skip_requested() -> bool:
     return os.getenv(_SKIP_ENV_VAR, "").strip().lower() in _TRUTHY
+
+
+def _github_login_explicitly_bypassed() -> bool:
+    """Cheap check for contexts where gate errors should not block startup."""
+    if _skip_requested():
+        return True
+    if os.getenv("OPENSRE_INVESTIGATION_SOURCE", "").strip().lower() == "test":
+        return True
+    if os.getenv("OPENSRE_IS_TEST", "0").strip() == "1":
+        return True
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+    if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true":
+        return True
+    ci_value = os.getenv("CI", "").strip().lower()
+    if ci_value in {"1", "true", "yes"}:
+        return True
+    try:
+        return not sys.stdin.isatty()
+    except Exception:
+        return True
 
 
 def _github_already_configured() -> bool:
@@ -153,3 +176,29 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
         if outcome == "quit" or not _ask_retry(con):
             _print_quit_guidance(con)
             return False
+
+
+def require_startup_github_login(console: Console) -> bool:
+    """Return True when startup may proceed past the GitHub login gate.
+
+    On an unexpected gate error we deliberately do NOT fail open into the REPL:
+    that would let a gate bug silently skip mandatory sign-in. Instead we only
+    allow startup when an explicit, documented bypass applies.
+    """
+    try:
+        if not should_require_github_login():
+            return True
+        return require_github_login_on_first_launch(console)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "First-launch GitHub login gate failed.",
+            exc_info=True,
+        )
+        if _github_login_explicitly_bypassed():
+            return True
+        console.print(
+            "GitHub sign-in is required to use OpenSRE, but the sign-in step could not run. "
+            f"Set [bold]{_SKIP_ENV_VAR}=1[/bold] to bypass this, then relaunch "
+            "[bold]opensre[/bold]."
+        )
+        return False

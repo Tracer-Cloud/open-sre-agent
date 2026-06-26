@@ -97,12 +97,13 @@ output:
 2. `handle_message_with_agent` resets that field at the start of every planner
    turn and, when a discovery command produced an observation and succeeded,
    calls the conversational assistant with `tool_observation=...`
-   (`_summarize_observation_turn` in `pipeline.py`). The assistant summarizes the
-   output into a direct answer and is instructed not to emit further actions.
+   (inside the handled-turn observation branch in `pipeline.py`). The assistant
+   summarizes the output into a direct answer and is instructed not to emit
+   further actions.
 
-This only fires for planner-driven turns. A literal `/integrations list` typed by
-the user takes the deterministic fast path (which returns before this logic), so
-explicit commands are never re-summarized.
+This only fires when the planner/tool path executes a read-only discovery command
+and records an observation. The pipeline no longer has a pre-agent deterministic
+dispatch branch.
 
 Discovery commands also no longer dump validator stack traces into the REPL: a
 vendor/config failure during verification (for example a GitHub MCP `401`) is
@@ -127,8 +128,8 @@ inline mid-turn (the live prompt is competing for stdin). Instead the action
 queues the command via `session.queue_auto_command(...)`, which prefills the next
 prompt and marks it for auto-submit. The prompt refresh hook
 (`wire_prompt_refresh` in `prompting/prompt_surface.py`) then submits it, so the
-command flows through the normal exclusive-stdin dispatch path of the REPL
-(`dispatch_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
+command flows through the normal exclusive-stdin turn path of the REPL
+(`turn_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
 place an interactive child process gets clean stdin. In a non-TTY/scripted
 context (no prompt to submit into) the action degrades to telling the user the
 command to run.

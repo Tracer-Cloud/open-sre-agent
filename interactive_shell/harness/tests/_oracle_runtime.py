@@ -33,7 +33,7 @@ from interactive_shell.harness.tests.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
-from interactive_shell.runtime.core.execution import execute_routed_turn
+from interactive_shell.runtime.controller import execute_routed_turn
 from interactive_shell.runtime.core.session import ReplSession
 
 # Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
@@ -45,6 +45,7 @@ from interactive_shell.runtime.core.session import ReplSession
 # the live integration and returned valid data (not a 401). When the credential
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
+_FIXED_ROUTE_KIND = "handle_message_with_agent"
 
 
 @dataclass
@@ -387,10 +388,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         prompt,
         session,
         console,
-        on_exit=lambda: None,
         confirm_fn=lambda _prompt: "y",
     )
-
     answer = case.answer
     normalized_response = normalize_response_text(console_buffer.getvalue())
     history_delta = [normalize_history_entry(entry) for entry in session.history[history_start:]]
@@ -421,7 +420,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     )
 
     passed = True
-    if decision.route_kind.value != answer.route.expected_kind:
+    if answer.route.expected_kind != _FIXED_ROUTE_KIND:
         passed = False
     if answer.policy.executes_terminal_action:
         if not executed_match:
@@ -453,7 +452,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
         passed=passed,
         details={
             "id": case.scenario.id,
-            "route_kind_actual": decision.route_kind.value,
+            "route_kind_actual": _FIXED_ROUTE_KIND,
             "route_kind_expected": answer.route.expected_kind,
             "executed_actions_actual": executed,
             "executed_actions_expected": executed_expected,

@@ -117,8 +117,8 @@ Across all 54 routing scenarios, what passes in CI is:
 - **Turn-entry correctness** — every turn is handed to the agent entrypoint.
   This is intentionally static; the valuable behavior is downstream dispatch
   and planning.
-- **Deterministic command dispatch** — slash commands and aliases resolve
-  correctly. This is genuine and valuable.
+- **Deterministic command-text detection** — slash commands and aliases resolve
+  correctly for UI policy decisions. This is genuine and valuable.
 - **Planned terminal action shape** — when a planner action fires (slash, shell,
   investigation), the oracle records and asserts it correctly. This is genuine
   and valuable.

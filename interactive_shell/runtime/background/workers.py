@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from rich.console import Console
 
@@ -38,7 +39,7 @@ class BackgroundTaskManager:
 
     def start_all(
         self,
-        processor_coro: Callable[[], Awaitable[None]],
+        processor_coro: Callable[[], Coroutine[Any, Any, None]],
     ) -> list[tuple[str, asyncio.Task[None]]]:
         self.tasks = [
             ("sampler", start_sampler()),

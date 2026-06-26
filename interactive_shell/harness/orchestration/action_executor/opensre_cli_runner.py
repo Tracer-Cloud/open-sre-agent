@@ -32,10 +32,10 @@ _OPENSRE_BLOCKED_SUBCOMMANDS: frozenset[str] = frozenset({"agent"})
 # step prompts.
 #
 # The *slash-command* paths (e.g. ``/onboard``, ``/integrations setup``)
-# are safe to run from the REPL because ``dispatch.py`` lists them in
-# ``_WAIT_FOR_COMPLETION_COMMANDS`` / ``_EXCLUSIVE_STDIN_SUBCOMMANDS``,
-# which pauses the prompt_toolkit Application before the handler runs and
-# gives the wizard subprocess exclusive stdin.
+# are safe to run from the REPL because ``runtime.utils.input_policy`` treats
+# them as exclusive-stdin commands, which pauses the prompt_toolkit
+# Application before the handler runs and gives the wizard subprocess
+# exclusive stdin.
 #
 # The *LLM-classified* path (``cli_exec`` tool with payload ``"onboard"``)
 # does NOT have that guarantee — the main loop may already be awaiting the

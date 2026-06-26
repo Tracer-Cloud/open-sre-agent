@@ -1,4 +1,4 @@
-"""Deterministic command detection used by the agent's pre-LLM fast path."""
+"""Literal command detection used by terminal UI policy."""
 
 from __future__ import annotations
 

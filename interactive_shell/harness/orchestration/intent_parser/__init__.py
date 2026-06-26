@@ -1,11 +1,11 @@
-"""Structural text helpers shared by the literal command fast path and shell layer.
+"""Structural text helpers shared by literal command detection and shell parsing.
 
 This package intentionally does NOT infer user intent from natural language.
 Tool/action selection is owned entirely by the LLM action planner (see
 ``llm_action_planner``); the only logic kept here is:
 
 - ``normalize_intent_text`` / ``is_single_edit_typo`` — typo-tolerant matching
-  of *literal* command aliases for the deterministic command fast path.
+  of *literal* command aliases for deterministic command-text detection.
 - ``shell_action`` — a ``PlannedAction`` factory for the explicit ``!cmd``
   shell-passthrough fast path.
 - ``IS_WINDOWS`` — platform flag consumed by the shell execution layer.

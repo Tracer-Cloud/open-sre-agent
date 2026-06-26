@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.filters import has_completions
-from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+
+
+class _DispatchCancelState(Protocol):
+    def is_dispatch_running(self) -> bool:
+        ...
+
+    def cancel_current_dispatch(self) -> None:
+        ...
+
 
 # Keystroke escape (xterm modifyOtherKeys for Shift+Enter), not a colour code.
 _SHIFT_ENTER_SEQUENCE = "\x1b[27;2;13~"
@@ -66,3 +78,27 @@ def _build_prompt_key_bindings() -> KeyBindings:
         event.current_buffer.complete_previous()  # type: ignore[attr-defined]
 
     return bindings
+
+
+def build_cancel_key_bindings(state: _DispatchCancelState) -> KeyBindings:
+    kb = KeyBindings()
+
+    @kb.add("escape", eager=True)
+    def _on_escape(event: KeyPressEvent) -> None:
+        if state.is_dispatch_running():
+            state.cancel_current_dispatch()
+            return
+        if event.current_buffer.text:
+            event.current_buffer.reset()
+
+    @kb.add("c-l")
+    def _on_ctrl_l(event: KeyPressEvent) -> None:
+        event.app.renderer.clear()
+
+    return kb
+
+
+def install_session_key_bindings(pt_session: object, extra_kb: KeyBindings) -> None:
+    existing = getattr(pt_session, "key_bindings", None)
+    merged = merge_key_bindings([existing, extra_kb]) if existing is not None else extra_kb
+    pt_session.key_bindings = merged  # type: ignore[attr-defined]

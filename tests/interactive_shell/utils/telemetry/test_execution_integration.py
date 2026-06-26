@@ -7,7 +7,7 @@ from rich.console import Console
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
-from interactive_shell.runtime.core import execution
+from interactive_shell.runtime import controller as loop_controller
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.utils.telemetry import LlmRunInfo
 
@@ -28,13 +28,13 @@ def _console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
 
-def test_execute_routed_turn_cli_agent_empty_response_prints_deterministic_fallback(
+def test_execute_routed_turn_cli_agent_empty_response_is_recorded_empty(
     monkeypatch,
 ) -> None:
     recorder = _FakeRecorder()
-    monkeypatch.setattr(execution.PromptRecorder, "start", lambda **_kwargs: recorder)
+    monkeypatch.setattr(loop_controller.PromptRecorder, "start", lambda **_kwargs: recorder)
     monkeypatch.setattr(
-        execution,
+        loop_controller,
         "execute_cli_actions",
         lambda *_args, **_kwargs: TerminalActionExecutionResult(
             planned_count=0,
@@ -45,26 +45,19 @@ def test_execute_routed_turn_cli_agent_empty_response_prints_deterministic_fallb
         ),
     )
     monkeypatch.setattr(
-        execution,
-        "answer_cli_agent",
+        loop_controller,
+        "_answer_cli_agent_with_tools",
         lambda *_args, **_kwargs: LlmRunInfo(response_text=""),
     )
 
     session = ReplSession()
-    session.configured_integrations_known = True
-    session.configured_integrations = ()
     output = io.StringIO()
-    execution.execute_routed_turn(
+    loop_controller.execute_routed_turn(
         "show datadog integration details",
         session,
         Console(file=output, force_terminal=False, highlight=False),
-        on_exit=lambda: None,
     )
 
-    rendered = output.getvalue().lower()
-    assert "datadog integration details" in rendered
-    assert "integrations are configured" in rendered
-    assert "investigate" in rendered
-    assert recorder.responses
-    assert "datadog integration details" in recorder.responses[0].lower()
+    assert output.getvalue() == ""
+    assert recorder.responses == [""]
     assert session.last_assistant_intent == "cli_agent_fallback"

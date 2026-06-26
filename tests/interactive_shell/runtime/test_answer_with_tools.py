@@ -1,10 +1,10 @@
-"""Tests for the tool-gathering wrapper used by interactive-shell execution.
+"""Tests for the tool-gathering wrapper used by interactive-shell turns.
 
 ``_answer_cli_agent_with_tools`` runs a tool-gathering pass on the main fallback
 path (no pre-existing ``tool_observation``) and threads any collected evidence
 into ``answer_cli_agent`` as an off-screen observation. The summarize path (a
 ``tool_observation`` already supplied) is passed through unchanged. These tests
-patch the canonical ``runtime.core.execution`` seams so no LLM or tools run.
+patch the canonical controller seams so no LLM or tools run.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
-import interactive_shell.runtime.core.execution as execution
+import interactive_shell.runtime.controller as controller
 from interactive_shell.runtime.core.session import ReplSession
 
 
@@ -29,17 +29,17 @@ def _record_answer(monkeypatch: Any) -> list[dict[str, Any]]:
         calls.append({"message": message, **kwargs})
         return None
 
-    monkeypatch.setattr(execution, "answer_cli_agent", _fake_answer)
+    monkeypatch.setattr(controller, "answer_cli_agent", _fake_answer)
     return calls
 
 
 def test_gather_string_threads_offscreen_observation(monkeypatch: Any) -> None:
     calls = _record_answer(monkeypatch)
     monkeypatch.setattr(
-        execution, "gather_tool_evidence", lambda *_a, **_k: "Tool: x\nArguments: {}\nResult: y"
+        controller, "gather_tool_evidence", lambda *_a, **_k: "Tool: x\nArguments: {}\nResult: y"
     )
 
-    execution._answer_cli_agent_with_tools("question", ReplSession(), _console())
+    controller._answer_cli_agent_with_tools("question", ReplSession(), _console())
 
     assert len(calls) == 1
     assert calls[0]["tool_observation"] == "Tool: x\nArguments: {}\nResult: y"
@@ -48,9 +48,9 @@ def test_gather_string_threads_offscreen_observation(monkeypatch: Any) -> None:
 
 def test_gather_none_passes_through_without_observation(monkeypatch: Any) -> None:
     calls = _record_answer(monkeypatch)
-    monkeypatch.setattr(execution, "gather_tool_evidence", lambda *_a, **_k: None)
+    monkeypatch.setattr(controller, "gather_tool_evidence", lambda *_a, **_k: None)
 
-    execution._answer_cli_agent_with_tools("question", ReplSession(), _console())
+    controller._answer_cli_agent_with_tools("question", ReplSession(), _console())
 
     assert len(calls) == 1
     assert calls[0]["tool_observation"] is None
@@ -63,9 +63,9 @@ def test_existing_observation_skips_gather(monkeypatch: Any) -> None:
     def _should_not_run(*_a: Any, **_k: Any) -> str:
         raise AssertionError("gather_tool_evidence must not run on the summarize path")
 
-    monkeypatch.setattr(execution, "gather_tool_evidence", _should_not_run)
+    monkeypatch.setattr(controller, "gather_tool_evidence", _should_not_run)
 
-    execution._answer_cli_agent_with_tools(
+    controller._answer_cli_agent_with_tools(
         "question", ReplSession(), _console(), tool_observation="already gathered"
     )
 

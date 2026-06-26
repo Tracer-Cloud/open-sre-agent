@@ -18,7 +18,7 @@ from interactive_shell.runtime.core.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
 )
-from interactive_shell.runtime.tasks import TaskRegistry
+from interactive_shell.runtime.core.tasks import TaskRegistry
 from platform.common.task_types import TaskKind, TaskStatus
 
 
@@ -95,7 +95,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("interactive_shell.runtime.tasks.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("interactive_shell.runtime.core.tasks.secrets.token_hex", _fake_hex)
         session = ReplSession()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)

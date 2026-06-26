@@ -102,8 +102,8 @@ def run_cli_command(
 
 
 def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    # The REPL loop adds ``/onboard`` to ``_WAIT_FOR_COMPLETION_COMMANDS``
-    # (dispatch.py) so the prompt_toolkit Application is torn down before
+    # The REPL loop treats ``/onboard`` as exclusive-stdin in
+    # ``runtime.utils.input_policy`` so the prompt_toolkit Application is torn down before
     # this handler runs — the wizard subprocess therefore gets exclusive
     # stdin and can drive its own interactive prompts without conflicting
     # with the shell's UI.

@@ -7,12 +7,14 @@ guards stay dead because ``configured_integrations_known`` never flips to True.
 from __future__ import annotations
 
 import io
+from types import SimpleNamespace
 from typing import Any
 
 from rich.console import Console
 
+from interactive_shell.runtime import entrypoint
 from interactive_shell.runtime.core.session import ReplSession
-from interactive_shell.runtime.startup import entrypoint
+from interactive_shell.runtime.startup import first_launch_github as flg
 
 
 def _console() -> Console:
@@ -25,7 +27,7 @@ def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -
         lambda: {"gitlab": {}, "datadog": {}},
     )
     session = ReplSession()
-    entrypoint._hydrate_configured_integrations(session)
+    session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     # Resolution covers env + local store and is returned in sorted order.
     assert session.configured_integrations == ("datadog", "gitlab")
@@ -37,7 +39,7 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
         dict,
     )
     session = ReplSession()
-    entrypoint._hydrate_configured_integrations(session)
+    session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     assert session.configured_integrations == ()
 
@@ -136,7 +138,7 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
         _resolve,
     )
     session = ReplSession()
-    entrypoint._hydrate_configured_integrations(session)
+    session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
     assert session.resolved_integrations_cache is None
     assert resolve_calls == []
@@ -172,7 +174,7 @@ def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
         _boom,
     )
     session = ReplSession()
-    entrypoint._hydrate_configured_integrations(session)
+    session.hydrate_configured_integrations()
     assert session.configured_integrations_known is False
     assert session.configured_integrations == ()
 
@@ -181,22 +183,24 @@ def test_gate_error_blocks_startup_without_bypass(monkeypatch: Any) -> None:
     """On an unexpected gate error we must NOT fail open into the REPL unless an
     explicit bypass applies."""
     monkeypatch.setattr(
-        "interactive_shell.runtime.startup.first_launch_github.should_require_github_login",
+        flg,
+        "should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
-    monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: False)
+    monkeypatch.setattr(flg, "_github_login_explicitly_bypassed", lambda: False)
 
-    assert entrypoint._maybe_require_github_login(_console()) is False
+    assert flg.require_startup_github_login(_console()) is False
 
 
 def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "interactive_shell.runtime.startup.first_launch_github.should_require_github_login",
+        flg,
+        "should_require_github_login",
         lambda: (_ for _ in ()).throw(RuntimeError("gate broke")),
     )
-    monkeypatch.setattr(entrypoint, "_github_login_explicitly_bypassed", lambda: True)
+    monkeypatch.setattr(flg, "_github_login_explicitly_bypassed", lambda: True)
 
-    assert entrypoint._maybe_require_github_login(_console()) is True
+    assert flg.require_startup_github_login(_console()) is True
 
 
 def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
@@ -205,24 +209,21 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
         "platform.analytics.cli.identify_saved_github_username",
         lambda: identified.append("called"),
     )
-    monkeypatch.setattr(entrypoint, "_hydrate_configured_integrations", lambda _session: None)
     monkeypatch.setattr(entrypoint, "run_initial_input", lambda *_args, **_kwargs: 0)
 
     class _Session:
         active_theme_name = None
 
+        def hydrate_configured_integrations(self) -> None:
+            return None
+
         def warm_resolved_integrations(self) -> None:
             return None
 
-    monkeypatch.setattr(entrypoint, "ReplSession", _Session)
-
-    def _persistent_task_registry() -> None:
-        return None
-
     monkeypatch.setattr(
-        entrypoint.TaskRegistry,
-        "persistent",
-        staticmethod(_persistent_task_registry),
+        entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=_Session(), inbox=None),
     )
 
     class _PromptSession:
@@ -246,10 +247,10 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
 
 def test_explicit_bypass_detects_skip_env(monkeypatch: Any) -> None:
     monkeypatch.setenv("OPENSRE_SKIP_GITHUB_LOGIN", "1")
-    assert entrypoint._github_login_explicitly_bypassed() is True
+    assert flg._github_login_explicitly_bypassed() is True
 
 
 def test_explicit_bypass_detects_ci_environment(monkeypatch: Any) -> None:
     monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
     monkeypatch.setenv("CI", "true")
-    assert entrypoint._github_login_explicitly_bypassed() is True
+    assert flg._github_login_explicitly_bypassed() is True

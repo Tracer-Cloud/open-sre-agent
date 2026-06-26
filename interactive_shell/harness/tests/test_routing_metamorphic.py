@@ -1,4 +1,4 @@
-"""Metamorphic invariants for deterministic command dispatch."""
+"""Metamorphic invariants for deterministic command-text detection."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from interactive_shell.harness.orchestration.command_dispatch import (
         "\thelp\t",
     ],
 )
-def test_help_alias_variants_dispatch_slash_help(prompt: str) -> None:
+def test_help_alias_variants_normalize_to_slash_help(prompt: str) -> None:
     assert deterministic_command_text(prompt) == "/help"
 
 
@@ -29,7 +29,7 @@ def test_help_alias_variants_dispatch_slash_help(prompt: str) -> None:
         "\topensre   investigate   -i   alert.json\t",
     ],
 )
-def test_opensre_investigate_variants_dispatch_deterministically(prompt: str) -> None:
+def test_opensre_investigate_variants_normalize_deterministically(prompt: str) -> None:
     command_text = deterministic_command_text(prompt)
     assert command_text is not None
     assert command_text.startswith("/investigate")

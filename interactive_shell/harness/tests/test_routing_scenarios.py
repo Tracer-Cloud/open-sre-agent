@@ -218,16 +218,16 @@ def test_shard_selection_is_non_empty() -> None:
     skip_or_fail(f"No routing cases selected for shard {index}/{total}.")
 
 
-def test_deterministic_command_dispatch(deterministic_case: ScenarioCase) -> None:
+def test_deterministic_command_text_matches_scenario(deterministic_case: ScenarioCase) -> None:
     prompt = deterministic_case.scenario.input.prompt
     answer = deterministic_case.answer
 
-    # Deterministic command dispatch is the agent's pre-LLM fast path; it must
-    # reproduce the normalized slash command the scenario expects.
+    # The literal-command detector must reproduce the normalized slash command
+    # the scenario expects for UI policy decisions.
     assert deterministic_command_text(prompt) == answer.route.expected_command_text
 
 
-def test_help_dispatches_slash_help_deterministically() -> None:
+def test_help_normalizes_to_slash_help_deterministically() -> None:
     assert deterministic_command_text("/help") == "/help"
 
 

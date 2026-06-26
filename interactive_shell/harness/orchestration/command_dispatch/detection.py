@@ -1,14 +1,15 @@
-"""Deterministic command detection for the interactive-shell agent fast path.
+"""Literal command detection for interactive-shell terminal UI policy.
 
 These helpers decide whether a turn is a literal slash command, a bare command
 alias (including single-edit typos), or an ``opensre investigate`` quick-start,
-and return the normalized slash command text to dispatch. They never call the
-LLM; the agent uses them to short-circuit straight to slash dispatch.
+and return normalized slash command text. They never call the LLM and are used
+only for terminal presentation concerns such as spinner suppression and
+exclusive-stdin gating.
 
 ==============================================================================
 HARD RULE (NON-NEGOTIABLE): THIS LAYER ONLY RECOGNIZES LITERAL CLI COMMANDS.
 ==============================================================================
-This fast path exists for ONE purpose: dispatching explicit, literal CLI/slash
+This layer exists for ONE purpose: recognizing explicit, literal CLI/slash
 commands and their bare command aliases. That is ALL it may ever do.
 
 DO NOT add ANYTHING that infers user *intent* from natural language. NEVER EVER
@@ -118,7 +119,7 @@ def deterministic_command_text(text: str) -> str | None:
 
     Handles ``opensre investigate`` quick-start, literal ``/slash`` input, and
     bare command aliases (including single-edit typos). Returns ``None`` for any
-    input that should fall through to the LLM-backed agent.
+    input that is not literal command text.
     """
     investigate_slash = opensre_investigate_slash_text(text)
     if investigate_slash is not None:

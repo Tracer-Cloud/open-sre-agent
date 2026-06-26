@@ -20,7 +20,7 @@ from interactive_shell.runtime.background.models import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
-from interactive_shell.runtime.tasks import TaskRegistry
+from interactive_shell.runtime.core.tasks import TaskRegistry
 
 InterventionKind = Literal["ctrl_c", "correction"]
 
@@ -79,9 +79,6 @@ class ReplSession:
 
     last_state: dict[str, Any] | None = None
     """The final AgentState from the most recent investigation, used by follow-ups."""
-
-    last_route_decision: Any | None = None
-    """Most recent structured routing decision for observability/debugging."""
 
     last_assistant_intent: str | None = None
     """Intent label set by the runtime after each routed turn.
@@ -163,8 +160,8 @@ class ReplSession:
     main_loop: Any = None
     """The asyncio event loop for the main REPL coroutine.
 
-    Set once in ``run_interactive`` so worker-thread code can schedule
-    prompt-toolkit updates on the main thread."""
+    Set once by ``InteractiveShellController.start_interactive_shell`` so
+    worker-thread code can schedule prompt-toolkit updates on the main thread."""
 
     active_theme_name: str = "green"
     """Interactive shell palette name for this REPL session (``/theme``, prompts)."""
@@ -207,7 +204,7 @@ class ReplSession:
 
     correction_intervention_count: int = 0
     """Incremented when a follow-up or new-alert message starts with a
-    correction cue (see ``looks_like_correction`` in ``dispatch.py``).
+    correction cue (see ``looks_like_correction`` in ``runtime.core.turn_detection``).
     Slash and CLI-agent turns are not counted because content like
     ``actually run ps aux`` is a command, not a correction."""
 
@@ -545,7 +542,6 @@ class ReplSession:
         self.history.clear()
         self.resumed_from_name = ""
         self.last_state = None
-        self.last_route_decision = None
         self.last_assistant_intent = None
         self.configured_integrations = ()
         self.configured_integrations_known = False

@@ -28,10 +28,6 @@ def _console() -> Console:
     return Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
 
-def _never_dispatch(*_args: object, **_kwargs: object) -> bool:  # pragma: no cover - guard
-    raise AssertionError("deterministic dispatch should not run for a free-text question")
-
-
 def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
     observed: list[str | None] = []
 
@@ -70,10 +66,8 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         session,
         _console(),
         recorder=None,
-        on_exit=lambda: None,
         execute_actions=fake_execute,
         answer_agent=fake_answer,
-        dispatch_command=_never_dispatch,
     )
 
     assert observed == [_OBSERVATION]
@@ -111,10 +105,8 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
         session,
         _console(),
         recorder=None,
-        on_exit=lambda: None,
         execute_actions=fake_execute,
         answer_agent=fake_answer,
-        dispatch_command=_never_dispatch,
     )
 
     assert answer_calls == []
@@ -152,10 +144,8 @@ def test_failed_discovery_is_not_summarized() -> None:
         session,
         _console(),
         recorder=None,
-        on_exit=lambda: None,
         execute_actions=fake_execute,
         answer_agent=fake_answer,
-        dispatch_command=_never_dispatch,
     )
 
     assert answer_calls == []
@@ -194,10 +184,8 @@ def test_observation_is_reset_each_turn() -> None:
         session,
         _console(),
         recorder=None,
-        on_exit=lambda: None,
         execute_actions=fake_execute,
         answer_agent=fake_answer,
-        dispatch_command=_never_dispatch,
     )
 
     assert answer_calls == []

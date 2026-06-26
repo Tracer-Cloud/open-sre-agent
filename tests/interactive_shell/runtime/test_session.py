@@ -12,7 +12,7 @@ from interactive_shell.runtime.core.session import (
     ReplSession,
     _scenario_id_from_synthetic_label,
 )
-from interactive_shell.runtime.tasks import TaskRegistry
+from interactive_shell.runtime.core.tasks import TaskRegistry
 from platform.common.task_types import TaskKind
 
 

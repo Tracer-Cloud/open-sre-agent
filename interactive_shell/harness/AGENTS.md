@@ -99,11 +99,10 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 - There is no top-level router: every turn is handed to
   `handle_message_with_agent`. Do **not** add command/slash/help/alert branches
   or any other top-level routing phases before the agent.
-- Deterministic command dispatch is an **internal fast path of the agent**, not
-  a routing branch. `handle_message_with_agent` detects literal slash commands,
-  bare command aliases, and `opensre investigate` quick-starts via
-  `orchestration/command_dispatch/` and dispatches them directly
-  (no LLM); everything else falls through to LLM action planning + assistant.
+- There is no deterministic command-dispatch fast path in
+  `handle_message_with_agent`. Every turn enters the agent pipeline; slash
+  command execution belongs to the planner/tool path (`slash_invoke`) rather than
+  a pre-agent dispatcher.
 - The runtime (`runtime/dispatch.py`) may reuse
   `orchestration.command_dispatch.deterministic_command_text` for terminal-UI concerns only
   (spinner suppression and exclusive-stdin gating). This is a presentation

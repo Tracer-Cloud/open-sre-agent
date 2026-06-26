@@ -14,7 +14,7 @@ render_ready_box(console, session=None)
 
 render_banner(console)
     Backward-compatible shim: render_splash + render_ready_box in one call.
-    Existing callers (loop.py) continue to work unchanged.
+    Existing callers continue to work unchanged.
 
 Rendered output legend (colour roles)
 --------------------------------------
@@ -367,7 +367,7 @@ def render_ready_box(
 def render_banner(console: Console | None = None) -> None:
     """Render splash + ready-state box in one call (legacy entry point).
 
-    Existing callers (runtime.startup.entrypoint.repl_main) continue to work unchanged.
+    Existing callers (runtime.entrypoint.repl_main) continue to work unchanged.
     """
     _console = console or Console(
         highlight=False,

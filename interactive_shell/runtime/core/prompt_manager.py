@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Callable
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
@@ -15,16 +16,16 @@ from interactive_shell.runtime.core.state import (
     ReplState,
     SpinnerState,
 )
-from interactive_shell.runtime.dispatch import (
-    build_cancel_key_bindings,
-    install_session_key_bindings,
-)
 from interactive_shell.ui import input_prompt
 from interactive_shell.ui.components.cpr_stdin import (
     drain_stale_cpr_bytes,
     strip_cpr_sequences,
 )
 from interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from interactive_shell.ui.input_prompt.key_bindings import (
+    build_cancel_key_bindings,
+    install_session_key_bindings,
+)
 from interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 
@@ -43,7 +44,7 @@ class PromptManager:
         self.state = state
         self.spinner = spinner
         self.pt_session = pt_session
-        self.pt_app = None
+        self.pt_app: Application[str] | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self._invalidate_prompt: Callable[[], None] | None = None
 

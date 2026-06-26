@@ -239,7 +239,7 @@ def test_flush_writes_session_end(tmp_path: Path) -> None:
 
 
 def test_flush_counts_cli_agent_turns_as_chat(tmp_path: Path) -> None:
-    """execution.py records kind='cli_agent' for chat turns — must count as chat_turns."""
+    """Chat turns recorded as kind='cli_agent' must count as chat_turns."""
     session = _make_session()
     with _patch_dir(tmp_path):
         SessionStore.open_session(session)
@@ -613,7 +613,7 @@ def test_load_recent_derives_name_from_turn_detail(tmp_path: Path) -> None:
 
 
 def test_load_recent_derives_name_from_cli_agent_turn(tmp_path: Path) -> None:
-    """execution.py calls session.record('cli_agent', text) for real chat turns."""
+    """Real chat turns recorded as kind='cli_agent' are reconstructed."""
     session = _make_session()
     with _patch_dir(tmp_path):
         SessionStore.open_session(session)
