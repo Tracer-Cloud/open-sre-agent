@@ -11,6 +11,7 @@ from cli.wizard.store import (
     save_local_config,
     save_named_remote,
     save_remote_ops_config,
+    update_local_llm_selection,
 )
 
 
@@ -51,6 +52,36 @@ def test_load_local_config_returns_independent_empty_payloads(tmp_path) -> None:
     second = load_local_config(store_path)
 
     assert second["targets"] == {}
+
+
+def test_update_local_llm_selection_merges_without_resetting_other_fields(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    save_local_config(
+        wizard_mode="quickstart",
+        provider="anthropic",
+        model="claude-haiku",
+        api_key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_MODEL",
+        probes={"local": {"target": "local", "reachable": True, "detail": "ok"}},
+        path=store_path,
+    )
+
+    update_local_llm_selection(
+        provider="openai",
+        model="gpt-5-mini",
+        api_key_env="OPENAI_API_KEY",
+        model_env="OPENAI_REASONING_MODEL",
+        path=store_path,
+    )
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    assert payload["wizard"]["mode"] == "quickstart"
+    assert payload["probes"]["local"]["reachable"] is True
+    assert payload["targets"]["local"]["provider"] == "openai"
+    assert payload["targets"]["local"]["model"] == "gpt-5-mini"
+    assert payload["targets"]["local"]["api_key_env"] == "OPENAI_API_KEY"
+    assert payload["targets"]["local"]["model_env"] == "OPENAI_REASONING_MODEL"
+    assert "updated_at" in payload["targets"]["local"]
 
 
 def test_remote_ops_config_round_trip(tmp_path) -> None:

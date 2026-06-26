@@ -586,7 +586,7 @@ MCP-capable integrations only (subset of the full integration catalog).
 
 ### `/model`
 
-Show or change LLM provider and models. Updates `~/.opensre/.env` (or your configured env path) and resets in-process LLM caches.
+Show or change LLM provider and models. Updates project `.env` (default: repo-root `.env`, override with `OPENSRE_PROJECT_ENV_PATH`), `~/.opensre/opensre.json`, and resets in-process LLM caches.
 
 ```text
 /model show

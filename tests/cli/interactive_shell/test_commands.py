@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -712,6 +713,17 @@ class TestModelCommand:
 
         monkeypatch.setattr(repl_data_module, "load_llm_settings", lambda: _Fake())
 
+    def _redirect_wizard_store(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> Path:
+        import cli.wizard.store as wizard_store
+
+        store_path = tmp_path / "opensre.json"
+        monkeypatch.setattr(wizard_store, "get_store_path", lambda: store_path)
+        return store_path
+
     def test_show_displays_model_info(self, monkeypatch: object) -> None:
         self._patch_llm(monkeypatch)
         console, buf = _capture()
@@ -734,6 +746,7 @@ class TestModelCommand:
         from cli.interactive_shell.command_registry.model import command as model_cmd
 
         env_path = tmp_path / ".env"
+        store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(["set", "anthropic", "__provider_default__"])
@@ -747,6 +760,8 @@ class TestModelCommand:
         assert "switched LLM provider" in output
         assert "reasoning model:" in output
         assert "LLM_PROVIDER=anthropic" in env_path.read_text(encoding="utf-8")
+        stored = json.loads(store_path.read_text(encoding="utf-8"))
+        assert stored["targets"]["local"]["provider"] == "anthropic"
 
     def test_model_interactive_show_then_done_shows_table_once(
         self,
@@ -797,6 +812,7 @@ class TestModelCommand:
         from services import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: reset_calls.append("reset"))
         # /model set now refuses to half-update .env when the target provider
@@ -814,6 +830,8 @@ class TestModelCommand:
         assert "reasoning model:" in output
         assert "ANTHROPIC_REASONING_MODEL" in output
         assert "LLM_PROVIDER=anthropic" in (tmp_path / ".env").read_text(encoding="utf-8")
+        stored = json.loads(store_path.read_text(encoding="utf-8"))
+        assert stored["targets"]["local"]["provider"] == "anthropic"
         assert reset_calls == ["reset"]
 
     def test_set_refuses_when_credential_missing(
@@ -830,6 +848,7 @@ class TestModelCommand:
         import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
+        store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         # Keyring lookups in CI / sandboxes are flaky; force the helper into
@@ -848,6 +867,7 @@ class TestModelCommand:
         assert "switched LLM provider" not in output
         # No .env should have been written.
         assert not env_path.exists()
+        assert not store_path.exists()
         # And the live LLM_PROVIDER must be untouched.
         import os
 
@@ -914,6 +934,7 @@ class TestModelCommand:
         import cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
+        store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
@@ -927,6 +948,9 @@ class TestModelCommand:
         assert "LLM_PROVIDER=" not in contents
         assert "OPENAI_REASONING_MODEL=gpt-5.5" in contents
         assert "OPENAI_MODEL=gpt-5.5" in contents
+        stored = json.loads(store_path.read_text(encoding="utf-8"))
+        assert stored["targets"]["local"]["provider"] == "openai"
+        assert stored["targets"]["local"]["model"] == "gpt-5.5"
 
     def test_set_bare_gpt_words_normalizes_to_model_id(
         self,

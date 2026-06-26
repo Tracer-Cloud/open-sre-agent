@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
@@ -93,10 +94,29 @@ def _local_defaults() -> dict[str, str | bool | None]:
     provider = PROVIDER_BY_VALUE.get(_string_value(raw_provider)) if raw_provider else None
     api_key_env = _string_value(local.get("api_key_env"), provider.api_key_env if provider else "")
     is_cli = bool(provider and provider.credential_kind == "cli")
+
+    provider_value = _string_value(raw_provider) if raw_provider else None
+    model_value = _string_value(local.get("model"))
+
+    # `/model set` and manual `.env` edits update runtime LLM config immediately, but
+    # onboarding previously read only the wizard store (~/.opensre/opensre.json).
+    # Prefer the active env selection so re-running onboard reflects the current model.
+    env_provider = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+    if env_provider:
+        env_option = PROVIDER_BY_VALUE.get(env_provider)
+        if env_option is not None:
+            provider_value = env_provider
+            provider = env_option
+            api_key_env = env_option.api_key_env or api_key_env
+            env_model = (os.getenv(env_option.model_env) or "").strip()
+            if env_model:
+                model_value = env_model
+            is_cli = env_option.credential_kind == "cli"
+
     return {
         "wizard_mode": _string_value(wizard.get("mode"), "quickstart"),
-        "provider": _string_value(raw_provider) if raw_provider else None,
-        "model": _string_value(local.get("model")),
+        "provider": provider_value,
+        "model": model_value,
         "api_key_env": api_key_env,
         "has_api_key": True if is_cli else bool(api_key_env and has_llm_api_key(api_key_env)),
         "legacy_api_key": _string_value(local.get("api_key")),

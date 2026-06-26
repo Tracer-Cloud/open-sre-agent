@@ -170,6 +170,33 @@ def sync_env_values(
     return target_path
 
 
+def sync_reasoning_model_env(
+    *,
+    provider: ProviderOption,
+    model: str,
+    env_path: Path | None = None,
+) -> Path:
+    """Write reasoning model env vars to ``.env``, update runtime env, and sync wizard store."""
+    values: dict[str, str] = {provider.model_env: model}
+    if provider.legacy_model_env:
+        values[provider.legacy_model_env] = model
+    target_path = sync_env_values(values, env_path=env_path)
+    os.environ.update(values)
+    _sync_llm_selection_to_store(provider=provider, model=model)
+    return target_path
+
+
+def _sync_llm_selection_to_store(*, provider: ProviderOption, model: str) -> None:
+    from cli.wizard.store import update_local_llm_selection
+
+    update_local_llm_selection(
+        provider=provider.value,
+        model=model,
+        api_key_env=provider.api_key_env or "",
+        model_env=provider.model_env,
+    )
+
+
 def _classification_model_env(p: ProviderOption) -> str | None:
     if p.classification_model_env:
         return p.classification_model_env
@@ -292,5 +319,6 @@ def sync_provider_env(
         if preserved is not None:
             values[key] = preserved
     os.environ.update(values)
+    _sync_llm_selection_to_store(provider=provider, model=model)
 
     return target_path

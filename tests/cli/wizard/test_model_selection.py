@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -81,6 +82,24 @@ def test_choose_model_preserves_saved_model_not_in_curated(
 
     assert model == "my-tuned-gpt"
     assert "my-tuned-gpt" in captured["values"]
+
+
+def test_local_defaults_prefers_env_over_stale_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    store_path = tmp_path / "opensre.json"
+    store_path.write_text(
+        '{"version":1,"wizard":{"mode":"quickstart"},"targets":{"local":{"provider":"anthropic","model":"claude-haiku"}},"probes":{}}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_ui, "get_store_path", lambda: store_path)
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_REASONING_MODEL", "gpt-5-mini")
+
+    defaults = _ui._local_defaults()
+
+    assert defaults["provider"] == "openai"
+    assert defaults["model"] == "gpt-5-mini"
 
 
 def test_choose_model_accepts_custom_entry(monkeypatch: pytest.MonkeyPatch) -> None:

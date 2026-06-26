@@ -210,7 +210,7 @@ def switch_reasoning_model(
 ) -> bool:
     """Set the reasoning model for the active (or named) provider."""
     from cli.wizard.config import PROVIDER_BY_VALUE
-    from cli.wizard.env_sync import sync_env_values
+    from cli.wizard.env_sync import sync_reasoning_model_env
 
     raw_name = provider_name if provider_name else os.getenv("LLM_PROVIDER", "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()
@@ -235,11 +235,7 @@ def switch_reasoning_model(
         )
         return False
 
-    values = {provider.model_env: new_model}
-    if provider.legacy_model_env:
-        values[provider.legacy_model_env] = new_model
-    env_path = sync_env_values(values)
-    os.environ.update(values)
+    env_path = sync_reasoning_model_env(provider=provider, model=new_model)
     _reset_runtime_llm_caches()
 
     console.print(

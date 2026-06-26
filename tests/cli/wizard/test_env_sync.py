@@ -12,11 +12,22 @@ from cli.wizard.env_sync import (
     sync_env_secret,
     sync_env_values,
     sync_provider_env,
+    sync_reasoning_model_env,
 )
+from cli.wizard.store import load_local_config
 from config.llm_credentials import resolve_env_credential
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
+
+
+@pytest.fixture(autouse=True)
+def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
+    """Keep sync_provider_env store updates off the developer's ~/.opensre."""
+    monkeypatch.setattr(
+        "cli.wizard.store.get_store_path",
+        lambda: tmp_path / "opensre.json",
+    )
 
 
 @pytest.mark.parametrize(
@@ -90,6 +101,47 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "ANTHROPIC_API_KEY=" not in content
     assert "OPENAI_REASONING_MODEL=gpt-5-mini\n" in content
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
+
+
+def test_sync_provider_env_updates_wizard_store(tmp_path, monkeypatch) -> None:
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5-mini",
+        env_path=env_path,
+    )
+
+    stored = load_local_config(store_path)
+    local = stored["targets"]["local"]
+    assert local["provider"] == "openai"
+    assert local["model"] == "gpt-5-mini"
+    assert local["api_key_env"] == "OPENAI_API_KEY"
+    assert local["model_env"] == "OPENAI_REASONING_MODEL"
+
+
+def test_sync_reasoning_model_env_updates_wizard_store(tmp_path, monkeypatch) -> None:
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+
+    sync_reasoning_model_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5.4-mini",
+        env_path=env_path,
+    )
+
+    stored = load_local_config(store_path)
+    local = stored["targets"]["local"]
+    assert local["provider"] == "openai"
+    assert local["model"] == "gpt-5.4-mini"
+    assert env_path.read_text(encoding="utf-8") == (
+        "OPENAI_REASONING_MODEL=gpt-5.4-mini\nOPENAI_MODEL=gpt-5.4-mini\n"
+    )
 
 
 def test_sync_provider_env_appends_to_file_without_final_newline(tmp_path, monkeypatch) -> None:

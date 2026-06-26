@@ -74,6 +74,32 @@ def save_local_config(
     return store_path
 
 
+def update_local_llm_selection(
+    *,
+    provider: str,
+    model: str,
+    api_key_env: str = "",
+    model_env: str = "",
+    path: Path | None = None,
+) -> Path:
+    """Merge LLM provider/model into the wizard store without resetting other fields."""
+    store_path = path or get_store_path()
+    data = _load_raw(store_path)
+    timestamp = datetime.now(UTC).isoformat()
+    targets = data.setdefault("targets", {})
+    local = targets.setdefault("local", {})
+    local["provider"] = provider
+    local["model"] = model
+    if api_key_env:
+        local["api_key_env"] = api_key_env
+    if model_env:
+        local["model_env"] = model_env
+    local["updated_at"] = timestamp
+    store_path.parent.mkdir(parents=True, exist_ok=True)
+    store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return store_path
+
+
 def load_remote_url(path: Path | None = None) -> str | None:
     """Return the persisted remote agent URL, or ``None`` if not configured."""
     data = _load_raw(path)
