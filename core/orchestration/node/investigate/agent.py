@@ -182,6 +182,15 @@ class ConnectedInvestigationAgent:
                 _record_tool_end(tc, output)
                 debug_print(f"[seed:{tc.name}] → {summarise(output)}")
 
+        # Expose planned tools and live evidence to _should_accept_conclusion overrides.
+        # Both are set before the loop so they're always initialised; evidence is a
+        # reference to the same mutable dict the loop populates, so overrides always
+        # see the current state without an extra assignment inside the loop body.
+        self._planned_actions: list[str] = [
+            str(name) for name in (state_dict.get("planned_actions") or []) if str(name).strip()
+        ]
+        self._current_evidence: dict[str, Any] = evidence
+
         context_ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
         stagnant_iterations = 0
         force_conclusion = False
@@ -327,3 +336,43 @@ class ConnectedInvestigationAgent:
 
 
 InvestigationAgent = ConnectedInvestigationAgent
+
+
+class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
+    """Investigation agent for CLI-backed LLMs (Codex, Claude Code CLI, etc.).
+
+    CLI models receive the full conversation history flattened into a single
+    text prompt per invoke. They tend to emit a plain-text final answer as
+    soon as they see accumulated tool results, exiting the ReAct loop before
+    all planned tools have been called.
+
+    This subclass overrides the conclusion hook to nudge the model to call
+    every planned tool before accepting its final answer. The outer
+    MAX_INVESTIGATION_LOOPS cap still bounds worst-case runtime.
+    """
+
+    def _should_accept_conclusion(
+        self,
+        *,
+        evidence_count: int,  # noqa: ARG002 — base class signature
+        iteration: int,
+    ) -> tuple[bool, str | None]:
+        planned = getattr(self, "_planned_actions", [])
+        evidence = getattr(self, "_current_evidence", None)
+
+        if not planned or evidence is None:
+            return True, None
+
+        # Leave room for a final text-only iteration after the nudge fires.
+        if iteration >= MAX_INVESTIGATION_LOOPS - 2:
+            return True, None
+
+        uncalled = [name for name in planned if name not in evidence]
+        if not uncalled:
+            return True, None
+
+        tool_list = ", ".join(uncalled)
+        return False, (
+            f"You have not yet called these planned investigation tools: {tool_list}. "
+            "Call them now using the JSON tool_calls format before writing your final answer."
+        )
