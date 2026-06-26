@@ -169,16 +169,13 @@ class TestRedisToolsAvailability:
     def test_redis_tools_exist_as_modules(self):
         """Redis tools modules exist and are properly structured."""
         try:
-            # Tools are defined as decorated functions within __init__ modules
-            from tools import (
-                RedisClientListTool,
-                RedisKeyScanTool,
-                RedisLatencyDoctorTool,
-                RedisListDepthTool,
-                RedisReplicationTool,
-                RedisServerInfoTool,
-                RedisSlowlogTool,
-            )
+            import tools.redis_client_list_tool as RedisClientListTool
+            import tools.redis_key_scan_tool as RedisKeyScanTool
+            import tools.redis_latency_doctor_tool as RedisLatencyDoctorTool
+            import tools.redis_list_depth_tool as RedisListDepthTool
+            import tools.redis_replication_tool as RedisReplicationTool
+            import tools.redis_server_info_tool as RedisServerInfoTool
+            import tools.redis_slowlog_tool as RedisSlowlogTool
 
             # All 7 tool modules should be importable (4 baseline + 3 P1)
             assert RedisServerInfoTool is not None

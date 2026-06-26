@@ -188,13 +188,11 @@ class TestMySQLToolsAvailability:
     def test_mysql_tools_exist_as_modules(self):
         """MySQL tools modules exist and are properly structured."""
         try:
-            from tools import (
-                MySQLCurrentProcessesTool,
-                MySQLReplicationStatusTool,
-                MySQLServerStatusTool,
-                MySQLSlowQueriesTool,
-                MySQLTableStatsTool,
-            )
+            import tools.mysql_current_processes_tool as MySQLCurrentProcessesTool
+            import tools.mysql_replication_status_tool as MySQLReplicationStatusTool
+            import tools.mysql_server_status_tool as MySQLServerStatusTool
+            import tools.mysql_slow_queries_tool as MySQLSlowQueriesTool
+            import tools.mysql_table_stats_tool as MySQLTableStatsTool
 
             assert MySQLServerStatusTool is not None
             assert MySQLCurrentProcessesTool is not None

@@ -1167,8 +1167,7 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
-        if tool.origin_module.startswith("tools.")
-        or tool.origin_module.startswith("vendors.")
+        if tool.origin_module.startswith("tools.") or tool.origin_module.startswith("vendors.")
     }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 

@@ -154,14 +154,11 @@ class TestMongoDBToolsAvailability:
     def test_mongodb_tools_exist_as_modules(self):
         """MongoDB tools modules exist and are properly structured."""
         try:
-            # Tools are defined as decorated functions within __init__ modules
-            from tools import (
-                MongoDBCollectionStatsTool,
-                MongoDBCurrentOpsTool,
-                MongoDBProfilerTool,
-                MongoDBReplicaStatusTool,
-                MongoDBServerStatusTool,
-            )
+            import tools.mongodb_collection_stats_tool as MongoDBCollectionStatsTool
+            import tools.mongodb_current_ops_tool as MongoDBCurrentOpsTool
+            import tools.mongodb_profiler_tool as MongoDBProfilerTool
+            import tools.mongodb_replica_status_tool as MongoDBReplicaStatusTool
+            import tools.mongodb_server_status_tool as MongoDBServerStatusTool
 
             # All 5 tool modules should be importable
             assert MongoDBServerStatusTool is not None
