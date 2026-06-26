@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from vendors.incident_io.client import make_incident_io_client
+from integrations.incident_io.client import make_incident_io_client
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("INCIDENT_IO_API_KEY"),

@@ -115,7 +115,7 @@ def answer_follow_up(
         return None
 
     try:
-        from services.llm_client import get_llm_for_reasoning
+        from core.runtime.llm.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.follow_up.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")

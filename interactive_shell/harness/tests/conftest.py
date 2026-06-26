@@ -86,7 +86,7 @@ def _resolve_live_llm_configuration(
         # Live suites must run with real credentials and fail on misconfiguration.
         pytest.fail(f"Live LLM routing tests require usable LLM configuration:{hint}. {msg}")
 
-    from services.llm_client import reset_llm_singletons
+    from core.runtime.llm.llm_client import reset_llm_singletons
 
     monkeypatch.setenv("LLM_PROVIDER", settings.provider)
     reset_llm_singletons()

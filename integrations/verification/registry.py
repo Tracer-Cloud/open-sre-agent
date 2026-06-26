@@ -1,15 +1,14 @@
-"""Plugin registry: per-vendor verifiers register themselves by service name.
+"""Plugin registry: integration-local verifiers register themselves by service name.
 
-Each per-vendor verifier module decorates its verify function with
-``@register_verifier("<service>")`` — either
-``integrations/verifiers/<service>.py`` or
-``services/<vendor>/verifier.py``. The registry is a simple
-module-level dict; lookup is ``get_verifier("<service>")``.
+Each integration verifier module decorates its verify function with
+``@register_verifier("<service>")`` from ``integrations/<service>/verifier.py``.
+The registry is a simple module-level dict; lookup is
+``get_verifier("<service>")``.
 
 Auto-discovery: the loader at
-``integrations/_verifiers_loader.py`` walks both verifier folders
-via ``pkgutil`` and triggers each module's ``@register_verifier``
-decorator on import. New vendor file = registered automatically.
+``integrations/_verifiers_loader.py`` walks integration packages via
+``pkgutil`` and triggers each module's ``@register_verifier`` decorator on
+import. New integration verifier file = registered automatically.
 """
 
 from __future__ import annotations

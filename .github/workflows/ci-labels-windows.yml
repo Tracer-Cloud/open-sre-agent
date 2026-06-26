@@ -46,13 +46,13 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run python -m ruff check cli config core deployment integrations platform services tools tests/
+        run: uv run python -m ruff check cli config core deployment integrations platform tools tests/
 
       - name: Format check
-        run: uv run python -m ruff format --check cli config core deployment integrations platform services tools tests/
+        run: uv run python -m ruff format --check cli config core deployment integrations platform tools tests/
 
       - name: Typecheck
-        run: uv run python -m mypy cli config core deployment integrations platform services tools
+        run: uv run python -m mypy cli config core deployment integrations platform tools
 
   windows-test:
     if: contains(github.event.pull_request.labels.*.name, 'ci:windows')
@@ -99,7 +99,7 @@ jobs:
       - name: Run full tests
         run: >-
           uv run python -m pytest -n auto -v
-          --cov=cli --cov=config --cov=core --cov=deployment --cov=integrations --cov=platform --cov=services --cov=tools
+          --cov=cli --cov=config --cov=core --cov=deployment --cov=integrations --cov=platform --cov=tools
           --cov-report=term-missing
           --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation

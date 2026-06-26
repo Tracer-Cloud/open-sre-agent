@@ -307,7 +307,7 @@ def answer_cli_agent(
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run)."""
     try:
-        from services.llm_client import get_llm_for_reasoning
+        from core.runtime.llm.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_agent.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")

@@ -140,7 +140,7 @@ def test_report_run_error_supports_warning_severity(
             err,
             tool_name="describe_eks_cluster",
             source="eks",
-            component="vendors.eks",
+            component="tools.eks_tools",
             severity="warning",
         )
 
@@ -162,7 +162,7 @@ def test_report_run_error_uses_provided_logger(
         err,
         tool_name="list_eks_pods",
         source="eks",
-        component="vendors.eks",
+        component="tools.eks_tools",
         logger=custom_logger,
     )
 
@@ -289,7 +289,7 @@ def _cloudwatch_batch_case() -> ToolFailureCase:
 
 def _google_docs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.google_docs as mod
+        import tools.google_docs_tools as mod
 
         mp.setattr(
             mod,
@@ -298,7 +298,7 @@ def _google_docs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        import vendors.google_docs as mod
+        import tools.google_docs_tools as mod
 
         return mod.create_google_docs_incident_report(
             title="t",
@@ -320,12 +320,12 @@ def _google_docs_case() -> ToolFailureCase:
 
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.list_eks_clusters(role_arn="arn:aws:iam::123:role/x")
 
@@ -334,12 +334,12 @@ def _eks_list_clusters_case() -> ToolFailureCase:
 
 def _eks_describe_cluster_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.describe_eks_cluster(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
@@ -348,12 +348,12 @@ def _eks_describe_cluster_case() -> ToolFailureCase:
 
 def _eks_nodegroup_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.get_eks_nodegroup_health(
             cluster_name="c",
@@ -365,12 +365,12 @@ def _eks_nodegroup_case() -> ToolFailureCase:
 
 def _eks_addon_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.describe_eks_addon(
             cluster_name="c",
@@ -383,12 +383,12 @@ def _eks_addon_case() -> ToolFailureCase:
 
 def _eks_events_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.get_eks_events(
             cluster_name="c",
@@ -401,12 +401,12 @@ def _eks_events_case() -> ToolFailureCase:
 
 def _eks_node_health_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.get_eks_node_health(
             cluster_name="c",
@@ -418,12 +418,12 @@ def _eks_node_health_case() -> ToolFailureCase:
 
 def _eks_list_namespaces_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.list_eks_namespaces(
             cluster_name="c",
@@ -435,12 +435,12 @@ def _eks_list_namespaces_case() -> ToolFailureCase:
 
 def _eks_list_deployments_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.list_eks_deployments(
             cluster_name="c",
@@ -453,12 +453,12 @@ def _eks_list_deployments_case() -> ToolFailureCase:
 
 def _eks_list_pods_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.list_eks_pods(
             cluster_name="c",
@@ -471,12 +471,12 @@ def _eks_list_pods_case() -> ToolFailureCase:
 
 def _eks_pod_logs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        import vendors.eks as mod
+        import tools.eks_tools as mod
 
         return mod.get_eks_pod_logs(
             cluster_name="c",
@@ -811,7 +811,7 @@ def test_eks_client_error_path_uses_warning_severity(
     """
     from botocore.exceptions import ClientError
 
-    import vendors.eks as mod
+    import tools.eks_tools as mod
 
     client_error = ClientError(
         error_response={
@@ -861,7 +861,7 @@ def test_eks_nodegroup_health_tags_failing_nodegroup_during_iteration(
     failure on the second nodegroup should reach Sentry tagged with
     ``ng-broken``, not ``None`` or the first nodegroup.
     """
-    import vendors.eks as mod
+    import tools.eks_tools as mod
 
     def _describe(_cluster: str, ng: str) -> dict[str, Any]:
         if ng == "ng-broken":
@@ -1161,8 +1161,8 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from tools.registry import get_registered_tool_map
 
-    # Limit the audit to PRODUCTION tools (those defined in ``tools.*`` or
-    # ``vendors.*``). External packages registered via
+    # Limit the audit to PRODUCTION tools (those defined in ``tools.*``).
+    # External packages registered via
     # ``register_external_tool_package`` (e.g. bench-only tools that live
     # under ``tests/benchmarks/``) have their own classification expectations
     # and aren't part of this production-telemetry contract. Filtering by
@@ -1170,7 +1170,7 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
-        if tool.origin_module.startswith("tools.") or tool.origin_module.startswith("vendors.")
+        if tool.origin_module.startswith("tools.")
     }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 

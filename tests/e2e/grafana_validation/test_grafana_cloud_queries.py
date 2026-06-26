@@ -1,8 +1,8 @@
 import pytest
 from _pytest.outcomes import Skipped
 
+from integrations.grafana.client import get_grafana_client
 from tests.e2e.grafana_validation.env_requirements import require_grafana_query_env
-from vendors.grafana.client import get_grafana_client
 
 
 @pytest.fixture(scope="session")

@@ -123,7 +123,7 @@ def test_production_agent_filter_tools_is_identity() -> None:
     investigations continue to see every available tool. Regressing this
     silently disables tools across the entire product."""
     tools = [
-        _make_registered_tool("EKSListClusters", "vendors.eks"),
+        _make_registered_tool("EKSListClusters", "tools.eks_tools"),
         _make_registered_tool("HermesLogs", "tools.hermes_logs_tool"),
     ]
     assert ConnectedInvestigationAgent()._filter_tools(tools) == tools
@@ -135,7 +135,7 @@ def test_bench_agent_filter_keeps_only_bench_package_tools() -> None:
     is by origin_module prefix so a new bench tool added under
     ``tests/benchmarks/cloudopsbench/tools/`` is picked up automatically."""
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "vendors.eks")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.eks_tools")
     prod_hermes = _make_registered_tool("HermesLogs", "tools.hermes_logs_tool")
     filtered = BenchInvestigationAgent()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool]
@@ -147,7 +147,7 @@ def test_bench_agent_filter_drops_everything_when_no_bench_tools_registered() ->
     should return an empty list rather than fall back to production tools.
     The ``run`` loop already logs a warning when no tools are available."""
     only_prod = [
-        _make_registered_tool("EKSListClusters", "vendors.eks"),
+        _make_registered_tool("EKSListClusters", "tools.eks_tools"),
         _make_registered_tool("HermesLogs", "tools.hermes_logs_tool"),
     ]
     assert BenchInvestigationAgent()._filter_tools(only_prod) == []
@@ -193,7 +193,7 @@ def test_baseline_agent_uses_same_bench_package_tool_filter_as_bench_agent() -> 
     from tests.benchmarks.cloudopsbench.bench_agent import BaselineLLMAloneAgent
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "vendors.eks")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.eks_tools")
     inputs = [bench_tool, prod_eks]
     assert BenchInvestigationAgent()._filter_tools(inputs) == BaselineLLMAloneAgent()._filter_tools(
         inputs
@@ -254,7 +254,7 @@ def test_pure_baseline_agent_uses_same_bench_package_tool_filter_as_other_arms()
     )
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "vendors.eks")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.eks_tools")
     inputs = [bench_tool, prod_eks]
     assert (
         BenchInvestigationAgent()._filter_tools(inputs)
@@ -271,11 +271,11 @@ def test_bench_agent_allowed_prefixes_is_class_attribute_for_override() -> None:
     class _MixedBench(BenchInvestigationAgent):
         ALLOWED_TOOL_MODULE_PREFIXES = (
             "tests.benchmarks.cloudopsbench.tools.",
-            "vendors.eks",  # add a single production tool
+            "tools.eks_tools",  # add a single production tool
         )
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
-    prod_eks = _make_registered_tool("EKSListClusters", "vendors.eks")
+    prod_eks = _make_registered_tool("EKSListClusters", "tools.eks_tools")
     prod_hermes = _make_registered_tool("HermesLogs", "tools.hermes_logs_tool")
     filtered = _MixedBench()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool, prod_eks]

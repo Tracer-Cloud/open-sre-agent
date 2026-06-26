@@ -248,7 +248,7 @@ def gather_tool_evidence(
     try:
         from core.orchestration.node.investigate.tools import get_available_tools
         from core.runtime import run_tool_calling_loop
-        from services.agent_llm_client import get_agent_llm
+        from core.runtime.llm.agent_llm_client import get_agent_llm
 
         resolved = _resolve_gather_integrations(session, message)
         tools = get_available_tools(resolved)

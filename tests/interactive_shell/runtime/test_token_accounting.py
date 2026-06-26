@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from rich.console import Console
 
+from core.runtime.llm.llm_client import LLMResponse
 from interactive_shell.chat.cli_agent import answer_cli_agent
 from interactive_shell.runtime.session import ReplSession
 from interactive_shell.runtime.token_accounting import (
@@ -19,7 +20,6 @@ from interactive_shell.runtime.token_accounting import (
     record_llm_turn,
 )
 from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from services.llm_client import LLMResponse
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -110,7 +110,7 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from services.llm_client import _coerce_usage_tokens
+    from core.runtime.llm.llm_client import _coerce_usage_tokens
 
     assert _coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
@@ -141,7 +141,7 @@ _PLANNER_LLM_CLIENT = "interactive_shell.harness.orchestration.llm_action_planne
 
 def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("services.llm_client.get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("core.runtime.llm.llm_client.get_llm_for_reasoning", lambda: client)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_cli_agent("hello", session, console)
@@ -169,7 +169,7 @@ def test_planner_call_llm_records_provider_token_usage() -> None:
             )
 
     with (
-        patch("services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
+        patch("core.runtime.llm.llm_client.get_llm_for_classification", return_value=_FakeClient()),
         patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
     ):
         result = _call_llm("check cpu", session)
@@ -200,7 +200,7 @@ def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> No
             return LLMResponse(content='{"tool_calls": []}')
 
     with (
-        patch("services.llm_client.get_llm_for_classification", return_value=_FakeClient()),
+        patch("core.runtime.llm.llm_client.get_llm_for_classification", return_value=_FakeClient()),
         patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
     ):
         _call_llm("check cpu", session)

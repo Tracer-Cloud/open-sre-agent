@@ -8,6 +8,7 @@ import pytest
 
 from integrations import port as integrations_port
 from integrations.port import fetch_remote_integrations, set_remote_integrations_fetcher
+from integrations.tracer.integrations_adapter import fetch_tracer_remote_integrations
 from interactive_shell.ui.output import boundary as output_boundary
 from platform.observability import NoopProgressTracker
 from platform.observability import debug as obs_debug
@@ -22,7 +23,6 @@ from platform.observability.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
 )
-from services.tracer_client.integrations_adapter import fetch_tracer_remote_integrations
 
 
 def _reset_all_ports() -> None:

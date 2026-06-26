@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-import vendors.jenkins as JenkinsTool
+import tools.jenkins_tools as JenkinsTool
 
 
 class _FixtureJenkinsClient:

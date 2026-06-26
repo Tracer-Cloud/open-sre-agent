@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
@@ -106,6 +107,13 @@ class TestRegistryCatalogSync:
     def test_list_verifiers_matches_supported_services(self) -> None:
         """Every CLI/catalog service has a registered verifier."""
         assert set(list_verifiers()) == set(SUPPORTED_VERIFY_SERVICES)
+
+    @pytest.mark.parametrize("service", ("aws", "datadog", "slack"))
+    def test_loader_discovers_integration_local_verifier_modules(self, service: str) -> None:
+        """Verifier discovery loads ``integrations.<name>.verifier`` modules."""
+        verifier = get_verifier(service)
+        assert verifier is not None
+        assert f"integrations.{service}.verifier" in sys.modules
 
 
 class TestBuildProbeVerifier:
@@ -286,7 +294,7 @@ class TestAlertmanagerRegistration:
     def test_alertmanager_is_registered_via_canonical_name(self) -> None:
         """Import the vendor verifier module and check it's reachable
         through both the registry and the module-level export."""
-        from vendors.alertmanager.verifier import verify_alertmanager
+        from integrations.alertmanager.verifier import verify_alertmanager
 
         assert get_verifier("alertmanager") is verify_alertmanager
 
@@ -304,8 +312,7 @@ class TestSupabasePreservedArgSwap:
     def test_first_arg_lands_in_service_field_and_source_is_supabase(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from integrations import verifiers as _verifiers_pkg
-        from integrations.verifiers import supabase as _supabase_verifier
+        from integrations.supabase import verifier as _supabase_verifier
 
         # Bypass the real config validation chain — we're testing the
         # verifier's arg routing, not Supabase config parsing.
@@ -331,6 +338,3 @@ class TestSupabasePreservedArgSwap:
         assert out["service"] == "local store"
         assert out["source"] == "supabase"
         assert out["status"] == "passed"
-        # Touch the package import to keep ruff from flagging it unused
-        # (the import asserts the package is importable end-to-end).
-        assert _verifiers_pkg is not None

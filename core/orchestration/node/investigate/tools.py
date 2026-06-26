@@ -9,8 +9,8 @@ from core.domain.alerts.alert_source import (
     resolve_alert_source,
 )
 from core.runtime import public_tool_input
+from core.runtime.llm.agent_llm_client import ToolCall
 from platform.observability.tool_trace import redact_sensitive
-from services.agent_llm_client import ToolCall
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 from tools.utils.integration_sources import availability_view
@@ -91,8 +91,8 @@ def build_seed_calls(
     if not seed_tools:
         return []
 
-    from services.agent_llm_client import BedrockConverseAgentClient
-    from services.bedrock_converse import new_tool_use_id
+    from core.runtime.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.runtime.llm.bedrock_converse import new_tool_use_id
 
     use_converse_ids = isinstance(llm, BedrockConverseAgentClient)
     calls: list[ToolCall] = []

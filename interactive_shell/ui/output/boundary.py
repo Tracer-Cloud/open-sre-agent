@@ -36,7 +36,7 @@ def install_product_adapters() -> None:
         set_investigation_header_renderer,
     )
     from platform.observability.progress import set_progress_tracker_factory
-    from services.tracer_client.integrations_adapter import (
+    from integrations.tracer.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )
 

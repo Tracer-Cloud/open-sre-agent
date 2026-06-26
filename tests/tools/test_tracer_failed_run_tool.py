@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from services.tracer_client import PipelineRunSummary
+from integrations.tracer import PipelineRunSummary
 from tests.tools.conftest import BaseToolContract
 from tools.tracer_failed_run_tool import fetch_failed_run
 

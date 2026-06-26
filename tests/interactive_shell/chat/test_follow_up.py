@@ -96,7 +96,7 @@ class TestAnswerFollowUpMarkupSafety:
 
     def _run_with_response(self, monkeypatch: object, response_text: str) -> str:
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             lambda: _StreamingClient(response_text),
         )
 
@@ -129,7 +129,7 @@ class TestAnswerFollowUpMarkupSafety:
             raise RuntimeError("config error: missing [api_key] in [datadog] section")
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             _boom,
         )
         monkeypatch.setattr(  # type: ignore[attr-defined]
@@ -166,7 +166,7 @@ class TestAnswerFollowUpGroundingContract:
                 yield "Success"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             lambda: _SpyClient(),
         )
 
@@ -213,7 +213,7 @@ class TestFollowUpMultiTurn:
     def test_first_follow_up_records_to_follow_up_messages(self, monkeypatch: object) -> None:
         captured: list[str] = []
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             lambda: self._make_spy_client(captured, "It was a cache miss."),
         )
         session = self._session_with_state()
@@ -240,7 +240,7 @@ class TestFollowUpMultiTurn:
                 yield f"Answer {call_count}"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             _SequentialClient,
         )
         session = self._session_with_state()
@@ -260,7 +260,7 @@ class TestFollowUpMultiTurn:
 
     def test_empty_response_not_recorded(self, monkeypatch: object) -> None:
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             lambda: self._make_spy_client([], ""),
         )
         session = self._session_with_state()
@@ -296,7 +296,7 @@ class TestFollowUpMultiTurn:
                 yield "Follow-up answer"
 
         monkeypatch.setattr(  # type: ignore[attr-defined]
-            "services.llm_client.get_llm_for_reasoning",
+            "core.runtime.llm.llm_client.get_llm_for_reasoning",
             _SpyClient,
         )
         session = self._session_with_state()

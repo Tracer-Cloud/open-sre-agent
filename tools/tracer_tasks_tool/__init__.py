@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.tracer_client import TracerTaskResult, get_tracer_client
+from integrations.tracer import TracerTaskResult, get_tracer_client
 from tools.tool_decorator import tool
 
 

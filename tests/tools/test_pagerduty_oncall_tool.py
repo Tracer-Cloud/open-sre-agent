@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from vendors.pagerduty import PagerDutyOnCallTool
+from tools.pagerduty_tools import PagerDutyOnCallTool
 
 
 def _tool() -> PagerDutyOnCallTool:
@@ -32,7 +32,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["escalation_policy_ids"] == []
 
 
-@patch("vendors.pagerduty.make_pagerduty_client")
+@patch("tools.pagerduty_tools.make_pagerduty_client")
 def test_run_returns_oncalls(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_oncalls.return_value = {
@@ -57,7 +57,7 @@ def test_run_returns_oncalls(mock_make: MagicMock) -> None:
     assert result["oncalls"][0]["user"]["summary"] == "Alice"
 
 
-@patch("vendors.pagerduty.make_pagerduty_client")
+@patch("tools.pagerduty_tools.make_pagerduty_client")
 def test_run_empty_oncalls(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_oncalls.return_value = {"success": True, "oncalls": [], "total": 0}
@@ -69,7 +69,7 @@ def test_run_empty_oncalls(mock_make: MagicMock) -> None:
     assert result["total"] == 0
 
 
-@patch("vendors.pagerduty.make_pagerduty_client")
+@patch("tools.pagerduty_tools.make_pagerduty_client")
 def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_oncalls.return_value = {"success": False, "error": "HTTP 403: Forbidden"}
@@ -80,14 +80,14 @@ def test_run_returns_unavailable_on_api_failure(mock_make: MagicMock) -> None:
     assert "403" in result["error"]
 
 
-@patch("vendors.pagerduty.make_pagerduty_client")
+@patch("tools.pagerduty_tools.make_pagerduty_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="")
     assert result["available"] is False
 
 
-@patch("vendors.pagerduty.make_pagerduty_client")
+@patch("tools.pagerduty_tools.make_pagerduty_client")
 def test_run_passes_escalation_policy_ids(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_oncalls.return_value = {"success": True, "oncalls": [], "total": 0}

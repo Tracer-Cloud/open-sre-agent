@@ -16,6 +16,7 @@ import sys
 
 import requests
 
+from integrations.grafana.client import get_grafana_client
 from tests.shared.stack_config import get_prefect_config
 from tests.utils.s3_upload_validate import (
     INVALID_PAYLOAD,
@@ -23,7 +24,6 @@ from tests.utils.s3_upload_validate import (
     upload_test_data,
     verify_output,
 )
-from vendors.grafana.client import get_grafana_client
 
 
 def _prefect_base_url(api_url: str) -> str:

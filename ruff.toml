@@ -59,9 +59,9 @@ ignore = [
 # __init__ exits — before the thread reads anything. The fd is closed in close().
 "tools/fleet_monitoring/tail.py" = ["SIM115"]
 
-# vendors/<vendor>/__init__.py files are concatenations of multiple tool modules.
+# tools/<vendor>_tools/__init__.py files are concatenations of multiple tool modules.
 # Imports appear in each section rather than all at the top (E402).
-"vendors/**/__init__.py" = ["E402", "F811"]
+"tools/*_tools/__init__.py" = ["E402", "F811"]
 
 [lint.isort]
 known-first-party = [
@@ -72,8 +72,6 @@ known-first-party = [
     "integrations",
     "interactive_shell",
     "platform",
-    "services",
     "tests",
     "tools",
-    "vendors",
 ]

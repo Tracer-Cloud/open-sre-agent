@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from integrations.catalog import classify_integrations, resolve_effective_integrations
+from integrations.helm.verifier import verify_helm as _verify_helm
 from integrations.models import HelmIntegrationConfig
 from integrations.verify import verify_integrations
-from vendors.helm.verifier import verify_helm as _verify_helm
 
 
 @pytest.fixture(autouse=True)
@@ -98,8 +98,8 @@ def test_helm_integration_config_validator_strips_whitespace() -> None:
 
 
 def test_verify_helm_passes_with_working_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.helm.client import HelmClient
     from integrations.probes import ProbeResult
-    from vendors.helm.client import HelmClient
 
     monkeypatch.setattr(
         HelmClient,
@@ -117,8 +117,8 @@ def test_verify_helm_passes_with_working_cli(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_verify_integrations_dispatches_to_helm(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integrations.helm.client import HelmClient
     from integrations.probes import ProbeResult
-    from vendors.helm.client import HelmClient
 
     monkeypatch.setattr(
         HelmClient,

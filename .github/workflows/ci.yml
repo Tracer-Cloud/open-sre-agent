@@ -10,8 +10,6 @@ on:
       - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
-      - "services/**"
-      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -33,8 +31,6 @@ on:
       - "infra/deployment/**"
       - "integrations/**"
       - "platform/**"
-      - "services/**"
-      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -52,7 +48,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform services tools vendors"
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform tools"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -109,10 +105,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            shard: tools-services
+            shard: tools-runtime
             pytest_paths: >-
               tests/tools
-              tests/services
+              tests/core/runtime/llm
+              tests/platform/observability
               tests/utils
               tests/masking
               tests/core/domain/types
@@ -242,7 +239,6 @@ jobs:
           --cov=infra.deployment
           --cov=integrations
           --cov=platform
-          --cov=services
           --cov=tools
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
@@ -373,8 +369,6 @@ jobs:
               - "infra/deployment/**"
               - "integrations/**"
               - "core/orchestration/**"
-              - "services/**"
-              - "vendors/**"
               - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"

@@ -3,7 +3,7 @@ title: "LLM Providers"
 description: "Supported LLM APIs and CLIs, environment variables, and how to switch between them."
 ---
 
-OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with per-provider API key and model overrides. Defaults are tracked in [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) and routing lives in [`services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/services/llm_client.py).
+OpenSRE is provider-agnostic: bring your own model. Selection is controlled by the `LLM_PROVIDER` environment variable, with per-provider API key and model overrides. Defaults are tracked in [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) and routing lives in [`core/runtime/llm/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/runtime/llm/llm_client.py).
 
 ## Quick reference
 
@@ -354,11 +354,11 @@ To remove a fallback, either set the missing key for your configured provider or
 
 ## Switching providers at runtime
 
-OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `services.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
+OpenSRE caches LLM clients on first use. To switch providers within a single process (tests, benchmarks), call `reset_llm_singletons()` from `core.runtime.llm.llm_client` after updating the env vars; otherwise a fresh process picks up the new `LLM_PROVIDER` automatically.
 
 ## Where this lives in the code
 
 - Provider literals and defaults: [`config/config.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/config.py) (`LLMProvider`, `LLMSettings`).
-- Runtime routing: [`services/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/services/llm_client.py) (`_create_llm_client`).
-- API-backed provider guide: [`services/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/services/AGENTS.md).
+- Runtime routing: [`core/runtime/llm/llm_client.py`](https://github.com/Tracer-Cloud/opensre/blob/main/core/runtime/llm/llm_client.py) (`_create_llm_client`).
+- API-backed provider guide: [`core/runtime/llm/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/core/runtime/llm/AGENTS.md).
 - CLI-backed provider guide: [`integrations/llm_cli/AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md).

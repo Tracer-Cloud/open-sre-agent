@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from services.llm_retry import LLMCreditExhaustedError
+from core.runtime.llm.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     BenchmarkAdapter,
     BenchmarkCase,
@@ -248,7 +248,7 @@ class BenchmarkRunner:
         # Register the cost-accounting hook so every successful LLM call
         # inside opensre's agent feeds CostTracker. Cleared in finally so
         # the hook doesn't leak into other test code that imports llm_client.
-        from services.llm_client import set_usage_hook
+        from core.runtime.llm.llm_client import set_usage_hook
 
         set_usage_hook(self.cost.add)
 
@@ -462,7 +462,7 @@ class BenchmarkRunner:
         latency_ms = int((time.monotonic() - t0) * 1000)
         ended = datetime.now(UTC)
 
-        # Cost tracking happens out-of-band: services/llm_client._emit_usage
+        # Cost tracking happens out-of-band: core/runtime/llm/llm_client._emit_usage
         # fires self.cost.add for every successful LLM call the agent makes,
         # so totals in report.json reflect real spend. Per-cell tokens/cost
         # below stay at 0 (delta capture is a follow-up — would need a

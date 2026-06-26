@@ -60,8 +60,8 @@ from typing import Any, Literal
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
-from services.llm_client import _emit_usage  # noqa: PLC2701 — bench needs cost tracking
-from services.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from core.runtime.llm.llm_client import _emit_usage  # noqa: PLC2701 — bench needs cost tracking
+from core.runtime.llm.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _build_system_prompt,
     _build_user_prompt,

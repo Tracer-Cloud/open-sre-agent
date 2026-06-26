@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from integrations.config_models import SMTPIntegrationConfig
-from integrations.verifiers.smtp import verify_smtp as _verify_smtp
+from integrations.smtp.verifier import verify_smtp as _verify_smtp
 
 
 def test_config_accepts_starttls_defaults() -> None:

@@ -26,7 +26,7 @@ def test_looks_like_timeout_without_anthropic_sdk() -> None:
 
 def test_classify_returns_none_for_credit_exhausted_so_it_propagates() -> None:
     """LLMCreditExhaustedError must propagate instead of becoming a degraded result."""
-    from services.llm_retry import LLMCreditExhaustedError
+    from core.runtime.llm.llm_retry import LLMCreditExhaustedError
 
     err = LLMCreditExhaustedError("OpenAI credit exhausted: insufficient_quota")
     assert classify_llm_invoke_failure(err) is None

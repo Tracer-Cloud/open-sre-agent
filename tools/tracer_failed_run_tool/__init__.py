@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from config.config import get_tracer_base_url
-from services.tracer_client import (
+from integrations.tracer import (
     PipelineRunSummary,
     get_tracer_web_client,
 )

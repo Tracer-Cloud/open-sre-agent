@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from config.llm_reasoning_effort import get_active_reasoning_effort
+from core.runtime.llm.llm_client import LLMResponse
 from integrations.llm_cli.base import CLIProbe, LLMCLIAdapter
 from integrations.llm_cli.constants import (
     EX_TEMPFAIL as _EX_TEMPFAIL,
@@ -33,7 +34,6 @@ from integrations.llm_cli.errors import (
 )
 from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
 from integrations.llm_cli.text import flatten_messages_to_prompt
-from services.llm_client import LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class CLIBackedLLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> Any:
         """JSON-schema prompt + parse; same contract as API `StructuredOutputClient`."""
-        from services.llm_client import StructuredOutputClient
+        from core.runtime.llm.llm_client import StructuredOutputClient
 
         return StructuredOutputClient(self, model)
 

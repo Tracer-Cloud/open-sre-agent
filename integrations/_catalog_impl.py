@@ -108,14 +108,14 @@ from integrations.telegram import classify as _classify_telegram
 from integrations.tempo import classify as _classify_tempo
 from integrations.tempo import tempo_config_from_env
 from integrations.temporal import classify as _classify_temporal
+from integrations.temporal.client import TemporalConfig
 from integrations.twilio import classify as _classify_twilio
 from integrations.vercel import classify as _classify_vercel
+from integrations.vercel.client import VercelConfig
 from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
 from platform.common.coercion import safe_int
 from platform.observability.errors import report_exception
-from vendors.temporal.client import TemporalConfig
-from vendors.vercel.client import VercelConfig
 
 logger = logging.getLogger(__name__)
 

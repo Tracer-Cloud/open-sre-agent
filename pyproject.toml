@@ -144,10 +144,8 @@ include = [
   "integrations*",
   "interactive_shell*",
   "platform*",
-  "services*",
   "tests*",
   "tools*",
-  "vendors*",
 ]
 
 [tool.setuptools.package-data]
@@ -166,7 +164,6 @@ paths = [
   "integrations",
   "interactive_shell",
   "platform",
-  "services",
   "tools",
 ]
 exclude = [

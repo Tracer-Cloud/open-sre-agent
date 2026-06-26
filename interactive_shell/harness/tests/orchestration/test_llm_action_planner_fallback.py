@@ -170,7 +170,7 @@ def _patch_planner_llm(monkeypatch, error: Exception) -> None:
         lambda _session: [],
     )
     monkeypatch.setattr(
-        "services.llm_client.get_llm_for_classification",
+        "core.runtime.llm.llm_client.get_llm_for_classification",
         lambda: _RaisingClient(error),
     )
 

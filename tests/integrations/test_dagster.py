@@ -28,7 +28,7 @@ from integrations.dagster import (
     list_sensor_ticks,
     validate_dagster_config,
 )
-from vendors.dagster.client import DagsterClient
+from integrations.dagster.client import DagsterClient
 
 # --- helpers ---------------------------------------------------------------
 

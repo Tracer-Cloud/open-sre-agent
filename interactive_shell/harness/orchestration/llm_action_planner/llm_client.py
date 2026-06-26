@@ -39,7 +39,7 @@ def _tool_specs_for_provider(session: Any) -> list[dict[str, Any]]:
 
 def _call_llm(sanitised_text: str, session: Any) -> str | None:
     try:
-        from services.llm_client import get_llm_for_classification
+        from core.runtime.llm.llm_client import get_llm_for_classification
     except Exception as exc:
         logger.warning(
             "llm_action_planner: LLM client import failed (%s): %s",

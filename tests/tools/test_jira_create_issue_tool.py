@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from vendors.jira import JiraCreateIssueTool
+from tools.jira_tools import JiraCreateIssueTool
 
 
 def _tool() -> JiraCreateIssueTool:
@@ -18,7 +18,7 @@ def test_is_available_false_without_connection_verified() -> None:
     assert _tool().is_available({}) is False
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_creates_issue(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.create_issue.return_value = {
@@ -50,7 +50,7 @@ def test_run_creates_issue(mock_make: MagicMock) -> None:
     )
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_returns_error_on_api_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.create_issue.return_value = {"success": False, "error": "HTTP 403"}
@@ -67,7 +67,7 @@ def test_run_returns_error_on_api_failure(mock_make: MagicMock) -> None:
     assert "403" in result["error"]
 
 
-@patch("vendors.jira.make_jira_client")
+@patch("tools.jira_tools.make_jira_client")
 def test_run_returns_unavailable_without_credentials(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(base_url="", email="", api_token="", summary="x", description="y")

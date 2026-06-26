@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.s3_client import (
+from integrations.aws.s3_client import (
     check_s3_marker_presence,
     compare_versions,
     head_object,

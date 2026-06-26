@@ -23,7 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.llm_retry import LLMCreditExhaustedError
+from core.runtime.llm.llm_retry import LLMCreditExhaustedError
 from tests.benchmarks._framework.adapters import (
     AlertPayload,
     BenchmarkAdapter,

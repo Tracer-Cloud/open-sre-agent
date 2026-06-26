@@ -128,7 +128,7 @@ def _require_default_llm_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
             "or unset LLM_PROVIDER to opt into default resolution."
         )
 
-    from services.llm_client import reset_llm_singletons
+    from core.runtime.llm.llm_client import reset_llm_singletons
 
     monkeypatch.setenv("LLM_PROVIDER", resolution.resolved_provider)
     reset_llm_singletons()

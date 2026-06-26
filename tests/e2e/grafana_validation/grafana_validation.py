@@ -44,7 +44,7 @@ def validate_grafana_telemetry(
         - missing_spans: list (if expected_spans provided)
         - passed: bool (overall validation result)
     """
-    from vendors.grafana import query_grafana_logs, query_grafana_traces
+    from tools.grafana_tools import query_grafana_logs, query_grafana_traces
 
     if wait_seconds > 0:
         print(f"Waiting {wait_seconds}s for telemetry to propagate to Grafana Cloud...")

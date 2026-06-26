@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 from tools.tool_decorator import tool
-from vendors.elasticsearch.client import ElasticsearchClient, ElasticsearchConfig
 
 _DEFAULT_MAX_RESULTS = 100
 _MAX_HARD_LIMIT = 200

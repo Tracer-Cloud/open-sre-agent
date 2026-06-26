@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from typing import Any, cast
 
 from core.runtime import ToolLoopResult, run_tool_calling_loop
-from services.agent_llm_client import AgentLLMResponse, ToolCall
+from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from tools.registered_tool import RegisteredTool
 
 

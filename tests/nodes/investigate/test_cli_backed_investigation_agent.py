@@ -118,7 +118,7 @@ class TestGetInvestigationAgentClass:
 
     def test_returns_cli_agent_class_for_cli_backed_llm(self, monkeypatch: Any) -> None:
         from core.orchestration.node.investigate.agent import get_investigation_agent_class
-        from services.agent_llm_client import CLIBackedAgentClient
+        from core.runtime.llm.agent_llm_client import CLIBackedAgentClient
 
         monkeypatch.setattr(
             "core.orchestration.node.investigate.agent.get_agent_llm",
@@ -129,7 +129,7 @@ class TestGetInvestigationAgentClass:
     def test_returns_base_agent_class_for_non_cli_llm(self, monkeypatch: Any) -> None:
         from core.orchestration.node.investigate import ConnectedInvestigationAgent
         from core.orchestration.node.investigate.agent import get_investigation_agent_class
-        from services.agent_llm_client import AnthropicAgentClient
+        from core.runtime.llm.agent_llm_client import AnthropicAgentClient
 
         monkeypatch.setattr(
             "core.orchestration.node.investigate.agent.get_agent_llm",

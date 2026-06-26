@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from vendors.grafana import query_grafana_traces
+from tools.grafana_tools import query_grafana_traces
 
 
 class TestGrafanaTracesToolContract(BaseToolContract):
@@ -44,7 +44,7 @@ def test_extract_params_maps_fields() -> None:
 def test_run_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
+    with patch("tools.grafana_tools._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_traces(service_name="svc", grafana_endpoint="http://grafana")
     assert result["available"] is False
 
@@ -53,7 +53,7 @@ def test_run_no_tempo_datasource() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.tempo_datasource_uid = None
-    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
+    with patch("tools.grafana_tools._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_traces(service_name="svc", grafana_endpoint="http://grafana")
     assert result["available"] is False
     assert "Tempo" in result["error"]
@@ -71,7 +71,7 @@ def test_run_happy_path() -> None:
         ],
         "total_traces": 1,
     }
-    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
+    with patch("tools.grafana_tools._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_traces(service_name="svc", grafana_endpoint="http://grafana")
     assert result["available"] is True
     assert result["total_traces"] == 1
@@ -121,7 +121,7 @@ def test_run_filters_by_execution_run_id() -> None:
         ],
         "total_traces": 2,
     }
-    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
+    with patch("tools.grafana_tools._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_traces(
             service_name="svc",
             execution_run_id="run-42",

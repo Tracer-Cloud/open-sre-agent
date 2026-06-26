@@ -97,7 +97,7 @@ def answer_cli_help(
     input routing; this path records estimated token usage on the session.
     """
     try:
-        from services.llm_client import get_llm_for_reasoning
+        from core.runtime.llm.llm_client import get_llm_for_reasoning
     except Exception as exc:
         report_exception(exc, context="interactive_shell.cli_help.import")
         console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")

@@ -1,14 +1,12 @@
-"""Auto-discover and import every per-vendor verifier module so the
+"""Auto-discover and import every per-integration verifier module so the
 ``@register_verifier`` decorators fire at import time.
 
-Two locations are scanned:
+Verifier modules live next to the integration they verify:
+``integrations.<name>.verifier``.
 
-* ``integrations.verifiers.*`` — config-only integrations.
-* ``vendors.<vendor>.verifier`` — integrations with a dedicated
-  vendor SDK client package.
-
-Adding a new vendor is one new file in either location. No edits to a
-central import list are required — this loader walks both trees.
+Adding a new verifier is one new file in the owning integration package. No
+edits to a central import list are required — this loader walks the integration
+tree.
 
 Public surface: :func:`register_all_verifiers`. Callers invoke it once
 during startup (``integrations.verify`` and the test suite both do).
@@ -21,30 +19,24 @@ from __future__ import annotations
 import importlib
 import pkgutil
 
-import integrations.verifiers as _verifiers_pkg
-import vendors as _vendors_pkg
+import integrations as _integrations_pkg
 
 _VERIFIER_SUBMODULE = "verifier"
+_SKIP_INTEGRATION_PACKAGES = frozenset({"verification", "__pycache__"})
 
 
-def _load_integrations_verifiers() -> None:
-    """Import every ``integrations.verifiers.<service>`` module."""
-    for module_info in pkgutil.iter_modules(_verifiers_pkg.__path__):
-        importlib.import_module(f"{_verifiers_pkg.__name__}.{module_info.name}")
+def _load_integration_local_verifiers() -> None:
+    """Import every ``integrations.<name>.verifier`` module that exists.
 
-
-def _load_vendor_verifiers() -> None:
-    """Import every ``vendors.<vendor>.verifier`` module that exists.
-
-    Iterates the ``vendors`` package one level deep, only attempting
-    ``<vendor>.verifier`` when ``<vendor>`` is itself a package. A
-    ``ModuleNotFoundError`` for the ``verifier`` submodule is silently
-    skipped — many vendor packages have no verifier.
+    Iterates ``integrations`` one level deep and attempts a verifier import only
+    for package integrations. A ``ModuleNotFoundError`` for the verifier
+    submodule is skipped; import failures inside an existing verifier still
+    surface.
     """
-    for module_info in pkgutil.iter_modules(_vendors_pkg.__path__):
-        if not module_info.ispkg:
+    for module_info in pkgutil.iter_modules(_integrations_pkg.__path__):
+        if not module_info.ispkg or module_info.name in _SKIP_INTEGRATION_PACKAGES:
             continue
-        candidate = f"{_vendors_pkg.__name__}.{module_info.name}.{_VERIFIER_SUBMODULE}"
+        candidate = f"{_integrations_pkg.__name__}.{module_info.name}.{_VERIFIER_SUBMODULE}"
         try:
             importlib.import_module(candidate)
         except ModuleNotFoundError as err:
@@ -55,8 +47,7 @@ def _load_vendor_verifiers() -> None:
 
 
 def register_all_verifiers() -> None:
-    """Import every vendor verifier module so its ``@register_verifier``
+    """Import every integration verifier module so its ``@register_verifier``
     decorator fires. Idempotent.
     """
-    _load_integrations_verifiers()
-    _load_vendor_verifiers()
+    _load_integration_local_verifiers()

@@ -16,7 +16,7 @@ from rich.console import Console
 
 import core.orchestration.node.investigate.tools as investigate_tools
 import core.runtime as runtime_module
-import services.agent_llm_client as agent_llm_client
+import core.runtime.llm.agent_llm_client as agent_llm_client
 from interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
     _resolve_gather_integrations,

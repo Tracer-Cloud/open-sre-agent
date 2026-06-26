@@ -10,7 +10,7 @@ from infra.deployment.remote.vercel_poller import (
     VercelResolutionError,
 )
 from integrations import vercel_incidents
-from vendors.vercel.client import VercelConfig
+from integrations.vercel.client import VercelConfig
 
 
 class _Prompt:

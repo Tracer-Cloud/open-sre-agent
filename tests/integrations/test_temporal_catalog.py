@@ -12,8 +12,8 @@ from __future__ import annotations
 from core.orchestration.node.investigate.tools import availability_view
 from integrations.catalog import classify_integrations
 from integrations.temporal import classify
-from vendors.temporal import TemporalWorkflowsTool
-from vendors.temporal.client import TemporalConfig
+from integrations.temporal.client import TemporalConfig
+from tools.temporal_tools import TemporalWorkflowsTool
 
 
 class TestClassify:

@@ -123,7 +123,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -146,7 +146,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -176,7 +176,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -202,7 +202,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -230,7 +230,7 @@ class TestReplModelPersistence:
         persistence_paths: dict[str, Path],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(llm_client, "reset_llm_singletons", lambda: None)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")

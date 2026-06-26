@@ -66,7 +66,7 @@ def test_call_llm_prompt_includes_recent_conversation(monkeypatch: Any) -> None:
     monkeypatch.setattr(llm_client, "_tool_specs_for_provider", lambda _session: [])
     monkeypatch.setattr(llm_client, "record_invoke_response", lambda *_a, **_k: "ok")
     monkeypatch.setattr(
-        "services.llm_client.get_llm_for_classification",
+        "core.runtime.llm.llm_client.get_llm_for_classification",
         lambda: _FakeClient(),
     )
 
@@ -121,7 +121,7 @@ def test_call_llm_prompt_includes_connected_integrations(monkeypatch: Any) -> No
     monkeypatch.setattr(llm_client, "_tool_specs_for_provider", lambda _session: [])
     monkeypatch.setattr(llm_client, "record_invoke_response", lambda *_a, **_k: "ok")
     monkeypatch.setattr(
-        "services.llm_client.get_llm_for_classification",
+        "core.runtime.llm.llm_client.get_llm_for_classification",
         lambda: _FakeClient(),
     )
 

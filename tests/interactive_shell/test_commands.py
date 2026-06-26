@@ -809,7 +809,7 @@ class TestModelCommand:
     ) -> None:
         self._patch_llm(monkeypatch)
         import cli.wizard.env_sync as env_sync
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -1122,7 +1122,7 @@ class TestModelCommand:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
         import cli.wizard.env_sync as env_sync
-        from services import llm_client
+        from core.runtime.llm import llm_client
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
