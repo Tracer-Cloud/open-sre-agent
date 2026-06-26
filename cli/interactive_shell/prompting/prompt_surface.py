@@ -46,8 +46,13 @@ def _prompt_rule_ansi() -> str:
     )
 
 
+def _prompt_turn_number(session: ReplSession) -> int:
+    """1-based index for the turn about to be entered or just submitted."""
+    return len(session.history) + 1
+
+
 def _prompt_counter_text(session: ReplSession) -> str:
-    return f"[{len(session.history)}] " if session.history else ""
+    return f"[{_prompt_turn_number(session)}] "
 
 
 def _prompt_prefix_text(session: ReplSession) -> str:
@@ -436,6 +441,30 @@ _DEFAULT_PLACEHOLDER_ANSI = ANSI(
 )
 
 
+def resolve_idle_hint_ansi(session: ReplSession) -> str:
+    """Dim hint line above the prompt rule — shortcuts plus connected integrations."""
+    parts = ["/ for commands", "↑↓ history"]
+    if session.configured_integrations_known and session.configured_integrations:
+        from cli.interactive_shell.ui.banner_state import _SERVICE_DISPLAY_NAMES
+
+        _MAX_SHOWN = 4
+        names = [
+            _SERVICE_DISPLAY_NAMES.get(name, name.replace("_", " ").title())
+            for name in sorted(session.configured_integrations)
+        ]
+        shown = names[:_MAX_SHOWN]
+        overflow = len(names) - len(shown)
+        integration_segment = " · ".join(shown)
+        if overflow:
+            integration_segment += f" +{overflow}"
+        parts.append(integration_segment)
+    app = get_app_or_none()
+    if app is not None and app.current_buffer.text:
+        parts.append("esc to clear")
+    hint = " · ".join(parts)
+    return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
+
+
 def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
     parts: list[str] = []
@@ -571,6 +600,7 @@ __all__ = [
     "ShellCompleter",
     "completion_preview_hint_ansi",
     "render_submitted_prompt",
+    "resolve_idle_hint_ansi",
     "resolve_prompt_placeholder",
     "resolve_prompt_prefix_ansi",
     "wire_prompt_refresh",
