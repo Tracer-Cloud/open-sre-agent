@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import core.orchestration.node.publish_findings.upstream_correlation.node as correlation_node
 from core.domain.state import InvestigationState
-from core.orchestration.node.publish_findings.upstream_correlation import (
-    node as correlation_node,
-)
 from core.orchestration.node.publish_findings.upstream_correlation.registry import (
     build_upstream_evidence_provider,
 )

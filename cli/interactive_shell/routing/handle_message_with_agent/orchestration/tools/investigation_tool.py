@@ -48,7 +48,14 @@ def execute_investigation_action(args: dict[str, Any], ctx: ToolContext) -> bool
 
 TOOL_ENTRY = ToolEntry(
     name="investigation_start",
-    description="Start an investigation with the provided alert text.",
+    description=(
+        "Start an investigation with the provided alert text. Use whenever the user "
+        "explicitly instructs you to investigate, RCA, diagnose, analyze, or "
+        "root-cause a named problem — including 'investigate why X ...' — regardless "
+        "of CONNECTED INTEGRATIONS. Do NOT use for bare incident statements with no "
+        "investigate verb, generic 'Run an investigation.' with no subject, sample/"
+        "demo alerts, or plain data lookups."
+    ),
     input_schema=object_schema(
         properties={
             "alert_text": string_property(

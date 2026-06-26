@@ -49,6 +49,11 @@ _SERVICE_DISPLAY_NAMES: dict[str, str] = {
 }
 
 
+def integration_display_name(service: str) -> str:
+    """Human-readable label for an integration service slug."""
+    return _SERVICE_DISPLAY_NAMES.get(service, service.replace("_", " ").title())
+
+
 def _load_integration_health() -> list[tuple[str, str]]:
     """Return ``(display_name, status)`` for each configured integration.
 
@@ -62,7 +67,7 @@ def _load_integration_health() -> list[tuple[str, str]]:
         )
 
         return [
-            (_SERVICE_DISPLAY_NAMES.get(service, service.title()), status)
+            (integration_display_name(service), status)
             for service, status in configured_integration_health()
         ]
     except Exception:
@@ -135,6 +140,7 @@ def _build_ambient_right_column(session: object = None) -> Text:
 
 __all__ = [
     "_SERVICE_DISPLAY_NAMES",
+    "integration_display_name",
     "_build_ambient_right_column",
     "_is_alert_listener_active",
     "_load_integration_health",

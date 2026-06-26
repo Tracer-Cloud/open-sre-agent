@@ -126,6 +126,11 @@ def health_command(watch: bool, rate: int) -> None:
 
 
 @click.command(name="investigate")
+@click.argument(
+    "alert_file",
+    required=False,
+    type=click.Path(),
+)
 @click.option(
     "--input",
     "-i",
@@ -168,6 +173,7 @@ def health_command(watch: bool, rate: int) -> None:
     help="After final diagnosis, LLM-judge vs scoring_points rubric (rubric stripped from agent alert).",
 )
 def investigate_command(
+    alert_file: str | None,
     input_path: str | None,
     input_json: str | None,
     interactive: bool,
@@ -178,6 +184,13 @@ def investigate_command(
     evaluate: bool,
 ) -> None:
     """Run an RCA investigation against an alert payload."""
+    # Treat a bare positional path the same as ``-i <path>``. Lets users type
+    # ``opensre investigate alert.json`` instead of the more verbose
+    # ``opensre investigate -i alert.json``. If both are given, the explicit
+    # flag wins to keep the behaviour predictable.
+    if alert_file and not input_path:
+        input_path = alert_file
+
     if service:
         _run_service_investigation(
             service=service,

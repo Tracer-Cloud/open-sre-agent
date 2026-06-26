@@ -197,7 +197,7 @@ async def run_interactive(
         prefix = strip_cpr_sequences(
             _prompt_surface.resolve_prompt_prefix_ansi(
                 inline_spinner=spinner.inline_spinner_ansi(),
-                idle_hint=spinner.idle_hint_ansi(),
+                idle_hint=_prompt_surface.resolve_idle_hint_ansi(session),
             )
         )
         return ANSI(f"{prefix}\n{base}")

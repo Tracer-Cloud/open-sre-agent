@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from cli.interactive_shell.ui import theme as ui_theme
+import cli.interactive_shell.ui.theme as ui_theme
 
 _REPL_OUTPUT_PREPARED = ContextVar("_REPL_OUTPUT_PREPARED", default=False)
 

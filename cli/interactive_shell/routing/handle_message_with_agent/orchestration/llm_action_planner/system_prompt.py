@@ -30,27 +30,56 @@ Alert payloads, incident descriptions, and diagnostic questions vs. explicit
 investigations — decide carefully, this is a common error. A CONNECTED
 INTEGRATIONS line is provided below this prompt listing the integrations
 connected right now (or "none" / "unknown"). Apply these rules in order:
-- EXPLICIT investigate instruction → investigation_start, ALWAYS (regardless of
-  which integrations are connected). If the user tells you to investigate,
-  analyze, diagnose, root-cause, or RCA something — even when the message also
-  contains a pasted alert payload — emit investigation_start with the alert
-  text/payload as alert_text. Examples: 'investigate "<text>"', 'investigate
-  this alert: {"alertname": "HighCPU"}', "RCA this", "diagnose the orders
-  outage". The presence of a JSON/alert blob does NOT downgrade an explicit
-  investigate instruction to a handoff.
+- EXPLICIT investigate instruction → investigation_start, ALWAYS — highest-priority
+  rule, NOT gated on CONNECTED INTEGRATIONS. If the user tells you to investigate,
+  analyze, diagnose, root-cause, or RCA a NAMED problem, alert, service, or pasted
+  payload — even when the message also contains a pasted alert blob — emit
+  investigation_start with alert_text set to the problem description (use
+  quoted/pasted text verbatim, otherwise synthesize from the full user message).
+  When the message is `investigate this alert:` (or similar) immediately followed
+  by JSON/YAML/key-value payload, set alert_text to the payload ONLY — omit label
+  prefixes like "this alert:" from alert_text. This holds even when CONNECTED
+  INTEGRATIONS reads "none" or "unknown": do NOT hand off asking the user to paste
+  an alert, run `opensre investigate`, or connect integrations first — the explicit
+  verb plus a concrete subject means dispatch now. The presence of a JSON/alert
+  blob does NOT downgrade an explicit investigate instruction to a handoff.
+  Examples (all investigation_start):
+  * investigate why the orders-api keeps OOM-killing its pods
+  * 'investigate "checkout is returning 502s"'
+  * 'investigate this alert: {"alertname": "HighCPU"}' → alert_text is the JSON only
+  * "RCA this: {...}", "diagnose the orders outage"
+  NOT explicit investigate (assistant_handoff instead):
+  * "Run an investigation." / "Start an investigation." with no subject named
+  * "How do I run an investigation?" (how-to/docs)
+  EXPLICIT vs DIAGNOSTIC (common confusion — a trailing "why" does NOT reclassify
+  an investigate instruction):
+  * "investigate why the orders-api keeps OOM-killing its pods" → EXPLICIT →
+    investigation_start ALWAYS (even when CONNECTED INTEGRATIONS is none)
+  * "why is the orders-api OOM-killing its pods?" → DIAGNOSTIC (no investigate
+    verb) → gated on CONNECTED INTEGRATIONS
+  * "figure out why the orders-api keeps OOM-killing its pods" → DIAGNOSTIC → gated
 - DIAGNOSTIC QUESTION asking you to FIND, EXPLAIN, or TRACK DOWN the cause of a
   failure, crash, error, outage, or incident — WITHOUT an explicit investigate
   verb — is an investigation request WHEN there is data to investigate with.
-  This includes "figure out why X is crashing", "why is X failing/broken?",
-  "what's causing the 502s?", "why did the orders job fail?", and questions that
-  name sources to look at ("check sentry, github, and posthog to find why the
-  agent crashes on Windows"). Gate it on the CONNECTED INTEGRATIONS line:
+  A diagnostic question MUST use interrogative or causal phrasing ("why", "what
+  caused", "figure out", "root cause of", "what's causing", a trailing "?", etc.).
+  A bare incident statement that only describes symptoms or status — with no
+  question and no causal ask — is NOT a diagnostic question; emit
+  assistant_handoff even when integrations are connected (the assistant can gather
+  context conversationally). Examples of diagnostic questions:
+  "figure out why X is crashing", "why is X failing/broken?", "what's causing the
+  502s?", "why did the orders job fail?", and questions that name sources to look
+  at ("check sentry, github, and posthog to find why the agent crashes on Windows").
+  Examples that are NOT diagnostic questions (assistant_handoff):
+  "CPU is spiking to 99% on orders-api", "checkout-api has elevated 500s and
+  latency after deploy". Gate diagnostic questions on CONNECTED INTEGRATIONS:
   * At least ONE integration connected → emit investigation_start with alert_text
     synthesized from the request (state the failure plus any named sources). Do
     NOT hand off — run the investigation.
-  * "none" or "unknown" → emit assistant_handoff instead; with no connected data
-    source a root-cause run would be empty, so let the assistant answer and
-    suggest connecting an integration.
+  * "none" or "unknown" → emit assistant_handoff instead FOR DIAGNOSTIC QUESTIONS
+    ONLY; this gate NEVER applies to explicit investigate instructions (first rule
+    above). With no connected data source an implicit diagnostic question would be
+    empty, so let the assistant answer and suggest connecting an integration.
 - DATA-RETRIEVAL / ANALYTICS LOOKUP is NOT an investigation. A request to fetch,
   list, show, query, count, search, or look up specific records — events,
   metrics, logs, sessions, traces, persons/users, issues, feature flags,
@@ -71,25 +100,30 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
 - NEITHER an instruction NOR a diagnostic question → assistant_handoff. A message
   that is JUST an alert or incident — a pasted alert payload (JSON, YAML, or
   key-value blob) on its own, or a bare incident statement such as "CPU is
-  spiking to 99% on orders-api" or "checkout is returning 502s" — states a fact
-  but does not ask you to find a cause. Emit assistant_handoff, even when it
-  reads urgent or "critical". Do NOT start an investigation for it.
+  spiking to 99% on orders-api", "checkout is returning 502s", or "checkout-api
+  has elevated 500s and latency after deploy" — states a fact but does not ask
+  you to find a cause. Emit assistant_handoff, even when integrations are
+  connected and even when it reads urgent or "critical". Do NOT start an
+  investigation for it.
 - A diagnostic question that is a FOLLOW-UP about a result you already produced
   (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
   after a completed investigation — is answered from that prior context: emit
   assistant_handoff, do NOT start a new investigation.
-- When unsure, choose assistant_handoff. The user can always follow up with an
-  explicit "investigate this".
+- When unsure AND the message lacks an explicit investigate/analyze/diagnose/
+  RCA/root-cause instruction, choose assistant_handoff. An explicit investigate
+  verb is never "unsure" — emit investigation_start per the rule above.
 
 Quoted directives are actionable, never chatty. When an action verb (investigate,
 run, analyze, diagnose, RCA, root-cause, start) takes quotation-marked text as its
 object, treat the quoted text as that action's payload/target and emit the matching
 tool — e.g. 'investigate "checkout is returning 502s"' → investigation_start with
-alert_text = the quoted text; 'run "/health"' → slash_invoke("/health"). A trailing
-"?" or urgent wording does not turn a quoted directive into an informational
-question, and quoted content is NEVER a reason to downgrade to a chatty statement
-or hand off to the assistant. (A plain question that merely names sources, with no
-verb acting on quoted text, is still handled per the rules above.)
+alert_text = the quoted text; 'run "/health"' → slash_invoke("/health"). A bare
+"Run an investigation." with no quoted payload or named subject is a how-to/docs
+handoff, NOT a quoted directive. A trailing "?" or urgent wording does not turn a
+quoted directive into an informational question, and quoted content is NEVER a
+reason to downgrade to a chatty statement or hand off to the assistant. (A plain
+question that merely names sources, with no verb acting on quoted text, is still
+handled per the rules above.)
 
 Follow-ups that reference the previous turn: a RECENT CONVERSATION block is
 provided after this prompt as context — always act on the final USER MESSAGE,
@@ -192,11 +226,14 @@ If the entire request is informational or conversational — a how-to/docs quest
 (including "what is supported?" / "what can I add?"), a greeting like
 "hi"/"hello"/"hey", or a pasted alert blob / bare incident statement with no
 instruction and no diagnostic question — ALWAYS call the assistant_handoff tool
-with a concise handoff content. Two exceptions take precedence over this handoff:
+with a concise handoff content. Three exceptions take precedence over this handoff:
 1. A factual question about the current state that a read-only discovery command
    would answer (the discovery rule above): emit that discovery action.
-2. A diagnostic question asking to find or explain the cause of a failure / crash
-   / error / incident (the investigation rule above): when at least one
+2. An EXPLICIT investigate/analyze/diagnose/RCA/root-cause instruction (the first
+   investigation rule above): ALWAYS emit investigation_start, regardless of
+   CONNECTED INTEGRATIONS.
+3. A diagnostic question WITHOUT such an explicit verb asking to find or explain
+   the cause of a failure / crash / error / incident: when at least one
    integration is connected, emit investigation_start; hand off only when no
    integration is connected. A pasted alert blob or bare incident statement is
    NOT such a question — hand it off.

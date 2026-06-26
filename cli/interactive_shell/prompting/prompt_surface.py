@@ -29,6 +29,7 @@ from cli.interactive_shell.routing.handle_message_with_agent.command_dispatch.ca
 )
 from cli.interactive_shell.runtime import ReplSession
 from cli.interactive_shell.ui import theme as ui_theme
+from cli.interactive_shell.ui.banner_state import integration_display_name
 from cli.interactive_shell.ui.choice_menu import repl_tty_interactive
 
 _PROMPT_RULE_CHAR = "─"
@@ -46,8 +47,13 @@ def _prompt_rule_ansi() -> str:
     )
 
 
+def _prompt_turn_number(session: ReplSession) -> int:
+    """1-based index for the turn about to be entered or just submitted."""
+    return len(session.history) + 1
+
+
 def _prompt_counter_text(session: ReplSession) -> str:
-    return f"[{len(session.history)}] " if session.history else ""
+    return f"[{_prompt_turn_number(session)}] "
 
 
 def _prompt_prefix_text(session: ReplSession) -> str:
@@ -56,10 +62,7 @@ def _prompt_prefix_text(session: ReplSession) -> str:
 
 def _prompt_line_ansi(session: ReplSession) -> ANSI:
     counter = _prompt_counter_text(session)
-    if counter:
-        prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
-    else:
-        prefix = ""
+    prefix = f"{ui_theme.DIM_COUNTER_ANSI}{counter}{ui_theme.ANSI_RESET}"
     return ANSI(f"{prefix}{ui_theme.PROMPT_ACCENT_ANSI}❯{ui_theme.ANSI_RESET} ")
 
 
@@ -76,8 +79,7 @@ def render_submitted_prompt(console: Console, session: ReplSession, text: str) -
     counter = _prompt_counter_text(session)
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
-    if counter:
-        rendered.append(counter, style=str(ui_theme.DIM))
+    rendered.append(counter, style=str(ui_theme.DIM))
     rendered.append("❯ ", style=f"bold {ui_theme.HIGHLIGHT}")
     rendered.append(lines[0], style=str(ui_theme.TEXT))
     for line in lines[1:]:
@@ -436,6 +438,25 @@ _DEFAULT_PLACEHOLDER_ANSI = ANSI(
 )
 
 
+def resolve_idle_hint_ansi(session: ReplSession) -> str:
+    """Dim hint line above the prompt rule — shortcuts plus connected integrations."""
+    parts = ["/ for commands", "↑↓ history"]
+    if session.configured_integrations_known and session.configured_integrations:
+        _MAX_SHOWN = 4
+        names = [integration_display_name(name) for name in sorted(session.configured_integrations)]
+        shown = names[:_MAX_SHOWN]
+        overflow = len(names) - len(shown)
+        integration_segment = " · ".join(shown)
+        if overflow:
+            integration_segment += f" +{overflow}"
+        parts.append(integration_segment)
+    app = get_app_or_none()
+    if app is not None and app.current_buffer.text:
+        parts.append("esc to clear")
+    hint = " · ".join(parts)
+    return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
+
+
 def resolve_prompt_placeholder(session: ReplSession) -> ANSI:
     """Contextual ghost text when the input buffer is empty."""
     parts: list[str] = []
@@ -571,6 +592,7 @@ __all__ = [
     "ShellCompleter",
     "completion_preview_hint_ansi",
     "render_submitted_prompt",
+    "resolve_idle_hint_ansi",
     "resolve_prompt_placeholder",
     "resolve_prompt_prefix_ansi",
     "wire_prompt_refresh",

@@ -100,7 +100,7 @@ def test_main_treats_onboard_abort_as_clean_cancel(
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("cli.__main__.init_sentry", lambda **_kw: None)
     monkeypatch.setattr(
-        "cli.wizard.run_wizard",
+        "cli.wizard.flow.run_wizard",
         lambda: (_ for _ in ()).throw(click.Abort()),
     )
 
@@ -442,7 +442,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
         (
             ["onboard"],
             "onboard_started",
-            "cli.wizard.run_wizard",
+            "cli.wizard.flow.run_wizard",
         ),
         (
             ["integrations", "list"],
@@ -469,7 +469,7 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
     monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli"))
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
 
-    if setup == "cli.wizard.run_wizard":
+    if setup == "cli.wizard.flow.run_wizard":
         onboard_module = importlib.import_module("cli.commands.onboard")
         monkeypatch.setattr(setup, lambda: 0)
         monkeypatch.setattr(

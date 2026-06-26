@@ -2,7 +2,15 @@
 
 **Date:** 2026-06-18  
 **Concerns:** `complex_shell_prompts` scenario class; oracle coverage of conversational tool-gathering  
-**Status:** Active gap — CI gives false green on integration behaviour
+**Status:** Partially addressed (2026-06-26) — gather recording, `tool_actions`, fixture `resolved_integrations`, and `@live` fail-closed CI are in place; many handoff scenarios still rely on text-only contracts
+
+> **Update (2026-06-26):** Natural-language investigation routing is re-enabled
+> (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`). Scenarios **314**, **338**,
+> **339**, and **315** assert gather dispatch via `tool_actions` with fixture
+> integrations; **333–335** and **337** use `@live` for canonical per-integration
+> gather. Handoff-only **313** lives under `chat_handoff/`. Remaining gap:
+> scenarios without `tool_actions` gather entries still pass on hallucination-satisfiable
+> text contracts only.
 
 > **Update (2026-06-19):** The scenario schema has since been trimmed and the
 > oracle's capability defaults realigned with production. `available_capabilities`
@@ -313,11 +321,10 @@ Add an AST check that specifically permits `monkeypatch.setattr` on
 
 ### 7.5 — Rename or reclassify misleading existing scenarios
 
-**313** (`configured_integrations: []`) does not test complex shell prompts
-with live data — it tests the text-only fallback when no integration is
-configured. It should either be moved to `chat_handoff` or its notes updated
-to reflect that it covers the no-integration fallback path only, not the
-data-gathering path.
+**313** (`configured_integrations: []`) is now under `chat_handoff/` with
+`tool_actions` gather `not_called` assertions. It covers the no-integration
+handoff path, not live data gathering. **338** and **339** assert gather
+`call_any` with fixture `resolved_integrations`.
 
 ---
 

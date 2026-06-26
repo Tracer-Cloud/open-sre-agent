@@ -451,8 +451,21 @@ format:
 typecheck:
 	$(PYTHON) -m mypy $(PYTHON_SOURCE_PATHS)
 
-# Run all checks (lint + format read-only check + types + full tests; mirrors CI quality gates)
-check: lint format-check typecheck test-full
+# Import graph: cycles + layering + forbidden direct edges (one command).
+check-imports:
+	$(PYTHON) scripts/check_imports.py
+
+# Deprecated aliases — use ``check-imports`` instead.
+check-cycles check-layers: check-imports
+
+# Optional: full transitive layer contracts (when .importlinter.strict exists).
+check-imports-strict:
+	$(PYTHON) scripts/check_imports.py --strict
+
+check-layers-strict: check-imports-strict
+
+# Run all checks (lint + format read-only check + types + imports + full tests; mirrors CI quality gates)
+check: lint format-check typecheck check-imports test-full
 
 # ─── Deployment Tests (Vercel) ───────────────────────────────────────────────
 deploy-vercel:
@@ -578,6 +591,7 @@ help:
 	@echo "  make format-check    - Check formatting with ruff (read-only)"
 	@echo "  make format          - Format code with ruff"
 	@echo "  make typecheck       - Type check with mypy"
+	@echo "  make check-imports   - Import cycles, layers, and direct-edge checks"
 	@echo "  make check           - Run all checks"
 	@echo "  make benchmark		  - Run benchmark report generation"
 	@echo "  make benchmark-update-readme - Update README from cached benchmark results"

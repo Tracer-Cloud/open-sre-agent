@@ -7,7 +7,7 @@ import os
 from rich.console import Console
 from rich.markup import escape
 
-from cli.interactive_shell.command_registry import repl_data
+import cli.interactive_shell.command_registry.repl_data as repl_data
 from cli.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
 from cli.interactive_shell.ui.choice_menu import print_valid_choice_list
 

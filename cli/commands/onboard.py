@@ -55,7 +55,7 @@ def onboard(ctx: click.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
 
-    from cli.wizard import run_wizard
+    from cli.wizard.flow import run_wizard
 
     _run_onboarding_command(run_wizard)
 

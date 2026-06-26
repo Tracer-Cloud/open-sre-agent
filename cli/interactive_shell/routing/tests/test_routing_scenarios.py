@@ -22,6 +22,10 @@ from cli.interactive_shell.routing.handle_message_with_agent.orchestration.llm_a
     plan_actions_with_llm,
 )
 from cli.interactive_shell.routing.router import RouteKind, route_input
+from cli.interactive_shell.routing.tests._ci_gates import (
+    skip_investigation_loop_disabled,
+    skip_or_fail,
+)
 from cli.interactive_shell.routing.tests._oracle_normalize import cli_command_payload_matches
 from cli.interactive_shell.routing.tests._oracle_runtime import (
     LIVE_INTEGRATION_SENTINEL,
@@ -82,11 +86,7 @@ def _expects_investigation(case: ScenarioCase) -> bool:
 
 def _skip_if_investigation_disabled(case: ScenarioCase) -> None:
     if not investigation_loop_enabled() and _expects_investigation(case):
-        pytest.skip(
-            "Natural-language investigation loop is disabled in the interactive shell "
-            "(feature_flags.INTERACTIVE_SHELL_INVESTIGATION_ENABLED is False); "
-            "this investigation scenario does not apply. Re-enable the flag to run it."
-        )
+        skip_investigation_loop_disabled()
 
 
 def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
@@ -94,9 +94,8 @@ def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
 
     Scenarios that pin ``<service>: "@live"`` in ``resolved_integrations`` make
     real calls during the gather loop. When **every** @live service is
-    unavailable the scenario is skipped — an environment gap, not a routing
-    regression. Fixtures 333–335 pin Datadog @live and assert
-    ``must_return_valid_data_any`` on a Datadog gather tool (316-style).
+    unavailable the scenario is skipped locally (env gap). In CI the same
+    condition fails the job so @live gather scenarios cannot pass silently.
     """
     override = case.scenario.session.resolved_integrations
     if not override:
@@ -108,7 +107,7 @@ def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
         return
     _expanded, unavailable = resolve_live_integrations(override)
     if len(unavailable) >= len(live_services):
-        pytest.skip(
+        skip_or_fail(
             "Live integration credentials unavailable for all @live services: "
             + ", ".join(sorted(live_services))
             + ". Configure at least one integration in the local store/env or provide CI "
@@ -218,7 +217,7 @@ def test_shard_selection_is_non_empty() -> None:
     if _LIVE_CASES:
         return
     total, index = read_shard_config()
-    pytest.skip(f"No routing cases selected for shard {index}/{total}.")
+    skip_or_fail(f"No routing cases selected for shard {index}/{total}.")
 
 
 def test_deterministic_routing(deterministic_case: ScenarioCase) -> None:

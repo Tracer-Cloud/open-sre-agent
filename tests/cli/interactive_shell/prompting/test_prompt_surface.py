@@ -11,7 +11,10 @@ from prompt_toolkit.completion import Completion
 from cli.interactive_shell.prompting import prompt_surface
 from cli.interactive_shell.prompting.prompt_surface import (
     _DEFAULT_PLACEHOLDER_TEXT,
+    _prompt_counter_text,
+    _prompt_turn_number,
     completion_preview_hint_ansi,
+    resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
     wire_prompt_refresh,
@@ -73,6 +76,39 @@ class TestPromptRefreshAutoSubmit:
         session.notify_prompt_changed()
         assert app.current_buffer.text == "why did it fail?"
         assert app.current_buffer.submitted is False
+
+
+class TestPromptTurnCounter:
+    def test_first_turn_is_numbered_one(self) -> None:
+        session = ReplSession()
+        assert _prompt_turn_number(session) == 1
+        assert _prompt_counter_text(session) == "[1] "
+
+    def test_counter_advances_with_history(self) -> None:
+        session = ReplSession()
+        session.record("chat", "hello")
+        assert _prompt_turn_number(session) == 2
+        assert _prompt_counter_text(session) == "[2] "
+
+
+class TestResolveIdleHint:
+    def test_shows_connected_integrations_in_hint_bar(self) -> None:
+        session = ReplSession()
+        session.configured_integrations_known = True
+        session.configured_integrations = ("datadog", "github", "grafana")
+        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
+        assert "/ for commands" in rendered
+        assert "Datadog" in rendered
+        assert "GitHub" in rendered
+        assert "Grafana" in rendered
+
+    def test_omits_integrations_when_none_configured(self) -> None:
+        session = ReplSession()
+        session.configured_integrations_known = True
+        session.configured_integrations = ()
+        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
+        assert "Datadog" not in rendered
+        assert "/ for commands" in rendered
 
 
 class TestResolvePromptPlaceholder:
