@@ -9,7 +9,6 @@ import sys
 
 from rich.console import Console
 
-import platform
 from cli.config import ReplConfig
 from cli.interactive_shell import alert_inbox as _alert_inbox
 from cli.interactive_shell.prompting import prompt_surface as _prompt_surface
@@ -38,6 +37,9 @@ def _hydrate_configured_integrations(session: ReplSession) -> None:
 
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
     from cli.interactive_shell.ui.theme import get_active_theme_name
+    from platform.analytics.cli import identify_saved_github_username
+
+    identify_saved_github_username()
 
     cfg = _config or ReplConfig.load()
     session = ReplSession()
@@ -89,19 +91,21 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
 
 
 def _github_login_explicitly_bypassed() -> bool:
-    """Cheap, dependency-free check for contexts where the GitHub gate is intentionally skipped.
+    """Cheap check for contexts where the GitHub gate is intentionally skipped.
 
     Used only as the *error* fallback for the first-launch gate. It must not import
     the gate module (that import may be exactly what failed), so it re-derives the
     documented bypasses directly:
 
     * ``OPENSRE_SKIP_GITHUB_LOGIN`` — the user-facing escape hatch.
-    * Non-eligible operating systems — the gate only runs on macOS/Windows.
-    * Non-interactive stdin — scripted / CI runs have no prompt to drive.
+    * CI/CD and test harnesses — detected via :func:`platform.analytics.source.is_test_run`.
+    * Non-interactive stdin — scripted / piped runs have no prompt to drive.
     """
     if os.getenv("OPENSRE_SKIP_GITHUB_LOGIN", "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
-    if platform.system() not in {"Darwin", "Windows"}:
+    from platform.analytics.source import is_test_run
+
+    if is_test_run():
         return True
     try:
         return not sys.stdin.isatty()
@@ -119,7 +123,7 @@ def _maybe_require_github_login(console: Console) -> bool:
     On an unexpected error we deliberately do NOT fail open into the REPL: that
     would let a gate bug silently skip the mandatory sign-in. Instead we only
     allow startup when an explicit, documented bypass applies (skip env var,
-    ineligible OS, or non-TTY); otherwise we block and point the user at the
+    CI/test harness, or non-TTY); otherwise we block and point the user at the
     escape hatch so a real outage can never permanently lock them out.
     """
     try:

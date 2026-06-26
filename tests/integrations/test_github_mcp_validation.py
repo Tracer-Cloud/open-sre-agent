@@ -852,3 +852,68 @@ def test_print_github_mcp_validation_report_success_and_failure() -> None:
     fail_text = fail_console.export_text()
     assert "validation failed" in fail_text.lower()
     assert "connection reset" in fail_text
+
+
+def test_github_mcp_is_usably_configured_requires_token_for_hosted_copilot() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "",
+        }
+    )
+    assert github_mcp_module.github_mcp_is_usably_configured(config) is False
+
+
+def test_github_mcp_is_usably_configured_accepts_hosted_copilot_with_token() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "gho_test",
+        }
+    )
+    assert github_mcp_module.github_mcp_is_usably_configured(config) is True
+
+
+def test_github_integration_is_configured_ignores_stale_store_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is False
+
+
+def test_github_integration_is_configured_true_when_store_has_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                    "auth_token": "gho_test",
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is True

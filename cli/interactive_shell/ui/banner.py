@@ -182,16 +182,9 @@ def _github_username() -> str:
     Best-effort and never raises: the welcome greeting must render even when the
     integration store is unreadable or GitHub is not configured.
     """
-    try:
-        from integrations.store import get_integration
+    from integrations.github_login import saved_github_username
 
-        record = get_integration("github")
-        if not record:
-            return ""
-        credentials = record.get("credentials") or {}
-        return str(credentials.get("username") or "").strip()
-    except Exception:
-        return ""
+    return saved_github_username()
 
 
 def _get_username() -> str:

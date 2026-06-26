@@ -639,7 +639,16 @@ def _configure_github_mcp() -> tuple[str, str]:
                 "args": args,
                 "toolsets": toolsets,
             }
+            authenticated_user = ""
+            if result.github_mcp is not None:
+                authenticated_user = (result.github_mcp.authenticated_user or "").strip()
+            if authenticated_user:
+                credentials["username"] = authenticated_user
             upsert_integration("github", {"credentials": credentials})
+            if authenticated_user:
+                from platform.analytics.cli import identify_github_username
+
+                identify_github_username(authenticated_user)
             env_path = sync_env_values(
                 {
                     "GITHUB_MCP_URL": url,

@@ -34,6 +34,24 @@ class GitHubLoginResult:
     detail: str = ""
 
 
+def saved_github_username() -> str:
+    """Return the persisted GitHub login from the integration store, or "".
+
+    Best-effort and never raises: callers like the welcome banner and analytics
+    re-identify must work even when the store is unreadable.
+    """
+    try:
+        from integrations.store import get_integration
+
+        record = get_integration("github")
+        if not record:
+            return ""
+        credentials = record.get("credentials") or {}
+        return str(credentials.get("username") or "").strip()
+    except Exception:
+        return ""
+
+
 def authenticate_and_configure_github(
     *,
     on_prompt: Callable[[GitHubDeviceCode], None] | None = None,
@@ -65,4 +83,9 @@ def authenticate_and_configure_github(
         # handle instead of the local system username.
         credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
-    return GitHubLoginResult(ok=True, username=result.authenticated_user, detail=result.detail)
+    username = result.authenticated_user
+    if username:
+        from platform.analytics.cli import identify_github_username
+
+        identify_github_username(username)
+    return GitHubLoginResult(ok=True, username=username, detail=result.detail)

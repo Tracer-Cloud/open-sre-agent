@@ -442,6 +442,34 @@ def github_mcp_config_from_env() -> GitHubMCPConfig | None:
     )
 
 
+def github_mcp_is_usably_configured(config: GitHubMCPConfig) -> bool:
+    """Return True when credentials are enough to use GitHub MCP without re-prompting.
+
+    Aligns with validation's ``not_configured`` handling: stdio needs a command;
+    the hosted Copilot endpoint needs an auth token; other HTTP endpoints need a URL.
+    """
+    if config.mode == "stdio":
+        return bool(config.command.strip())
+    if config.auth_token.strip():
+        return True
+    if _is_github_copilot_host(config.url):
+        return False
+    return bool(config.url.strip())
+
+
+def github_integration_is_configured() -> bool:
+    """Return True when GitHub MCP is configured with usable store or env credentials."""
+    from integrations.store import get_integration
+
+    record = get_integration("github")
+    if record is not None:
+        credentials = record.get("credentials") or {}
+        if github_mcp_is_usably_configured(build_github_mcp_config(credentials)):
+            return True
+    env_config = github_mcp_config_from_env()
+    return env_config is not None and github_mcp_is_usably_configured(env_config)
+
+
 @asynccontextmanager
 async def _open_github_mcp_session(config: GitHubMCPConfig) -> AsyncIterator[ClientSession]:
     stack = AsyncExitStack()

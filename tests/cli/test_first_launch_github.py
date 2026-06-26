@@ -9,7 +9,9 @@ from cli import first_launch_github as flg
 from cli.interactive_shell.ui.theme import DEVICE_CODE_ANSI
 from integrations import github_login as github_login_mod
 from integrations.github_login import GitHubLoginResult
+from integrations.github_mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
 from integrations.github_mcp_oauth import GitHubDeviceCode
+from platform.analytics import source as analytics_source
 
 
 def _console() -> Console:
@@ -23,7 +25,6 @@ def _terminal_console(output: io.StringIO) -> Console:
 def _force_required(monkeypatch: pytest.MonkeyPatch) -> None:
     """Set every gate input so that login would be required."""
     monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
-    monkeypatch.setattr(flg, "_eligible_os", lambda: True)
     monkeypatch.setattr(flg, "is_test_run", lambda: False)
     monkeypatch.setattr(flg, "repl_tty_interactive", lambda: True)
     monkeypatch.setattr(flg, "_github_already_configured", lambda: False)
@@ -41,16 +42,15 @@ def test_gate_skipped_by_env(monkeypatch: pytest.MonkeyPatch, value: str) -> Non
     assert flg.should_require_github_login() is False
 
 
-def test_gate_skipped_on_ineligible_os(monkeypatch: pytest.MonkeyPatch) -> None:
-    _force_required(monkeypatch)
-    monkeypatch.setattr(flg, "_eligible_os", lambda: False)
-    assert flg.should_require_github_login() is False
-
-
 def test_gate_skipped_in_test_run(monkeypatch: pytest.MonkeyPatch) -> None:
     _force_required(monkeypatch)
     monkeypatch.setattr(flg, "is_test_run", lambda: True)
     assert flg.should_require_github_login() is False
+
+
+def test_gate_required_on_linux_when_interactive(monkeypatch: pytest.MonkeyPatch) -> None:
+    _force_required(monkeypatch)
+    assert flg.should_require_github_login() is True
 
 
 def test_gate_skipped_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,12 +75,49 @@ def test_gate_required_when_github_not_configured(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.parametrize(
-    "system,expected",
-    [("Darwin", True), ("Windows", True), ("Linux", False), ("FreeBSD", False)],
+    "ci_env",
+    [
+        ("CI", "true"),
+        ("GITHUB_ACTIONS", "true"),
+        ("OPENSRE_IS_TEST", "1"),
+    ],
 )
-def test_eligible_os(monkeypatch: pytest.MonkeyPatch, system: str, expected: bool) -> None:
-    monkeypatch.setattr(flg.platform, "system", lambda: system)
-    assert flg._eligible_os() is expected
+def test_gate_skipped_in_ci_like_environment(
+    monkeypatch: pytest.MonkeyPatch, ci_env: tuple[str, str]
+) -> None:
+    monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("OPENSRE_IS_TEST", raising=False)
+    monkeypatch.delenv("OPENSRE_INVESTIGATION_SOURCE", raising=False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(flg, "is_test_run", analytics_source.is_test_run)
+    monkeypatch.setattr(flg, "repl_tty_interactive", lambda: True)
+    monkeypatch.setattr(flg, "_github_already_configured", lambda: False)
+    monkeypatch.setenv(ci_env[0], ci_env[1])
+    assert flg.should_require_github_login() is False
+
+
+def test_gate_required_when_stale_github_store_record_has_no_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy installs may have an abandoned github store row without credentials."""
+    _force_required(monkeypatch)
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": DEFAULT_GITHUB_MCP_URL,
+                    "toolsets": list(DEFAULT_GITHUB_MCP_TOOLSETS),
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    assert flg.should_require_github_login() is True
 
 
 def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,15 +144,12 @@ def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.Monkey
         "authenticate_and_configure_github",
         lambda **_kwargs: GitHubLoginResult(ok=True, username="octocat", detail="OK"),
     )
-    identified: list[str] = []
     completed: list[str] = []
-    monkeypatch.setattr(flg, "identify_github_username", identified.append)
     monkeypatch.setattr(flg, "capture_github_login_completed", completed.append)
 
     proceed = flg.require_github_login_on_first_launch(_console())
 
     assert proceed is True
-    assert identified == ["octocat"]
     assert completed == ["octocat"]
 
 
@@ -154,7 +188,6 @@ def test_orchestrator_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(github_login_mod, "authenticate_and_configure_github", _login)
     monkeypatch.setattr(flg, "_ask_retry", lambda _console: True)
-    monkeypatch.setattr(flg, "identify_github_username", lambda _username: None)
     monkeypatch.setattr(flg, "capture_github_login_completed", lambda _username: None)
 
     proceed = flg.require_github_login_on_first_launch(_console())
