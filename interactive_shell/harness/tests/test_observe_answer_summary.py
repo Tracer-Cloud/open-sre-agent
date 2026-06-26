@@ -56,7 +56,9 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         confirm_fn=None,
         is_tty=None,
         tool_observation: str | None = None,
+        tool_observation_on_screen: bool = True,
     ) -> LlmRunInfo:
+        _ = text, session, console, confirm_fn, is_tty, tool_observation_on_screen
         observed.append(tool_observation)
         return LlmRunInfo(response_text="No — Sentry is not configured.")
 

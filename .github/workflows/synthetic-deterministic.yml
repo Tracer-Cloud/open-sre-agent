@@ -4,7 +4,7 @@ name: Synthetic Deterministic Tests
 # PR and merge so pipeline refactors can't silently break investigations.
 #
 # Tests that need a live LLM are excluded via the marker filter below.
-# Those suites live in routing-live.yml and hermes-tests.yml instead.
+# Those suites live in interactive-shell-live.yml and hermes-tests.yml instead.
 
 on:
   push:

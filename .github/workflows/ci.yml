@@ -118,10 +118,10 @@ jobs:
               tests/watch_dog
           - os: ubuntu-latest
             shard: cli-runtime
-            # Live planner/routing contracts (tests/cli/.../test_llm_action_planner.py)
-            # are validated on openai, matching routing-live.yml. The
+            # Live planner/action contracts (tests/cli/.../test_llm_action_planner.py)
+            # are validated on openai, matching interactive-shell-live.yml. The
             # default anthropic tool-call model (haiku) cannot reliably perform
-            # compound action routing, so pin this shard to openai.
+            # compound action planning, so pin this shard to openai.
             llm_provider: openai
             pytest_paths: >-
               tests/cli

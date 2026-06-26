@@ -181,9 +181,13 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
         text: str,
         _session: ReplSession,
         _console: Console,
+        *,
         confirm_fn=None,
+        is_tty=None,
+        tool_observation: str | None = None,
+        tool_observation_on_screen: bool = True,
     ) -> None:
-        _ = confirm_fn
+        _ = confirm_fn, is_tty, tool_observation, tool_observation_on_screen
         llm_calls.append(text)
 
     session = ReplSession()

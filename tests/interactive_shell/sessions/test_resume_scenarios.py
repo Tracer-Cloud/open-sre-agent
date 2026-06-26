@@ -90,6 +90,7 @@ def _open_current(session: ReplSession) -> None:
 
 def _require_live_llm_for_repl_planner() -> None:
     explicit_pin = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    resolution = None
     try:
         resolution = resolve_llm_settings_verbose()
     except ValidationError as exc:
@@ -101,6 +102,9 @@ def _require_live_llm_for_repl_planner() -> None:
             hint += f", required key={env_var}"
         hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
         pytest.skip(f"Skipping live REPL planner smoke; missing LLM configuration:{hint}. {msg}")
+
+    if resolution is None:
+        pytest.skip("Skipping live REPL planner smoke; LLM configuration was not resolved.")
 
     if explicit_pin and resolution.fell_back:
         pytest.skip(
