@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from integrations.config_models import GoogleDocsIntegrationConfig
+from integrations.google_docs.client import GoogleDocsClient
 from integrations.verification import register_probe_verifier
-from tools.google_docs_tools import GoogleDocsClient
 
 verify_google_docs = register_probe_verifier(
     "google_docs",

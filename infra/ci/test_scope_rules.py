@@ -38,7 +38,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("cli/", ("tests/cli/",)),
     PathRule("tools/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
-    PathRule("services/", ("tests/services/", "tests/tools/")),
     PathRule("platform/analytics/", ("tests/analytics/",)),
     PathRule("platform/guardrails/", ("tests/test_guardrails/",)),
     PathRule("platform/masking/", ("tests/masking/",)),

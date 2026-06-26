@@ -63,7 +63,6 @@ COPY infra/__init__.py ./infra/__init__.py
 COPY infra/deployment/ ./infra/deployment/
 COPY integrations/ ./integrations/
 COPY platform/ ./platform/
-COPY services/ ./services/
 COPY tools/ ./tools/
 COPY tests/__init__.py ./tests/__init__.py
 COPY tests/benchmarks/ ./tests/benchmarks/

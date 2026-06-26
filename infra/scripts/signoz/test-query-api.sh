@@ -34,7 +34,7 @@ import os
 import sys
 
 from integrations.signoz import SigNozConfig
-from services.signoz.client import SigNozClient
+from integrations.signoz.client import SigNozClient
 
 config = SigNozConfig(
     url=os.environ.get("SIGNOZ_URL", "http://localhost:8080"),

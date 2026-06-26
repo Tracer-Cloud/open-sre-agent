@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from integrations.config_models import CoralogixIntegrationConfig
+from integrations.coralogix.client import CoralogixClient
 from integrations.verification import register_probe_verifier
-from tools.coralogix_tools import CoralogixClient
 
 verify_coralogix = register_probe_verifier(
     "coralogix",

@@ -3,7 +3,6 @@
 from typing import Any
 
 from integrations.aws.env import make_boto3_client, require_aws_credentials
-from tools.tool_decorator import tool
 
 try:
     from botocore.exceptions import ClientError
@@ -169,10 +168,3 @@ def get_log_events(
         return {"success": True, "data": response.get("events", [])}
     except ClientError as e:
         return {"success": False, "error": str(e)}
-
-
-# Create tool wrappers from the functions
-# These can be used in agents while the functions above remain callable
-get_metric_statistics_tool = tool(get_metric_statistics)
-filter_log_events_tool = tool(filter_log_events)
-get_log_events_tool = tool(get_log_events)
