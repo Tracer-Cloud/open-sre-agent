@@ -19,7 +19,13 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `app/`                | Core application logic, tools, integrations, services, and runtime state.                          |
+| `core/`               | Investigation orchestration, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
+| `cli/`                | Command-line interface, onboarding wizard, and the interactive terminal (REPL) loop.               |
+| `integrations/`       | Integration config normalization, verification, store, catalog logic, and the Hermes log pipeline. |
+| `services/`           | Reusable API clients and adapters for integrations and tools (including LLM providers).            |
+| `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
+| `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
+| `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
 | `tests/`              | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.               |
 | `docs/`               | User-facing documentation, integration guides, and docs-site assets.                               |
@@ -152,7 +158,7 @@ Basic steps:
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
-- If adding new tests -> always place them in `tests/`, never in `app/` (no inline tests).
+- If adding new tests -> always place them in `tests/`, never inside the source packages (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `core/orchestration/pipeline.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
@@ -164,7 +170,7 @@ Test commands, routing rules, CI-only paths: **[CI.md](CI.md)**. Live REPL testi
 
 ## 5. Footguns (common mistakes to avoid)
 
-- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `cli/interactive_shell/routing/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`orchestration/execution_policy.py`), not the planner.
+- No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn with "I couldn't safely decide actions". All terminal actions are read-only, so unmatched/ambiguous/chatty clauses run what they can and fall through to the assistant. Do **not** reintroduce a planner denial, the `mark_unhandled` tool, or the `UNHANDLED:` convention. Rationale and details: `cli/interactive_shell/routing/AGENTS.md` and `docs/routing-policy-architecture.md`. If mutating actions are ever added, gate them at the execution stage (`cli/interactive_shell/routing/handle_message_with_agent/orchestration/execution_policy.py`), not the planner.
 - Vendored deps: No obvious vendored third-party dependencies are present. Python dependencies are managed in `pyproject.toml`, and the docs site has its own `docs/package.json` and `docs/pnpm-lock.yaml`. Do not vendor new libraries unless there is a strong reason.
 - Secrets: Never commit `.env` - always use `.env.example` as the template. Use read-only credentials for production integrations.
 - CI-only tests: Some e2e tests, including Kubernetes, EKS, and chaos engineering paths, require live infrastructure and are excluded from `make test-cov`. Do not expect them to pass locally without that environment.
