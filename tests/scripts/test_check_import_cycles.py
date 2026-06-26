@@ -13,8 +13,10 @@ from scripts.check_import_cycles import discover_first_party_roots, main
 
 
 def test_discover_first_party_roots_includes_known_packages() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    roots = discover_first_party_roots(repo_root)
+    # parents[2] = repo root (tests/scripts/<file>.py); parents[1] would
+    # be the tests/ directory, which happens to contain similarly-named
+    # subdirectories and would silently produce a passing assertion.
+    roots = discover_first_party_roots(_REPO_ROOT)
     assert "cli" in roots
     assert "core" in roots
     assert "integrations" in roots
@@ -22,8 +24,7 @@ def test_discover_first_party_roots_includes_known_packages() -> None:
 
 
 def test_discover_first_party_roots_excludes_tests_and_scripts() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    roots = discover_first_party_roots(repo_root)
+    roots = discover_first_party_roots(_REPO_ROOT)
     assert "tests" not in roots
     assert "scripts" not in roots
 
