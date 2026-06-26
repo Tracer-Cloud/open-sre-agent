@@ -27,6 +27,7 @@ from interactive_shell.harness.orchestration.interaction_models import (
 from interactive_shell.harness.orchestration.llm_action_planner import (
     plan_actions_with_llm,
 )
+
 PROMPT_TURN_CONTRACTS_DATASET = Path(__file__).resolve().parents[1] / "prompt_turn_contracts.yml"
 
 pytestmark = [pytest.mark.integration, pytest.mark.live_llm]

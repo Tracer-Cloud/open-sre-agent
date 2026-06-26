@@ -305,7 +305,10 @@ def _read_note(*, console: Console | None) -> str:
 def _pick_rating(*, console: Console | None) -> str | None:
     """Show the rating prompt; returns key or None on cancel/skip."""
     if console is not None:
-        from interactive_shell.ui.components.choice_menu import repl_choose_one, repl_tty_interactive
+        from interactive_shell.ui.components.choice_menu import (
+            repl_choose_one,
+            repl_tty_interactive,
+        )
 
         if not repl_tty_interactive():
             return None
@@ -323,7 +326,10 @@ def _pick_taxonomy(*, console: Console | None) -> str | None:
     choices = taxonomy_choices()
 
     if console is not None:
-        from interactive_shell.ui.components.choice_menu import repl_choose_one, repl_tty_interactive
+        from interactive_shell.ui.components.choice_menu import (
+            repl_choose_one,
+            repl_tty_interactive,
+        )
 
         if not repl_tty_interactive():
             return None

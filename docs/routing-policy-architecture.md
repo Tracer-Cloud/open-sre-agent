@@ -161,8 +161,8 @@ only strips `assistant_handoff` markers), `render_plan_denied`, the
 `fail_closed`, `has_unhandled_clause`, and `route.expected_signals` fields were
 also removed from routing scenario fixtures, since the oracle never asserted on
 them; the fixture `policy` block now carries a single `executes_terminal_action`
-boolean (true only when a planned terminal action is expected to run through the
-dispatch gate).
+`boolean` (true only when a planned terminal action is expected to run through
+the dispatch gate).
 
 If write/mutating actions are introduced later, gate them with the
 execution-stage confirmation policy (`orchestration/execution_policy.py`), **not**
