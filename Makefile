@@ -344,7 +344,7 @@ test-bedrock:
 
 # Run fast tests + Prefect cloud E2E
 test:
-	$(PYTHON) -m pytest -v app tests/utils
+	$(PYTHON) -m pytest -v cli tests/utils
 	$(PYTHON) -m tests.e2e.upstream_prefect_ecs_fargate.test_agent_e2e
 
 # Run full test suite (CI/CD)
