@@ -1,16 +1,6 @@
 """Client modules for different services."""
 
 from services.cloudwatch_client import get_metric_statistics
-from services.coralogix import (
-    CoralogixClient,
-    build_coralogix_logs_query,
-)
-from services.grafana import (
-    GrafanaAccountConfig,
-    GrafanaClient,
-    get_grafana_client_from_credentials,
-)
-from services.honeycomb import HoneycombClient
 from services.llm_client import (
     RootCauseResult,
     get_llm_for_reasoning,
@@ -34,15 +24,6 @@ from services.tracer_client import (
 __all__ = [
     # CloudWatch client
     "get_metric_statistics",
-    # Coralogix client
-    "CoralogixClient",
-    "build_coralogix_logs_query",
-    # Grafana client
-    "GrafanaAccountConfig",
-    "GrafanaClient",
-    "get_grafana_client_from_credentials",
-    # Honeycomb client
-    "HoneycombClient",
     # LLM client
     "RootCauseResult",
     "get_llm_for_reasoning",

@@ -25,12 +25,14 @@ from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_TOOL_SOURCES as _PROMPT_MAP,
 )
 from integrations import dagster as dagster_integration
-from services.dagster import DagsterClient
-from tools.DagsterAssetsTool import list_dagster_assets
-from tools.DagsterRunLogsTool import get_dagster_run_logs
-from tools.DagsterRunsTool import list_dagster_runs
-from tools.DagsterSchedulesTool import list_dagster_schedule_ticks
-from tools.DagsterSensorsTool import list_dagster_sensor_ticks
+from vendors.dagster import (
+    get_dagster_run_logs,
+    list_dagster_assets,
+    list_dagster_runs,
+    list_dagster_schedule_ticks,
+    list_dagster_sensor_ticks,
+)
+from vendors.dagster.client import DagsterClient
 
 pytestmark = pytest.mark.synthetic
 

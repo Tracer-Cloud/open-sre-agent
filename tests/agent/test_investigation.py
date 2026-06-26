@@ -305,7 +305,7 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
 
 def test_execute_tools_uses_availability_view_for_classified_integrations() -> None:
     from integrations.config_models import GrafanaIntegrationConfig
-    from tools.GrafanaLogsTool import query_grafana_logs
+    from vendors.grafana import query_grafana_logs
 
     rt = query_grafana_logs.__opensre_registered_tool__
     mock_client = MagicMock()
@@ -322,7 +322,7 @@ def test_execute_tools_uses_availability_view_for_classified_integrations() -> N
     tool_calls = [ToolCall(id="tc1", name="query_grafana_logs", input={"service_name": "checkout"})]
 
     with patch(
-        "tools.GrafanaLogsTool.get_grafana_client_from_credentials",
+        "vendors.grafana.get_grafana_client_from_credentials",
         return_value=mock_client,
     ) as mock_factory:
         results = execute_tools(tool_calls, [rt], resolved)

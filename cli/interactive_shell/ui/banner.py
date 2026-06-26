@@ -183,13 +183,9 @@ def _github_username() -> str:
     integration store is unreadable or GitHub is not configured.
     """
     try:
-        from integrations.store import get_integration
+        from integrations.github_identity import saved_github_username
 
-        record = get_integration("github")
-        if not record:
-            return ""
-        credentials = record.get("credentials") or {}
-        return str(credentials.get("username") or "").strip()
+        return saved_github_username()
     except Exception:
         return ""
 

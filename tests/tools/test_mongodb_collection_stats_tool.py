@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MongoDBCollectionStatsTool import get_mongodb_collection_stats
+from tools.mongodb_collection_stats_tool import get_mongodb_collection_stats
 
 
 class TestMongoDBCollectionStatsToolContract(BaseToolContract):
@@ -26,7 +26,9 @@ def test_run_happy_path() -> None:
         "size": 2048,
         "indexes": [],
     }
-    with patch("tools.MongoDBCollectionStatsTool.get_collection_stats", return_value=fake_result):
+    with patch(
+        "tools.mongodb_collection_stats_tool.get_collection_stats", return_value=fake_result
+    ):
         result = get_mongodb_collection_stats(
             connection_string="mongodb://localhost:27017",
             database="my-db",
@@ -37,7 +39,9 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     fake_result = {"error": "Connection refused"}
-    with patch("tools.MongoDBCollectionStatsTool.get_collection_stats", return_value=fake_result):
+    with patch(
+        "tools.mongodb_collection_stats_tool.get_collection_stats", return_value=fake_result
+    ):
         result = get_mongodb_collection_stats(
             connection_string="mongodb://invalid",
             database="my-db",

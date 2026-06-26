@@ -13,6 +13,7 @@ from typing import Any, Protocol, Required, TypedDict
 
 from config.config import DEFAULT_MAX_TOKENS
 from config.llm_credentials import resolve_llm_api_key
+from services.tool_schema_normalize import normalize_openai_tool_input_schema
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 
@@ -153,7 +154,7 @@ def _openai_tool_schema(tool: RegisteredTool) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": tool.public_input_schema,
+            "parameters": normalize_openai_tool_input_schema(tool.public_input_schema),
         },
     }
 

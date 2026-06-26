@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.TempoTool import _tempo_is_available, query_tempo
+from vendors.tempo import _tempo_is_available, query_tempo
 
 
 class _FakeTempoBackend:

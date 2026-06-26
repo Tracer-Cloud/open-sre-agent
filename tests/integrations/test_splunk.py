@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from integrations.models import SplunkIntegrationConfig
-from services.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
+from vendors.splunk.client import SplunkClient, SplunkConfig, build_splunk_spl_query
 
 # ── SplunkIntegrationConfig ───────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ def test_validate_access_success() -> None:
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
     mock_response.json.return_value = {"entry": [{"content": {"version": "9.1.0"}}]}
-    with patch("services.splunk.client.httpx.get", return_value=mock_response):
+    with patch("vendors.splunk.client.httpx.get", return_value=mock_response):
         result = client.validate_access()
     assert result["success"] is True
     assert "9.1.0" in result["detail"]
@@ -212,7 +212,7 @@ def test_validate_access_http_error() -> None:
     mock_response.status_code = 401
     mock_response.text = "Unauthorized"
     with patch(
-        "services.splunk.client.httpx.get",
+        "vendors.splunk.client.httpx.get",
         side_effect=httpx.HTTPStatusError("", request=MagicMock(), response=mock_response),
     ):
         result = client.validate_access()
@@ -224,7 +224,7 @@ def test_validate_access_connection_error() -> None:
     config = SplunkConfig(base_url="https://splunk:8089", token="tok")
     client = SplunkClient(config)
     with patch(
-        "services.splunk.client.httpx.get",
+        "vendors.splunk.client.httpx.get",
         side_effect=Exception("Connection refused"),
     ):
         result = client.validate_access()
@@ -260,7 +260,7 @@ def test_validate_access_passes_ca_bundle_to_httpx() -> None:
         captured_verify.append(verify)
         return mock_response
 
-    with patch("services.splunk.client.httpx.get", side_effect=fake_get):
+    with patch("vendors.splunk.client.httpx.get", side_effect=fake_get):
         result = client.validate_access()
 
     assert result["success"] is True
@@ -283,7 +283,7 @@ def test_search_logs_passes_ca_bundle_to_httpx() -> None:
         mock_resp.text = ""
         return mock_resp
 
-    with patch("services.splunk.client.httpx.post", side_effect=fake_post):
+    with patch("vendors.splunk.client.httpx.post", side_effect=fake_post):
         client.search_logs(query="index=main | head 10")
 
     assert captured_verify[0] == "/etc/ssl/corp-ca.pem"
@@ -304,7 +304,7 @@ def test_search_logs_prepends_search_keyword_if_missing() -> None:
         mock_resp.text = ""
         return mock_resp
 
-    with patch("services.splunk.client.httpx.post", side_effect=fake_post):
+    with patch("vendors.splunk.client.httpx.post", side_effect=fake_post):
         client.search_logs(query='index=main "error" | head 10')
 
     assert captured["search"].startswith("search ")
@@ -322,7 +322,7 @@ def test_search_logs_does_not_double_prepend_search_keyword() -> None:
         mock_resp.text = ""
         return mock_resp
 
-    with patch("services.splunk.client.httpx.post", side_effect=fake_post):
+    with patch("vendors.splunk.client.httpx.post", side_effect=fake_post):
         client.search_logs(query='search index=main "error" | head 10')
 
     assert captured["search"].count("search ") == 1
@@ -341,7 +341,7 @@ def test_search_logs_returns_parsed_ndjson_results() -> None:
     mock_resp.raise_for_status.return_value = None
     mock_resp.text = ndjson_response
 
-    with patch("services.splunk.client.httpx.post", return_value=mock_resp):
+    with patch("vendors.splunk.client.httpx.post", return_value=mock_resp):
         result = client.search_logs(query='index=main "error" | head 10')
 
     assert result["success"] is True
@@ -357,7 +357,7 @@ def test_search_logs_http_error_returns_failure() -> None:
     mock_response.status_code = 403
     mock_response.text = "Forbidden"
     with patch(
-        "services.splunk.client.httpx.post",
+        "vendors.splunk.client.httpx.post",
         side_effect=httpx.HTTPStatusError("", request=MagicMock(), response=mock_response),
     ):
         result = client.search_logs(query="index=main | head 10")

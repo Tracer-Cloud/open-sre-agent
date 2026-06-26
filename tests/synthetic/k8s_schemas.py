@@ -112,7 +112,7 @@ class K8sAlertFixture(TypedDict):
 
 # ---------------------------------------------------------------------------
 # EKS pods fixture  (eks_pods.json)
-# Mirrors the shape returned by ``tools.EKSListPodsTool.list_eks_pods``.
+# Mirrors the shape returned by ``tools.eks_list_pods_tool.list_eks_pods``.
 # ---------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ class EKSPodsFixture(TypedDict):
 
 # ---------------------------------------------------------------------------
 # EKS events fixture  (eks_events.json)
-# Mirrors the shape returned by ``tools.EKSEventsTool.get_eks_events``
+# Mirrors the shape returned by ``tools.eks_events_tool.get_eks_events``
 # for a single Warning event record.
 # ---------------------------------------------------------------------------
 
@@ -239,7 +239,7 @@ class EKSPodLogsFixture(TypedDict):
 
 # ---------------------------------------------------------------------------
 # Datadog logs fixture  (datadog_logs.json)
-# Mirrors ``tools.DataDogLogsTool.query_datadog_logs``.
+# Mirrors ``tools.datadog_logs_tool.query_datadog_logs``.
 # ---------------------------------------------------------------------------
 
 
@@ -258,7 +258,7 @@ class DatadogLogsFixture(TypedDict):
 
 # ---------------------------------------------------------------------------
 # Datadog monitors fixture  (datadog_monitors.json)
-# Mirrors ``tools.DataDogMonitorsTool.query_datadog_monitors``.
+# Mirrors ``tools.datadog_monitors_tool.query_datadog_monitors``.
 # ---------------------------------------------------------------------------
 
 

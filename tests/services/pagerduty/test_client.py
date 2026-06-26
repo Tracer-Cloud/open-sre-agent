@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from services.pagerduty.client import (
+from vendors.pagerduty.client import (
     PagerDutyClient,
     PagerDutyConfig,
     make_pagerduty_client,
@@ -67,7 +67,7 @@ def test_headers_include_token() -> None:
 
 def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"incidents": []}),
     )
     result = _client().probe_access()
@@ -83,7 +83,7 @@ def test_probe_access_missing_key() -> None:
 
 def test_probe_access_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"message": "Not Found", "code": 2100}, 401),
     )
     result = _client().probe_access()
@@ -116,7 +116,7 @@ def test_list_incidents_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_incidents()
@@ -134,7 +134,7 @@ def test_list_incidents_with_filters(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"incidents": []})
 
-    monkeypatch.setattr("services.pagerduty.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.pagerduty.client.httpx.Client.get", _fake_get)
     _client().list_incidents(
         statuses=["triggered", "acknowledged"],
         urgencies=["high"],
@@ -153,7 +153,7 @@ def test_list_incidents_with_filters(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_incidents_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "unauthorized"}, 401),
     )
     result = _client().list_incidents()
@@ -167,7 +167,7 @@ def test_list_incidents_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr("services.pagerduty.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("vendors.pagerduty.client.httpx.Client.get", _raise)
     result = _client().list_incidents()
     assert result["success"] is False
     assert "connection refused" in result["error"]
@@ -204,7 +204,7 @@ def test_get_incident_success(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_incident("P1ABC")
@@ -216,7 +216,7 @@ def test_get_incident_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_incident_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "not found"}, 404),
     )
     result = _client().get_incident("bad-id")
@@ -249,7 +249,7 @@ def test_list_incident_log_entries_success(monkeypatch: pytest.MonkeyPatch) -> N
         ]
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_incident_log_entries("P1ABC")
@@ -261,7 +261,7 @@ def test_list_incident_log_entries_success(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_list_incident_log_entries_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "forbidden"}, 403),
     )
     result = _client().list_incident_log_entries("P1ABC")
@@ -286,7 +286,7 @@ def test_get_oncalls_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_oncalls()
@@ -303,14 +303,14 @@ def test_get_oncalls_with_policy_filter(monkeypatch: pytest.MonkeyPatch) -> None
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"oncalls": []})
 
-    monkeypatch.setattr("services.pagerduty.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.pagerduty.client.httpx.Client.get", _fake_get)
     _client().get_oncalls(escalation_policy_ids=["EP1", "EP2"])
     assert captured["params"]["escalation_policy_ids[]"] == ["EP1", "EP2"]
 
 
 def test_get_oncalls_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "unauthorized"}, 401),
     )
     result = _client().get_oncalls()
@@ -344,7 +344,7 @@ def test_list_services_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_services()
@@ -356,7 +356,7 @@ def test_list_services_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_services_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "forbidden"}, 403),
     )
     result = _client().list_services()
@@ -390,7 +390,7 @@ def test_get_service_success(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     }
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_service("SVC1")
@@ -402,7 +402,7 @@ def test_get_service_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_service_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.pagerduty.client.httpx.Client.get",
+        "vendors.pagerduty.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "not found"}, 404),
     )
     result = _client().get_service("bad-id")

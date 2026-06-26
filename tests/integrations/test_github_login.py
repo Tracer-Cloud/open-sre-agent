@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from integrations import github_login
+from integrations.github_identity import saved_github_username
 from integrations.github_login import GitHubLoginResult
 from integrations.github_mcp import GitHubMCPValidationResult
 from integrations.github_mcp_oauth import GitHubDeviceToken
@@ -27,6 +28,11 @@ def test_authenticate_and_configure_github_happy_path(monkeypatch: pytest.Monkey
         "upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
+    identified: list[str] = []
+    monkeypatch.setattr(
+        "platform.analytics.cli.identify_github_username",
+        lambda username: identified.append(username),
+    )
 
     result = github_login.authenticate_and_configure_github()
 
@@ -42,6 +48,7 @@ def test_authenticate_and_configure_github_happy_path(monkeypatch: pytest.Monkey
     # The resolved GitHub login is persisted as a non-secret field so the
     # welcome banner can greet the user by their GitHub handle.
     assert credentials["username"] == "octocat"
+    assert identified == ["octocat"]
 
 
 def test_authenticate_and_configure_github_validation_failure_does_not_save(
@@ -72,3 +79,18 @@ def test_authenticate_and_configure_github_validation_failure_does_not_save(
     assert result.username == "octocat"
     assert result.detail == "missing tools"
     assert saved == []
+
+
+def test_saved_github_username_reads_integration_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: {"credentials": {"username": "octocat"}} if service == "github" else None,
+    )
+
+    assert saved_github_username() == "octocat"
+
+
+def test_saved_github_username_empty_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("integrations.store.get_integration", lambda _service: None)
+
+    assert saved_github_username() == ""

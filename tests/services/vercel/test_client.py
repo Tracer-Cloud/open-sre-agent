@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from services.vercel.client import (
+from vendors.vercel.client import (
     _MAX_VERCEL_PATH_SEGMENT_LEN,
     VercelClient,
     VercelConfig,
@@ -111,7 +111,7 @@ def test_list_projects_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_projects()
@@ -122,7 +122,7 @@ def test_list_projects_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_projects_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"error": "forbidden"}, 403),
     )
     result = _client().list_projects()
@@ -137,7 +137,7 @@ def test_list_deployments_filters_state(monkeypatch: pytest.MonkeyPatch) -> None
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"deployments": []})
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _fake_get)
     _client().list_deployments(project_id="proj_1", state="error")
     assert captured["params"]["state"] == "ERROR"
     assert captured["params"]["projectId"] == "proj_1"
@@ -165,7 +165,7 @@ def test_list_deployments_maps_fields(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_deployments()
@@ -189,7 +189,7 @@ def test_get_deployment_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "build": {},
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment("dpl_xyz")
@@ -213,7 +213,7 @@ def test_get_deployment_normalizes_git_metadata(monkeypatch: pytest.MonkeyPatch)
         "build": {},
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment("dpl_xyz")
@@ -235,7 +235,7 @@ def test_get_deployment_events_list_response(monkeypatch: pytest.MonkeyPatch) ->
         },
     ]
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment_events("dpl_xyz")
@@ -263,7 +263,7 @@ def test_get_runtime_logs_success(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["path"] = path
         return _FakeStreamResponse(lines=_runtime_stream_lines_from_payload(payload))
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.stream", _fake_stream)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.stream", _fake_stream)
     result = _client().get_runtime_logs("dpl_xyz", project_id="proj_123")
     assert result["success"] is True
     assert result["total"] == 1
@@ -287,7 +287,7 @@ def test_get_runtime_logs_stream_json_response(monkeypatch: pytest.MonkeyPatch) 
         ),
     ]
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.stream",
+        "vendors.vercel.client.httpx.Client.stream",
         lambda _self, *_a, **_kw: _FakeStreamResponse(lines=lines),
     )
     result = _client().get_runtime_logs("dpl_xyz")
@@ -300,7 +300,7 @@ def test_get_runtime_logs_stream_json_response(monkeypatch: pytest.MonkeyPatch) 
 
 def test_get_runtime_logs_404_returns_empty_result(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.stream",
+        "vendors.vercel.client.httpx.Client.stream",
         lambda _self, *_a, **_kw: _FakeStreamResponse(lines=[], status_code=404),
     )
     result = _client().get_runtime_logs("dpl_xyz")
@@ -316,7 +316,7 @@ def test_team_params_included_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"projects": []})
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _fake_get)
     _client(team_id="team_123").list_projects()
     assert captured["params"]["teamId"] == "team_123"
 
@@ -328,7 +328,7 @@ def test_team_params_absent_when_empty(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"projects": []})
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _fake_get)
     _client(team_id="").list_projects()
     assert "teamId" not in captured["params"]
 
@@ -341,7 +341,7 @@ def test_get_deployment_events_dict_response(monkeypatch: pytest.MonkeyPatch) ->
         ]
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment_events("dpl_xyz")
@@ -356,7 +356,7 @@ def test_get_runtime_logs_dict_wrapped_response(monkeypatch: pytest.MonkeyPatch)
         "logs": [{"id": "l1", "createdAt": 1, "payload": {}, "type": "stdout", "source": "lambda"}]
     }
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.stream",
+        "vendors.vercel.client.httpx.Client.stream",
         lambda _self, *_a, **_kw: _FakeStreamResponse(
             lines=_runtime_stream_lines_from_payload(payload)
         ),
@@ -386,8 +386,8 @@ def test_get_runtime_logs_retries_on_read_timeout(monkeypatch: pytest.MonkeyPatc
             raise httpx.ReadTimeout("slow")
         return _FakeStreamResponse(lines=_runtime_stream_lines_from_payload(payload))
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.stream", _fake_stream)
-    monkeypatch.setattr("services.vercel.client.time.sleep", lambda _s: None)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.stream", _fake_stream)
+    monkeypatch.setattr("vendors.vercel.client.time.sleep", lambda _s: None)
     result = _client().get_runtime_logs("dpl_xyz", project_id="proj_123")
     assert result["success"] is True
     assert result["total"] == 1
@@ -416,8 +416,8 @@ def test_get_runtime_logs_retries_on_remote_protocol_error(
             raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
         return _FakeStreamResponse(lines=_runtime_stream_lines_from_payload(payload))
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.stream", _fake_stream)
-    monkeypatch.setattr("services.vercel.client.time.sleep", lambda _s: None)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.stream", _fake_stream)
+    monkeypatch.setattr("vendors.vercel.client.time.sleep", lambda _s: None)
     result = _client().get_runtime_logs("dpl_xyz", project_id="proj_123")
     assert result["success"] is True
     assert result["total"] == 1
@@ -430,8 +430,8 @@ def test_get_runtime_logs_remote_protocol_error_after_retries_returns_error(
     def _fake_stream(_self: Any, *_a: Any, **_kw: Any) -> _FakeStreamResponse:
         raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.stream", _fake_stream)
-    monkeypatch.setattr("services.vercel.client.time.sleep", lambda _s: None)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.stream", _fake_stream)
+    monkeypatch.setattr("vendors.vercel.client.time.sleep", lambda _s: None)
 
     result = _client().get_runtime_logs("dpl_xyz", project_id="proj_123")
 
@@ -446,7 +446,7 @@ def test_list_projects_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _raise)
     result = _client().list_projects()
     assert result["success"] is False
     assert "connection refused" in result["error"]
@@ -458,7 +458,7 @@ def test_get_deployment_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.TimeoutException("timed out")
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _raise)
     result = _client().get_deployment("dpl_xyz")
     assert result["success"] is False
     assert "timed out" in result["error"]
@@ -489,7 +489,7 @@ def test_list_deployments_no_filters(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"deployments": []})
 
-    monkeypatch.setattr("services.vercel.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.vercel.client.httpx.Client.get", _fake_get)
     _client().list_deployments()
     assert "state" not in captured["params"]
     assert "projectId" not in captured["params"]
@@ -502,7 +502,7 @@ def test_get_deployment_events_null_payload_does_not_crash(monkeypatch: pytest.M
         {"type": "stdout", "created": 3, "text": None, "payload": {"text": "from payload"}},
     ]
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment_events("dpl_xyz")
@@ -516,7 +516,7 @@ def test_get_deployment_events_null_payload_does_not_crash(monkeypatch: pytest.M
 def test_get_deployment_events_text_is_always_string(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = [{"type": "stdout", "created": 1, "text": 42, "payload": None}]
     monkeypatch.setattr(
-        "services.vercel.client.httpx.Client.get",
+        "vendors.vercel.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_deployment_events("dpl_xyz")

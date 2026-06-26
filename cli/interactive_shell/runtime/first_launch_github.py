@@ -1,13 +1,13 @@
 """First-launch mandatory GitHub login gate.
 
-On the first interactive launch of ``opensre`` on macOS or Windows (never on
-Linux, never in CI/tests), the user must sign in to GitHub via device flow. The
-sign-in runs the hosted GitHub MCP setup, persists the integration, and
-propagates the authenticated GitHub username to PostHog.
+On the first interactive launch of ``opensre`` (all platforms), the user must
+sign in to GitHub via device flow unless they are in CI/CD, a test harness, or a
+non-interactive session. The sign-in runs the hosted GitHub MCP setup, persists
+the integration, and propagates the authenticated GitHub username to PostHog.
 
 Escape hatch: ``OPENSRE_SKIP_GITHUB_LOGIN=1`` bypasses the gate so a GitHub
 outage or a disabled device flow can never permanently lock anyone out. The gate
-is also auto-bypassed on Linux and in CI/test environments.
+is also auto-bypassed in CI/test environments and when stdin is not a TTY.
 """
 
 from __future__ import annotations
@@ -17,14 +17,12 @@ import os
 from rich.console import Console
 from rich.markup import escape
 
-import platform
 from cli.interactive_shell.ui import repl_tty_interactive
 from cli.interactive_shell.ui.theme import DEVICE_CODE
-from platform.analytics.cli import capture_github_login_completed, identify_github_username
+from platform.analytics.cli import capture_github_login_completed
 from platform.analytics.source import is_test_run
 
 _SKIP_ENV_VAR = "OPENSRE_SKIP_GITHUB_LOGIN"
-_ELIGIBLE_OS = frozenset({"Darwin", "Windows"})
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
@@ -32,27 +30,15 @@ def _skip_requested() -> bool:
     return os.getenv(_SKIP_ENV_VAR, "").strip().lower() in _TRUTHY
 
 
-def _eligible_os() -> bool:
-    return platform.system() in _ELIGIBLE_OS
-
-
 def _github_already_configured() -> bool:
-    from integrations.github_mcp import github_mcp_config_from_env
-    from integrations.store import get_integration
+    from integrations.github_mcp import github_integration_is_configured
 
-    if get_integration("github") is not None:
-        return True
-    try:
-        return github_mcp_config_from_env() is not None
-    except Exception:
-        return False
+    return github_integration_is_configured()
 
 
 def should_require_github_login() -> bool:
     """Return True when the mandatory first-launch GitHub login must run now."""
     if _skip_requested():
-        return False
-    if not _eligible_os():
         return False
     if is_test_run():
         return False
@@ -69,7 +55,8 @@ def should_require_github_login() -> bool:
 def _propagate_username(username: str) -> None:
     if not username:
         return
-    identify_github_username(username)
+    # ``authenticate_and_configure_github`` already calls identify_github_username;
+    # only emit the one-time login lifecycle event here.
     capture_github_login_completed(username)
 
 

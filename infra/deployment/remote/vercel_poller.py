@@ -15,7 +15,7 @@ from urllib.parse import parse_qs, urlparse
 
 from infra.deployment.remote.error_reporting import report_remote_exception
 from integrations.verify import resolve_effective_integrations
-from services.vercel import VercelClient, VercelConfig, make_vercel_client
+from vendors.vercel.client import VercelClient, VercelConfig, make_vercel_client
 
 logger = logging.getLogger(__name__)
 

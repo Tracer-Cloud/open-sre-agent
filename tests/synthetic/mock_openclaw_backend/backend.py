@@ -81,7 +81,7 @@ class FixtureOpenClawBackend:
         Patches both locations where openclaw_runtime_unavailable_reason
         is imported by name:
           - integrations.openclaw   (canonical source)
-          - tools.OpenClawMCPTool   (tool layer local alias)
+          - tools.openclaw_mcp_tool   (tool layer local alias)
 
         Also patches the tool call and list functions at both the integration
         module and the tool module's local aliases.
@@ -92,7 +92,7 @@ class FixtureOpenClawBackend:
                 side_effect=self.call_tool,
             ),
             patch(
-                "tools.OpenClawMCPTool.invoke_openclaw_mcp_tool",
+                "tools.openclaw_mcp_tool.invoke_openclaw_mcp_tool",
                 side_effect=self.call_tool,
             ),
             patch(
@@ -100,7 +100,7 @@ class FixtureOpenClawBackend:
                 side_effect=self.list_tools,
             ),
             patch(
-                "tools.OpenClawMCPTool.list_openclaw_mcp_tools",
+                "tools.openclaw_mcp_tool.list_openclaw_mcp_tools",
                 side_effect=self.list_tools,
             ),
             patch(
@@ -108,7 +108,7 @@ class FixtureOpenClawBackend:
                 return_value=None,
             ),
             patch(
-                "tools.OpenClawMCPTool.openclaw_runtime_unavailable_reason",
+                "tools.openclaw_mcp_tool.openclaw_runtime_unavailable_reason",
                 return_value=None,
             ),
         ):

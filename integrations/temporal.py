@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from integrations._validation_helpers import report_classify_failure
-from services.temporal import TemporalConfig
+from vendors.temporal.client import TemporalConfig
 
 logger = logging.getLogger(__name__)
 

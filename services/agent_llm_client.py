@@ -21,6 +21,7 @@ from services.llm_retry import (
     extract_retry_after_seconds,
     is_credit_exhausted_error,
 )
+from services.tool_schema_normalize import normalize_openai_tool_input_schema
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +128,14 @@ def _openai_tool_schema(tool: Any) -> dict[str, Any]:
         "function": {
             "name": tool.name,
             "description": tool.description,
-            "parameters": tool.public_input_schema,
+            "parameters": normalize_openai_tool_input_schema(tool.public_input_schema),
         },
     }
+
+
+def build_openai_tool_specs(tools: list[Any]) -> list[dict[str, Any]]:
+    """Build OpenAI chat ``tools`` entries from registered tool objects."""
+    return [_openai_tool_schema(t) for t in tools]
 
 
 class AnthropicAgentClient:
@@ -503,7 +509,7 @@ class OpenAIAgentClient:
         self._max_tokens = max_tokens
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
-        return [_openai_tool_schema(t) for t in tools]
+        return build_openai_tool_specs(tools)
 
     def invoke(
         self,

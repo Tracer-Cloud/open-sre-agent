@@ -28,7 +28,7 @@ from integrations.dagster import (
     list_sensor_ticks,
     validate_dagster_config,
 )
-from services.dagster import DagsterClient
+from vendors.dagster.client import DagsterClient
 
 # --- helpers ---------------------------------------------------------------
 
@@ -1377,10 +1377,6 @@ class TestValidateDagsterConfig:
         assert "endpoint is required" in result.detail.lower()
 
     def test_happy_path_returns_ok_with_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Patch DagsterClient inside the dagster module so validate_dagster_config
-        # builds a mocked client.
-        from integrations import dagster as dagster_module
-
         original_init = DagsterClient.__init__
 
         def patched_init(
@@ -1394,7 +1390,6 @@ class TestValidateDagsterConfig:
                 http_client=_mock_client(responses=[{"data": {"version": "1.13.6"}}]),
             )
 
-        monkeypatch.setattr(dagster_module, "DagsterClient", DagsterClient)
         monkeypatch.setattr(DagsterClient, "__init__", patched_init)
 
         result = validate_dagster_config(DagsterConfig(endpoint="http://x"))
@@ -1402,8 +1397,6 @@ class TestValidateDagsterConfig:
         assert "1.13.6" in result.detail
 
     def test_probe_failure_returns_not_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from integrations import dagster as dagster_module
-
         original_init = DagsterClient.__init__
 
         def patched_init(
@@ -1417,7 +1410,6 @@ class TestValidateDagsterConfig:
                 http_client=_mock_client(raise_on_request=httpx.ConnectError("refused")),
             )
 
-        monkeypatch.setattr(dagster_module, "DagsterClient", DagsterClient)
         monkeypatch.setattr(DagsterClient, "__init__", patched_init)
 
         result = validate_dagster_config(DagsterConfig(endpoint="http://x"))
@@ -1427,8 +1419,6 @@ class TestValidateDagsterConfig:
     def test_response_without_version_field_returns_not_ok(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from integrations import dagster as dagster_module
-
         original_init = DagsterClient.__init__
 
         def patched_init(
@@ -1442,7 +1432,6 @@ class TestValidateDagsterConfig:
                 http_client=_mock_client(responses=[{"data": {}}]),
             )
 
-        monkeypatch.setattr(dagster_module, "DagsterClient", DagsterClient)
         monkeypatch.setattr(DagsterClient, "__init__", patched_init)
 
         result = validate_dagster_config(DagsterConfig(endpoint="http://x"))

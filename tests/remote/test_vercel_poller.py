@@ -19,7 +19,7 @@ from infra.deployment.remote.vercel_poller import (
     enrich_remote_alert_from_vercel,
     parse_vercel_url,
 )
-from services.vercel import VercelConfig
+from vendors.vercel.client import VercelConfig
 
 
 class _FakeVercelClient:

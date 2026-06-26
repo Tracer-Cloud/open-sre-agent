@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GrafanaServiceNamesTool import query_grafana_service_names
+from vendors.grafana import query_grafana_service_names
 
 
 class TestGrafanaServiceNamesToolContract(BaseToolContract):
@@ -37,7 +37,7 @@ def test_run_with_backend() -> None:
 def test_run_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("tools.GrafanaServiceNamesTool._resolve_grafana_client", return_value=mock_client):
+    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_service_names(grafana_endpoint="http://grafana")
     assert result["available"] is False
 
@@ -46,7 +46,7 @@ def test_run_happy_path() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_loki_label_values.return_value = ["svc-a", "svc-b"]
-    with patch("tools.GrafanaServiceNamesTool._resolve_grafana_client", return_value=mock_client):
+    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_service_names(grafana_endpoint="http://grafana")
     assert result["available"] is True
     assert result["service_names"] == ["svc-a", "svc-b"]

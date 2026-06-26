@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MySQLSlowQueriesTool import get_mysql_slow_queries
+from tools.mysql_slow_queries_tool import get_mysql_slow_queries
 
 
 class TestMySQLSlowQueriesToolContract(BaseToolContract):
@@ -53,7 +53,7 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.MySQLSlowQueriesTool.get_slow_queries", return_value=fake_result):
+    with patch("tools.mysql_slow_queries_tool.get_slow_queries", return_value=fake_result):
         result = get_mysql_slow_queries(host="localhost", database="testdb", threshold_ms=500.0)
     assert result["threshold_ms"] == 500.0
     assert result["total_queries"] == 2
@@ -69,7 +69,7 @@ def test_run_performance_schema_disabled() -> None:
         "note": "performance_schema is not enabled. Enable it in my.cnf with performance_schema=ON.",
         "queries": [],
     }
-    with patch("tools.MySQLSlowQueriesTool.get_slow_queries", return_value=fake_result):
+    with patch("tools.mysql_slow_queries_tool.get_slow_queries", return_value=fake_result):
         result = get_mysql_slow_queries(host="localhost", database="testdb")
     assert "note" in result
     assert len(result["queries"]) == 0
@@ -77,7 +77,7 @@ def test_run_performance_schema_disabled() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MySQLSlowQueriesTool.get_slow_queries",
+        "tools.mysql_slow_queries_tool.get_slow_queries",
         return_value={"source": "mysql", "available": False, "error": "database does not exist"},
     ):
         result = get_mysql_slow_queries(host="localhost", database="invalid_db")

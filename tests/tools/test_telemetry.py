@@ -113,7 +113,7 @@ def test_report_run_error_captures_with_expected_tags(
             boom,
             tool_name="query_azure_monitor_logs",
             source="azure",
-            component="tools.AzureMonitorLogsTool",
+            component="tools.azure_monitor_logs_tool",
             method="httpx.post",
             extras={"workspace_id": "w"},
         )
@@ -124,7 +124,7 @@ def test_report_run_error_captures_with_expected_tags(
     assert event.extras["tag.surface"] == "tool"
     assert event.extras["tag.tool_name"] == "query_azure_monitor_logs"
     assert event.extras["tag.source"] == "azure"
-    assert event.extras["tag.component"] == "tools.AzureMonitorLogsTool"
+    assert event.extras["tag.component"] == "tools.azure_monitor_logs_tool"
     assert event.extras["tag.method"] == "httpx.post"
     assert event.extras["workspace_id"] == "w"
     assert "Tool query_azure_monitor_logs failed" in caplog.text
@@ -140,7 +140,7 @@ def test_report_run_error_supports_warning_severity(
             err,
             tool_name="describe_eks_cluster",
             source="eks",
-            component="tools.EKSDescribeClusterTool",
+            component="vendors.eks",
             severity="warning",
         )
 
@@ -162,7 +162,7 @@ def test_report_run_error_uses_provided_logger(
         err,
         tool_name="list_eks_pods",
         source="eks",
-        component="tools.EKSListPodsTool",
+        component="vendors.eks",
         logger=custom_logger,
     )
 
@@ -191,12 +191,12 @@ class ToolFailureCase:
 
 def _azure_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import AzureMonitorLogsTool as mod
+        from tools import azure_monitor_logs_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.AzureMonitorLogsTool import query_azure_monitor_logs
+        from tools.azure_monitor_logs_tool import query_azure_monitor_logs
 
         return query_azure_monitor_logs(workspace_id="w", access_token="t")
 
@@ -205,12 +205,12 @@ def _azure_case() -> ToolFailureCase:
 
 def _openobserve_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import OpenObserveLogsTool as mod
+        from tools import openobserve_logs_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.OpenObserveLogsTool import query_openobserve_logs
+        from tools.openobserve_logs_tool import query_openobserve_logs
 
         return query_openobserve_logs(
             base_url="https://oo.example",
@@ -227,12 +227,12 @@ def _openobserve_case() -> ToolFailureCase:
 
 def _snowflake_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import SnowflakeQueryHistoryTool as mod
+        from tools import snowflake_query_history_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.SnowflakeQueryHistoryTool import query_snowflake_history
+        from tools.snowflake_query_history_tool import query_snowflake_history
 
         return query_snowflake_history(
             account_identifier="acc",
@@ -247,7 +247,7 @@ def _snowflake_case() -> ToolFailureCase:
 
 def _cloudwatch_logs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import CloudWatchLogsTool as mod
+        from tools import cloudwatch_logs_tool as mod
 
         mp.setattr(
             mod,
@@ -256,7 +256,7 @@ def _cloudwatch_logs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.CloudWatchLogsTool import get_cloudwatch_logs
+        from tools.cloudwatch_logs_tool import get_cloudwatch_logs
 
         return get_cloudwatch_logs(log_group="/aws/lambda/test")
 
@@ -265,7 +265,7 @@ def _cloudwatch_logs_case() -> ToolFailureCase:
 
 def _cloudwatch_batch_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import CloudWatchBatchMetricsTool as mod
+        from tools import cloudwatch_batch_metrics_tool as mod
 
         mp.setattr(
             mod,
@@ -274,7 +274,7 @@ def _cloudwatch_batch_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.CloudWatchBatchMetricsTool import get_cloudwatch_batch_metrics
+        from tools.cloudwatch_batch_metrics_tool import get_cloudwatch_batch_metrics
 
         return get_cloudwatch_batch_metrics(job_queue="q", metric_type="cpu")
 
@@ -289,7 +289,7 @@ def _cloudwatch_batch_case() -> ToolFailureCase:
 
 def _google_docs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import GoogleDocsCreateReportTool as mod
+        import vendors.google_docs as mod
 
         mp.setattr(
             mod,
@@ -298,7 +298,7 @@ def _google_docs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.GoogleDocsCreateReportTool import create_google_docs_incident_report
+        from vendors.google_docs import create_google_docs_incident_report
 
         return create_google_docs_incident_report(
             title="t",
@@ -320,12 +320,12 @@ def _google_docs_case() -> ToolFailureCase:
 
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSListClustersTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSListClustersTool import list_eks_clusters
+        from vendors.eks import list_eks_clusters
 
         return list_eks_clusters(role_arn="arn:aws:iam::123:role/x")
 
@@ -334,12 +334,12 @@ def _eks_list_clusters_case() -> ToolFailureCase:
 
 def _eks_describe_cluster_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSDescribeClusterTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSDescribeClusterTool import describe_eks_cluster
+        from vendors.eks import describe_eks_cluster
 
         return describe_eks_cluster(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
@@ -348,12 +348,12 @@ def _eks_describe_cluster_case() -> ToolFailureCase:
 
 def _eks_nodegroup_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSNodegroupHealthTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSNodegroupHealthTool import get_eks_nodegroup_health
+        from vendors.eks import get_eks_nodegroup_health
 
         return get_eks_nodegroup_health(cluster_name="c", role_arn="arn:aws:iam::123:role/x")
 
@@ -362,12 +362,12 @@ def _eks_nodegroup_case() -> ToolFailureCase:
 
 def _eks_addon_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSDescribeAddonTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSDescribeAddonTool import describe_eks_addon
+        from vendors.eks import describe_eks_addon
 
         return describe_eks_addon(
             cluster_name="c",
@@ -380,12 +380,12 @@ def _eks_addon_case() -> ToolFailureCase:
 
 def _eks_events_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSEventsTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSEventsTool import get_eks_events
+        from vendors.eks import get_eks_events
 
         return get_eks_events(
             cluster_name="c",
@@ -398,12 +398,12 @@ def _eks_events_case() -> ToolFailureCase:
 
 def _eks_node_health_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSNodeHealthTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSNodeHealthTool import get_eks_node_health
+        from vendors.eks import get_eks_node_health
 
         return get_eks_node_health(
             cluster_name="c",
@@ -415,12 +415,12 @@ def _eks_node_health_case() -> ToolFailureCase:
 
 def _eks_list_namespaces_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSListNamespacesTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSListNamespacesTool import list_eks_namespaces
+        from vendors.eks import list_eks_namespaces
 
         return list_eks_namespaces(
             cluster_name="c",
@@ -432,12 +432,12 @@ def _eks_list_namespaces_case() -> ToolFailureCase:
 
 def _eks_list_deployments_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSListDeploymentsTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSListDeploymentsTool import list_eks_deployments
+        from vendors.eks import list_eks_deployments
 
         return list_eks_deployments(
             cluster_name="c",
@@ -450,12 +450,12 @@ def _eks_list_deployments_case() -> ToolFailureCase:
 
 def _eks_list_pods_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSListPodsTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSListPodsTool import list_eks_pods
+        from vendors.eks import list_eks_pods
 
         return list_eks_pods(
             cluster_name="c",
@@ -468,12 +468,12 @@ def _eks_list_pods_case() -> ToolFailureCase:
 
 def _eks_pod_logs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import EKSPodLogsTool as mod
+        import vendors.eks as mod
 
         mp.setattr(mod, "build_k8s_clients", MagicMock(side_effect=RuntimeError("k8s")))
 
     def invoke() -> dict[str, Any]:
-        from tools.EKSPodLogsTool import get_eks_pod_logs
+        from vendors.eks import get_eks_pod_logs
 
         return get_eks_pod_logs(
             cluster_name="c",
@@ -490,7 +490,7 @@ def _patch_openclaw_runtime(mp: pytest.MonkeyPatch) -> None:
 
     Each test still patches the specific failure point afterwards.
     """
-    from tools import OpenClawMCPTool as mod
+    from tools import openclaw_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -503,13 +503,13 @@ def _patch_openclaw_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _openclaw_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import OpenClawMCPTool as mod
+        from tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "list_openclaw_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.OpenClawMCPTool import list_openclaw_bridge_tools
+        from tools.openclaw_mcp_tool import list_openclaw_bridge_tools
 
         return list_openclaw_bridge_tools()
 
@@ -518,13 +518,13 @@ def _openclaw_list_case() -> ToolFailureCase:
 
 def _openclaw_search_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import OpenClawMCPTool as mod
+        from tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.OpenClawMCPTool import search_openclaw_conversations
+        from tools.openclaw_mcp_tool import search_openclaw_conversations
 
         return search_openclaw_conversations(search="db error")
 
@@ -546,13 +546,13 @@ def _openclaw_get_conversation_case() -> ToolFailureCase:
     """
 
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import OpenClawMCPTool as mod
+        from tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.OpenClawMCPTool import get_openclaw_conversation
+        from tools.openclaw_mcp_tool import get_openclaw_conversation
 
         return get_openclaw_conversation(conversation_id="conv-1")
 
@@ -567,13 +567,13 @@ def _openclaw_get_conversation_case() -> ToolFailureCase:
 
 def _openclaw_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import OpenClawMCPTool as mod
+        from tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.OpenClawMCPTool import call_openclaw_bridge_tool
+        from tools.openclaw_mcp_tool import call_openclaw_bridge_tool
 
         return call_openclaw_bridge_tool(tool_name="permissions_grant", arguments={})
 
@@ -588,7 +588,7 @@ def _openclaw_call_tool_case() -> ToolFailureCase:
 
 def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
     """Shared patches for PostHog MCP cases — bypass the config/runtime guards."""
-    from tools import PostHogMCPTool as mod
+    from tools import posthog_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -614,13 +614,13 @@ def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _posthog_mcp_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import PostHogMCPTool as mod
+        from tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
         mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.PostHogMCPTool import list_posthog_tools
+        from tools.posthog_mcp_tool import list_posthog_tools
 
         return list_posthog_tools()
 
@@ -635,13 +635,13 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
 
 def _posthog_mcp_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import PostHogMCPTool as mod
+        from tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
         mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.PostHogMCPTool import call_posthog_tool
+        from tools.posthog_mcp_tool import call_posthog_tool
 
         return call_posthog_tool(tool_name="query-run", arguments={})
 
@@ -656,7 +656,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
 
 def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
     """Shared patches for Sentry MCP cases — bypass the config/runtime guards."""
-    from tools import SentryMCPTool as mod
+    from tools import sentry_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -682,13 +682,13 @@ def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _sentry_mcp_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import SentryMCPTool as mod
+        from tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
         mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.SentryMCPTool import list_sentry_tools
+        from tools.sentry_mcp_tool import list_sentry_tools
 
         return list_sentry_tools()
 
@@ -703,13 +703,13 @@ def _sentry_mcp_list_case() -> ToolFailureCase:
 
 def _sentry_mcp_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import SentryMCPTool as mod
+        from tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
         mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.SentryMCPTool import call_sentry_tool
+        from tools.sentry_mcp_tool import call_sentry_tool
 
         return call_sentry_tool(tool_name="get_issue_details", arguments={})
 
@@ -808,7 +808,7 @@ def test_eks_client_error_path_uses_warning_severity(
     """
     from botocore.exceptions import ClientError
 
-    from tools import EKSListClustersTool as mod
+    import vendors.eks as mod
 
     client_error = ClientError(
         error_response={
@@ -858,7 +858,7 @@ def test_eks_nodegroup_health_tags_failing_nodegroup_during_iteration(
     failure on the second nodegroup should reach Sentry tagged with
     ``ng-broken``, not ``None`` or the first nodegroup.
     """
-    from tools import EKSNodegroupHealthTool as mod
+    import vendors.eks as mod
 
     def _describe(_cluster: str, ng: str) -> dict[str, Any]:
         if ng == "ng-broken":
@@ -1158,17 +1158,16 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from tools.registry import get_registered_tool_map
 
-    # Limit the audit to PRODUCTION tools (those defined in ``tools.*``).
-    # External packages registered via ``register_external_tool_package``
-    # (e.g. bench-only tools that live under ``tests/benchmarks/``) have
-    # their own classification expectations and aren't part of this
-    # production-telemetry contract. Filtering by ``origin_module`` keeps
-    # this test stable regardless of test order — whether the bench package
-    # has been imported earlier in the session is no longer relevant.
+    # Limit the audit to PRODUCTION tools (those defined in ``tools.*`` or
+    # ``vendors.*``). External packages registered via
+    # ``register_external_tool_package`` (e.g. bench-only tools that live
+    # under ``tests/benchmarks/``) have their own classification expectations
+    # and aren't part of this production-telemetry contract. Filtering by
+    # ``origin_module`` keeps this test stable regardless of test order.
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
-        if tool.origin_module.startswith("tools.")
+        if tool.origin_module.startswith("tools.") or tool.origin_module.startswith("vendors.")
     }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 

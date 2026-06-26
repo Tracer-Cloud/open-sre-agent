@@ -6,7 +6,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GitHubActionsTool import (
+from tools.github_actions_tool import (
     extract_step_log,
     get_github_actions_step_log,
     list_github_actions_active_runs,
@@ -219,8 +219,8 @@ def test_extract_params_maps_github_repository_fields() -> None:
 def test_list_workflow_runs_happy_path() -> None:
     workflow_tool = cast(Any, list_github_actions_workflow_runs)
     with (
-        patch("tools.GitHubActionsTool.resolve_github_mcp_config", return_value=object()),
-        patch("tools.GitHubActionsTool.call_github_mcp_tool", side_effect=_mcp_response),
+        patch("tools.github_actions_tool.resolve_github_mcp_config", return_value=object()),
+        patch("tools.github_actions_tool.call_github_mcp_tool", side_effect=_mcp_response),
     ):
         result = workflow_tool(owner="org", repo="repo", github_token="tok")
     assert result["available"] is True
@@ -230,8 +230,8 @@ def test_list_workflow_runs_happy_path() -> None:
 def test_list_active_runs_happy_path() -> None:
     active_tool = cast(Any, list_github_actions_active_runs)
     with (
-        patch("tools.GitHubActionsTool.resolve_github_mcp_config", return_value=object()),
-        patch("tools.GitHubActionsTool.call_github_mcp_tool", side_effect=_mcp_response),
+        patch("tools.github_actions_tool.resolve_github_mcp_config", return_value=object()),
+        patch("tools.github_actions_tool.call_github_mcp_tool", side_effect=_mcp_response),
     ):
         result = active_tool(owner="org", repo="repo", github_token="tok")
     assert result["available"] is True
@@ -241,8 +241,8 @@ def test_list_active_runs_happy_path() -> None:
 def test_list_run_jobs_happy_path() -> None:
     jobs_tool = cast(Any, list_github_actions_run_jobs)
     with (
-        patch("tools.GitHubActionsTool.resolve_github_mcp_config", return_value=object()),
-        patch("tools.GitHubActionsTool.call_github_mcp_tool", side_effect=_mcp_response),
+        patch("tools.github_actions_tool.resolve_github_mcp_config", return_value=object()),
+        patch("tools.github_actions_tool.call_github_mcp_tool", side_effect=_mcp_response),
     ):
         result = jobs_tool(owner="org", repo="repo", run_id=101, github_token="tok")
     assert result["available"] is True
@@ -252,8 +252,8 @@ def test_list_run_jobs_happy_path() -> None:
 def test_get_step_log_happy_path() -> None:
     log_tool = cast(Any, get_github_actions_step_log)
     with (
-        patch("tools.GitHubActionsTool.resolve_github_mcp_config", return_value=object()),
-        patch("tools.GitHubActionsTool.call_github_mcp_tool", side_effect=_mcp_response),
+        patch("tools.github_actions_tool.resolve_github_mcp_config", return_value=object()),
+        patch("tools.github_actions_tool.call_github_mcp_tool", side_effect=_mcp_response),
     ):
         result = log_tool(
             owner="org",

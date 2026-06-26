@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from services.opsgenie.client import (
+from vendors.opsgenie.client import (
     OpsGenieClient,
     OpsGenieConfig,
     make_opsgenie_client,
@@ -106,7 +106,7 @@ def test_list_alerts_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.get",
+        "vendors.opsgenie.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().list_alerts()
@@ -123,7 +123,7 @@ def test_list_alerts_with_query(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["params"] = kwargs.get("params", {})
         return _FakeResponse({"data": []})
 
-    monkeypatch.setattr("services.opsgenie.client.httpx.Client.get", _fake_get)
+    monkeypatch.setattr("vendors.opsgenie.client.httpx.Client.get", _fake_get)
     _client().list_alerts(query="status=open", limit=5)
     assert captured["params"]["query"] == "status=open"
     assert captured["params"]["limit"] == 5
@@ -131,7 +131,7 @@ def test_list_alerts_with_query(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_list_alerts_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.get",
+        "vendors.opsgenie.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"message": "forbidden"}, 403),
     )
     result = _client().list_alerts()
@@ -145,7 +145,7 @@ def test_list_alerts_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr("services.opsgenie.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("vendors.opsgenie.client.httpx.Client.get", _raise)
     result = _client().list_alerts()
     assert result["success"] is False
     assert "connection refused" in result["error"]
@@ -181,7 +181,7 @@ def test_get_alert_success(monkeypatch: pytest.MonkeyPatch) -> None:
         }
     }
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.get",
+        "vendors.opsgenie.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_alert("a1")
@@ -193,7 +193,7 @@ def test_get_alert_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_get_alert_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.get",
+        "vendors.opsgenie.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse({"message": "not found"}, 404),
     )
     result = _client().get_alert("bad-id")
@@ -207,7 +207,7 @@ def test_get_alert_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(_self: Any, _path: str, **_kw: Any) -> _FakeResponse:
         raise httpx.TimeoutException("timed out")
 
-    monkeypatch.setattr("services.opsgenie.client.httpx.Client.get", _raise)
+    monkeypatch.setattr("vendors.opsgenie.client.httpx.Client.get", _raise)
     result = _client().get_alert("a1")
     assert result["success"] is False
     assert "timed out" in result["error"]
@@ -236,7 +236,7 @@ def test_get_alert_logs_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
     }
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.get",
+        "vendors.opsgenie.client.httpx.Client.get",
         lambda _self, _path, **_kw: _FakeResponse(payload),
     )
     result = _client().get_alert_logs("a1")
@@ -250,7 +250,7 @@ def test_get_alert_logs_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_add_note_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.post",
+        "vendors.opsgenie.client.httpx.Client.post",
         lambda _self, _path, **_kw: _FakeResponse(
             {"result": "Request will be processed", "requestId": "r1"}
         ),
@@ -261,7 +261,7 @@ def test_add_note_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_add_note_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.opsgenie.client.httpx.Client.post",
+        "vendors.opsgenie.client.httpx.Client.post",
         lambda _self, _path, **_kw: _FakeResponse({"message": "forbidden"}, 403),
     )
     result = _client().add_note("a1", "note")

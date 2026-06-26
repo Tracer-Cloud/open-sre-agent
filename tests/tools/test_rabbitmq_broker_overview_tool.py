@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.RabbitMQBrokerOverviewTool import get_rabbitmq_broker_overview
+from tools.rabbitmq_broker_overview_tool import get_rabbitmq_broker_overview
 
 
 class TestRabbitMQBrokerOverviewToolContract(BaseToolContract):
@@ -29,7 +29,7 @@ def test_run_happy_path() -> None:
         "alarms": {"ok": True, "detail": "ok"},
     }
     with patch(
-        "tools.RabbitMQBrokerOverviewTool.get_broker_overview",
+        "tools.rabbitmq_broker_overview_tool.get_broker_overview",
         return_value=fake_result,
     ):
         result = get_rabbitmq_broker_overview(host="rmq", username="admin")

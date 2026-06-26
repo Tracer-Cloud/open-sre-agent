@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from integrations.tempo import TempoConfig
-from services.tempo.client import TempoClient
+from vendors.tempo.client import TempoClient
 
 
 class _FakeResponse:
@@ -57,7 +57,7 @@ def _client() -> TempoClient:
 def _patch_client(monkeypatch: Any, *responses: Any) -> _FakeClient:
     fake = _FakeClient(list(responses))
     monkeypatch.setattr(
-        "services.tempo.client.httpx.get",
+        "vendors.tempo.client.httpx.get",
         fake.get,
     )
     return fake

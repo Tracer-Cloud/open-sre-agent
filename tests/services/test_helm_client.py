@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from integrations.config_models import HelmIntegrationConfig
-from services.helm.client import HelmClient, _helm_client_major_version
+from vendors.helm.client import HelmClient, _helm_client_major_version
 
 _HELM_V3_VERSION_STDOUT = (
     'Client: version.BuildInfo{Version:"v3.14.0", GitCommit:"abc", GoVersion:"go1.22"}\n'
@@ -28,7 +28,7 @@ def _client() -> HelmClient:
 
 
 def test_helm_probe_missing_binary(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: None)
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: None)
     client = _client()
     result = client.probe_access()
     assert result.status == "missing"
@@ -45,7 +45,7 @@ def test_helm_client_major_version_parses_helm2_and_helm3_output() -> None:
 def test_helm_probe_passes_when_version_and_list_succeed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
@@ -54,7 +54,7 @@ def test_helm_probe_passes_when_version_and_list_succeed(
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     result = _client().probe_access()
     assert result.ok is True
     assert "Helm CLI" in result.detail
@@ -64,7 +64,7 @@ def test_helm_probe_invokes_helm_version_without_client_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: modern Helm rejects ``helm version --client`` with an unknown-flag error."""
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
     cmds: list[list[str]] = []
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
@@ -75,7 +75,7 @@ def test_helm_probe_invokes_helm_version_without_client_flag(
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     _client().probe_access()
     version_cmds = [c for c in cmds if "version" in c]
     assert version_cmds, "probe_access did not invoke `helm version`"
@@ -84,7 +84,7 @@ def test_helm_probe_invokes_helm_version_without_client_flag(
 
 
 def test_helm_probe_rejects_helm2_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
     helm2_out = 'Client: &version.Version{SemVer:"v2.17.0", GitCommit:""}\n'
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
@@ -94,7 +94,7 @@ def test_helm_probe_rejects_helm2_client(monkeypatch: pytest.MonkeyPatch) -> Non
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     result = _client().probe_access()
     assert result.ok is False
     assert "helm 3" in result.detail.lower()
@@ -103,7 +103,7 @@ def test_helm_probe_rejects_helm2_client(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
@@ -112,7 +112,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
             return SimpleNamespace(returncode=0, stdout="WARNING: banner\nnot-json", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     result = _client().probe_access()
     assert result.ok is False
     assert "json" in result.detail.lower()
@@ -121,7 +121,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_valid_json(
 def test_helm_probe_fails_when_list_stdout_is_not_a_json_array(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
@@ -130,7 +130,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_a_json_array(
             return SimpleNamespace(returncode=0, stdout='{"releases":[]}', stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     result = _client().probe_access()
     assert result.ok is False
     assert "array" in result.detail.lower()
@@ -139,7 +139,7 @@ def test_helm_probe_fails_when_list_stdout_is_not_a_json_array(
 def test_helm_probe_fails_when_list_stdout_is_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/usr/bin/helm")
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         if "version" in cmd:
@@ -148,21 +148,21 @@ def test_helm_probe_fails_when_list_stdout_is_empty(
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     result = _client().probe_access()
     assert result.ok is False
     assert "empty" in result.detail.lower()
 
 
 def test_helm_list_parses_json_array(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
 
     payload = '[{"name": "demo", "namespace": "demo"}]'
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         return SimpleNamespace(returncode=0, stdout=payload, stderr="")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     out = _client().list_releases(all_namespaces=True, max_releases=10)
     assert out["success"] is True
     assert out["releases"][0]["name"] == "demo"
@@ -172,7 +172,7 @@ def test_helm_list_reports_all_namespaces_when_cli_uses_dash_a_with_empty_namesp
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Default branch passes `-A`; response metadata must not claim single-namespace mode."""
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
     cmds: list[list[str]] = []
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
@@ -181,7 +181,7 @@ def test_helm_list_reports_all_namespaces_when_cli_uses_dash_a_with_empty_namesp
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     out = _client().list_releases(all_namespaces=False, namespace="", max_releases=10)
     assert out["success"] is True
     assert out["all_namespaces"] is True
@@ -191,7 +191,7 @@ def test_helm_list_reports_all_namespaces_when_cli_uses_dash_a_with_empty_namesp
 def test_helm_list_reports_single_namespace_when_cli_uses_dash_n(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
     cmds: list[list[str]] = []
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
@@ -200,7 +200,7 @@ def test_helm_list_reports_single_namespace_when_cli_uses_dash_n(
             return SimpleNamespace(returncode=0, stdout="[]", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     out = _client().list_releases(all_namespaces=False, namespace="prod", max_releases=10)
     assert out["success"] is True
     assert out["all_namespaces"] is False
@@ -209,7 +209,7 @@ def test_helm_list_reports_single_namespace_when_cli_uses_dash_n(
 
 
 def test_helm_status_requires_release_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
     out = _client().release_status("", "demo")
     assert out["success"] is False
     assert "required" in out["error"].lower()
@@ -219,7 +219,7 @@ def test_helm_get_values_treats_json_null_as_empty_dict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Helm 3 prints the JSON literal null for releases installed without custom values."""
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
         for i, part in enumerate(cmd):
@@ -227,7 +227,7 @@ def test_helm_get_values_treats_json_null_as_empty_dict(
                 return SimpleNamespace(returncode=0, stdout="null\n", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     out = _client().get_values("my-release", "default")
     assert out["success"] is True
     assert out["values"] == {}
@@ -239,7 +239,7 @@ def test_helm_get_manifest_truncates_using_helm_manifest_max_chars_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("HELM_MANIFEST_MAX_CHARS", "5000")
-    monkeypatch.setattr("services.helm.client.shutil.which", lambda _name: "/bin/helm")
+    monkeypatch.setattr("vendors.helm.client.shutil.which", lambda _name: "/bin/helm")
     payload = "x" * 8000
 
     def fake_run(cmd: list[str], **_kwargs: Any) -> SimpleNamespace:
@@ -248,7 +248,7 @@ def test_helm_get_manifest_truncates_using_helm_manifest_max_chars_env(
                 return SimpleNamespace(returncode=0, stdout=payload, stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="unexpected argv")
 
-    monkeypatch.setattr("services.helm.client.subprocess.run", fake_run)
+    monkeypatch.setattr("vendors.helm.client.subprocess.run", fake_run)
     out = _client().get_manifest("rel", "ns")
     assert out["success"] is True
     assert len(out["manifest"]) == 5000

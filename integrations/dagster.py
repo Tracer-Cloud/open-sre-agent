@@ -11,11 +11,13 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure
-from services.dagster import DagsterClient
+
+if TYPE_CHECKING:
+    from vendors.dagster.client import DagsterClient
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,8 @@ def build_dagster_config(raw: dict[str, Any] | None) -> DagsterConfig:
 
 def validate_dagster_config(config: DagsterConfig) -> DagsterValidationResult:
     """Validate Dagster GraphQL reachability with a lightweight version query."""
+    from vendors.dagster.client import DagsterClient  # lazy import to avoid circular dependency
+
     if not config.endpoint:
         return DagsterValidationResult(ok=False, detail="Dagster endpoint is required.")
 
@@ -95,6 +99,8 @@ def dagster_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
 
 
 def _client(config: DagsterConfig) -> DagsterClient:
+    from vendors.dagster.client import DagsterClient
+
     return DagsterClient(
         endpoint=config.endpoint,
         api_token=config.api_token,

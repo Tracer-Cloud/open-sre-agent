@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MongoDBAtlasClustersTool import get_mongodb_atlas_clusters
+from tools.mongodb_atlas_clusters_tool import get_mongodb_atlas_clusters
 
 
 class TestMongoDBAtlasClustersToolContract(BaseToolContract):
@@ -26,7 +26,7 @@ def test_run_happy_path() -> None:
         "total_clusters": 1,
         "clusters": [{"name": "prod-cluster", "state": "IDLE", "mongo_db_version": "7.0.12"}],
     }
-    with patch("tools.MongoDBAtlasClustersTool.get_clusters", return_value=fake_result):
+    with patch("tools.mongodb_atlas_clusters_tool.get_clusters", return_value=fake_result):
         result = get_mongodb_atlas_clusters(
             api_public_key="pub", api_private_key="priv", project_id="proj"
         )
@@ -36,7 +36,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MongoDBAtlasClustersTool.get_clusters",
+        "tools.mongodb_atlas_clusters_tool.get_clusters",
         return_value={"source": "mongodb_atlas", "available": False, "error": "auth failed"},
     ):
         result = get_mongodb_atlas_clusters(

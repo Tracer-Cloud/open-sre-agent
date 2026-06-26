@@ -18,8 +18,8 @@ from integrations.models import (
 )
 from integrations.sentry import build_sentry_config
 from integrations.snowflake import classify as classify_snowflake
-from services.datadog.client import DatadogConfig
-from services.grafana.config import GrafanaAccountConfig
+from vendors.datadog.client import DatadogConfig
+from vendors.grafana.config import GrafanaAccountConfig
 
 
 def test_betterstack_config_rejects_unknown_fields_with_suggestion() -> None:

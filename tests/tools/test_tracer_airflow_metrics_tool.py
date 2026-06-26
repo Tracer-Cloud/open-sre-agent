@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.TracerAirflowMetricsTool import get_airflow_metrics
+from tools.tracer_airflow_metrics_tool import get_airflow_metrics
 
 
 class TestTracerAirflowMetricsToolContract(BaseToolContract):
@@ -35,7 +35,7 @@ def test_run_returns_error_when_no_trace_id() -> None:
 def test_run_happy_path() -> None:
     mock_client = MagicMock()
     mock_client.get_airflow_metrics.return_value = {"dag_runs": 5, "failed": 1}
-    with patch("tools.TracerAirflowMetricsTool.get_tracer_web_client", return_value=mock_client):
+    with patch("tools.tracer_airflow_metrics_tool.get_tracer_web_client", return_value=mock_client):
         result = get_airflow_metrics(trace_id="trace-123")
     assert "metrics" in result
     assert result["metrics"]["dag_runs"] == 5

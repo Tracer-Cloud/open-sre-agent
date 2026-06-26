@@ -7,7 +7,7 @@ import pytest
 from integrations.catalog import classify_integrations, resolve_effective_integrations
 from integrations.models import ArgoCDIntegrationConfig
 from integrations.verify import verify_integrations
-from services.argocd.verifier import verify_argocd as _verify_argocd
+from vendors.argocd.verifier import verify_argocd as _verify_argocd
 
 
 @pytest.fixture(autouse=True)
@@ -158,7 +158,7 @@ def test_argocd_multi_instance_env_is_propagated(monkeypatch: pytest.MonkeyPatch
 
 def test_verify_argocd_passes_with_reachable_api(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.argocd.client import ArgoCDClient
+    from vendors.argocd.client import ArgoCDClient
 
     monkeypatch.setattr(
         ArgoCDClient,
@@ -184,7 +184,7 @@ def test_verify_argocd_reports_missing_auth() -> None:
 
 def test_verify_integrations_dispatches_to_argocd(monkeypatch: pytest.MonkeyPatch) -> None:
     from integrations.probes import ProbeResult
-    from services.argocd.client import ArgoCDClient
+    from vendors.argocd.client import ArgoCDClient
 
     monkeypatch.setattr(
         ArgoCDClient,

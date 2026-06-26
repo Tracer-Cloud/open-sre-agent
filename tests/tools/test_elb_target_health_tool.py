@@ -1,4 +1,4 @@
-"""Unit tests for tools.ELBTargetHealthTool."""
+"""Unit tests for tools.elb_target_health_tool."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tools.ELBTargetHealthTool import _is_available, get_elb_target_health
+from tools.elb_target_health_tool import _is_available, get_elb_target_health
 from tools.utils.aws_topology_helper import extract_target_health_params
 
 
@@ -122,7 +122,7 @@ def test_real_path_combines_groups_and_health(monkeypatch: pytest.MonkeyPatch) -
             },
         }
 
-    monkeypatch.setattr("tools.ELBTargetHealthTool.execute_aws_sdk_call", _execute)
+    monkeypatch.setattr("tools.elb_target_health_tool.execute_aws_sdk_call", _execute)
     out = get_elb_target_health(target_group_arn="tg-1")
     assert out["available"] is True
     assert [t["instance_id"] for t in out["healthy_targets"]] == ["i-healthy"]
@@ -158,7 +158,7 @@ def test_summary_block_is_agent_friendly(monkeypatch: pytest.MonkeyPatch) -> Non
             },
         }
 
-    monkeypatch.setattr("tools.ELBTargetHealthTool.execute_aws_sdk_call", _execute)
+    monkeypatch.setattr("tools.elb_target_health_tool.execute_aws_sdk_call", _execute)
     out = get_elb_target_health(target_group_arn="tg-1")
     summary = out["summary"]
     assert summary["total_targets"] == 4
@@ -203,7 +203,7 @@ def test_partial_target_health_failure_marks_unavailable(
             }
         return {"success": False, "error": "AccessDenied: tg-worker"}
 
-    monkeypatch.setattr("tools.ELBTargetHealthTool.execute_aws_sdk_call", _execute)
+    monkeypatch.setattr("tools.elb_target_health_tool.execute_aws_sdk_call", _execute)
     out = get_elb_target_health(target_group_arns=["tg-web", "tg-worker"])
     assert out["available"] is False, (
         "partial coverage must flip available to False so the agent doesn't "
@@ -221,7 +221,7 @@ def test_real_path_propagates_describe_groups_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "tools.ELBTargetHealthTool.execute_aws_sdk_call",
+        "tools.elb_target_health_tool.execute_aws_sdk_call",
         lambda **_: {"success": False, "error": "AccessDenied"},
     )
     out = get_elb_target_health(target_group_arn="tg-1")

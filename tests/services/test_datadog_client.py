@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from services.datadog.client import DatadogClient, DatadogConfig
+from vendors.datadog.client import DatadogClient, DatadogConfig
 
 # -------------------------
 # Fixtures
@@ -26,7 +26,7 @@ def client(config):
 
 @pytest.fixture
 def mock_httpx_client():
-    with patch("services.datadog.client.httpx.Client") as mock:
+    with patch("vendors.datadog.client.httpx.Client") as mock:
         yield mock
 
 

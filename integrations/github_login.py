@@ -65,4 +65,9 @@ def authenticate_and_configure_github(
         # handle instead of the local system username.
         credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
-    return GitHubLoginResult(ok=True, username=result.authenticated_user, detail=result.detail)
+    username = result.authenticated_user
+    if username:
+        from platform.analytics.cli import identify_github_username
+
+        identify_github_username(username)
+    return GitHubLoginResult(ok=True, username=username, detail=result.detail)

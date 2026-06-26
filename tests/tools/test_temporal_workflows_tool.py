@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.TemporalWorkflowsTool import TemporalWorkflowsTool
+from vendors.temporal import TemporalWorkflowsTool
 
 
 class TestTemporalWorkflowsToolContract(BaseToolContract):
@@ -64,7 +64,7 @@ def test_run_happy_path(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.TemporalWorkflowsTool.TemporalClient",
+        "vendors.temporal.TemporalClient",
         lambda _config: mock_client,
     )
 
@@ -86,7 +86,7 @@ def test_run_returns_error_on_failure(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.TemporalWorkflowsTool.TemporalClient",
+        "vendors.temporal.TemporalClient",
         lambda _config: mock_client,
     )
 
@@ -108,7 +108,7 @@ def test_run_passes_pagination_token(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "tools.TemporalWorkflowsTool.TemporalClient",
+        "vendors.temporal.TemporalClient",
         lambda _config: mock_client,
     )
 

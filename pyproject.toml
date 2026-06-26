@@ -146,6 +146,7 @@ include = [
   "services*",
   "tests*",
   "tools*",
+  "vendors*",
 ]
 
 [tool.setuptools.package-data]

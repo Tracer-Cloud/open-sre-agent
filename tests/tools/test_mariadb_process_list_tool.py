@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MariaDBProcessListTool import get_mariadb_process_list
+from tools.mariadb_process_list_tool import get_mariadb_process_list
 
 
 class TestMariaDBProcessListToolContract(BaseToolContract):
@@ -26,7 +26,7 @@ def test_run_happy_path() -> None:
         "total_processes": 1,
         "processes": [{"id": 1, "user": "root", "command": "Query", "query": "SELECT 1"}],
     }
-    with patch("tools.MariaDBProcessListTool.get_process_list", return_value=fake_result):
+    with patch("tools.mariadb_process_list_tool.get_process_list", return_value=fake_result):
         result = get_mariadb_process_list(host="localhost", database="test", username="user")
     assert result["available"] is True
     assert result["total_processes"] == 1
@@ -34,7 +34,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MariaDBProcessListTool.get_process_list",
+        "tools.mariadb_process_list_tool.get_process_list",
         return_value={"source": "mariadb", "available": False, "error": "connection timeout"},
     ):
         result = get_mariadb_process_list(host="invalid", database="test", username="user")
@@ -43,7 +43,7 @@ def test_run_error_propagated() -> None:
 
 def test_default_db_warning_present_when_database_omitted() -> None:
     with patch(
-        "tools.MariaDBProcessListTool.get_process_list",
+        "tools.mariadb_process_list_tool.get_process_list",
         return_value={"source": "mariadb", "available": True, "processes": []},
     ):
         result = get_mariadb_process_list(host="localhost", username="user")
@@ -53,7 +53,7 @@ def test_default_db_warning_present_when_database_omitted() -> None:
 
 def test_no_default_db_warning_when_database_provided() -> None:
     with patch(
-        "tools.MariaDBProcessListTool.get_process_list",
+        "tools.mariadb_process_list_tool.get_process_list",
         return_value={"source": "mariadb", "available": True, "processes": []},
     ):
         result = get_mariadb_process_list(host="localhost", username="user", database="mydb")

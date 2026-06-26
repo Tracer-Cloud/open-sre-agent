@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MariaDBSlowQueriesTool import get_mariadb_slow_queries
+from tools.mariadb_slow_queries_tool import get_mariadb_slow_queries
 
 
 class TestMariaDBSlowQueriesToolContract(BaseToolContract):
@@ -26,7 +26,7 @@ def test_run_happy_path() -> None:
         "total_queries": 1,
         "queries": [{"digest_text": "SELECT ...", "count": 100, "avg_time_ms": 50.5}],
     }
-    with patch("tools.MariaDBSlowQueriesTool.get_slow_queries", return_value=fake_result):
+    with patch("tools.mariadb_slow_queries_tool.get_slow_queries", return_value=fake_result):
         result = get_mariadb_slow_queries(host="localhost", database="test", username="user")
     assert result["available"] is True
     assert result["total_queries"] == 1
@@ -34,7 +34,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MariaDBSlowQueriesTool.get_slow_queries",
+        "tools.mariadb_slow_queries_tool.get_slow_queries",
         return_value={"source": "mariadb", "available": False, "error": "connection timeout"},
     ):
         result = get_mariadb_slow_queries(host="invalid", database="test", username="user")

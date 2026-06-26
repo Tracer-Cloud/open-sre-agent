@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GrafanaAlertRulesTool import query_grafana_alert_rules
+from vendors.grafana import query_grafana_alert_rules
 
 
 class TestGrafanaAlertRulesToolContract(BaseToolContract):
@@ -55,7 +55,7 @@ def test_run_with_backend() -> None:
 def test_run_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("tools.GrafanaAlertRulesTool._resolve_grafana_client", return_value=mock_client):
+    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_alert_rules(grafana_endpoint="http://grafana")
     assert result["available"] is False
 
@@ -66,7 +66,7 @@ def test_run_happy_path() -> None:
     mock_client.query_alert_rules.return_value = [
         {"uid": "r1", "title": "High CPU", "state": "Firing"}
     ]
-    with patch("tools.GrafanaAlertRulesTool._resolve_grafana_client", return_value=mock_client):
+    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_alert_rules(grafana_endpoint="http://grafana")
     assert result["available"] is True
     assert result["total_rules"] == 1
@@ -76,7 +76,7 @@ def test_run_with_folder_filter() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = True
     mock_client.query_alert_rules.return_value = []
-    with patch("tools.GrafanaAlertRulesTool._resolve_grafana_client", return_value=mock_client):
+    with patch("vendors.grafana._resolve_grafana_client", return_value=mock_client):
         result = query_grafana_alert_rules(folder="my-folder", grafana_endpoint="http://grafana")
     assert result["folder_filter"] == "my-folder"
     mock_client.query_alert_rules.assert_called_once_with(folder="my-folder")

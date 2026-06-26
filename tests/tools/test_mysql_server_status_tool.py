@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.MySQLServerStatusTool import get_mysql_server_status
+from tools.mysql_server_status_tool import get_mysql_server_status
 
 
 class TestMySQLServerStatusToolContract(BaseToolContract):
@@ -42,7 +42,7 @@ def test_run_happy_path() -> None:
             "deadlocks": 0,
         },
     }
-    with patch("tools.MySQLServerStatusTool.get_server_status", return_value=fake_result):
+    with patch("tools.mysql_server_status_tool.get_server_status", return_value=fake_result):
         result = get_mysql_server_status(host="localhost", database="testdb")
     assert result["version"] == "8.0.32"
     assert result["connections"]["current"] == 25
@@ -51,7 +51,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.MySQLServerStatusTool.get_server_status",
+        "tools.mysql_server_status_tool.get_server_status",
         return_value={"source": "mysql", "available": False, "error": "connection refused"},
     ):
         result = get_mysql_server_status(host="invalid", database="testdb")

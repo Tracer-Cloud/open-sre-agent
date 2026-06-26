@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from tools.TwilioNotifyTool import TwilioNotifyTool, twilio_notify
+from tools.twilio_notify_tool import TwilioNotifyTool, twilio_notify
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_run_resolves_credentials_internally_and_dispatches(
         captured["ctx"] = ctx
         return True, "", "SM-SENT"
 
-    monkeypatch.setattr("tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
+    monkeypatch.setattr("tools.twilio_notify_tool.send_twilio_sms_report", _fake_send)
 
     result = twilio_notify.run(body="page on-call", to="+14155559999")
 
@@ -138,7 +138,7 @@ def test_run_falls_back_to_default_recipient(monkeypatch: pytest.MonkeyPatch) ->
         captured["ctx"] = ctx
         return True, "", "SM-DEF"
 
-    monkeypatch.setattr("tools.TwilioNotifyTool.send_twilio_sms_report", _fake_send)
+    monkeypatch.setattr("tools.twilio_notify_tool.send_twilio_sms_report", _fake_send)
 
     result = twilio_notify.run(body="hi")
 
@@ -192,7 +192,7 @@ def test_run_propagates_send_error(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "tools.TwilioNotifyTool.send_twilio_sms_report",
+        "tools.twilio_notify_tool.send_twilio_sms_report",
         lambda _r, _c: (False, "twilio rejected", ""),
     )
 

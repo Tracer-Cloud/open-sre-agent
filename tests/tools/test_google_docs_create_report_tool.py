@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GoogleDocsCreateReportTool import create_google_docs_incident_report
+from vendors.google_docs import create_google_docs_incident_report
 
 
 class TestGoogleDocsCreateReportToolContract(BaseToolContract):
@@ -31,7 +31,7 @@ def test_extract_params_maps_fields() -> None:
 def test_run_returns_failure_when_client_not_configured() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False
-    with patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient", return_value=mock_client):
+    with patch("vendors.google_docs.GoogleDocsClient", return_value=mock_client):
         result = create_google_docs_incident_report(
             title="Incident Report",
             summary="Summary",
@@ -52,7 +52,7 @@ def test_run_happy_path() -> None:
         "document_url": "https://docs.google.com/doc/d/doc-1",
         "title": "Incident Report",
     }
-    with patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient", return_value=mock_client):
+    with patch("vendors.google_docs.GoogleDocsClient", return_value=mock_client):
         result = create_google_docs_incident_report(
             title="Incident Report",
             summary="Summary",
@@ -74,7 +74,7 @@ def test_run_with_sharing() -> None:
         "document_url": "https://docs.google.com/doc/d/doc-1",
         "title": "Incident Report",
     }
-    with patch("tools.GoogleDocsCreateReportTool.GoogleDocsClient", return_value=mock_client):
+    with patch("vendors.google_docs.GoogleDocsClient", return_value=mock_client):
         result = create_google_docs_incident_report(
             title="Incident Report",
             summary="Summary",
@@ -90,9 +90,7 @@ def test_run_with_sharing() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch(
-        "tools.GoogleDocsCreateReportTool.GoogleDocsClient", side_effect=Exception("Auth error")
-    ):
+    with patch("vendors.google_docs.GoogleDocsClient", side_effect=Exception("Auth error")):
         result = create_google_docs_incident_report(
             title="Report",
             summary="Summary",

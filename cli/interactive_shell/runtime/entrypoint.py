@@ -9,7 +9,6 @@ import sys
 
 from rich.console import Console
 
-import platform
 from cli.interactive_shell.runtime.dispatch import run_initial_input
 from cli.interactive_shell.runtime.loop import run_interactive
 from cli.interactive_shell.runtime.session import ReplSession
@@ -38,6 +37,9 @@ def _hydrate_configured_integrations(session: ReplSession) -> None:
 
 async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
     from cli.interactive_shell.ui.theme import get_active_theme_name
+    from platform.analytics.cli import identify_saved_github_username
+
+    identify_saved_github_username()
 
     cfg = _config or ReplConfig.load()
     session = ReplSession()
@@ -89,19 +91,28 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
 
 
 def _github_login_explicitly_bypassed() -> bool:
-    """Cheap, dependency-free check for contexts where the GitHub gate is intentionally skipped.
+    """Cheap check for contexts where the GitHub gate is intentionally skipped.
 
     Used only as the *error* fallback for the first-launch gate. It must not import
     the gate module (that import may be exactly what failed), so it re-derives the
     documented bypasses directly:
 
     * ``OPENSRE_SKIP_GITHUB_LOGIN`` — the user-facing escape hatch.
-    * Non-eligible operating systems — the gate only runs on macOS/Windows.
-    * Non-interactive stdin — scripted / CI runs have no prompt to drive.
+    * CI/CD and test harnesses — env vars only (no analytics import).
+    * Non-interactive stdin — scripted / piped runs have no prompt to drive.
     """
     if os.getenv("OPENSRE_SKIP_GITHUB_LOGIN", "").strip().lower() in {"1", "true", "yes", "on"}:
         return True
-    if platform.system() not in {"Darwin", "Windows"}:
+    if os.getenv("OPENSRE_INVESTIGATION_SOURCE", "").strip().lower() == "test":
+        return True
+    if os.getenv("OPENSRE_IS_TEST", "0").strip() == "1":
+        return True
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+    if os.getenv("GITHUB_ACTIONS", "").strip().lower() == "true":
+        return True
+    ci_value = os.getenv("CI", "").strip().lower()
+    if ci_value in {"1", "true", "yes"}:
         return True
     try:
         return not sys.stdin.isatty()
@@ -119,7 +130,7 @@ def _maybe_require_github_login(console: Console) -> bool:
     On an unexpected error we deliberately do NOT fail open into the REPL: that
     would let a gate bug silently skip the mandatory sign-in. Instead we only
     allow startup when an explicit, documented bypass applies (skip env var,
-    ineligible OS, or non-TTY); otherwise we block and point the user at the
+    CI/test harness, or non-TTY); otherwise we block and point the user at the
     escape hatch so a real outage can never permanently lock them out.
     """
     try:

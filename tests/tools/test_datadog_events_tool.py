@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.DataDogEventsTool import query_datadog_events
+from vendors.datadog import query_datadog_events
 
 
 class TestDataDogEventsToolContract(BaseToolContract):
@@ -41,7 +41,7 @@ def test_run_happy_path() -> None:
         "events": [{"id": "e1", "title": "Deployment", "type": "deploy"}],
         "total": 1,
     }
-    with patch("tools.DataDogEventsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_events(api_key="key", app_key="akey")
     assert result["available"] is True
     assert len(result["events"]) == 1
@@ -50,7 +50,7 @@ def test_run_happy_path() -> None:
 def test_run_api_error() -> None:
     mock_client = MagicMock()
     mock_client.get_events.return_value = {"success": False, "error": "Unauthorized"}
-    with patch("tools.DataDogEventsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_events(api_key="key", app_key="akey")
     assert result["available"] is False
 
@@ -58,6 +58,6 @@ def test_run_api_error() -> None:
 def test_run_with_query() -> None:
     mock_client = MagicMock()
     mock_client.get_events.return_value = {"success": True, "events": [], "total": 0}
-    with patch("tools.DataDogEventsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_events(query="deploy", api_key="key", app_key="akey")
     assert result["query"] == "deploy"

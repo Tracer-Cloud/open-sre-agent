@@ -11,6 +11,7 @@ on:
       - "integrations/**"
       - "platform/**"
       - "services/**"
+      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -33,6 +34,7 @@ on:
       - "integrations/**"
       - "platform/**"
       - "services/**"
+      - "vendors/**"
       - "tools/**"
       - "tests/**"
       - "pyproject.toml"
@@ -50,7 +52,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform services tools"
+  PYTHON_SOURCE_PATHS: "cli config core infra/deployment integrations platform services tools vendors"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -372,6 +374,7 @@ jobs:
               - "integrations/**"
               - "core/orchestration/**"
               - "services/**"
+              - "vendors/**"
               - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"

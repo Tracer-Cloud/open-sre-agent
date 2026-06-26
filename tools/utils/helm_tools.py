@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.config_models import HelmIntegrationConfig
-from services.helm import HelmClient
+from vendors.helm.client import HelmClient
 
 
 def helm_client_for_run(

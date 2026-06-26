@@ -7,11 +7,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.groundcover.client import GroundcoverToolResult
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.GroundcoverLogsTool import query_groundcover_logs
-from tools.GroundcoverQueryReferenceTool import get_groundcover_query_reference
-from tools.GroundcoverTracesTool import query_groundcover_traces
+from vendors.groundcover import (
+    get_groundcover_query_reference,
+    query_groundcover_logs,
+    query_groundcover_traces,
+)
+from vendors.groundcover.client import GroundcoverToolResult
 
 
 def _ok(data: Any, notes: list[str] | None = None) -> GroundcoverToolResult:

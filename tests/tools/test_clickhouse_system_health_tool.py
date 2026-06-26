@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.ClickHouseSystemHealthTool import get_clickhouse_system_health
+from tools.clickhouse_system_health_tool import get_clickhouse_system_health
 
 
 class TestClickHouseSystemHealthToolContract(BaseToolContract):
@@ -79,8 +79,8 @@ def test_run_happy_path_with_table_stats() -> None:
         ],
     }
     with (
-        patch("tools.ClickHouseSystemHealthTool.get_system_health", return_value=health_result),
-        patch("tools.ClickHouseSystemHealthTool.get_table_stats", return_value=table_result),
+        patch("tools.clickhouse_system_health_tool.get_system_health", return_value=health_result),
+        patch("tools.clickhouse_system_health_tool.get_table_stats", return_value=table_result),
     ):
         result = get_clickhouse_system_health(host="ch.example.com", include_table_stats=True)
     assert result["available"] is True
@@ -97,8 +97,8 @@ def test_run_happy_path_without_table_stats() -> None:
         "metrics": {},
     }
     with (
-        patch("tools.ClickHouseSystemHealthTool.get_system_health", return_value=health_result),
-        patch("tools.ClickHouseSystemHealthTool.get_table_stats") as mock_table_stats,
+        patch("tools.clickhouse_system_health_tool.get_system_health", return_value=health_result),
+        patch("tools.clickhouse_system_health_tool.get_table_stats") as mock_table_stats,
     ):
         result = get_clickhouse_system_health(host="ch.example.com", include_table_stats=False)
     assert result["available"] is True
@@ -116,8 +116,10 @@ def test_run_table_stats_error_falls_back_to_empty_list() -> None:
     }
     table_error_result = {"source": "clickhouse", "available": False, "error": "timeout"}
     with (
-        patch("tools.ClickHouseSystemHealthTool.get_system_health", return_value=health_result),
-        patch("tools.ClickHouseSystemHealthTool.get_table_stats", return_value=table_error_result),
+        patch("tools.clickhouse_system_health_tool.get_system_health", return_value=health_result),
+        patch(
+            "tools.clickhouse_system_health_tool.get_table_stats", return_value=table_error_result
+        ),
     ):
         result = get_clickhouse_system_health(host="ch.example.com", include_table_stats=True)
     assert result["available"] is True
@@ -131,8 +133,8 @@ def test_run_skips_table_stats_when_health_unavailable() -> None:
         "error": "connection refused",
     }
     with (
-        patch("tools.ClickHouseSystemHealthTool.get_system_health", return_value=health_result),
-        patch("tools.ClickHouseSystemHealthTool.get_table_stats") as mock_table_stats,
+        patch("tools.clickhouse_system_health_tool.get_system_health", return_value=health_result),
+        patch("tools.clickhouse_system_health_tool.get_table_stats") as mock_table_stats,
     ):
         result = get_clickhouse_system_health(host="ch.example.com", include_table_stats=True)
     assert result["available"] is False
@@ -145,7 +147,7 @@ def test_run_error_path() -> None:
         "available": False,
         "error": "connection refused",
     }
-    with patch("tools.ClickHouseSystemHealthTool.get_system_health", return_value=error_result):
+    with patch("tools.clickhouse_system_health_tool.get_system_health", return_value=error_result):
         result = get_clickhouse_system_health(host="ch.example.com")
     assert result["available"] is False
     assert "error" in result

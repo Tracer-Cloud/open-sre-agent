@@ -87,6 +87,32 @@ def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch)
     assert stub.identified == []
 
 
+def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(
+        "integrations.github_identity.saved_github_username",
+        lambda: "octocat",
+    )
+
+    cli.identify_saved_github_username()
+
+    assert stub.identified == [{"github_username": "octocat"}]
+    assert stub.persistent_properties == {"github_username": "octocat"}
+
+
+def test_identify_saved_github_username_noop_when_store_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr("integrations.github_identity.saved_github_username", lambda: "")
+
+    cli.identify_saved_github_username()
+
+    assert stub.identified == []
+
+
 def test_identify_github_username_reports_failures_to_sentry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -18,7 +18,7 @@ def eks_available_or_backend(sources: dict[str, dict]) -> bool:
     Used by EKS tool wrappers whose ``extract_params`` can delegate to a
     mock ``eks_backend`` for synthetic tests.  Tools without backend
     support continue to use the narrower check in
-    ``tools.EKSListClustersTool._eks_available``.
+    ``tools.eks_list_clusters_tool._eks_available``.
 
     The ``_backend`` slot is reserved for fixture backends that implement
     the EKS tool API (``list_pods``, ``get_pod_logs``, ...). Other backend

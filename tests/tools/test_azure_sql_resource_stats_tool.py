@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.AzureSQLResourceStatsTool import get_azure_sql_resource_stats
+from tools.azure_sql_resource_stats_tool import get_azure_sql_resource_stats
 
 
 class TestAzureSQLResourceStatsToolContract(BaseToolContract):
@@ -35,7 +35,7 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "tools.AzureSQLResourceStatsTool.get_resource_stats",
+        "tools.azure_sql_resource_stats_tool.get_resource_stats",
         return_value=fake_result,
     ):
         result = get_azure_sql_resource_stats(
@@ -47,7 +47,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.AzureSQLResourceStatsTool.get_resource_stats",
+        "tools.azure_sql_resource_stats_tool.get_resource_stats",
         return_value={"source": "azure_sql", "available": False, "error": "timeout"},
     ):
         result = get_azure_sql_resource_stats(server="invalid", database="testdb")

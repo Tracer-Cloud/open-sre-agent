@@ -127,3 +127,24 @@ def test_ignores_automerge_workflow_check_while_running() -> None:
     )
     assert green is True
     assert reason == "all checks green"
+
+
+def test_ignores_mintlify_vale_spellcheck_failure() -> None:
+    green, reason = automerge_pr._checks_are_green(
+        [
+            {
+                "__typename": "CheckRun",
+                "name": "quality (ubuntu-latest)",
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            },
+            {
+                "__typename": "CheckRun",
+                "name": "Mintlify Validation (tracer) - vale-spellcheck",
+                "status": "COMPLETED",
+                "conclusion": "FAILURE",
+            },
+        ]
+    )
+    assert green is True
+    assert reason == "all checks green"

@@ -271,7 +271,7 @@ class TestVictoriaLogsToolAvailability:
     """VictoriaLogsTool importability + executor-path contract."""
 
     def test_tool_importable(self) -> None:
-        from tools.VictoriaLogsTool import VictoriaLogsTool, victoria_logs_query
+        from vendors.victoria_logs import VictoriaLogsTool, victoria_logs_query
 
         assert victoria_logs_query is not None
         assert isinstance(victoria_logs_query, VictoriaLogsTool)
@@ -279,14 +279,14 @@ class TestVictoriaLogsToolAvailability:
         assert victoria_logs_query.source == "victoria_logs"
 
     def test_tool_unavailable_without_source(self) -> None:
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         assert not victoria_logs_query.is_available({})
         assert not victoria_logs_query.is_available({"victoria_logs": {}})
         assert not victoria_logs_query.is_available({"victoria_logs": {"base_url": ""}})
 
     def test_tool_available_with_configured_source(self) -> None:
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         sources = {"victoria_logs": {"base_url": "http://vmlogs:9428"}}
         assert victoria_logs_query.is_available(sources)
@@ -296,7 +296,7 @@ class TestVictoriaLogsToolAvailability:
         surface every kwarg run() declares; otherwise the tool is permanently inert
         from the executor path. This is the regression that broke prior PRs #663/#1060.
         """
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         sources = {
             "victoria_logs": {
@@ -313,10 +313,10 @@ class TestVictoriaLogsToolAvailability:
         assert "limit" in params
         assert "start" in params
 
-    @patch("tools.VictoriaLogsTool.make_victoria_logs_client")
+    @patch("vendors.victoria_logs.make_victoria_logs_client")
     def test_tool_run_via_executor_path(self, mock_factory) -> None:
         """Full executor flow: extract_params → run(**params) → success."""
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         mock_client = mock_factory.return_value
         mock_client.__enter__.return_value = mock_client
@@ -349,7 +349,7 @@ class TestVictoriaLogsToolAvailability:
         mock_factory.assert_called_once_with("http://vmlogs.monitoring.svc:9428", tenant_id=None)
 
     def test_tool_run_missing_base_url(self) -> None:
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         result = victoria_logs_query.run(base_url="")
 
@@ -361,7 +361,7 @@ class TestVictoriaLogsToolAvailability:
         like SplunkSearchTool, not investigation-only (the registry default for
         class-based tools without explicit ``surfaces``).
         """
-        from tools.VictoriaLogsTool import victoria_logs_query
+        from vendors.victoria_logs import victoria_logs_query
 
         assert "investigation" in victoria_logs_query.surfaces
         assert "chat" in victoria_logs_query.surfaces

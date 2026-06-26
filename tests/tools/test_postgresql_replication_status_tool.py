@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.PostgreSQLReplicationStatusTool import get_postgresql_replication_status
+from tools.postgresql_replication_status_tool import get_postgresql_replication_status
 
 
 class TestPostgreSQLReplicationStatusToolContract(BaseToolContract):
@@ -62,7 +62,7 @@ def test_run_happy_path_with_replicas() -> None:
         ],
     }
     with patch(
-        "tools.PostgreSQLReplicationStatusTool.get_replication_status", return_value=fake_result
+        "tools.postgresql_replication_status_tool.get_replication_status", return_value=fake_result
     ):
         result = get_postgresql_replication_status(host="localhost", database="testdb")
     assert result["is_primary"] is True
@@ -82,7 +82,7 @@ def test_run_happy_path_no_replicas() -> None:
         "note": "Server is a primary but has no active replicas.",
     }
     with patch(
-        "tools.PostgreSQLReplicationStatusTool.get_replication_status", return_value=fake_result
+        "tools.postgresql_replication_status_tool.get_replication_status", return_value=fake_result
     ):
         result = get_postgresql_replication_status(host="localhost", database="testdb")
     assert result["is_primary"] is True
@@ -92,7 +92,7 @@ def test_run_happy_path_no_replicas() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.PostgreSQLReplicationStatusTool.get_replication_status",
+        "tools.postgresql_replication_status_tool.get_replication_status",
         return_value={"source": "postgresql", "available": False, "error": "access denied"},
     ):
         result = get_postgresql_replication_status(host="invalid", database="testdb")

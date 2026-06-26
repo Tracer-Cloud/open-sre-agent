@@ -1,6 +1,6 @@
 """Shared Hermes-log polling helper for the test suite.
 
-This is the test-side counterpart to ``tools.HermesLogsTool``: it
+This is the test-side counterpart to ``tools.hermes_logs_tool``: it
 wraps :func:`integrations.hermes.poller.poll_hermes_logs` with the small
 ergonomics every Hermes test ends up wanting — a temp-file context
 manager that appends lines with realistic line endings and flushing,

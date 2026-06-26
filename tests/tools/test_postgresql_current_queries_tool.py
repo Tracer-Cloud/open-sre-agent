@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.PostgreSQLCurrentQueriesTool import get_postgresql_current_queries
+from tools.postgresql_current_queries_tool import get_postgresql_current_queries
 
 
 class TestPostgreSQLCurrentQueriesToolContract(BaseToolContract):
@@ -52,7 +52,9 @@ def test_run_happy_path() -> None:
             },
         ],
     }
-    with patch("tools.PostgreSQLCurrentQueriesTool.get_current_queries", return_value=fake_result):
+    with patch(
+        "tools.postgresql_current_queries_tool.get_current_queries", return_value=fake_result
+    ):
         result = get_postgresql_current_queries(
             host="localhost", database="testdb", threshold_seconds=2
         )
@@ -64,7 +66,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.PostgreSQLCurrentQueriesTool.get_current_queries",
+        "tools.postgresql_current_queries_tool.get_current_queries",
         return_value={"source": "postgresql", "available": False, "error": "permission denied"},
     ):
         result = get_postgresql_current_queries(host="invalid", database="testdb")
@@ -74,7 +76,7 @@ def test_run_error_propagated() -> None:
 
 def test_default_db_warning_present_when_database_omitted() -> None:
     with patch(
-        "tools.PostgreSQLCurrentQueriesTool.get_current_queries",
+        "tools.postgresql_current_queries_tool.get_current_queries",
         return_value={"source": "postgresql", "available": True, "queries": []},
     ):
         result = get_postgresql_current_queries(host="localhost")
@@ -84,7 +86,7 @@ def test_default_db_warning_present_when_database_omitted() -> None:
 
 def test_no_default_db_warning_when_database_provided() -> None:
     with patch(
-        "tools.PostgreSQLCurrentQueriesTool.get_current_queries",
+        "tools.postgresql_current_queries_tool.get_current_queries",
         return_value={"source": "postgresql", "available": True, "queries": []},
     ):
         result = get_postgresql_current_queries(host="localhost", database="mydb")

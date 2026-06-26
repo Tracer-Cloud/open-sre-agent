@@ -199,12 +199,46 @@ def test_gate_error_allows_startup_with_bypass(monkeypatch: Any) -> None:
     assert entrypoint._maybe_require_github_login(_console()) is True
 
 
+def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
+    identified: list[str] = []
+    monkeypatch.setattr(
+        "platform.analytics.cli.identify_saved_github_username",
+        lambda: identified.append("called"),
+    )
+    monkeypatch.setattr(entrypoint, "_hydrate_configured_integrations", lambda _session: None)
+    monkeypatch.setattr(entrypoint, "run_initial_input", lambda *_args, **_kwargs: 0)
+
+    class _Session:
+        active_theme_name = None
+
+        def warm_resolved_integrations(self) -> None:
+            return None
+
+    monkeypatch.setattr(entrypoint, "ReplSession", _Session)
+    monkeypatch.setattr(
+        entrypoint.TaskRegistry,
+        "persistent",
+        staticmethod(lambda: None),
+    )
+    monkeypatch.setattr(
+        entrypoint._prompt_surface,
+        "_build_prompt_session",
+        lambda: type("P", (), {"history": None})(),
+    )
+
+    import asyncio
+
+    asyncio.run(entrypoint.repl_main(initial_input="hello"))
+
+    assert identified == ["called"]
+
+
 def test_explicit_bypass_detects_skip_env(monkeypatch: Any) -> None:
     monkeypatch.setenv("OPENSRE_SKIP_GITHUB_LOGIN", "1")
     assert entrypoint._github_login_explicitly_bypassed() is True
 
 
-def test_explicit_bypass_detects_ineligible_os(monkeypatch: Any) -> None:
+def test_explicit_bypass_detects_ci_environment(monkeypatch: Any) -> None:
     monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
-    monkeypatch.setattr(entrypoint.platform, "system", lambda: "Linux")
+    monkeypatch.setenv("CI", "true")
     assert entrypoint._github_login_explicitly_bypassed() is True

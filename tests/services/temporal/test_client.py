@@ -2,7 +2,7 @@ import base64
 import json
 from typing import Any
 
-from services.temporal.client import TemporalClient, TemporalConfig
+from vendors.temporal.client import TemporalClient, TemporalConfig
 
 
 def _encode_status_payload(status: str) -> str:

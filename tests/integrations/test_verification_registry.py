@@ -286,7 +286,7 @@ class TestAlertmanagerRegistration:
     def test_alertmanager_is_registered_via_canonical_name(self) -> None:
         """Import the vendor verifier module and check it's reachable
         through both the registry and the module-level export."""
-        from services.alertmanager.verifier import verify_alertmanager
+        from vendors.alertmanager.verifier import verify_alertmanager
 
         assert get_verifier("alertmanager") is verify_alertmanager
 

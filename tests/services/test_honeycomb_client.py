@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from integrations.models import HoneycombIntegrationConfig
-from services.honeycomb.client import HoneycombClient
+from vendors.honeycomb.client import HoneycombClient
 
 
 @pytest.fixture

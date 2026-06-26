@@ -20,7 +20,7 @@ from integrations.openclaw import (
     openclaw_runtime_unavailable_reason,
     validate_openclaw_config,
 )
-from tools.OpenClawMCPTool import (
+from tools.openclaw_mcp_tool import (
     call_openclaw_bridge_tool,
     search_openclaw_conversations,
 )

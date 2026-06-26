@@ -96,6 +96,21 @@ def test_github_username_empty_when_not_configured(monkeypatch: object) -> None:
     assert banner_module._github_username() == ""
 
 
+def test_github_username_survives_identity_import_failure(monkeypatch: object) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fail_github_identity(name: str, *args: object, **kwargs: object) -> object:
+        if name == "integrations.github_identity":
+            raise ImportError("simulated heavy import failure")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fail_github_identity)
+
+    assert banner_module._github_username() == ""
+
+
 def test_ambient_column_marks_incomplete_integration(monkeypatch: object) -> None:
     # A hosted MCP record saved without an API token is "present" but cannot
     # connect; the banner must mark it rather than imply it works.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.RedisSlowlogTool import get_redis_slowlog
+from tools.redis_slowlog_tool import get_redis_slowlog
 
 
 class TestRedisSlowlogToolContract(BaseToolContract):
@@ -21,7 +21,7 @@ def test_metadata() -> None:
 
 def test_run_happy_path() -> None:
     fake_result = {"source": "redis", "available": True, "returned_entries": 1, "entries": [{}]}
-    with patch("tools.RedisSlowlogTool.get_slowlog", return_value=fake_result) as mock_fn:
+    with patch("tools.redis_slowlog_tool.get_slowlog", return_value=fake_result) as mock_fn:
         result = get_redis_slowlog(host="localhost", limit=5)
     assert result["available"] is True
     assert mock_fn.call_args.kwargs["limit"] == 5
@@ -29,7 +29,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.RedisSlowlogTool.get_slowlog",
+        "tools.redis_slowlog_tool.get_slowlog",
         return_value={"source": "redis", "available": False, "error": "boom"},
     ):
         result = get_redis_slowlog(host="invalid")

@@ -11,7 +11,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract
-from tools.VictoriaLogsTool import VictoriaLogsTool
+from vendors.victoria_logs import VictoriaLogsTool
 
 
 class TestVictoriaLogsToolContract(BaseToolContract):
@@ -111,7 +111,7 @@ class TestExecutorPathContract:
         tool = VictoriaLogsTool()
         params = tool.extract_params(sources)
 
-        with patch("tools.VictoriaLogsTool.make_victoria_logs_client") as mock_factory:
+        with patch("vendors.victoria_logs.make_victoria_logs_client") as mock_factory:
             mock_client = mock_factory.return_value
             mock_client.__enter__.return_value = mock_client
             mock_client.query_logs.return_value = {
@@ -139,7 +139,7 @@ class TestExecutorPathContract:
         tool = VictoriaLogsTool()
         params = tool.extract_params(sources)
 
-        with patch("tools.VictoriaLogsTool.make_victoria_logs_client") as mock_factory:
+        with patch("vendors.victoria_logs.make_victoria_logs_client") as mock_factory:
             mock_client = mock_factory.return_value
             mock_client.__enter__.return_value = mock_client
             mock_client.query_logs.return_value = {"success": True, "rows": [], "total": 0}
@@ -156,7 +156,7 @@ class TestRun:
         assert "base_url" in result["error"]
 
     def test_propagates_query_failure(self) -> None:
-        with patch("tools.VictoriaLogsTool.make_victoria_logs_client") as mock_factory:
+        with patch("vendors.victoria_logs.make_victoria_logs_client") as mock_factory:
             mock_client = mock_factory.return_value
             mock_client.__enter__.return_value = mock_client
             mock_client.query_logs.return_value = {

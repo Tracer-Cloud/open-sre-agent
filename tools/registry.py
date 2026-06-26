@@ -11,6 +11,7 @@ from functools import lru_cache
 from types import ModuleType
 
 import tools as tools_package
+import vendors as vendors_package
 from tools.base import BaseTool
 from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
 
@@ -137,10 +138,10 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    # Walk the canonical tools package, then any externally-registered
-    # packages in the order they were registered. First definition of a
-    # given tool name wins; duplicates are logged and skipped.
-    packages: list[ModuleType] = [tools_package, *_external_tool_packages]
+    # Walk the canonical tools package, then the vendor surfaces package,
+    # then any externally-registered packages in registration order.
+    # First definition of a given tool name wins; duplicates are logged and skipped.
+    packages: list[ModuleType] = [tools_package, vendors_package, *_external_tool_packages]
     for package in packages:
         for module_name in _iter_tool_module_names(package):
             try:

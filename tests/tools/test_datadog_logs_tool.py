@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.DataDogLogsTool import query_datadog_logs
+from vendors.datadog import query_datadog_logs
 
 
 class TestDataDogLogsToolContract(BaseToolContract):
@@ -45,7 +45,7 @@ def test_run_happy_path() -> None:
         ],
         "total": 2,
     }
-    with patch("tools.DataDogLogsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_logs(query="service:my-service", api_key="key", app_key="akey")
     assert result["available"] is True
     assert len(result["logs"]) == 2
@@ -56,7 +56,7 @@ def test_run_happy_path() -> None:
 def test_run_empty_logs() -> None:
     mock_client = MagicMock()
     mock_client.search_logs.return_value = {"success": True, "logs": [], "total": 0}
-    with patch("tools.DataDogLogsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_logs(query="service:test", api_key="key", app_key="akey")
     assert result["available"] is True
     assert result["logs"] == []
@@ -66,7 +66,7 @@ def test_run_empty_logs() -> None:
 def test_run_api_error() -> None:
     mock_client = MagicMock()
     mock_client.search_logs.return_value = {"success": False, "error": "Rate limited"}
-    with patch("tools.DataDogLogsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_logs(query="service:test", api_key="key", app_key="akey")
     assert result["available"] is False
 
@@ -82,6 +82,6 @@ def test_run_filters_error_keywords() -> None:
         ],
         "total": 3,
     }
-    with patch("tools.DataDogLogsTool.make_client", return_value=mock_client):
+    with patch("vendors.datadog.make_client", return_value=mock_client):
         result = query_datadog_logs(query="test", api_key="key", app_key="akey")
     assert len(result["error_logs"]) == 2

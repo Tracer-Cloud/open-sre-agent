@@ -4,7 +4,7 @@
 Two locations are scanned:
 
 * ``integrations.verifiers.*`` — config-only integrations.
-* ``services.<vendor>.verifier`` — integrations with a dedicated
+* ``vendors.<vendor>.verifier`` — integrations with a dedicated
   vendor SDK client package.
 
 Adding a new vendor is one new file in either location. No edits to a
@@ -22,7 +22,7 @@ import importlib
 import pkgutil
 
 import integrations.verifiers as _verifiers_pkg
-import services as _services_pkg
+import vendors as _vendors_pkg
 
 _VERIFIER_SUBMODULE = "verifier"
 
@@ -33,18 +33,18 @@ def _load_integrations_verifiers() -> None:
         importlib.import_module(f"{_verifiers_pkg.__name__}.{module_info.name}")
 
 
-def _load_service_verifiers() -> None:
-    """Import every ``services.<vendor>.verifier`` module that exists.
+def _load_vendor_verifiers() -> None:
+    """Import every ``vendors.<vendor>.verifier`` module that exists.
 
-    Iterates the ``services`` package one level deep, only attempting
+    Iterates the ``vendors`` package one level deep, only attempting
     ``<vendor>.verifier`` when ``<vendor>`` is itself a package. A
     ``ModuleNotFoundError`` for the ``verifier`` submodule is silently
-    skipped — many service packages have no verifier.
+    skipped — many vendor packages have no verifier.
     """
-    for module_info in pkgutil.iter_modules(_services_pkg.__path__):
+    for module_info in pkgutil.iter_modules(_vendors_pkg.__path__):
         if not module_info.ispkg:
             continue
-        candidate = f"{_services_pkg.__name__}.{module_info.name}.{_VERIFIER_SUBMODULE}"
+        candidate = f"{_vendors_pkg.__name__}.{module_info.name}.{_VERIFIER_SUBMODULE}"
         try:
             importlib.import_module(candidate)
         except ModuleNotFoundError as err:
@@ -59,4 +59,4 @@ def register_all_verifiers() -> None:
     decorator fires. Idempotent.
     """
     _load_integrations_verifiers()
-    _load_service_verifiers()
+    _load_vendor_verifiers()

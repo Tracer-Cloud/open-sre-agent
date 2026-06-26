@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.S3GetObjectTool import get_s3_object
+from tools.s3_get_object_tool import get_s3_object
 
 
 class TestS3GetObjectToolContract(BaseToolContract):
@@ -43,7 +43,7 @@ def test_run_happy_path() -> None:
         "metadata": {},
     }
     with patch(
-        "tools.S3GetObjectTool.get_full_object",
+        "tools.s3_get_object_tool.get_full_object",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_s3_object(bucket="my-bucket", key="my-key.json")
@@ -53,7 +53,7 @@ def test_run_happy_path() -> None:
 
 def test_run_not_found() -> None:
     with patch(
-        "tools.S3GetObjectTool.get_full_object", return_value={"success": True, "exists": False}
+        "tools.s3_get_object_tool.get_full_object", return_value={"success": True, "exists": False}
     ):
         result = get_s3_object(bucket="b", key="k")
     assert result["found"] is False
@@ -61,7 +61,7 @@ def test_run_not_found() -> None:
 
 def test_run_api_error() -> None:
     with patch(
-        "tools.S3GetObjectTool.get_full_object",
+        "tools.s3_get_object_tool.get_full_object",
         return_value={"success": False, "error": "Access denied"},
     ):
         result = get_s3_object(bucket="b", key="k")

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.eks.eks_client import EKSClient
-from services.eks.utils import stored_credentials_to_aws_creds
+from vendors.eks.eks_client import EKSClient
+from vendors.eks.utils import stored_credentials_to_aws_creds
 
 # ---------------------------------------------------------------------------
 # stored_credentials_to_aws_creds
@@ -100,7 +100,7 @@ def test_eks_client_stored_credentials_skip_assume_role() -> None:
             return mock_eks
         raise AssertionError(f"unexpected boto3 client: {service_name}")
 
-    with patch("services.eks.eks_client.boto3.client", side_effect=_boto_client):
+    with patch("vendors.eks.eks_client.boto3.client", side_effect=_boto_client):
         EKSClient(role_arn="", region="us-east-1", credentials=creds)
 
     mock_sts.assume_role.assert_not_called()
@@ -120,7 +120,7 @@ def test_eks_client_stored_credentials_empty_session_token_becomes_none() -> Non
             captured.update(kwargs)
         return MagicMock()
 
-    with patch("services.eks.eks_client.boto3.client", side_effect=_boto_client):
+    with patch("vendors.eks.eks_client.boto3.client", side_effect=_boto_client):
         EKSClient(role_arn="", credentials=creds)
 
     assert captured["aws_session_token"] is None
@@ -143,7 +143,7 @@ def test_eks_client_falls_back_to_assume_role_when_creds_incomplete() -> None:
             return mock_sts
         return MagicMock()
 
-    with patch("services.eks.eks_client.boto3.client", side_effect=_boto_client):
+    with patch("vendors.eks.eks_client.boto3.client", side_effect=_boto_client):
         EKSClient(role_arn="arn:aws:iam::123:role/r", credentials=creds)
 
     mock_sts.assume_role.assert_called_once()
@@ -153,7 +153,7 @@ def test_eks_client_falls_back_to_assume_role_when_creds_incomplete() -> None:
 
 def test_eks_client_no_credentials_no_role_arn_raises() -> None:
     with (
-        patch("services.eks.eks_client.boto3.client"),
+        patch("vendors.eks.eks_client.boto3.client"),
         pytest.raises(ValueError, match="stored credentials or role_arn"),
     ):
         EKSClient(role_arn="", credentials=None)
@@ -175,7 +175,7 @@ def test_eks_client_assume_role_external_id_passed_through() -> None:
             return mock_sts
         return MagicMock()
 
-    with patch("services.eks.eks_client.boto3.client", side_effect=_boto_client):
+    with patch("vendors.eks.eks_client.boto3.client", side_effect=_boto_client):
         EKSClient(role_arn="arn:aws:iam::123:role/r", external_id="ext-123")
 
     kwargs = mock_sts.assume_role.call_args.kwargs

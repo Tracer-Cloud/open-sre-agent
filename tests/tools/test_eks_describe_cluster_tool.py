@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from botocore.exceptions import ClientError
 
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.EKSDescribeClusterTool import describe_eks_cluster
+from vendors.eks import describe_eks_cluster
 
 
 class TestEKSDescribeClusterToolContract(BaseToolContract):
@@ -40,7 +40,7 @@ def test_run_happy_path() -> None:
         "resourcesVpcConfig": {},
         "tags": {},
     }
-    with patch("tools.EKSDescribeClusterTool.EKSClient", return_value=mock_client):
+    with patch("vendors.eks.EKSClient", return_value=mock_client):
         result = describe_eks_cluster(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is True
     assert result["status"] == "ACTIVE"
@@ -53,6 +53,6 @@ def test_run_handles_client_error() -> None:
         {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}, "DescribeCluster"
     )
     mock_client.describe_cluster.side_effect = error
-    with patch("tools.EKSDescribeClusterTool.EKSClient", return_value=mock_client):
+    with patch("vendors.eks.EKSClient", return_value=mock_client):
         result = describe_eks_cluster(cluster_name="c1", role_arn="arn:aws:iam::123:role/r")
     assert result["available"] is False

@@ -715,6 +715,49 @@ def test_unrelated_type_error_is_retried_and_wrapped(
     assert call_count == 3, "non-auth TypeError should be retried like a generic exception"
 
 
+def test_build_openai_tool_specs_preserves_additional_properties_false() -> None:
+    from services.agent_llm_client import build_openai_tool_specs
+
+    tool = types.SimpleNamespace(
+        name="strict_object_tool",
+        description="tool with closed object schema",
+        public_input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+
+    parameters = build_openai_tool_specs([tool])[0]["function"]["parameters"]
+    assert parameters["additionalProperties"] is False
+
+
+def test_build_openai_tool_specs_normalizes_anyof_optional_parameters() -> None:
+    from services.agent_llm_client import build_openai_tool_specs
+    from tests.services.investigation_tool_schema_contract import assert_strict_tool_schema_node
+
+    tool = types.SimpleNamespace(
+        name="optional_field_tool",
+        description="tool with optional field",
+        public_input_schema={
+            "type": "object",
+            "properties": {
+                "required_field": {"type": "string"},
+                "optional_field": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            },
+            "required": ["required_field"],
+        },
+    )
+
+    specs = build_openai_tool_specs([tool])
+    parameters = specs[0]["function"]["parameters"]
+    assert parameters["type"] == "object"
+    assert "anyOf" not in parameters["properties"]["optional_field"]
+    assert parameters["properties"]["optional_field"]["type"] == "string"
+    assert_strict_tool_schema_node(parameters, path="optional_field_tool")
+
+
 def test_get_agent_llm_routes_deepseek_to_openai_compatible_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
