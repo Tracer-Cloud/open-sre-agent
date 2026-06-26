@@ -108,6 +108,12 @@ def _require_live_llm_for_repl_planner() -> None:
             f"{resolution.resolved_provider!r}."
         )
 
+    env_var = get_llm_provider_api_key_env(resolution.resolved_provider)
+    if env_var is not None and not os.environ.get(env_var):
+        pytest.skip(
+            f"Skipping live REPL planner smoke; {env_var} is not exported to the child REPL."
+        )
+
 
 class TestResumeScenarioMatrix:
     """Scenario coverage for /resume session adoption and JSONL persistence."""

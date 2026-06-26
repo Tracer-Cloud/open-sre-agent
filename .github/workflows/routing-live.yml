@@ -158,5 +158,5 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          interactive_shell/harness/tests/test_routing_scenarios.py
+          interactive_shell/harness/tests/test_turn_scenarios.py
           -k "test_live_turn_execution_oracle or test_live_action_planning"
