@@ -188,8 +188,7 @@ def test_incident_actions_can_execute_and_view_saved_rca(
         lambda *_args, **_kwargs: _Prompt(answers),
     )
     monkeypatch.setattr(
-        vercel_incidents,
-        "run_investigation_cli_streaming",
+        "integrations.vercel_incidents.run_investigation_payload",
         lambda **_kwargs: {
             "root_cause": "A broken import path shipped in the deployment.",
             "report": "The deployment failed during the build step.",

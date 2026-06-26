@@ -44,7 +44,6 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         "integrations.__main__ -> cli.interactive_shell.ui.prompt_support",
         "integrations.github_mcp -> cli.interactive_shell.ui.theme",
         "integrations.vercel_incidents -> cli.interactive_shell.state.data_store.context",
-        "integrations.vercel_incidents -> cli.investigation",
     }
 )
 

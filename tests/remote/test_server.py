@@ -236,7 +236,7 @@ def test_execute_investigation_tracks_remote_http_source(
 
     monkeypatch.setattr("infra.deployment.remote.server.track_investigation", fake_track)
     monkeypatch.setattr(
-        "cli.investigation.resolve_investigation_context",
+        "core.orchestration.entrypoints.resolve_investigation_context",
         lambda **_kwargs: ("alert-name", "pipeline-name", "critical"),
     )
     cli_calls: list[dict[str, Any]] = []
@@ -290,7 +290,7 @@ async def test_investigate_stream_persists_state_on_disconnect(
 
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "cli.investigation.resolve_investigation_context",
+        "core.orchestration.entrypoints.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
@@ -341,7 +341,7 @@ async def test_investigate_stream_captures_streaming_exception(
 
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "cli.investigation.resolve_investigation_context",
+        "core.orchestration.entrypoints.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
@@ -858,7 +858,7 @@ async def test_investigate_stream_emits_correlation_payload(
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
 
     monkeypatch.setattr(
-        "cli.investigation.resolve_investigation_context",
+        "core.orchestration.entrypoints.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "orders-pipeline", "critical"),
     )
 

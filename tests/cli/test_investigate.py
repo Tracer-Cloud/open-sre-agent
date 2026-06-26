@@ -6,12 +6,9 @@ import pytest
 
 from cli.interactive_shell.utils.error_handling.cli_error_mapping import reraise_cli_runtime_error
 from cli.interactive_shell.utils.error_handling.errors import OpenSREError
-from cli.investigation import (
-    resolve_investigation_context,
-    run_investigation_cli,
-    stream_investigation_cli,
-)
+from cli.investigation import run_investigation_cli, stream_investigation_cli
 from core.domain.stream import StreamEvent
+from core.orchestration.entrypoints import resolve_investigation_context
 from integrations.llm_cli.errors import CLIAuthenticationRequired
 
 
@@ -56,7 +53,7 @@ def test_run_investigation_cli_passes_investigation_metadata_to_runner(
     def fake_call(**kwargs: Any) -> dict[str, Any]:
         captured.update(kwargs)
         return {
-            "slack_message": "r",
+            "report": "r",
             "problem_md": "p",
             "root_cause": "c",
             "is_noise": False,
@@ -64,7 +61,10 @@ def test_run_investigation_cli_passes_investigation_metadata_to_runner(
         }
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
-    monkeypatch.setattr("cli.investigation.investigate._call_run_investigation", fake_call)
+    monkeypatch.setattr(
+        "core.orchestration.entrypoints.run_investigation_payload",
+        fake_call,
+    )
     run_investigation_cli(
         raw_alert={"description": "x"},
         investigation_metadata=("A", "B", "high"),
@@ -80,11 +80,11 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_run_investigation(
-        *,
-        raw_alert: dict[str, object],
-        **_: object,
+        raw_alert: str | dict[str, object],
+        **kwargs: object,
     ) -> dict[str, object]:
         captured["raw_alert"] = raw_alert
+        captured.update(kwargs)
         return {
             "slack_message": "report body",
             "problem_md": "# problem",
@@ -93,7 +93,8 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "cli.investigation.investigate._call_run_investigation", fake_run_investigation
+        "core.orchestration.entrypoints.run_investigation",
+        fake_run_investigation,
     )
 
     result = run_investigation_cli(
@@ -102,6 +103,8 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
     assert captured == {
         "raw_alert": {"alert_name": "PayloadAlert"},
+        "opensre_evaluate": False,
+        "investigation_metadata": None,
     }
     assert result == {
         "report": "report body",
@@ -114,9 +117,8 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
 def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch) -> None:
     def fake_run(
-        *,
-        raw_alert: dict[str, object],
-        **_: object,
+        raw_alert: str | dict[str, object],
+        **kwargs: object,
     ) -> dict[str, object]:
         return {
             "slack_message": "r",
@@ -128,7 +130,7 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
         }
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
-    monkeypatch.setattr("cli.investigation.investigate._call_run_investigation", fake_run)
+    monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", fake_run)
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "A"},
@@ -150,7 +152,7 @@ def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) ->
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _: "")
     monkeypatch.setattr(
-        "cli.investigation.investigate._call_run_investigation",
+        "core.orchestration.entrypoints.run_investigation_payload",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),
     )
 
@@ -210,7 +212,7 @@ def test_stream_investigation_cli_closes_cleanly_on_generator_close(
 def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def boom(*_args: object, **_kwargs: object) -> NoReturn:
+    def boom(raw_alert: str | dict[str, object], **_kwargs: object) -> NoReturn:
         raise CLIAuthenticationRequired(
             provider="cursor",
             auth_hint="Run: agent login.",
@@ -218,7 +220,7 @@ def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
         )
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
-    monkeypatch.setattr("cli.investigation.investigate._call_run_investigation", boom)
+    monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", boom)
 
     with pytest.raises(OpenSREError, match="not authenticated") as exc_info:
         run_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
