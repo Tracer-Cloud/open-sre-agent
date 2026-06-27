@@ -139,6 +139,7 @@ azure_sql = [
 include = [
   "cli*",
   "config*",
+  "context*",
   "core*",
   "infra*",
   "integrations*",
@@ -159,6 +160,8 @@ data_file = ".pytest_cache/.coverage"
 [tool.vulture]
 paths = [
   "cli",
+  "config",
+  "context",
   "core",
   "infra/deployment",
   "integrations",
