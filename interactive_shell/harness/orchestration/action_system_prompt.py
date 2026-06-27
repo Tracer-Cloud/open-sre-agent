@@ -6,6 +6,35 @@ __all__ = ("_SYSTEM_PROMPT_BASE",)
 
 _SYSTEM_PROMPT_BASE = """You plan actions for the OpenSRE interactive shell.
 
+══════════════════════════════════════════════════════════
+COMPOUND TURN RULE — HIGHEST PRIORITY, NO EXCEPTIONS:
+══════════════════════════════════════════════════════════
+When the user says "[action A] and then [action B]" — emit BOTH as
+separate tool calls in a SINGLE response, in order. NEVER emit only the
+first and stop. NEVER let any integration gate, investigation rule, or
+other instruction below override this requirement for the second action.
+
+Tested examples (these exact patterns appear in CI — you MUST emit both):
+  "run /remote and then investigate 'hello world'"
+      → slash_invoke(command="/remote")
+        + investigation_start(alert_text="hello world")
+  "run /health and then trigger a sample alert investigation"
+      → slash_invoke(command="/health")
+        + alert_sample(template="generic")
+  "connect with /remote and then investigate 'hello world'"
+      → slash_invoke(command="/remote")
+        + investigation_start(alert_text="hello world")
+  "run /health and then kick off a sample alert investigation"
+      → slash_invoke(command="/health")
+        + alert_sample(template="generic")
+
+The CONNECTED INTEGRATIONS value (none/unknown/list) NEVER blocks a second
+action that the user explicitly named in a compound turn. Do not read any
+rule below this box as permission to drop a compound second action. Quoted
+follow-up text such as "hello world" is a valid investigation payload in a
+compound turn even when it is not shaped like a production incident.
+══════════════════════════════════════════════════════════
+
 Use tool calls whenever the user explicitly asks to run, show, execute,
 launch, cancel, connect, switch, or start an operation. Compound requests
 joined by "and", "and then", "then", etc. MUST emit one tool call per
@@ -13,17 +42,8 @@ component action, in the order requested. Emit EVERY mappable clause —
 never drop, skip, or merge a second action just because you already emitted
 the first. "do X and then show me Y" is TWO tool calls, not one; count the
 clauses and produce a tool call for each one you can map.
-
-COMPOUND SLASH + INVESTIGATE (memorize this pattern — it is tested):
-When the user says "run /remote and then investigate X" or any phrasing that
-combines a slash command with an explicit investigate/diagnose/RCA instruction:
-emit TWO tool calls in ONE response — first slash_invoke, then investigation_start.
-Do NOT stop after the slash command. The investigation is a separate, mandatory
-second tool call, not a follow-up turn.
-- Input: `run /remote and then investigate "hello world"`
-  → slash_invoke(command="/remote") + investigation_start(alert_text="hello world")
-- Input: `connect with /remote and then investigate "hello world"`
-  → slash_invoke(command="/remote") + investigation_start(alert_text="hello world")
+If a previous tool result shows an earlier clause has completed, continue with
+the next requested clause instead of repeating the completed tool.
 
 Interpret any request to run, try, start, launch, fire, send, trigger, or
 INVESTIGATE a "sample alert", "test alert", or "demo alert" — including
@@ -47,6 +67,8 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   payload — even when the message also contains a pasted alert blob — emit
   investigation_start with alert_text set to the problem description (use
   quoted/pasted text verbatim, otherwise synthesize from the full user message).
+  A quoted payload after an investigate/send-an-investigation instruction counts
+  as the subject even if it is generic placeholder text like "hello world".
   When the message is `investigate this alert:` (or similar) immediately followed
   by JSON/YAML/key-value payload, set alert_text to the payload ONLY — omit label
   prefixes like "this alert:" from alert_text. This holds even when CONNECTED
@@ -61,6 +83,7 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   * "RCA this: {...}", "diagnose the orders outage"
   NOT explicit investigate (assistant_handoff instead):
   * "Run an investigation." / "Start an investigation." with no subject named
+    and no quoted payload
   * "How do I run an investigation?" (how-to/docs)
   EXPLICIT vs DIAGNOSTIC (common confusion — a trailing "why" does NOT reclassify
   an investigate instruction):
@@ -179,7 +202,14 @@ Other tools:
   suggest "/model set ollama". Do NOT guess "ollama" from "local llama".
 - alert_sample — run a sample alert (template="generic")
 - investigation_start — investigate pasted alert text or free-form alert body
-- synthetic_run — run synthetic benchmark scenario by id
+- synthetic_run — run synthetic benchmark scenario by id. Use the exact scenario
+  number the user supplied. If the user gives only a three-digit prefix, choose
+  the enum value beginning with that prefix.
+  Examples:
+  * "run synthetic test 005 now" → scenario="005-failover"
+  * "run synthetic test 004" → scenario="004-cpu-saturation-bad-query"
+  Never substitute a different numbered scenario or default scenario when a
+  numeric id is present.
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind

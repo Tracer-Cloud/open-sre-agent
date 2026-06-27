@@ -686,7 +686,18 @@ def call_github_mcp_tool(
 ) -> dict[str, Any]:
     """Call a GitHub MCP tool and normalize the result."""
 
-    return cast(dict[str, Any], _run_async(_call_tool_async(config, tool_name, arguments)))
+    try:
+        return cast(dict[str, Any], _run_async(_call_tool_async(config, tool_name, arguments)))
+    except BaseException as err:
+        logger.debug("GitHub MCP tool call failed: %s", tool_name, exc_info=True)
+        return {
+            "is_error": True,
+            "text": _root_cause_message(err),
+            "content": [],
+            "structured_content": None,
+            "tool": tool_name,
+            "arguments": arguments or {},
+        }
 
 
 def _json_schema_allows_empty_object_call(schema: Any) -> bool:

@@ -40,7 +40,13 @@ def execute_synthetic_action(args: dict[str, Any], ctx: ToolContext) -> bool:
 
 TOOL_ENTRY = ToolEntry(
     name="synthetic_run",
-    description="Run a synthetic scenario in a suite.",
+    description=(
+        "Run a synthetic scenario in a suite. Match the scenario id exactly from "
+        "the user request: a bare numeric prefix selects the enum value with that "
+        'same prefix, e.g. "005" -> "005-failover" and "004" -> '
+        '"004-cpu-saturation-bad-query". Never substitute a neighboring numbered '
+        "scenario when the user supplied a numeric id."
+    ),
     input_schema=object_schema(
         properties={
             "suite": string_property(
@@ -48,7 +54,11 @@ TOOL_ENTRY = ToolEntry(
                 enum=("rds_postgres",),
             ),
             "scenario": string_property(
-                description="Synthetic scenario id within the selected suite or `all`.",
+                description=(
+                    "Synthetic scenario id within the selected suite or `all`. "
+                    "For bare numeric requests, use the enum value with the same "
+                    "three-digit prefix."
+                ),
                 enum=("all", *list_rds_postgres_scenarios()),
             ),
         },

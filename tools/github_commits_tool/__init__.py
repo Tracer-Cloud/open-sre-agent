@@ -14,6 +14,20 @@ from tools.utils.github_helpers import (
 )
 
 
+def _unwrap_exception_message(exc: BaseException) -> str:
+    """Unwrap ExceptionGroup / BaseExceptionGroup to a human-readable message."""
+    # ExceptionGroup (Python 3.11+) wraps multiple exceptions; unwrap to the first one.
+    if isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        return _unwrap_exception_message(exc.exceptions[0])
+    cause = getattr(exc, "__cause__", None)
+    if isinstance(cause, BaseException):
+        return _unwrap_exception_message(cause)
+    context = getattr(exc, "__context__", None)
+    if isinstance(context, BaseException) and not getattr(exc, "__suppress_context__", False):
+        return _unwrap_exception_message(context)
+    return f"{type(exc).__name__}: {exc}"
+
+
 def _list_github_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gh = sources["github"]
     return {
@@ -73,24 +87,36 @@ def list_github_commits(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """List recent commits for a GitHub repository through the MCP server."""
-    config = resolve_github_mcp_config(
-        github_url, github_mode, github_token, github_command, github_args
-    )
-    if config is None:
+    try:
+        config = resolve_github_mcp_config(
+            github_url, github_mode, github_token, github_command, github_args
+        )
+        if config is None:
+            return {
+                "source": "github",
+                "available": False,
+                "error": "GitHub MCP integration is not configured.",
+                "commits": [],
+            }
+
+        arguments: dict[str, Any] = {"owner": owner, "repo": repo, "perPage": per_page}
+        if path:
+            arguments["path"] = path
+        if sha:
+            arguments["sha"] = sha
+
+        result = call_github_mcp_tool(config, "list_commits", arguments)
+        payload = normalize_github_tool_result(result)
+        payload["commits"] = payload.pop("structured_content", None)
+        return payload
+    except BaseException as exc:
+        # MCP session cleanup can raise ExceptionGroup (anyio TaskGroup) when both
+        # the tool call and the background receive-loop fail simultaneously.
+        # Catch here to ensure the tool always returns an error dict rather than raising.
+        error_msg = _unwrap_exception_message(exc)
         return {
             "source": "github",
             "available": False,
-            "error": "GitHub MCP integration is not configured.",
+            "error": error_msg,
             "commits": [],
         }
-
-    arguments: dict[str, Any] = {"owner": owner, "repo": repo, "perPage": per_page}
-    if path:
-        arguments["path"] = path
-    if sha:
-        arguments["sha"] = sha
-
-    result = call_github_mcp_tool(config, "list_commits", arguments)
-    payload = normalize_github_tool_result(result)
-    payload["commits"] = payload.pop("structured_content", None)
-    return payload

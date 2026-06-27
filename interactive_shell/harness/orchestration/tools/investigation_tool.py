@@ -49,12 +49,13 @@ def execute_investigation_action(args: dict[str, Any], ctx: ToolContext) -> bool
 TOOL_ENTRY = ToolEntry(
     name="investigation_start",
     description=(
-        "Start an investigation with the provided alert text. Use whenever the user "
-        "explicitly instructs you to investigate, RCA, diagnose, analyze, or "
-        "root-cause a named problem — including 'investigate why X ...' — regardless "
-        "of CONNECTED INTEGRATIONS. In compound turns like `run /remote and then "
-        'investigate "hello world"`, emit this as a separate second tool call; '
-        "never drop the quoted investigation after emitting the slash command. "
+        "Start an investigation with the provided alert text or quoted payload. "
+        "Use whenever the user explicitly instructs you to investigate, RCA, "
+        "diagnose, analyze, root-cause, or send an investigation payload — including "
+        "'investigate why X ...' and placeholder quoted text like 'hello world' — "
+        "regardless of CONNECTED INTEGRATIONS. In compound turns like `run /remote "
+        'and then investigate "hello world"`, emit this as a separate second tool '
+        "call; never drop the quoted investigation after emitting the slash command. "
         "Do NOT use for bare incident statements with no investigate verb, generic "
         "'Run an investigation.' with no subject, sample/demo alerts, or plain data "
         "lookups."

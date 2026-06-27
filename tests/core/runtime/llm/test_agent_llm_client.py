@@ -491,6 +491,60 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
     assert first_tc.get("thought_signature") == "abc123"
 
 
+def test_openai_agent_client_enables_parallel_tool_calls_for_openai(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
+    )
+    client._model = "gpt-5.4-mini"
+    client._max_tokens = 4096
+    client._api_key_env = "OPENAI_API_KEY"
+
+    client.invoke(
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[{"type": "function", "function": {"name": "one", "parameters": {}}}],
+    )
+
+    assert captured["tool_choice"] == "auto"
+    assert captured["parallel_tool_calls"] is True
+
+
+def test_openai_agent_client_omits_parallel_tool_calls_for_compat_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return _make_fake_openai_response(content="ok")
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=capture_create))
+    )
+    client._model = "gemini-3.1-flash-lite-preview"
+    client._max_tokens = 4096
+    client._api_key_env = "GEMINI_API_KEY"
+
+    client.invoke(
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[{"type": "function", "function": {"name": "one", "parameters": {}}}],
+    )
+
+    assert captured["tool_choice"] == "auto"
+    assert "parallel_tool_calls" not in captured
+
+
 def test_openai_o_series_uses_max_completion_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

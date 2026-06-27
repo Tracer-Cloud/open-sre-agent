@@ -192,6 +192,7 @@ def test_investigation_tool_description_preserves_compound_slash_guidance() -> N
     assert entry is not None
     description = entry.description.lower()
     assert "run /remote and then investigate" in description
+    assert "placeholder quoted text like 'hello world'" in description
     assert "separate second tool call" in description
     assert "never drop the quoted investigation" in description
 
@@ -203,3 +204,12 @@ def test_slash_tool_description_preserves_compound_followup_guidance() -> None:
     assert "only the slash-command clause" in description
     assert "run /remote and then investigate" in description
     assert "investigation_start" in description
+
+
+def test_synthetic_tool_description_preserves_numeric_id_guidance() -> None:
+    entry = REGISTRY.get("synthetic_run")
+    assert entry is not None
+    description = entry.description.lower()
+    assert '"005" -> "005-failover"' in description
+    assert '"004" -> "004-cpu-saturation-bad-query"' in description
+    assert "never substitute a neighboring numbered scenario" in description

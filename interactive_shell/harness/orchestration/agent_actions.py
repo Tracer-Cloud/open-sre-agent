@@ -28,7 +28,11 @@ from interactive_shell.utils.error_handling.exception_reporting import report_ex
 
 logger = logging.getLogger(__name__)
 
-_MAX_ACTION_ITERATIONS = 1
+# Some hosted tool-calling models emit one tool call per assistant turn even when
+# parallel tool calls are enabled. Keep the action loop bounded, but allow the
+# shared AgentTool path to continue through a two-action compound request and a
+# final no-tool response.
+_MAX_ACTION_ITERATIONS = 3
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",

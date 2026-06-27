@@ -5,12 +5,14 @@ from __future__ import annotations
 import io
 import json
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 import pytest
 from rich.console import Console
 
+from core.runtime import run_tool_calling_loop
 from core.runtime.llm.agent_llm_client import ToolCall
+from core.runtime.types import AgentTool, AgentToolContext
 from interactive_shell.command_registry import SLASH_COMMANDS
 from interactive_shell.harness.orchestration.action_prompt import (
     build_action_system_prompt,
@@ -73,6 +75,7 @@ _LIVE_CASES = iter_scenarios_for_shard(
     [case for case in _ALL_CASES if case.scenario.intent_class != "deterministic"]
 )
 _TOOL_TO_ACTION_KIND = {tool: kind for kind, tool in ACTION_KIND_TO_TOOL.items()}
+_LIVE_PLANNING_MAX_ITERATIONS = 3
 
 
 def _slash_content(command: str, args: list[str]) -> str:
@@ -158,6 +161,42 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
             str(template_value).strip() if isinstance(template_value, str) else content
         )
     return expected
+
+
+def _planning_probe_tool(tool: AgentTool) -> AgentTool:
+    """Return an inert copy of an action tool for live planning assertions.
+
+    The live planning test should exercise the same provider message shaping as
+    runtime, including bounded follow-up iterations, without running real slash
+    commands or starting investigations.
+    """
+
+    def _execute(args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+        if tool.name == "slash_invoke":
+            command = str(args.get("command", "")).strip()
+            raw_args = args.get("args")
+            parsed_args = (
+                [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
+            )
+            content = _slash_content(command, parsed_args)
+        elif tool.name == "investigation_start":
+            content = str(args.get("alert_text", "")).strip()
+        elif tool.name == "synthetic_run":
+            suite = str(args.get("suite", "")).strip()
+            scenario = str(args.get("scenario", "")).strip()
+            content = f"{suite}:{scenario}" if scenario else suite
+        else:
+            content = tool.name
+        return {"ok": True, "text": f"planned {content}".strip()}
+
+    return AgentTool(
+        name=tool.name,
+        description=tool.description,
+        input_schema=tool.public_input_schema,
+        execute=_execute,
+        source=tool.source,
+        parallel_safe=tool.parallel_safe,
+    )
 
 
 def _content_from_tool_call(kind: ActionKind, args: dict[str, object]) -> str:
@@ -328,12 +367,15 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     from core.runtime.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
-    response = llm.invoke(
-        [{"role": "user", "content": build_action_user_message(prompt)}],
+    result = run_tool_calling_loop(
+        llm=llm,
         system=build_action_system_prompt(session),
-        tools=llm.tool_schemas(tools),
+        messages=[{"role": "user", "content": build_action_user_message(prompt)}],
+        tools=[_planning_probe_tool(tool) for tool in tools],
+        resolved_integrations={},
+        max_iterations=_LIVE_PLANNING_MAX_ITERATIONS,
     )
-    actions = response.tool_calls
+    actions = [tool_call for tool_call, _output in result.executed]
     actual_actions = [_build_actual_action(action) for action in actions]
     expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
 

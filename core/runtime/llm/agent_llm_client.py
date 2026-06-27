@@ -476,6 +476,11 @@ _OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
 _OPENAI_GPT5_RE = re.compile(r"(?:^|[^A-Za-z0-9])gpt-5", re.IGNORECASE)
 
 
+def _supports_openai_parallel_tool_calls_param(api_key_env: str) -> bool:
+    """Return whether this client targets OpenAI's native chat-completions API."""
+    return api_key_env == "OPENAI_API_KEY"
+
+
 def _openai_max_token_kwarg(model: str) -> str:
     # OpenAI o-series (o1, o3, o4-mini, …) and gpt-5 series reject max_tokens.
     # O-series: matches a bare ``o<digit>`` token at the start of the name or
@@ -507,6 +512,7 @@ class OpenAIAgentClient:
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
         self._model = model
         self._max_tokens = max_tokens
+        self._api_key_env = api_key_env
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
@@ -538,6 +544,10 @@ class OpenAIAgentClient:
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
+            if _supports_openai_parallel_tool_calls_param(
+                str(getattr(self, "_api_key_env", "OPENAI_API_KEY"))
+            ):
+                kwargs["parallel_tool_calls"] = True
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
