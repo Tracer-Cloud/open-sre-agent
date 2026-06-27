@@ -47,7 +47,7 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         lambda _state: resolved,
     )
     session = ReplSession()
@@ -63,7 +63,7 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
         return {"github": {}}
 
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -80,7 +80,7 @@ def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
         return {}
 
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()
@@ -95,11 +95,11 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
     quiet_calls: list[str] = []
 
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations",
         lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         lambda _state: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
@@ -134,7 +134,7 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
         return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         _resolve,
     )
     session = ReplSession()

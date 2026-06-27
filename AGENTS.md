@@ -59,7 +59,7 @@ Main packages one level deeper:
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
 - `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
-- `core/orchestration/` — Investigation orchestration, public entrypoints, and stage nodes.
+- `tools/investigation/` — Composite investigation capability, public entrypoints, semantic stages, and reporting.
 - `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
 - `core/runtime/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
 - `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
@@ -96,14 +96,14 @@ Steps:
 
 ### Changing the investigation pipeline
 
-Investigations are coordinated in `core/orchestration/pipeline.py` and exposed via
-`core/orchestration/entrypoints.py`. Stage nodes live under
-`core/orchestration/node/`; publishing under
-`core/orchestration/node/publish_findings/`.
+Investigations are coordinated in `tools/investigation/lifecycle.py` and exposed via
+`tools/investigation/capability.py`. Semantic stages live under
+`tools/investigation/stages/`; reporting lives under
+`tools/investigation/reporting/`.
 
 Files to touch:
 
-- `core/orchestration/pipeline.py` for high-level stage ordering.
+- `tools/investigation/lifecycle.py` for high-level stage ordering.
 - `context/` for shared context assembly, trimming, ranking, and evidence-envelope logic
   that runs before agent/runtime consumption.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
@@ -168,7 +168,7 @@ Basic steps:
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
 - If adding new tests -> always place them in `tests/`, never inside the source packages (no inline tests).
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
-- If investigation branching or loop behavior changes -> update `core/orchestration/pipeline.py` and the tests for that path.
+- If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).
 - If pushing or creating a PR -> follow the full pre-push checklist in [CI.md](CI.md).
 

@@ -236,7 +236,7 @@ def test_execute_investigation_tracks_remote_http_source(
 
     monkeypatch.setattr("infra.deployment.remote.server.track_investigation", fake_track)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.resolve_investigation_context",
+        "tools.investigation.capability.resolve_investigation_context",
         lambda **_kwargs: ("alert-name", "pipeline-name", "critical"),
     )
     cli_calls: list[dict[str, Any]] = []
@@ -290,11 +290,11 @@ async def test_investigate_stream_persists_state_on_disconnect(
 
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.resolve_investigation_context",
+        "tools.investigation.capability.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.astream_investigation",
+        "tools.investigation.capability.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(
@@ -341,11 +341,11 @@ async def test_investigate_stream_captures_streaming_exception(
 
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.resolve_investigation_context",
+        "tools.investigation.capability.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "etl_daily_orders", "critical"),
     )
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.astream_investigation",
+        "tools.investigation.capability.astream_investigation",
         fake_astream_investigation,
     )
     monkeypatch.setattr(remote_server, "capture_exception", captured_errors.append)
@@ -858,17 +858,17 @@ async def test_investigate_stream_emits_correlation_payload(
     monkeypatch.setattr("config.config.LLMSettings.from_env", object)
 
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.resolve_investigation_context",
+        "tools.investigation.capability.resolve_investigation_context",
         lambda **_kwargs: ("test-alert", "orders-pipeline", "critical"),
     )
 
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations",
         lambda _state: {"resolved_integrations": {}},
     )
 
     monkeypatch.setattr(
-        "core.orchestration.node.extract_alert.extract_alert",
+        "tools.investigation.stages.intake.extract_alert",
         lambda _state: {
             "raw_alert": {
                 "alert_name": "PayloadAlert",
@@ -886,12 +886,12 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "core.orchestration.node.investigate.agent.ConnectedInvestigationAgent.run",
+        "tools.investigation.stages.gather_evidence.agent.ConnectedInvestigationAgent.run",
         fake_investigation_run,
     )
 
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.upstream_correlation.node.node_correlate_upstream",
+        "tools.investigation.reporting.upstream_correlation.node.node_correlate_upstream",
         lambda _state, _config=None: {
             "correlation": {
                 "correlated_signals": [
@@ -913,7 +913,7 @@ async def test_investigate_stream_emits_correlation_payload(
     )
 
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.generate_report",
+        "tools.investigation.reporting.node.generate_report",
         lambda _state: {
             "root_cause": "RDS CPU spike",
             "report": "Correlation attached",

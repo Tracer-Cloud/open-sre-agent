@@ -95,7 +95,7 @@ Rules with `always_escalate=True` map to `make test-cov`; all others list their
 
 Run `make test-cov` (instead of only targeted tests) when any of these are true:
 
-- Shared/core code changed (`core/domain/state/`, `core/domain/types/`, `core/orchestration/`, `core/orchestration/node/`)
+- Shared/core code changed (`core/domain/state/`, `core/domain/types/`, `tools/investigation/`, `tools/investigation/stages/`)
 - 3+ app areas changed in one diff
 - New files with unclear blast radius
 - Cross-cutting refactor

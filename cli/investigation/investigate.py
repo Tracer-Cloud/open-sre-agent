@@ -70,7 +70,7 @@ def run_investigation_cli(
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload.
 
-    Thin CLI wrapper over :func:`core.orchestration.entrypoints.run_investigation_payload`:
+    Thin CLI wrapper over :func:`tools.investigation.capability.run_investigation_payload`:
     it adds the CLI-only precondition check (LLM settings) and maps runtime failures to
     structured ``OpenSREError`` messages. The run itself and the result shaping live in
     ``core`` so non-CLI surfaces can reuse them without importing ``cli``.
@@ -80,7 +80,7 @@ def run_investigation_cli(
     """
     _check_llm_settings()
     # Import the heavy investigation runner only when execution starts.
-    from core.orchestration.entrypoints import run_investigation_payload
+    from tools.investigation.capability import run_investigation_payload
 
     try:
         return run_investigation_payload(
@@ -110,7 +110,7 @@ def stream_investigation_cli(
     import queue
     import threading
 
-    from core.orchestration.entrypoints import astream_investigation
+    from tools.investigation.capability import astream_investigation
 
     _check_llm_settings()
 
@@ -223,7 +223,7 @@ def _run_session_alert_payload(
     import queue
 
     from cli.ui.renderer import StreamRenderer
-    from core.orchestration.entrypoints import astream_investigation
+    from tools.investigation.capability import astream_investigation
 
     _check_llm_settings()
     if context_overrides:

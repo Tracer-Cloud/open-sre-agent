@@ -177,9 +177,7 @@ def test_git_state_preserves_first_char_of_unstaged_changed_path(
 
     def fake_run_git(*args: str, strip: bool = True) -> str:
         if args[:2] == ("status", "--porcelain"):
-            raw = (
-                " M core/orchestration/node/investigate/agent.py\n?? tests/benchmarks/new_file.py\n"
-            )
+            raw = " M tools/investigation/stages/gather_evidence/agent.py\n?? tests/benchmarks/new_file.py\n"
             return raw if not strip else raw.strip()
         return "deadbeef"
 
@@ -189,7 +187,7 @@ def test_git_state_preserves_first_char_of_unstaged_changed_path(
 
     assert state["opensre_dirty"] is True
     assert state["opensre_changed_files"] == [
-        "core/orchestration/node/investigate/agent.py",
+        "tools/investigation/stages/gather_evidence/agent.py",
         "tests/benchmarks/new_file.py",
     ]
 

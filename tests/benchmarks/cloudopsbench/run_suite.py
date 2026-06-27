@@ -7,7 +7,6 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from core.orchestration.entrypoints import run_investigation
 from tests.benchmarks.cloudopsbench.case_loader import (
     BENCHMARK_DIR,
     CLOUDOPSBENCH_HF_DATASET_ID,
@@ -19,6 +18,7 @@ from tests.benchmarks.cloudopsbench.case_loader import (
 )
 from tests.benchmarks.cloudopsbench.replay_backend import CloudOpsBenchReplayBackend
 from tests.benchmarks.cloudopsbench.scoring import CloudOpsCaseScore, score_case, summarize_scores
+from tools.investigation.capability import run_investigation
 
 DEFAULT_OUTPUT_DIR = Path(".cloudopsbench-results")
 

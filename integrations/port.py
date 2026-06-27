@@ -3,7 +3,7 @@ remote integration configuration without depending on a specific
 SaaS backend.
 
 Today the only port is :func:`fetch_remote_integrations`, called by
-:mod:`core.orchestration.node.resolve_integrations.node` to pull the user's
+:mod:`tools.investigation.stages.resolve_integrations.node` to pull the user's
 org-wide integrations from a remote source. The default returns an
 empty list; the CLI/SDK boundary registers a Tracer-Cloud-backed
 fetcher via :func:`set_remote_integrations_fetcher`. Headless
@@ -11,7 +11,7 @@ contexts (tests, scripted invocations, alternate hosting) get the
 empty default and fall through to local-store integration sources.
 
 Same Ports & Adapters pattern as
-``core.orchestration.node.publish_findings.upstream_correlation`` and
+``tools.investigation.reporting.upstream_correlation`` and
 ``platform/observability``: core
 depends on abstractions, vendor SDKs plug in as adapters at the
 boundary.

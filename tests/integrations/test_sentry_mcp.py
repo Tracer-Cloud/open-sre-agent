@@ -190,7 +190,7 @@ def test_classify_sentry_mcp_credentials() -> None:
             },
         }
     ]
-    from core.orchestration.node.investigate.tools import availability_view
+    from tools.investigation.stages.gather_evidence.tools import availability_view
 
     resolved = _classify_integrations(records)
     assert "sentry_mcp" in resolved

@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
-from core.orchestration.node.investigate.tools import get_available_tools
 from integrations.registry import family_key
+from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
 
 class _IntegrationSession(Protocol):
@@ -43,7 +43,7 @@ def _resolved_integrations(session: _IntegrationSession | None) -> dict[str, Any
     if session is not None and session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
     try:
-        from core.orchestration.node.resolve_integrations import resolve_integrations_quiet
+        from tools.investigation.stages.resolve_integrations import resolve_integrations_quiet
 
         return resolve_integrations_quiet({})  # type: ignore[arg-type]
     except Exception:

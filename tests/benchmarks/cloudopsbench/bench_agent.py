@@ -1,6 +1,6 @@
 """CloudOpsBench-specific investigation agent.
 
-Subclasses :class:`core.orchestration.node.investigate.ConnectedInvestigationAgent` to
+Subclasses :class:`tools.investigation.stages.gather_evidence.ConnectedInvestigationAgent` to
 enforce a minimum-tool-call floor before the agent is allowed to conclude.
 Production code is untouched — bench-only termination behavior lives here.
 
@@ -30,7 +30,7 @@ import logging
 import os
 from typing import Any, ClassVar
 
-from core.orchestration.node.investigate import ConnectedInvestigationAgent
+from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 from tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)

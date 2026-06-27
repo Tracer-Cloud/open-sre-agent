@@ -231,7 +231,7 @@ class TestSeverityRouting:
         def _boom(**_kwargs: Any) -> Any:
             raise RuntimeError("investigation pipeline exploded")
 
-        monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", _boom)
+        monkeypatch.setattr("tools.investigation.capability.run_investigation", _boom)
         sink = TelegramSink(
             dispatcher,
             investigation_bridge=run_incident_investigation,

@@ -12,7 +12,7 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 | `core/runtime/llm/agent_llm_client.py` | Investigation ReAct loop: tool-calling clients (`get_agent_llm`). |
 | `core/runtime/llm/bedrock_converse.py` | Bedrock Converse request and response shaping. |
 | `core/runtime/llm/tool_schema_normalize.py` | JSON Schema normalization shared by strict tool-calling adapters. |
-| `core/orchestration/node/investigate/` | Investigation agent, prompts, and seed tool calls. |
+| `tools/investigation/stages/gather_evidence/` | Investigation agent, prompts, and seed tool calls. |
 | `core/runtime/` | Shared tool-loop and provider-specific assistant/tool-result messages. |
 | `cli/wizard/config.py` | Onboarding metadata (`SUPPORTED_PROVIDERS`) and model choices. |
 | `cli/wizard/env_sync.py` | `.env` synchronization when provider/model choices change. |

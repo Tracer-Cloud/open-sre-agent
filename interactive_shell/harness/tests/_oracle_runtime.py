@@ -107,7 +107,7 @@ def resolve_live_integrations(
     if not live_services:
         return override, []
 
-    from core.orchestration.node.resolve_integrations import resolve_integrations
+    from tools.investigation.stages.resolve_integrations import resolve_integrations
 
     resolved_updates = resolve_integrations({})  # type: ignore[arg-type]  # real store/env resolution
     resolved_map = _resolved_integrations_map(resolved_updates)

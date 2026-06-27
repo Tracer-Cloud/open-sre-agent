@@ -13,7 +13,7 @@ Use this package for code that gathers, normalizes, trims, and packages the inci
 
 ## Does not belong here
 
-- Agent orchestration or stage sequencing; keep that in `core/orchestration/`.
+- Agent orchestration or stage sequencing; keep that in `tools/investigation/`.
 - The LLM/tool-calling loop; keep that in `core/runtime/`.
 - External clients, config, and verification; keep those in `integrations/`.
 - Agent-callable tool implementations; keep those in `tools/`.

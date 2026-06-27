@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from config.config import has_credentials_for_active_llm_provider
-from core.orchestration.entrypoints import run_investigation
 from tests.synthetic.hermes_rca.scenario_loader import (
     SUITE_DIR,
     HermesScenarioFixture,
@@ -21,6 +20,7 @@ from tests.synthetic.llm_provider_preflight import (
     validate_synthetic_llm_provider,
 )
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
+from tools.investigation.capability import run_investigation
 
 HISTORY_DIR = SUITE_DIR / "benchmark_history"
 

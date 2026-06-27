@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.orchestration.node.publish_findings.upstream_correlation.feature_config import (
+from tools.investigation.reporting.upstream_correlation.feature_config import (
     load_feature_workflow_config,
     resolve_feature_keywords,
 )

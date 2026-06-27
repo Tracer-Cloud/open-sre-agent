@@ -10,7 +10,6 @@ from typing import Any
 
 import questionary
 
-from core.orchestration.entrypoints import run_investigation_payload
 from infra.deployment.remote.vercel_poller import (
     VercelInvestigationCandidate,
     VercelResolutionError,
@@ -20,6 +19,7 @@ from infra.deployment.remote.vercel_poller import (
 from integrations.store import STORE_PATH
 from integrations.vercel.client import make_vercel_client
 from platform.common.runtime_flags import is_json_output
+from tools.investigation.capability import run_investigation_payload
 
 _INCIDENT_CACHE_DIR: Path = STORE_PATH.parent / "investigations" / "vercel"
 

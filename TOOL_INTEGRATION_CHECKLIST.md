@@ -94,7 +94,7 @@ import top-level `vendors/` or `services/` packages.
 If the tool/integration is relevant to investigations:
 
 - [ ] Review alert-source seeding in `core/domain/alerts/alert_source.py`
-- [ ] Review source-priority/prompt mapping in `core/orchestration/node/investigate/prompt.py`
+- [ ] Review source-priority/prompt mapping in `tools/investigation/stages/gather_evidence/prompt.py`
 - [ ] Review evidence/source registration in `core/domain/types/` or related state models when relevant
 - [ ] Add scenario coverage proving the tool surfaces useful RCA evidence
 

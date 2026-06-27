@@ -13,9 +13,6 @@ from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
-    build_runtime_correlation,
-)
 from interactive_shell.utils.error_handling.errors import OpenSREError
 from platform.analytics.cli import (
     capture_test_run_completed,
@@ -28,6 +25,9 @@ from platform.analytics.cli import (
     capture_tests_picker_opened,
 )
 from platform.common.runtime_flags import is_json_output, is_yes
+from tools.investigation.reporting.upstream_correlation.runtime import (
+    build_runtime_correlation,
+)
 
 _TEST_CATEGORIES: tuple[str, ...] = (
     "all",

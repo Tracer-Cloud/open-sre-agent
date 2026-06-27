@@ -488,7 +488,7 @@ class TestClassifyOpenClawIntegration:
                 "auth_token": "tok",
             }
         )
-        from core.orchestration.node.investigate.tools import availability_view
+        from tools.investigation.stages.gather_evidence.tools import availability_view
 
         resolved = _classify_integrations([record])
         assert "openclaw" in resolved

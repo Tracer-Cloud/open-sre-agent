@@ -6,11 +6,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from core.orchestration.entrypoints import run_investigation
 from platform.observability.tracing import traceable
 from tests.synthetic.hermes_rca.scenario_loader import SUITE_DIR, load_scenario
 from tests.synthetic.mock_hermes_backend.backend import FixtureHermesBackend
 from tests.utils.alert_factory.factory import create_alert
+from tools.investigation.capability import run_investigation
 
 
 def _build_annotations(scenario_id: str, scenario_alert: dict[str, Any]) -> dict[str, Any]:

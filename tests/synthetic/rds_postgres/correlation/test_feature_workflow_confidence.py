@@ -4,7 +4,7 @@ from core.domain.correlation.confidence import (
 )
 from core.domain.correlation.scoring import rank_upstream_candidates
 from core.domain.types.upstream import UpstreamCandidate
-from core.orchestration.node.publish_findings.upstream_correlation.feature_workflow import (
+from tools.investigation.reporting.upstream_correlation.feature_workflow import (
     score_feature_workflow_hypothesis,
 )
 

@@ -34,7 +34,7 @@ def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any)
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
     monkeypatch.setattr(
-        "core.orchestration.node.resolve_integrations.resolve_integrations_quiet",
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
         lambda _state: refreshed,
     )
     session = ReplSession()

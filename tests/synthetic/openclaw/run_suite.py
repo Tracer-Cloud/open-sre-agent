@@ -65,7 +65,7 @@ def _check_keywords(root_cause_text: str, keywords: list[str]) -> tuple[bool, li
 
 def run_scenario(scenario: OpenClawScenario) -> dict[str, Any]:
     """Run one scenario and return a result dict."""
-    from core.orchestration.entrypoints import run_investigation
+    from tools.investigation.capability import run_investigation
 
     backend = FixtureOpenClawBackend(scenario)
     resolved = _openclaw_resolved_integrations()

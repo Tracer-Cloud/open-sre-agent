@@ -254,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             raise
     # Wire CLI-flavored implementations into the observability ports
     # (ProgressTracker, debug_print) so any core code under core/domain,
-    # core/orchestration, utils that calls into the abstractions routes
+    # tools/investigation, utils that calls into the abstractions routes
     # through the Rich-aware adapters during this process.
     from interactive_shell.ui.output.boundary import (
         install_product_adapters,

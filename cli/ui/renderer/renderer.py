@@ -555,7 +555,7 @@ class StreamRenderer:
                 )
             return
 
-        from core.orchestration.node.publish_findings.renderers.terminal import (
+        from tools.investigation.reporting.renderers.terminal import (
             render_report as _render,
         )
 

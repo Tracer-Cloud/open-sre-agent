@@ -6,7 +6,7 @@ from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from core.orchestration.node.publish_findings.upstream_correlation.providers import (
+from tools.investigation.reporting.upstream_correlation.providers import (
     NoopUpstreamEvidenceProvider,
     QueryBackedUpstreamEvidenceProvider,
 )

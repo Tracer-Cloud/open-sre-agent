@@ -14,10 +14,10 @@ from typing import Any
 
 from rich.console import Console
 
-import core.orchestration.node.investigate.tools as investigate_tools
 import core.runtime as runtime_module
 import core.runtime.agent as runtime_agent_module
 import core.runtime.llm.agent_llm_client as agent_llm_client
+import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from context.session import ReplSession
 from interactive_shell.tools.tool_gathering import (
     _format_gathering_progress_line,

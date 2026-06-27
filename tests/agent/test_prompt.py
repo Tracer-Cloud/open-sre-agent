@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.orchestration.node.investigate.prompt import (
+from tools.investigation.stages.gather_evidence.prompt import (
     _relevant_sources,
     build_system_prompt,
     format_alert_context,

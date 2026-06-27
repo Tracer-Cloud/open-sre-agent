@@ -7,7 +7,6 @@ import sys
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from core.orchestration.entrypoints import run_investigation
 from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,
     K8sScenarioFixture,
@@ -19,6 +18,7 @@ from tests.synthetic.llm_provider_preflight import (
 )
 from tests.synthetic.mock_datadog_backend.backend import FixtureDatadogBackend
 from tests.synthetic.mock_eks_backend.backend import FixtureEKSBackend
+from tools.investigation.capability import run_investigation
 
 # Maps fixture schema evidence keys to the agent's internal state keys.
 # Kept identity for the initial harness drop; refine as scenarios #261+ land

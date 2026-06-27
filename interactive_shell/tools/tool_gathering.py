@@ -127,7 +127,7 @@ def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
 
-    from core.orchestration.node.resolve_integrations import resolve_integrations
+    from tools.investigation.stages.resolve_integrations import resolve_integrations
 
     updates = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
     resolved = dict(updates.get("resolved_integrations") or {})
@@ -248,9 +248,9 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from core.orchestration.node.investigate.tools import get_available_tools
         from core.runtime.agent import Agent
         from core.runtime.llm.agent_llm_client import get_agent_llm
+        from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
         resolved = _resolve_gather_integrations(session, message)
         tools = get_available_tools(resolved)

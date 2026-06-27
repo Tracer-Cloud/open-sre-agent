@@ -15,7 +15,7 @@ The investigation agent does **not** call integration APIs through the LLM. The 
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
 5. **Seed path** — Before the loop, `_build_seed_calls` may inject deterministic tool runs; synthetic
    assistant + tool-result messages must match the active client
-   (`core/orchestration/node/investigate/agent.py`).
+   (`tools/investigation/stages/gather_evidence/agent.py`).
 
 ```text
 investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / invoke
@@ -29,7 +29,7 @@ investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / inv
 | -------- | -------- |
 | Provider routing | `core/runtime/llm/agent_llm_client.py` (`get_agent_llm`, client classes) |
 | Chat / non-agent LLM | `core/runtime/llm/llm_client.py` (separate path—changes here do not fix investigation) |
-| Investigation loop & message dispatch | `core/orchestration/node/investigate/` and `core/runtime/` |
+| Investigation loop & message dispatch | `tools/investigation/stages/gather_evidence/` and `core/runtime/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
 | Tool definitions | `tools/` (`input_schema`, `public_input_schema`) |
 

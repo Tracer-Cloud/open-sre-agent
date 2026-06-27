@@ -7,9 +7,9 @@ import pytest
 from cli.error_mapping import reraise_cli_runtime_error
 from cli.investigation import run_investigation_cli, stream_investigation_cli
 from core.domain.stream import StreamEvent
-from core.orchestration.entrypoints import resolve_investigation_context
 from integrations.llm_cli.errors import CLIAuthenticationRequired
 from interactive_shell.utils.error_handling.errors import OpenSREError
+from tools.investigation.capability import resolve_investigation_context
 
 
 def test_resolve_investigation_context_prefers_cli_overrides() -> None:
@@ -62,7 +62,7 @@ def test_run_investigation_cli_passes_investigation_metadata_to_runner(
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.run_investigation_payload",
+        "tools.investigation.capability.run_investigation_payload",
         fake_call,
     )
     run_investigation_cli(
@@ -93,7 +93,7 @@ def test_run_investigation_cli_shapes_agent_state(monkeypatch) -> None:
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.run_investigation",
+        "tools.investigation.capability.run_investigation",
         fake_run_investigation,
     )
 
@@ -130,7 +130,7 @@ def test_run_investigation_cli_evaluate_reports_skip_when_no_rubric(monkeypatch)
         }
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
-    monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", fake_run)
+    monkeypatch.setattr("tools.investigation.capability.run_investigation", fake_run)
 
     result = run_investigation_cli(
         raw_alert={"alert_name": "A"},
@@ -152,7 +152,7 @@ def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) ->
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _: "")
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.run_investigation_payload",
+        "tools.investigation.capability.run_investigation_payload",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),
     )
 
@@ -169,7 +169,7 @@ def test_stream_investigation_cli_raises_queued_exception_immediately(
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.astream_investigation",
+        "tools.investigation.capability.astream_investigation",
         fake_astream_investigation,
     )
 
@@ -195,7 +195,7 @@ def test_stream_investigation_cli_closes_cleanly_on_generator_close(
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.astream_investigation",
+        "tools.investigation.capability.astream_investigation",
         fake_astream_investigation,
     )
 
@@ -220,7 +220,7 @@ def test_run_investigation_cli_maps_cli_auth_to_opensre_error(
         )
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
-    monkeypatch.setattr("core.orchestration.entrypoints.run_investigation", boom)
+    monkeypatch.setattr("tools.investigation.capability.run_investigation", boom)
 
     with pytest.raises(OpenSREError, match="not authenticated") as exc_info:
         run_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
@@ -241,7 +241,7 @@ def test_stream_investigation_cli_maps_cli_auth_to_opensre_error(
 
     monkeypatch.setattr("cli.investigation.investigate.resolve_llm_settings", object)
     monkeypatch.setattr(
-        "core.orchestration.entrypoints.astream_investigation",
+        "tools.investigation.capability.astream_investigation",
         fake_astream_investigation,
     )
 

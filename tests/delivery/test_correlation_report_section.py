@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.orchestration.node.publish_findings.context import build_report_context
-from core.orchestration.node.publish_findings.formatters.report import (
+from tools.investigation.reporting.context import build_report_context
+from tools.investigation.reporting.formatters.report import (
     build_slack_blocks,
     format_slack_message,
 )

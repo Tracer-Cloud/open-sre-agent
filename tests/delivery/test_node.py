@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.orchestration.node.publish_findings.gitlab_writeback import _build_mr_note
+from tools.investigation.reporting.gitlab_writeback import _build_mr_note
 
 # ---------------------------------------------------------------------------
 # _build_mr_note
@@ -69,14 +69,14 @@ def _make_state(**overrides: Any) -> dict[str, Any]:
 
 def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch all heavy dependencies of generate_report so we can run it in tests."""
-    from core.orchestration.node.publish_findings.formatters.messages import ReportMessages
+    from tools.investigation.reporting.formatters.messages import ReportMessages
 
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.build_report_context",
+        "tools.investigation.reporting.node.build_report_context",
         lambda _state: {},
     )
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.build_report_messages",
+        "tools.investigation.reporting.node.build_report_messages",
         lambda _ctx: ReportMessages(
             slack_text="slack report text",
             telegram_html="telegram report text",
@@ -85,18 +85,18 @@ def _patch_generate_report_deps(monkeypatch: pytest.MonkeyPatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.create_investigation_and_attach_url",
+        "tools.investigation.reporting.node.create_investigation_and_attach_url",
         lambda _state, _msg, _summary: (
             "inv-id-123",
             "https://app.example.com/inv/1",
         ),
     )
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.render_report",
+        "tools.investigation.reporting.node.render_report",
         lambda _msg, **_kw: None,
     )
     monkeypatch.setattr(
-        "core.orchestration.node.publish_findings.node.open_in_editor",
+        "tools.investigation.reporting.node.open_in_editor",
         lambda _msg: None,
     )
 
@@ -115,15 +115,15 @@ def test_gitlab_writeback_calls_post_when_enabled(monkeypatch: pytest.MonkeyPatc
             "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "tools.investigation.reporting.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
+            "tools.investigation.reporting.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -147,11 +147,11 @@ def test_gitlab_writeback_skipped_when_env_var_not_set(monkeypatch: pytest.Monke
             "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "tools.investigation.reporting.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -175,11 +175,11 @@ def test_gitlab_writeback_skipped_when_mr_iid_missing(monkeypatch: pytest.Monkey
             "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "tools.investigation.reporting.gitlab_writeback.post_gitlab_mr_note",
             mock_post_note,
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(state)  # type: ignore[arg-type]
 
@@ -199,15 +199,15 @@ def test_gitlab_writeback_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch
             "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.post_gitlab_mr_note",
+            "tools.investigation.reporting.gitlab_writeback.post_gitlab_mr_note",
             side_effect=RuntimeError("network error"),
         ),
         patch(
-            "core.orchestration.node.publish_findings.gitlab_writeback.build_gitlab_config",
+            "tools.investigation.reporting.gitlab_writeback.build_gitlab_config",
             return_value=MagicMock(),
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         result = generate_report(_make_state())  # type: ignore[arg-type]
 
@@ -229,10 +229,10 @@ def test_generate_report_can_skip_terminal_render_and_editor(
         patch(
             "platform.notifications.slack_delivery.build_action_blocks", mock_build_action_blocks
         ),
-        patch("core.orchestration.node.publish_findings.node.render_report", mock_render_report),
-        patch("core.orchestration.node.publish_findings.node.open_in_editor", mock_open_in_editor),
+        patch("tools.investigation.reporting.node.render_report", mock_render_report),
+        patch("tools.investigation.reporting.node.open_in_editor", mock_open_in_editor),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(),  # type: ignore[arg-type]
@@ -262,7 +262,7 @@ def test_openclaw_writeback_calls_delivery_when_configured(
             "platform.notifications.openclaw_delivery.send_openclaw_report", mock_openclaw_delivery
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(
@@ -295,7 +295,7 @@ def test_whatsapp_delivery_uses_twilio_credentials(monkeypatch: pytest.MonkeyPat
             "platform.notifications.whatsapp_delivery.send_whatsapp_report", mock_whatsapp_delivery
         ),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(
@@ -335,7 +335,7 @@ def test_twilio_sms_dispatched_when_enabled(monkeypatch: pytest.MonkeyPatch) -> 
         ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(
@@ -380,7 +380,7 @@ def test_twilio_sms_skipped_when_channel_disabled(monkeypatch: pytest.MonkeyPatc
         ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(
@@ -411,7 +411,7 @@ def test_twilio_sms_skipped_without_recipient(monkeypatch: pytest.MonkeyPatch) -
         ),
         patch("platform.notifications.twilio_delivery.send_twilio_sms_report", mock_sms),
     ):
-        from core.orchestration.node.publish_findings.node import generate_report
+        from tools.investigation.reporting.node import generate_report
 
         generate_report(
             _make_state(

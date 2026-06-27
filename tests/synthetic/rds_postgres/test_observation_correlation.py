@@ -8,12 +8,12 @@ from core.domain.types.upstream import (
     TopologyHint,
     UpstreamEvidenceBundle,
 )
-from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
-    build_runtime_correlation,
-)
 from tests.synthetic.rds_postgres.observations import (
     build_observation,
     compute_trajectory_metrics,
+)
+from tools.investigation.reporting.upstream_correlation.runtime import (
+    build_runtime_correlation,
 )
 
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from core.domain.types.upstream import MetricSeries, TopologyHint, UpstreamEvidenceBundle
-from core.orchestration.node.publish_findings.upstream_correlation.runtime import (
+from tools.investigation.reporting.upstream_correlation.runtime import (
     build_runtime_correlation,
 )
 

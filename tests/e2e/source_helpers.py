@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.orchestration.node.investigate.tools import availability_view
+from tools.investigation.stages.gather_evidence.tools import availability_view
 from tools.registry import get_registered_tools
 
 

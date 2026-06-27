@@ -27,7 +27,8 @@ RULES: tuple[PathRule, ...] = (
     # Shared core (always escalate)
     PathRule("core/runtime/", ("tests/core/runtime/",)),
     PathRule("core/domain/", (), always_escalate=True),
-    PathRule("core/orchestration/", (), always_escalate=True),
+    PathRule("tools/investigation/reporting/", ("tests/delivery/")),
+    PathRule("tools/investigation/", (), always_escalate=True),
     PathRule("utils/", (), always_escalate=True),
     # Specific sub-packages before their parent
     PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
@@ -46,7 +47,6 @@ RULES: tuple[PathRule, ...] = (
     PathRule("infra/deployment/remote/", ("tests/remote/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
     PathRule("infra/deployment/", ("tests/deployment/",)),
-    PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("config/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config

@@ -1131,6 +1131,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_splunk_logs",
         "query_tempo",
         "run_diagnostic_code",
+        "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
         "search_github_code",

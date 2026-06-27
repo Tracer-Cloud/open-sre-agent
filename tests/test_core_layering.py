@@ -1,6 +1,6 @@
 """Layering boundary test: core-facing packages must not import from ``cli``.
 
-Core (``core/domain/``, ``core/orchestration/``) reports progress, prints debug
+Core (``core/domain/``, ``tools/investigation/``) reports progress, prints debug
 output, and renders investigation headers/footers through the ports defined in
 :mod:`platform.observability`. Reaching into ``cli.*`` directly couples the
 domain/orchestration layer to the REPL's specific renderer and breaks headless /
@@ -19,8 +19,12 @@ import pytest
 
 _CORE_PACKAGES: tuple[Path, ...] = (
     Path("core/domain"),
-    Path("core/orchestration"),
+    Path("tools/investigation"),
     Path("platform/observability"),
+)
+_CORE_ONLY_PACKAGES: tuple[Path, ...] = (
+    Path("core/domain"),
+    Path("core/runtime"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /
@@ -43,6 +47,13 @@ _FORBIDDEN_PREFIXES: tuple[str, ...] = (
 def _core_modules() -> list[Path]:
     files: list[Path] = []
     for root in _CORE_PACKAGES:
+        files.extend(p for p in root.glob("**/*.py") if "__pycache__" not in p.parts)
+    return sorted(files)
+
+
+def _python_modules_under(roots: tuple[Path, ...]) -> list[Path]:
+    files: list[Path] = []
+    for root in roots:
         files.extend(p for p in root.glob("**/*.py") if "__pycache__" not in p.parts)
     return sorted(files)
 
@@ -83,3 +94,16 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
         "port (``platform.observability.*`` or ``integrations.port``) and register "
         "adapters via ``install_product_adapters``."
     )
+
+
+@pytest.mark.parametrize("module_path", _python_modules_under(_CORE_ONLY_PACKAGES), ids=str)
+def test_core_does_not_import_investigation_tool(module_path: Path) -> None:
+    """Core runtime and domain code must not depend on the product investigation tool."""
+    source = module_path.read_text(encoding="utf-8")
+    imports = _imported_modules(source)
+    leaks = {
+        imp
+        for imp in imports
+        if imp == "tools.investigation" or imp.startswith("tools.investigation.")
+    }
+    assert not leaks, f"{module_path} imports product capability module(s): {sorted(leaks)}"

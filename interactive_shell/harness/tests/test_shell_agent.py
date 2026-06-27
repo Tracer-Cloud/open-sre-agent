@@ -128,5 +128,5 @@ def test_shell_agent_lifecycle_modules_do_not_import_core_domain_or_orchestratio
                 imports.append(node.module)
 
         assert not any(
-            name.startswith(("core.domain", "core.orchestration")) for name in imports
+            name.startswith(("core.domain", "tools.investigation")) for name in imports
         ), module_name
