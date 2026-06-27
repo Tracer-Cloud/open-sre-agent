@@ -8,10 +8,10 @@ from typing import Any
 
 from rich.console import Console
 
-import interactive_shell.harness.pipeline as pipeline
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
 )
+from interactive_shell.harness.turn_loop import ShellTurnContext, ShellTurnDeps, run_shell_turn
 from interactive_shell.runtime.core.session import ReplSession
 
 
@@ -39,19 +39,21 @@ def _record_answer() -> tuple[list[dict[str, Any]], Callable[..., None]]:
     return calls, _fake_answer
 
 
-def test_gather_string_threads_offscreen_observation(monkeypatch: Any) -> None:
+def test_gather_string_threads_offscreen_observation() -> None:
     calls, fake_answer = _record_answer()
-    monkeypatch.setattr(
-        pipeline, "gather_tool_evidence", lambda *_a, **_k: "Tool: x\nArguments: {}\nResult: y"
-    )
 
-    pipeline.handle_message_with_agent(
-        "question",
-        ReplSession(),
-        _console(),
-        recorder=None,
-        execute_actions=_unhandled_turn,
-        answer_agent=fake_answer,
+    run_shell_turn(
+        ShellTurnContext(
+            text="question",
+            session=ReplSession(),
+            console=_console(),
+            recorder=None,
+        ),
+        ShellTurnDeps(
+            execute_actions=_unhandled_turn,
+            gather_evidence=lambda *_a, **_k: "Tool: x\nArguments: {}\nResult: y",
+            answer_agent=fake_answer,
+        ),
     )
 
     assert len(calls) == 1
@@ -59,17 +61,21 @@ def test_gather_string_threads_offscreen_observation(monkeypatch: Any) -> None:
     assert calls[0]["tool_observation_on_screen"] is False
 
 
-def test_gather_none_passes_through_without_observation(monkeypatch: Any) -> None:
+def test_gather_none_passes_through_without_observation() -> None:
     calls, fake_answer = _record_answer()
-    monkeypatch.setattr(pipeline, "gather_tool_evidence", lambda *_a, **_k: None)
 
-    pipeline.handle_message_with_agent(
-        "question",
-        ReplSession(),
-        _console(),
-        recorder=None,
-        execute_actions=_unhandled_turn,
-        answer_agent=fake_answer,
+    run_shell_turn(
+        ShellTurnContext(
+            text="question",
+            session=ReplSession(),
+            console=_console(),
+            recorder=None,
+        ),
+        ShellTurnDeps(
+            execute_actions=_unhandled_turn,
+            gather_evidence=lambda *_a, **_k: None,
+            answer_agent=fake_answer,
+        ),
     )
 
     assert len(calls) == 1
@@ -77,7 +83,7 @@ def test_gather_none_passes_through_without_observation(monkeypatch: Any) -> Non
     assert "tool_observation_on_screen" not in calls[0]
 
 
-def test_existing_command_observation_skips_gather(monkeypatch: Any) -> None:
+def test_existing_command_observation_skips_gather() -> None:
     calls, fake_answer = _record_answer()
 
     def _should_not_run(*_a: Any, **_k: Any) -> str:
@@ -98,15 +104,18 @@ def test_existing_command_observation_skips_gather(monkeypatch: Any) -> None:
             handled=True,
         )
 
-    monkeypatch.setattr(pipeline, "gather_tool_evidence", _should_not_run)
-
-    pipeline.handle_message_with_agent(
-        "question",
-        ReplSession(),
-        _console(),
-        recorder=None,
-        execute_actions=_handled_with_observation,
-        answer_agent=fake_answer,
+    run_shell_turn(
+        ShellTurnContext(
+            text="question",
+            session=ReplSession(),
+            console=_console(),
+            recorder=None,
+        ),
+        ShellTurnDeps(
+            execute_actions=_handled_with_observation,
+            gather_evidence=_should_not_run,
+            answer_agent=fake_answer,
+        ),
     )
 
     assert len(calls) == 1
