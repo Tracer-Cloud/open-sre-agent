@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from core.domain.state import InvestigationState
+from context.state import InvestigationState
 from platform.masking import MaskingContext
 from platform.notifications.ingest_delivery import create_investigation_and_attach_url
 from tools.investigation.reporting.context import build_report_context

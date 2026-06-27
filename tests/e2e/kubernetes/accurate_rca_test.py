@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.domain.state import make_initial_state
+from tools.investigation.state_factory import make_initial_state
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "datadog_k8s_alert.json"
 

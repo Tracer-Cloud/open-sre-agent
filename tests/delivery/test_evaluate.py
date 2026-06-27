@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from core.domain.state import make_initial_state
 from tools.investigation.reporting import deliver
+from tools.investigation.state_factory import make_initial_state
 
 
 def _make_state(*, evaluate: bool = False, rubric: str = "") -> dict[str, Any]:

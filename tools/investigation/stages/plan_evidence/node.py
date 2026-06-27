@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from context.state import InvestigationState
 from core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
 )
 from core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES, score_tools
-from core.domain.state import InvestigationState
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 from tools.investigation.stages.gather_evidence.tools import (

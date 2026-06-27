@@ -166,7 +166,7 @@ def stream_opensre_query_alerts(
     ``opensre investigate --evaluate``. Pass ``strip_scoring_points=True`` for a stream
     with rubric removed (e.g. publishing blind fixtures). Investigations still strip
     rubric from the in-graph ``raw_alert`` when ``--evaluate`` is off — see
-    :func:`core.domain.state.factory.make_initial_state`.
+    :func:`tools.investigation.state_factory.make_initial_state`.
     """
     load_dataset = _load_dataset_loader()
     repo = (dataset_id or OPENSRE_HF_DATASET_ID).strip()

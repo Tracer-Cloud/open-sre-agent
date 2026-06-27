@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.domain.state import InvestigationState
+from context.state import InvestigationState
 
 logger = logging.getLogger(__name__)
 

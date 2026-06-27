@@ -10,7 +10,7 @@ from typing import Any
 from rich.console import Console
 
 from context.session import ReplSession
-from interactive_shell.harness.response import generate_response
+from interactive_shell.agent_shell.agent import answer_cli_agent
 from interactive_shell.runtime.core.token_accounting import (
     build_llm_run_info,
     estimate_tokens,
@@ -134,12 +134,12 @@ class _FakeLLMClient:
         yield self._content
 
 
-def test_generate_response_records_session_token_usage(monkeypatch: Any) -> None:
+def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
     monkeypatch.setattr("core.runtime.llm.llm_client.get_llm_for_reasoning", lambda: client)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False)
-    generate_response("hello", session, console)
+    answer_cli_agent("hello", session, console)
     assert session.token_usage["input"] > 0
     assert session.token_usage["output"] == estimate_tokens("assistant reply")
     assert session.token_usage_has_estimates is True

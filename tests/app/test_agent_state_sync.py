@@ -5,8 +5,8 @@ Fix drift by updating ``AgentStateModel`` and the matching slice in
 ``core/domain/state/runtime_slices.py`` or ``core/domain/state/slices.py``.
 """
 
-from core.domain.state.agent_state import AgentState, AgentStateModel
-from core.domain.state.runtime_slices import (
+from context.state.models import AgentState, AgentStateModel
+from context.state.runtime_slices import (
     AlertInputSlice,
     DeliveryContextSlice,
     DeliveryOutputSlice,
@@ -17,7 +17,7 @@ from core.domain.state.runtime_slices import (
     MaskingSlice,
     SessionContext,
 )
-from core.domain.state.slices import ChatStateSlice
+from context.state.slices import ChatStateSlice
 
 _SLICE_TYPES: tuple[type, ...] = (
     SessionContext,

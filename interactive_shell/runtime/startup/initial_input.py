@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from context.session import ReplSession
-from interactive_shell.harness.agent import ShellAgent
+from interactive_shell.agent_shell.agent import handle_message_with_agent
 from interactive_shell.ui import render_banner
 from interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from interactive_shell.utils.telemetry import PromptRecorder
@@ -14,7 +14,7 @@ from platform.analytics.repl_context import bind_cli_session_id, reset_cli_sessi
 _TURN_KIND = "agent"
 
 
-async def run_initial_input(
+def run_initial_input(
     initial_input: str,
     session: ReplSession,
 ) -> int:
@@ -25,30 +25,24 @@ async def run_initial_input(
         legacy_windows=False,
     )
     render_banner(console)
-    agent = ShellAgent(session)
-    agent.start()
-    try:
-        for line in initial_input.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            render_submitted_prompt(console, session, stripped)
-            session_token = bind_cli_session_id(session.session_id)
-            try:
-                recorder = PromptRecorder.start(
-                    session=session, text=stripped, turn_kind=_TURN_KIND
-                )
-                await agent.prompt(
-                    stripped,
-                    console=console,
-                    recorder=recorder,
-                    confirm_fn=None,
-                    is_tty=False,
-                )
-            finally:
-                reset_cli_session_id(session_token)
-    finally:
-        await agent.stop()
+    for line in initial_input.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        render_submitted_prompt(console, session, stripped)
+        session_token = bind_cli_session_id(session.session_id)
+        try:
+            recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
+            handle_message_with_agent(
+                stripped,
+                session,
+                console,
+                recorder=recorder,
+                confirm_fn=None,
+                is_tty=False,
+            )
+        finally:
+            reset_cli_session_id(session_token)
     return 0
 
 

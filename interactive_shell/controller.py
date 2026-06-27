@@ -15,6 +15,11 @@ from context.session import (
     create_repl_runtime_context,
 )
 from core.domain.alerts import inbox as _alert_inbox
+from interactive_shell.agent_shell.agent import (
+    AgentTurnRunner,
+    run_agent_turn_queue,
+    run_input_loop,
+)
 from interactive_shell.runtime.background.workers import BackgroundTaskManager
 from interactive_shell.runtime.core.prompt_manager import PromptManager
 from interactive_shell.runtime.core.state import (
@@ -31,11 +36,6 @@ from interactive_shell.runtime.input.actions import (
     IgnoreInput,
     InputAction,
     SubmitTurn,
-)
-from interactive_shell.runtime.turn_host import (
-    ShellTurnHost,
-    run_agent_prompt_queue,
-    run_input_loop,
 )
 
 log = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        self.turn_host = ShellTurnHost(
+        self.turn_runner = AgentTurnRunner(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
@@ -139,9 +139,9 @@ class InteractiveShellController:
             self.prompt.invalidate_prompt,
         )
         self.tasks = self.background.start_all(
-            lambda: run_agent_prompt_queue(
+            lambda: run_agent_turn_queue(
                 state=self.state,
-                run_prompt=self.turn_host.run_prompt,
+                run_turn=self.turn_runner.run_agent_turn,
             )
         )
 
@@ -172,7 +172,6 @@ class InteractiveShellController:
     async def _shutdown_runtime(self) -> None:
         self.state.request_exit()
         self.state.cancel_current_dispatch()
-        await self.turn_host.stop()
 
         for _label, task in self.tasks:
             task.cancel()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.domain.state.diagnosis import (
+from core.domain.diagnosis import (
     build_diagnosis_schema,
     extract_last_assistant_text,
     taxonomy_categories_for_alert_source,

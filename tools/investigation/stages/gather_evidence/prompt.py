@@ -10,7 +10,7 @@ from core.domain.alerts.alert_source import (
     relevant_sources_for_alert,
     resolve_alert_source,
 )
-from core.domain.state.diagnosis import root_cause_category_instruction_for_source
+from core.domain.diagnosis import root_cause_category_instruction_for_source
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
 

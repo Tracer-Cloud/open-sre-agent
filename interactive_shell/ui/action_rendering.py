@@ -4,7 +4,7 @@ This module owns the *user-facing* half of tool-calling execution: it formats
 tool calls into human-readable labels and prints the "Requested actions" preview
 as the action agent streams its tool calls. The execution orchestration that
 drives it lives in
-:mod:`interactive_shell.harness.tool_calling`.
+:mod:`interactive_shell.agent_shell.tool_calling`.
 
 Keeping rendering here (rather than in ``tool_calling``) means the execution
 file stays focused on orchestration while terminal formatting stays in ``ui/``.

@@ -20,7 +20,7 @@ from rich.markdown import Markdown
 from rich.markup import escape
 
 from context.session import ReplSession
-from interactive_shell.harness.events import AgentEvent, AsyncAgentEventSink
+from interactive_shell.agent_shell.agent import AgentEvent, AgentEventSink
 from interactive_shell.runtime.core.state import SpinnerState
 from interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
 from interactive_shell.ui import (
@@ -49,14 +49,14 @@ def _reduce_agent_presentation(
     should_show_spinner: bool,
 ) -> AgentPresentationState:
     """Compute the next presentation state for *event* (pure)."""
-    if event.type == "prompt_start":
+    if event.type == "turn_start":
         return AgentPresentationState(
             show_spinner=should_show_spinner,
             prompt_suppressed=should_show_spinner,
         )
-    if event.type == "prompt_end":
+    if event.type == "turn_end":
         return AgentPresentationState()
-    if event.type in {"prompt_interrupted", "prompt_error", "agent_start", "agent_stop"}:
+    if event.type in {"turn_interrupted", "turn_error"}:
         return state
     raise ValueError(f"Unknown agent event type: {event.type!r}")
 
@@ -73,25 +73,23 @@ async def _render_agent_presentation_transition(
     from interactive_shell.ui.output import set_prompt_suppress_fn
 
     match event.type:
-        case "prompt_start":
+        case "turn_start":
             if current.show_spinner:
                 spinner.start()
                 set_prompt_suppress_fn(console.suppress_prompt_spinner)
-        case "prompt_interrupted":
+        case "turn_interrupted":
             console.print(f"[{WARNING}]· interrupted[/]")
-        case "prompt_error":
+        case "turn_error":
             exc = event.error
             if exc is None:
-                raise ValueError("prompt_error event requires an error")
-            console.print(f"[{ERROR}]prompt error:[/] {escape(str(exc))}")
-        case "prompt_end":
+                raise ValueError("turn_error event requires an error")
+            console.print(f"[{ERROR}]turn error:[/] {escape(str(exc))}")
+        case "turn_end":
             set_prompt_suppress_fn(None)
             if previous.show_spinner:
                 spinner.stop()
             await asyncio.sleep(0.05)
             drain_stale_cpr_bytes()
-        case "agent_start" | "agent_stop":
-            return
         case _:
             raise ValueError(f"Unknown agent event type: {event.type!r}")
 
@@ -146,8 +144,8 @@ def render_json_like_response(console: Console, text: str) -> None:
 
 __all__ = [
     "AgentEvent",
-    "AsyncAgentEventSink",
     "AgentPresentationState",
     "ConsoleAgentEventSink",
+    "AgentEventSink",
     "render_json_like_response",
 ]

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.domain.state import AgentState
-from tools.investigation.state_updates import apply_state_updates
+from context.state import AgentState
+from context.state.updates import apply_state_updates
 
 if TYPE_CHECKING:
     # Type-only import — avoids paying the agent module's heavy import cost

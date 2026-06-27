@@ -51,8 +51,8 @@ def _reset_sentinel() -> None:
 def test_run_connected_investigation_uses_agent_class_when_provided() -> None:
     """The pipeline must instantiate the override class, not the default."""
     _reset_sentinel()
-    from core.domain.state.factory import make_initial_state
     from tools.investigation.lifecycle import run_connected_investigation
+    from tools.investigation.state_factory import make_initial_state
 
     state = make_initial_state(raw_alert="alert text")
     # Avoid running real integration/extraction; mock them to no-ops so the
@@ -83,8 +83,8 @@ def test_run_connected_investigation_uses_default_agent_when_class_omitted() -> 
     """Production behavior is unchanged: omitting ``agent_class`` constructs
     :class:`ConnectedInvestigationAgent` (the default)."""
     _reset_sentinel()
-    from core.domain.state.factory import make_initial_state
     from tools.investigation.lifecycle import run_connected_investigation
+    from tools.investigation.state_factory import make_initial_state
 
     state = make_initial_state(raw_alert="alert text")
     with (
@@ -157,8 +157,8 @@ def test_run_investigation_forwards_agent_class_to_pipeline() -> None:
 
 
 def test_run_connected_investigation_runs_plan_actions_before_agent() -> None:
-    from core.domain.state.factory import make_initial_state
     from tools.investigation.lifecycle import run_connected_investigation
+    from tools.investigation.state_factory import make_initial_state
 
     calls: list[str] = []
 

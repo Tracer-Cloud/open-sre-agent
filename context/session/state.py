@@ -172,6 +172,24 @@ class ReplSession:
     (\"user\"|\"assistant\", text)) and the per-turn read-only discovery
     observation, kept in one place rather than as loose session fields."""
 
+    @property
+    def cli_agent_messages(self) -> list[tuple[str, str]]:
+        """Compatibility view used by the surface-agnostic agent turn engine."""
+        return self.agent.messages
+
+    @cli_agent_messages.setter
+    def cli_agent_messages(self, value: list[tuple[str, str]]) -> None:
+        self.agent.messages = value
+
+    @property
+    def last_command_observation(self) -> str | None:
+        """Latest command/tool observation for the current turn."""
+        return self.agent.last_observation
+
+    @last_command_observation.setter
+    def last_command_observation(self, value: str | None) -> None:
+        self.agent.last_observation = value
+
     prompt_history_backend: History | None = None
     """The live ``prompt_toolkit.History`` object backing the input prompt.
 

@@ -1,56 +1,28 @@
-"""Live tool-gathering pass for the interactive-shell assistant.
+"""Live tool-gathering pass for the interactive-shell assistant (terminal adapter).
 
-The REPL's response generator (:func:`interactive_shell.harness.response.generate_response`)
-is grounded text generation — it cannot reach integrations on its own. This
-module gives a free-form turn access to the **same registered tools the
-investigation pipeline uses**: it runs a bounded think → call-tools → observe
-loop (:class:`core.runtime.agent.Agent`) over the available
-``"investigation"`` surface tools, then hands the collected tool outputs back to
-``generate_response`` as an observation block so it can compose a grounded answer.
-
-Design notes:
-
-* Tools are read-only data fetches, so calls run autonomously (no per-call
-  confirmation) exactly like the investigation agent.
-* When no integrations are configured (no tools available), gathering is a fast
-  no-op and the normal text-only assistant path runs unchanged.
-* Integration resolution is cached on the session so repeated turns don't
-  re-resolve or re-render progress.
+The bounded think -> call-tools -> observe loop lives in the decoupled
+:func:`core.agent.gather.gather_tool_evidence`. This module is the terminal adapter:
+it renders each gathering step to the console and persists the gathered tool
+calls into the shell's session storage, then hands the collected observation back
+to :func:`interactive_shell.agent_shell.core.agent.answer_cli_agent`.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
-import os
 from typing import Any
 
 from rich.console import Console
 from rich.markup import escape
 
-from context.conversation_history import (
-    MAX_CONVERSATION_MESSAGES,
-    NO_HISTORY_PLACEHOLDER,
-    format_recent_conversation,
-)
 from context.session import ReplSession
-from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from core.agent import gather as agent_gather
 from interactive_shell.ui import DIM
 from interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
-from tools.utils.github_repo_scope import (
-    apply_github_repo_scope,
-    infer_github_repo_scope,
-)
 
-# Keep the gathering loop short: this runs inline on a REPL turn, so it must stay
-# responsive. A handful of iterations is enough to fetch the data needed to
-# answer a question; the full multi-stage ReAct budget belongs to investigations.
-_MAX_GATHER_ITERATIONS = 4
-
-# Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the
-# assistant must summarize.
-_MAX_OBSERVATION_CHARS = 12_000
+# Cap so a chatty tool result can't blow up persistence writes.
 _MAX_PER_TOOL_CHARS = 4_000
 
 # Keys most likely to distinguish back-to-back calls to the same tool.
@@ -76,6 +48,13 @@ _GATHER_INPUT_HINT_KEYS: tuple[str, ...] = (
     "to",
     "time_range",
 )
+
+
+class _ShellGatherErrorReporter:
+    """Minimal :class:`core.agent.ports.ErrorReporter` over ``report_exception``."""
+
+    def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
+        report_exception(exc, context=context, expected=expected)
 
 
 def _truncate_hint(text: str, *, max_len: int = 48) -> str:
@@ -122,18 +101,9 @@ def _format_gathering_progress_line(
     return f"· gathering via {safe_display}…"
 
 
-def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
-    """Resolve integration configs once per session and cache the result."""
-    if session.resolved_integrations_cache is not None:
-        return session.resolved_integrations_cache
-
-    from tools.investigation.stages.resolve_integrations import resolve_integrations
-
-    updates = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
-    resolved = dict(updates.get("resolved_integrations") or {})
-    if resolved:
-        session.resolved_integrations_cache = resolved
-    return resolved
+def _resolve_gather_integrations(session: ReplSession, message: str) -> dict[str, Any]:
+    """Resolve gather integrations through the decoupled agent helper."""
+    return agent_gather._resolve_gather_integrations(session, message)  # noqa: SLF001
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -142,25 +112,11 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n…[truncated, {len(text)} chars total]"
 
 
-def _format_observation(executed: list[tuple[Any, Any]]) -> str:
-    """Render executed (tool_call, output) pairs into a compact prompt block."""
-    blocks: list[str] = []
-    for tc, output in executed:
-        args = json.dumps(tc.input, default=str, sort_keys=True)
-        body = output if isinstance(output, str) else json.dumps(output, default=str)
-        blocks.append(
-            f"Tool: {tc.name}\nArguments: {args}\nResult: {_truncate(body, _MAX_PER_TOOL_CHARS)}"
-        )
-    return _truncate("\n\n".join(blocks), _MAX_OBSERVATION_CHARS)
-
-
 def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -> None:
     """Record each gathered tool-call result into the session log.
 
-    Closes the observability gap where a turn's actual integration/API evidence
-    was never persisted (only the final prose answer was). Arguments and results
-    are redacted and bounded before writing; failures are swallowed so logging
-    never breaks the turn.
+    Arguments and results are redacted and bounded before writing; failures are
+    swallowed so logging never breaks the turn.
     """
     from context.session import default_session_storage
     from platform.observability.tool_trace import redact_sensitive
@@ -185,120 +141,44 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
             )
 
 
-def _build_gather_system_prompt(session: ReplSession) -> str:
-    configured = (
-        ", ".join(session.configured_integrations)
-        if session.configured_integrations
-        else "(unknown)"
-    )
-    return (
-        "You are the data-gathering step of the OpenSRE terminal assistant. The "
-        "user asked a question that may be answerable with live data from the "
-        "connected integrations. You have access to the same tools the "
-        "investigation pipeline uses (logs, metrics, GitHub, error trackers, "
-        "cloud APIs, etc.).\n"
-        "Call the tools needed to gather evidence relevant to the user's "
-        "question. Derive arguments (such as owner/repo, service names, time "
-        "ranges, or search queries) from the user's message. Make tool calls "
-        "ONLY when they will help answer the question; if no tool is relevant, "
-        "respond with a short plain-text note and call nothing.\n"
-        "Do NOT write the final user-facing answer here — a later step composes "
-        "that from the tool results you collect. Stop calling tools as soon as "
-        "you have enough data.\n"
-        f"Configured integrations in this session: {configured}."
-    )
-
-
-def _resolve_gather_integrations(session: ReplSession, message: str) -> dict[str, Any]:
-    """Resolve integrations for one gather turn, enriching GitHub repo scope when inferred."""
-    base = _resolve_session_integrations(session)
-    scope = infer_github_repo_scope(
-        message=message,
-        conversation_messages=session.agent.messages,
-        env=os.environ,
-        cwd=os.getcwd(),
-        cached=session.github_repo_scope,
-    )
-    if scope:
-        session.github_repo_scope = scope
-        return apply_github_repo_scope(base, scope[0], scope[1])
-    return base
-
-
-def _build_gather_user_message(session: ReplSession, message: str) -> str:
-    messages = session.agent.messages[-MAX_CONVERSATION_MESSAGES:]
-    history = format_recent_conversation(messages, max_turns=3)
-    if history == NO_HISTORY_PLACEHOLDER:
-        return message
-    return f"Recent conversation:\n{history}\n\nCurrent question:\n{message}"
-
-
 def gather_tool_evidence(
     message: str,
     session: ReplSession,
     console: Console,
     *,
-    is_tty: bool | None = None,  # noqa: ARG001 — reserved for parity with answer agents
+    is_tty: bool | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
     Returns a formatted observation block when at least one tool was executed;
     otherwise ``None`` so the caller falls back to the normal text-only answer.
-    Any failure is reported and swallowed (returns ``None``) — gathering must
-    never break the conversational turn.
     """
-    try:
-        from core.runtime.agent import Agent
-        from core.runtime.llm.agent_llm_client import get_agent_llm
-        from tools.investigation.stages.gather_evidence.tools import get_available_tools
+    tool_call_counts: dict[str, int] = {}
 
-        resolved = _resolve_gather_integrations(session, message)
-        tools = get_available_tools(resolved)
-        if not tools:
-            return None
-        if not any(str(tool.source) not in SECONDARY_TOOL_SOURCES for tool in tools):
-            return None
+    def on_progress(kind: str, data: dict[str, Any]) -> None:
+        if kind == "tool_start":
+            name = str(data.get("name", "")).strip() or "tool"
+            tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+            line = _format_gathering_progress_line(
+                name,
+                data.get("input"),
+                repeat_index=tool_call_counts[name],
+            )
+            console.print(f"[{DIM}]{line}[/]")
+        elif kind == "gather_cancelled":
+            console.print(f"[{DIM}]· gathering cancelled[/]")
 
-        try:
-            llm = get_agent_llm()
-        except Exception as exc:
-            # Tool-calling client unavailable (e.g. unsupported provider): fall
-            # back to the text-only assistant rather than failing the turn.
-            report_exception(exc, context="interactive_shell.tool_gathering.client", expected=True)
-            return None
+    def persist(executed: list[tuple[Any, Any]]) -> None:
+        _persist_tool_calls(session, executed)
 
-        tool_call_counts: dict[str, int] = {}
-
-        def _on_event(kind: str, data: dict[str, Any]) -> None:
-            if kind == "tool_start":
-                name = str(data.get("name", "")).strip() or "tool"
-                tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
-                line = _format_gathering_progress_line(
-                    name,
-                    data.get("input"),
-                    repeat_index=tool_call_counts[name],
-                )
-                console.print(f"[{DIM}]{line}[/]")
-
-        result = Agent(
-            llm=llm,
-            system=_build_gather_system_prompt(session),
-            tools=tools,
-            resolved_integrations=resolved,
-            max_iterations=_MAX_GATHER_ITERATIONS,
-            on_event=_on_event,
-        ).run([{"role": "user", "content": _build_gather_user_message(session, message)}])
-    except KeyboardInterrupt:
-        console.print(f"[{DIM}]· gathering cancelled[/]")
-        return None
-    except Exception as exc:
-        report_exception(exc, context="interactive_shell.tool_gathering")
-        return None
-
-    if not result.executed:
-        return None
-    _persist_tool_calls(session, result.executed)
-    return _format_observation(result.executed)
+    return agent_gather.gather_tool_evidence(
+        message,
+        session,
+        on_progress=on_progress,
+        persist=persist,
+        error_reporter=_ShellGatherErrorReporter(),
+        is_tty=is_tty,
+    )
 
 
 __all__ = ["gather_tool_evidence"]

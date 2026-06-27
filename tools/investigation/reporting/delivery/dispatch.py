@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.domain.state import InvestigationState
+from context.state import InvestigationState
 from tools.investigation.reporting.delivery.slack import deliver_slack_report
 from tools.investigation.reporting.formatters.messages import ReportMessages
 from tools.investigation.reporting.gitlab_writeback import post_gitlab_mr_writeback

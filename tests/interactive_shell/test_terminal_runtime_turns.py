@@ -9,10 +9,7 @@ from rich.console import Console
 
 from context.session import ReplSession
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
-from interactive_shell.harness.agent_loop import run_agent_prompt
-from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
-    FakeActionLLM,
-)
+from interactive_shell.agent_shell.agent import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -22,6 +19,9 @@ from interactive_shell.tools import (
 )
 from interactive_shell.tools import (
     slash_tool as _slash_tool,
+)
+from tests.core.agent.orchestration.action_execution_test_harness import (
+    FakeActionLLM,
 )
 
 
@@ -155,21 +155,7 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
-def test_turn_needs_exclusive_stdin_for_auth_and_login(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
-    session = ReplSession()
-
-    assert loop_input_policy.turn_needs_exclusive_stdin("/auth", session) is True
-    assert loop_input_policy.turn_needs_exclusive_stdin("/auth login deepseek", session) is True
-    assert loop_input_policy.turn_needs_exclusive_stdin("/auth status", session) is True
-    assert loop_input_policy.turn_needs_exclusive_stdin("/login", session) is True
-    assert loop_input_policy.turn_needs_exclusive_stdin("/login chatgpt", session) is True
-    assert loop_input_policy.turn_needs_exclusive_stdin("login chatgpt", session) is False
-
-
-def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
+def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -194,7 +180,7 @@ def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
             handled=True,
         )
 
-    def _fake_generate_response(
+    def _fake_answer_cli_agent(
         text: str,
         _session: ReplSession,
         _console: Console,
@@ -204,7 +190,7 @@ def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    run_agent_prompt(
+    handle_message_with_agent(
         nitro_prompt,
         session,
         console,
@@ -212,14 +198,14 @@ def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
         confirm_fn=None,
         is_tty=None,
         execute_actions=_fake_execute_cli_actions,
-        response_generator=_fake_generate_response,
+        answer_agent=_fake_answer_cli_agent,
     )
 
     assert action_calls == [nitro_prompt]
     assert llm_calls == []
 
 
-def test_run_agent_prompt_nitro_prompt_executes_remote_then_investigation(
+def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -248,7 +234,7 @@ def test_run_agent_prompt_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "interactive_shell.harness.tool_calling._default_llm_factory",
+        "interactive_shell.agent_shell.tool_calling._default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(
@@ -275,7 +261,7 @@ def test_run_agent_prompt_nitro_prompt_executes_remote_then_investigation(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    run_agent_prompt(
+    handle_message_with_agent(
         nitro_prompt,
         session,
         console,

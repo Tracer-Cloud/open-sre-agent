@@ -469,29 +469,17 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
 def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 
-    async def _fake_prompt(*args: object, **kwargs: object) -> None:
+    def _fake_handle_message(*args: object, **kwargs: object) -> None:
+        _ = args
         calls.append(kwargs)
-
-    class _FakeShellAgent:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def start(self) -> None:
-            pass
-
-        async def prompt(self, *args: object, **kwargs: object) -> None:
-            await _fake_prompt(*args, **kwargs)
-
-        async def stop(self) -> None:
-            pass
 
     monkeypatch.setattr(
         startup_initial_input,
-        "ShellAgent",
-        _FakeShellAgent,
+        "handle_message_with_agent",
+        _fake_handle_message,
     )
 
-    assert asyncio.run(startup_initial_input.run_initial_input("/remote", ReplSession())) == 0
+    assert startup_initial_input.run_initial_input("/remote", ReplSession()) == 0
     assert len(calls) == 1
     assert calls[0]["is_tty"] is False
 
@@ -1275,7 +1263,7 @@ class TestRequestConfirmationViaPrompt:
         """
         state = loop_state.ReplState()
         # Active dispatch must have a cancel event parked; in production
-        # ``interactive_shell.runtime.turn_host.ShellTurnHost.run_prompt`` allocates this before invoking the
+        # ``interactive_shell.agent_shell.agent.ShellTurnHost.run_prompt`` allocates this before invoking the
         # confirm_fn. Never set in this test.
         state.current_cancel_event = threading.Event()
 

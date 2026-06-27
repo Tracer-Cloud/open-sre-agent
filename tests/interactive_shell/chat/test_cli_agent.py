@@ -18,24 +18,28 @@ from typing import Any
 
 from rich.console import Console
 
-from context import assistant_prompt
-from context.assistant_prompt import (
-    build_assistant_system_prompt,
-    build_environment_block,
-    build_observation_block,
-)
-from context.rules import (
-    ACTION_RULE,
-    CLI_ASSISTANT_MARKDOWN_RULE,
-    INTERACTIVE_SHELL_TERMINOLOGY_RULE,
-)
 from context.session import ReplSession
-from interactive_shell.harness import response as response_module
-from interactive_shell.harness.action_plan import (
-    ActionPlanAction,
-    _parse_action_plan,
+from core.agent.action_plan import ActionPlanAction
+from core.agent.action_plan import parse_action_plan as _parse_action_plan
+from core.agent.prompts.assistant import (
+    _ACTION_RULE,
+    _MARKDOWN_RULE,
+    _TERMINOLOGY_RULE,
+    _build_observation_block,
+    _build_system_prompt,
+    build_environment_block,
 )
-from interactive_shell.harness.response import generate_response
+from interactive_shell.agent_shell import adapters as shell_adapters
+from interactive_shell.agent_shell import agent as cli_agent
+from interactive_shell.agent_shell.agent import answer_cli_agent
+
+
+def _build_environment_block(session: ReplSession) -> str:
+    """Adapter for the relocated, signature-changed environment-block builder."""
+    return build_environment_block(
+        integrations=tuple(session.configured_integrations),
+        known=session.configured_integrations_known,
+    )
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -78,7 +82,7 @@ class _FakeLLMClient:
 
 def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
-    # ``generate_response`` imports ``get_llm_for_reasoning`` lazily from
+    # ``answer_cli_agent`` imports ``get_llm_for_reasoning`` lazily from
     # ``core.runtime.llm.llm_client``, so we patch the symbol on that module.
     import core.runtime.llm.llm_client as llm_module
 
@@ -86,28 +90,48 @@ def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     return client
 
 
+def _patch_grounding(
+    monkeypatch: Any,
+    *,
+    cli_reference: str = "(ref)",
+    agents_md: str = "",
+    investigation_flow: str = "",
+) -> None:
+    """Pin the shell grounding caches the prompt provider reads from.
+
+    The conversational assistant now sources grounding text through
+    ``ShellPromptContextProvider`` (over ``session.grounding`` + the
+    investigation-flow reference), so tests patch the provider methods rather
+    than module-level builders.
+    """
+    provider = shell_adapters.ShellPromptContextProvider
+    monkeypatch.setattr(provider, "cli_reference", lambda _self: cli_reference)
+    monkeypatch.setattr(provider, "agents_md", lambda _self: agents_md)
+    monkeypatch.setattr(provider, "investigation_flow", lambda _self: investigation_flow)
+
+
 class TestSystemPromptTerminology:
     """The LLM grounding must steer answers away from the word 'REPL'."""
 
     def test_conversational_prompt_uses_interactive_shell_not_repl(self) -> None:
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "interactive shell" in prompt
         assert "argv" in prompt
         assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
-        assert INTERACTIVE_SHELL_TERMINOLOGY_RULE in prompt
+        assert _TERMINOLOGY_RULE in prompt
         assert "Never use the word 'REPL'" in prompt
 
     def test_prompt_requests_markdown_formatting(self) -> None:
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
-        assert CLI_ASSISTANT_MARKDOWN_RULE in prompt
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
+        assert _MARKDOWN_RULE in prompt
         assert "Markdown" in prompt
 
     def test_conversational_prompt_exposes_action_contract(self) -> None:
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
 
-        assert ACTION_RULE in prompt
+        assert _ACTION_RULE in prompt
         assert "switch_llm_provider" in prompt
         assert '"action":"switch_llm_provider"' in prompt
         assert "claude-code" in prompt
@@ -118,7 +142,7 @@ class TestSystemPromptTerminology:
         """Any "configure/connect X" request should LAUNCH setup via a run_interactive
         action rather than just printing a command — and generically, not per vendor
         (see the "can you configure sentry?" deflection)."""
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "/integrations setup <service>" in prompt
         assert "run_interactive" in prompt
         # Launch it for them, do not merely instruct.
@@ -132,7 +156,7 @@ class TestSystemPromptAgentsMdGrounding:
     """The conversational shell wires AGENTS.md repo-map content (#1442)."""
 
     def test_section_present_in_conversational_prompt_when_agents_md_provided(self) -> None:
-        prompt = build_assistant_system_prompt(
+        prompt = _build_system_prompt(
             reference="(ref)",
             history="(hist)",
             agents_md="repo map content",
@@ -141,11 +165,11 @@ class TestSystemPromptAgentsMdGrounding:
         assert "repo map content" in prompt
 
     def test_section_omitted_when_agents_md_empty(self) -> None:
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)", agents_md="")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", agents_md="")
         assert "--- Repo map (AGENTS.md) ---" not in prompt
 
     def test_section_omitted_by_default_for_callers_that_dont_pass_it(self) -> None:
-        prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)")
         assert "--- Repo map (AGENTS.md) ---" not in prompt
 
 
@@ -153,7 +177,7 @@ class TestSystemPromptInvestigationFlowGrounding:
     """The conversational shell includes the investigation-flow reference block."""
 
     def test_investigation_flow_section_present_when_reference_provided(self) -> None:
-        prompt = build_assistant_system_prompt(
+        prompt = _build_system_prompt(
             reference="(ref)",
             history="(hist)",
             investigation_flow="resolve → extract → investigate → deliver",
@@ -164,26 +188,19 @@ class TestSystemPromptInvestigationFlowGrounding:
         assert "do not claim the pipeline definition is unavailable" in prompt
 
     def test_investigation_flow_section_omitted_when_reference_empty(self) -> None:
-        prompt = build_assistant_system_prompt(
-            reference="(ref)", history="(hist)", investigation_flow=""
-        )
+        prompt = _build_system_prompt(reference="(ref)", history="(hist)", investigation_flow="")
 
         assert "--- Investigation flow reference ---" not in prompt
 
-    def test_generate_response_injects_investigation_flow_reference(self, monkeypatch: Any) -> None:
+    def test_answer_cli_agent_injects_investigation_flow_reference(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "Yes, I can describe the pipeline.")
-        monkeypatch.setattr(
-            assistant_prompt,
-            "build_investigation_flow_reference_text",
-            lambda: "resolve → extract → investigate → deliver",
+        _patch_grounding(
+            monkeypatch,
+            investigation_flow="resolve → extract → investigate → deliver",
         )
 
-        session = ReplSession()
-        monkeypatch.setattr(session.grounding.cli, "build_text", lambda: "(ref)")
-        monkeypatch.setattr(session.grounding.agents_md, "build_text", lambda: "")
-
         console, _ = _capture()
-        generate_response("Can you see how investigations are structured?", session, console)
+        answer_cli_agent("Can you see how investigations are structured?", ReplSession(), console)
 
         assert client.last_prompt is not None
         assert "--- Investigation flow reference ---" in client.last_prompt
@@ -197,7 +214,7 @@ class TestEnvironmentIntegrationGrounding:
         session = ReplSession()
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab", "datadog")
-        block = build_environment_block(session)
+        block = _build_environment_block(session)
         assert "--- Environment (configured integrations) ---" in block
         assert "gitlab" in block
         assert "datadog" in block
@@ -207,25 +224,23 @@ class TestEnvironmentIntegrationGrounding:
         session = ReplSession()
         session.configured_integrations_known = True
         session.configured_integrations = ()
-        block = build_environment_block(session)
+        block = _build_environment_block(session)
         assert "No integrations are configured" in block
 
     def test_block_omitted_when_unknown(self) -> None:
         session = ReplSession()
         assert session.configured_integrations_known is False
-        assert build_environment_block(session) == ""
+        assert _build_environment_block(session) == ""
 
-    def test_generate_response_injects_configured_integrations(self, monkeypatch: Any) -> None:
+    def test_answer_cli_agent_injects_configured_integrations(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "No, Sentry is not configured.")
-        monkeypatch.setattr(assistant_prompt, "build_investigation_flow_reference_text", lambda: "")
+        _patch_grounding(monkeypatch)
 
         session = ReplSession()
-        monkeypatch.setattr(session.grounding.cli, "build_text", lambda: "(ref)")
-        monkeypatch.setattr(session.grounding.agents_md, "build_text", lambda: "")
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab",)
         console, _ = _capture()
-        generate_response("is sentry installed?", session, console)
+        answer_cli_agent("is sentry installed?", session, console)
 
         assert client.last_prompt is not None
         assert "--- Environment (configured integrations) ---" in client.last_prompt
@@ -236,29 +251,27 @@ class TestObservationSummaryBlock:
     """The observe→answer loop feeds discovery output back for summarization."""
 
     def test_block_empty_without_observation(self) -> None:
-        assert build_observation_block(None) == ""
-        assert build_observation_block("   ") == ""
+        assert _build_observation_block(None) == ""
+        assert _build_observation_block("   ") == ""
 
     def test_block_wraps_command_output_with_summarize_instruction(self) -> None:
-        block = build_observation_block("- sentry: missing (Not configured.)")
+        block = _build_observation_block("- sentry: missing (Not configured.)")
         assert "tool_results" in block
         assert "- sentry: missing (Not configured.)" in block
         assert "summarize" in block.lower()
         # The summary turn must not kick off more actions.
         assert "not request, plan, or emit any further actions" in block.lower()
 
-    def test_generate_response_injects_observation(self, monkeypatch: Any) -> None:
+    def test_answer_cli_agent_injects_observation(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "No — Sentry is not configured.")
-        monkeypatch.setattr(assistant_prompt, "build_investigation_flow_reference_text", lambda: "")
+        _patch_grounding(monkeypatch)
 
         session = ReplSession()
-        monkeypatch.setattr(session.grounding.cli, "build_text", lambda: "(ref)")
-        monkeypatch.setattr(session.grounding.agents_md, "build_text", lambda: "")
         console, _ = _capture()
         observation = (
             "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
         )
-        generate_response("is sentry installed?", session, console, tool_observation=observation)
+        answer_cli_agent("is sentry installed?", session, console, tool_observation=observation)
 
         assert client.last_prompt is not None
         assert "tool_results" in client.last_prompt
@@ -316,7 +329,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Hello **world**")
         session = ReplSession()
         console, buf = _capture()
-        generate_response("hi", session, console)
+        answer_cli_agent("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "**world**" not in output
         assert "world" in output
@@ -331,7 +344,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, markdown)
         session = ReplSession()
         console, buf = _capture()
-        generate_response("show commands", session, console)
+        answer_cli_agent("show commands", session, console)
         output = _strip_ansi(buf.getvalue())
         # Rich's Markdown table renderer replaces the ``|---|---|``
         # separator with box-drawing chars — the literal must not leak.
@@ -344,8 +357,8 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Sure thing.")
         session = ReplSession()
         console, _ = _capture()
-        generate_response("hello", session, console)
-        assert session.agent.messages[-2:] == [
+        answer_cli_agent("hello", session, console)
+        assert session.cli_agent_messages[-2:] == [
             ("user", "hello"),
             ("assistant", "Sure thing."),
         ]
@@ -354,10 +367,10 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Use `opensre investigate` for incidents.")
         session = ReplSession()
         console, buf = _capture()
-        generate_response("what command do I use?", session, console)
+        answer_cli_agent("what command do I use?", session, console)
         output = _strip_ansi(buf.getvalue()).casefold()
         assert "opensre investigate" in output
-        assert session.agent.messages[-2:] == [
+        assert session.cli_agent_messages[-2:] == [
             ("user", "what command do I use?"),
             ("assistant", "Use `opensre investigate` for incidents."),
         ]
@@ -371,11 +384,11 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, [_Block("First line"), {"text": "Second line"}])
         session = ReplSession()
         console, buf = _capture()
-        generate_response("hello", session, console)
+        answer_cli_agent("hello", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "First line" in output
         assert "Second line" in output
-        assert session.agent.messages[-1] == ("assistant", "First line\nSecond line")
+        assert session.cli_agent_messages[-1] == ("assistant", "First line\nSecond line")
 
     def test_llm_failure_prints_red_error_and_does_not_record(self, monkeypatch: Any) -> None:
         captured_errors: list[BaseException] = []
@@ -394,7 +407,7 @@ class TestAssistantOutputRendering:
         )
         session = ReplSession()
         console, buf = _capture()
-        generate_response("hi", session, console)
+        answer_cli_agent("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "assistant failed" in output
         assert "upstream 503" in output
@@ -403,7 +416,7 @@ class TestAssistantOutputRendering:
         # On failure the turn must NOT be appended to the cli-agent history,
         # otherwise the next turn's prompt would carry a phantom assistant
         # message.
-        assert session.agent.messages == []
+        assert session.cli_agent_messages == []
 
     def test_reasoned_provider_switch_action_is_executed(
         self,
@@ -431,7 +444,7 @@ class TestAssistantOutputRendering:
 
         session = ReplSession()
         console, buf = _capture()
-        generate_response("switch back to anthropic", session, console)
+        answer_cli_agent("switch back to anthropic", session, console)
 
         output = _strip_ansi(buf.getvalue())
         assert "Requested actions" in output
@@ -465,7 +478,7 @@ class TestAssistantOutputRendering:
 
         session = ReplSession(available_capabilities={"llm_provider": ()})
         console, buf = _capture()
-        generate_response("switch my model to gpt-5.5", session, console)
+        answer_cli_agent("switch my model to gpt-5.5", session, console)
 
         output = _strip_ansi(buf.getvalue())
         assert "$ /model set" not in output
@@ -508,7 +521,7 @@ class TestAssistantOutputRendering:
 
         session = ReplSession()
         console, buf = _capture()
-        generate_response("switch to the anthropic model", session, console)
+        answer_cli_agent("switch to the anthropic model", session, console)
 
         output = _strip_ansi(buf.getvalue())
         # With streaming, prose-prefixed responses are rendered live before the
@@ -540,7 +553,7 @@ class TestStreamingMigration:
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Recording())
 
         console, _ = _capture()
-        generate_response("hi", ReplSession(), console)
+        answer_cli_agent("hi", ReplSession(), console)
 
         assert calls == ["invoke_stream"]
 
@@ -573,7 +586,7 @@ class TestStreamingMigration:
 
         session = ReplSession()
         console, buf = _capture()
-        generate_response("switch to anthropic", session, console)
+        answer_cli_agent("switch to anthropic", session, console)
 
         output = _strip_ansi(buf.getvalue())
         # Suppression: the raw JSON payload must not appear in the rendered
@@ -585,7 +598,7 @@ class TestStreamingMigration:
         assert "$ /model set anthropic" in output
 
 
-def test_generate_response_injects_synthetic_observation_on_why_failed(
+def test_answer_cli_agent_injects_synthetic_observation_on_why_failed(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
@@ -598,13 +611,13 @@ def test_generate_response_injects_synthetic_observation_on_why_failed(
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "The synthetic run failed the scoring gate.")
-    generate_response("why did it fail?", session, console)
+    answer_cli_agent("why did it fail?", session, console)
     assert client.last_prompt is not None
     assert "observation_json" in client.last_prompt
     assert "008-storage-full-missing-metric" in client.last_prompt
 
 
-def test_generate_response_skips_observation_without_failure_question(
+def test_answer_cli_agent_skips_observation_without_failure_question(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
@@ -614,7 +627,7 @@ def test_generate_response_skips_observation_without_failure_question(
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "hi")
-    generate_response("hello", session, console)
+    answer_cli_agent("hello", session, console)
     assert client.last_prompt is not None
     assert "observation_json" not in client.last_prompt
 
@@ -631,7 +644,7 @@ def test_run_interactive_action_queues_setup_command(monkeypatch: Any) -> None:
     )
     session = ReplSession()
     console, buf = _capture()
-    generate_response("can you configure sentry?", session, console)
+    answer_cli_agent("can you configure sentry?", session, console)
     assert session.pending_prompt_default == "/integrations setup sentry"
     assert session.pending_prompt_autosubmit is True
     assert "Launching" in _strip_ansi(buf.getvalue())
@@ -649,7 +662,7 @@ def test_run_interactive_action_falls_back_to_guidance_without_tty(monkeypatch: 
     )
     session = ReplSession()
     console, buf = _capture()
-    generate_response("can you configure sentry?", session, console)
+    answer_cli_agent("can you configure sentry?", session, console)
     assert session.pending_prompt_default is None
     assert session.pending_prompt_autosubmit is False
     assert "/integrations setup sentry" in _strip_ansi(buf.getvalue())
@@ -665,7 +678,7 @@ def test_run_interactive_action_queues_any_registered_opensre_command(monkeypatc
     )
     session = ReplSession()
     console, buf = _capture()
-    generate_response("remove github connection", session, console)
+    answer_cli_agent("remove github connection", session, console)
     assert session.pending_prompt_default == "/integrations remove github"
     assert session.pending_prompt_autosubmit is True
     assert "Launching" in _strip_ansi(buf.getvalue())
@@ -681,7 +694,7 @@ def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) 
     )
     session = ReplSession()
     console, buf = _capture()
-    generate_response("do a fake thing", session, console)
+    answer_cli_agent("do a fake thing", session, console)
     assert session.pending_prompt_default is None
     assert "unsupported interactive command" in _strip_ansi(buf.getvalue())
 
@@ -689,7 +702,7 @@ def test_run_interactive_action_rejects_unknown_slash_command(monkeypatch: Any) 
 def test_prompt_advertises_run_interactive_for_configure_requests() -> None:
     """The system prompt must tell the model to LAUNCH setup via run_interactive,
     catch-all for any integration (no hardcoded vendor advice)."""
-    prompt = build_assistant_system_prompt(reference="(ref)", history="(hist)")
+    prompt = _build_system_prompt(reference="(ref)", history="(hist)")
     assert "run_interactive" in prompt
     assert "/integrations setup <service>" in prompt
     assert "any integration" in prompt
@@ -709,5 +722,5 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
 
 
-def test_module_exports_generate_response() -> None:
-    assert "generate_response" in response_module.__all__
+def test_module_exports_answer_cli_agent() -> None:
+    assert "answer_cli_agent" in cli_agent.__all__

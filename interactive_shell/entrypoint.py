@@ -66,7 +66,7 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
 
     if initial_input:
         session.warm_resolved_integrations()
-        return await run_initial_input(initial_input, session)
+        return run_initial_input(initial_input, session)
 
     # Open the session file now that we know this is an interactive REPL run.
     session.storage.open_session(session)

@@ -10,7 +10,7 @@ Node contract:
                  evidence_entries, agent_messages
 """
 
-from core.domain.state.diagnosis import InvestigationResult
+from core.domain.diagnosis import InvestigationResult
 from tools.investigation.stages.diagnose.node import diagnose, parse_diagnosis
 
 __all__ = ["InvestigationResult", "diagnose", "parse_diagnosis"]

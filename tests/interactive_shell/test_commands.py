@@ -1757,7 +1757,7 @@ class TestResumeCommand:
         """Action-agent LLM failures must be stored so /resume can show them."""
         from unittest.mock import patch
 
-        from interactive_shell.harness.tool_calling import (
+        from interactive_shell.agent_shell.tool_calling import (
             run_tool_calling_turn,
         )
 
@@ -1768,7 +1768,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "interactive_shell.harness.tool_calling._default_llm_factory",
+            "interactive_shell.agent_shell.tool_calling._default_llm_factory",
             side_effect=_raise,
         ):
             result = run_tool_calling_turn("check cpu usage", session, console)

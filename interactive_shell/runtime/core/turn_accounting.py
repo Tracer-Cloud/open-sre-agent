@@ -11,40 +11,18 @@ persistence, and the final assistant-intent stamp).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
 from context.session import ReplSession
-from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
+
+# The neutral "facts only" turn-result models live in the decoupled agent
+# package; this module owns only the shell's accounting side effects over them.
+from core.agent.results import (
+    ShellTurnResult,
+    ToolCallingAccountingStatus,
+    ToolCallingTurnResult,
+)
+from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.cli import capture_terminal_turn_summarized
-
-# Distinguishes the two zero-count outcomes that need different analytics:
-# a normal tool-calling run that completed without planning actions ("completed"),
-# versus a run that never produced actions because it failed/overflowed ("not_run").
-ToolCallingAccountingStatus = Literal["completed", "not_run"]
-
-
-@dataclass(frozen=True)
-class ToolCallingTurnResult:
-    planned_count: int
-    executed_count: int
-    executed_success_count: int
-    has_unhandled_clause: bool
-    handled: bool
-    response_text: str = ""
-    accounting_status: ToolCallingAccountingStatus = "completed"
-
-
-@dataclass(frozen=True)
-class ShellTurnResult:
-    final_intent: str
-    action_result: ToolCallingTurnResult
-    assistant_response_text: str = ""
-    llm_run: LlmRunInfo | None = None
-
-    @property
-    def answered(self) -> bool:
-        """A turn is "answered" exactly when the conversational LLM produced a run."""
-        return self.llm_run is not None
 
 
 @dataclass
