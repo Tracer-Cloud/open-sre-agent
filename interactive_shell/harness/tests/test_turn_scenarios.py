@@ -281,6 +281,10 @@ def _planning_actions_for_match(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
 ) -> list[ExpectedAction]:
+    if _expected_actions_are_assistant_handoff_only(expected_actions) and all(
+        str(action.get("kind", "")).strip() == "assistant_handoff" for action in actual_actions
+    ):
+        return actual_actions[: len(expected_actions)]
     if any(
         str(action.get("kind", "")).strip() == "assistant_handoff" for action in expected_actions
     ):
@@ -336,6 +340,22 @@ def test_planning_match_ignores_handoff_after_terminal_action_only() -> None:
 
     assert _planning_actions_for_match(actual, slash_expected) == actual[:1]
     assert _planning_actions_for_match(actual, handoff_expected) == actual
+
+
+def test_planning_match_collapses_handoff_only_retries() -> None:
+    actual = cast(
+        "list[ExpectedAction]",
+        [
+            {"kind": "assistant_handoff", "content": "first", "source": "llm"},
+            {"kind": "assistant_handoff", "content": "second", "source": "llm"},
+        ],
+    )
+    handoff_expected = cast(
+        "list[ExpectedAction]",
+        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
+    )
+
+    assert _planning_actions_for_match(actual, handoff_expected) == actual[:1]
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
