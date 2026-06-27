@@ -73,6 +73,13 @@ def _get_provider_base_url(provider_value: str) -> str | None:
     return None
 
 
+def _provider_validation_label(provider: ProviderOption) -> str:
+    suffix = " API key"
+    if provider.label.endswith(suffix):
+        return provider.label[: -len(suffix)]
+    return provider.label
+
+
 def _check_ollama(host: str, model: str) -> ValidationResult:
     """Check Ollama server connectivity and verify model responds to inference."""
     import httpx
@@ -169,13 +176,16 @@ def validate_provider_credentials(
                 max_tokens=24,
             )
         sample_text = (openai_response.choices[0].message.content or "").strip()
+        provider_label = _provider_validation_label(provider)
         return ValidationResult(
-            ok=True, detail=f"{provider.label} API key validated.", sample_response=sample_text
+            ok=True, detail=f"{provider_label} API key validated.", sample_response=sample_text
         )
     except anthropic_auth_error:
         return ValidationResult(ok=False, detail="Anthropic rejected the API key.")
     except openai_auth_error:
-        return ValidationResult(ok=False, detail=f"{provider.label} rejected the API key.")
+        return ValidationResult(
+            ok=False, detail=f"{_provider_validation_label(provider)} rejected the API key."
+        )
     except Exception as err:
         return ValidationResult(ok=False, detail=f"Validation request failed: {err}")
 

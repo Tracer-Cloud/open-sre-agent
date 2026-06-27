@@ -650,7 +650,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         pytest.param(
             "codex",
             "codex",
-            "OpenAI Codex CLI",
+            "OpenAI OAuth (Codex CLI)",
             60.0,
             marks=pytest.mark.skipif(
                 shutil.which("codex") is None,
@@ -736,7 +736,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         msg = str(exc)
         if (
             _cli_binary == "codex"
-            and "Choose OpenAI Codex CLI model" in msg
+            and "Choose OpenAI OAuth (Codex CLI) model" in msg
             and "requires login" in msg
         ):
             pytest.skip(

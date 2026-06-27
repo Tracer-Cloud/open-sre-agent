@@ -52,9 +52,15 @@ _SUBSCRIPTION_PROFILES: tuple[ProviderAuthProfile, ...] = (
     ProviderAuthProfile(
         name="claude",
         provider_value="claude-code",
-        label="Claude subscription via Claude Code CLI",
+        label="Anthropic OAuth via Claude Code CLI",
         kind="cli_subscription",
-        aliases=("claude-ai", "claude-subscription", "anthropic-claude", "claude-code-cli"),
+        aliases=(
+            "anthropic-oauth",
+            "claude-ai",
+            "claude-subscription",
+            "anthropic-claude",
+            "claude-code-cli",
+        ),
         setup_url="https://github.com/anthropics/claude-code",
         auth_hint="Run: claude auth login",
     ),
@@ -70,7 +76,9 @@ def _api_key_profiles() -> tuple[ProviderAuthProfile, ...]:
             ProviderAuthProfile(
                 name=provider.value,
                 provider_value=provider.value,
-                label=f"{provider.label} API key",
+                label=provider.label
+                if provider.label.lower().endswith("api key")
+                else f"{provider.label} API key",
                 kind="api_key",
                 setup_url=_API_KEY_SETUP_URLS.get(provider.value),
                 auth_hint=f"Paste {provider.api_key_env}",

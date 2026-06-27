@@ -76,6 +76,14 @@ def _credential_line_for_saved_summary(provider: ProviderOption) -> str:
     return f"{provider.label} ({cli_adapter.auth_hint})"
 
 
+def _credential_prompt_label(provider: ProviderOption) -> str:
+    """Provider label without the credential kind when the choice already includes it."""
+    suffix = f" {provider.credential_label}"
+    if provider.label.lower().endswith(suffix.lower()):
+        return provider.label[: -len(suffix)]
+    return provider.label
+
+
 def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", "repick"]:
     """Probe CLI binary + auth; recovery menu when missing. ``repick`` = choose another LLM."""
     factory = provider.adapter_factory
@@ -247,7 +255,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 _step(provider.credential_label.title())
                 try:
                     api_key = _prompt_value(
-                        f"{provider.label} {provider.credential_label} ({provider.api_key_env})",
+                        f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
                         default=provider.credential_default,
                         secret=provider.credential_secret,
                     )
@@ -271,7 +279,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     _step(provider.credential_label.title())
                     try:
                         api_key = _prompt_value(
-                            f"{provider.label} {provider.credential_label} ({provider.api_key_env})",
+                            f"{_credential_prompt_label(provider)} {provider.credential_label} ({provider.api_key_env})",
                             default=provider.credential_default,
                             secret=provider.credential_secret,
                         )

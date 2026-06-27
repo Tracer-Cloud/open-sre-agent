@@ -195,6 +195,14 @@ def _grouped_questionary_choices(
 _CUSTOM_MODEL_SENTINEL = "__custom__"
 
 
+def _provider_model_prompt_label(provider: ProviderOption) -> str:
+    """Provider label without auth-method suffixes that read badly in model prompts."""
+    for suffix in (" API key", " OAuth"):
+        if provider.label.endswith(suffix):
+            return provider.label[: -len(suffix)]
+    return provider.label
+
+
 def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
@@ -230,8 +238,9 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     if default_value and not any(c.value == default_value for c in choices):
         default_value = curated_choices[0].value if curated_choices else _CUSTOM_MODEL_SENTINEL
 
+    provider_label = _provider_model_prompt_label(provider)
     selection = _choose(
-        f"Choose {provider.label} model",
+        f"Choose {provider_label} model",
         choices,
         default=default_value or None,
     )
@@ -240,7 +249,7 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
         return selection
 
     return _prompt_value(
-        f"Custom {provider.label} model ID ({provider.model_env})",
+        f"Custom {provider_label} model ID ({provider.model_env})",
         default=resolved_default,
         allow_empty=False,
     )

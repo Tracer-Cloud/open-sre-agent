@@ -9,19 +9,22 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 
 | Provider     | `LLM_PROVIDER` | Auth                            | Reasoning model default                       | Toolcall model default                          |
 | ------------ | -------------- | ------------------------------- | --------------------------------------------- | ----------------------------------------------- |
-| Anthropic    | `anthropic`    | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
-| OpenAI       | `openai`       | `OPENAI_API_KEY`                | `gpt-5.4-mini`                                | `gpt-5.4-mini`                                  |
+| Anthropic API key | `anthropic` | `ANTHROPIC_API_KEY`             | `claude-sonnet-4-6`                           | `claude-haiku-4-5-20251001`                     |
+| Anthropic OAuth | `claude-code` | `claude auth login` (Claude Code CLI) | Claude Code CLI default                 | Claude Code CLI default                         |
+| OpenAI API key | `openai`     | `OPENAI_API_KEY`                | `gpt-5.4-mini`                                | `gpt-5.4-mini`                                  |
+| OpenAI OAuth | `codex`        | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
 | DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
-| Google Gemini| `gemini`       | `GEMINI_API_KEY`                | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
+| Google Gemini API key | `gemini` | `GEMINI_API_KEY`               | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
+| Google OAuth | `gemini-cli`   | `gemini` interactive login or API key env | Gemini CLI default                    | Gemini CLI default                              |
+| Google OAuth | `antigravity-cli`| `agy` browser OAuth / OS keyring | Antigravity CLI configured model            | same as reasoning model                         |
 | NVIDIA NIM   | `nvidia`       | `NVIDIA_API_KEY`                | `meta/llama-3.1-405b-instruct`                | `meta/llama-3.1-8b-instruct`                    |
 | MiniMax      | `minimax`      | `MINIMAX_API_KEY`               | `MiniMax-M3`                                  | `MiniMax-M2.7-highspeed`                        |
 | Amazon Bedrock| `bedrock`     | AWS IAM (`AWS_REGION`)          | `us.anthropic.claude-sonnet-4-6`              | `us.anthropic.claude-haiku-4-5-20251001-v1:0`   |
 | Ollama (local)| `ollama`     | None (local daemon)             | `llama3.2`                                    | `llama3.2`                                      |
-| OpenAI Codex CLI| `codex`    | `codex login` (CLI)             | Codex CLI default                             | Codex CLI default                               |
-| Claude Code CLI| `claude-code`| `claude login` (CLI)            | Claude Code CLI default                       | Claude Code CLI default                         |
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
-| Google Antigravity CLI| `antigravity-cli`| `agy` (browser OAuth, OS keyring) | Whatever the local `agy` config is set to (switch via `/models` inside agy) | same as reasoning model |
+| xAI Groq API key | `groq`      | `GROQ_API_KEY`                  | `llama-3.3-70b-versatile`                     | `llama-3.1-8b-instant`                          |
+| xAI OAuth    | `grok-cli`     | `grok login` (CLI)              | Grok Build CLI default                        | Grok Build CLI default                          |
 | Pi CLI (BYOK)| `pi`          | provider API key env or `pi` → `/login` | Pi configured model (`PI_MODEL` to override) | same as reasoning model |
 
 OpenSRE distinguishes two model slots per provider:
@@ -43,6 +46,11 @@ Or run the onboarding wizard, which writes the same values to `.env`:
 ```bash
 opensre onboard
 ```
+
+When a provider has more than one supported auth route, onboarding lists the
+auth methods as separate choices. For example, choose **Anthropic API key** for
+`ANTHROPIC_API_KEY` or **Anthropic OAuth (Claude Code CLI)** to reuse a Claude
+Code OAuth/session login.
 
 In the interactive shell, `/model` shows curated quick-pick choices for common models. Providers
 with fast-changing or account-gated catalogs (OpenAI, OpenRouter, Gemini, NVIDIA, Bedrock, local
