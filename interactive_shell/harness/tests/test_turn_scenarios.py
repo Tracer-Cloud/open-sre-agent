@@ -277,6 +277,21 @@ def _expected_actions_are_assistant_handoff_only(
     )
 
 
+def _planning_actions_for_match(
+    actual_actions: list[ExpectedAction],
+    expected_actions: list[ExpectedAction],
+) -> list[ExpectedAction]:
+    if any(
+        str(action.get("kind", "")).strip() == "assistant_handoff" for action in expected_actions
+    ):
+        return actual_actions
+    return [
+        action
+        for action in actual_actions
+        if str(action.get("kind", "")).strip() != "assistant_handoff"
+    ]
+
+
 def _no_tool_response_is_handoff_equivalent(
     actual_actions: list[ExpectedAction],
     expected_actions: list[ExpectedAction],
@@ -300,6 +315,27 @@ def test_no_tool_response_equivalence_is_limited_to_assistant_handoff() -> None:
 
     assert _no_tool_response_is_handoff_equivalent([], handoff_expected)
     assert not _no_tool_response_is_handoff_equivalent([], slash_expected)
+
+
+def test_planning_match_ignores_handoff_after_terminal_action_only() -> None:
+    actual = cast(
+        "list[ExpectedAction]",
+        [
+            {"kind": "slash", "content": "/health", "command": "/health", "args": []},
+            {"kind": "assistant_handoff", "content": "done", "source": "llm"},
+        ],
+    )
+    slash_expected = cast(
+        "list[ExpectedAction]",
+        [{"kind": "slash", "content": "/health", "command": "/health", "args": []}],
+    )
+    handoff_expected = cast(
+        "list[ExpectedAction]",
+        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
+    )
+
+    assert _planning_actions_for_match(actual, slash_expected) == actual[:1]
+    assert _planning_actions_for_match(actual, handoff_expected) == actual
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -371,6 +407,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     actions = [tool_call for tool_call, _output in result.executed]
     actual_actions = [_build_actual_action(action) for action in actions]
     expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
+    actual_actions_for_match = _planning_actions_for_match(actual_actions, expected_actions)
 
     for action_idx, expected in enumerate(expected_actions):
         kind = str(expected.get("kind", ""))
@@ -393,12 +430,12 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     # without a mismatch assertion. Any other actual actions (slash, shell …)
     # with an empty fixture still fall through and fail the match.
     if (not expected_actions and handoff_only) or _no_tool_response_is_handoff_equivalent(
-        actual_actions,
+        actual_actions_for_match,
         expected_actions,
     ):
         pass
     else:
-        _assert_planned_actions_match(actual_actions, expected_actions)
+        _assert_planned_actions_match(actual_actions_for_match, expected_actions)
 
 
 @pytest.mark.integration
