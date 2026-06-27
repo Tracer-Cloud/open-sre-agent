@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, cast
 
-from core.runtime import ToolLoopResult, run_tool_calling_loop
+from core.runtime.agent import Agent, AgentRunResult
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from tools.registered_tool import RegisteredTool
 
@@ -13,8 +13,7 @@ class FakeLLM:
 
     Deliberately NOT a subclass of any real provider client so that the
     isinstance branches in ``build_assistant_message`` / ``build_tool_result_messages``
-    fall through to the generic ``build_assistant_message`` /
-    ``build_tool_result_message`` path.
+    fall through to the generic path.
     """
 
     def __init__(self, responses: Iterator[AgentLLMResponse]) -> None:
@@ -89,19 +88,25 @@ def _tool_call_response(call_id: str, name: str) -> AgentLLMResponse:
     )
 
 
+def _agent(
+    llm: FakeLLM, tools: list[RegisteredTool], max_iterations: int = 5, on_event: Any = None
+) -> Agent:
+    return Agent(
+        llm=llm,
+        system="sys",
+        tools=tools,
+        resolved_integrations={},
+        max_iterations=max_iterations,
+        on_event=on_event,
+    )
+
+
 def test_immediate_final_answer_executes_no_tools() -> None:
     llm = FakeLLM(iter([_text_response("done immediately")]))
 
-    result = run_tool_calling_loop(
-        llm=llm,
-        system="sys",
-        messages=[{"role": "user", "content": "hello"}],
-        tools=_tools(FakeTool("query_logs")),
-        resolved_integrations={},
-        max_iterations=5,
-    )
+    result = _agent(llm, _tools(FakeTool("query_logs"))).run([{"role": "user", "content": "hello"}])
 
-    assert isinstance(result, ToolLoopResult)
+    assert isinstance(result, AgentRunResult)
     assert result.executed == []
     assert result.final_text == "done immediately"
     assert result.hit_iteration_cap is False
@@ -117,16 +122,9 @@ def test_one_tool_round_then_final() -> None:
             ]
         )
     )
-    messages: list[dict[str, Any]] = [{"role": "user", "content": "hello"}]
+    initial: list[dict[str, Any]] = [{"role": "user", "content": "hello"}]
 
-    result = run_tool_calling_loop(
-        llm=llm,
-        system="sys",
-        messages=messages,
-        tools=_tools(FakeTool("query_logs", output)),
-        resolved_integrations={},
-        max_iterations=5,
-    )
+    result = _agent(llm, _tools(FakeTool("query_logs", output))).run(initial)
 
     assert len(result.executed) == 1
     tc, tool_output = result.executed[0]
@@ -137,7 +135,7 @@ def test_one_tool_round_then_final() -> None:
     assert result.hit_iteration_cap is False
     # user + assistant(tool call) + tool-result + assistant(final)
     assert len(result.messages) == 4
-    assert result.messages is messages
+    assert result.messages[0] == initial[0]
 
 
 def test_on_event_emits_kinds_in_order() -> None:
@@ -154,14 +152,8 @@ def test_on_event_emits_kinds_in_order() -> None:
     def on_event(kind: str, _data: dict[str, Any]) -> None:
         events.append(kind)
 
-    run_tool_calling_loop(
-        llm=llm,
-        system="sys",
-        messages=[{"role": "user", "content": "hello"}],
-        tools=_tools(FakeTool("query_logs")),
-        resolved_integrations={},
-        max_iterations=5,
-        on_event=on_event,
+    _agent(llm, _tools(FakeTool("query_logs")), on_event=on_event).run(
+        [{"role": "user", "content": "hello"}]
     )
 
     assert events == ["llm_start", "tool_start", "tool_end", "llm_start"]
@@ -177,13 +169,8 @@ def test_always_tool_call_hits_iteration_cap() -> None:
     max_iterations = 3
     llm = FakeLLM(always_tool_calls())
 
-    result = run_tool_calling_loop(
-        llm=llm,
-        system="sys",
-        messages=[{"role": "user", "content": "hello"}],
-        tools=_tools(FakeTool("query_logs")),
-        resolved_integrations={},
-        max_iterations=max_iterations,
+    result = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=max_iterations).run(
+        [{"role": "user", "content": "hello"}]
     )
 
     assert result.hit_iteration_cap is True

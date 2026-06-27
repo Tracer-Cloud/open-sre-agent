@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any, cast
 
@@ -36,6 +35,7 @@ from core.runtime import (
     summarise,
     tool_source,
 )
+from core.runtime.agent import Agent
 from core.runtime.llm.agent_llm_client import ToolCall, get_agent_llm
 from core.runtime.llm_invoke_errors import classify_llm_invoke_failure
 from platform.observability import debug_print
@@ -65,8 +65,20 @@ def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[
     return planned or tools
 
 
-class ConnectedInvestigationAgent:
-    """ReAct loop scoped to the tools enabled by connected integrations."""
+class ConnectedInvestigationAgent(Agent):
+    """ReAct loop scoped to the tools enabled by connected integrations.
+
+    Subclasses :class:`~core.runtime.agent.Agent` to inherit the shared hook
+    interface. The investigation loop is more specialised than the generic
+    :meth:`Agent.run` (seed calls, evidence collection, duplicate detection,
+    stagnation handling), so it overrides ``run()`` entirely.
+    """
+
+    def __init__(self) -> None:
+        # Investigation agent builds its LLM/tools/system from the pipeline
+        # state at run-time, not at construction time. Sentinel values here;
+        # run() assigns the real ones before the loop starts.
+        super().__init__(llm=None, system="", tools=[], resolved_integrations={}, max_iterations=0)
 
     def _should_accept_conclusion(
         self,
@@ -77,7 +89,7 @@ class ConnectedInvestigationAgent:
         """Hook: decide what to do when the LLM stops requesting tools."""
         return True, None
 
-    def _filter_tools(
+    def _filter_tools(  # type: ignore[override]
         self,
         tools: list[RegisteredTool],
     ) -> list[RegisteredTool]:
@@ -88,32 +100,28 @@ class ConnectedInvestigationAgent:
         """Hook: produce the LLM system prompt for this investigation."""
         return build_system_prompt(state)
 
-    def run(
+    def _record_tool_start(self, tc: ToolCall) -> None:
+        self._tracker.record_tool_start(tc.name, redact_sensitive(tc.input), event_key=tc.id)
+        self._emit("tool_start", tool_event_payload(tc))
+
+    def _record_tool_end(self, tc: ToolCall, output: Any) -> None:
+        self._tracker.record_tool_end(
+            tc.name,
+            redact_sensitive(output),
+            event_key=tc.id,
+            tool_input=redact_sensitive(tc.input),
+        )
+        self._emit("tool_end", tool_event_payload(tc, output=output))
+
+    def run(  # type: ignore[override]
         self,
         state: InvestigationState,
         on_event: LoopEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
-        tracker = get_tracker()
-        tracker.start("investigation_agent", "Running investigation agent loop")
-
-        def _emit(kind: str, data: dict[str, Any]) -> None:
-            if on_event is not None:
-                with contextlib.suppress(Exception):
-                    on_event(kind, data)
-
-        def _record_tool_start(tc: ToolCall) -> None:
-            tracker.record_tool_start(tc.name, redact_sensitive(tc.input), event_key=tc.id)
-            _emit("tool_start", tool_event_payload(tc))
-
-        def _record_tool_end(tc: ToolCall, output: Any) -> None:
-            tracker.record_tool_end(
-                tc.name,
-                redact_sensitive(output),
-                event_key=tc.id,
-                tool_input=redact_sensitive(tc.input),
-            )
-            _emit("tool_end", tool_event_payload(tc, output=output))
+        self._on_event = on_event
+        self._tracker = get_tracker()
+        self._tracker.start("investigation_agent", "Running investigation agent loop")
 
         state_dict = cast(dict[str, Any], state)
         resolved = state.get("resolved_integrations") or {}
@@ -137,7 +145,7 @@ class ConnectedInvestigationAgent:
         executed_hypotheses: list[dict[str, Any]] = []
         tool_call_cache = InvestigationToolCallCache()
 
-        _emit(
+        self._emit(
             "agent_start",
             {
                 "tool_count": len(tools),
@@ -150,7 +158,7 @@ class ConnectedInvestigationAgent:
         if seed_calls:
             logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
             for tc in seed_calls:
-                _record_tool_start(tc)
+                self._record_tool_start(tc)
             executed_hypotheses.append(
                 {
                     "hypothesis": "Seed primary integration tools",
@@ -179,7 +187,7 @@ class ConnectedInvestigationAgent:
                         loop_iteration=-1,
                     )
                 )
-                _record_tool_end(tc, output)
+                self._record_tool_end(tc, output)
                 debug_print(f"[seed:{tc.name}] → {summarise(output)}")
 
         # Expose planned tools and live evidence to _should_accept_conclusion overrides.
@@ -201,7 +209,7 @@ class ConnectedInvestigationAgent:
         force_conclusion = False
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
-            _emit("llm_start", {"iteration": iteration})
+            self._emit("llm_start", {"iteration": iteration})
             active_tool_schemas: list[dict[str, Any]] = [] if force_conclusion else tool_schemas
             enforce_context_budget(
                 messages, system=system, tools=active_tool_schemas, ceiling=context_ceiling
@@ -216,8 +224,8 @@ class ConnectedInvestigationAgent:
                 return degraded_investigation_from_llm_failure(
                     failure,
                     err=err,
-                    tracker=tracker,
-                    _emit=_emit,
+                    tracker=self._tracker,
+                    _emit=self._emit,
                     evidence=evidence,
                     evidence_entries=evidence_entries,
                     messages=messages,
@@ -255,7 +263,7 @@ class ConnectedInvestigationAgent:
                 if cached is None
             ]
             for tc in fresh_calls:
-                _record_tool_start(tc)
+                self._record_tool_start(tc)
 
             executed_hypotheses.append(
                 {
@@ -295,7 +303,7 @@ class ConnectedInvestigationAgent:
                         loop_iteration=iteration,
                     )
                 )
-                _record_tool_end(tc, output)
+                self._record_tool_end(tc, output)
                 debug_print(f"[{tc.name}] → {summarise(output)}")
 
             if fresh_calls:
@@ -316,7 +324,7 @@ class ConnectedInvestigationAgent:
                 MAX_INVESTIGATION_LOOPS,
             )
 
-        _emit(
+        self._emit(
             "agent_end",
             {
                 "evidence_count": len(evidence_entries),
@@ -324,7 +332,7 @@ class ConnectedInvestigationAgent:
             },
         )
 
-        tracker.complete(
+        self._tracker.complete(
             "investigation_agent",
             fields_updated=["evidence", "evidence_entries", "agent_messages"],
             message=f"evidence:{len(evidence_entries)} messages:{len(messages)}",

@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from core.runtime import LoopEventCallback, ToolLoopResult, run_tool_calling_loop
+from core.runtime.agent import Agent, AgentRunResult, LoopEventCallback
 from core.runtime.types import RuntimeTool
 
 
 class ShellActionHarness:
-    """Small action-selection harness over the shared tool-calling loop."""
+    """Small action-selection harness over the shared Agent loop."""
 
     def __init__(
         self,
@@ -27,16 +27,15 @@ class ShellActionHarness:
         self._max_iterations = max_iterations
         self._on_event = on_event
 
-    def prompt(self, text: str) -> ToolLoopResult:
-        return run_tool_calling_loop(
+    def prompt(self, text: str) -> AgentRunResult:
+        return Agent(
             llm=self._llm_factory(),
             system=self._system_prompt,
-            messages=[{"role": "user", "content": text}],
             tools=self._tools,
             resolved_integrations={},
             max_iterations=self._max_iterations,
             on_event=self._on_event,
-        )
+        ).run([{"role": "user", "content": text}])
 
 
 def create_shell_action_harness(

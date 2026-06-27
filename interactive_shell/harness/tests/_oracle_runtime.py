@@ -378,24 +378,23 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     patch_execution_boundary(monkeypatch, executed)
 
     # Record which registered tools fire during the conversational
-    # gather_tool_evidence pass. gather_tool_evidence imports
-    # run_tool_calling_loop lazily from core.runtime, so patch the name on
-    # that source module (the local import re-binds from there at call time).
-    import core.runtime as _runtime_mod
+    # gather_tool_evidence pass. Both gather_tool_evidence and ShellActionHarness
+    # create Agent instances and call .run(), so we patch Agent.run on the class.
+    import core.runtime.agent as _agent_mod
 
     gathered_tool_calls: list[str] = []
     gathered_valid_data: set[str] = set()
-    _original_tool_loop = _runtime_mod.run_tool_calling_loop
+    _original_agent_run = _agent_mod.Agent.run
 
-    def _recording_tool_loop(*args: Any, **kwargs: Any) -> Any:
-        result = _original_tool_loop(*args, **kwargs)
+    def _recording_agent_run(self: Any, initial_messages: Any) -> Any:
+        result = _original_agent_run(self, initial_messages)
         for tc, output in result.executed:
             gathered_tool_calls.append(tc.name)
             if tool_output_returned_valid_data(output):
                 gathered_valid_data.add(tc.name)
         return result
 
-    monkeypatch.setattr(_runtime_mod, "run_tool_calling_loop", _recording_tool_loop)
+    monkeypatch.setattr(_agent_mod.Agent, "run", _recording_agent_run)
 
     console_buffer = io.StringIO()
     console = Console(file=console_buffer, force_terminal=False, highlight=False, width=100)
