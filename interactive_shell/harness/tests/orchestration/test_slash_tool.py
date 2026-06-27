@@ -41,10 +41,14 @@ def _record_dispatch(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 @pytest.mark.parametrize(
     ("command", "args", "expected"),
     [
+        ("/auth", ["login", "deepseek"], "/auth login deepseek"),
+        ("/login", ["deepseek"], "/login deepseek"),
         ("/integrations", ["remove", "github"], "/integrations remove github"),
         ("/integrations", ["setup", "datadog"], "/integrations setup datadog"),
         ("/mcp", ["connect", "github"], "/mcp connect github"),
         ("/mcp", ["disconnect", "github"], "/mcp disconnect github"),
+        ("/auth", [], "/auth"),
+        ("/login", [], "/login"),
         ("/integrations", [], "/integrations"),
         ("/mcp", [], "/mcp"),
     ],

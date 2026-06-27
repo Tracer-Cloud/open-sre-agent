@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
+from cli.llm_auth.service import AuthSetupError, persist_api_key_secret
 from cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
 from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
@@ -324,8 +325,8 @@ def _prompt_value(
 
 def _persist_llm_api_key(env_var: str, value: str) -> bool:
     try:
-        save_llm_api_key(env_var, value)
-    except RuntimeError as exc:
+        persist_api_key_secret(env_var, value, save_secret=save_llm_api_key)
+    except AuthSetupError as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"

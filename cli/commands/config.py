@@ -77,7 +77,8 @@ def _emit_llm_config() -> None:
     if key_env:
         click.echo(f"{key_env:<16}: {_masked(key_value)}")
     click.echo()
-    click.echo("To change LLM settings, run: opensre onboard")
+    click.echo("To log in or change LLM auth, run: opensre auth login")
+    click.echo("To rerun the full setup wizard, run: opensre onboard")
     click.echo("Local CLI YAML: opensre config show / opensre config set …")
 
 

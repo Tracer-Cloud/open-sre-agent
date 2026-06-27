@@ -58,6 +58,11 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks about the alert inbox, listener, or queued alerts",
         anti_examples=("User wants to investigate an alert body (use investigation_start)",),
     ),
+    "/auth": _mcp(
+        "Log in to LLM providers and inspect local auth state. Subcommands: login, status, logout.",
+        "User asks to log in, authenticate, connect an LLM provider, or check provider auth",
+        anti_examples=("User asks to configure an observability integration (use /integrations)",),
+    ),
     "/background": _mcp(
         "Manage session-local background investigation mode and completed RCA summaries. "
         "Subcommands: on, off, status, list, show <task_id>, use <task_id>, notify list, notify set.",
@@ -165,6 +170,12 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/last": _mcp(
         "Reprint the most recent investigation report from this session.",
         "User asks to show the last investigation result or report again",
+    ),
+    "/login": _mcp(
+        "Shortcut for /auth login. Supports subscription aliases chatgpt and claude, "
+        "and API-key providers such as deepseek.",
+        "User asks to log in to ChatGPT, Claude, DeepSeek, or another LLM provider",
+        anti_examples=("User asks to log in to a non-LLM integration (use /integrations or /mcp)",),
     ),
     "/rca": _mcp(
         "Browse persisted RCA reports across sessions. Subcommands: history, show <id>, save <path>.",

@@ -1,9 +1,11 @@
-"""Secure local storage helpers for LLM API keys."""
+"""Secure local storage helpers for LLM credentials."""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+from collections.abc import Mapping
 from typing import Final
 
 import keyring
@@ -12,6 +14,7 @@ import keyring.errors
 import platform
 
 _KEYRING_SERVICE: Final = "opensre.llm"
+_RECORD_PREFIX: Final = "record:"
 _DISABLED_VALUES: Final = frozenset({"1", "true", "yes", "on"})
 
 
@@ -38,6 +41,20 @@ def resolve_llm_api_key(env_var: str) -> str:
         return (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip()
     except keyring.errors.KeyringError:
         return ""
+
+
+def llm_api_key_source(env_var: str) -> str:
+    """Return where an LLM credential resolves from: ``env``, ``keyring``, or ``none``."""
+    if os.getenv(env_var, "").strip():
+        return "env"
+    if _keyring_is_disabled():
+        return "none"
+    try:
+        if (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip():
+            return "keyring"
+    except keyring.errors.KeyringError:
+        return "none"
+    return "none"
 
 
 def has_llm_api_key(env_var: str) -> bool:
@@ -115,4 +132,74 @@ def delete_llm_api_key(env_var: str) -> None:
     try:
         keyring.delete_password(_KEYRING_SERVICE, env_var)
     except keyring.errors.KeyringError:
+        return
+
+
+def _record_username(record_name: str) -> str:
+    normalized = record_name.strip()
+    if not normalized:
+        raise ValueError("record_name must not be empty")
+    return f"{_RECORD_PREFIX}{normalized}"
+
+
+def save_llm_credential_record(record_name: str, values: Mapping[str, str]) -> None:
+    """Persist a small JSON credential metadata record in the system keychain.
+
+    These records are for auth metadata such as provider/source/status. API keys
+    still use :func:`save_llm_api_key`; OAuth or vendor CLI tokens must remain
+    in the vendor-owned credential store unless the vendor returns a supported
+    API credential explicitly meant for OpenSRE.
+    """
+    normalized = {
+        str(key).strip(): str(value).strip()
+        for key, value in values.items()
+        if str(key).strip() and str(value).strip()
+    }
+    if not normalized:
+        delete_llm_credential_record(record_name)
+        return
+    if _keyring_is_disabled():
+        raise RuntimeError("Secure local credential storage is disabled on this machine.")
+    try:
+        keyring.set_password(
+            _KEYRING_SERVICE,
+            _record_username(record_name),
+            json.dumps(normalized, sort_keys=True),
+        )
+    except keyring.errors.KeyringError as exc:
+        raise RuntimeError(
+            "Secure local credential storage is unavailable on this machine."
+        ) from exc
+
+
+def resolve_llm_credential_record(record_name: str) -> dict[str, str]:
+    """Resolve a JSON credential metadata record from the local keychain."""
+    if _keyring_is_disabled():
+        return {}
+    try:
+        raw = keyring.get_password(_KEYRING_SERVICE, _record_username(record_name)) or ""
+    except keyring.errors.KeyringError:
+        return {}
+    if not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {
+        str(key): str(value)
+        for key, value in parsed.items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
+
+
+def delete_llm_credential_record(record_name: str) -> None:
+    """Remove a JSON credential metadata record from the local keychain."""
+    if _keyring_is_disabled():
+        return
+    try:
+        keyring.delete_password(_KEYRING_SERVICE, _record_username(record_name))
+    except (keyring.errors.KeyringError, ValueError):
         return

@@ -155,6 +155,20 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
+def test_turn_needs_exclusive_stdin_for_auth_and_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
+    session = ReplSession()
+
+    assert loop_input_policy.turn_needs_exclusive_stdin("/auth", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/auth login deepseek", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/auth status", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/login", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/login chatgpt", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("login chatgpt", session) is False
+
+
 def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

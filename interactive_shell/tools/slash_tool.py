@@ -28,9 +28,11 @@ from interactive_shell.ui.execution_confirm import execution_allowed
 # terminal's cursor-position replies (ESC[row;colR) leak into the input line as
 # literal keystrokes. Defer them through ``queue_auto_command`` so the loop
 # re-dispatches the command as a deterministic turn it runs with exclusive stdin.
-_INTERACTIVE_PICKER_MENUS: frozenset[str] = frozenset({"/integrations", "/mcp"})
+_INTERACTIVE_PICKER_MENUS: frozenset[str] = frozenset({"/auth", "/login", "/integrations", "/mcp"})
 _INTERACTIVE_PICKER_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     {
+        ("/auth", "login"),
+        ("/auth", "logout"),
         ("/integrations", "setup"),
         ("/integrations", "remove"),
         ("/mcp", "connect"),
@@ -47,6 +49,8 @@ def _slash_drives_interactive_picker(name: str, slash_args: list[str]) -> bool:
     """
     if not repl_tty_interactive():
         return False
+    if name == "/login":
+        return True
     if not slash_args:
         return name in _INTERACTIVE_PICKER_MENUS
     return (name, slash_args[0].lower()) in _INTERACTIVE_PICKER_SUBCOMMANDS

@@ -20,6 +20,7 @@ def _literal_slash_command_text(text: str) -> str | None:
 _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
     {
         "/history",
+        "/auth",
         "/help",
         "/integrations",
         "/investigate",
@@ -69,7 +70,7 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
-    {"/exit", "/quit", "/update", "/onboard", "/config"}
+    {"/exit", "/quit", "/update", "/onboard", "/config", "/auth", "/login"}
 )
 
 

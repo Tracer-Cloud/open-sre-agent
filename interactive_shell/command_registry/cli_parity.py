@@ -110,6 +110,15 @@ def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> boo
     return run_cli_command(console, ["onboard", *args])
 
 
+def _cmd_auth(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    capture_output = not args or args[0].lower() in {"status", "logout"}
+    return run_cli_command(console, ["auth", *args], capture_output=capture_output)
+
+
+def _cmd_login(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["auth", "login", *args])
+
+
 def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["remote", *args])
 
@@ -284,6 +293,18 @@ def _cmd_misses(session: ReplSession, console: Console, args: list[str]) -> bool
 
 
 COMMANDS: list[SlashCommand] = [
+    SlashCommand(
+        "/auth",
+        "Log in to LLM providers and inspect local auth state.",
+        _cmd_auth,
+        usage=("/auth", "/auth status", "/auth login deepseek", "/auth logout deepseek"),
+    ),
+    SlashCommand(
+        "/login",
+        "Shortcut for LLM provider login.",
+        _cmd_login,
+        usage=("/login", "/login chatgpt", "/login claude", "/login deepseek"),
+    ),
     SlashCommand(
         "/onboard",
         "Run the interactive onboarding wizard.",

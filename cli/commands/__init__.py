@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from cli.commands.agent import fleet
+from cli.commands.auth import auth_command
 from cli.commands.config import config_command
 from cli.commands.cron import cron_command
 from cli.commands.debug import debug_command
@@ -30,6 +31,7 @@ from cli.commands.watchdog import watchdog_command
 _COMMANDS: tuple[click.Command, ...] = (
     investigate_command,
     onboard,
+    auth_command,
     config_command,
     remote,
     tests,

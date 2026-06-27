@@ -62,6 +62,29 @@ export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 
 A shared `LLM_MAX_TOKENS` (default `4096`) controls the response token budget for every provider.
 
+## Login and secret storage
+
+Use `opensre auth` for provider login without writing secrets to `.env`:
+
+| Command | What it does |
+| ------- | ------------ |
+| `opensre auth` | Show auth status for subscription and API-key providers |
+| `opensre auth login deepseek` | Open DeepSeek setup guidance, validate `DEEPSEEK_API_KEY`, store it in the system keychain, and select DeepSeek |
+| `opensre auth login claude` | Configure the `claude-code` provider through Claude Code CLI subscription login |
+| `opensre auth login chatgpt` | Configure the `codex` provider through Codex CLI / ChatGPT subscription login |
+| `opensre auth logout deepseek` | Remove OpenSRE-managed DeepSeek credentials from the keychain |
+
+`opensre auth login` never reads browser cookies, browser profiles, browser local storage, or IndexedDB. API-key providers use hidden paste prompts plus keyring storage. Subscription providers delegate OAuth/session handling to the vendor CLI that owns the browser login flow.
+
+Inside the interactive shell, use the same flows through `/auth` or `/login`:
+
+```bash
+/login chatgpt
+/login claude
+/login deepseek
+/auth status
+```
+
 ## API providers
 
 ### Anthropic
@@ -115,6 +138,7 @@ export DEEPSEEK_TOOLCALL_MODEL=deepseek-v4-flash
 ```
 
 Uses DeepSeek's official OpenAI-compatible API endpoint at `https://api.deepseek.com`.
+Run `opensre auth login deepseek` for browser-assisted key setup and secure local storage.
 
 ### Google Gemini
 
@@ -207,6 +231,7 @@ export CODEX_BIN=
 ```
 
 Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If `CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI's currently configured model. If `CODEX_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+Run `opensre auth login chatgpt` to detect the Codex CLI login and persist `LLM_PROVIDER=codex`.
 
 ### Claude Code
 
@@ -220,6 +245,7 @@ export CLAUDE_CODE_BIN=
 ```
 
 Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE omits the `--model` flag and the CLI uses its configured default. If `CLAUDE_CODE_BIN` is unset, the binary is resolved via `PATH` and known install locations.
+Run `opensre auth login claude` to detect Claude subscription login and persist `LLM_PROVIDER=claude-code`.
 
 ### GitHub Copilot
 
