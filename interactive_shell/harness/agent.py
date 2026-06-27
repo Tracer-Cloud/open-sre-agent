@@ -746,53 +746,49 @@ def handle_message_with_agent(
     observation = session.last_command_observation
 
     route = _route_turn(action_result, observation)
-    match route:
-        case "summarize_observation":
-            with apply_reasoning_effort(turn_ctx.reasoning_effort):
-                run = answer_agent(
-                    text,
-                    session,
-                    console,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                    tool_observation=observation,
-                    turn_ctx=turn_ctx,
-                )
-            result = ShellTurnResult(
-                final_intent="cli_agent_summarized",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
-                llm_run=run,
+    if route == "summarize_observation":
+        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+            run = answer_agent(
+                text,
+                session,
+                console,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                tool_observation=observation,
+                turn_ctx=turn_ctx,
             )
-
-        case "handled_without_llm":
-            result = ShellTurnResult(
-                final_intent="cli_agent_handled",
-                action_result=action_result,
-                assistant_response_text=action_result.response_text,
+        result = ShellTurnResult(
+            final_intent="cli_agent_summarized",
+            action_result=action_result,
+            assistant_response_text=_response_text(run),
+            llm_run=run,
+        )
+    elif route == "handled_without_llm":
+        result = ShellTurnResult(
+            final_intent="cli_agent_handled",
+            action_result=action_result,
+            assistant_response_text=action_result.response_text,
+        )
+    elif route == "gather_and_answer":
+        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+            run = _gather_and_answer(
+                text=text,
+                session=session,
+                console=console,
+                gather_evidence=gather_evidence,
+                answer_agent=answer_agent,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                turn_ctx=turn_ctx,
             )
-
-        case "gather_and_answer":
-            with apply_reasoning_effort(turn_ctx.reasoning_effort):
-                run = _gather_and_answer(
-                    text=text,
-                    session=session,
-                    console=console,
-                    gather_evidence=gather_evidence,
-                    answer_agent=answer_agent,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                    turn_ctx=turn_ctx,
-                )
-            result = ShellTurnResult(
-                final_intent="cli_agent_fallback",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
-                llm_run=run,
-            )
-
-        case _:
-            raise AssertionError(f"unreachable turn route: {route!r}")
+        result = ShellTurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=action_result,
+            assistant_response_text=_response_text(run),
+            llm_run=run,
+        )
+    else:
+        raise AssertionError(f"unreachable turn route: {route!r}")
 
     return accounting.finalize(result)
 
