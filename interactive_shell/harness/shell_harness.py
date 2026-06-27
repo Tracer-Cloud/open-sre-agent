@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from core.runtime import AgentEventCallback, AgentHarness
+from core.runtime.types import RuntimeTool
 from tools.registered_tool import RegisteredTool
 
 
@@ -36,4 +37,26 @@ def create_shell_tool_gathering_harness(
     return harness
 
 
-__all__ = ["create_shell_tool_gathering_harness"]
+def create_shell_action_harness(
+    *,
+    llm_factory: Callable[[], Any],
+    system_prompt: str,
+    tools: Sequence[RuntimeTool],
+    max_iterations: int,
+    on_event: AgentEventCallback | None = None,
+) -> AgentHarness:
+    """Build the shell action harness over first-class runtime tools."""
+
+    harness = AgentHarness(
+        llm_factory=llm_factory,
+        system_prompt=system_prompt,
+        tool_provider=lambda _context: list(tools),
+        integration_provider=lambda: {},
+        max_iterations=max_iterations,
+    )
+    if on_event is not None:
+        harness.subscribe(on_event)
+    return harness
+
+
+__all__ = ["create_shell_action_harness", "create_shell_tool_gathering_harness"]

@@ -1,4 +1,4 @@
-"""Typed fake planner/registry harness for action-execution tests."""
+"""Typed fake agent harness for action-execution tests."""
 
 from __future__ import annotations
 
@@ -8,39 +8,57 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.harness.orchestration.agent_actions import (
-    ActionExecutionDeps,
-)
-from interactive_shell.harness.orchestration.interaction_models import (
-    PlannedAction,
-)
+from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from interactive_shell.harness.orchestration.agent_actions import ActionExecutionDeps
 
 
 @dataclass
-class FakePlanner:
-    result: Any
-    calls: list[tuple[str, Any]] = field(default_factory=list)
+class FakeActionLLM:
+    responses: list[AgentLLMResponse]
+    invocations: int = 0
+    tool_schema_names: list[str] = field(default_factory=list)
 
-    def __call__(self, message: str, *, session: Any | None = None) -> Any:
-        self.calls.append((message, session))
-        return self.result
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        self.tool_schema_names = [str(tool.name) for tool in tools]
+        return [{"name": tool.name} for tool in tools]
 
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],  # noqa: ARG002
+        *,
+        system: str | None = None,  # noqa: ARG002
+        tools: list[dict[str, Any]] | None = None,  # noqa: ARG002
+    ) -> AgentLLMResponse:
+        self.invocations += 1
+        if not self.responses:
+            return AgentLLMResponse(content="", tool_calls=[], raw_content=None)
+        return self.responses.pop(0)
 
-@dataclass
-class FakeDispatcher:
-    should_succeed: bool = True
-    calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    @staticmethod
+    def build_assistant_message(content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": [{"id": tc.id, "name": tc.name, "input": tc.input} for tc in tool_calls],
+        }
 
-    def __call__(self, *, tool_name: str, args: dict[str, Any], ctx: Any) -> bool:
-        _ = ctx
-        self.calls.append((tool_name, dict(args)))
-        return self.should_succeed
+    @staticmethod
+    def build_tool_result_message(
+        tool_calls: list[ToolCall],
+        results: list[Any],
+    ) -> dict[str, Any]:
+        return {
+            "role": "tool",
+            "results": [
+                {"id": tc.id, "name": tc.name, "output": output}
+                for tc, output in zip(tool_calls, results)
+            ],
+        }
 
 
 @dataclass
 class ActionExecutionHarness:
-    planner: FakePlanner
-    dispatcher: FakeDispatcher
+    llm: FakeActionLLM
     console_buffer: io.StringIO = field(default_factory=io.StringIO)
 
     @property
@@ -49,8 +67,16 @@ class ActionExecutionHarness:
 
     @property
     def deps(self) -> ActionExecutionDeps:
-        return ActionExecutionDeps(planner=self.planner, dispatch=self.dispatcher)
+        return ActionExecutionDeps(llm_factory=lambda: self.llm)
 
 
-def planned_action(kind: str, content: str) -> PlannedAction:
-    return PlannedAction(kind=kind, content=content, position=0, source="llm")
+def tool_response(name: str, args: dict[str, Any] | None = None) -> AgentLLMResponse:
+    return AgentLLMResponse(
+        content="",
+        tool_calls=[ToolCall(id=f"call_{name}", name=name, input=dict(args or {}))],
+        raw_content=None,
+    )
+
+
+def no_tool_response() -> AgentLLMResponse:
+    return AgentLLMResponse(content="", tool_calls=[], raw_content=None)

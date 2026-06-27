@@ -1748,13 +1748,10 @@ class TestResumeCommand:
         assert "first answer" in output
         assert "second answer" in output
 
-    def test_planner_llm_error_persisted_to_cli_agent_messages(self) -> None:
-        """PlannerLLMError must be added to cli_agent_messages so /resume can show it."""
+    def test_action_agent_llm_error_persisted_to_cli_agent_messages(self) -> None:
+        """Action-agent LLM failures must be stored so /resume can show them."""
         from unittest.mock import patch
 
-        from interactive_shell.harness.domain.errors import (
-            PlannerLLMError,
-        )
         from interactive_shell.harness.orchestration.agent_actions import (
             execute_cli_actions,
         )
@@ -1763,15 +1760,17 @@ class TestResumeCommand:
         console, _ = _capture()
 
         def _raise(*_args: object, **_kwargs: object) -> None:
-            raise PlannerLLMError("codex: quota or rate limit exceeded (exit 1)")
+            raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "interactive_shell.harness.orchestration.agent_actions._plan_actions",
+            "interactive_shell.harness.orchestration.agent_actions._default_llm_factory",
             side_effect=_raise,
         ):
-            execute_cli_actions("check cpu usage", session, console)
+            result = execute_cli_actions("check cpu usage", session, console)
 
         # The error turn must be recorded in cli_agent_messages for /resume
+        assert result.handled is True
+        assert result.has_unhandled_clause is True
         assert len(session.cli_agent_messages) == 2
         assert session.cli_agent_messages[0] == ("user", "check cpu usage")
         assert session.cli_agent_messages[1][0] == "assistant"

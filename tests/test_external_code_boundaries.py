@@ -19,7 +19,7 @@ def _tracked_files(*pathspecs: str) -> list[Path]:
         capture_output=True,
         text=True,
     )
-    return [ROOT / line for line in result.stdout.splitlines()]
+    return [path for line in result.stdout.splitlines() if (path := ROOT / line).exists()]
 
 
 def _forbidden_imports(path: Path) -> set[str]:

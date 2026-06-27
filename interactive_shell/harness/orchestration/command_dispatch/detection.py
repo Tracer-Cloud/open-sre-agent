@@ -15,13 +15,15 @@ commands and their bare command aliases. That is ALL it may ever do.
 DO NOT add ANYTHING that infers user *intent* from natural language. NEVER EVER
 add regex (or keyword/substring/fuzzy/NLU matching) that maps free-form text to
 an action — e.g. detecting "investigate a sample alert", "show my integrations",
-or any phrasing-based behavior. All intent decisions belong to the LLM action
-planner, NOT here. Intent regex in this layer is exactly the bug class that sent
-sample-alert requests to the wrong place; it will not be reintroduced.
+or any phrasing-based behavior. All intent decisions belong to the action-agent
+LLM selecting AgentTools, NOT here. Intent regex in this layer is exactly the
+bug class that sent sample-alert requests to the wrong place; it will not be
+reintroduced.
 
 If you add anything to this layer other than literal CLI command detection,
-YOU WILL BE FIRED. No exceptions. When in doubt, return ``None`` and let the
-LLM planner decide.
+YOU WILL BE FIRED. This is not rhetorical; engineers have been fired before for
+implementing this exact shortcut. No exceptions. When in doubt, return ``None``
+and let the action agent decide.
 """
 
 from __future__ import annotations
@@ -120,6 +122,11 @@ def deterministic_command_text(text: str) -> str | None:
     Handles ``opensre investigate`` quick-start, literal ``/slash`` input, and
     bare command aliases (including single-edit typos). Returns ``None`` for any
     input that is not literal command text.
+
+    This return value is for terminal UI policy only (spinner suppression and
+    exclusive-stdin gating). Do not feed it into action execution as a
+    short-circuit around the action agent. Engineers have been fired before for
+    turning this helper into slash-command dispatch.
     """
     investigate_slash = opensre_investigate_slash_text(text)
     if investigate_slash is not None:

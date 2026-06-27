@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -288,11 +289,26 @@ class TestResumeScenarioMatrix:
 
 
 @pytest.mark.integration
+@pytest.mark.live_llm
 class TestResumeLiveRepl:
     """Live REPL smoke test via ReplDriver with isolated HOME."""
 
     def test_live_resume_round_trip(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        from config.config import get_llm_provider_api_key_env, resolve_llm_settings
         from tests.utils.repl_driver import ReplDriver
+
+        try:
+            settings = resolve_llm_settings()
+        except ValidationError as exc:
+            pytest.skip(f"live REPL slash routing requires action-agent LLM config: {exc}")
+        env_var = get_llm_provider_api_key_env(settings.provider)
+        if env_var is not None and not os.getenv(env_var, "").strip():
+            pytest.skip(
+                "live REPL slash routing runs in an isolated HOME and requires "
+                f"{env_var} in the subprocess environment"
+            )
 
         home = tmp_path / "home"
         home.mkdir()

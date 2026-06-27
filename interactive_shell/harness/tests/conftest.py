@@ -17,10 +17,13 @@ from config.config import (
     resolve_llm_settings,
 )
 from config.grafana_cloud import load_env
+from config.platform_bootstrap import ensure_project_platform_package
 from interactive_shell.harness.tests._ci_gates import (
     is_allowed_live_llm_skip_in_ci,
     running_in_github_actions,
 )
+
+ensure_project_platform_package()
 
 
 def _repo_root() -> Path:

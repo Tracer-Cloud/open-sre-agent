@@ -1,4 +1,4 @@
-"""LLM action-planner system prompt text."""
+"""Shell action-agent system prompt text."""
 
 from __future__ import annotations
 

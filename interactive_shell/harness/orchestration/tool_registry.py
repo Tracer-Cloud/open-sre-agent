@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 from typing import Any
 
+from core.runtime.types import AgentTool
 from interactive_shell.harness.orchestration.interaction_models import (
     ActionKind,
 )
@@ -43,19 +44,21 @@ class ActionToolRegistry:
             )
         return specs
 
-    def dispatch(
+    def agent_tools_for_context(
         self,
-        *,
-        tool_name: str,
-        args: dict[str, Any],
         ctx: ToolContext,
-    ) -> bool:
-        entry = self.get(tool_name)
-        if entry is None:
-            return False
-        if not entry.is_available(ctx.session):
-            return False
-        return entry.execute(args, ctx)
+        *,
+        planner_selectable_only: bool = True,
+    ) -> list[AgentTool]:
+        tools: list[AgentTool] = []
+        for name in self.names():
+            entry = self._tools[name]
+            if not entry.is_available(ctx.session):
+                continue
+            if planner_selectable_only and not entry.is_planner_selectable(ctx.session):
+                continue
+            tools.append(entry.to_agent_tool(ctx))
+        return tools
 
 
 # NOTE: Tool names MUST match the regex ``^[a-zA-Z0-9_-]+$`` — the OpenAI

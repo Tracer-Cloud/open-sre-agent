@@ -26,7 +26,7 @@ from interactive_shell.harness.orchestration.tool_contracts import (
 from interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
-# repl_choose_one). When the LLM action planner resolves free text (e.g. "remove
+# repl_choose_one). When the action agent resolves free text (e.g. "remove
 # github") into one of these, the REPL loop has NOT reserved exclusive stdin for
 # the turn — it only does so for deterministically-typed commands. Running the
 # picker inline then races the concurrently open prompt_async() for stdin and the

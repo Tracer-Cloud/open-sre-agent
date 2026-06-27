@@ -6,11 +6,9 @@ import io
 import time
 from collections.abc import Iterator
 from typing import Any
-from unittest.mock import patch
 
 from rich.console import Console
 
-from core.runtime.llm.llm_client import LLMResponse
 from interactive_shell.chat.cli_agent import answer_cli_agent
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.runtime.core.token_accounting import (
@@ -136,9 +134,6 @@ class _FakeLLMClient:
         yield self._content
 
 
-_PLANNER_LLM_CLIENT = "interactive_shell.harness.orchestration.llm_action_planner.llm_client"
-
-
 def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
     monkeypatch.setattr("core.runtime.llm.llm_client.get_llm_for_reasoning", lambda: client)
@@ -147,64 +142,4 @@ def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     answer_cli_agent("hello", session, console)
     assert session.token_usage["input"] > 0
     assert session.token_usage["output"] == estimate_tokens("assistant reply")
-    assert session.token_usage_has_estimates is True
-
-
-def test_planner_call_llm_records_provider_token_usage() -> None:
-    from interactive_shell.harness.orchestration.llm_action_planner.llm_client import (
-        _call_llm,
-    )
-
-    session = ReplSession()
-
-    class _FakeClient:
-        def bind_tools(self, _tools: object) -> _FakeClient:
-            return self
-
-        def invoke(self, _prompt: str) -> LLMResponse:
-            return LLMResponse(
-                content='{"tool_calls": []}',
-                input_tokens=321,
-                output_tokens=42,
-            )
-
-    with (
-        patch("core.runtime.llm.llm_client.get_llm_for_classification", return_value=_FakeClient()),
-        patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
-    ):
-        result = _call_llm("check cpu", session)
-
-    assert result == '{"tool_calls": []}'
-    assert session.token_usage == {
-        "input": 321,
-        "output": 42,
-        "input_measured": 321,
-        "output_measured": 42,
-    }
-    assert session.token_usage_has_estimates is False
-    assert session.llm_call_count == 1
-
-
-def test_planner_call_llm_falls_back_to_estimates_without_provider_usage() -> None:
-    from interactive_shell.harness.orchestration.llm_action_planner.llm_client import (
-        _call_llm,
-    )
-
-    session = ReplSession()
-
-    class _FakeClient:
-        def bind_tools(self, _tools: object) -> _FakeClient:
-            return self
-
-        def invoke(self, _prompt: str) -> LLMResponse:
-            return LLMResponse(content='{"tool_calls": []}')
-
-    with (
-        patch("core.runtime.llm.llm_client.get_llm_for_classification", return_value=_FakeClient()),
-        patch(f"{_PLANNER_LLM_CLIENT}._tool_specs_for_provider", return_value=[]),
-    ):
-        _call_llm("check cpu", session)
-
-    assert session.token_usage["input"] > 0
-    assert session.token_usage["output"] > 0
     assert session.token_usage_has_estimates is True

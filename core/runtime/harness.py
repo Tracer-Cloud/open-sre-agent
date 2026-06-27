@@ -40,9 +40,7 @@ class AgentHarness:
         self.integration_provider = integration_provider
         self.max_iterations = max_iterations
         self.store = store
-        self.messages = (
-            store.load_messages() if store is not None else list(initial_messages or [])
-        )
+        self.messages = store.load_messages() if store is not None else list(initial_messages or [])
         self._listeners: list[AgentEventCallback] = []
 
     def subscribe(self, listener: AgentEventCallback) -> Callable[[], None]:
@@ -60,11 +58,7 @@ class AgentHarness:
             messages=list(self.messages),
             resolved_integrations=resolved,
         )
-        prompt = (
-            self.system_prompt(context)
-            if callable(self.system_prompt)
-            else self.system_prompt
-        )
+        prompt = self.system_prompt(context) if callable(self.system_prompt) else self.system_prompt
         agent = Agent(
             llm=self.llm_factory(),
             system_prompt=prompt,

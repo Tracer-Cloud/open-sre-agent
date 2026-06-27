@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 
 _COMPLEXITY_LIMITS: dict[str, int] = {
-    "interactive_shell/harness/orchestration/llm_action_planner/postprocessing.py": 5,
+    "interactive_shell/harness/orchestration/action_prompt.py": 7,
 }
 
 

@@ -13,9 +13,8 @@ from core.runtime.context_budget import (
 from core.runtime.events import AgentEventCallback, AgentEventKind
 from core.runtime.llm.agent_llm_client import ToolCall
 from core.runtime.tool_execution import execute_tools, public_tool_input
-from core.runtime.types import AgentLoopResult
+from core.runtime.types import AgentLoopResult, RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
-from tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ def run_agent_loop(
     llm: Any,
     system: str,
     messages: list[dict[str, Any]],
-    tools: list[RegisteredTool],
+    tools: list[RuntimeTool],
     resolved_integrations: dict[str, Any],
     max_iterations: int,
     on_event: AgentEventCallback | None = None,

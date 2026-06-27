@@ -8,8 +8,7 @@ from typing import Any
 
 import core.runtime.agent_loop as agent_loop_module
 from core.runtime.events import AgentEventCallback, AgentEventKind
-from core.runtime.types import AgentLoopResult, AgentMessage
-from tools.registered_tool import RegisteredTool
+from core.runtime.types import AgentLoopResult, AgentMessage, RuntimeTool
 
 
 class PendingMessageQueue:
@@ -46,7 +45,7 @@ class Agent:
         *,
         llm: object,
         system_prompt: str,
-        tools: list[RegisteredTool],
+        tools: list[RuntimeTool],
         resolved_integrations: dict[str, Any],
         messages: list[AgentMessage] | None = None,
         max_iterations: int,
@@ -80,7 +79,9 @@ class Agent:
         self._follow_up_queue.enqueue(message)
 
     def abort(self) -> None:
-        self.error_message = "Agent abort requested; blocking runtime will stop at the next boundary."
+        self.error_message = (
+            "Agent abort requested; blocking runtime will stop at the next boundary."
+        )
 
     def wait_for_idle(self) -> None:
         return None

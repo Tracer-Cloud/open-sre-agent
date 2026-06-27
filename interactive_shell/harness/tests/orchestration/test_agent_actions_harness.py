@@ -1,88 +1,110 @@
-"""Action-execution tests using typed fakes instead of monkeypatch-heavy seams."""
+"""Action-execution tests over model tool calls, not planner DTOs."""
 
 from __future__ import annotations
 
 from rich.console import Console
 
+import interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
 from interactive_shell.harness.orchestration.agent_actions import (
+    ActionExecutionDeps,
     execute_cli_actions,
-)
-from interactive_shell.harness.orchestration.terminal_actions.models import (
-    ActionPlanningDecision,
 )
 from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
-    FakeDispatcher,
-    FakePlanner,
-    planned_action,
+    FakeActionLLM,
+    no_tool_response,
+    tool_response,
 )
 from interactive_shell.runtime.core.session import ReplSession
 
 
-def test_execute_with_harness_dispatches_slash_action() -> None:
-    planner = FakePlanner(
-        result=ActionPlanningDecision((planned_action("slash", "/health"),), False, ())
+def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
+    dispatched: list[str] = []
+
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        dispatched.append(command)
+        session.record("slash", command, ok=True)
+        console.print(f"ran {command}")
+        return True
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("slash_invoke", {"command": "/health", "args": []})])
     )
-    dispatcher = FakeDispatcher()
-    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
+    session = ReplSession()
 
     result = execute_cli_actions(
         "check health",
-        ReplSession(),
-        cast_console(harness.console),
+        session,
+        harness.console,
         deps=harness.deps,
     )
 
     assert result.handled is True
     assert result.planned_count == 1
-    assert result.executed_count == 0
-    assert dispatcher.calls == [("slash_invoke", {"command": "/health", "args": []})]
+    assert result.executed_count == 1
+    assert dispatched == ["/health"]
+    assert "slash_invoke" in harness.llm.tool_schema_names
 
 
-def test_execute_with_harness_hands_off_handoff_only_plan() -> None:
-    planner = FakePlanner(
-        result=ActionPlanningDecision(
-            (planned_action("assistant_handoff", "docs:help"),),
-            True,
-            (),
+def test_literal_slash_command_does_not_short_circuit_without_agent_tool_call(
+    monkeypatch,
+) -> None:
+    def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("literal slash commands must be selected by the action agent")
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
+
+    result = execute_cli_actions(
+        "/sessions",
+        ReplSession(),
+        harness.console,
+        deps=harness.deps,
+    )
+
+    assert result.handled is False
+    assert result.planned_count == 0
+
+
+def test_execute_with_harness_hands_off_handoff_only_tool_call() -> None:
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [tool_response("assistant_handoff", {"content": "docs:help"})],
         )
     )
-    dispatcher = FakeDispatcher()
-    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
 
     result = execute_cli_actions(
         "half actionable prompt",
         ReplSession(),
-        cast_console(harness.console),
+        harness.console,
         deps=harness.deps,
     )
 
-    # A handoff-only plan is not "handled" by terminal execution: it falls
-    # through to the conversational assistant. v0.1 never denies the turn.
     assert result.handled is False
     assert result.has_unhandled_clause is False
     assert result.planned_count == 0
-    assert dispatcher.calls == []
+    assert "Requested actions" not in harness.console_buffer.getvalue()
 
 
-def test_execute_with_harness_handles_planner_unavailable() -> None:
-    planner = FakePlanner(result=None)
-    dispatcher = FakeDispatcher()
-    harness = ActionExecutionHarness(planner=planner, dispatcher=dispatcher)
+def test_execute_with_harness_handles_llm_unavailable() -> None:
+    def _raise() -> object:
+        raise RuntimeError("action agent unavailable")
 
+    session = ReplSession()
     result = execute_cli_actions(
-        "planner outage",
-        ReplSession(),
-        cast_console(harness.console),
-        deps=harness.deps,
+        "action agent outage",
+        session,
+        Console(force_terminal=False),
+        deps=ActionExecutionDeps(llm_factory=_raise),
     )
 
-    # Planner outage falls through to the assistant instead of denying.
-    assert result.handled is False
-    assert result.has_unhandled_clause is False
+    assert result.handled is True
+    assert result.has_unhandled_clause is True
     assert result.planned_count == 0
-    assert dispatcher.calls == []
-
-
-def cast_console(console: Console) -> Console:
-    return console
+    assert session.cli_agent_messages[-1] == ("assistant", "action agent unavailable")
