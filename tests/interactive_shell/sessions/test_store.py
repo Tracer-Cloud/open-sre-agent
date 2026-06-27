@@ -36,7 +36,9 @@ def _read_lines(path: Path) -> list[dict]:
 
 
 def _patch_dir(tmp_path: Path):
-    return patch("interactive_shell.harness.llm_context.session.paths.sessions_dir", return_value=tmp_path)
+    return patch(
+        "interactive_shell.harness.llm_context.session.paths.sessions_dir", return_value=tmp_path
+    )
 
 
 @pytest.fixture

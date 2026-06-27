@@ -20,7 +20,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable, Coroutine, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, assert_never
 
 from rich.console import Console
 from rich.markup import escape
@@ -745,7 +745,8 @@ def handle_message_with_agent(
 
     observation = session.last_command_observation
 
-    match _route_turn(action_result, observation):
+    route = _route_turn(action_result, observation)
+    match route:
         case "summarize_observation":
             with apply_reasoning_effort(turn_ctx.reasoning_effort):
                 run = answer_agent(
@@ -789,6 +790,9 @@ def handle_message_with_agent(
                 assistant_response_text=_response_text(run),
                 llm_run=run,
             )
+
+        case _:
+            assert_never(route)
 
     return accounting.finalize(result)
 
