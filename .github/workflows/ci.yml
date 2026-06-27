@@ -129,8 +129,7 @@ jobs:
               tests/agent
               tests/fleet_monitoring
               tests/analytics
-              tests/nodes
-              tests/core/orchestration
+              tests/tools/investigation
               tests/delivery
               tests/entrypoints
               tests/sandbox
@@ -371,7 +370,7 @@ jobs:
               - "uv.lock"
               - "infra/deployment/**"
               - "integrations/**"
-              - "core/orchestration/**"
+              - "tools/investigation/**"
               - "tools/**"
               - "tests/e2e/cloudwatch_demo/**"
               - "tests/e2e/upstream_lambda/**"
