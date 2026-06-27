@@ -299,17 +299,8 @@ class TestAlertmanagerRegistration:
         assert get_verifier("alertmanager") is verify_alertmanager
 
 
-class TestSupabasePreservedArgSwap:
-    """Pin the pre-#37 arg-name swap in ``verify_supabase``.
-
-    The original ``_verify_supabase`` passed its first positional arg
-    as ``service`` (not ``source``) and the literal ``"supabase"`` as
-    ``source``. That's almost certainly a typo. This test locks in
-    the existing behavior so any "fix" PR has to consciously break it
-    and ship a separate ticket.
-    """
-
-    def test_first_arg_lands_in_service_field_and_source_is_supabase(
+class TestSupabaseVerifierRouting:
+    def test_source_arg_lands_in_source_field_and_service_is_supabase(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from integrations.supabase import verifier as _supabase_verifier
@@ -333,8 +324,6 @@ class TestSupabasePreservedArgSwap:
 
         out = verifier("local store", {"placeholder": True})
 
-        # The "swap": the source passed in lands as service; "supabase"
-        # lands as source. Do not fix without a behavior-change PR.
-        assert out["service"] == "local store"
-        assert out["source"] == "supabase"
+        assert out["service"] == "supabase"
+        assert out["source"] == "local store"
         assert out["status"] == "passed"
