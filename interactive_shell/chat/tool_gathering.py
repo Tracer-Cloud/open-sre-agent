@@ -4,7 +4,7 @@ The REPL's conversational assistant (:func:`interactive_shell.chat.cli_agent.ans
 is grounded text generation — it cannot reach integrations on its own. This
 module gives a free-form turn access to the **same registered tools the
 investigation pipeline uses**: it runs a bounded think → call-tools → observe
-loop (:func:`core.runtime.run_tool_calling_loop`) over the available
+loop (:class:`core.runtime.agent.Agent`) over the available
 ``"investigation"`` surface tools, then hands the collected tool outputs back to
 ``answer_cli_agent`` as an observation block so it can compose a grounded answer.
 

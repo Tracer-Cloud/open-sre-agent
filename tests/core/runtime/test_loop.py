@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from typing import Any, cast
+
+import pytest
 
 from core.runtime.agent import Agent, AgentRunResult
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
@@ -19,8 +22,10 @@ class FakeLLM:
     def __init__(self, responses: Iterator[AgentLLMResponse]) -> None:
         self._responses = responses
         self.invocations = 0
+        self.schema_tool_names: list[list[str]] = []
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        self.schema_tool_names.append([t.name for t in tools])
         return [{"name": t.name} for t in tools]
 
     def invoke(
@@ -157,6 +162,76 @@ def test_on_event_emits_kinds_in_order() -> None:
     )
 
     assert events == ["llm_start", "tool_start", "tool_end", "llm_start"]
+
+
+def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixture) -> None:
+    llm = FakeLLM(iter([_text_response("final")]))
+
+    def on_event(_kind: str, _data: dict[str, Any]) -> None:
+        raise RuntimeError("broken renderer")
+
+    with caplog.at_level(logging.DEBUG, logger="core.runtime.agent"):
+        result = _agent(llm, _tools(FakeTool("query_logs")), on_event=on_event).run(
+            [{"role": "user", "content": "hello"}]
+        )
+
+    assert result.final_text == "final"
+    assert "[runtime] on_event(llm_start) raised; ignoring" in caplog.text
+
+
+def test_rejecting_conclusion_without_nudge_raises() -> None:
+    class RejectingAgent(Agent[RegisteredTool]):
+        def _should_accept_conclusion(
+            self,
+            *,
+            evidence_count: int,  # noqa: ARG002
+            iteration: int,  # noqa: ARG002
+        ) -> tuple[bool, str | None]:
+            return False, None
+
+    llm = FakeLLM(iter([_text_response("not enough")]))
+    agent = RejectingAgent(
+        llm=llm,
+        system="sys",
+        tools=_tools(FakeTool("query_logs")),
+        resolved_integrations={},
+        max_iterations=3,
+    )
+
+    with pytest.raises(ValueError, match="_should_accept_conclusion returned"):
+        agent.run([{"role": "user", "content": "hello"}])
+
+
+def test_tool_filtering_runs_after_subclass_initialization() -> None:
+    class LateStateFilteringAgent(Agent[RegisteredTool]):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            self.allowed_tool_names = {"keep"}
+
+        def _filter_tools(self, tools: list[RegisteredTool]) -> list[RegisteredTool]:
+            return [tool for tool in tools if tool.name in self.allowed_tool_names]
+
+    output = {"value": 42}
+    llm = FakeLLM(
+        iter(
+            [
+                _tool_call_response("c1", "keep"),
+                _text_response("done"),
+            ]
+        )
+    )
+    agent = LateStateFilteringAgent(
+        llm=llm,
+        system="sys",
+        tools=_tools(FakeTool("drop"), FakeTool("keep", output)),
+        resolved_integrations={},
+        max_iterations=3,
+    )
+
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert llm.schema_tool_names == [["keep"]]
+    assert [(tc.name, tool_output) for tc, tool_output in result.executed] == [("keep", output)]
 
 
 def test_always_tool_call_hits_iteration_cap() -> None:

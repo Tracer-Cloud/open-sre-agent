@@ -26,7 +26,7 @@
 
 The turn scenario oracle (`_oracle_runtime.py`) does not observe, assert on,
 or control the conversational tool-gathering path (`gather_tool_evidence` →
-`run_tool_calling_loop`). Every `complex_shell_prompts` scenario passes in CI
+`Agent.run`). Every `complex_shell_prompts` scenario passes in CI
 even when zero integrations are queried and the response is entirely hallucinated
 text. The test infrastructure provides confidence that does not exist.
 
@@ -223,7 +223,7 @@ no fixture currently sets this field.
 
 ### 7.2 — Track gather-loop tool calls in the oracle
 
-Wrap `run_tool_calling_loop` (or `_run_parallel`) with a thin recorder inside
+Wrap `Agent.run` with a thin recorder inside
 `run_oracle_once` so tool calls made during gathering are captured alongside
 planned terminal actions. This does not mock the tools themselves; it records
 which ones fired.
@@ -232,15 +232,15 @@ which ones fired.
 # _oracle_runtime.py
 gathered_calls: list[str] = []
 
-original_loop = tool_loop.run_tool_calling_loop
+original_run = Agent.run
 
-def _recording_loop(*args, **kwargs):
-    result = original_loop(*args, **kwargs)
+def _recording_run(self, initial_messages):
+    result = original_run(self, initial_messages)
     for tc, _ in result.executed:
         gathered_calls.append(tc.name)
     return result
 
-monkeypatch.setattr(tool_loop, "run_tool_calling_loop", _recording_loop)
+monkeypatch.setattr(Agent, "run", _recording_run)
 ```
 
 The oracle result gains `gathered_tool_calls: list[str]` and the OracleRunResult
@@ -318,7 +318,7 @@ to distinguish between two separate things:
 
 Add an AST check that specifically permits `monkeypatch.setattr` on
 `tool_gathering._resolve_session_integrations` and
-`tool_loop.run_tool_calling_loop` while continuing to prohibit `patch`,
+`core.runtime.agent.Agent.run` while continuing to prohibit `patch`,
 `MagicMock`, and LLM client stubs.
 
 ### 7.5 — Rename or reclassify misleading existing scenarios

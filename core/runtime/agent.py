@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -45,7 +44,7 @@ class AgentRunResult:
 ToolLoopResult = AgentRunResult
 
 
-class Agent:
+class Agent[RuntimeToolT: RuntimeTool]:
     """Stateful, configurable ReAct agent.
 
     Owns the think → call-tools → observe loop and exposes hook methods so
@@ -67,14 +66,14 @@ class Agent:
         *,
         llm: Any,
         system: str,
-        tools: Sequence[RuntimeTool],
+        tools: Sequence[RuntimeToolT],
         resolved_integrations: dict[str, Any],
         max_iterations: int,
         on_event: LoopEventCallback | None = None,
     ) -> None:
         self._llm = llm
         self._system = system
-        self._tools = list(self._filter_tools(list(tools)))
+        self._tools = list(tools)
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
         self._on_event = on_event
@@ -82,7 +81,8 @@ class Agent:
     def run(self, initial_messages: list[dict[str, Any]]) -> AgentRunResult:
         """Run the think → call-tools → observe loop and return its outcome."""
         messages = list(initial_messages)
-        tool_schemas = self._llm.tool_schemas(self._tools)
+        runtime_tools = list(self._filter_tools(self._tools))
+        tool_schemas = self._llm.tool_schemas(runtime_tools)
         ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
         executed: list[tuple[ToolCall, Any]] = []
         final_text = ""
@@ -97,15 +97,21 @@ class Agent:
             messages.append(build_assistant_message(self._llm, response))
 
             if not response.has_tool_calls:
-                accept, _nudge = self._should_accept_conclusion(
+                accept, nudge = self._should_accept_conclusion(
                     evidence_count=len(executed), iteration=iteration
                 )
                 if accept:
                     final_text = response.content or ""
                     hit_cap = False
                     break
-                if _nudge:
-                    messages.append({"role": "user", "content": _nudge})
+                if nudge is None:
+                    raise ValueError(
+                        f"{type(self).__name__}._should_accept_conclusion returned "
+                        "(False, None) — a nudge string is required when rejecting "
+                        "the conclusion, otherwise the LLM will loop on an unchanged "
+                        "message history until max_iterations."
+                    )
+                messages.append({"role": "user", "content": nudge})
                 continue
 
             for tc in response.tool_calls:
@@ -114,7 +120,7 @@ class Agent:
                     {"id": tc.id, "name": tc.name, "input": public_tool_input(tc.input)},
                 )
 
-            results = execute_tools(response.tool_calls, self._tools, self._resolved)
+            results = execute_tools(response.tool_calls, runtime_tools, self._resolved)
             messages.extend(build_tool_result_messages(self._llm, response.tool_calls, results))
 
             for tc, output in zip(response.tool_calls, results):
@@ -144,11 +150,13 @@ class Agent:
         """
         return True, None
 
-    def _filter_tools(self, tools: list[RuntimeTool]) -> list[RuntimeTool]:
+    def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]:
         """Hook: narrow the tool list the agent will see."""
         return tools
 
     def _emit(self, kind: str, data: dict[str, Any]) -> None:
         if self._on_event is not None:
-            with contextlib.suppress(Exception):
+            try:
                 self._on_event(kind, data)
+            except Exception:  # noqa: BLE001 — event rendering must never break the loop
+                logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)

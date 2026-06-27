@@ -379,7 +379,8 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
 
     # Record which registered tools fire during the conversational
     # gather_tool_evidence pass. Both gather_tool_evidence and ShellActionHarness
-    # create Agent instances and call .run(), so we patch Agent.run on the class.
+    # create Agent instances and call .run(), so patch Agent.run on the class
+    # and ignore the interactive-shell action-agent tool surface.
     import core.runtime.agent as _agent_mod
 
     gathered_tool_calls: list[str] = []
@@ -388,6 +389,9 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
 
     def _recording_agent_run(self: Any, initial_messages: Any) -> Any:
         result = _original_agent_run(self, initial_messages)
+        runtime_tools = getattr(self, "_tools", [])
+        if all(getattr(tool, "source", None) == "interactive_shell" for tool in runtime_tools):
+            return result
         for tc, output in result.executed:
             gathered_tool_calls.append(tc.name)
             if tool_output_returned_valid_data(output):

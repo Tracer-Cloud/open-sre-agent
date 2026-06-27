@@ -65,7 +65,7 @@ def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[
     return planned or tools
 
 
-class ConnectedInvestigationAgent(Agent):
+class ConnectedInvestigationAgent(Agent[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
     Subclasses :class:`~core.runtime.agent.Agent` to inherit the shared hook
@@ -88,13 +88,6 @@ class ConnectedInvestigationAgent(Agent):
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools."""
         return True, None
-
-    def _filter_tools(  # type: ignore[override]
-        self,
-        tools: list[RegisteredTool],
-    ) -> list[RegisteredTool]:
-        """Hook: narrow the tool list the agent will see."""
-        return tools
 
     def _build_system_prompt(self, state: dict[str, Any]) -> str:
         """Hook: produce the LLM system prompt for this investigation."""

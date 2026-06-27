@@ -16,6 +16,7 @@ from rich.console import Console
 
 import core.orchestration.node.investigate.tools as investigate_tools
 import core.runtime as runtime_module
+import core.runtime.agent as runtime_agent_module
 import core.runtime.llm.agent_llm_client as agent_llm_client
 from interactive_shell.chat.tool_gathering import (
     _format_gathering_progress_line,
@@ -34,6 +35,17 @@ class _DummyTool:
     def __init__(self, name: str, source: str = "github") -> None:
         self.name = name
         self.source = source
+
+
+def _patch_agent_run(monkeypatch: Any, run: Any) -> None:
+    class _FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+
+        def run(self, initial_messages: list[dict[str, Any]]) -> runtime_module.ToolLoopResult:
+            return run(self.kwargs, initial_messages)
+
+    monkeypatch.setattr(runtime_agent_module, "Agent", _FakeAgent)
 
 
 def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
@@ -83,10 +95,12 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
         )
     ]
 
-    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+    def _fake_run(
+        _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=executed)
 
-    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+    _patch_agent_run(monkeypatch, _fake_run)
 
     observation = gather_tool_evidence("any open issues?", session, _console())
 
@@ -107,10 +121,12 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+    def _fake_run(
+        _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="nothing to do", executed=[])
 
-    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+    _patch_agent_run(monkeypatch, _fake_run)
 
     assert gather_tool_evidence("any question", session, _console()) is None
 
@@ -190,7 +206,9 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**kwargs: Any) -> runtime_module.ToolLoopResult:
+    def _fake_run(
+        kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.ToolLoopResult:
         on_event = kwargs.get("on_event")
         if on_event is not None:
             on_event(
@@ -211,7 +229,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
             )
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+    _patch_agent_run(monkeypatch, _fake_run)
 
     gather_tool_evidence("check metrics", session, console)
     output = console.file.getvalue()
@@ -270,10 +288,12 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
     monkeypatch.setattr(investigate_tools, "get_available_tools", _capture_tools)
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**_kwargs: Any) -> runtime_module.ToolLoopResult:
+    def _fake_run(
+        _kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.ToolLoopResult:
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+    _patch_agent_run(monkeypatch, _fake_run)
 
     gather_tool_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
@@ -299,11 +319,13 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
     )
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", object)
 
-    def _fake_loop(**kwargs: Any) -> runtime_module.ToolLoopResult:
-        captured["messages"] = kwargs["messages"]
+    def _fake_run(
+        _kwargs: dict[str, Any], initial_messages: list[dict[str, Any]]
+    ) -> runtime_module.ToolLoopResult:
+        captured["messages"] = initial_messages
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 
-    monkeypatch.setattr(runtime_module, "run_tool_calling_loop", _fake_loop)
+    _patch_agent_run(monkeypatch, _fake_run)
 
     gather_tool_evidence("follow up", session, _console())
 
