@@ -95,7 +95,7 @@ output:
    found on `session.agent.last_observation`
    (`_record_integrations_observation` in
    `interactive_shell/command_registry/integrations.py`).
-2. `handle_message_with_agent` resets that field at the start of every action-agent
+2. `run_agent_prompt` resets that field at the start of every action-agent
    turn and, when a discovery command produced an observation and succeeded,
    calls the conversational assistant with `tool_observation=...`
    (inside the handled-turn observation branch in `pipeline.py`). The assistant

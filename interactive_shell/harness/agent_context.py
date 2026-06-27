@@ -1,14 +1,14 @@
-"""Per-turn immutable context snapshot for the interactive-shell agent.
+"""Agent-owned per-prompt immutable context snapshot.
 
-Assembled once at the start of each turn from the live ``ReplSession``.
-All fields reflect session state at turn-start and do not change while the
-turn runs, so downstream code reads a stable snapshot rather than a live,
+Assembled once at the start of each prompt from the live ``ReplSession``.
+All fields reflect session state at prompt start and do not change while the
+prompt runs, so downstream code reads a stable snapshot rather than a live,
 concurrently-mutated object.
 
 Usage::
 
-    turn_ctx = TurnContext.from_session(text, session)
-    # pass turn_ctx to action agent + conversational assistant
+    agent_ctx = AgentContext.from_session(text, session)
+    # pass agent_ctx to action agent + conversational assistant
     # keep passing session for writes (recording history, token usage, etc.)
 """
 
@@ -26,46 +26,33 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class TurnContext:
-    """Immutable per-turn snapshot assembled from ``ReplSession`` at turn start.
-
-    Carries everything the action agent and conversational assistant need to
-    build prompts and ground answers, frozen at the moment the turn begins.
-
-    The live ``ReplSession`` is still passed separately to callers that need
-    to write state (recording history, persisting token usage, updating intent).
-    """
+class AgentContext:
+    """Immutable per-prompt snapshot assembled from ``ReplSession`` at prompt start."""
 
     text: str
-    """Raw user input text for this turn."""
+    """Raw user input text for this prompt."""
 
     conversation_messages: tuple[ConversationMessage, ...]
-    """Snapshot of recent CLI conversation as :class:`ConversationMessage`
-    values, oldest first, capped to ``MAX_CONVERSATION_MESSAGES`` entries at
-    assembly time."""
+    """Snapshot of recent CLI conversation, oldest first."""
 
     configured_integrations: tuple[str, ...]
-    """Integration names known to be configured at turn start."""
+    """Integration names known to be configured at prompt start."""
 
     configured_integrations_known: bool
     """Whether ``configured_integrations`` reflects real state (vs unknown)."""
 
     last_state: dict[str, Any] | None
-    """Final ``AgentState`` from the most recent investigation (follow-up grounding)."""
+    """Final ``AgentState`` from the most recent investigation."""
 
     last_synthetic_observation_path: str | None
-    """Path to latest synthetic-run observation file (failure explanation context)."""
+    """Path to latest synthetic-run observation file."""
 
     reasoning_effort: ReasoningEffortChoice | None
-    """Session-scoped reasoning effort preference for LLM calls this turn."""
+    """Session-scoped reasoning effort preference for LLM calls this prompt."""
 
     @classmethod
-    def from_session(cls, text: str, session: ReplSession) -> TurnContext:
-        """Snapshot the relevant session fields for one turn.
-
-        Call this once at the top of ``handle_message_with_agent`` before any
-        mutations happen, then pass the returned context downstream.
-        """
+    def from_session(cls, text: str, session: ReplSession) -> AgentContext:
+        """Snapshot the relevant session fields for one prompt."""
         messages = session.agent.messages
         snapshot: tuple[ConversationMessage, ...] = tuple(
             ConversationMessage.from_role_content(role, content)
@@ -83,4 +70,4 @@ class TurnContext:
         )
 
 
-__all__ = ["TurnContext"]
+__all__ = ["AgentContext"]

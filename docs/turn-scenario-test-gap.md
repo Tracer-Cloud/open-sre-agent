@@ -34,7 +34,7 @@ text. The test infrastructure provides confidence that does not exist.
 
 ## 1. The Two Execution Paths — Only One Is Tested
 
-When a REPL turn enters `handle_message_with_agent`, two independent paths
+When a REPL turn enters `run_agent_prompt`, two independent paths
 can fire:
 
 | Path | What it does | Oracle coverage |
@@ -350,7 +350,7 @@ scenario fixtures follow.
 
 - The no-mocks policy on the LLM path. The planner, classifier, and
   conversational assistant all continue to hit the real LLM in turn tests.
-- The turn-execution oracle still invokes `handle_message_with_agent` directly.
+- The turn-execution oracle still invokes `run_agent_prompt` directly.
 - Any existing passing scenario. The `resolved_integrations_override` is opt-in;
   existing scenarios without it keep the current no-op gather behaviour and
   continue to pass.

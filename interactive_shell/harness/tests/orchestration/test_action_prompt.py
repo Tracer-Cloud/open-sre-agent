@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interactive_shell.harness.agent_context import AgentContext
 from interactive_shell.harness.llm_context import (
     SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -10,7 +11,6 @@ from interactive_shell.harness.llm_context import (
 )
 from interactive_shell.harness.llm_context.conversation_history import NO_HISTORY_PLACEHOLDER
 from interactive_shell.harness.llm_context.models import coerce_messages
-from interactive_shell.harness.turn_context import TurnContext
 
 
 def _ctx(
@@ -18,8 +18,8 @@ def _ctx(
     messages: list[tuple[str, str]] | None = None,
     integrations: tuple[str, ...] = (),
     integrations_known: bool = False,
-) -> TurnContext:
-    return TurnContext(
+) -> AgentContext:
+    return AgentContext(
         text="",
         conversation_messages=coerce_messages(messages or []),
         configured_integrations=integrations,

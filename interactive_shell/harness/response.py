@@ -19,8 +19,8 @@ from rich.markup import escape
 from integrations.llm_cli.errors import CLITimeoutError
 from interactive_shell.harness.action_exec import _execute_action_plan
 from interactive_shell.harness.action_plan import _parse_action_plan
+from interactive_shell.harness.agent_context import AgentContext
 from interactive_shell.harness.llm_context.assistant_prompt import build_cli_agent_prompt
-from interactive_shell.harness.turn_context import TurnContext
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.agent_presentation import render_json_like_response
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
@@ -90,27 +90,27 @@ def generate_response(
     is_tty: bool | None = None,
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
-    turn_ctx: TurnContext | None = None,
+    agent_ctx: AgentContext | None = None,
 ) -> LlmRunInfo | None:
     """Generate one turn's final assistant response (guidance only; no investigation run).
 
-    ``turn_ctx`` is the immutable per-turn snapshot assembled at turn start.
+    ``agent_ctx`` is the immutable per-prompt snapshot assembled at prompt start.
     When present, snapshot fields (conversation history, integration state,
     prior investigation, synthetic-run path) are read from it rather than from
-    the live session, so prompt construction reflects a stable turn-start view.
+    the live session, so prompt construction reflects a stable prompt-start view.
     """
     client = _load_reasoning_client(console)
     if client is None:
         return None
 
-    ctx = turn_ctx or TurnContext.from_session(message, session)
+    ctx = agent_ctx or AgentContext.from_session(message, session)
 
     prompt = build_cli_agent_prompt(
         message=message,
         session=session,
         tool_observation=tool_observation,
         tool_observation_on_screen=tool_observation_on_screen,
-        turn_ctx=ctx,
+        agent_ctx=ctx,
     )
 
     run_info = _stream_response(

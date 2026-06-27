@@ -209,7 +209,11 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
         "platform.analytics.cli.identify_saved_github_username",
         lambda: identified.append("called"),
     )
-    monkeypatch.setattr(entrypoint, "run_initial_input", lambda *_args, **_kwargs: 0)
+
+    async def _run_initial_input(*_args: Any, **_kwargs: Any) -> int:
+        return 0
+
+    monkeypatch.setattr(entrypoint, "run_initial_input", _run_initial_input)
 
     class _Session:
         active_theme_name = None

@@ -23,12 +23,12 @@ from rich.markup import escape
 from core.runtime.agent import Agent
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
+from interactive_shell.harness.agent_context import AgentContext
 from interactive_shell.harness.llm_context import (
     build_action_system_prompt,
     build_action_user_message,
 )
 from interactive_shell.harness.llm_context.session import ReplSession
-from interactive_shell.harness.turn_context import TurnContext
 from interactive_shell.runtime.core.turn_accounting import ToolCallingTurnResult
 from interactive_shell.tools.tool_contracts import ToolContext
 from interactive_shell.tools.tool_registry import REGISTRY
@@ -157,13 +157,13 @@ def run_tool_calling_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     deps: ToolCallingDeps | None = None,
-    turn_ctx: TurnContext | None = None,
+    agent_ctx: AgentContext | None = None,
 ) -> ToolCallingTurnResult:
     """Run one shell tool-calling turn through the shared agent harness.
 
-    ``turn_ctx`` is the immutable per-turn snapshot assembled at turn start
-    in ``handle_message_with_agent``. When present it is used to build the
-    action-agent system prompt so the prompt reflects turn-start state rather
+    ``agent_ctx`` is the immutable per-prompt snapshot assembled at prompt start
+    in ``run_agent_prompt``. When present it is used to build the
+    action-agent system prompt so the prompt reflects prompt-start state rather
     than the live (potentially mid-mutation) session.
     """
     history_start = len(session.history)
@@ -196,7 +196,7 @@ def run_tool_calling_turn(
             deps.llm_factory if deps is not None and deps.llm_factory else _default_llm_factory
         )
         user_message = build_action_user_message(message)
-        effective_ctx = turn_ctx or TurnContext.from_session(message, session)
+        effective_ctx = agent_ctx or AgentContext.from_session(message, session)
         system_prompt = build_action_system_prompt(effective_ctx)
 
     try:

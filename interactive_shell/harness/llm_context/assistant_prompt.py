@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from interactive_shell.harness.agent_context import AgentContext
 from interactive_shell.harness.llm_context.conversation_history import format_recent_conversation
 from interactive_shell.harness.llm_context.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
@@ -34,7 +35,6 @@ from interactive_shell.harness.llm_context.rules import (
 from interactive_shell.harness.llm_context.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 )
-from interactive_shell.harness.turn_context import TurnContext
 from interactive_shell.runtime import ReplSession
 
 _logger = logging.getLogger(__name__)
@@ -229,7 +229,7 @@ def _load_synthetic_observation_text(
     return raw
 
 
-def _build_integration_guard(ctx: TurnContext) -> str:
+def _build_integration_guard(ctx: AgentContext) -> str:
     """Render the no-integrations guidance block (pure over the snapshot)."""
     if not (ctx.configured_integrations_known and not ctx.configured_integrations):
         return ""
@@ -243,7 +243,7 @@ def _build_integration_guard(ctx: TurnContext) -> str:
     )
 
 
-def _build_synthetic_failure_block(ctx: TurnContext) -> str:
+def _build_synthetic_failure_block(ctx: AgentContext) -> str:
     obs_path = ctx.last_synthetic_observation_path
     if not obs_path:
         return ""
@@ -271,7 +271,7 @@ def build_cli_agent_prompt(
     session: ReplSession,
     tool_observation: str | None,
     tool_observation_on_screen: bool,
-    turn_ctx: TurnContext,
+    agent_ctx: AgentContext,
 ) -> str:
     """Read grounding sources / files / snapshot once and render the prompt string.
 
@@ -282,20 +282,20 @@ def build_cli_agent_prompt(
 
     system = build_assistant_system_prompt(
         session.grounding.cli.build_text(),
-        format_recent_conversation(list(turn_ctx.conversation_messages)),
+        format_recent_conversation(list(agent_ctx.conversation_messages)),
         agents_md=session.grounding.agents_md.build_text(),
         investigation_flow=build_investigation_flow_reference_text(),
         prior_investigation=(
-            _summarize_last_state(turn_ctx.last_state) if turn_ctx.last_state is not None else ""
+            _summarize_last_state(agent_ctx.last_state) if agent_ctx.last_state is not None else ""
         ),
         environment=build_environment_block(session),
     )
 
-    integration_guard = _build_integration_guard(turn_ctx)
+    integration_guard = _build_integration_guard(agent_ctx)
     observation_block = build_observation_block(
         tool_observation, on_screen=tool_observation_on_screen
     )
-    synthetic_block = _build_synthetic_failure_block(turn_ctx)
+    synthetic_block = _build_synthetic_failure_block(agent_ctx)
 
     return (
         f"{system}\n"

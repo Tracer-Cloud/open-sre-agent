@@ -8,8 +8,8 @@ from typing import Any
 
 from rich.console import Console
 
+from interactive_shell.harness.agent_loop import run_agent_prompt
 from interactive_shell.harness.llm_context.session import ReplSession
-from interactive_shell.harness.turn import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -42,7 +42,7 @@ def _record_answer() -> tuple[list[dict[str, Any]], Callable[..., None]]:
 def test_gather_string_threads_offscreen_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    handle_message_with_agent(
+    run_agent_prompt(
         "question",
         ReplSession(),
         _console(),
@@ -60,7 +60,7 @@ def test_gather_string_threads_offscreen_observation() -> None:
 def test_gather_none_passes_through_without_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    handle_message_with_agent(
+    run_agent_prompt(
         "question",
         ReplSession(),
         _console(),
@@ -96,7 +96,7 @@ def test_existing_command_observation_skips_gather() -> None:
             handled=True,
         )
 
-    handle_message_with_agent(
+    run_agent_prompt(
         "question",
         ReplSession(),
         _console(),

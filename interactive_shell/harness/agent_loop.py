@@ -1,10 +1,9 @@
-"""Turn routing for one interactive-shell turn.
+"""Per-prompt shell agent loop.
 
-Decides, from the tool-calling action result and any left-over discovery
-observation, which of three paths a turn takes (summarize an observation,
-finish without the LLM, or gather evidence and answer), then performs the
-chosen path's effects. The path choice is the pure :func:`_route_turn`; this
-module is the imperative shell around it.
+This module owns the repeatable mechanics for one submitted shell prompt:
+snapshot context, clear stale observations, run the action-agent pass, route the
+result, optionally gather evidence, optionally call the assistant, and finalize
+accounting. The durable lifecycle object lives in ``harness/agent.py``.
 """
 
 from __future__ import annotations
@@ -15,10 +14,10 @@ from typing import Literal
 from rich.console import Console
 
 from config.llm_reasoning_effort import apply_reasoning_effort
+from interactive_shell.harness.agent_context import AgentContext
+from interactive_shell.harness.llm_context.session import ReplSession
 from interactive_shell.harness.response import generate_response
 from interactive_shell.harness.tool_calling import run_tool_calling_turn
-from interactive_shell.harness.turn_context import TurnContext
-from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.turn_accounting import (
     ShellTurnAccounting,
     ShellTurnResult,
@@ -36,10 +35,10 @@ def _response_text(run: LlmRunInfo | None) -> str:
     return run.response_text if run is not None and run.response_text else ""
 
 
-def _route_turn(
+def _route_prompt(
     action_result: ToolCallingTurnResult, observation: str | None
 ) -> Literal["summarize_observation", "handled_without_llm", "gather_and_answer"]:
-    """Decide the turn path from the action result and any left-over observation."""
+    """Decide the prompt path from the action result and any left-over observation."""
     if (
         action_result.handled
         and observation is not None
@@ -60,7 +59,7 @@ def _gather_and_answer(
     response_generator: ResponseGenerator,
     confirm_fn: Callable[[str], str] | None,
     is_tty: bool | None,
-    turn_ctx: TurnContext,
+    agent_ctx: AgentContext,
 ) -> LlmRunInfo | None:
     gathered = gather_evidence(text, session, console, is_tty=is_tty)
 
@@ -76,12 +75,12 @@ def _gather_and_answer(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         tool_observation=gathered or None,
-        turn_ctx=turn_ctx,
+        agent_ctx=agent_ctx,
         **on_screen,
     )
 
 
-def handle_message_with_agent(
+def run_agent_prompt(
     text: str,
     session: ReplSession,
     console: Console,
@@ -93,28 +92,20 @@ def handle_message_with_agent(
     gather_evidence: GatherEvidence | None = None,
     response_generator: ResponseGenerator | None = None,
 ) -> ShellTurnResult:
-    """Run one interactive-shell turn through three paths, in order:
-
-    1. ``summarize_observation`` — a successful action left discovery output, so
-       summarize it into a direct answer.
-    2. ``handled_without_llm`` — the action fully handled the turn; stop without the LLM.
-    3. ``gather_and_answer`` — nothing was handled; gather evidence and answer.
-
-    The path choice is the pure ``_route_turn``; this function is the imperative
-    shell that performs the chosen path's effects.
-    """
+    """Run one prompt through the shell agent's action/answer loop."""
     execute_actions = execute_actions or run_tool_calling_turn
     gather_evidence = gather_evidence or gather_tool_evidence
     response_generator = response_generator or generate_response
 
-    # Snapshot session state before any turn mutations. Both the action agent
-    # and the conversational assistant read from this frozen context so their
-    # prompts reflect a consistent turn-start view rather than live session state.
-    turn_ctx = TurnContext.from_session(text, session)
+    # Snapshot session state before any prompt mutations. Both the action
+    # agent and the conversational assistant read from this frozen context so
+    # prompts reflect a consistent prompt-start view rather than live session
+    # state.
+    agent_ctx = AgentContext.from_session(text, session)
     accounting = ShellTurnAccounting(session=session, text=text, recorder=recorder)
 
-    # Clear any observation left by a prior turn so only this turn's discovery
-    # output can trigger a summary pass.
+    # Clear any observation left by a prior prompt so only this prompt's
+    # discovery output can trigger a summary pass.
     session.agent.reset_observation()
 
     action_result = execute_actions(
@@ -123,15 +114,15 @@ def handle_message_with_agent(
         console,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
-        turn_ctx=turn_ctx,
+        agent_ctx=agent_ctx,
     )
     accounting.record_action_result(action_result)
 
     observation = session.agent.last_observation
 
-    route = _route_turn(action_result, observation)
+    route = _route_prompt(action_result, observation)
     if route == "summarize_observation":
-        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+        with apply_reasoning_effort(agent_ctx.reasoning_effort):
             run = response_generator(
                 text,
                 session,
@@ -139,7 +130,7 @@ def handle_message_with_agent(
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
                 tool_observation=observation,
-                turn_ctx=turn_ctx,
+                agent_ctx=agent_ctx,
             )
         return accounting.finalize(
             ShellTurnResult(
@@ -160,7 +151,7 @@ def handle_message_with_agent(
         )
 
     if route == "gather_and_answer":
-        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+        with apply_reasoning_effort(agent_ctx.reasoning_effort):
             run = _gather_and_answer(
                 text=text,
                 session=session,
@@ -169,7 +160,7 @@ def handle_message_with_agent(
                 response_generator=response_generator,
                 confirm_fn=confirm_fn,
                 is_tty=is_tty,
-                turn_ctx=turn_ctx,
+                agent_ctx=agent_ctx,
             )
         return accounting.finalize(
             ShellTurnResult(
@@ -187,5 +178,5 @@ __all__ = [
     "GatherEvidence",
     "ResponseGenerator",
     "RunToolCallingTurn",
-    "handle_message_with_agent",
+    "run_agent_prompt",
 ]

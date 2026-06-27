@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from interactive_shell.harness.agent_context import AgentContext
 from interactive_shell.harness.llm_context import (
     build_action_system_prompt,
     build_action_user_message,
@@ -35,7 +36,6 @@ from interactive_shell.harness.llm_context import (
 from interactive_shell.harness.llm_context.assistant_prompt import build_cli_agent_prompt
 from interactive_shell.harness.llm_context.models import coerce_messages
 from interactive_shell.harness.llm_context.session import InMemorySessionStorage, ReplSession
-from interactive_shell.harness.turn_context import TurnContext
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 
@@ -64,7 +64,7 @@ class _StubGrounding:
         return None
 
 
-def _turn_ctx(
+def _agent_ctx(
     *,
     text: str = "hello",
     conversation_messages: tuple[tuple[str, str], ...] = (),
@@ -72,8 +72,8 @@ def _turn_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
-) -> TurnContext:
-    return TurnContext(
+) -> AgentContext:
+    return AgentContext(
         text=text,
         conversation_messages=coerce_messages(conversation_messages),
         configured_integrations=configured_integrations,
@@ -107,13 +107,13 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
 
     # --- action system prompt: the three CONNECTED INTEGRATIONS states ---
     cases["action_system_unknown"] = build_action_system_prompt(
-        _turn_ctx(configured_integrations_known=False)
+        _agent_ctx(configured_integrations_known=False)
     )
     cases["action_system_none"] = build_action_system_prompt(
-        _turn_ctx(configured_integrations_known=True)
+        _agent_ctx(configured_integrations_known=True)
     )
     cases["action_system_listed_with_history"] = build_action_system_prompt(
-        _turn_ctx(
+        _agent_ctx(
             configured_integrations=("github", "datadog"),
             configured_integrations_known=True,
             conversation_messages=convo,
@@ -132,7 +132,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_turn_ctx(text="how do I configure datadog?"),
+        agent_ctx=_agent_ctx(text="how do I configure datadog?"),
     )
 
     cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt(
@@ -140,7 +140,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(configured_integrations_known=True),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_turn_ctx(text="set up sentry", configured_integrations_known=True),
+        agent_ctx=_agent_ctx(text="set up sentry", configured_integrations_known=True),
     )
 
     cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt(
@@ -151,7 +151,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_turn_ctx(
+        agent_ctx=_agent_ctx(
             text="why did checkout fail?",
             configured_integrations=("datadog", "github"),
             configured_integrations_known=True,
@@ -174,7 +174,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="datadog: configured (connection_verified=true)",
         tool_observation_on_screen=True,
-        turn_ctx=_turn_ctx(
+        agent_ctx=_agent_ctx(
             text="is datadog configured?",
             configured_integrations=("datadog",),
             configured_integrations_known=True,
@@ -189,7 +189,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="sentry issues: [#1 NPE in checkout]",
         tool_observation_on_screen=False,
-        turn_ctx=_turn_ctx(
+        agent_ctx=_agent_ctx(
             text="any open sentry issues for checkout?",
             configured_integrations=("sentry",),
             configured_integrations_known=True,
@@ -206,7 +206,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        turn_ctx=_turn_ctx(
+        agent_ctx=_agent_ctx(
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),

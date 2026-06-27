@@ -1,252 +1,182 @@
-"""Runtime driver for interactive OpenSRE shell turns."""
+"""Durable shell agent for interactive-shell prompts.
+
+``ShellAgent`` is the shell-facing agent object. It owns the live session,
+lifecycle state, active-prompt guard, event subscribers, and injected runtime
+primitives. Per-prompt action/answer mechanics live in ``agent_loop.py``.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import logging
-import threading
-from collections.abc import Awaitable, Callable, Coroutine, Iterator
-from typing import Any
+from collections.abc import Callable
+from contextlib import suppress
 
 from rich.console import Console
 
-from interactive_shell.harness.turn import handle_message_with_agent
-from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.agent_presentation import (
-    AgentEvent,
-    AgentEventSink,
-    ConsoleAgentEventSink,
+from interactive_shell.harness.agent_loop import (
+    GatherEvidence,
+    ResponseGenerator,
+    RunToolCallingTurn,
+    run_agent_prompt,
 )
-from interactive_shell.runtime.background.workers import BackgroundTaskManager
-from interactive_shell.runtime.core.confirmation import (
-    DispatchCancelled,
-    request_confirmation_via_prompt,
-)
-from interactive_shell.runtime.core.state import ReplState, SpinnerState
-from interactive_shell.runtime.input import PromptInputReader
-from interactive_shell.runtime.input.actions import (
-    InputAction,
-    ShellInputSnapshot,
-    decide_input_action,
-)
-from interactive_shell.runtime.utils.input_policy import turn_needs_exclusive_stdin
-from interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
-from interactive_shell.ui.streaming.console import StreamingConsole
-from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from interactive_shell.harness.events import AgentEvent, AgentEventSink
+from interactive_shell.harness.llm_context.session import ReplSession
+from interactive_shell.harness.state import ConversationState
+from interactive_shell.runtime.core.confirmation import DispatchCancelled
+from interactive_shell.runtime.core.turn_accounting import ShellTurnResult
 from interactive_shell.utils.telemetry import PromptRecorder
-from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
-
-_logger = logging.getLogger(__name__)
-_AGENT_TURN_KIND = "agent"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Core utilities
-# ─────────────────────────────────────────────────────────────────────────────
+class ShellAgent:
+    """Stateful owner of the interactive-shell agent lifecycle.
 
-
-@contextlib.contextmanager
-def _bound_cli_session(session_id: str) -> Iterator[None]:
-    """Temporarily bind the CLI session ID for the current turn."""
-    token = bind_cli_session_id(session_id)
-    try:
-        yield
-    finally:
-        reset_cli_session_id(token)
-
-
-def _setup_turn_presentation(
-    runner: AgentTurnCoordinator, user_input: str
-) -> tuple[StreamingConsole, AgentEventSink, PromptRecorder | None, threading.Event]:
-    """Create console, event emitter, recorder, and cancellation primitive for a turn."""
-    cancel_event = threading.Event()
-
-    console = StreamingConsole(
-        runner.spinner,
-        cancel_event,
-        prompt_invalidator=runner.invalidate_prompt,
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
-
-    event_sink = ConsoleAgentEventSink(
-        session=runner.session,
-        spinner=runner.spinner,
-        console=console,
-    )
-
-    recorder = PromptRecorder.start(
-        session=runner.session,
-        text=user_input,
-        turn_kind=_AGENT_TURN_KIND,
-    )
-
-    return console, event_sink, recorder, cancel_event
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Turn Coordinator
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class AgentTurnCoordinator:
-    """Orchestrates the full lifecycle of one agent turn."""
+    The shell agent owns shell/session state, event subscribers, lifecycle
+    state, and active prompt execution. It delegates one prompt's action/answer
+    loop to ``run_agent_prompt``. That loop may use ``core.runtime.agent.Agent``
+    through ``tool_calling.py`` as a disposable tool-calling primitive.
+    """
 
     def __init__(
         self,
-        *,
         session: ReplSession,
-        state: ReplState,
-        spinner: SpinnerState,
-        invalidate_prompt: Callable[[], None],
+        *,
+        execute_actions: RunToolCallingTurn | None = None,
+        gather_evidence: GatherEvidence | None = None,
+        response_generator: ResponseGenerator | None = None,
+        event_sink: AgentEventSink | None = None,
     ) -> None:
         self.session = session
-        self.state = state
-        self.spinner = spinner
-        self.invalidate_prompt = invalidate_prompt
+        self._execute_actions = execute_actions
+        self._gather_evidence = gather_evidence
+        self._response_generator = response_generator
+        self._event_sinks: list[AgentEventSink] = []
+        self._started = False
+        self._active_prompt: asyncio.Task[ShellTurnResult] | None = None
+        if event_sink is not None:
+            self.subscribe(event_sink)
 
-    async def run_turn(self, user_input: str) -> None:
-        """Execute a complete agent turn with presentation and lifecycle management."""
-        console, event_sink, recorder, cancel_event = _setup_turn_presentation(self, user_input)
+    @property
+    def state(self) -> ConversationState:
+        """Return the shell-owned conversational state for this session."""
+        return self.session.agent
 
-        progress_scope = (
-            contextlib.nullcontext()
-            if turn_needs_exclusive_stdin(user_input, self.session)
-            else repl_safe_progress_scope()
-        )
+    @property
+    def started(self) -> bool:
+        """Whether the shell agent has been started and not yet stopped."""
+        return self._started
 
-        with progress_scope:
-            await self._execute_turn_lifecycle(
-                user_input=user_input,
+    @property
+    def active(self) -> bool:
+        """Whether a prompt is currently running."""
+        return self._active_prompt is not None and not self._active_prompt.done()
+
+    def subscribe(self, sink: AgentEventSink) -> Callable[[], None]:
+        """Subscribe to lifecycle events and return an unsubscribe callback."""
+        self._event_sinks.append(sink)
+
+        def _unsubscribe() -> None:
+            with suppress(ValueError):
+                self._event_sinks.remove(sink)
+
+        return _unsubscribe
+
+    def start(self) -> None:
+        """Start the shell agent lifecycle."""
+        if self._started:
+            return
+        self._started = True
+        self._emit(AgentEvent(type="agent_start"))
+
+    async def prompt(
+        self,
+        text: str,
+        *,
+        console: Console,
+        recorder: PromptRecorder | None,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+    ) -> ShellTurnResult:
+        """Run one submitted user prompt through the shell agent."""
+        if not self._started:
+            raise RuntimeError("ShellAgent.start() must be called before prompt().")
+        if self.active:
+            raise RuntimeError("ShellAgent is already processing a prompt.")
+
+        task = asyncio.current_task()
+        if task is None:
+            raise RuntimeError("ShellAgent.prompt() requires a running asyncio task.")
+        self._active_prompt = task  # type: ignore[assignment]
+
+        try:
+            return await asyncio.to_thread(
+                self._run_prompt_lifecycle,
+                text,
                 console=console,
                 recorder=recorder,
-                event_sink=event_sink,
-                cancel_event=cancel_event,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
             )
-
-    async def _execute_turn_lifecycle(
-        self,
-        user_input: str,
-        console: StreamingConsole,
-        recorder: PromptRecorder | None,
-        event_sink: AgentEventSink,
-        cancel_event: threading.Event,
-    ) -> None:
-        """Manage turn lifecycle: dispatch tracking, execution, and final events."""
-        task = asyncio.current_task()
-        if task is not None:
-            self.state.start_dispatch(task=task, cancel_event=cancel_event)
-        else:
-            self.state.attach_cancel_event(cancel_event)
-
-        await event_sink(AgentEvent(type="turn_start", text=user_input))
-
-        try:
-            await self._run_agent_handler(user_input, console, recorder)
-        except asyncio.CancelledError:
-            await event_sink(AgentEvent(type="turn_interrupted"))
-            raise
-        except DispatchCancelled:
-            await event_sink(AgentEvent(type="turn_interrupted"))
-        except Exception as exc:
-            report_exception(exc, context="interactive_shell.turn")
-            await event_sink(AgentEvent(type="turn_error", error=exc))
         finally:
-            self.state.finish_dispatch(cancel_event)
-            await event_sink(AgentEvent(type="turn_end"))
+            self._active_prompt = None
 
-    async def _run_agent_handler(
-        self, user_input: str, output: StreamingConsole, recorder: PromptRecorder | None
-    ) -> None:
-        """Execute the core agent logic in a thread with proper session context."""
+    def abort(self) -> None:
+        """Cancel the active prompt task, if one is running."""
+        if self._active_prompt is not None and not self._active_prompt.done():
+            self._active_prompt.cancel()
 
-        def confirm_fn(prompt: str) -> str:
-            return request_confirmation_via_prompt(self.state, prompt)
+    async def wait_idle(self) -> None:
+        """Wait until the active prompt task finishes."""
+        task = self._active_prompt
+        if task is None or task is asyncio.current_task():
+            return
+        with suppress(asyncio.CancelledError):
+            await task
 
-        with _bound_cli_session(self.session.session_id):
-            await asyncio.to_thread(
-                handle_message_with_agent,
-                user_input,
-                self.session,
-                output,
+    async def stop(self) -> None:
+        """Stop the shell agent lifecycle after any active prompt settles."""
+        await self.wait_idle()
+        if not self._started:
+            return
+        self._started = False
+        self._emit(AgentEvent(type="agent_stop"))
+
+    def _run_prompt_lifecycle(
+        self,
+        text: str,
+        *,
+        console: Console,
+        recorder: PromptRecorder | None,
+        confirm_fn: Callable[[str], str] | None,
+        is_tty: bool | None,
+    ) -> ShellTurnResult:
+        """Run the sync prompt loop and emit lifecycle events."""
+        self._emit(AgentEvent(type="prompt_start", text=text))
+        try:
+            return run_agent_prompt(
+                text,
+                session=self.session,
+                console=console,
                 recorder=recorder,
                 confirm_fn=confirm_fn,
-                is_tty=None,
+                is_tty=is_tty,
+                execute_actions=self._execute_actions,
+                gather_evidence=self._gather_evidence,
+                response_generator=self._response_generator,
             )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Top-level loops
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def run_input_loop(
-    *,
-    state: ReplState,
-    session: ReplSession,
-    background: BackgroundTaskManager | None,
-    input_reader: PromptInputReader,
-    echo_console: Console,
-    handle_input_action: Callable[[InputAction], Awaitable[bool]],
-) -> None:
-    """Continuously read and process user input events until exit."""
-    while not state.exit_requested:
-        if background:
-            background.drain_turn_start_output(echo_console)
-
-        event = await input_reader.read()
-
-        action = decide_input_action(
-            event,
-            ShellInputSnapshot(
-                exit_requested=state.exit_requested,
-                dispatch_running=state.is_dispatch_running(),
-                awaiting_confirmation=state.is_awaiting_confirmation(),
-            ),
-            needs_exclusive_stdin=lambda text: turn_needs_exclusive_stdin(text, session),
-        )
-
-        if not await handle_input_action(action):
-            return
-
-
-async def run_agent_turn_queue(
-    *,
-    state: ReplState,
-    run_turn: Callable[[str], Coroutine[Any, Any, None]],
-) -> None:
-    """Process turns from the queue until the REPL is shutting down."""
-    while not state.exit_requested:
-        try:
-            user_input = await state.queue.get()
-        except asyncio.CancelledError:
-            return
-
-        if state.exit_requested:
-            state.queue.task_done()
-            return
-
-        turn_task = asyncio.create_task(run_turn(user_input))
-        state.attach_turn_task(turn_task)
-
-        try:
-            await turn_task
-        except asyncio.CancelledError:
-            _logger.debug("Queued agent turn was cancelled")
+        except DispatchCancelled:
+            self._emit(AgentEvent(type="prompt_interrupted"))
+            raise
         except Exception as exc:
-            _logger.debug("Queued agent turn failed: %s", exc)
+            self._emit(AgentEvent(type="prompt_error", error=exc))
+            raise
         finally:
-            state.clear_current_task()
-            state.queue.task_done()
+            self._emit(AgentEvent(type="prompt_end"))
+
+    def _emit(self, event: AgentEvent) -> None:
+        for sink in tuple(self._event_sinks):
+            sink(event)
 
 
 __all__ = [
-    "AgentEvent",
-    "AgentEventSink",
-    "AgentTurnCoordinator",
-    "run_agent_turn_queue",
-    "run_input_loop",
+    "ShellAgent",
 ]

@@ -17,6 +17,7 @@ from integrations.llm_cli.pi_cli import PiAdapter
 
 _PROBE = "integrations.llm_cli.pi_cli.run_version_probe"
 _WHICH = "integrations.llm_cli.binary_resolver.shutil.which"
+_PI_FALLBACK_PATHS = "integrations.llm_cli.pi_cli._fallback_pi_paths"
 
 
 # --------------------------------------------------------------------------- #
@@ -108,8 +109,9 @@ def test_detect_version_probe_failure_marks_not_installed(
     assert "boom" in probe.detail
 
 
+@patch(_PI_FALLBACK_PATHS, return_value=[])
 @patch(_WHICH, return_value=None)
-def test_detect_binary_missing(_mock_which: MagicMock) -> None:
+def test_detect_binary_missing(_mock_which: MagicMock, _mock_fallbacks: MagicMock) -> None:
     with patch.dict(os.environ, {}, clear=True):
         probe = PiAdapter().detect()
     assert probe.installed is False
@@ -153,8 +155,11 @@ def test_build_forwards_provider_api_key(_mock_which: MagicMock) -> None:
     assert "SOME_UNRELATED_SECRET" not in inv.env
 
 
+@patch(_PI_FALLBACK_PATHS, return_value=[])
 @patch(_WHICH, return_value=None)
-def test_build_raises_when_binary_missing(_mock_which: MagicMock) -> None:
+def test_build_raises_when_binary_missing(
+    _mock_which: MagicMock, _mock_fallbacks: MagicMock
+) -> None:
     with (
         patch.dict(os.environ, {}, clear=True),
         pytest.raises(RuntimeError, match="Pi CLI not found"),

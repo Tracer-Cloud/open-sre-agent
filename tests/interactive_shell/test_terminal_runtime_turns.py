@@ -8,11 +8,11 @@ import pytest
 from rich.console import Console
 
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from interactive_shell.harness.agent_loop import run_agent_prompt
 from interactive_shell.harness.llm_context.session import ReplSession
 from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )
-from interactive_shell.harness.turn import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -155,7 +155,7 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
-def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
+def test_run_agent_prompt_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -190,7 +190,7 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    handle_message_with_agent(
+    run_agent_prompt(
         nitro_prompt,
         session,
         console,
@@ -205,7 +205,7 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
     assert llm_calls == []
 
 
-def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigation(
+def test_run_agent_prompt_nitro_prompt_executes_remote_then_investigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -261,7 +261,7 @@ def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigati
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    handle_message_with_agent(
+    run_agent_prompt(
         nitro_prompt,
         session,
         console,

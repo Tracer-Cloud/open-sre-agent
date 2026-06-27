@@ -19,6 +19,7 @@ from rich.console import Console
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
 
+from interactive_shell.harness.agent_loop import run_agent_prompt
 from interactive_shell.harness.llm_context.session import ReplSession
 from interactive_shell.harness.tests._oracle_normalize import (
     normalize_history_entry,
@@ -30,7 +31,6 @@ from interactive_shell.harness.tests.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
-from interactive_shell.harness.turn import handle_message_with_agent
 from interactive_shell.tools.tool_contracts import ToolExecutor
 from interactive_shell.tools.tool_registry import (
     REGISTRY,
@@ -409,7 +409,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     session_token = bind_cli_session_id(session.session_id)
     try:
         recorder = PromptRecorder.start(session=session, text=prompt, turn_kind=_AGENT_TURN_KIND)
-        handle_message_with_agent(
+        run_agent_prompt(
             prompt,
             session,
             console,
