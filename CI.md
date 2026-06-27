@@ -95,7 +95,7 @@ Rules with `always_escalate=True` map to `make test-cov`; all others list their
 
 Run `make test-cov` (instead of only targeted tests) when any of these are true:
 
-- Shared/core code changed (`app/utils/`, `app/state/`, `app/types/`, `app/pipeline/`, `app/nodes/`)
+- Shared/core code changed (`core/domain/state/`, `core/domain/types/`, `core/orchestration/`, `core/orchestration/node/`)
 - 3+ app areas changed in one diff
 - New files with unclear blast radius
 - Cross-cutting refactor
@@ -117,11 +117,13 @@ make verify-integrations
 
 You may run `make check` as a final pass, but it is heavier (`test-full`) than the required harness.
 
-## 6) Routing tests
+## 6) Interactive-shell turn tests
 
-Routing live tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
+Interactive-shell live turn tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
 
-In CI, [`.github/workflows/routing-live.yml`](.github/workflows/routing-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `routing-checks` gate (deterministic routing + fixture integrity, `-m "not live_llm"`) and the sharded `routing-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
+In CI, [`.github/workflows/interactive-shell-live.yml`](.github/workflows/interactive-shell-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `turn-checks` gate (deterministic command detection + fixture integrity, `-m "not live_llm"`) and the sharded `turn-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
+
+`@live` gather scenarios **fail** (not skip) in GitHub Actions when integration credentials are missing; locally they may still skip. Natural-language investigation dispatch is **enabled** by default (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`). Investigation dispatch scenarios run in `turn-live`; if the flag is set to `False` for emergency rollback, those scenarios **skip** in live shards and `turn-checks` stays green. Require all `turn-checks` and `turn-live shard *` checks on `main` branch protection.
 
 ## 7) CI-only tests
 

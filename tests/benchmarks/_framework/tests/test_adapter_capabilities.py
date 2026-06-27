@@ -12,7 +12,7 @@ These tests pin two behaviors that replace the previous hardcoded
      adapter's name — to decide whether config knobs like
      ``agent_variant`` and ``predictor_variant`` are accepted.
 
-The pattern unblocks adding new adapters (OpenRCA, ToolCallBench, etc.)
+The pattern unblocks adding new adapters (ToolCallBench, etc.)
 without touching framework validation code.
 """
 

@@ -1,0 +1,18 @@
+[importlinter]
+root_packages =
+    cli
+    config
+    core
+    infra
+    integrations
+    platform
+    tools
+
+[importlinter:contract:config-independent]
+name = Config is independent
+type = independence
+modules =
+    config
+
+# Full layered contracts (core ⊄ tools, integrations ⊄ cli, …) live in
+# ``.importlinter.strict`` for local burn-down. Run: ``make check-layers-strict``

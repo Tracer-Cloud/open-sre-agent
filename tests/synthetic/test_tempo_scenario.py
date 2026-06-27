@@ -12,8 +12,8 @@ import pytest
 
 pytestmark = pytest.mark.synthetic
 
-from app.agent.investigation import _ALERT_SOURCE_TO_TOOL_SOURCES
-from app.tools.TempoTool import query_tempo
+from core.domain.alerts.alert_source import ALERT_SOURCE_TO_SEED_TOOL_SOURCES
+from tools.tempo_tools import query_tempo
 
 
 class _FixtureTempoBackend:
@@ -99,8 +99,8 @@ class _FixtureTempoBackend:
 
 def test_tempo_alert_source_maps_to_tools() -> None:
     """Tempo alert source seeds tempo tools before the ReAct loop."""
-    assert "tempo" in _ALERT_SOURCE_TO_TOOL_SOURCES
-    assert _ALERT_SOURCE_TO_TOOL_SOURCES["tempo"] == ["tempo"]
+    assert "tempo" in ALERT_SOURCE_TO_SEED_TOOL_SOURCES
+    assert ALERT_SOURCE_TO_SEED_TOOL_SOURCES["tempo"] == ("tempo",)
 
 
 def test_tempo_search_synthetic_scenario() -> None:

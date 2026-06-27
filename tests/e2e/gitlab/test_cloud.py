@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from app.integrations.gitlab import (
+from integrations.gitlab import (
     DEFAULT_GITLAB_BASE_URL,
     build_gitlab_config,
     get_gitlab_commits,
@@ -185,7 +185,7 @@ def test_gitlab_investigation_e2e():
     """
     access_token, base_url, project_id = _require_env()
 
-    from app.cli.investigation import run_investigation_cli
+    from cli.investigation import run_investigation_cli
 
     # Load the shared fixture and patch in the real project URL so the
     # The repo_url hint lets the agent correlate the alert with this project.

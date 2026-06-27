@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download OpenRCA-style alert JSON from the Hugging Face OpenSRE dataset (streaming).
+"""Download alert JSON from the Hugging Face OpenSRE dataset (streaming).
 
 Requires: ``pip install 'opensre[opensre-hub]'`` (or dev extra) and Hub auth if the dataset is gated.
 
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -54,7 +55,7 @@ def main() -> int:
         "--output",
         "-o",
         default="",
-        help="Write one alert JSON here (default: /tmp/opensre-hub-alert.json). Ignored if --export-dir is set.",
+        help="Write one alert JSON here (default: <tmpdir>/opensre-hub-alert.json). Ignored if --export-dir is set.",
     )
     parser.add_argument(
         "--export-dir",
@@ -76,7 +77,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from app.integrations.opensre.hf_remote import stream_opensre_query_alerts
+    from integrations.opensre.hf_remote import stream_opensre_query_alerts
 
     stream = stream_opensre_query_alerts(
         query_alerts_prefix=args.prefix,
@@ -115,7 +116,8 @@ def main() -> int:
         print("No alert at this index.", file=sys.stderr)
         return 1
 
-    out = Path(args.output or "/tmp/opensre-hub-alert.json").expanduser()
+    default_output = Path(tempfile.gettempdir()) / "opensre-hub-alert.json"
+    out = Path(args.output or default_output).expanduser()
     out.write_text(json.dumps(alert, indent=2) + "\n", encoding="utf-8")
     print(out)
     return 0

@@ -5,9 +5,12 @@ from typing import Any
 
 import pytest
 
-from app.integrations import vercel_incidents
-from app.remote.vercel_poller import VercelInvestigationCandidate, VercelResolutionError
-from app.services.vercel import VercelConfig
+from infra.deployment.remote.vercel_poller import (
+    VercelInvestigationCandidate,
+    VercelResolutionError,
+)
+from integrations import vercel_incidents
+from integrations.vercel.client import VercelConfig
 
 
 class _Prompt:
@@ -59,14 +62,17 @@ def _candidate(
 
 def test_cmd_vercel_incidents_json_outputs_incidents(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.resolve_vercel_config",
+        "integrations.vercel_incidents.resolve_vercel_config",
         lambda: VercelConfig(api_token="tok_test", team_id=""),
     )
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         lambda **_kwargs: [_candidate()],
     )
-    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": True})
+    monkeypatch.setattr(
+        "integrations.vercel_incidents.is_json_output",
+        lambda: True,
+    )
 
     vercel_incidents.cmd_vercel_incidents(limit=5)
 
@@ -83,12 +89,15 @@ def test_cmd_vercel_incidents_exits_on_api_error(monkeypatch, capsys) -> None:
         lambda: [_project()],
     )
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         lambda **_kwargs: (_ for _ in ()).throw(
             VercelResolutionError("Failed to list Vercel projects: HTTP 403: invalidToken")
         ),
     )
-    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": False})
+    monkeypatch.setattr(
+        "integrations.vercel_incidents.is_json_output",
+        lambda: False,
+    )
     monkeypatch.setattr(
         vercel_incidents.questionary,
         "select",
@@ -136,7 +145,10 @@ def test_project_label_formats_epoch_milliseconds() -> None:
 def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
     answers: list[object] = ["proj_123", "_exit"]
     captured: dict[str, Any] = {}
-    monkeypatch.setattr("app.cli.support.context._root_obj", lambda: {"json": False})
+    monkeypatch.setattr(
+        "integrations.vercel_incidents.is_json_output",
+        lambda: False,
+    )
     monkeypatch.setattr(
         vercel_incidents,
         "_load_projects",
@@ -151,7 +163,7 @@ def test_cmd_vercel_incidents_scopes_to_selected_project(monkeypatch) -> None:
         return [_candidate()]
 
     monkeypatch.setattr(
-        "app.integrations.vercel_incidents.collect_vercel_candidates",
+        "integrations.vercel_incidents.collect_vercel_candidates",
         _fake_collect,
     )
     monkeypatch.setattr(
@@ -179,8 +191,7 @@ def test_incident_actions_can_execute_and_view_saved_rca(
         lambda *_args, **_kwargs: _Prompt(answers),
     )
     monkeypatch.setattr(
-        vercel_incidents,
-        "run_investigation_cli_streaming",
+        "integrations.vercel_incidents.run_investigation_payload",
         lambda **_kwargs: {
             "root_cause": "A broken import path shipped in the deployment.",
             "report": "The deployment failed during the build step.",

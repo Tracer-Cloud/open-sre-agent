@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.agent.correlation.upstream import (
+from core.domain.types.upstream import (
     LogSignal,
     MetricSeries,
     TopologyHint,

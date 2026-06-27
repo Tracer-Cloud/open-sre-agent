@@ -78,7 +78,7 @@ def _extract_conclusion_haystack(summary: str) -> str:
 
 
 def _fault_object_scope_name(fault_object: str) -> str:
-    """Canonical scope name after ``app/``, ``node/``, or ``namespace/``."""
+    """Canonical scope name after ``config/``, ``node/``, or ``namespace/``."""
     fo = (fault_object or "").strip().lower()
     if "/" in fo:
         _, _, name = fo.partition("/")

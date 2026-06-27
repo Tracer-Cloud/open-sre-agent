@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import keyring
 
-import app.llm_credentials as llm_credentials
+import config.llm_credentials as llm_credentials
 from tests.shared.keyring_backend import MemoryKeyring
 
 

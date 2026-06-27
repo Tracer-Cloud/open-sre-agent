@@ -71,12 +71,12 @@ Use `issue/` or `fix/` prefix. Branch names should be lowercase with hyphens.
 
 ### 2.1 Add a Tool (Fast Path: Single File)
 
-For simple tools, you do not need a class or `ClassVar` metadata. Add one file under `app/tools/` and register a function with `@tool`.
+For simple tools, you do not need a class or `ClassVar` metadata. Add one file under `tools/` and register a function with `@tool`.
 
-Example (`app/tools/example_status_tool.py`):
+Example (`tools/example_status_tool.py`):
 
 ```python
-from app.tools.tool_decorator import tool
+from tools.tool_decorator import tool
 
 
 @tool(source="knowledge")
@@ -97,7 +97,7 @@ Notes:
 
 ### 3. Add or Update Tests
 
-- **Test Location:** New tests should be placed in the `tests/` directory, mirroring the structure of the `app/` directory (e.g., tests for `app/cli/` go in `tests/cli/`).
+- **Test Location:** New tests should be placed in the `tests/` directory, mirroring the structure of the `app/` directory (e.g., tests for `cli/` go in `tests/cli/`).
 - **No Inline Tests:** Avoid adding `*_test.py` files directly inside the `app/` directory. We are phasing out existing inline tests to keep the core logic clean.
 - Bug fixes should include a test that would have caught the bug
 - New features should have corresponding tests

@@ -318,9 +318,9 @@ class LLMDispatcher:
 
         Both singleton caches must be cleared. ``reset_llm_singletons`` only
         clears the reasoning/classification/toolcall clients in
-        ``app.services.llm_client``; the investigation agent (and the
+        ``core.runtime.llm.llm_client``; the investigation agent (and the
         cloudopsbench predictor) call ``get_agent_llm`` in
-        ``app.services.agent_llm_client``, which keeps a SEPARATE
+        ``core.runtime.llm.agent_llm_client``, which keeps a SEPARATE
         ``_agent_client`` singleton. Without resetting it too, the agent
         client built during the first LLM's cells is reused for every
         subsequent LLM — so e.g. a ``gpt-5`` stratum silently runs on the
@@ -329,8 +329,8 @@ class LLMDispatcher:
         model's name.
         """
         # Late import — keeps llm_dispatch.py importable without opensre deps
-        from app.services.agent_llm_client import reset_agent_client
-        from app.services.llm_client import reset_llm_singletons
+        from core.runtime.llm.agent_llm_client import reset_agent_client
+        from core.runtime.llm.llm_client import reset_llm_singletons
 
         reset_llm_singletons()
         reset_agent_client()

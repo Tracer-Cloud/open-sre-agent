@@ -7,6 +7,8 @@ body:
   - type: markdown
     attributes:
       value: |
+        > **Security notice:** Never paste real API keys, tokens, or passwords in this form. Replace them with placeholders like `glsa_***`, `sk-***`, or `your-token-here` before submitting. Tokens posted here are publicly visible and cannot be fully deleted from GitHub's history.
+
         Thanks for the report. Please include **observed** behavior and repro steps — guesses make triage slower.
   - type: textarea
     id: summary

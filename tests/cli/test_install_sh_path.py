@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -27,6 +28,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 INSTALL_SH = Path(__file__).parents[2] / "install.sh"
+_INSTALL_SH_SHELL = shlex.quote(str(INSTALL_SH))
 _LOCAL_BIN = ".local/bin"
 
 
@@ -36,9 +38,12 @@ def _run(
     fake_home = tmp_path / "home"
     fake_home.mkdir(exist_ok=True)
     idir = install_dir if install_dir is not None else str(fake_home / _LOCAL_BIN)
+    install_sh = _INSTALL_SH_SHELL
+    idir_shell = shlex.quote(idir)
+    home_shell = shlex.quote(str(fake_home))
 
     script = textwrap.dedent(f"""\
-        __fn=$(awk 'p&&/^}}$/{{print;exit}} /^configure_path\\(\\)/{{p=1}} p{{print}}' {INSTALL_SH})
+        __fn=$(awk 'p&&/^}}$/{{print;exit}} /^configure_path\\(\\)/{{p=1}} p{{print}}' {install_sh})
         if [ -z "$__fn" ]; then
             echo "configure_path not found in install.sh" >&2
             exit 1
@@ -46,19 +51,20 @@ def _run(
         log()  {{ printf '%s\\n' "$*"; }}
         warn() {{ printf 'Warning: %s\\n' "$*" >&2; }}
         eval "$__fn"
-        INSTALL_DIR="{idir}" platform="{platform}" HOME="{fake_home}" SHELL="{shell}" configure_path
+        INSTALL_DIR={idir_shell} platform="{platform}" HOME={home_shell} SHELL="{shell}" configure_path
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
 
 def _run_logging_snippet(body: str) -> subprocess.CompletedProcess[str]:
+    install_sh = _INSTALL_SH_SHELL
     script = textwrap.dedent(f"""\
-        eval "$(awk '/^REPO=/{{exit}} {{print}}' {INSTALL_SH})"
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {install_sh})"
         eval "$(awk '
             /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
             in_fn {{ print }}
             in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {INSTALL_SH})"
+        ' {install_sh})"
         {body}
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
@@ -83,13 +89,14 @@ def _run_release_metadata_step(
     install_channel: str = "release", version: str = ""
 ) -> subprocess.CompletedProcess[str]:
     block = _find_release_metadata_step_block()
+    install_sh = _INSTALL_SH_SHELL
     script = textwrap.dedent(f"""\
-        eval "$(awk '/^REPO=/{{exit}} {{print}}' {INSTALL_SH})"
+        eval "$(awk '/^REPO=/{{exit}} {{print}}' {install_sh})"
         eval "$(awk '
             /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
             in_fn {{ print }}
             in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {INSTALL_SH})"
+        ' {install_sh})"
         INSTALL_CHANNEL="{install_channel}"
         version="{version}"
         {block}
@@ -307,6 +314,9 @@ def _run_post_install(
     path_value = f"{idir}:/usr/bin:/bin" if dir_already_on_path else "/usr/bin:/bin"
 
     start_line = _find_post_install_start_line()
+    install_sh = _INSTALL_SH_SHELL
+    idir_shell = shlex.quote(idir)
+    home_shell = shlex.quote(str(fake_home))
 
     script = textwrap.dedent(f"""\
         # 1. Load every function definition from install.sh
@@ -314,7 +324,7 @@ def _run_post_install(
             /^[a-z_][a-z_]*\\(\\)/ {{ in_fn=1 }}
             in_fn {{ print }}
             in_fn && /^\\}}$/ {{ in_fn=0 }}
-        ' {INSTALL_SH})"
+        ' {install_sh})"
 
         # 2. Stub side-effect functions — no binary or network calls
         install_binary()               {{ :; }}
@@ -324,11 +334,11 @@ def _run_post_install(
 
         # 3. Set every variable the output block reads
         BIN_NAME="opensre"
-        INSTALL_DIR="{idir}"
+        INSTALL_DIR={idir_shell}
         INSTALL_CHANNEL="{install_channel}"
         installed_version="{installed_version}"
         platform="{platform}"
-        HOME="{fake_home}"
+        HOME={home_shell}
         SHELL="{shell}"
         PATH="{path_value}"
         export HOME SHELL PATH
@@ -337,7 +347,7 @@ def _run_post_install(
         #    tail -n +{start_line} feeds everything from the version-print block
         #    to EOF, so any change to those lines in install.sh is immediately
         #    reflected here — no copy-paste tautology.
-        eval "$(tail -n +{start_line} {INSTALL_SH})"
+        eval "$(tail -n +{start_line} {install_sh})"
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 

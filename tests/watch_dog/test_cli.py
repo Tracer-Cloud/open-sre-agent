@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
-from app.cli.commands.watchdog import watchdog_command
-from app.watch_dog.config import WatchdogConfig
+from cli.__main__ import cli
+from cli.commands.watchdog import watchdog_command
+from tools.watch_dog.config import WatchdogConfig
 
 
 def test_watchdog_help_lists_expected_flags() -> None:
@@ -38,7 +38,7 @@ def test_watchdog_cli_maps_flags_to_config(monkeypatch: pytest.MonkeyPatch) -> N
         captured["config"] = config
         return 0
 
-    monkeypatch.setattr("app.cli.commands.watchdog.run_watchdog", _fake_run)
+    monkeypatch.setattr("cli.commands.watchdog.run_watchdog", _fake_run)
 
     result = CliRunner().invoke(
         watchdog_command,

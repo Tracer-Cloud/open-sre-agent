@@ -12,8 +12,8 @@ from typing import NoReturn
 
 import pytest
 
-from app.analytics import install, provider
-from app.analytics.events import Event
+from platform.analytics import install, provider
+from platform.analytics.events import Event
 
 
 @pytest.fixture(autouse=True)
@@ -296,7 +296,7 @@ def test_set_persistent_property_merges_into_subsequent_captures(
     analytics.capture(Event.CLI_INVOKED)
     analytics.set_persistent_property("github_username", "octocat")
     analytics.capture(Event.ONBOARD_STARTED, {"entrypoint": "cli"})
-    analytics.capture(Event.INTERACTIVE_SHELL_ROUTE_DECISION, {"route": "agent"})
+    analytics.capture(Event.TERMINAL_TURN_SUMMARIZED, {"turn": "agent"})
     analytics.shutdown(flush=True)
 
     assert len(posted_payloads) == 3
@@ -307,7 +307,7 @@ def test_set_persistent_property_merges_into_subsequent_captures(
     assert "github_username" not in props_before
     assert props_after_1["github_username"] == "octocat"
     assert props_after_2["github_username"] == "octocat"
-    assert props_after_2["route"] == "agent"
+    assert props_after_2["turn"] == "agent"
 
 
 def test_set_persistent_property_noop_when_telemetry_disabled(
@@ -435,7 +435,7 @@ import sys
 import time
 from pathlib import Path
 
-from app.analytics import provider
+from platform.analytics import provider
 
 config_dir = Path(sys.argv[1])
 start_file = Path(sys.argv[2])

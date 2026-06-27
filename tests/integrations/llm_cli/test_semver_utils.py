@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
+from integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to_tuple
 
 
 def test_parse_semver_three_part_finds_version() -> None:

@@ -1,10 +1,10 @@
-"""Tests for app.integrations.messaging_security — identity model, pairing, and authorization."""
+"""Tests for integrations.messaging_security — identity model, pairing, and authorization."""
 
 from __future__ import annotations
 
 import time
 
-from app.integrations.messaging_security import (
+from integrations.messaging_security import (
     _MAX_PAIRING_ATTEMPTS,
     _PAIRING_CODE_TTL_SECONDS,
     AuthorizationResult,

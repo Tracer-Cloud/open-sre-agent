@@ -13,18 +13,18 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
-from app.integrations.cli import _HANDLERS, cmd_setup, cmd_verify
+from cli.__main__ import cli
+from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
 
 
 def test_setup_posthog_alias_resolves_to_posthog_mcp() -> None:
     runner = CliRunner()
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_cmd,
-        patch("app.integrations.cli.cmd_verify", return_value=0),
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_cmd,
+        patch("integrations.cli.cmd_verify", return_value=0),
     ):
         mock_cmd.return_value = "posthog_mcp"
         result = runner.invoke(cli, ["integrations", "setup", "posthog"])
@@ -45,7 +45,7 @@ def test_cmd_setup_posthog_alias_dispatches_posthog_mcp_handler(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Direct cmd_setup('posthog') (python -m app.integrations path) dispatches MCP."""
+    """Direct cmd_setup('posthog') (python -m integrations path) dispatches MCP."""
     called: list[str] = []
     monkeypatch.setitem(_HANDLERS, "posthog_mcp", lambda: called.append("posthog_mcp"))
 
@@ -65,10 +65,10 @@ def test_cmd_verify_posthog_alias_resolves_before_verifying(
         captured["service"] = service
         return []
 
-    monkeypatch.setattr("app.integrations.cli.verify_integrations", fake_verify)
-    monkeypatch.setattr("app.integrations.cli.format_verification_results", lambda _results: "")
+    monkeypatch.setattr("integrations.cli.verify_integrations", fake_verify)
+    monkeypatch.setattr("integrations.cli.format_verification_results", lambda _results: "")
     monkeypatch.setattr(
-        "app.integrations.cli.verification_exit_code",
+        "integrations.cli.verification_exit_code",
         lambda *_args, **_kwargs: 0,
     )
 

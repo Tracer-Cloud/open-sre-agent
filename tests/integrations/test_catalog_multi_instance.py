@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.integrations.catalog import classify_integrations
+from integrations.catalog import classify_integrations
 
 
 def _v1_grafana(endpoint: str = "https://x", api_key: str = "k") -> dict:
@@ -39,8 +39,8 @@ def test_classify_single_v1_record_returns_flat_shape_unchanged() -> None:
     exactly as before (no _all_*_instances sibling when single default)."""
     resolved = classify_integrations([_v1_grafana()])
     assert "grafana" in resolved
-    assert resolved["grafana"]["api_key"] == "k"
-    assert resolved["grafana"]["endpoint"] == "https://x"
+    assert resolved["grafana"].api_key == "k"
+    assert resolved["grafana"].endpoint == "https://x"
     # No sibling published for a single default-named instance
     assert "_all_grafana_instances" not in resolved
 
@@ -56,14 +56,14 @@ def test_classify_single_v2_record_returns_flat_shape() -> None:
         ],
     }
     resolved = classify_integrations([v2_single])
-    assert resolved["grafana"]["api_key"] == "k"
+    assert resolved["grafana"].api_key == "k"
     assert "_all_grafana_instances" not in resolved
 
 
 def test_classify_multi_instance_record_exposes_sibling_all_grafana_instances() -> None:
     resolved = classify_integrations([_v2_grafana_multi()])
     # Default (first) view
-    assert resolved["grafana"]["api_key"] == "kp"
+    assert resolved["grafana"].api_key == "kp"
     # Sibling with all instances
     assert "_all_grafana_instances" in resolved
     all_instances = resolved["_all_grafana_instances"]
@@ -77,7 +77,7 @@ def test_all_grafana_instances_each_has_config_name_tags_integration_id() -> Non
     assert set(first.keys()) >= {"name", "tags", "config", "integration_id"}
     assert first["name"] == "prod"
     assert first["tags"] == {"env": "prod"}
-    assert first["config"]["api_key"] == "kp"
+    assert first["config"].api_key == "kp"
     assert first["integration_id"] == "env-grafana"
 
 
@@ -98,7 +98,7 @@ def test_classify_two_records_same_service_both_preserved() -> None:
     }
     resolved = classify_integrations([record_a, record_b])
     # Flat shape is the FIRST (setdefault keeps it)
-    assert resolved["grafana"]["api_key"] == "ka"
+    assert resolved["grafana"].api_key == "ka"
     # Both are in the sibling
     assert "_all_grafana_instances" in resolved
     ids = [i["integration_id"] for i in resolved["_all_grafana_instances"]]
@@ -126,9 +126,9 @@ def test_classify_aws_with_role_arn_in_instance_credentials_works() -> None:
     }
     resolved = classify_integrations([v2_aws])
     assert "aws" in resolved
-    assert resolved["aws"]["role_arn"] == "arn:aws:iam::123456789012:role/opensre"
-    assert resolved["aws"]["external_id"] == "ext"
-    assert resolved["aws"]["region"] == "us-east-1"
+    assert resolved["aws"].role_arn == "arn:aws:iam::123456789012:role/opensre"
+    assert resolved["aws"].external_id == "ext"
+    assert resolved["aws"].region == "us-east-1"
 
 
 def test_classify_with_migrated_v1_aws_record_works() -> None:
@@ -143,7 +143,7 @@ def test_classify_with_migrated_v1_aws_record_works() -> None:
         "credentials": {"region": "us-east-1"},
     }
     resolved = classify_integrations([v1_aws])
-    assert resolved["aws"]["role_arn"] == "arn:aws:iam::123:role/r"
+    assert resolved["aws"].role_arn == "arn:aws:iam::123:role/r"
 
 
 def test_local_and_cloud_grafana_share_all_grafana_instances_bucket() -> None:
@@ -190,9 +190,9 @@ def test_local_grafana_without_basic_auth_keeps_credentials_empty() -> None:
     }
 
     resolved = classify_integrations([local_only])
-    assert resolved["grafana_local"]["endpoint"] == "http://localhost:3000"
-    assert resolved["grafana_local"]["username"] == ""
-    assert resolved["grafana_local"]["password"] == ""
+    assert resolved["grafana_local"].endpoint == "http://localhost:3000"
+    assert resolved["grafana_local"].username == ""
+    assert resolved["grafana_local"].password == ""
 
 
 def test_classify_inactive_record_is_skipped() -> None:
@@ -210,7 +210,7 @@ def test_resolve_effective_integrations_propagates_single_non_default_instance()
     """Regression: when classify publishes _all_*_instances for a single
     non-default-named instance, resolve_effective_integrations must also
     propagate it so CLI/verify consumers see the instance metadata."""
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     single_prod = {
         "id": "env-grafana",
@@ -234,7 +234,7 @@ def test_resolve_effective_integrations_carries_instances_through_pydantic() -> 
     {name, tags, config, integration_id} instance shape we build. Previously
     this used list[IntegrationInstance] which would reject the extra keys
     under StrictConfigModel's extra='forbid'."""
-    from app.integrations.catalog import resolve_effective_integrations
+    from integrations.catalog import resolve_effective_integrations
 
     env_records = [_v2_grafana_multi()]
     resolved = resolve_effective_integrations(store_integrations=[], env_integrations=env_records)

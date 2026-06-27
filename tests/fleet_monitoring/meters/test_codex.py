@@ -13,7 +13,7 @@ import pathlib
 
 import pytest
 
-from app.fleet_monitoring.meters.codex import CodexMeter
+from tools.fleet_monitoring.meters.codex import CodexMeter
 
 _FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "codex_rollout.ndjson"
 

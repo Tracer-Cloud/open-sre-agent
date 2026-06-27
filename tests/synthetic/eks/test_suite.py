@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import has_credentials_for_active_llm_provider
+from config.config import has_credentials_for_active_llm_provider
 from tests.synthetic.eks.run_suite import run_scenario, score_result
 from tests.synthetic.eks.scenario_loader import (
     SUITE_DIR,

@@ -12,8 +12,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.integrations import betterstack as bs_module
-from app.integrations.betterstack import (
+from integrations import betterstack as bs_module
+from integrations.betterstack import (
     DEFAULT_BETTERSTACK_MAX_ROWS,
     DEFAULT_BETTERSTACK_TIMEOUT_S,
     BetterStackConfig,

@@ -14,8 +14,8 @@ Opt-in squash merge when CI is green. Trigger: add the **`automerge`** label to 
 ### Flow
 
 1. Add the `automerge` label on GitHub (or `gh pr edit <n> --add-label automerge`).
-2. [`.github/scripts/automerge_pr.py`](../scripts/automerge_pr.py) runs on label add, new pushes, or check-suite completion.
-3. The PR is squash-merged with branch delete when every reported check is green:
+2. [`.github/scripts/automerge_pr.py`](../scripts/automerge_pr.py) runs on label add, new pushes, or check-suite completion (excluding this workflow's own check).
+3. The PR is squash-merged with branch delete when every other reported check is green:
    - GitHub Actions **CheckRun** items (`SUCCESS`, `SKIPPED`, `NEUTRAL`)
    - Legacy commit **StatusContext** items (`SUCCESS` only)
 
@@ -23,7 +23,7 @@ Push again with the label still on to re-merge after CI. Remove the label to can
 
 ### Limits
 
-- **Upstream branches only** — fork PRs still need a manual merge (`GITHUB_TOKEN` cannot write on fork heads).
+- Uses **`pull_request_target`** so fork PRs can merge; the job only calls `gh` APIs (no PR head code execution).
 - **Greptile is not a GitHub check** — the label does not wait for Greptile; add it only when review is done.
 - **Draft PRs** — skipped until marked ready for review.
 

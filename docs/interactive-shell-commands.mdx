@@ -3,7 +3,7 @@ title: 'Interactive Shell Commands'
 description: 'Complete reference for every slash command in the OpenSRE REPL — session control, investigations, integrations, tasks, watchdogs, and more'
 ---
 
-Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action planner can route intent to the right command.
+Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action agent can route intent to the right command.
 
 Run `/help` anytime for the live command list grouped by category. In a TTY, bare `/help` opens an interactive picker; selecting a command runs it directly.
 
@@ -17,10 +17,10 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 
 | Input type | What happens |
 | --- | --- |
-| Slash command (`/status`) | Parsed and dispatched immediately — fastest path for known actions |
-| Plain language (`verify datadog`) | Routed by the action planner to slash commands, investigations, or doc-grounded answers |
+| Slash command (`/status`) | Routed through the action agent and executed via the `slash_invoke` AgentTool |
+| Plain language (`verify datadog`) | Routed by the action agent to slash commands, investigations, or doc-grounded answers |
 | Pasted alert JSON/text | Often starts an investigation without a slash command |
-| Shell one-liner (`kubectl get pods`) | Executed through shell policy when the planner selects a shell action |
+| Shell one-liner (`kubectl get pods`) | Executed through shell policy when the action agent selects a shell action |
 
 **TTY vs non-TTY:** The full experience (interactive menus, confirmations, onboarding wizards) requires a real terminal. Piping input or running in CI sets non-interactive mode — elevated commands are rejected unless trust mode was enabled in a prior interactive session (prefer explicit CLI commands outside the REPL for automation).
 
@@ -78,6 +78,7 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 | Command | What it does |
 | --- | --- |
 | `/health` | Integration and agent health check |
+| `/verify` | Verify integration connectivity (all or one service) |
 | `/integrations` | List, verify, show, setup, or remove integrations |
 | `/mcp` | List, connect, or disconnect MCP servers |
 | `/model` | Show or switch LLM provider and models |
@@ -125,7 +126,7 @@ These commands delegate to the same Click CLI you would run outside the REPL.
 | `/config` | Show or edit `~/.opensre/config.yml` |
 | `/cron` | Manage scheduled delivery jobs |
 | `/messaging` | Telegram pairing and allowlist |
-| `/hermes` | Hermes log tailing and incident routing |
+| `/hermes` | Hermes log tailing and incident escalation |
 | `/guardrails` | Sensitive-information guardrail rules |
 | `/tests` | Browse and run inventoried tests |
 | `/update` | Check for updates and upgrade OpenSRE |
@@ -239,7 +240,7 @@ Example output (measured + estimated mix):
 
 When any estimate is included, the table title notes `(includes estimates)` and rows show measured vs estimated splits.
 
-**What increments the counter:** Normal LLM chat turns. **What does not:** Deterministic slash routing that never calls the API (e.g. some direct command mappings).
+**What increments the counter:** Normal LLM chat turns and planner calls. **What does not:** Non-LLM command handling such as history recall or prompt rendering.
 
 Token totals reset on `/new` or when session identity is rotated. They do **not** carry across `/resume`. See [Session History](/sessions).
 
@@ -513,7 +514,8 @@ Parent directories must exist or be creatable; write failures print the underlyi
 
 | Question | Command |
 | --- | --- |
-| Are my integrations configured and reachable? | `/health` or `/integrations verify` |
+| Are my integrations configured and reachable? | `/verify`, `/health`, or `/integrations verify` |
+| Verify one integration by name? | `/verify datadog` or `/integrations verify datadog` |
 | Show one integration's credentials/endpoints? | `/integrations show datadog` |
 | Is Python/Docker/venv OK on this machine? | `/doctor` |
 | What integrations exist in OpenSRE generally? | Ask in plain language (docs answer) — not `/integrations list` |
@@ -526,7 +528,22 @@ Read-only pass/fail report for the local OpenSRE agent, LLM connectivity, and ea
 /health
 ```
 
-Runs live verification against the integration store. Use before incidents to confirm Datadog/Grafana/K8s credentials still work.
+Runs live verification against the integration store. Use before incidents to confirm Datadog/Grafana/K8s credentials still work. For integration-only checks without the full agent/LLM report, prefer `/verify`.
+
+### `/verify`
+
+Shortcut for integration connectivity checks (same as `opensre integrations verify` / `make verify-integrations`).
+
+```text
+/verify
+/verify datadog
+/verify telegram
+```
+
+| Form | Behavior |
+| --- | --- |
+| Bare `/verify` | Verify all integrations; prints status table plus `all integrations ok` or `N integration(s) need attention` |
+| `/verify <service>` | Verify one named integration |
 
 ### `/integrations`
 
@@ -534,6 +551,7 @@ Runs live verification against the integration store. Use before incidents to co
 /integrations
 /integrations list
 /integrations verify
+/integrations verify datadog
 /integrations show datadog
 /integrations setup datadog
 /integrations remove datadog
@@ -542,7 +560,8 @@ Runs live verification against the integration store. Use before incidents to co
 | Subcommand | Behavior |
 | --- | --- |
 | `list` (default) | Verify all configured integrations and render status table |
-| `verify` | Same verification; prints `all integrations ok` or `N integration(s) need attention` |
+| `verify` | Verify all integrations; prints summary line |
+| `verify <service>` | Verify one integration (same as `/verify <service>`) |
 | `show <service>` | Verify one service and print key/value config (masked secrets) |
 | `setup <service>` | Launch setup wizard via CLI subprocess |
 | `remove <service>` | Remove from local store **elevated** |
@@ -567,7 +586,7 @@ MCP-capable integrations only (subset of the full integration catalog).
 
 ### `/model`
 
-Show or change LLM provider and models. Updates `~/.opensre/.env` (or your configured env path) and resets in-process LLM caches.
+Show or change LLM provider and models. Updates project `.env` (default: repository root `.env`, override with `OPENSRE_PROJECT_ENV_PATH`), `~/.opensre/opensre.json`, and resets in-process LLM caches.
 
 ```text
 /model show
@@ -605,7 +624,7 @@ List tools available to investigation and chat surfaces in this build (name, sou
 /tools list
 ```
 
-There is no global `/list` command — use domain-specific list commands (see [Natural language routing](#natural-language-routing)).
+There is no global `/list` command — use domain-specific list commands (see [Natural language actions](#natural-language-actions)).
 
 ---
 
@@ -837,7 +856,7 @@ When the alert listener is active:
 | `dropped` | Alerts dropped when queue was full |
 | `recent` | Up to 5 latest alert names/snippets |
 
-If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL can route them into investigations from plain language.
+If the listener is inactive, prints a warning. Incoming alerts also appear in `/status` as `incoming alerts`. Post alerts to your configured webhook/listener URL during setup; the REPL can start investigations from plain language.
 
 ---
 
@@ -904,7 +923,7 @@ Telegram bot pairing and sender allowlist — required for `/watch` alarms and s
 /hermes watch
 ```
 
-Tail Hermes logs and route classified incidents. See [Hermes](/hermes) and [Hermes runbook](/hermes_runbook).
+Tail Hermes logs and escalate classified incidents. See [Hermes](/hermes) and [Hermes runbook](/hermes_runbook).
 
 ### `/guardrails`
 
@@ -1024,14 +1043,14 @@ Non-TTY: elevated commands **fail closed** (error message, no side effect).
 
 ---
 
-## Natural language routing
+## Natural language actions
 
 You do not need to memorize every slash command. Examples:
 
-| You type | Typical routing |
+| You type | Typical action |
 | --- | --- |
 | "what's my token usage?" | `/cost` |
-| "verify datadog" | `/integrations verify` |
+| "verify datadog" | `/verify datadog` |
 | "show datadog config" | `/integrations show datadog` |
 | "switch to openai gpt-4.1" | `/model set openai gpt-4.1` |
 | "run the generic sample alert" | `/investigate generic` |
@@ -1064,7 +1083,7 @@ Compound requests ("health then integrations") execute as an ordered sequence of
 ```text
 /onboard
 /health
-/integrations verify
+/verify
 /model show
 ```
 
@@ -1144,7 +1163,7 @@ Continue chatting, then optionally:
 
 - [Session History](/sessions) — persistence format, privacy, `/new` vs `/clear`
 - [Interactive Shell Privacy](/interactive-shell-privacy) — redaction, env vars, threat model
-- [Investigation overview](/investigation-overview) — RCA workflow, plain-language routing, CLI investigate
+- [Investigation overview](/investigation-overview) — RCA workflow, plain-language actions, CLI investigate
 - [LLM providers](/llm-providers) — `/model` and `/effort`
 - [Agents](/fleet) — fleet dashboard, bus, trace, budgets
 - [Cron](/cron) — `/cron` scheduled deliveries

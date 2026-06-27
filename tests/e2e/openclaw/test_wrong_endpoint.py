@@ -3,7 +3,7 @@
 A common user-side misconfiguration is pasting the Control UI URL
 (``http://127.0.0.1:18789/``) into the MCP integration config instead
 of using the ``stdio`` transport.
-:func:`app.integrations.openclaw._is_probable_openclaw_control_ui_url`
+:func:`integrations.openclaw._is_probable_openclaw_control_ui_url`
 already detects this; this test asserts the canonical "Use mode
 `stdio`" hint propagates through use_case → orchestrator → RCA.
 

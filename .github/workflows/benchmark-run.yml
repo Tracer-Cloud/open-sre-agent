@@ -7,7 +7,7 @@ name: Benchmark — run on Fargate (any adapter)
 # adapter (``benchmark: <name>``); the framework's registry resolves it
 # to a registered ``BenchmarkAdapter`` subclass. The same workflow runs
 # any adapter packaged into the bench image — CloudOpsBench today,
-# OpenRCA / ToolCallBench / future adapters tomorrow, with zero changes
+# ToolCallBench / future adapters tomorrow, with zero changes
 # here. See ``tests/benchmarks/_framework/registry.py``.
 #
 # Why ECS RunTask instead of a GitHub-hosted ubuntu runner: a full bench

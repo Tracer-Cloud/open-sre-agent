@@ -3,8 +3,8 @@
 The Protocol defines the minimal surface the EC2/RDS investigation agent
 uses to query AWS topology and instance state. FixtureAWSBackend satisfies
 it by serving scenario fixture data in the exact shape the tools under
-``app/tools/EC2InstancesByTagTool/``, ``app/tools/ELBTargetHealthTool/``,
-``app/tools/RDSDescribeInstanceTool/``, and ``app/tools/RDSEventsTool/``
+``tools/EC2InstancesByTagTool/``, ``tools/ELBTargetHealthTool/``,
+``tools/RDSDescribeInstanceTool/``, and ``tools/RDSEventsTool/``
 return — no boto3 calls, no AWS credentials required.
 
 Usage
@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from app.tools.utils.aws_topology_helper import build_ec2_summary, build_elb_summary
+from tools.utils.aws_topology_helper import build_ec2_summary, build_elb_summary
 
 if TYPE_CHECKING:
     from tests.synthetic.rds_postgres.scenario_loader import ScenarioFixture

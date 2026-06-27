@@ -10,11 +10,12 @@ or ``logger.debug(..., exc_info=True)`` with no Sentry trace:
      openclaw, mariadb, rabbitmq, rds, betterstack, alertmanager,
      victoria_logs, supabase).
 
-After the fix every site routes through ``_report_classify_failure`` or
-``_report_env_loader_failure``, which call ``report_exception`` with
-``surface=integration``, ``component=app.integrations._catalog_impl``,
-``event=classify_failed`` / ``event=env_loader_failed``, and the vendor
-tag — preserving the historic "skip the integration" caller contract.
+After the fix every site routes through ``report_classify_failure`` (in
+``integrations._validation_helpers``) or ``_report_env_loader_failure``
+(in ``integrations._catalog_impl``), which call ``report_exception`` with
+``surface=integration``, ``event=classify_failed`` / ``event=env_loader_failed``,
+and the vendor tag — preserving the historic "skip the integration" caller
+contract.
 """
 
 from __future__ import annotations
@@ -25,12 +26,12 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations._catalog_impl import (
+from integrations._catalog_impl import (
     _classify_service_instance,
-    _report_classify_failure,
     _report_env_loader_failure,
     load_env_integrations,
 )
+from integrations._validation_helpers import report_classify_failure
 
 
 @pytest.fixture(autouse=True)
@@ -45,14 +46,19 @@ def _quiet_sentry(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_report_classify_failure_forwards_tags() -> None:
     exc = ValueError("bad config")
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
-        _report_classify_failure(exc, integration="datadog", record_id="rec-1")
+    with patch("integrations._validation_helpers.report_exception") as mock_report:
+        report_classify_failure(
+            exc,
+            logger=__import__("logging").getLogger(__name__),
+            integration="datadog",
+            record_id="rec-1",
+        )
     mock_report.assert_called_once()
     kwargs = mock_report.call_args.kwargs
     assert kwargs["severity"] == "warning"
     assert kwargs["tags"] == {
         "surface": "integration",
-        "component": "app.integrations._catalog_impl",
+        "component": "integrations",
         "integration": "datadog",
         "event": "classify_failed",
     }
@@ -61,14 +67,14 @@ def test_report_classify_failure_forwards_tags() -> None:
 
 def test_report_env_loader_failure_forwards_tags() -> None:
     exc = RuntimeError("env missing")
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("integrations._catalog_impl.report_exception") as mock_report:
         _report_env_loader_failure(exc, integration="rabbitmq")
     mock_report.assert_called_once()
     kwargs = mock_report.call_args.kwargs
     assert kwargs["severity"] == "warning"
     assert kwargs["tags"] == {
         "surface": "integration",
-        "component": "app.integrations._catalog_impl",
+        "component": "integrations._catalog_impl",
         "integration": "rabbitmq",
         "event": "env_loader_failed",
     }
@@ -79,49 +85,48 @@ def test_report_env_loader_failure_forwards_tags() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Per-vendor: the symbol inside ``app.integrations._catalog_impl`` whose
-# constructor we force to raise, so we can prove the surrounding try/except
-# now routes the failure through ``report_exception`` instead of returning
-# ``(None, None)`` silently. Patching is more reliable than crafting bad
-# credentials, since validator strictness drifts per integration.
-_CLASSIFY_PATCH_TARGETS: list[tuple[str, str]] = [
-    ("grafana", "GrafanaIntegrationConfig"),
-    ("aws", "AWSIntegrationConfig"),
-    ("datadog", "DatadogIntegrationConfig"),
-    ("honeycomb", "HoneycombIntegrationConfig"),
-    ("coralogix", "CoralogixIntegrationConfig"),
-    ("github", "build_github_mcp_config"),
-    ("sentry", "build_sentry_config"),
-    ("gitlab", "build_gitlab_config"),
-    ("mongodb", "build_mongodb_config"),
-    ("postgresql", "build_postgresql_config"),
-    ("mongodb_atlas", "build_mongodb_atlas_config"),
-    ("mariadb", "build_mariadb_config"),
-    ("vercel", "VercelConfig"),
-    ("opsgenie", "OpsGenieIntegrationConfig"),
-    ("incident_io", "IncidentIoIntegrationConfig"),
-    ("jira", "JiraIntegrationConfig"),
-    ("discord", "DiscordBotConfig"),
-    ("telegram", "TelegramBotConfig"),
-    ("openclaw", "build_openclaw_config"),
-    ("mysql", "build_mysql_config"),
-    ("rabbitmq", "build_rabbitmq_config"),
-    ("rds", "build_rds_config"),
-    ("airflow", "build_airflow_config"),
-    ("betterstack", "build_betterstack_config"),
-    ("azure_sql", "build_azure_sql_config"),
-    ("alertmanager", "AlertmanagerIntegrationConfig"),
-    ("argocd", "ArgoCDIntegrationConfig"),
-    ("helm", "HelmIntegrationConfig"),
-    ("victoria_logs", "VictoriaLogsIntegrationConfig"),
-    ("splunk", "SplunkIntegrationConfig"),
-    ("supabase", "build_supabase_config"),
+# Per-vendor: the module path and symbol whose constructor we force to raise,
+# so we can prove the surrounding try/except now routes the failure through
+# ``report_exception`` instead of returning ``(None, None)`` silently.
+_CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
+    ("grafana", "integrations.grafana", "GrafanaIntegrationConfig"),
+    ("aws", "integrations.aws", "AWSIntegrationConfig"),
+    ("datadog", "integrations.datadog", "DatadogIntegrationConfig"),
+    ("honeycomb", "integrations.honeycomb", "HoneycombIntegrationConfig"),
+    ("coralogix", "integrations.coralogix", "CoralogixIntegrationConfig"),
+    ("github", "integrations.github_mcp", "build_github_mcp_config"),
+    ("sentry", "integrations.sentry", "build_sentry_config"),
+    ("gitlab", "integrations.gitlab", "build_gitlab_config"),
+    ("mongodb", "integrations.mongodb", "build_mongodb_config"),
+    ("postgresql", "integrations.postgresql", "build_postgresql_config"),
+    ("mongodb_atlas", "integrations.mongodb_atlas", "build_mongodb_atlas_config"),
+    ("mariadb", "integrations.mariadb", "build_mariadb_config"),
+    ("vercel", "integrations.vercel", "VercelConfig"),
+    ("opsgenie", "integrations.opsgenie", "OpsGenieIntegrationConfig"),
+    ("incident_io", "integrations.incident_io", "IncidentIoIntegrationConfig"),
+    ("jira", "integrations.jira", "JiraIntegrationConfig"),
+    ("discord", "integrations.discord", "DiscordBotConfig"),
+    ("telegram", "integrations.telegram", "TelegramBotConfig"),
+    ("openclaw", "integrations.openclaw", "build_openclaw_config"),
+    ("mysql", "integrations.mysql", "build_mysql_config"),
+    ("rabbitmq", "integrations.rabbitmq", "build_rabbitmq_config"),
+    ("rds", "integrations.rds", "build_rds_config"),
+    ("airflow", "integrations.airflow", "build_airflow_config"),
+    ("betterstack", "integrations.betterstack", "build_betterstack_config"),
+    ("azure_sql", "integrations.azure_sql", "build_azure_sql_config"),
+    ("alertmanager", "integrations.alertmanager", "AlertmanagerIntegrationConfig"),
+    ("argocd", "integrations.argocd", "ArgoCDIntegrationConfig"),
+    ("helm", "integrations.helm", "HelmIntegrationConfig"),
+    ("victoria_logs", "integrations.victoria_logs", "VictoriaLogsIntegrationConfig"),
+    ("splunk", "integrations.splunk", "SplunkIntegrationConfig"),
+    ("supabase", "integrations.supabase", "build_supabase_config"),
 ]
 
 
-@pytest.mark.parametrize(("integration", "patch_symbol"), _CLASSIFY_PATCH_TARGETS)
+@pytest.mark.parametrize(("integration", "patch_module", "patch_symbol"), _CLASSIFY_PATCH_TARGETS)
 def test_classify_failure_skips_integration_and_reports(
     integration: str,
+    patch_module: str,
     patch_symbol: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -132,9 +137,9 @@ def test_classify_failure_skips_integration_and_reports(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError(f"forced {integration} failure")
 
-    monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
+    monkeypatch.setattr(f"{patch_module}.{patch_symbol}", _boom)
 
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("integrations._validation_helpers.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
             {"endpoint": "https://x", "api_key": "k", "bot_token": "fake-token"},
@@ -167,7 +172,7 @@ def test_classify_empty_bot_token_silently_skips(
     if bot_token is not None:
         credentials["bot_token"] = bot_token
 
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("integrations._validation_helpers.report_exception") as mock_report:
         result = _classify_service_instance(
             integration,
             credentials,
@@ -186,7 +191,7 @@ def test_classify_empty_bot_token_silently_skips(
 
 
 # For each env-loader case: env vars to enable the loader path + the symbol in
-# ``app.integrations._catalog_impl`` to patch so its constructor raises. This
+# ``integrations._catalog_impl`` to patch so its constructor raises. This
 # proves the exception is *caught* and *routed* — without depending on which
 # fields the real builder rejects (validator details drift independently).
 _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
@@ -309,9 +314,9 @@ def test_env_loader_failure_reports_and_skips(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError(f"forced {integration} failure")
 
-    monkeypatch.setattr(f"app.integrations._catalog_impl.{patch_symbol}", _boom)
+    monkeypatch.setattr(f"integrations._catalog_impl.{patch_symbol}", _boom)
 
-    with patch("app.integrations._catalog_impl.report_exception") as mock_report:
+    with patch("integrations._catalog_impl.report_exception") as mock_report:
         result = load_env_integrations()
 
     services = {entry["service"] for entry in result}
@@ -352,9 +357,9 @@ def test_one_failing_env_loader_does_not_abort_remaining_integrations(
     def _boom(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("forced vercel failure")
 
-    monkeypatch.setattr("app.integrations._catalog_impl.VercelConfig", _boom)
+    monkeypatch.setattr("integrations._catalog_impl.VercelConfig", _boom)
 
-    with patch("app.integrations._catalog_impl.report_exception"):
+    with patch("integrations._catalog_impl.report_exception"):
         result = load_env_integrations()
 
     services = {entry["service"] for entry in result}

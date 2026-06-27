@@ -17,6 +17,9 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+.stdlib_vendor/
+# PyInstaller generates this from CLI args during the release build.
+opensre.spec
 downloads/
 eggs/
 .eggs/
@@ -115,6 +118,10 @@ Temporary Items
 # Project specific
 .antigravitycli/
 output/
+# CLI terminal output package (must stay tracked; ``output/`` above ignores new files here)
+!interactive_shell/ui/output/
+!interactive_shell/ui/output/**
+interactive_shell/ui/output/**/__pycache__/
 .cloudopsbench-results/
 .bench-results/
 tests/benchmarks/cloudopsbench/benchmark/

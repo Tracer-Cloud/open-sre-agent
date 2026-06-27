@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from app.utils.config import load_env
+from config.grafana_cloud import load_env
+from config.platform_bootstrap import ensure_project_platform_package
+
+ensure_project_platform_package()
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _ENV_PATH = _PROJECT_ROOT / ".env"

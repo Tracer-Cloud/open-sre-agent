@@ -32,9 +32,9 @@ One-shot (includes heavier `test-full`): `make check`.
 
 Before a PR, run at least `make lint`, `make format-check`, `make typecheck`, and `make test-cov` (see [CONTRIBUTING.md](https://github.com/Tracer-Cloud/opensre/blob/main/CONTRIBUTING.md)).
 
-## Routing policy architecture
+## Interactive shell action policy
 
-Routing precedence, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/routing-policy-architecture.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/routing-policy-architecture.md).
+Action-planner behavior, postprocessing transforms, compatibility seams, and the rule-extension checklist are documented in [`docs/interactive-shell-action-policy.md`](https://github.com/Tracer-Cloud/opensre/blob/main/docs/interactive-shell-action-policy.md).
 
 ## Investigation tool calling
 
@@ -52,9 +52,9 @@ PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR un
 6. Optional: lower `--max-cpu` so a threshold trips; after Telegram sends, the REPL prints one line: `[task …] alarm fired: … (telegram delivered)`.
 
 Automated equivalent (runs in `make test-cov`):  
-`uv run pytest tests/cli/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
+`uv run pytest tests/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`
 
-Longer transcript (optional): [tests/cli/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/cli/interactive_shell/repl_watchdog_demo.md).
+Longer transcript (optional): [tests/interactive_shell/repl_watchdog_demo.md](https://github.com/Tracer-Cloud/opensre/blob/main/tests/interactive_shell/repl_watchdog_demo.md).
 
 ## VS Code dev container
 
@@ -126,11 +126,11 @@ Events are tagged with `entrypoint`, `opensre.runtime`, and `deployment_method`.
 
 A random install ID is stored under `~/.opensre/anonymous_id`. PostHog `distinct_id` is scoped to that ID. Telemetry is off in GitHub Actions and pytest.
 
-### First-launch GitHub login (macOS & Windows)
+### First-launch GitHub login
 
-On the first interactive launch on macOS or Windows (never on Linux, never in CI/tests), OpenSRE requires a GitHub device-flow sign-in before the REPL prompt. On success it sets `github_username` as a PostHog **person property** (via `$identify`/`$set`, which forces `$process_person_profile: True` for that one event — this is the only intentional PII OpenSRE sends) and emits a `github_login_completed` event. A marker at `~/.opensre/github_login_done` prevents re-prompting.
+On the first interactive launch (all platforms, except CI/CD and test harnesses), OpenSRE requires a GitHub device-flow sign-in before the REPL prompt. On success it sets `github_username` as a PostHog **person property** (via `$identify`/`$set`, which forces `$process_person_profile: True` for that one event — this is the only intentional PII OpenSRE sends) and emits a `github_login_completed` event. A configured GitHub integration suppresses re-prompting on later launches.
 
-The existing kill-switches still apply: `OPENSRE_NO_TELEMETRY` / `DO_NOT_TRACK` make the `$identify` and `github_login_completed` calls no-ops, but the login itself still runs. Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the login gate entirely (also auto-bypassed on Linux and in CI/tests).
+The existing kill-switches still apply: `OPENSRE_NO_TELEMETRY` / `DO_NOT_TRACK` make the `$identify` and `github_login_completed` calls no-ops, but the login itself still runs. Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the login gate entirely (also auto-bypassed in CI — `CI=true`, `GITHUB_ACTIONS=true` — and in pytest).
 
 ### Kill-switch matrix
 

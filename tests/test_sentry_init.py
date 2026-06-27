@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
-from app.utils import sentry_sdk as sentry_mod
+from config.constants import SENTRY_DSN, SENTRY_ERROR_SAMPLE_RATE, SENTRY_TRACES_SAMPLE_RATE
+from platform.observability import sentry_sdk as sentry_mod
 
 _REAL_BUILD_INTEGRATIONS = sentry_mod._build_sentry_integrations
 
@@ -225,7 +225,7 @@ def test_init_sentry_release_tag_uses_get_version(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
     monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)
-    monkeypatch.setattr("app.version.get_version", lambda: "9.9.9")
+    monkeypatch.setattr("config.version.get_version", lambda: "9.9.9")
     init_mock = MagicMock()
     monkeypatch.setitem(sys.modules, "sentry_sdk", SimpleNamespace(init=init_mock))
 
@@ -942,7 +942,7 @@ def test_apply_scope_tags_is_first_wins(monkeypatch) -> None:
 
 
 def test_init_sentry_ignore_errors_includes_cli_transient_error(monkeypatch) -> None:
-    from app.integrations.llm_cli.errors import CLITransientError
+    from integrations.llm_cli.errors import CLITransientError
 
     _clear_kill_switches(monkeypatch)
     init_mock, _ = _install_full_sentry_mock(monkeypatch)

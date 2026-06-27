@@ -9,7 +9,7 @@ from typing import Literal
 
 from dotenv import load_dotenv
 
-from app.config import LLMSettings
+from config.config import LLMSettings
 from tests.benchmarks.toolcall_model_benchmark.pricing import (
     DEFAULT_REASONING_USD_PER_MTOK,
     DEFAULT_TOOL_USD_PER_MTOK,

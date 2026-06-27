@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.cli.wizard.store import (
+from cli.wizard.store import (
     delete_named_remote,
     load_local_config,
     load_named_remotes,
@@ -11,6 +11,7 @@ from app.cli.wizard.store import (
     save_local_config,
     save_named_remote,
     save_remote_ops_config,
+    update_local_llm_selection,
 )
 
 
@@ -51,6 +52,63 @@ def test_load_local_config_returns_independent_empty_payloads(tmp_path) -> None:
     second = load_local_config(store_path)
 
     assert second["targets"] == {}
+
+
+def test_update_local_llm_selection_merges_without_resetting_other_fields(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    save_local_config(
+        wizard_mode="quickstart",
+        provider="anthropic",
+        model="claude-haiku",
+        api_key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_MODEL",
+        probes={"local": {"target": "local", "reachable": True, "detail": "ok"}},
+        path=store_path,
+    )
+
+    update_local_llm_selection(
+        provider="openai",
+        model="gpt-5-mini",
+        api_key_env="OPENAI_API_KEY",
+        model_env="OPENAI_REASONING_MODEL",
+        path=store_path,
+    )
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    assert payload["wizard"]["mode"] == "quickstart"
+    assert payload["probes"]["local"]["reachable"] is True
+    assert payload["targets"]["local"]["provider"] == "openai"
+    assert payload["targets"]["local"]["model"] == "gpt-5-mini"
+    assert payload["targets"]["local"]["api_key_env"] == "OPENAI_API_KEY"
+    assert payload["targets"]["local"]["model_env"] == "OPENAI_REASONING_MODEL"
+    assert "updated_at" in payload["targets"]["local"]
+
+
+def test_update_local_llm_selection_clears_api_key_env_for_cli_provider(tmp_path) -> None:
+    store_path = tmp_path / "opensre.json"
+    save_local_config(
+        wizard_mode="quickstart",
+        provider="anthropic",
+        model="claude-haiku",
+        api_key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_REASONING_MODEL",
+        probes={"local": {"target": "local", "reachable": True, "detail": "ok"}},
+        path=store_path,
+    )
+
+    update_local_llm_selection(
+        provider="claude-code",
+        model="",
+        api_key_env="",
+        model_env="CLAUDE_CODE_MODEL",
+        path=store_path,
+    )
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    local = payload["targets"]["local"]
+    assert local["provider"] == "claude-code"
+    assert local["api_key_env"] == ""
+    assert local["model_env"] == "CLAUDE_CODE_MODEL"
 
 
 def test_remote_ops_config_round_trip(tmp_path) -> None:
@@ -116,7 +174,7 @@ def test_delete_named_remote_is_noop_when_name_missing(tmp_path) -> None:
 def test_deploy_destroy_lifecycle_updates_opensre_json(tmp_path) -> None:
     """Simulate deploy_remote + destroy_remote config-persistence without live AWS."""
     store_path = tmp_path / "opensre.json"
-    stack_name = "tracer-ec2-remote"
+    stack_name = "opensre-ec2-remote"
     remote_url = "http://54.0.0.1:8080"
 
     # --- deploy ---

@@ -25,32 +25,30 @@ class PathRule:
 # Matched in list order — more specific prefixes must appear before parents.
 RULES: tuple[PathRule, ...] = (
     # Shared core (always escalate)
-    PathRule("app/pipeline/", (), always_escalate=True),
-    PathRule("app/nodes/", (), always_escalate=True),
-    PathRule("app/types/", (), always_escalate=True),
-    PathRule("app/state/", (), always_escalate=True),
-    PathRule("app/utils/", (), always_escalate=True),
+    PathRule("core/runtime/", ("tests/core/runtime/",)),
+    PathRule("core/domain/", (), always_escalate=True),
+    PathRule("core/orchestration/", (), always_escalate=True),
+    PathRule("utils/", (), always_escalate=True),
     # Specific sub-packages before their parent
-    PathRule("app/integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
-    PathRule("app/integrations/opensre/", ("tests/integrations/opensre/",)),
-    PathRule("app/integrations/hermes/", ("tests/hermes/",)),
-    PathRule("app/integrations/", ("tests/integrations/",)),
-    PathRule("app/agent/", ("tests/agent/", "tests/fleet_monitoring/")),
-    PathRule("app/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
-    PathRule("app/cli/", ("tests/cli/",)),
-    PathRule("app/tools/", ("tests/tools/",)),
-    PathRule("app/services/", ("tests/services/", "tests/tools/")),
-    PathRule("app/analytics/", ("tests/analytics/",)),
-    PathRule("app/guardrails/", ("tests/test_guardrails/",)),
-    PathRule("app/masking/", ("tests/masking/",)),
-    PathRule("app/entrypoints/", ("tests/entrypoints/",)),
-    PathRule("app/remote/", ("tests/remote/",)),
-    PathRule("app/sandbox/", ("tests/sandbox/",)),
-    PathRule("app/deployment/", ("tests/deployment/", "tests/app/deployment/")),
-    PathRule("app/delivery/", ("tests/delivery/",)),
-    PathRule("app/auth/", ("tests/app/auth/",)),
-    PathRule("app/watch_dog/", ("tests/watch_dog/",)),
-    PathRule("app/webapp.py", ("tests/test_webapp.py",)),
+    PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
+    PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
+    PathRule("integrations/hermes/", ("tests/hermes/",)),
+    PathRule("integrations/", ("tests/integrations/",)),
+    PathRule("tools/fleet_monitoring/", ("tests/agent/", "tests/fleet_monitoring/")),
+    PathRule("cli/", ("tests/cli/",)),
+    PathRule("interactive_shell/", ("tests/interactive_shell/",)),
+    PathRule("tools/watch_dog/", ("tests/watch_dog/",)),
+    PathRule("tools/", ("tests/tools/",)),
+    PathRule("platform/analytics/", ("tests/analytics/",)),
+    PathRule("platform/guardrails/", ("tests/test_guardrails/",)),
+    PathRule("platform/masking/", ("tests/masking/",)),
+    PathRule("infra/deployment/entrypoints/", ("tests/entrypoints/",)),
+    PathRule("infra/deployment/remote/", ("tests/remote/",)),
+    PathRule("platform/sandbox/", ("tests/sandbox/",)),
+    PathRule("infra/deployment/", ("tests/deployment/",)),
+    PathRule("core/orchestration/node/publish_findings/", ("tests/delivery/",)),
+    PathRule("platform/auth/", ("tests/platform/auth/",)),
+    PathRule("config/webapp.py", ("tests/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
     PathRule("uv.lock", (), always_escalate=True),
@@ -66,7 +64,9 @@ def _matches(path: str, prefix: str) -> bool:
 
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
-    return parts[1] if len(parts) > 1 and parts[0] == "app" else prefix
+    if parts[0] == "deployment" or parts[:2] == ["infra", "deployment"]:
+        return "deployment"
+    return prefix
 
 
 def classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:
@@ -92,12 +92,8 @@ def classify(changed: list[str]) -> tuple[bool, list[str], list[str]]:
                         targets.append(target)
             break
 
-        if not matched:
-            if path.startswith("tests/"):
-                if path not in targets:
-                    targets.append(path)
-            elif path.startswith("app/"):
-                escalate = True
+        if not matched and path.startswith("tests/") and path not in targets:
+            targets.append(path)
 
     if len(areas) >= ESCALATION_AREA_THRESHOLD:
         escalate = True

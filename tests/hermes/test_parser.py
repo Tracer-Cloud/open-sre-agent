@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.integrations.hermes.parser`."""
+"""Tests for :mod:`integrations.hermes.parser`."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from app.integrations.hermes.incident import LogLevel
-from app.integrations.hermes.parser import parse_log_line
+from integrations.hermes.incident import LogLevel
+from integrations.hermes.parser import parse_log_line
 
 
 class TestParseLogLine:

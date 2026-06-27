@@ -7,18 +7,22 @@ from typing import Any
 
 import pytest
 
-from app.cli.support import output
-from app.cli.support.output import (
+from interactive_shell.ui import output
+from interactive_shell.ui.output import (
     ProgressEvent,
     ProgressTracker,
     _fmt_timing,
-    _humanise_message,
     get_output_format,
     get_tracker,
     reset_tracker,
     suppress_stdin_watchers,
     toggle_active_tool_details,
 )
+from interactive_shell.ui.output import environment as output_environment
+from interactive_shell.ui.output import repl_display as output_repl
+from interactive_shell.ui.output import toggles as output_toggles
+from interactive_shell.ui.output import tracker as output_tracker
+from interactive_shell.ui.output.labels import _humanise_message
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -34,9 +38,9 @@ def _isolate_output_state(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
     # The module-level ``_tracker`` is a session-scoped singleton; without resetting it
     # a tracker created in an earlier test would leak its ``_rich`` flag into later ones.
-    monkeypatch.setattr(output, "_tracker", None)
-    monkeypatch.setattr(output, "_stdin_watcher_suppression_depth", 0)
-    monkeypatch.setattr(output, "_tool_detail_toggle_callbacks", [])
+    monkeypatch.setattr(output_tracker, "_tracker", None)
+    monkeypatch.setattr(output_toggles, "_stdin_watcher_suppression_depth", 0)
+    monkeypatch.setattr(output_toggles, "_tool_detail_toggle_callbacks", [])
 
 
 @pytest.fixture
@@ -78,12 +82,12 @@ def test_get_output_format_returns_text_when_slack_webhook_present(
 
 
 def test_get_output_format_returns_rich_for_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(output.sys.stdout, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(output_environment.sys.stdout, "isatty", lambda: True, raising=False)
     assert get_output_format() == "rich"
 
 
 def test_get_output_format_returns_text_when_not_a_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(output.sys.stdout, "isatty", lambda: False, raising=False)
+    monkeypatch.setattr(output_environment.sys.stdout, "isatty", lambda: False, raising=False)
     assert get_output_format() == "text"
 
 
@@ -175,22 +179,22 @@ def test_fmt_timing(elapsed_ms: int, expected: str) -> None:
 def test_tracker_uses_repl_append_display_when_prompt_app_active(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
-    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output_tracker, "_repl_progress_active", lambda: True)
     tracker = ProgressTracker()
-    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert isinstance(tracker._display, output_repl._ReplEventLogDisplay)
     assert tracker._toggle_watcher is None
 
 
 def test_tracker_uses_repl_append_display_under_repl_safe_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
-    from app.cli.support.repl_progress import repl_safe_progress_scope
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    from interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
         tracker = ProgressTracker()
-    assert isinstance(tracker._display, output._ReplEventLogDisplay)
+    assert isinstance(tracker._display, output_repl._ReplEventLogDisplay)
     assert tracker._toggle_watcher is None
 
 
@@ -198,9 +202,9 @@ def test_repl_display_buffers_subtext_until_step_complete(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr(output, "get_output_format", lambda: "rich")
-    monkeypatch.setattr(output, "_repl_progress_active", lambda: True)
-    display = output._ReplEventLogDisplay()
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output_tracker, "_repl_progress_active", lambda: True)
+    display = output_repl._ReplEventLogDisplay()
     display.step_start("investigate")
     out_after_start = _strip_ansi(capsys.readouterr().out)
     assert "Gathering evidence" in out_after_start
@@ -222,10 +226,10 @@ def test_repl_display_buffers_subtext_until_step_complete(
 
 @pytest.mark.asyncio
 async def test_repl_safe_progress_scope_propagates_to_asyncio_thread() -> None:
-    from app.cli.support.repl_progress import repl_safe_progress_scope
+    from interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 
     with repl_safe_progress_scope():
-        assert await asyncio.to_thread(output._repl_progress_active) is True
+        assert await asyncio.to_thread(output_environment._repl_progress_active) is True
 
 
 @pytest.mark.usefixtures("force_text_mode")
@@ -265,7 +269,7 @@ def test_tracker_complete_emits_dot_label_and_timing(
     # once via ``dict.pop(node, time.monotonic())`` whose default is always evaluated
     # before ``pop`` runs — even when ``node`` is present. So we yield three values.
     clock = iter([100.0, 100.5, 100.5])
-    monkeypatch.setattr(output.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(output_tracker.time, "monotonic", lambda: next(clock))
 
     tracker.start("plan_actions")
     tracker.complete("plan_actions", message="No new actions to plan")
@@ -286,7 +290,7 @@ def test_tracker_complete_appends_humanised_message_when_present(
     tracker = ProgressTracker()
 
     clock = iter([0.0, 1.25, 1.25])
-    monkeypatch.setattr(output.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(output_tracker.time, "monotonic", lambda: next(clock))
 
     tracker.start("diagnose_root_cause")
     tracker.complete("diagnose_root_cause", message="validity:75%")
@@ -465,11 +469,11 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
         def tcsetattr(cls, _fd: int, _when: int, attrs: list[Any]) -> None:
             cls.saved_attrs.append(attrs)
 
-    monkeypatch.setattr(output.sys, "stdin", _TTY())
-    monkeypatch.setattr(output.sys, "stdout", _TTY())
-    monkeypatch.setattr(output, "select", _Select)
-    monkeypatch.setattr(output, "termios", _Termios)
-    monkeypatch.setattr(output.os, "fpathconf", lambda _fd, _name: 0)
+    monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
+    monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
+    monkeypatch.setattr(output_toggles, "select", _Select)
+    monkeypatch.setattr(output_toggles, "termios", _Termios)
+    monkeypatch.setattr(output_toggles.os, "fpathconf", lambda _fd, _name: 0)
 
     watcher = output.CtrlOToggleWatcher(lambda: None)
     watcher.start()
@@ -480,6 +484,66 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     assert attrs[3] & _Termios.ECHO == 0
     assert attrs[3] & _Termios.IEXTEN == 0
     assert attrs[6][_Termios.VDISCARD] == b"\x00"
+
+
+def test_ctrl_o_watcher_stop_restores_canonical_echo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _TTY:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            return 0
+
+    class _Termios:
+        ICANON = 0x0002
+        ECHO = 0x0008
+        IEXTEN = 0x0400
+        VMIN = 6
+        VTIME = 5
+        VDISCARD = 13
+        TCSADRAIN = 1
+        TCIFLUSH = 0
+        final_attrs: list[int] | None = None
+
+        @classmethod
+        def tcgetattr(cls, _fd: int) -> list[Any]:
+            lflags = cls.ICANON | cls.ECHO | cls.IEXTEN
+            if cls.final_attrs is not None:
+                lflags = cls.final_attrs[3]
+            return [0, 0, 0, lflags, 0, 0, [0] * 20]
+
+        @classmethod
+        def tcsetattr(cls, _fd: int, _when: int, attrs: list[Any]) -> None:
+            cls.final_attrs = attrs[3]
+
+        @classmethod
+        def tcflush(cls, _fd: int, _queue: int) -> None:
+            return None
+
+    class _Select:
+        @staticmethod
+        def select(*_args: Any, **_kwargs: Any) -> tuple[list[int], list[int], list[int]]:
+            return [], [], []
+
+    from interactive_shell.ui.components import key_reader
+
+    monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
+    monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
+    monkeypatch.setattr(output_toggles, "select", _Select)
+    monkeypatch.setattr(output_toggles, "termios", _Termios)
+    monkeypatch.setattr(output_toggles.os, "fpathconf", lambda _fd, _name: 0)
+    monkeypatch.setattr(key_reader, "termios", _Termios, raising=False)
+    monkeypatch.setattr(key_reader.sys, "stdin", _TTY())
+
+    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher.start()
+    watcher.stop()
+
+    assert _Termios.final_attrs is not None
+    assert _Termios.final_attrs & _Termios.ICANON
+    assert _Termios.final_attrs & _Termios.ECHO
 
 
 def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
@@ -497,9 +561,9 @@ def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
         def tcgetattr(_fd: int) -> list[Any]:
             raise AssertionError("suppressed watcher should not query terminal state")
 
-    monkeypatch.setattr(output.sys, "stdin", _TTY())
-    monkeypatch.setattr(output.sys, "stdout", _TTY())
-    monkeypatch.setattr(output, "termios", _Termios)
+    monkeypatch.setattr(output_toggles.sys, "stdin", _TTY())
+    monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
+    monkeypatch.setattr(output_toggles, "termios", _Termios)
 
     watcher = output.CtrlOToggleWatcher(lambda: None)
     with suppress_stdin_watchers():
@@ -509,11 +573,55 @@ def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
     assert watcher._fd is None
 
 
+def test_repl_tracker_skips_per_tool_call_lines(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(output_tracker, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(output_tracker, "_repl_progress_active", lambda: True)
+    tracker = ProgressTracker()
+    tracker.start("investigation_agent")
+    tracker.record_tool_start("query_datadog_logs", event_key="call-1")
+    tracker.record_tool_end(
+        "query_datadog_logs",
+        {"logs": []},
+        event_key="call-1",
+    )
+    out = _strip_ansi(capsys.readouterr().out)
+    assert "Datadog" not in out or "Investigation" in out
+    assert out.count("↳") == 0
+    tracker.complete("investigation_agent")
+
+
 class TestReplHintAnimation:
     """Tests for _ReplEventLogDisplay in-place hint animation."""
 
-    def _make_display(self) -> output._ReplEventLogDisplay:
-        return output._ReplEventLogDisplay(t0=0.0)
+    def test_fit_hint_prefix_truncates_for_narrow_terminals(self) -> None:
+        long_prefix = (
+            "Reviewing evidence (lap 2/20) after Datadog logs, "
+            "Datadog events, Datadog monitors, search sentry issues"
+        )
+        fitted = output_repl._fit_hint_prefix(long_prefix, cols=80)
+        assert fitted.endswith("...")
+        assert len(fitted) <= 80 - output_repl._HINT_LINE_OVERHEAD
+
+    def test_fit_hint_prefix_keeps_short_text(self) -> None:
+        short = "Planning investigation (lap 1/20)"
+        assert output_repl._fit_hint_prefix(short, cols=80) == short
+
+    def test_animate_hint_does_not_start_animation_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """REPL lap hints print once; no background cursor-up spam."""
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
+        display = self._make_display()
+        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ·")
+        assert display._anim_thread is None
+        display.animate_hint("Reviewing evidence (lap 2/20) after Datadog logs ··")
+        assert display._anim_thread is None
+
+    def _make_display(self) -> output_repl._ReplEventLogDisplay:
+        return output_repl._ReplEventLogDisplay(t0=0.0)
 
     class _FakeStdout:
         def __init__(self) -> None:
@@ -530,9 +638,9 @@ class TestReplHintAnimation:
 
     def test_no_ansi_when_not_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Animation does not start and no \\r/ANSI codes are emitted when stdout is not a TTY."""
-        monkeypatch.setattr(output, "_stdout_is_tty", lambda: False)
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: False)
         fake = self._FakeStdout()
-        monkeypatch.setattr(output.sys, "stdout", fake)
+        monkeypatch.setattr(output_repl.sys, "stdout", fake)
 
         display = self._make_display()
         display._start_animation("analyzing alert")
@@ -546,10 +654,10 @@ class TestReplHintAnimation:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Animation thread writes multiple distinct frames over wall-clock time."""
-        monkeypatch.setattr(output, "_stdout_is_tty", lambda: True)
-        monkeypatch.setattr(output, "_REPL_ANIM_INTERVAL", 0.05)  # fast for tests
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
+        monkeypatch.setattr(output_repl, "_REPL_ANIM_INTERVAL", 0.05)  # fast for tests
         fake = self._FakeStdout()
-        monkeypatch.setattr(output.sys, "stdout", fake)
+        monkeypatch.setattr(output_repl.sys, "stdout", fake)
 
         display = self._make_display()
         display._start_animation("analyzing results")
@@ -579,9 +687,9 @@ class TestReplHintAnimation:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """_stop_animation signals the thread and joins it, leaving clean state."""
-        monkeypatch.setattr(output, "_stdout_is_tty", lambda: True)
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
         fake = self._FakeStdout()
-        monkeypatch.setattr(output.sys, "stdout", fake)
+        monkeypatch.setattr(output_repl.sys, "stdout", fake)
 
         display = self._make_display()
         display._start_animation("analyzing")
@@ -598,9 +706,9 @@ class TestReplHintAnimation:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Animation is guaranteed stopped even when the caller raises mid-synthesis."""
-        monkeypatch.setattr(output, "_stdout_is_tty", lambda: True)
+        monkeypatch.setattr(output_repl, "_stdout_is_tty", lambda: True)
         fake = self._FakeStdout()
-        monkeypatch.setattr(output.sys, "stdout", fake)
+        monkeypatch.setattr(output_repl.sys, "stdout", fake)
 
         display = self._make_display()
         display._start_animation("analyzing results")
@@ -680,7 +788,7 @@ def test_progress_event_independent_default_lists() -> None:
 
 
 def test_safe_print_passes_utf8_strings_unchanged(capsys: pytest.CaptureFixture[str]) -> None:
-    from app.cli.support.output import _safe_print
+    from interactive_shell.ui.output import _safe_print
 
     _safe_print("hello world")
     assert capsys.readouterr().out.strip() == "hello world"
@@ -690,7 +798,7 @@ def test_safe_print_survives_encode_error(monkeypatch: pytest.MonkeyPatch) -> No
     """Simulate Windows cp1252 stdout that can't encode ● (U+25CF)."""
     from io import StringIO
 
-    from app.cli.support.output import _safe_print
+    from interactive_shell.ui.output import _safe_print
 
     class _NarrowWriter(StringIO):
         encoding = "ascii"
@@ -712,7 +820,7 @@ def test_finish_text_mode_survives_non_ascii_mark(
     """Regression: _finish in text mode must not raise UnicodeEncodeError for ●."""
     from io import StringIO
 
-    from app.cli.support.output import _safe_print
+    from interactive_shell.ui.output import _safe_print
 
     # Verify _safe_print itself is robust; _finish delegates to it.
     class _AsciiWriter(StringIO):

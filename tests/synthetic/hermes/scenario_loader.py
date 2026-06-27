@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 
-from app.integrations.hermes.classifier import (
+from integrations.hermes.classifier import (
     DEFAULT_TRACEBACK_FOLLOWUP_S,
     DEFAULT_WARNING_BURST_THRESHOLD,
     DEFAULT_WARNING_BURST_WINDOW_S,

@@ -2,7 +2,7 @@
 
 Importing this package side-effects the opensre tool registry: the
 CloudOpsBench-specific replay tools (under ``tools.k8s``) are registered
-via :func:`app.tools.registry.register_external_tool_package` so the
+via :func:`tools.registry.register_external_tool_package` so the
 agent loop sees them whenever a bench cell runs. Production code that
 never imports ``tests.benchmarks.cloudopsbench`` never sees these tools
 — the registry stays clean.
@@ -14,7 +14,7 @@ the first method call) ensures the registration happens before any
 
 from __future__ import annotations
 
-from app.tools.registry import register_external_tool_package
 from tests.benchmarks.cloudopsbench import tools as _bench_tools_package
+from tools.registry import register_external_tool_package
 
 register_external_tool_package(_bench_tools_package)

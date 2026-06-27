@@ -2,7 +2,7 @@
 
 The Protocol defines the minimal surface the Kubernetes investigation agent
 uses to query EKS workload state.  FixtureEKSBackend satisfies it by serving
-scenario fixture data in the exact shape the EKS tools under ``app/tools/EKS*/``
+scenario fixture data in the exact shape the EKS tools under ``tools/EKS*/``
 return — no HTTP calls, no AWS credentials required.
 
 Usage
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 class EKSBackend(Protocol):
     """Minimal EKS interface used by the Kubernetes investigation agent.
 
-    One method per evidence source under ``app/tools/EKS*/``:
+    One method per evidence source under ``tools/EKS*/``:
         list_pods        → EKSListPodsTool response shape
         get_events       → EKSEventsTool response shape
         list_deployments → EKSListDeploymentsTool response shape

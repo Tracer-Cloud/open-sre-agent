@@ -63,9 +63,11 @@ def _load_env(*, home: str | None = None) -> dict[str, str]:
     env = dict(os.environ)
     if home is not None:
         env["HOME"] = home
+    env.setdefault("OPENSRE_SKIP_GITHUB_LOGIN", "1")
     env_file = _REPO_ROOT / ".env"
     if env_file.exists():
         env.update({k: v for k, v in dotenv_values(env_file).items() if v is not None})
+    env.setdefault("OPENSRE_SKIP_GITHUB_LOGIN", "1")
     return env
 
 
@@ -149,6 +151,15 @@ class ReplDriver:
     def contains(self, substring: str) -> bool:
         """Return True if substring appears anywhere in the stripped output."""
         return substring in self.text
+
+    def wait_until_contains(self, *substrings: str, timeout: float = 30.0) -> bool:
+        """Drain output until any substring appears or the timeout expires."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if any(substring in self.text for substring in substrings):
+                return True
+            self._drain(min(0.5, deadline - time.monotonic()))
+        return any(substring in self.text for substring in substrings)
 
     def lines(self) -> list[str]:
         """Non-empty visible lines from the stripped output."""

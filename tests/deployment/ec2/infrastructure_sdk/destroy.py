@@ -15,7 +15,7 @@ from tests.shared.infrastructure_sdk.config import delete_outputs, load_outputs
 from tests.shared.infrastructure_sdk.deployer import DEFAULT_REGION
 from tests.shared.infrastructure_sdk.resources.vpc import delete_security_group
 
-STACK_NAME = "tracer-ec2"
+STACK_NAME = "opensre-ec2"
 REGION = DEFAULT_REGION
 
 

@@ -1,4 +1,4 @@
-"""Coverage for the ``python -m app.integrations`` entrypoint.
+"""Coverage for the ``python -m integrations`` entrypoint.
 
 Mirrors the contract from ``tests/cli/test_main.py`` for the standalone
 integrations CLI: Sentry must be initialised, accepted commands must emit a
@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.integrations import __main__ as integrations_main
+from integrations import __main__ as integrations_main
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,7 @@ def _captures(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object] | None]
 
 def test_help_does_not_capture_analytics(monkeypatch, capsys) -> None:
     captured = _captures(monkeypatch)
-    monkeypatch.setattr("sys.argv", ["python -m app.integrations", "--help"])
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "--help"])
 
     integrations_main.main()
 
@@ -48,7 +48,7 @@ def test_help_does_not_capture_analytics(monkeypatch, capsys) -> None:
 
 def test_unknown_command_does_not_capture_analytics(monkeypatch, capsys) -> None:
     captured = _captures(monkeypatch)
-    monkeypatch.setattr("sys.argv", ["python -m app.integrations", "bogus"])
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "bogus"])
 
     with pytest.raises(SystemExit) as excinfo:
         integrations_main.main()
@@ -60,7 +60,7 @@ def test_unknown_command_does_not_capture_analytics(monkeypatch, capsys) -> None
 
 def test_list_emits_cli_invoked_with_metadata(monkeypatch) -> None:
     captured = _captures(monkeypatch)
-    monkeypatch.setattr("sys.argv", ["python -m app.integrations", "list"])
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "list"])
 
     with patch.object(integrations_main, "cmd_list") as cmd_list:
         integrations_main.main()
@@ -69,8 +69,8 @@ def test_list_emits_cli_invoked_with_metadata(monkeypatch) -> None:
     install_marker, properties = captured
     assert install_marker == {"_marker": "install"}
     assert properties is not None
-    assert properties["entrypoint"] == "python -m app.integrations"
-    assert properties["command_path"] == "python -m app.integrations list"
+    assert properties["entrypoint"] == "python -m integrations"
+    assert properties["command_path"] == "python -m integrations list"
     assert properties["command_family"] == "list"
     assert properties["command_leaf"] == "list"
     assert "subcommand" not in properties
@@ -78,7 +78,7 @@ def test_list_emits_cli_invoked_with_metadata(monkeypatch) -> None:
 
 def test_verify_emits_cli_invoked_with_service_subcommand(monkeypatch) -> None:
     captured = _captures(monkeypatch)
-    monkeypatch.setattr("sys.argv", ["python -m app.integrations", "verify", "slack"])
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "verify", "slack"])
 
     with (
         patch.object(integrations_main, "cmd_verify", return_value=0) as cmd_verify,
@@ -91,7 +91,7 @@ def test_verify_emits_cli_invoked_with_service_subcommand(monkeypatch) -> None:
     install_marker, properties = captured
     assert install_marker == {"_marker": "install"}
     assert properties is not None
-    assert properties["command_path"] == "python -m app.integrations verify slack"
+    assert properties["command_path"] == "python -m integrations verify slack"
     assert properties["command_family"] == "verify"
     assert properties["subcommand"] == "slack"
     assert properties["command_leaf"] == "slack"
@@ -101,7 +101,7 @@ def test_main_initialises_sentry(monkeypatch) -> None:
     init_calls: list[int] = []
     monkeypatch.setattr(integrations_main, "init_sentry", lambda **_kw: init_calls.append(1))
     _captures(monkeypatch)
-    monkeypatch.setattr("sys.argv", ["python -m app.integrations", "--help"])
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "--help"])
 
     integrations_main.main()
 

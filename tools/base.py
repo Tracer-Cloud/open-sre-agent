@@ -1,0 +1,189 @@
+"""Base class for all investigation tool actions."""
+
+from __future__ import annotations
+
+from abc import ABC
+from typing import Any, ClassVar, Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+from config.strict_config import StrictConfigModel
+from core.domain.types.evidence import EvidenceSource
+from core.domain.types.retrieval import RetrievalControls
+
+EvidenceType = Literal[
+    "logs",
+    "metrics",
+    "traces",
+    "events",
+    "topology",
+    "deployment_metadata",
+    "query_stats",
+    "artifact",
+    "other",
+]
+SideEffectLevel = Literal["none", "read_only", "mutating", "external"]
+
+
+class ToolMetadata(StrictConfigModel):
+    """Strict schema for tool metadata declared on BaseTool subclasses."""
+
+    name: str
+    description: str
+    display_name: str | None = None
+    input_schema: dict[str, Any]
+    source: EvidenceSource
+    source_id: str | None = None
+    evidence_type: EvidenceType | None = None
+    side_effect_level: SideEffectLevel | None = None
+    use_cases: list[str] = Field(default_factory=list)
+    examples: list[str] = Field(default_factory=list)
+    anti_examples: list[str] = Field(default_factory=list)
+    requires: list[str] = Field(default_factory=list)
+    outputs: dict[str, str] = Field(default_factory=dict)
+    output_schema: dict[str, Any] | None = None
+    injected_params: list[str] = Field(default_factory=list)
+    retrieval_controls: RetrievalControls = Field(
+        default_factory=RetrievalControls,
+        description="Declares which structured retrieval controls this tool supports",
+    )
+
+    @field_validator("name", "description", "display_name")
+    @classmethod
+    def _require_non_empty_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must be a non-empty string")
+        return normalized
+
+
+class BaseTool(ABC):
+    """Abstract base for all investigation tool actions.
+
+    Each subclass declares metadata as ClassVars and implements ``run()``.
+    ``is_available()`` and ``extract_params()`` may be overridden to make the
+    tool self-describing — the investigation registry calls these instead of
+    the old ``availability_check`` / ``parameter_extractor`` lambdas.
+
+    Instances are directly callable; ``tool(**kwargs)`` delegates to ``run()``.
+
+    Subclasses define ``run()`` with their own explicit signatures for type
+    safety and readability.  The method is **not** declared here to avoid
+    forcing every subclass into a single ``**kwargs`` signature — the
+    ``__call__`` protocol provides the uniform dispatch contract instead.
+
+    Backward compatibility: ``retrieval_controls`` is optional. Tools that
+    don't declare it default to no supported controls. Existing tools continue
+    to work without modification.
+    """
+
+    name: ClassVar[str]
+    description: ClassVar[str]
+    display_name: ClassVar[str | None] = None
+    input_schema: ClassVar[dict[str, Any]]  # JSON Schema — consumed by LLM planner
+    input_model: ClassVar[type[BaseModel] | None] = None
+    source: ClassVar[EvidenceSource]
+    source_id: ClassVar[str | None] = None
+    evidence_type: ClassVar[EvidenceType | None] = None
+    side_effect_level: ClassVar[SideEffectLevel | None] = None
+    use_cases: ClassVar[list[str]] = []
+    examples: ClassVar[list[str]] = []
+    anti_examples: ClassVar[list[str]] = []
+    requires: ClassVar[list[str]] = []
+    outputs: ClassVar[dict[str, str]] = {}  # Output field -> description (optional, for prompting)
+    output_schema: ClassVar[dict[str, Any] | None] = None
+    output_model: ClassVar[type[BaseModel] | None] = None
+    injected_params: ClassVar[list[str]] = []
+    retrieval_controls: ClassVar[RetrievalControls] = (
+        RetrievalControls()
+    )  # Declares supported controls
+    requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
+    approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
+    approval_expiry_seconds: ClassVar[int] = (
+        300  # Approval auto-expires after N seconds (default 5 min)
+    )
+    approval_scope: ClassVar[str] = (
+        "one_shot"  # "one_shot" (single call) or "session" (until disconnect)
+    )
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        metadata = cls.metadata()
+        cls.name = metadata.name
+        cls.description = metadata.description
+        cls.display_name = metadata.display_name
+        cls.input_schema = metadata.input_schema
+        cls.source = metadata.source
+        cls.source_id = metadata.source_id
+        cls.evidence_type = metadata.evidence_type
+        cls.side_effect_level = metadata.side_effect_level
+        cls.use_cases = metadata.use_cases
+        cls.examples = metadata.examples
+        cls.anti_examples = metadata.anti_examples
+        cls.requires = metadata.requires
+        cls.outputs = metadata.outputs
+        cls.output_schema = metadata.output_schema
+        cls.injected_params = metadata.injected_params
+        cls.retrieval_controls = metadata.retrieval_controls
+
+    @classmethod
+    def metadata(cls) -> ToolMetadata:
+        """Return validated tool metadata for this subclass."""
+        return ToolMetadata.model_validate(
+            {
+                "name": getattr(cls, "name", ""),
+                "description": getattr(cls, "description", ""),
+                "display_name": getattr(cls, "display_name", None),
+                "input_schema": getattr(cls, "input_schema", {}),
+                "source_id": getattr(cls, "source_id", None),
+                "source": getattr(cls, "source", ""),
+                "evidence_type": getattr(cls, "evidence_type", None),
+                "side_effect_level": getattr(cls, "side_effect_level", None),
+                "use_cases": list(getattr(cls, "use_cases", [])),
+                "examples": list(getattr(cls, "examples", [])),
+                "anti_examples": list(getattr(cls, "anti_examples", [])),
+                "requires": list(getattr(cls, "requires", [])),
+                "outputs": dict(getattr(cls, "outputs", {})),
+                "output_schema": getattr(cls, "output_schema", None),
+                "injected_params": list(getattr(cls, "injected_params", [])),
+                "retrieval_controls": getattr(cls, "retrieval_controls", RetrievalControls()),
+            }
+        )
+
+    @property
+    def inputs(self) -> dict[str, str]:
+        """Derived from input_schema for backward-compatibility with build_prompt.py."""
+        props = self.metadata().input_schema.get("properties", {})
+        return {
+            param: str(info.get("description", info.get("type", "")))
+            for param, info in props.items()
+        }
+
+    def __call__(self, **kwargs: Any) -> dict[str, Any]:
+        try:
+            return self.run(**kwargs)  # type: ignore[attr-defined, no-any-return]
+        except Exception as exc:
+            from platform.observability.sentry_sdk import capture_exception
+
+            capture_exception(
+                exc,
+                context=f"tool.{self.name}",
+                tags={"surface": "tool", "tool": self.name},
+            )
+            return {"error": str(exc), "exception_type": type(exc).__name__}
+
+    def is_available(self, _sources: dict[str, dict]) -> bool:
+        """Return True when required data sources are present.
+
+        Override per tool. Default allows the tool to always run.
+        """
+        return True
+
+    def extract_params(self, _sources: dict[str, dict]) -> dict[str, Any]:
+        """Extract the kwargs to pass to ``run()`` from the available sources.
+
+        Override per tool. Default returns an empty dict.
+        """
+        return {}

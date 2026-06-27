@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.fleet_monitoring.token_sources import IncrementalJsonlSource, _PerPidState
+from tools.fleet_monitoring.token_sources import IncrementalJsonlSource, _PerPidState
 
 
 def test_detect_rotation_returns_none_on_transient_stat_error(tmp_path: Path) -> None:

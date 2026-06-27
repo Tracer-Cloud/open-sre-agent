@@ -31,6 +31,6 @@ analytics emitted by the CLI.
 
 ## Data Contract Source of Truth
 
-- Event enum: `app/analytics/events.py`
-- Capture helpers and KPI query specs: `app/analytics/cli.py`
-- Provider type constraints and coercion: `app/analytics/provider.py`
+- Event enum: `platform/analytics/events.py`
+- Capture helpers and KPI query specs: `platform/analytics/cli.py`
+- Provider type constraints and coercion: `platform/analytics/provider.py`

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.kimi import KimiAdapter
+from integrations.llm_cli.kimi import KimiAdapter
 
 
 def _version_proc() -> MagicMock:
@@ -25,8 +25,8 @@ def _login_status_logged_in_proc() -> MagicMock:
     return m
 
 
-@patch("app.integrations.llm_cli.kimi.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.kimi.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_path_binary_logged_in_env(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/kimi"
 
@@ -47,8 +47,8 @@ def test_detect_path_binary_logged_in_env(mock_which: MagicMock, mock_run: Magic
     assert probe.version == "1.40.0"
 
 
-@patch("app.integrations.llm_cli.kimi.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.kimi.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_min_version_enforcement(mock_which: MagicMock, mock_run: MagicMock) -> None:
     mock_which.return_value = "/usr/bin/kimi"
 
@@ -78,9 +78,9 @@ def test_detect_min_version_enforcement(mock_which: MagicMock, mock_run: MagicMo
     assert "upgrade: uv tool upgrade kimi-cli" in probe.detail
 
 
-@patch("app.integrations.llm_cli.kimi.pathlib.Path.exists", return_value=False)
-@patch("app.integrations.llm_cli.kimi.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.kimi.pathlib.Path.exists", return_value=False)
+@patch("integrations.llm_cli.kimi.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_missing_config_not_logged_in(
     mock_which: MagicMock, mock_run: MagicMock, _mock_exists: MagicMock
 ) -> None:
@@ -107,8 +107,8 @@ def test_detect_missing_config_not_logged_in(
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.kimi.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.kimi.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_login_status_not_logged_in_uses_api_key_fallback(
     mock_which: MagicMock, mock_run: MagicMock
 ) -> None:
@@ -138,10 +138,10 @@ def test_detect_login_status_not_logged_in_uses_api_key_fallback(
     assert mock_run.call_args_list[1].args[0] == ["/usr/bin/kimi", "login", "status"]
 
 
-@patch("app.integrations.llm_cli.kimi.pathlib.Path.read_text")
-@patch("app.integrations.llm_cli.kimi.pathlib.Path.exists", return_value=True)
-@patch("app.integrations.llm_cli.kimi.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.kimi.pathlib.Path.read_text")
+@patch("integrations.llm_cli.kimi.pathlib.Path.exists", return_value=True)
+@patch("integrations.llm_cli.kimi.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_login_status_unavailable_uses_config_fallback(
     mock_which: MagicMock,
     mock_run: MagicMock,
@@ -173,7 +173,7 @@ def test_detect_login_status_unavailable_uses_config_fallback(
 
 
 @patch(
-    "app.integrations.llm_cli.binary_resolver.shutil.which",
+    "integrations.llm_cli.binary_resolver.shutil.which",
     return_value="/usr/bin/kimi",
 )
 def test_build_adds_model_flag_and_yolo(mock_which: MagicMock) -> None:
@@ -188,7 +188,7 @@ def test_build_adds_model_flag_and_yolo(mock_which: MagicMock) -> None:
 
 
 def test_kimi_cli_registry_entry() -> None:
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("kimi")
     assert reg is not None
@@ -196,10 +196,10 @@ def test_kimi_cli_registry_entry() -> None:
     assert reg.adapter_factory().name == "kimi"
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_invoke_forwards_kimi_env(mock_run: MagicMock) -> None:
-    from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli.runner import CLIBackedLLMClient
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
@@ -222,7 +222,7 @@ def test_cli_backed_client_invoke_forwards_kimi_env(mock_run: MagicMock) -> None
     mock_run.return_value = MagicMock(returncode=0, stdout="answer\n", stderr="")
 
     with (
-        patch("app.guardrails.engine.get_guardrail_engine") as gr,
+        patch("platform.guardrails.engine.get_guardrail_engine") as gr,
         patch.dict(
             os.environ,
             {
@@ -244,14 +244,14 @@ def test_cli_backed_client_invoke_forwards_kimi_env(mock_run: MagicMock) -> None
     assert "OPENAI_API_KEY" not in env
 
 
-@patch("app.integrations.llm_cli.runner.time.sleep")
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.time.sleep")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_retries_on_ex_tempfail(
     mock_run: MagicMock, mock_sleep: MagicMock
 ) -> None:
     """EX_TEMPFAIL (75) should be retried; on final success returns the answer."""
-    from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient
+    from integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli.runner import CLIBackedLLMClient
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
@@ -277,7 +277,7 @@ def test_cli_backed_client_retries_on_ex_tempfail(
     success = MagicMock(returncode=0, stdout="answer\n", stderr="")
     mock_run.side_effect = [tempfail, success]
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
         resp = client.invoke("hello")
@@ -287,16 +287,16 @@ def test_cli_backed_client_retries_on_ex_tempfail(
     mock_sleep.assert_called_once()
 
 
-@patch("app.integrations.llm_cli.runner.time.sleep")
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.time.sleep")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_raises_after_all_tempfail_retries(
     mock_run: MagicMock, mock_sleep: MagicMock
 ) -> None:
     """EX_TEMPFAIL (75) exhausting all retries raises RuntimeError."""
     import pytest
 
-    from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import _TEMPFAIL_MAX_RETRIES, CLIBackedLLMClient
+    from integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli.runner import _TEMPFAIL_MAX_RETRIES, CLIBackedLLMClient
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
@@ -320,7 +320,7 @@ def test_cli_backed_client_raises_after_all_tempfail_retries(
     tempfail = MagicMock(returncode=75, stdout="To resume this session: kimi -r abc", stderr="")
     mock_run.side_effect = [tempfail] * (_TEMPFAIL_MAX_RETRIES + 1)
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
         with pytest.raises(RuntimeError):
@@ -359,7 +359,7 @@ def test_parse_and_explain_failure() -> None:
     assert fail_empty == "kimi returned no output"
 
 
-@patch("app.integrations.llm_cli.runner.subprocess.run")
+@patch("integrations.llm_cli.runner.subprocess.run")
 def test_cli_backed_client_exit_75_raises_cli_timeout_error(mock_run: MagicMock) -> None:
     """Exit code 75 (EX_TEMPFAIL) must raise CLITimeoutError, not RuntimeError.
 
@@ -368,8 +368,8 @@ def test_cli_backed_client_exit_75_raises_cli_timeout_error(mock_run: MagicMock)
     """
     import pytest
 
-    from app.integrations.llm_cli.kimi import KimiAdapter
-    from app.integrations.llm_cli.runner import CLIBackedLLMClient, CLITimeoutError
+    from integrations.llm_cli.kimi import KimiAdapter
+    from integrations.llm_cli.runner import CLIBackedLLMClient, CLITimeoutError
 
     mock_adapter = MagicMock(spec=KimiAdapter)
     mock_adapter.name = "kimi"
@@ -385,7 +385,7 @@ def test_cli_backed_client_exit_75_raises_cli_timeout_error(mock_run: MagicMock)
     )
     mock_run.return_value = MagicMock(returncode=75, stdout="", stderr="rate limit")
 
-    with patch("app.guardrails.engine.get_guardrail_engine") as gr:
+    with patch("platform.guardrails.engine.get_guardrail_engine") as gr:
         gr.return_value.is_active = False
         client = CLIBackedLLMClient(mock_adapter, model="kimi-k2.5", max_tokens=256)
         with pytest.raises(CLITimeoutError, match="exit 75"):

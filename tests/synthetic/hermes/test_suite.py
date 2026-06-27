@@ -2,7 +2,7 @@
 
 The suite is intentionally offline. It loads each scenario's
 ``errors.log``, parses every line into :class:`LogRecord` objects via
-:func:`app.integrations.hermes.parser.parse_log_line`, and feeds them to a fresh
+:func:`integrations.hermes.parser.parse_log_line`, and feeds them to a fresh
 :class:`IncidentClassifier` configured by the scenario's YAML. The
 emitted :class:`HermesIncident` list is then validated against
 ``answer.yml``.
@@ -14,9 +14,9 @@ from collections import Counter
 
 import pytest
 
-from app.integrations.hermes.classifier import IncidentClassifier
-from app.integrations.hermes.incident import HermesIncident, LogLevel
-from app.integrations.hermes.parser import parse_log_line
+from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.incident import HermesIncident, LogLevel
+from integrations.hermes.parser import parse_log_line
 from tests.synthetic.hermes.scenario_loader import (
     ExpectedIncident,
     HermesScenarioFixture,

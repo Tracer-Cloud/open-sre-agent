@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.analytics import cli
-from app.analytics.events import Event
-from app.analytics.source import EntrypointSource, TriggerMode
+from platform.analytics import cli
+from platform.analytics.events import Event
+from platform.analytics.source import EntrypointSource, TriggerMode
 
 
 def _assert_investigation_events_have_source(
@@ -83,6 +83,32 @@ def test_identify_github_username_noop_on_empty(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
     cli.identify_github_username("")
+
+    assert stub.identified == []
+
+
+def test_identify_saved_github_username_reads_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr(
+        "integrations.github_identity.saved_github_username",
+        lambda: "octocat",
+    )
+
+    cli.identify_saved_github_username()
+
+    assert stub.identified == [{"github_username": "octocat"}]
+    assert stub.persistent_properties == {"github_username": "octocat"}
+
+
+def test_identify_saved_github_username_noop_when_store_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+    monkeypatch.setattr("integrations.github_identity.saved_github_username", lambda: "")
+
+    cli.identify_saved_github_username()
 
     assert stub.identified == []
 
@@ -310,3 +336,24 @@ def test_track_investigation_nested_context_dedupes(monkeypatch: pytest.MonkeyPa
     emitted_events = [event for event, _ in stub.events]
     assert emitted_events == [Event.INVESTIGATION_STARTED, Event.INVESTIGATION_COMPLETED]
     _assert_investigation_events_have_source(stub.events)
+
+
+def test_capture_diagnosis_category_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = _StubAnalytics()
+    monkeypatch.setattr(cli, "get_analytics", lambda: stub)
+
+    cli.capture_diagnosis_category_mismatch(
+        root_cause_category="dns_resolution_failure",
+        mismatch_reason="root cause text signals database (2 keyword hits)",
+    )
+
+    assert stub.events == [
+        (
+            Event.DIAGNOSIS_CATEGORY_MISMATCH,
+            {
+                "category_text_mismatch": True,
+                "root_cause_category": "dns_resolution_failure",
+                "mismatch_reason": "root cause text signals database (2 keyword hits)",
+            },
+        )
+    ]

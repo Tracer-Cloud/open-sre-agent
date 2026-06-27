@@ -5,8 +5,8 @@ import pytest
 from anthropic import AuthenticationError as AnthropicAuthError
 from openai import AuthenticationError as OpenAIAuthError
 
-from app.cli.wizard.config import PROVIDER_BY_VALUE
-from app.cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
+from cli.wizard.config import PROVIDER_BY_VALUE
+from cli.wizard.validation import _get_provider_base_url, validate_provider_credentials
 
 
 @pytest.fixture(autouse=True)
@@ -25,8 +25,8 @@ def _preload_sdk_error_classes(monkeypatch) -> None:
     imported at the top of this file), we short-circuit the loader's import
     branch and make monkeypatches of ``Anthropic`` / ``OpenAI`` reliable.
     """
-    monkeypatch.setattr("app.cli.wizard.validation.AnthropicAuthError", AnthropicAuthError)
-    monkeypatch.setattr("app.cli.wizard.validation.OpenAIAuthError", OpenAIAuthError)
+    monkeypatch.setattr("cli.wizard.validation.AnthropicAuthError", AnthropicAuthError)
+    monkeypatch.setattr("cli.wizard.validation.OpenAIAuthError", OpenAIAuthError)
 
 
 class _FakeAnthropicTextBlock:
@@ -102,7 +102,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
         body=None,
     )
     monkeypatch.setattr(
-        "app.cli.wizard.validation.Anthropic",
+        "cli.wizard.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(auth_error),
     )
 
@@ -118,7 +118,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
 
 def test_validate_provider_credentials_returns_success_for_valid_anthropic_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.validation.Anthropic",
+        "cli.wizard.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(_FakeAnthropicResponse("OpenSRE ready")),
     )
 
@@ -142,7 +142,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
         body=None,
     )
     monkeypatch.setattr(
-        "app.cli.wizard.validation.OpenAI",
+        "cli.wizard.validation.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(auth_error),
     )
 
@@ -158,7 +158,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
 
 def test_validate_provider_credentials_returns_success_for_valid_openai_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.cli.wizard.validation.OpenAI",
+        "cli.wizard.validation.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(_FakeOpenAIResponse("OpenSRE ready")),
     )
 
@@ -174,13 +174,13 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
 
 
 def test_get_provider_base_url_deepseek() -> None:
-    from app.config import DEEPSEEK_BASE_URL
+    from config.config import DEEPSEEK_BASE_URL
 
     assert _get_provider_base_url("deepseek") == DEEPSEEK_BASE_URL
 
 
 def test_get_provider_base_url_groq() -> None:
-    from app.config import GROQ_BASE_URL
+    from config.config import GROQ_BASE_URL
 
     assert _get_provider_base_url("groq") == GROQ_BASE_URL
 

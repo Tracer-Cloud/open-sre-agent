@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.cli.support.update import (
+from cli.lifecycle.update import (
     _is_update_available,
     _upgrade_via_install_script,
     development_install_doctor_version_detail,
@@ -13,8 +13,8 @@ from app.cli.support.update import (
 def test_already_up_to_date(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update()
 
@@ -26,10 +26,11 @@ def test_check_only_returns_1_when_update_available(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "app.cli.support.update._upgrade_via_install_script", lambda _v: pytest.fail()
+        "cli.lifecycle.update._upgrade_via_install_script",
+        lambda _v: pytest.fail(),
     )
 
     rc = run_update(check_only=True)
@@ -44,8 +45,8 @@ def test_check_only_returns_0_when_up_to_date(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update(check_only=True)
 
@@ -56,9 +57,9 @@ def test_check_only_returns_0_when_up_to_date(
 def test_update_install_script_success(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 0)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 0)
 
     rc = run_update(yes=True)
 
@@ -70,9 +71,9 @@ def test_update_install_script_failure_shows_retry_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 1)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 1)
 
     rc = run_update(yes=True)
 
@@ -85,12 +86,12 @@ def test_update_install_script_failure_shows_retry_hint(
 def test_fetch_error_returns_1(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError("network unreachable")
 
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -101,12 +102,12 @@ def test_fetch_error_returns_1(
 def test_rate_limit_error_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError("GitHub API rate limit exceeded, try again later")
 
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -117,14 +118,14 @@ def test_rate_limit_error_message(
 def test_proxy_hint_in_connect_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
 
     def _raise() -> str:
         raise RuntimeError(
             "could not connect to GitHub — check your network or HTTPS_PROXY settings"
         )
 
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -136,10 +137,10 @@ def test_binary_install_upgrades_via_install_script(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_binary_install", lambda: True)
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 0)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._is_binary_install", lambda: True)
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 0)
 
     rc = run_update(yes=True)
 
@@ -151,11 +152,11 @@ def test_editable_install_prints_warning(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_binary_install", lambda: False)
-    monkeypatch.setattr("app.cli.support.update._is_editable_install", lambda: True)
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 0)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._is_binary_install", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 0)
 
     rc = run_update(yes=True)
 
@@ -169,10 +170,10 @@ def test_install_script_failure_windows_shows_powershell_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_windows", lambda: True)
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 1)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._is_windows", lambda: True)
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 1)
 
     rc = run_update(yes=True)
 
@@ -184,10 +185,10 @@ def test_install_script_failure_unix_shows_curl_hint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_windows", lambda: False)
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 1)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._is_windows", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 1)
 
     rc = run_update(yes=True)
 
@@ -199,10 +200,10 @@ def test_update_prints_release_notes_url_after_success(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update.get_version", lambda: "1.0.0")
-    monkeypatch.setattr("app.cli.support.update._fetch_latest_version", lambda: "1.2.3")
-    monkeypatch.setattr("app.cli.support.update._is_binary_install", lambda: False)
-    monkeypatch.setattr("app.cli.support.update._upgrade_via_install_script", lambda _v: 0)
+    monkeypatch.setattr("cli.lifecycle.update.get_version", lambda: "1.0.0")
+    monkeypatch.setattr("cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("cli.lifecycle.update._is_binary_install", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update._upgrade_via_install_script", lambda _v: 0)
 
     rc = run_update(yes=True)
 
@@ -222,8 +223,8 @@ def test_upgrade_via_install_script_passes_version(monkeypatch: pytest.MonkeyPat
         result = type("Result", (), {"returncode": 0})
         return result
 
-    monkeypatch.setattr("app.cli.support.update.subprocess.run", fake_run)
-    monkeypatch.setattr("app.cli.support.update._is_windows", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update.subprocess.run", fake_run)
+    monkeypatch.setattr("cli.lifecycle.update._is_windows", lambda: False)
 
     rc = _upgrade_via_install_script("2026.4.5")
 
@@ -250,7 +251,7 @@ def test_is_update_available_when_equal() -> None:
 def test_development_install_doctor_detail_none_for_release_like_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update._is_editable_install", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update._is_editable_install", lambda: False)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     assert development_install_doctor_version_detail("2026.4.5") is None
 
@@ -258,7 +259,7 @@ def test_development_install_doctor_detail_none_for_release_like_install(
 def test_development_install_doctor_detail_editable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("cli.lifecycle.update._is_editable_install", lambda: True)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (editable install; skipped comparing to latest release)"
@@ -267,7 +268,7 @@ def test_development_install_doctor_detail_editable(
 def test_development_install_doctor_detail_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update._is_editable_install", lambda: False)
+    monkeypatch.setattr("cli.lifecycle.update._is_editable_install", lambda: False)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (uv run; skipped comparing to latest release)"
@@ -276,7 +277,7 @@ def test_development_install_doctor_detail_uv_run(
 def test_development_install_doctor_detail_editable_and_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.cli.support.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("cli.lifecycle.update._is_editable_install", lambda: True)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == ("2026.4.5 (editable install + uv run; skipped comparing to latest release)")

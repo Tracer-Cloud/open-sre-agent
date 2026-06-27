@@ -25,16 +25,16 @@ from typing import Any
 
 import pytest
 
-from app.integrations.hermes.agent import HermesAgent
-from app.integrations.hermes.classifier import IncidentClassifier
-from app.integrations.hermes.incident import HermesIncident
-from app.integrations.hermes.sinks import TelegramSink
-from app.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
+from integrations.hermes.agent import HermesAgent
+from integrations.hermes.classifier import IncidentClassifier
+from integrations.hermes.incident import HermesIncident
+from integrations.hermes.sinks import TelegramSink
 from tests.synthetic.hermes.scenario_loader import (
     SUITE_DIR,
     HermesScenarioFixture,
     load_scenario,
 )
+from tools.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
 
 pytestmark = [pytest.mark.synthetic, pytest.mark.e2e]
 
@@ -58,7 +58,7 @@ def _patch_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
         return True, "", "1"
 
-    monkeypatch.setattr("app.watch_dog.alarms.post_telegram_message", _fake_post)
+    monkeypatch.setattr("tools.watch_dog.alarms.post_telegram_message", _fake_post)
     return calls
 
 

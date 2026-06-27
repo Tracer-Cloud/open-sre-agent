@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
-import app.integrations.github_mcp as github_mcp_module
+import integrations.github_mcp as github_mcp_module
 
 
 def test_run_async_closes_coroutine_when_runner_fails(
@@ -71,8 +71,8 @@ def test_validate_github_mcp_config_success_includes_repo_samples(
             }
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -122,7 +122,7 @@ def test_validate_github_mcp_config_credential_less_hosted_is_not_configured(
     def _must_not_connect(_config: Any) -> list[dict[str, Any]]:
         raise AssertionError("network must not be probed for credential-less config")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
 
     cfg = github_mcp_module.build_github_mcp_config({})
     result = github_mcp_module.validate_github_mcp_config(cfg)
@@ -144,7 +144,7 @@ def test_validate_github_mcp_config_custom_url_without_token_still_probes(
         probed["called"] = True
         return []
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", _fake_list_tools)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {"url": "https://mcp.internal.example.com/mcp", "mode": "streamable-http"}
@@ -157,12 +157,12 @@ def test_validate_github_mcp_config_custom_url_without_token_still_probes(
 def test_verify_github_reports_credential_less_as_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.integrations._verification_adapters import _verify_github
+    from integrations.github.verifier import verify_github as _verify_github
 
     def _must_not_connect(_config: Any) -> list[dict[str, Any]]:
         raise AssertionError("network must not be probed for credential-less config")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", _must_not_connect)
 
     verdict = _verify_github("local store", {})
 
@@ -186,8 +186,8 @@ def test_validate_github_mcp_config_fails_when_repo_list_returns_error(
             return {"is_error": True, "text": "403 Forbidden", "structured_content": None}
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -234,8 +234,8 @@ def test_validate_github_mcp_config_fails_when_no_repo_list_tool(
             return {"is_error": False, "structured_content": {"login": "carol"}, "text": ""}
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -300,8 +300,8 @@ def test_validate_github_mcp_config_reports_actual_attempts_for_starred_view(
             return {"is_error": False, "structured_content": {"login": "carol"}, "text": ""}
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -398,8 +398,8 @@ def test_validate_github_mcp_config_uses_search_repositories_when_no_list_tool(
             }
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -413,6 +413,240 @@ def test_validate_github_mcp_config_uses_search_repositories_when_no_list_tool(
     assert result.ok is True
     assert result.repo_access_samples == ("dana/a",)
     assert result.repo_access_probe_tool == "search_repositories"
+
+
+def _hosted_tools_with_search() -> list[dict[str, Any]]:
+    tools = [
+        {
+            "name": n,
+            "description": "",
+            "input_schema": {"type": "object", "properties": {}},
+        }
+        for n in (
+            "get_file_contents",
+            "get_me",
+            "get_repository_tree",
+            "list_commits",
+            "search_code",
+        )
+    ]
+    tools.append(
+        {
+            "name": "search_repositories",
+            "description": "",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        }
+    )
+    return tools
+
+
+def test_validate_github_mcp_config_falls_back_to_get_me_when_user_search_422(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Org-centric users often get 422 on ``user:<login>`` even with valid org access."""
+
+    tools = _hosted_tools_with_search()
+    search_422 = (
+        "422 Validation Failed "
+        "[{Resource:Search Field:q Code:invalid Message:The listed users and repositories "
+        "cannot be searched either because the resources do not exist or you do not have "
+        "permission to view them.}]"
+    )
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {
+                "is_error": False,
+                "structured_content": {
+                    "login": "larsspinetta12",
+                    "details": {"public_repos": 0, "total_private_repos": 0},
+                },
+                "text": "",
+            }
+        if name == "search_repositories":
+            assert args == {"query": "user:larsspinetta12"}
+            return {"is_error": True, "text": search_422, "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.authenticated_user == "larsspinetta12"
+    assert result.repo_access_count == 0
+    assert "get_me profile" in result.detail
+    assert "search_repositories" in result.detail
+
+
+def test_validate_github_mcp_config_tries_org_search_after_user_search_422(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+    search_422 = "422 Validation Failed"
+    calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        calls.append((name, args))
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev1"}, "text": ""}
+        if name == "search_repositories":
+            query = str((args or {}).get("query") or "")
+            if query == "user:dev1":
+                return {"is_error": True, "text": search_422, "structured_content": None}
+            if query == "org:Tracer-Cloud":
+                return {
+                    "is_error": False,
+                    "structured_content": {
+                        "items": [{"full_name": "Tracer-Cloud/opensre", "private": True}]
+                    },
+                    "text": "",
+                }
+            raise AssertionError(f"unexpected search query {query!r}")
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setenv("OPENSRE_GITHUB_MCP_VERIFY_ORGS", "Tracer-Cloud")
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.repo_access_samples == ("Tracer-Cloud/opensre",)
+    assert result.repo_access_probe_tool == "search_repositories"
+    assert calls.count(("search_repositories", {"query": "user:dev1"})) == 1
+    assert calls.count(("search_repositories", {"query": "org:Tracer-Cloud"})) == 1
+
+
+def test_validate_github_mcp_config_auth_only_when_search_fails_without_profile_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev2"}, "text": ""}
+        if name == "search_repositories":
+            return {"is_error": True, "text": "422 Validation Failed", "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is True
+    assert result.authenticated_user == "dev2"
+    assert result.repo_access_count is None
+    assert "authenticated; repo probes inconclusive" in result.detail
+
+
+def test_is_recoverable_repo_probe_error_only_matches_search_validation_failures() -> None:
+    assert github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "user:octocat"},
+        "422 Validation Failed",
+    )
+    assert github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "org:Tracer-Cloud"},
+        "The listed users and repositories cannot be searched",
+    )
+    assert not github_mcp_module._is_recoverable_repo_probe_error(
+        "search_repositories",
+        {"query": "user:octocat"},
+        "403 Forbidden",
+    )
+    assert not github_mcp_module._is_recoverable_repo_probe_error(
+        "list_repositories",
+        {},
+        "403 Forbidden",
+    )
+
+
+def test_validate_github_mcp_config_fails_when_user_search_returns_403(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = _hosted_tools_with_search()
+
+    def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
+        return tools
+
+    def fake_call(
+        _config: Any,
+        name: str,
+        args: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if name == "get_me":
+            return {"is_error": False, "structured_content": {"login": "dev3"}, "text": ""}
+        if name == "search_repositories":
+            assert args == {"query": "user:dev3"}
+            return {"is_error": True, "text": "403 Forbidden", "structured_content": None}
+        raise AssertionError(f"unexpected tool {name}")
+
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
+
+    cfg = github_mcp_module.build_github_mcp_config(
+        {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "mode": "streamable-http",
+            "auth_token": "ghp_test",
+        }
+    )
+    result = github_mcp_module.validate_github_mcp_config(cfg)
+
+    assert result.ok is False
+    assert result.failure_category == "repository_access"
+    assert "403 Forbidden" in result.detail
+    assert "repository access check failed" in result.detail
 
 
 def test_validate_github_mcp_config_succeeds_from_get_me_profile_without_list_tools(
@@ -448,8 +682,8 @@ def test_validate_github_mcp_config_succeeds_from_get_me_profile_without_list_to
             }
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -487,9 +721,9 @@ def test_validate_github_mcp_config_fails_when_get_me_tool_is_missing(
     def fake_list_tools(_config: Any) -> list[dict[str, Any]]:
         return tools
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
     monkeypatch.setattr(
-        "app.integrations.github_mcp.call_github_mcp_tool",
+        "integrations.github_mcp.call_github_mcp_tool",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("get_me should not run")),
     )
 
@@ -530,8 +764,8 @@ def test_validate_github_mcp_config_handles_truthy_non_dict_get_me_structured_co
             }
         raise AssertionError(f"unexpected tool {name}")
 
-    monkeypatch.setattr("app.integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
-    monkeypatch.setattr("app.integrations.github_mcp.call_github_mcp_tool", fake_call)
+    monkeypatch.setattr("integrations.github_mcp.list_github_mcp_tools", fake_list_tools)
+    monkeypatch.setattr("integrations.github_mcp.call_github_mcp_tool", fake_call)
 
     cfg = github_mcp_module.build_github_mcp_config(
         {
@@ -618,3 +852,104 @@ def test_print_github_mcp_validation_report_success_and_failure() -> None:
     fail_text = fail_console.export_text()
     assert "validation failed" in fail_text.lower()
     assert "connection reset" in fail_text
+
+
+def test_github_mcp_is_usably_configured_requires_token_for_hosted_copilot() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "",
+        }
+    )
+    assert github_mcp_module.github_mcp_is_usably_configured(config) is False
+
+
+def test_github_mcp_is_usably_configured_accepts_hosted_copilot_with_token() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "gho_test",
+        }
+    )
+    assert github_mcp_module.github_mcp_is_usably_configured(config) is True
+
+
+def test_build_github_mcp_config_strips_persisted_username_metadata() -> None:
+    config = github_mcp_module.build_github_mcp_config(
+        {
+            "mode": "streamable-http",
+            "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+            "auth_token": "gho_test",
+            "username": "octocat",
+        }
+    )
+    assert config.auth_token == "gho_test"
+    assert "username" not in config.model_fields_set
+
+
+def test_github_integration_is_configured_true_when_store_has_token_and_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                    "auth_token": "gho_test",
+                    "username": "octocat",
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is True
+
+
+def test_github_integration_is_configured_ignores_stale_store_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is False
+
+
+def test_github_integration_is_configured_true_when_store_has_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.store.get_integration",
+        lambda service: (
+            {
+                "credentials": {
+                    "mode": "streamable-http",
+                    "url": github_mcp_module.DEFAULT_GITHUB_MCP_URL,
+                    "auth_token": "gho_test",
+                }
+            }
+            if service == "github"
+            else None
+        ),
+    )
+    monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
+
+    assert github_mcp_module.github_integration_is_configured() is True

@@ -22,8 +22,8 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
-      - "app/integrations/openclaw.py"
-      - "app/tools/OpenClawMCPTool/**"
+      - "integrations/openclaw.py"
+      - "tools/OpenClawMCPTool/**"
       - "tests/e2e/openclaw/**"
       - "tests/utils/alert_factory/**"
       - ".github/workflows/e2e-openclaw.yml"
@@ -32,8 +32,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "app/integrations/openclaw.py"
-      - "app/tools/OpenClawMCPTool/**"
+      - "integrations/openclaw.py"
+      - "tools/OpenClawMCPTool/**"
       - "tests/e2e/openclaw/**"
       - "tests/utils/alert_factory/**"
       - ".github/workflows/e2e-openclaw.yml"

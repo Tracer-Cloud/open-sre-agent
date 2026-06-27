@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths-ignore:
       - "docs/**"
-      - "infra/**"
+      - "infra/bench/**"
+      - "infra/docker-compose*.yml"
+      - "infra/install-proxy/**"
+      - "infra/opensre-dataset/**"
+      - "infra/scripts/**"
       - "tests/**"
       - "**/*.md"
       - "**/*.mdx"
@@ -24,7 +28,7 @@ on:
           - release
           - main
       tag:
-        description: "Optional tag to release (e.g. v2026.4.5 or v0.1). Ignored for the main channel."
+        description: "Optional tag to release (e.g. v0.1.2026.6.26 or v0.1). Ignored for the main channel."
         required: false
         type: string
 
@@ -87,7 +91,9 @@ jobs:
             year="$(date -u +%Y)"
             month="$(date -u +%-m)"
             day="$(date -u +%-d)"
-            tag_name="v${year}.${month}.${day}"
+            # Keep the v0.1 prefix so the tag makes clear the product is still
+            # v0.1, while the date stays useful (e.g. v0.1.2026.6.26).
+            tag_name="v0.1.${year}.${month}.${day}"
           fi
 
           echo "channel=release" >> "$GITHUB_OUTPUT"
@@ -151,7 +157,7 @@ jobs:
 
       - name: Sync release version
         shell: bash
-        run: python packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python .github/scripts/sync-release-version.py --tag "$TAG_NAME"
 
       - name: Build Python distributions
         run: |
@@ -229,14 +235,35 @@ jobs:
       - name: Sync release version
         if: env.RELEASE_CHANNEL == 'release'
         shell: bash
-        run: python packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python .github/scripts/sync-release-version.py --tag "$TAG_NAME"
 
       - name: Install binary build dependencies
         shell: bash
         run: uv sync --frozen --extra release-binary
 
+      - name: Stage stdlib platform module for bundling
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The first-party ``platform`` package shadows the stdlib ``platform``
+          # module. PyInstaller does not lay out the stdlib as loose ``.py`` files,
+          # so bundle a copy of the genuine module that platform/__init__.py can
+          # load from ``sys._MEIPASS`` at runtime (see _FROZEN_STDLIB_DIR).
+          rm -rf .stdlib_vendor
+          mkdir -p .stdlib_vendor
+          uv run python -c "import os, shutil, sysconfig; src = os.path.join(sysconfig.get_path('stdlib'), 'platform.py'); shutil.copy(src, os.path.join('.stdlib_vendor', 'platform.py')); print('Staged stdlib platform from ' + src)"
+
       - name: Build binary
-        run: uv run pyinstaller packaging/opensre.spec --clean --noconfirm
+        run: >-
+          uv run pyinstaller cli/__main__.py
+          --name opensre
+          --onefile
+          --clean
+          --noconfirm
+          --collect-data cli
+          --collect-data config
+          --add-data "platform:platform"
+          --add-data ".stdlib_vendor:_opensre_stdlib_platform"
 
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'
@@ -352,7 +379,7 @@ jobs:
           target_sha="$(git rev-parse "origin/$default_branch")"
 
           previous_tag="$(
-            git tag --list 'v[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*' --sort=-v:refname \
+            git tag --list 'v0.1.[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*' --sort=-v:refname \
               | grep -v -x "$TAG_NAME" \
               | head -n 1 \
               || true
@@ -452,23 +479,17 @@ jobs:
           fi
 
           VERSION="${TAG_NAME#v}"
-          latest_flag="--latest=false"
-          release_title="Latest"
-          case "$TAG_NAME" in
-            v[0-9][0-9][0-9][0-9].*) ;;
-            *)
-              latest_flag="--latest"
-              release_title="OpenSRE ${VERSION}"
-              ;;
-          esac
 
+          # Every release-channel publish is the newest stable build at this
+          # point, so mark it as GitHub's Latest. The title keeps the full
+          # version (e.g. "OpenSRE 0.1.2026.6.26") so the v0.1 line is clear.
           gh release create "$TAG_NAME" \
             release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$TARGET_SHA" \
-            --title "$release_title" \
+            --title "OpenSRE ${VERSION}" \
             --notes-file RELEASE_NOTES.md \
-            "$latest_flag"
+            --latest
 
           echo "created=true" >> "$GITHUB_OUTPUT"
 

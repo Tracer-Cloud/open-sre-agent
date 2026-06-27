@@ -7,8 +7,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
-from app.integrations.llm_cli.opencode import (
+from integrations.llm_cli.binary_resolver import npm_prefix_bin_dirs
+from integrations.llm_cli.opencode import (
     OpenCodeAdapter,
     _fallback_opencode_paths,
     _parse_opencode_auth_list_output,
@@ -89,7 +89,7 @@ def test_parse_auth_list_missing_credentials_line() -> None:
     assert "missing credentials summary" in detail
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.opencode.subprocess.run")
 def test_probe_auth_via_cli_success(mock_run: MagicMock) -> None:
     proc = MagicMock()
     proc.returncode = 0
@@ -106,7 +106,7 @@ def test_probe_auth_via_cli_success(mock_run: MagicMock) -> None:
     assert argv == ["/bin/opencode", "auth", "list"]
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.opencode.subprocess.run")
 def test_probe_auth_via_cli_nonzero_exit(mock_run: MagicMock) -> None:
     proc = MagicMock()
     proc.returncode = 2
@@ -119,7 +119,7 @@ def test_probe_auth_via_cli_nonzero_exit(mock_run: MagicMock) -> None:
     assert "failed" in detail.lower()
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.opencode.subprocess.run")
 def test_probe_auth_via_cli_timeout(mock_run: MagicMock) -> None:
     mock_run.side_effect = subprocess.TimeoutExpired(cmd=["x"], timeout=1.0)
 
@@ -142,15 +142,15 @@ def _version_proc() -> MagicMock:
     return m
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_installed_and_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should detect installed binary and authenticated user."""
     mock_which.return_value = "/usr/bin/opencode"
     mock_run.return_value = _version_proc()
 
     with patch(
-        "app.integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
+        "integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
         return_value=(True, "Authenticated"),
     ):
         probe = OpenCodeAdapter().detect()
@@ -161,15 +161,15 @@ def test_detect_installed_and_authenticated(mock_which: MagicMock, mock_run: Mag
     assert probe.version == "1.2.3"
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_installed_not_authenticated(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should detect installed binary but user not authenticated."""
     mock_which.return_value = "/usr/bin/opencode"
     mock_run.return_value = _version_proc()
 
     with patch(
-        "app.integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
+        "integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
         return_value=(False, "Not authenticated"),
     ):
         probe = OpenCodeAdapter().detect()
@@ -178,8 +178,8 @@ def test_detect_installed_not_authenticated(mock_which: MagicMock, mock_run: Mag
     assert probe.logged_in is False
 
 
-@patch("app.integrations.llm_cli.opencode._fallback_opencode_paths", return_value=[])
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.opencode._fallback_opencode_paths", return_value=[])
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_detect_not_installed(mock_which: MagicMock, mock_fallback: MagicMock) -> None:
     """Should detect that binary is not installed."""
     probe = OpenCodeAdapter().detect()
@@ -190,8 +190,8 @@ def test_detect_not_installed(mock_which: MagicMock, mock_fallback: MagicMock) -
     assert "not found" in probe.detail.lower()
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_command_fails(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should return installed=False when version command fails."""
     mock_which.return_value = "/usr/bin/opencode"
@@ -207,8 +207,8 @@ def test_detect_version_command_fails(mock_which: MagicMock, mock_run: MagicMock
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_os_error(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should handle OSError when running version command."""
     mock_which.return_value = "/usr/bin/opencode"
@@ -220,8 +220,8 @@ def test_detect_version_os_error(mock_which: MagicMock, mock_run: MagicMock) -> 
     assert probe.logged_in is None
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_version_timeout_expired(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should handle timeout when version command hangs."""
     import subprocess
@@ -245,7 +245,7 @@ def test_detect_version_timeout_expired(mock_which: MagicMock, mock_run: MagicMo
 # ---------------------------------------------------------------------------
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_basic_invocation(mock_which: MagicMock) -> None:
     """Should build correct basic command without model flag."""
     inv = OpenCodeAdapter().build(prompt="explain this alert", model=None, workspace="")
@@ -256,7 +256,7 @@ def test_build_basic_invocation(mock_which: MagicMock) -> None:
     assert inv.timeout_sec == 300.0
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_adds_model_flag(mock_which: MagicMock) -> None:
     """Should add -m flag when model is provided."""
     inv = OpenCodeAdapter().build(prompt="p", model="openai/gpt-5.4-mini", workspace="")
@@ -266,35 +266,35 @@ def test_build_adds_model_flag(mock_which: MagicMock) -> None:
     assert inv.argv[idx + 1] == "openai/gpt-5.4-mini"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_omits_model_flag_when_empty_string(mock_which: MagicMock) -> None:
     """Should omit -m flag when model is empty string."""
     inv = OpenCodeAdapter().build(prompt="p", model="", workspace="")
     assert "-m" not in inv.argv
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_omits_model_flag_when_none(mock_which: MagicMock) -> None:
     """Should omit -m flag when model is None."""
     inv = OpenCodeAdapter().build(prompt="p", model=None, workspace="")
     assert "-m" not in inv.argv
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_uses_provided_workspace(mock_which: MagicMock) -> None:
     """Should use provided workspace as working directory."""
     inv = OpenCodeAdapter().build(prompt="p", model=None, workspace="/my/project")
     assert inv.cwd == "/my/project"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_defaults_to_cwd_when_workspace_empty(mock_which: MagicMock) -> None:
     """Should default to current working directory when workspace not provided."""
     inv = OpenCodeAdapter().build(prompt="p", model=None, workspace="")
     assert inv.cwd == os.getcwd()
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_sets_no_color_env(mock_which: MagicMock) -> None:
     """Should set NO_COLOR=1 to disable ANSI colors."""
     inv = OpenCodeAdapter().build(prompt="p", model=None, workspace="")
@@ -302,7 +302,7 @@ def test_build_sets_no_color_env(mock_which: MagicMock) -> None:
     assert inv.env.get("NO_COLOR") == "1"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_forwards_http_llm_env_when_set(mock_which: MagicMock) -> None:
     """Should mirror ``opencode auth list`` env-backed credentials into invocation overrides."""
     with patch.dict(
@@ -317,7 +317,7 @@ def test_build_forwards_http_llm_env_when_set(mock_which: MagicMock) -> None:
     assert inv.env.get("OPENAI_PROJECT_ID") == "proj-1"
 
 
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value="/usr/bin/opencode")
 def test_build_forwards_proxy_env_vars(mock_which: MagicMock) -> None:
     """Should forward proxy environment variables to subprocess."""
     with patch.dict(
@@ -336,8 +336,8 @@ def test_build_forwards_proxy_env_vars(mock_which: MagicMock) -> None:
     assert inv.env["NO_PROXY"] == "localhost,127.0.0.1"
 
 
-@patch("app.integrations.llm_cli.opencode._fallback_opencode_paths", return_value=[])
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
+@patch("integrations.llm_cli.opencode._fallback_opencode_paths", return_value=[])
+@patch("integrations.llm_cli.binary_resolver.shutil.which", return_value=None)
 def test_build_raises_when_binary_not_found(
     mock_which: MagicMock, mock_fallback: MagicMock
 ) -> None:
@@ -432,11 +432,11 @@ def test_detect_uses_opencode_bin_env(tmp_path: Path) -> None:
 
     with (
         patch.dict(os.environ, {"OPENCODE_BIN": str(fake_bin)}, clear=False),
-        patch("app.integrations.llm_cli.opencode.subprocess.run") as mock_run,
+        patch("integrations.llm_cli.opencode.subprocess.run") as mock_run,
     ):
         mock_run.return_value = _version_proc()
         with patch(
-            "app.integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
+            "integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
             return_value=(True, "ok"),
         ):
             probe = OpenCodeAdapter().detect()
@@ -445,8 +445,8 @@ def test_detect_uses_opencode_bin_env(tmp_path: Path) -> None:
     assert probe.installed is True
 
 
-@patch("app.integrations.llm_cli.opencode.subprocess.run")
-@patch("app.integrations.llm_cli.binary_resolver.shutil.which")
+@patch("integrations.llm_cli.opencode.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
 def test_detect_falls_back_when_bin_env_invalid(mock_which: MagicMock, mock_run: MagicMock) -> None:
     """Should fall back to PATH search when OPENCODE_BIN points to invalid binary."""
     mock_which.return_value = "/usr/bin/opencode"
@@ -455,7 +455,7 @@ def test_detect_falls_back_when_bin_env_invalid(mock_which: MagicMock, mock_run:
     with (
         patch.dict(os.environ, {"OPENCODE_BIN": "/does/not/exist/opencode"}, clear=False),
         patch(
-            "app.integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
+            "integrations.llm_cli.opencode._probe_opencode_auth_via_cli",
             return_value=(True, "ok"),
         ),
     ):
@@ -474,7 +474,7 @@ def test_fallback_paths_macos() -> None:
     """Test binary search paths on macOS (Homebrew, local bins, etc.)."""
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "darwin"),
         patch.dict(os.environ, {}, clear=False),
     ):
         paths = _fallback_opencode_paths()
@@ -495,7 +495,7 @@ def test_fallback_paths_linux() -> None:
     """Test binary search paths on Linux (npm prefixes, local bins)."""
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "linux"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "linux"),
         patch.dict(os.environ, {"npm_config_prefix": "/custom/npm"}, clear=False),
     ):
         paths = _fallback_opencode_paths()
@@ -510,7 +510,7 @@ def test_fallback_paths_windows() -> None:
     """Test binary search paths on Windows (npm, Scoop, local bins)."""
     npm_prefix_bin_dirs.cache_clear()
     with (
-        patch("app.integrations.llm_cli.binary_resolver.sys.platform", "win32"),
+        patch("integrations.llm_cli.binary_resolver.sys.platform", "win32"),
         patch.dict(
             os.environ,
             {
@@ -541,7 +541,7 @@ def test_fallback_paths_windows() -> None:
 
 def test_opencode_registry_entry() -> None:
     """Should be properly registered in CLI provider registry."""
-    from app.integrations.llm_cli.registry import get_cli_provider_registration
+    from integrations.llm_cli.registry import get_cli_provider_registration
 
     reg = get_cli_provider_registration("opencode")
     assert reg is not None
@@ -556,7 +556,7 @@ def test_opencode_registry_entry() -> None:
 
 def test_opencode_model_options_in_wizard() -> None:
     """Verify OpenCode model options are properly defined in wizard config."""
-    from app.cli.wizard.config import OPENCODE_MODELS, SUPPORTED_PROVIDERS
+    from cli.wizard.config import OPENCODE_MODELS, SUPPORTED_PROVIDERS
 
     # Find OpenCode provider
     opencode_provider = None
@@ -582,7 +582,7 @@ def test_opencode_model_options_in_wizard() -> None:
 
 def test_opencode_prefix_forwarded_to_subprocess() -> None:
     """OPENCODE_* environment variables should be forwarded via blanket prefix allowlist."""
-    from app.integrations.llm_cli.runner import _build_subprocess_env
+    from integrations.llm_cli.runner import _build_subprocess_env
 
     with patch.dict(
         os.environ,
@@ -602,7 +602,7 @@ def test_opencode_prefix_forwarded_to_subprocess() -> None:
 
 def test_non_opencode_vars_not_forwarded() -> None:
     """Only OPENCODE_* vars should be forwarded, not arbitrary vars."""
-    from app.integrations.llm_cli.runner import _build_subprocess_env
+    from integrations.llm_cli.runner import _build_subprocess_env
 
     with patch.dict(
         os.environ,
@@ -634,7 +634,7 @@ def test_adapter_build_does_not_need_to_forward_opencode_vars() -> None:
             clear=False,
         ),
         patch(
-            "app.integrations.llm_cli.binary_resolver.shutil.which",
+            "integrations.llm_cli.binary_resolver.shutil.which",
             return_value="/usr/bin/opencode",
         ),
     ):

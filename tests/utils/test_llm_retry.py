@@ -10,7 +10,7 @@ import pytest
 # the same lookup path as the symbols under test. Satisfies CodeQL
 # "Module imported with both 'import' and 'import from'" (a from-import
 # alongside a module-import flags as mixed-style).
-import app.utils.llm_retry as llm_retry
+import core.runtime.llm.llm_retry as llm_retry
 
 # --------------------------------------------------------------------------- #
 # is_rate_limit_error — provider recognizer                                   #
@@ -352,6 +352,47 @@ def test_extract_retry_after_returns_none_when_no_hint_present() -> None:
     assert llm_retry.extract_retry_after_seconds(RuntimeError("rate limited, generic")) is None
     # Response present but no retry-after header.
     err = _err_with_response({"x-other": "value"})
+    assert llm_retry.extract_retry_after_seconds(err) is None
+
+
+def _err_with_retry_delay(retry_delay: str, msg: str = "rate limited") -> RuntimeError:
+    """Build an error carrying a Gemini-style RetryInfo body (no header)."""
+    err = RuntimeError(msg)
+    err.body = {  # type: ignore[attr-defined]
+        "error": {
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay},
+            ]
+        }
+    }
+    return err
+
+
+def test_extract_retry_after_reads_gemini_structured_retry_delay() -> None:
+    # Gemini ships no retry-after header; the hint lives in error.details[].retryDelay.
+    assert llm_retry.extract_retry_after_seconds(_err_with_retry_delay("5s")) == 5.0
+
+
+def test_extract_retry_after_reads_gemini_fractional_retry_delay() -> None:
+    err = _err_with_retry_delay("5.478s")
+    assert llm_retry.extract_retry_after_seconds(err) == pytest.approx(5.478)
+
+
+def test_extract_retry_after_caps_gemini_retry_delay_at_max() -> None:
+    err = _err_with_retry_delay("120s")
+    assert llm_retry.extract_retry_after_seconds(err) == llm_retry.RETRY_AFTER_MAX_SEC
+
+
+def test_extract_retry_after_reads_gemini_retry_in_message() -> None:
+    # Gemini's human-readable form: "Please retry in 8.5s".
+    err = RuntimeError("Please retry in 8.5s due to quota exceeded")
+    assert llm_retry.extract_retry_after_seconds(err) == 8.5
+
+
+def test_extract_retry_after_tolerates_null_details() -> None:
+    # A body with "details": null must not raise (no hint -> None).
+    err = RuntimeError("rate limited")
+    err.body = {"error": {"details": None}}  # type: ignore[attr-defined]
     assert llm_retry.extract_retry_after_seconds(err) is None
 
 

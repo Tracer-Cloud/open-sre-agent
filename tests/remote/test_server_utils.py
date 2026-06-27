@@ -1,11 +1,11 @@
-"""Tests for app.remote.server utility functions."""
+"""Tests for infra.deployment.remote.server utility functions."""
 
 from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
 
-from app.remote.server import (
+from infra.deployment.remote.server import (
     _id_to_iso,
     _make_id,
     _safe_investigation_path,
@@ -219,7 +219,7 @@ def test_save_investigation_does_not_overwrite_same_second_same_name(
     """
     from pathlib import Path
 
-    from app.remote import server as remote_server
+    from infra.deployment.remote import server as remote_server
 
     monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", Path(str(tmp_path)))
 
@@ -253,7 +253,7 @@ def test_save_investigation_is_atomic(monkeypatch: pytest.MonkeyPatch, tmp_path:
     """
     from pathlib import Path
 
-    from app.remote import server as remote_server
+    from infra.deployment.remote import server as remote_server
 
     monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", Path(str(tmp_path)))
 

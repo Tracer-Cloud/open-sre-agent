@@ -8,7 +8,7 @@ from pathlib import Path
 import psutil
 import pytest
 
-from app.fleet_monitoring.token_sources.claude_code import ClaudeCodeJsonlSource
+from tools.fleet_monitoring.token_sources.claude_code import ClaudeCodeJsonlSource
 
 
 def _mangled_dir(cwd: Path) -> str:
@@ -38,7 +38,7 @@ def _no_open_files(monkeypatch: pytest.MonkeyPatch) -> None:
     Tests that need a specific ``open_files`` set override this.
     """
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
+        "tools.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
         lambda _pid: (),
     )
 
@@ -47,14 +47,14 @@ def _patch_cwd(monkeypatch: pytest.MonkeyPatch, cwd: Path) -> None:
     """Make ``cwd_for_pid`` return ``cwd`` for any PID.
 
     The source no longer imports ``psutil`` directly (per the #1489
-    acceptance criterion that confines psutil to ``app/fleet_monitoring/probe.py``);
-    it calls :func:`app.fleet_monitoring.probe.cwd_for_pid`. The test patches
+    acceptance criterion that confines psutil to ``tools/fleet_monitoring/probe.py``);
+    it calls :func:`tools.fleet_monitoring.probe.cwd_for_pid`. The test patches
     the helper at the source's import site so the unit test stays
     decoupled from psutil internals.
     """
 
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
+        "tools.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
         lambda _pid: cwd,
     )
 
@@ -69,7 +69,7 @@ def _patch_open_files(monkeypatch: pytest.MonkeyPatch, *paths: Path) -> None:
     "holding".
     """
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
+        "tools.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
         lambda _pid: paths,
     )
 
@@ -85,7 +85,7 @@ def _patch_cwd_raises(monkeypatch: pytest.MonkeyPatch, exc: type[BaseException])
     """
     del exc  # All psutil failure paths collapse to None via cwd_for_pid.
     monkeypatch.setattr(
-        "app.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
+        "tools.fleet_monitoring.token_sources.claude_code.cwd_for_pid",
         lambda _pid: None,
     )
 
@@ -236,7 +236,7 @@ class TestFirstCallResolution:
         newer.write_text("newer historical\n", encoding="utf-8")
         _patch_cwd(monkeypatch, cwd)
         monkeypatch.setattr(
-            "app.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
+            "tools.fleet_monitoring.token_sources.claude_code.open_files_for_pid",
             lambda pid: (older,) if pid == 1111 else (newer,),
         )
 

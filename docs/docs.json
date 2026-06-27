@@ -99,11 +99,13 @@
             "pages": [
               "integrations-overview",
               "remote-runtime-investigation",
+              "background-investigations",
               "masking",
               "interactive-shell-privacy",
               "sessions",
               "fleet",
               "cron",
+              "closed-loop-learning",
               "multi-instance-integrations"
             ]
           },
@@ -124,6 +126,7 @@
               "datadog",
               "grafana",
               "grafana_annotations",
+              "groundcover",
               "hermes",
               "honeycomb",
               "incident_io",
@@ -163,6 +166,7 @@
             "expanded": true,
             "pages": [
               "messaging/index",
+              "smtp",
               "messaging/slack",
               "messaging/discord",
               "messaging/telegram",
@@ -190,7 +194,9 @@
               "rds",
               "snowflake",
               "supabase",
-              "redis"
+              "redis",
+              "rds",
+              "temporal"
             ]
           }
         ]
@@ -309,18 +315,6 @@
                   "comparisons/Tracer_vs_AWS_CloudWatch"
                 ]
               }
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Changelog",
-        "icon": "clock",
-        "groups": [
-          {
-            "group": "Daily updates",
-            "pages": [
-              "daily-updates/overview"
             ]
           }
         ]

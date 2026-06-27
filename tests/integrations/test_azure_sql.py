@@ -1,6 +1,6 @@
 """Unit tests for the Azure SQL integration module."""
 
-from app.integrations.azure_sql import (
+from integrations.azure_sql import (
     DEFAULT_AZURE_SQL_PORT,
     AzureSQLConfig,
     AzureSQLValidationResult,

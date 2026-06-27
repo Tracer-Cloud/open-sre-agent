@@ -7,9 +7,9 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from app.cli.__main__ import cli
-from app.integrations.cli import _setup_github, cmd_setup
-from app.integrations.github_mcp import GitHubMCPValidationResult
+from cli.__main__ import cli
+from integrations.cli import _setup_github, cmd_setup
+from integrations.github_mcp import GitHubMCPValidationResult
 
 
 def _upsert_should_not_run(*_a: object, **_k: object) -> None:
@@ -19,7 +19,7 @@ def _upsert_should_not_run(*_a: object, **_k: object) -> None:
 def _mock_confirm(monkeypatch: pytest.MonkeyPatch, *, advanced: bool) -> None:
     """Mock the advanced-settings confirm prompt at the top of ``_setup_github``."""
     monkeypatch.setattr(
-        "app.integrations.cli.questionary.confirm",
+        "integrations.cli.questionary.confirm",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: advanced})(),
     )
 
@@ -35,17 +35,17 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
 
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
-    monkeypatch.setattr("app.integrations.cli._setup_github_auth_token", lambda _mode: "ghp_x")
-    monkeypatch.setattr("app.integrations.cli._prompt_github_repo_report_level", lambda: "full")
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "ghp_x")
+    monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", lambda: "full")
     monkeypatch.setattr(
-        "app.integrations.cli.questionary.select",
+        "integrations.cli.questionary.select",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
 
     monkeypatch.setattr(
-        "app.integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github_mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail=(
@@ -61,7 +61,7 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
 
     saved: list[tuple[str, dict]] = []
     monkeypatch.setattr(
-        "app.integrations.cli.upsert_integration",
+        "integrations.cli.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
 
@@ -101,14 +101,12 @@ def test_setup_github_simple_path_uses_hosted_defaults(
     def _no_level_prompt() -> str:
         raise AssertionError("simple path should not prompt for repo detail level")
 
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=False)
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "gho_browser")
+    monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", _no_level_prompt)
     monkeypatch.setattr(
-        "app.integrations.cli._setup_github_auth_token", lambda _mode: "gho_browser"
-    )
-    monkeypatch.setattr("app.integrations.cli._prompt_github_repo_report_level", _no_level_prompt)
-    monkeypatch.setattr(
-        "app.integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github_mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail="OK @u; repos=2; owners=acme; examples=acme/a; mcp_tools=5",
@@ -122,7 +120,7 @@ def test_setup_github_simple_path_uses_hosted_defaults(
 
     saved: list[tuple[str, dict]] = []
     monkeypatch.setattr(
-        "app.integrations.cli.upsert_integration",
+        "integrations.cli.upsert_integration",
         lambda service, entry: saved.append((service, entry)),
     )
 
@@ -158,22 +156,22 @@ def test_setup_github_exits_without_save_on_validation_failure(
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
 
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
-    monkeypatch.setattr("app.integrations.cli._setup_github_auth_token", lambda _mode: "")
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "")
     monkeypatch.setattr(
-        "app.integrations.cli.questionary.select",
+        "integrations.cli.questionary.select",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "app.integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github_mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=False,
             detail="GitHub MCP connected, but authentication failed: bad token",
             failure_category="authentication",
         ),
     )
-    monkeypatch.setattr("app.integrations.cli.upsert_integration", _upsert_should_not_run)
+    monkeypatch.setattr("integrations.cli.upsert_integration", _upsert_should_not_run)
 
     with pytest.raises(SystemExit) as exc:
         _setup_github()
@@ -196,22 +194,22 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
 
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
-    monkeypatch.setattr("app.integrations.cli._setup_github_auth_token", lambda _mode: "x")
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "x")
     monkeypatch.setattr(
-        "app.integrations.cli.questionary.select",
+        "integrations.cli.questionary.select",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "app.integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github_mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=False,
             detail="validation failed for test",
             failure_category="connectivity",
         ),
     )
-    monkeypatch.setattr("app.integrations.cli.upsert_integration", _upsert_should_not_run)
+    monkeypatch.setattr("integrations.cli.upsert_integration", _upsert_should_not_run)
 
     with pytest.raises(SystemExit) as exc:
         cmd_setup("github")
@@ -232,16 +230,16 @@ def test_cmd_setup_github_prints_saved_after_success(
     def fake_p(_label: str, default: str = "", secret: bool = False) -> str:
         return next(answers)
 
-    monkeypatch.setattr("app.integrations.cli._p", fake_p)
+    monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
-    monkeypatch.setattr("app.integrations.cli._setup_github_auth_token", lambda _mode: "tok")
-    monkeypatch.setattr("app.integrations.cli._prompt_github_repo_report_level", lambda: "standard")
+    monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "tok")
+    monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", lambda: "standard")
     monkeypatch.setattr(
-        "app.integrations.cli.questionary.select",
+        "integrations.cli.questionary.select",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
     )
     monkeypatch.setattr(
-        "app.integrations.github_mcp.validate_github_mcp_config",
+        "integrations.github_mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
             ok=True,
             detail="OK @u; repos=0; owners=-; examples=-; mcp_tools=5",
@@ -251,7 +249,7 @@ def test_cmd_setup_github_prints_saved_after_success(
             repo_access_samples=(),
         ),
     )
-    monkeypatch.setattr("app.integrations.cli.upsert_integration", lambda *_a, **_k: None)
+    monkeypatch.setattr("integrations.cli.upsert_integration", lambda *_a, **_k: None)
 
     cmd_setup("github")
     out = capsys.readouterr().out
@@ -263,11 +261,11 @@ def test_cmd_setup_github_prints_saved_after_success(
 def test_integrations_setup_github_cli_invokes_cmd_setup() -> None:
     runner = CliRunner()
     with (
-        patch("app.cli.commands.integrations.capture_integration_setup_started"),
-        patch("app.cli.commands.integrations.capture_integration_setup_completed"),
-        patch("app.cli.commands.integrations.capture_integration_verified"),
-        patch("app.integrations.cli.cmd_setup") as mock_cmd,
-        patch("app.integrations.cli.cmd_verify", return_value=0),
+        patch("cli.commands.integrations.capture_integration_setup_started"),
+        patch("cli.commands.integrations.capture_integration_setup_completed"),
+        patch("cli.commands.integrations.capture_integration_verified"),
+        patch("integrations.cli.cmd_setup") as mock_cmd,
+        patch("integrations.cli.cmd_verify", return_value=0),
     ):
         mock_cmd.return_value = "github"
         result = runner.invoke(cli, ["integrations", "setup", "github"])

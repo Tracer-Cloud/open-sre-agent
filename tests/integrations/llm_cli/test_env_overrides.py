@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-from app.integrations.llm_cli import env_overrides
+from integrations.llm_cli import env_overrides
 
 
 def test_nonempty_env_values_skips_empty_and_missing() -> None:

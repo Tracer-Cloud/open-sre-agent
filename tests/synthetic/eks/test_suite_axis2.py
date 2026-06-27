@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import pytest
 
+from config.config import has_credentials_for_active_llm_provider
 from tests.synthetic.eks.run_suite import run_scenario, score_reasoning
 from tests.synthetic.eks.scenario_loader import load_all_scenarios
 from tests.synthetic.mock_datadog_backend.selective_backend import SelectiveDatadogBackend
@@ -33,6 +34,10 @@ from tests.synthetic.mock_eks_backend.selective_backend import SelectiveEKSBacke
 
 _ALL_SCENARIOS = load_all_scenarios()
 _LLM_ATTEMPTS = 2
+_SYNTHETIC_SKIP_LLM = (
+    "SKIPPED: missing API key for LLM_PROVIDER "
+    "(suite uses mock EKS/Datadog backends; configure the key for your selected provider)"
+)
 
 # Difficulty threshold above which the LLM is expected to struggle.
 # Failures at or above this difficulty are the gap signal —
@@ -79,6 +84,9 @@ def _should_assert_trajectory(fixture, actual_category: str) -> bool:
 
 def _run_axis2_scenario_test(fixture) -> None:
     """Run Axis 2 scenario with real LLM and selective backends, then assert reasoning."""
+    if not has_credentials_for_active_llm_provider():
+        pytest.skip(_SYNTHETIC_SKIP_LLM)
+
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         eks_backend = SelectiveEKSBackend(fixture)

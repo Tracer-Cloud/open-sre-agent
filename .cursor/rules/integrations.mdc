@@ -1,7 +1,7 @@
 ---
 description: Integration client patterns
 globs:
-  - app/integrations/**
+  - integrations/**
 ---
 
 # Integration Clients
@@ -9,25 +9,25 @@ globs:
 ## Directory Structure
 
 ```
-app/services/
+services/
 ├── grafana/          # Vendor-specific client packages
 ├── datadog/
 ├── s3_client.py      # Single-file clients
 └── vercel/
 
-app/integrations/
+integrations/
 ├── clients/
-│   └── prefect/      # Legacy location — new clients go in app/services/
+│   └── prefect/      # Legacy location — new clients go in services/
 ├── opensre_mcp.py    # MCP server implementation
 └── ...
 ```
 ## Adding a New Integration
 
-1. Create a client under `app/services/<vendor>/`
+1. Create a client under `services/<vendor>/`
 2. Implement connection, authentication, and API methods
-3. Create a tool under `app/tools/<VendorTool>/` that uses the client
+3. Create a tool under `tools/<VendorTool>/` that uses the client
 4. Wire availability into `resolve_integrations` node if the integration requires runtime discovery
-5. Add the vendor to `EvidenceSource` literal in `app/state.py` if it's a new source type
+5. Add the vendor to `EvidenceSource` literal in `core/domain/types/evidence.py` if it's a new source type
 
 ## Conventions
 

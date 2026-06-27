@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from app.config import has_credentials_for_active_llm_provider
+from config.config import has_credentials_for_active_llm_provider
 
 LLM_CREDENTIAL_SKIP_REASON = (
     "SKIPPED: Hermes long-running e2e requires both active LLM credentials and "

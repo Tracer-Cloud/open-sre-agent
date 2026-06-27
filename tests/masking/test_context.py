@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.masking.context import MaskingContext
-from app.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.masking.context import MaskingContext
+from platform.masking.policy import ALL_KINDS, MaskingPolicy
 
 
 def _enabled_ctx() -> MaskingContext:

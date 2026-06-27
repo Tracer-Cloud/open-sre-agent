@@ -6,6 +6,7 @@ Reads from environment variables set by the GitHub Actions step:
   DISCORD_RELEASES_ROLE_ID, DISCORD_RELEASE_LOGO_EMOJI, DISCORD_RELEASE_LOGO_URL,
   CHANGELOG_FILE  — path to DISCORD_NARRATIVE.md or GENERATED_CHANGELOG.md
 """
+
 from __future__ import annotations
 
 import json
@@ -35,11 +36,7 @@ logo_prefix = f"{logo_emoji} " if logo_emoji else ""
 bt = "`"
 
 content = (
-    mention
-    + logo_prefix
-    + f"🚀 **opensre {bt}{tag}{bt} is live**\n"
-    + f"🔗 {url}\n\n"
-    + changelog
+    mention + logo_prefix + f"🚀 **opensre {bt}{tag}{bt} is live**\n" + f"🔗 {url}\n\n" + changelog
 )
 
 allowed_mentions: dict = {"parse": []}

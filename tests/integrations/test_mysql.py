@@ -1,6 +1,6 @@
 """Unit tests for the MySQL integration module."""
 
-from app.integrations.mysql import (
+from integrations.mysql import (
     MySQLConfig,
     MySQLValidationResult,
     build_mysql_config,
