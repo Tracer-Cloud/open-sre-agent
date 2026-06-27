@@ -52,12 +52,12 @@ _SUBSCRIPTION_PROFILES: tuple[ProviderAuthProfile, ...] = (
     ProviderAuthProfile(
         name="claude",
         provider_value="claude-code",
-        label="Anthropic OAuth via Claude Code CLI",
+        label="Anthropic subscription via Claude Code CLI",
         kind="cli_subscription",
         aliases=(
-            "anthropic-oauth",
             "claude-ai",
             "claude-subscription",
+            "anthropic-subscription",
             "anthropic-claude",
             "claude-code-cli",
         ),

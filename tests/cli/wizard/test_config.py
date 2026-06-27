@@ -12,21 +12,21 @@ def test_project_env_path_defaults_to_repo_root() -> None:
 
 
 def test_provider_catalog_shows_auth_method_alternatives_together() -> None:
-    """Onboarding should expose API-key and OAuth/CLI choices where both exist."""
+    """Onboarding should expose API-key and CLI choices where both exist."""
     labels_by_value = {provider.value: provider.label for provider in SUPPORTED_PROVIDERS}
     values = [provider.value for provider in SUPPORTED_PROVIDERS]
 
     assert labels_by_value["anthropic"] == "Anthropic API key"
-    assert labels_by_value["claude-code"] == "Anthropic OAuth (Claude Code CLI)"
+    assert labels_by_value["claude-code"] == "Anthropic Claude Code CLI"
     assert values.index("anthropic") < values.index("claude-code") < values.index("openai")
 
     assert labels_by_value["openai"] == "OpenAI API key"
-    assert labels_by_value["codex"] == "OpenAI OAuth (Codex CLI)"
+    assert labels_by_value["codex"] == "OpenAI Codex CLI"
     assert values.index("openai") < values.index("codex") < values.index("openrouter")
 
     assert labels_by_value["gemini"] == "Google Gemini API key"
-    assert labels_by_value["gemini-cli"] == "Google OAuth (Gemini CLI)"
-    assert labels_by_value["antigravity-cli"] == "Google OAuth (Antigravity CLI)"
+    assert labels_by_value["gemini-cli"] == "Google Gemini CLI"
+    assert labels_by_value["antigravity-cli"] == "Google Antigravity CLI"
     assert (
         values.index("gemini")
         < values.index("gemini-cli")
@@ -35,5 +35,5 @@ def test_provider_catalog_shows_auth_method_alternatives_together() -> None:
     )
 
     assert labels_by_value["groq"] == "Groq API key"
-    assert labels_by_value["grok-cli"] == "xAI OAuth (Grok Build CLI)"
+    assert labels_by_value["grok-cli"] == "xAI Grok Build CLI"
     assert values.index("groq") < values.index("grok-cli") < values.index("cursor")

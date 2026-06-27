@@ -482,7 +482,7 @@ SUPPORTED_PROVIDERS = (
     ),
     ProviderOption(
         value="claude-code",
-        label="Anthropic OAuth (Claude Code CLI)",
+        label="Anthropic Claude Code CLI",
         group="Hosted providers",
         api_key_env="",
         model_env="CLAUDE_CODE_MODEL",
@@ -508,7 +508,7 @@ SUPPORTED_PROVIDERS = (
     ),
     ProviderOption(
         value="codex",
-        label="OpenAI OAuth (Codex CLI)",
+        label="OpenAI Codex CLI",
         group="Hosted providers",
         api_key_env="",
         model_env="CODEX_MODEL",
@@ -560,7 +560,7 @@ SUPPORTED_PROVIDERS = (
     ),
     ProviderOption(
         value="gemini-cli",
-        label="Google OAuth (Gemini CLI)",
+        label="Google Gemini CLI",
         group="Hosted providers",
         api_key_env="",
         model_env="GEMINI_CLI_MODEL",
@@ -573,7 +573,7 @@ SUPPORTED_PROVIDERS = (
     ),
     ProviderOption(
         value="antigravity-cli",
-        label="Google OAuth (Antigravity CLI)",
+        label="Google Antigravity CLI",
         group="Hosted providers",
         api_key_env="",
         model_env="ANTIGRAVITY_CLI_MODEL",
@@ -633,7 +633,7 @@ SUPPORTED_PROVIDERS = (
     ),
     ProviderOption(
         value="grok-cli",
-        label="xAI OAuth (Grok Build CLI)",
+        label="xAI Grok Build CLI",
         group="Hosted providers",
         api_key_env="",
         model_env="GROK_CLI_MODEL",

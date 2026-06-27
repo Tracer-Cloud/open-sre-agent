@@ -1312,9 +1312,7 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
     from cli.wizard import config as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
-    assert flow._credential_line_for_saved_summary(codex) == (
-        "OpenAI OAuth (Codex CLI) (Run: codex login)"
-    )
+    assert flow._credential_line_for_saved_summary(codex) == "OpenAI Codex CLI (Run: codex login)"
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
@@ -1322,7 +1320,7 @@ def test_credential_line_for_saved_summary_cli_claude_code() -> None:
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
     assert flow._credential_line_for_saved_summary(claude_code) == (
-        "Anthropic OAuth (Claude Code CLI) (Run: claude auth login or set ANTHROPIC_API_KEY)"
+        "Anthropic Claude Code CLI (Run: claude auth login or set ANTHROPIC_API_KEY)"
     )
 
 
@@ -1331,7 +1329,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
     assert flow._credential_line_for_saved_summary(gemini_cli) == (
-        "Google OAuth (Gemini CLI) (Run: gemini (interactive login) or set GEMINI_API_KEY)"
+        "Google Gemini CLI (Run: gemini (interactive login) or set GEMINI_API_KEY)"
     )
 
 
