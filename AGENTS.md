@@ -20,6 +20,7 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | `core/`               | Investigation orchestration, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
+| `context/`            | First-class top-level home for context assembly, budgets, trimming, and evidence envelopes shared by agents. |
 | `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
 | `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
 | `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, and the Hermes log pipeline. |
@@ -48,6 +49,7 @@ Main packages one level deeper:
 - `cli/` — Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.
 - `interactive_shell/` — Interactive terminal (TTY) loop, slash-command surface, chat/help handoff, session runtime, and terminal UI. REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
+- `context/` — First-class context assembly boundary for building, trimming, ranking, and packaging incident evidence before agent/runtime consumption.
 - `infra/deployment/` — Single top-level home for deployment-facing code, split by concern:
     - `infra/deployment/entrypoints/` — SDK and MCP entrypoints exposed to external runtimes.
     - `infra/deployment/operations/` — _Runtime / infra_ around a deployment (health polling, EC2 output files, provider dry-run validation).
@@ -102,6 +104,8 @@ Investigations are coordinated in `core/orchestration/pipeline.py` and exposed v
 Files to touch:
 
 - `core/orchestration/pipeline.py` for high-level stage ordering.
+- `context/` for shared context assembly, trimming, ranking, and evidence-envelope logic
+  that runs before agent/runtime consumption.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
   category alignment, correlation scoring).
 - `core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
