@@ -75,6 +75,7 @@ userland
 vCPUs
 walkthrough
 whoever
+writeback
 # Mintlify docs terms
 blockquote
 Blockquotes
@@ -99,20 +100,25 @@ url
 VSCode
 ack
 allowlisted
+Alertmanager
 backpressure
 Coralogix
+datasource
 dicts
 Entra
 env
+groundcover
 hostname
 JIRA
 Jira
+Kimi
 loopback
 passwordless
 performance_schema
 pg_stat_activity
 pg_stat_statements
 prefetch
+repos
 rollout
 timespan
 vhost
@@ -130,9 +136,11 @@ FastAPI
 Groq
 Ollama
 Ollama's
+Opsgenie
 Postgres
 SuperGrok
 Toolcall
+Twilio
 Vercel
 xAI
 xAI's
