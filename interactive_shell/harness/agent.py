@@ -20,7 +20,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable, Coroutine, Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, assert_never
+from typing import Any, Literal
 
 from rich.console import Console
 from rich.markup import escape
@@ -792,7 +792,7 @@ def handle_message_with_agent(
             )
 
         case _:
-            assert_never(route)
+            raise AssertionError(f"unreachable turn route: {route!r}")
 
     return accounting.finalize(result)
 
