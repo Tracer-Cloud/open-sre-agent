@@ -312,6 +312,25 @@ def test_real_registry_preserves_existing_chat_tool_surface() -> None:
     assert {"fetch_failed_run", "get_tracer_run", "search_github_code"} <= chat_names
 
 
+def test_real_registry_does_not_emit_duplicate_tool_warnings(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    saved_external_packages = list(registry_module._external_tool_packages)
+    try:
+        registry_module._external_tool_packages.clear()
+        registry_module.clear_tool_registry_cache()
+
+        with caplog.at_level(logging.WARNING, logger="tools.registry"):
+            tool_names = [tool_def.name for tool_def in registry_module.get_registered_tools()]
+
+        assert len(tool_names) == len(set(tool_names))
+        assert {"get_supabase_service_health", "get_supabase_storage_buckets"} <= set(tool_names)
+        assert not any("Duplicate tool name" in record.message for record in caplog.records)
+    finally:
+        registry_module._external_tool_packages[:] = saved_external_packages
+        registry_module.clear_tool_registry_cache()
+
+
 def test_registry_regression_duplicate_tool_names_across_modules(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
