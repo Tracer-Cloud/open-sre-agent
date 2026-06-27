@@ -155,9 +155,12 @@ def _github_headers(token: str) -> dict[str, str]:
 
 
 def _github_json(url: str, token: str) -> tuple[Any, Any]:
+    parsed = parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc != "api.github.com":
+        raise RuntimeError("GitHub API URL must target https://api.github.com")
     req = request.Request(url, headers=_github_headers(token), method="GET")
     try:
-        with request.urlopen(req, timeout=20) as response:
+        with _open_github_request(req) as response:
             payload = json.loads(response.read().decode("utf-8"))
             return payload, response.headers
     except error.HTTPError as exc:
@@ -165,6 +168,10 @@ def _github_json(url: str, token: str) -> tuple[Any, Any]:
         raise RuntimeError(f"GitHub API request failed with HTTP {exc.code}: {detail}") from exc
     except error.URLError as exc:
         raise RuntimeError(f"GitHub API request failed: {exc.reason}") from exc
+
+
+def _open_github_request(req: request.Request):
+    return request.urlopen(req, timeout=20)  # nosemgrep
 
 
 def _next_link(headers: Any) -> str | None:

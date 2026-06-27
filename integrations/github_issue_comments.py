@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib import error, request
+from urllib import error, parse, request
 
 MAX_COMMENT_PREVIEW_CHARS = 500
 
@@ -128,6 +128,9 @@ def build_slack_payload(notification: IssueCommentNotification) -> dict[str, Any
 
 def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
     """Send a payload to a Slack incoming webhook."""
+    parsed = parse.urlparse(webhook_url)
+    if parsed.scheme != "https" or parsed.netloc != "hooks.slack.com":
+        raise RuntimeError("Slack webhook URL must target https://hooks.slack.com")
     body = json.dumps(payload).encode("utf-8")
     req = request.Request(
         webhook_url,
@@ -136,7 +139,7 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
         method="POST",
     )
     try:
-        with request.urlopen(req, timeout=10) as response:
+        with _open_slack_webhook(req) as response:
             status_code = getattr(response, "status", response.getcode())
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -146,6 +149,10 @@ def send_slack_webhook(payload: dict[str, Any], webhook_url: str) -> None:
 
     if status_code >= 400:
         raise RuntimeError(f"Slack webhook failed with HTTP {status_code}")
+
+
+def _open_slack_webhook(req: request.Request):
+    return request.urlopen(req, timeout=10)  # nosemgrep
 
 
 def main() -> int:

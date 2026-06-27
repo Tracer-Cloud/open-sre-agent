@@ -35,6 +35,14 @@ def _text_from_timeout_stream(raw: str | bytes | None) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _shell_argv(command: str) -> list[str]:
+    if os.name == "nt":
+        shell = os.environ.get("COMSPEC") or "cmd.exe"
+        return [shell, "/d", "/s", "/c", command]
+    shell = os.environ.get("SHELL") or "/bin/sh"
+    return [shell, "-lc", command]
+
+
 def execute_shell_command(
     *,
     command: str,
@@ -46,10 +54,12 @@ def execute_shell_command(
     """Execute a command and return a structured result object."""
     try:
         if use_shell:
+            # Intentional REPL shell passthrough for local terminal commands.
+            # The caller runs through interactive confirmation/policy first and
+            # records that the command used a shell in ShellExecutionResult.
             completed = subprocess.run(
-                command,
-                shell=True,
-                executable=os.environ.get("SHELL") or None,
+                _shell_argv(command),
+                shell=False,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

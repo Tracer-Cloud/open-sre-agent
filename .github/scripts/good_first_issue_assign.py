@@ -34,6 +34,11 @@ EXCLUDED_COMMENTER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 GITHUB_API = "https://api.github.com"
 
 
+def _github_api_url(path: str, query: dict[str, str]) -> str:
+    encoded = urllib.parse.urlencode(query)
+    return f"{GITHUB_API}{path}?{encoded}"
+
+
 def screen_event_without_api(event: dict[str, Any]) -> str | None:
     """Return a skip reason before calling the GitHub API, or None if checks should continue."""
     issue = event.get("issue") or {}
@@ -99,6 +104,9 @@ def assign_decision(
 
 
 def _request_json(url: str, token: str) -> Any:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc != "api.github.com":
+        raise ValueError("GitHub API URL must target https://api.github.com")
     req = urllib.request.Request(
         url,
         headers={
@@ -108,13 +116,13 @@ def _request_json(url: str, token: str) -> Any:
         },
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=60) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         return json.loads(resp.read().decode("utf-8"))
 
 
 def _search_issue_total_count(query: str, token: str) -> int:
     params = urllib.parse.urlencode({"q": query})
-    url = f"{GITHUB_API}/search/issues?{params}"
+    url = _github_api_url("/search/issues", {"q": query})
     try:
         data = _request_json(url, token)
     except urllib.error.URLError as exc:

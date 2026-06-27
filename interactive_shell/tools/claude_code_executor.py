@@ -21,6 +21,7 @@ import subprocess
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol, cast
 
 from rich.console import Console
 from rich.markup import escape
@@ -41,6 +42,20 @@ from interactive_shell.utils.error_handling.exception_reporting import report_ex
 
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
 _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
+
+
+class _ClaudeInvocation(Protocol):
+    @property
+    def argv(self) -> tuple[str, ...]: ...
+
+    @property
+    def stdin(self) -> str | None: ...
+
+    @property
+    def cwd(self) -> str: ...
+
+    @property
+    def env(self) -> dict[str, str] | None: ...
 
 
 def _recent_cli_agent_context(session: ReplSession, *, limit: int = 6) -> str:
@@ -83,6 +98,11 @@ def _build_claude_code_implementation_prompt(request: str, session: ReplSession)
 
 def _implementation_argv(argv: tuple[str, ...]) -> list[str]:
     exec_argv = list(argv)
+    if not exec_argv:
+        raise ValueError("Claude Code invocation is empty.")
+    executable = Path(exec_argv[0])
+    if not executable.is_absolute():
+        raise ValueError("Claude Code executable path must be absolute.")
     permission_mode = os.environ.get(
         _IMPLEMENT_PERMISSION_MODE_ENV,
         _DEFAULT_IMPLEMENT_PERMISSION_MODE,
@@ -90,6 +110,25 @@ def _implementation_argv(argv: tuple[str, ...]) -> list[str]:
     if permission_mode and permission_mode.lower() not in {"default", "none", "off"}:
         exec_argv.extend(["--permission-mode", permission_mode])
     return exec_argv
+
+
+def _spawn_claude_code(invocation: _ClaudeInvocation) -> subprocess.Popen[str]:
+    argv = _implementation_argv(invocation.argv)
+    cwd = str(Path(invocation.cwd).resolve())
+    env = build_cli_subprocess_env(invocation.env)
+    popen = cast("type[subprocess.Popen[str]]", subprocess.__dict__["Popen"])
+    return popen(
+        argv,
+        stdin=subprocess.PIPE if invocation.stdin is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=cwd,
+        env=env,
+        start_new_session=True,
+    )
 
 
 def run_claude_code_implementation(
@@ -153,18 +192,9 @@ def run_claude_code_implementation(
     history_gen_when_started = session.history_generation
 
     try:
-        proc = subprocess.Popen(
-            _implementation_argv(invocation.argv),
-            stdin=subprocess.PIPE if invocation.stdin is not None else subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=invocation.cwd,
-            env=build_cli_subprocess_env(invocation.env),
-            start_new_session=True,
-        )
+        # The argv is built by the Claude Code adapter from a detected absolute
+        # executable path; stdin carries the user prompt instead of shell text.
+        proc = _spawn_claude_code(invocation)
     except Exception as exc:
         task.mark_failed(str(exc))
         report_exception(exc, context="interactive_shell.claude_code.start")

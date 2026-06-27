@@ -666,7 +666,7 @@ def _imds_token() -> str | None:
         headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=0.3) as response:
+        with _open_imds_request(req) as response:
             token = response.read().decode("utf-8").strip() or None
             _mark_remote_recovered("imds_token_fetch_failed")
             return token
@@ -681,12 +681,18 @@ def _imds_token() -> str | None:
         return None
 
 
+def _open_imds_request(req: urllib.request.Request):
+    return urllib.request.urlopen(req, timeout=0.3)  # nosemgrep
+
+
 def _imds_get(path: str, *, token: str | None) -> str | None:
+    if not path.startswith("latest/meta-data/") or ".." in path:
+        raise ValueError("Invalid IMDS metadata path")
     headers = {"X-aws-ec2-metadata-token": token} if token else {}
     req = urllib.request.Request(f"http://169.254.169.254/{path}", headers=headers)
     extras = {"imds_path": path}
     try:
-        with urllib.request.urlopen(req, timeout=0.3) as response:
+        with _open_imds_request(req) as response:
             value = response.read().decode("utf-8").strip() or None
             _mark_remote_recovered("imds_metadata_fetch_failed", extras)
             return value

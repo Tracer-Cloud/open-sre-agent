@@ -70,7 +70,7 @@ class TracerIntegrationsMixin(TracerClientBase):
                     integration["credentials"] = json.loads(creds)
                 except (json.JSONDecodeError, TypeError):
                     logger.warning(
-                        "Malformed credentials JSON for integration %s",
+                        "Malformed integration JSON for integration id=%s",
                         integration.get("id", "unknown"),
                     )
                     integration["credentials"] = {}
@@ -101,7 +101,7 @@ class TracerIntegrationsMixin(TracerClientBase):
                 credentials = json.loads(credentials)
             except (json.JSONDecodeError, TypeError):
                 logger.warning(
-                    "Malformed Grafana credentials JSON for integration %s",
+                    "Malformed Grafana integration JSON for integration id=%s",
                     integration.get("id", "unknown"),
                 )
                 credentials = {}

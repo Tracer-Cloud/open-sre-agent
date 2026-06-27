@@ -111,7 +111,7 @@ def test_get_all_integrations_falls_back_to_empty_credentials_on_malformed_json(
         result = client.get_all_integrations()
 
     assert result[0]["credentials"] == {}
-    assert "Malformed credentials JSON for integration grafana-1" in caplog.text
+    assert "Malformed integration JSON for integration id=grafana-1" in caplog.text
 
 
 def test_get_grafana_credentials_prefers_active_integration() -> None:

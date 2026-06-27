@@ -8,6 +8,9 @@ Uses async httpx for non-blocking JWKS fetching.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -164,24 +167,22 @@ def get_jwks_url_for_issuer(issuer: str) -> str | None:
 
 
 def decode_jwt_payload_unverified(token: str) -> dict[str, Any]:
-    """Decode JWT payload without signature verification.
+    """Decode JWT payload bytes before signature verification.
 
-    Used to extract the issuer before we know which JWKS to use.
+    Used only to extract the issuer before selecting the JWKS endpoint. The
+    returned claims are not trusted for authorization; full signature
+    verification happens in ``verify_jwt_token`` before claims are returned.
     """
     try:
-        from typing import cast
-
-        result = jwt.decode(
-            token,
-            options={
-                "verify_signature": False,
-                "verify_exp": False,
-                "verify_aud": False,
-            },
-        )
-        return cast(dict[str, Any], result)
-    except jwt.exceptions.DecodeError as e:
+        _header, payload, _signature = token.split(".", 2)
+        padded_payload = payload + "=" * (-len(payload) % 4)
+        decoded = base64.urlsafe_b64decode(padded_payload.encode("ascii"))
+        result = json.loads(decoded.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError) as e:
         raise JWTVerificationError(f"Invalid JWT format: {e}") from e
+    if not isinstance(result, dict):
+        raise JWTVerificationError("Invalid JWT payload")
+    return result
 
 
 def get_signing_key_from_jwks(jwks_data: dict[str, Any], token: str) -> Any:

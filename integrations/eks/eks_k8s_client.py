@@ -66,7 +66,7 @@ def _generate_eks_token(cluster_name: str, assumed_creds: dict[str, Any], region
         raise RuntimeError(msg)
 
     token = "k8s-aws-v1." + base64.urlsafe_b64encode(signed_url.encode()).decode().rstrip("=")
-    logger.info("[eks] Token generated for cluster=%s (length=%d)", cluster_name, len(token))
+    logger.info("[eks] Kubernetes auth material generated for cluster=%s", cluster_name)
     return token
 
 

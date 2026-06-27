@@ -254,9 +254,8 @@ _FINGERPRINT_SEPARATOR: Final[str] = "|"
 def _fingerprint(rule: str, logger_name: str | None, extra: str) -> str:
     import hashlib
 
-    digest = hashlib.sha1(
+    digest = hashlib.sha256(
         f"{rule}{_FINGERPRINT_SEPARATOR}{logger_name or ''}{_FINGERPRINT_SEPARATOR}{extra}".encode(),
-        usedforsecurity=False,
     )
     return digest.hexdigest()[:16]
 

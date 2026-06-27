@@ -275,10 +275,7 @@ def _build_traceback_incident(state: _OpenTraceback) -> HermesIncident:
 
 
 def _fingerprint(rule: str, logger_name: str, message: str) -> str:
-    digest = hashlib.sha1(
-        f"{rule}|{logger_name}|{message}".encode(),
-        usedforsecurity=False,
-    )
+    digest = hashlib.sha256(f"{rule}|{logger_name}|{message}".encode())
     return digest.hexdigest()[:16]
 
 

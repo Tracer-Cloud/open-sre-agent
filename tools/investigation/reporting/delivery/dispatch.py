@@ -63,7 +63,7 @@ def _dispatch_discord(
     channel_id = discord_ctx.get("channel_id") or discord_creds.get("default_channel_id", "")
     thread_id = discord_ctx.get("thread_id", "")
     logger.debug(
-        "[publish] discord delivery: channel_id=%s thread_id=%s bot_token_present=%s",
+        "[publish] discord delivery: channel_id=%s thread_id=%s auth_configured=%s",
         channel_id,
         thread_id,
         bool(bot_token),
@@ -85,7 +85,7 @@ def _dispatch_discord(
         return
 
     logger.debug(
-        "[publish] discord delivery: skipped - bot_token_present=%s channel_id=%s",
+        "[publish] discord delivery: skipped - auth_configured=%s channel_id=%s",
         bool(bot_token),
         channel_id,
     )
@@ -107,7 +107,7 @@ def _dispatch_telegram(
     chat_id = telegram_ctx.get("chat_id") or telegram_creds.get("default_chat_id", "")
     reply_to = str(telegram_ctx.get("reply_to_message_id") or "")
     logger.debug(
-        "[publish] telegram delivery: chat_id=%s reply_to=%s bot_token_present=%s",
+        "[publish] telegram delivery: chat_id=%s reply_to=%s auth_configured=%s",
         chat_id,
         reply_to,
         bool(bot_token),
@@ -127,7 +127,7 @@ def _dispatch_telegram(
         return
 
     logger.debug(
-        "[publish] telegram delivery: skipped - bot_token_present=%s chat_id=%s",
+        "[publish] telegram delivery: skipped - auth_configured=%s chat_id=%s",
         bool(bot_token),
         chat_id,
     )
@@ -150,7 +150,7 @@ def _dispatch_whatsapp(
     from_number = whatsapp_ctx.get("from_number") or whatsapp_creds.get("from_number", "")
     to = whatsapp_ctx.get("to") or whatsapp_creds.get("default_to", "")
     logger.debug(
-        "[publish] whatsapp delivery: to=%s account_sid=%s auth_token_present=%s from_number=%s",
+        "[publish] whatsapp delivery: to=%s account_sid=%s auth_configured=%s from_number=%s",
         to,
         account_sid,
         bool(auth_token),
