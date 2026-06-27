@@ -197,6 +197,14 @@ def test_investigation_tool_description_preserves_compound_slash_guidance() -> N
     assert "never drop the quoted investigation" in description
 
 
+def test_assistant_handoff_description_preserves_bare_alert_guidance() -> None:
+    entry = REGISTRY.get("assistant_handoff")
+    assert entry is not None
+    description = entry.description.lower()
+    assert "bare pasted alert json/yaml/key-value blob" in description
+    assert "did not explicitly ask to investigate" in description
+
+
 def test_slash_tool_description_preserves_compound_followup_guidance() -> None:
     entry = REGISTRY.get("slash_invoke")
     assert entry is not None

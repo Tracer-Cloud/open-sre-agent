@@ -52,6 +52,14 @@ def test_system_prompt_requires_same_response_for_slash_then_investigation() -> 
     assert "valid investigation payload" in prompt
 
 
+def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt
+    assert "pasted alert blob / bare incident statement" in prompt
+    assert "with no\ninstruction" in prompt
+    assert "not such a question — hand it off" in prompt
+
+
 def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "run synthetic test 005 now" in prompt

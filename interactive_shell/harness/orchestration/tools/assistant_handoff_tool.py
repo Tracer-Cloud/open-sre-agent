@@ -25,7 +25,13 @@ def execute_assistant_handoff_action(args: dict[str, Any], ctx: ToolContext) -> 
 
 TOOL_ENTRY = ToolEntry(
     name="assistant_handoff",
-    description="Mark a request as non-executable and hand off to assistant response generation.",
+    description=(
+        "Mark a request as non-executable and hand off to assistant response generation. "
+        "Use for informational, conversational, ambiguous, or non-actionable requests, "
+        "including a bare pasted alert JSON/YAML/key-value blob or bare incident statement "
+        "when the user did not explicitly ask to investigate, analyze, diagnose, RCA, or "
+        "root-cause it."
+    ),
     input_schema=object_schema(
         properties={
             "content": string_property(

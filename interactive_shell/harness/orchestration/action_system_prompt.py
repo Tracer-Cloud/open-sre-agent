@@ -201,7 +201,10 @@ Other tools:
   provider switch: emit assistant_handoff so the assistant can clarify and
   suggest "/model set ollama". Do NOT guess "ollama" from "local llama".
 - alert_sample — run a sample alert (template="generic")
-- investigation_start — investigate pasted alert text or free-form alert body
+- investigation_start — start an investigation ONLY when the user explicitly asks
+  to investigate/analyze/diagnose/RCA/root-cause a pasted alert text or free-form
+  alert body, or asks a diagnostic cause question while integrations are connected.
+  A bare pasted alert blob with no instruction remains assistant_handoff.
 - synthetic_run — run synthetic benchmark scenario by id. Use the exact scenario
   number the user supplied. If the user gives only a three-digit prefix, choose
   the enum value beginning with that prefix.
