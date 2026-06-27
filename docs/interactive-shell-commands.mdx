@@ -3,7 +3,7 @@ title: 'Interactive Shell Commands'
 description: 'Complete reference for every slash command in the OpenSRE REPL — session control, investigations, integrations, tasks, watchdogs, and more'
 ---
 
-Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action planner can select the right command.
+Start the interactive shell with `opensre` (TTY required). Type a slash command at the prompt, or describe what you want in plain language — the action agent can route intent to the right command.
 
 Run `/help` anytime for the live command list grouped by category. In a TTY, bare `/help` opens an interactive picker; selecting a command runs it directly.
 
@@ -17,10 +17,10 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 
 | Input type | What happens |
 | --- | --- |
-| Slash command (`/status`) | Planned as an explicit command action and executed by the REPL |
-| Plain language (`verify datadog`) | Mapped by the action planner to slash commands, investigations, or doc-grounded answers |
+| Slash command (`/status`) | Routed through the action agent and executed via the `slash_invoke` AgentTool |
+| Plain language (`verify datadog`) | Routed by the action agent to slash commands, investigations, or doc-grounded answers |
 | Pasted alert JSON/text | Often starts an investigation without a slash command |
-| Shell one-liner (`kubectl get pods`) | Executed through shell policy when the planner selects a shell action |
+| Shell one-liner (`kubectl get pods`) | Executed through shell policy when the action agent selects a shell action |
 
 **TTY vs non-TTY:** The full experience (interactive menus, confirmations, onboarding wizards) requires a real terminal. Piping input or running in CI sets non-interactive mode — elevated commands are rejected unless trust mode was enabled in a prior interactive session (prefer explicit CLI commands outside the REPL for automation).
 

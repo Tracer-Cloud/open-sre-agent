@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
 from core.runtime.llm.agent_llm_client import ToolCall
+from core.runtime.types import AgentTool, AgentToolContext, RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
-from tools.registered_tool import RegisteredTool
 from tools.utils.integration_sources import availability_view
 
 logger = logging.getLogger(__name__)
@@ -20,11 +21,12 @@ _UNSET: object = object()  # sentinel distinguishing "not yet started" from a No
 
 def execute_tools(
     tool_calls: list[ToolCall],
-    tools: list[RegisteredTool],
+    tools: Sequence[RuntimeTool],
     resolved_integrations: dict[str, Any],
 ) -> list[Any]:
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
+    agent_tool_context = AgentToolContext(resolved_integrations=resolved_integrations)
 
     def _call(tc: ToolCall) -> Any:
         tool = tool_map.get(tc.name)
@@ -34,6 +36,8 @@ def execute_tools(
             validation_error = tool.validate_public_input(tc.input)
             if validation_error:
                 return {"error": validation_error}
+            if isinstance(tool, AgentTool):
+                return tool.execute(tc.input, agent_tool_context)
             injected = tool.extract_params(tool_sources)
             kwargs = {**injected, **tc.input}
             return tool.run(**kwargs)
@@ -41,8 +45,8 @@ def execute_tools(
             logger.warning("[tool:%s] failed: %s", tc.name, exc)
             return {"error": str(exc)}
 
-    if len(tool_calls) == 1:
-        return [_call(tool_calls[0])]
+    if len(tool_calls) == 1 or _requires_sequential_execution(tool_calls, tool_map):
+        return [_call(tc) for tc in tool_calls]
 
     results: list[Any] = [_UNSET] * len(tool_calls)
     submitted: dict[
@@ -72,6 +76,17 @@ def execute_tools(
     return results
 
 
+def _requires_sequential_execution(
+    tool_calls: list[ToolCall],
+    tool_map: dict[str, RuntimeTool],
+) -> bool:
+    for tc in tool_calls:
+        tool = tool_map.get(tc.name)
+        if isinstance(tool, AgentTool) and not tool.parallel_safe:
+            return True
+    return False
+
+
 def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     redacted = redact_sensitive(value)
     return {
@@ -81,7 +96,7 @@ def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def tool_source(tools: list[RegisteredTool], tool_name: str) -> str:
+def tool_source(tools: Sequence[RuntimeTool], tool_name: str) -> str:
     for tool in tools:
         if tool.name == tool_name:
             return str(tool.source)

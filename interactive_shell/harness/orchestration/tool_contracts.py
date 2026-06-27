@@ -8,6 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.runtime.types import AgentTool, AgentToolContext
 from interactive_shell.harness.orchestration.execution_tier import (
     ExecutionTier,
 )
@@ -45,6 +46,28 @@ class ToolEntry:
     # explicit, tested code paths.
     is_available: ToolAvailability = _tool_is_available
     is_planner_selectable: ToolAvailability = _tool_is_available
+
+    @property
+    def public_input_schema(self) -> dict[str, Any]:
+        return self.input_schema
+
+    def to_agent_tool(self, ctx: ToolContext) -> AgentTool:
+        """Bind this shell action tool to a REPL turn context."""
+
+        def _execute(args: dict[str, Any], _agent_ctx: AgentToolContext) -> dict[str, Any]:
+            if getattr(ctx.console, "cancel_requested", False):
+                ctx.console.print("[dim](remaining actions cancelled)[/]")
+                return {"ok": False, "cancelled": True}
+            return {"ok": bool(self.execute(args, ctx))}
+
+        return AgentTool(
+            name=self.name,
+            description=self.description,
+            input_schema=self.input_schema,
+            execute=_execute,
+            source="interactive_shell",
+            parallel_safe=False,
+        )
 
 
 def string_property(

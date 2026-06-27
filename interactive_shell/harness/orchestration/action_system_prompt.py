@@ -1,4 +1,4 @@
-"""LLM action-planner system prompt text."""
+"""Shell action-agent system prompt text."""
 
 from __future__ import annotations
 
@@ -141,9 +141,12 @@ just proposed. Resolve the referent against the assistant's previous reply:
 
 If the user asks for a slash action and then asks to investigate/send quoted
 follow-up text (for example: connect with /remote and then investigate "hello world"),
-emit TWO actions in order:
+emit TWO actions in the SAME planner response, in order:
 1) slash_invoke for the slash command
 2) investigation_start with alert_text set to the quoted follow-up text.
+Do not stop after the slash command, do not wait for the slash command output,
+and do not replace the second action with a slash subcommand unless the user
+explicitly typed that slash subcommand.
 
 Example mapping for sequence + sample alert:
 - Input: "run /health and then kick off a sample alert investigation"

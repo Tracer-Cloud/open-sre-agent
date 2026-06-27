@@ -1,11 +1,4 @@
-"""Tests for terminal action execution in the interactive terminal assistant.
-
-The regex-based natural-language intent inference and deterministic action
-mapping have been removed; the LLM action planner is now the sole tool selector
-for non-command turns. These tests validate action *execution* mechanics, so the
-autouse fixture injects a deterministic fake planner that maps the exact
-natural-language phrases used here to explicit ``PlannedAction`` plans.
-"""
+"""Tests for terminal action execution in the interactive terminal assistant."""
 
 from __future__ import annotations
 
@@ -26,6 +19,7 @@ import interactive_shell.harness.orchestration.agent_actions as agent_actions
 import interactive_shell.harness.orchestration.tools.implementation_tool as implementation_tool
 import interactive_shell.harness.orchestration.tools.llm_provider_tool as llm_provider_tool
 import interactive_shell.harness.orchestration.tools.slash_tool as slash_tool
+from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from interactive_shell.harness.orchestration import (
     intent_parser as intent_parser_module,
 )
@@ -34,14 +28,17 @@ from interactive_shell.harness.orchestration.interaction_models import (
     PlannedAction,
     default_target_surface,
 )
-from interactive_shell.harness.orchestration.llm_action_planner import (
-    LlmActionPlanResult,
+from interactive_shell.harness.orchestration.tool_registry import (
+    ACTION_KIND_TO_TOOL,
+)
+from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
+    FakeActionLLM,
 )
 from interactive_shell.runtime.core.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 
-_PLANNER_RESULT_PATCH = (
-    "interactive_shell.harness.orchestration.terminal_actions.planning.plan_actions_with_llm_result"
+_ACTION_LLM_FACTORY_PATCH = (
+    "interactive_shell.harness.orchestration.agent_actions._default_llm_factory"
 )
 
 
@@ -68,6 +65,77 @@ def _action(
     )
 
 
+def _tool_args_for_action(action: PlannedAction) -> dict[str, object]:
+    if action.args:
+        return dict(action.args)
+    content = action.content.strip()
+    if action.kind == "slash":
+        parts = content.split()
+        return {
+            "command": parts[0] if parts else "",
+            "args": parts[1:] if len(parts) > 1 else [],
+        }
+    if action.kind == "llm_provider":
+        return {"target": content}
+    if action.kind == "shell":
+        return {"command": content}
+    if action.kind == "sample_alert":
+        return {"template": content}
+    if action.kind == "investigation":
+        return {"alert_text": content}
+    if action.kind == "synthetic_test":
+        suite, _sep, scenario = content.partition(":")
+        return {"suite": suite, "scenario": scenario}
+    if action.kind == "task_cancel":
+        return {"target": content}
+    if action.kind == "cli_command":
+        return {"payload": content}
+    if action.kind == "implementation":
+        return {"task": content}
+    return {"content": content}
+
+
+def _response_from_actions(actions: list[PlannedAction]) -> AgentLLMResponse:
+    return AgentLLMResponse(
+        content="",
+        tool_calls=[
+            ToolCall(
+                id=f"call_{index}",
+                name=ACTION_KIND_TO_TOOL[action.kind],
+                input=_tool_args_for_action(action),
+            )
+            for index, action in enumerate(actions)
+        ],
+        raw_content=None,
+    )
+
+
+def _message_from_agent_prompt(messages: list[dict[str, object]]) -> str:
+    raw = str(messages[-1].get("content", "")) if messages else ""
+    prefix = "USER MESSAGE (literal): <<<"
+    suffix = ">>>"
+    if raw.startswith(prefix) and raw.endswith(suffix):
+        return raw[len(prefix) : -len(suffix)]
+    return raw
+
+
+class _MessageMappedActionLLM(FakeActionLLM):
+    def __init__(self) -> None:
+        super().__init__([])
+
+    def invoke(
+        self,
+        messages: list[dict[str, object]],
+        *,
+        system: str | None = None,  # noqa: ARG002
+        tools: list[dict[str, object]] | None = None,  # noqa: ARG002
+    ) -> AgentLLMResponse:
+        self.invocations += 1
+        message = _message_from_agent_prompt(messages)
+        actions, _has_unhandled = _FAKE_PLANS.get(message, ([], False))
+        return _response_from_actions(list(actions))
+
+
 _NITRO_PROMPT = (
     "I want to deploy OpenSRE on a remote EC2 Nitro instance, and then I want to send\n"
     'it an investigation. Can you please deploy the instance and send it "hello world"?'
@@ -78,8 +146,8 @@ _NITRO_PROMPT = (
 # fake LLM planner. Reconstructed from each execution test's own assertions and the
 # documented phrase mappings of the (now-removed) deterministic mapper.
 #
-# Semantics enforced by terminal_actions.planning.plan_actions (v0.1 has NO
-# planning-stage fail-closed denial — every terminal action is read-only):
+# Semantics enforced by the action-agent path (v0.1 has NO planning-stage
+# fail-closed denial — every terminal action is read-only):
 #   - ([], *)                -> fall through to chat (handled is False, no history).
 #   - ([...], *)             -> execute the listed (non-handoff) actions; the
 #                               has_unhandled flag is ignored, so an unmapped clause
@@ -177,42 +245,17 @@ _FAKE_PLANS: dict[str, tuple[list[PlannedAction], bool]] = {
 }
 
 
-def _llm_plan_result(
+def _llm_response(
     actions: list[PlannedAction],
     *,
-    has_unhandled: bool = False,
-    policy_trace: tuple[str, ...] = ("fake_planner",),
-) -> LlmActionPlanResult:
-    return LlmActionPlanResult(
-        actions=tuple(actions),
-        has_unhandled_clause=has_unhandled,
-        policy_trace=policy_trace,
-    )
-
-
-def _fake_planner_result(
-    message: str,
-    *,
-    session: ReplSession | None = None,  # noqa: ARG001
-) -> LlmActionPlanResult:
-    actions, has_unhandled = _FAKE_PLANS.get(message, ([], False))
-    return _llm_plan_result(list(actions), has_unhandled=has_unhandled)
+    has_unhandled: bool = False,  # noqa: ARG001
+) -> AgentLLMResponse:
+    return _response_from_actions(actions)
 
 
 @pytest.fixture(autouse=True)
 def _llm_planner_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Install a deterministic fake LLM planner for execution-mechanics tests.
-
-    The regex/deterministic mapper has been removed; the LLM action planner is
-    now the sole tool selector for non-command turns. Most tests in this file
-    validate action *execution* mechanics, not planner quality, so they use a
-    stable fake planner that looks up explicit ``PlannedAction`` plans by the
-    exact message string. Unknown phrases fall through with ``([], False)``.
-
-    Per-test overrides of ``plan_actions_with_llm_result`` run after this
-    autouse fixture, so those tests still win.
-    """
-    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _fake_planner_result)
+    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _MessageMappedActionLLM)
 
 
 def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) -> None:
@@ -410,15 +453,19 @@ def test_execute_cli_actions_sets_bare_model_for_active_provider(
     reasoning_models: list[str] = []
 
     monkeypatch.setattr(
-        _PLANNER_RESULT_PATCH,
-        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM(
             [
-                PlannedAction(
-                    kind="llm_provider",
-                    content="gpt-5.5",
-                    position=0,
-                    source="llm",
-                    target_surface="slash",
+                _llm_response(
+                    [
+                        PlannedAction(
+                            kind="llm_provider",
+                            content="gpt-5.5",
+                            position=0,
+                            source="llm",
+                            target_surface="slash",
+                        )
+                    ]
                 )
             ]
         ),
@@ -1288,35 +1335,33 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
     assert captured_executed == [(1, 1, 1)]
 
 
-def test_execute_cli_actions_falls_through_when_llm_plan_is_unavailable(
+def test_execute_cli_actions_persists_action_agent_llm_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        _PLANNER_RESULT_PATCH,
-        lambda _message, *, session=None: None,  # noqa: ARG005
-    )
+    def _raise() -> object:
+        raise RuntimeError("action agent unavailable")
+
+    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _raise)
 
     session = ReplSession()
     console, buf = _capture()
     handled = agent_actions.execute_cli_actions("check health", session, console)
 
-    # Planner unavailable now hands off to the conversational assistant rather
-    # than denying the turn (no planning-stage fail-closed in v0.1).
-    assert handled.handled is False
-    assert session.history == []
+    assert handled.handled is True
+    assert handled.has_unhandled_clause is True
+    assert session.history == [{"type": "cli_agent", "text": "check health", "ok": False}]
+    assert session.cli_agent_messages[-1] == ("assistant", "action agent unavailable")
     output = buf.getvalue()
     assert "couldn't safely decide actions" not in output.lower()
+    assert "action agent unavailable" in output
 
 
 def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        _PLANNER_RESULT_PATCH,
-        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
-            [_action("slash", "/health")],
-            has_unhandled=True,
-        ),
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM([_llm_response([_action("slash", "/health")], has_unhandled=True)]),
     )
 
     def _fake_dispatch(
@@ -1360,17 +1405,17 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
     assert captured_executed == [(1, 1, 1)]
 
 
-def test_execute_cli_actions_bang_prefix_runs_only_after_llm_plans_shell(
+def test_execute_cli_actions_bang_prefix_uses_only_explicit_shell_escape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Bare !cmd input still goes through the LLM planner before shell execution."""
+    """Bare !cmd input is the only direct shell AgentTool escape."""
     llm_called: list[str] = []
 
-    def _planner(message: str, *, session: object = None) -> LlmActionPlanResult:  # noqa: ARG001
-        llm_called.append(message)
-        return _llm_plan_result([_action("shell", "!curl wttr.in/London")])
+    def _fail_if_called() -> None:  # pragma: no cover
+        llm_called.append("called")
+        raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _planner)
+    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
 
     calls: list[tuple[str, dict[str, object]]] = []
 
@@ -1387,7 +1432,7 @@ def test_execute_cli_actions_bang_prefix_runs_only_after_llm_plans_shell(
     handled = agent_actions.execute_cli_actions("!curl\n      wttr.in/London", session, console)
 
     assert handled.handled is True
-    assert llm_called == ["!curl\n      wttr.in/London"]
+    assert llm_called == []
     assert session.history[-1] == {"type": "shell", "text": "!curl wttr.in/London", "ok": True}
     # The executor strips `!` and runs with shell=True.
     assert calls[0][0] == "curl wttr.in/London"
@@ -1398,14 +1443,14 @@ def test_execute_cli_actions_bang_prefix_runs_only_after_llm_plans_shell(
 def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Single-line !cmd shell execution is planner-owned, not a deterministic bypass."""
+    """Single-line !cmd shell execution uses the explicit shell escape."""
     llm_called: list[str] = []
 
-    def _planner(message: str, *, session: object = None) -> LlmActionPlanResult:  # noqa: ARG001
-        llm_called.append(message)
-        return _llm_plan_result([_action("shell", "!echo hello world")])
+    def _fail_if_called() -> None:  # pragma: no cover
+        llm_called.append("called")
+        raise AssertionError("LLM planner must not be called for !cmd input")
 
-    monkeypatch.setattr(_PLANNER_RESULT_PATCH, _planner)
+    monkeypatch.setattr(_ACTION_LLM_FACTORY_PATCH, _fail_if_called)
 
     calls: list[tuple[str, dict[str, object]]] = []
 
@@ -1421,7 +1466,7 @@ def test_execute_cli_actions_bang_prefix_single_line_dispatches_to_shell(
     handled = agent_actions.execute_cli_actions("!echo hello world", session, console)
 
     assert handled.handled is True
-    assert llm_called == ["!echo hello world"]
+    assert llm_called == []
     assert session.history[-1] == {"type": "shell", "text": "!echo hello world", "ok": True}
     assert calls[0][0] == "echo hello world"
     assert calls[0][1]["shell"] is True
@@ -1432,19 +1477,23 @@ def test_execute_cli_actions_handoff_only_plan_falls_through_silently(
 ) -> None:
     """A pure assistant_handoff LLM plan must not print a 'Requested actions' header.
 
-    Regression: when the planner returned only assistant_handoff, _execute_planned_actions
+    Regression: when the planner returned only assistant_handoff, action execution
     was called and printed '● assistant / Requested actions: 1. assistant handoff [reason]'
     before the real LLM reply ran.  The user saw two assistant headers and internal
     planner reasoning that should have been invisible.
     """
     monkeypatch.setattr(
-        _PLANNER_RESULT_PATCH,
-        lambda _message, *, session=None: _llm_plan_result(  # noqa: ARG005
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM(
             [
-                PlannedAction(
-                    kind="assistant_handoff",
-                    content="informational question about current model",
-                    position=0,
+                _llm_response(
+                    [
+                        PlannedAction(
+                            kind="assistant_handoff",
+                            content="informational question about current model",
+                            position=0,
+                        )
+                    ]
                 )
             ]
         ),

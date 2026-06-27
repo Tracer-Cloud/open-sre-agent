@@ -7,14 +7,9 @@ import io
 import pytest
 from rich.console import Console
 
+from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from interactive_shell.harness.orchestration.agent_actions import (
     TerminalActionExecutionResult,
-)
-from interactive_shell.harness.orchestration.interaction_models import (
-    PlannedAction,
-)
-from interactive_shell.harness.orchestration.llm_action_planner import (
-    LlmActionPlanResult,
 )
 from interactive_shell.harness.orchestration.tools import (
     investigation_tool as _investigation_tool,
@@ -23,6 +18,9 @@ from interactive_shell.harness.orchestration.tools import (
     slash_tool as _slash_tool,
 )
 from interactive_shell.harness.pipeline import handle_message_with_agent
+from interactive_shell.harness.tests.orchestration.action_execution_test_harness import (
+    FakeActionLLM,
+)
 from interactive_shell.runtime.core.session import ReplSession
 from interactive_shell.runtime.utils import input_policy as loop_input_policy
 
@@ -236,15 +234,26 @@ def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigati
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "interactive_shell.harness.orchestration"
-        ".terminal_actions.planning.plan_actions_with_llm_result",
-        lambda _message, *, session=None: LlmActionPlanResult(  # noqa: ARG005
-            actions=(
-                PlannedAction(kind="slash", content="/remote", position=0),
-                PlannedAction(kind="investigation", content="hello world", position=1),
-            ),
-            has_unhandled_clause=False,
-            policy_trace=("fake_planner",),
+        "interactive_shell.harness.orchestration.agent_actions._default_llm_factory",
+        lambda: FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="call_remote",
+                            name="slash_invoke",
+                            input={"command": "/remote", "args": []},
+                        ),
+                        ToolCall(
+                            id="call_investigate",
+                            name="investigation_start",
+                            input={"alert_text": "hello world"},
+                        ),
+                    ],
+                    raw_content=None,
+                )
+            ]
         ),
     )
     monkeypatch.setattr(_slash_tool, "dispatch_slash", _fake_dispatch)

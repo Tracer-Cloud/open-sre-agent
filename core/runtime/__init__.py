@@ -32,10 +32,15 @@ from core.runtime.messages import (
     build_synthetic_assistant_tool_call_message,
     build_tool_result_messages,
 )
+from core.runtime.types import AgentTool, AgentToolContext, AgentToolExecutor, RuntimeTool
 
 __all__ = [
+    "AgentTool",
+    "AgentToolContext",
+    "AgentToolExecutor",
     "LoopEventCallback",
     "LLMInvokeFailure",
+    "RuntimeTool",
     "ToolLoopResult",
     "build_assistant_message",
     "build_synthetic_assistant_tool_call_message",

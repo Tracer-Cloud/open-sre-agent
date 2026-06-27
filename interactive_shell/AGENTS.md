@@ -104,32 +104,37 @@ owning area rather than adding more logic to the caller.
   prompt buffer, causing garbage like `^[[60;1R` to appear.
   **Any command that calls `print_repl_table` (directly or via `render_table` /
   `render_integrations_table` / `render_models_table` / etc.) must be added to
-  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/dispatch.py`.** That makes the main
+  `_EXCLUSIVE_STDIN_MENU_COMMANDS` in `runtime/utils/input_policy.py`.** That makes the main
   loop call `await state.queue.join()`, blocking the next prompt until dispatch
   completes and both drain cycles clean up stale CPR bytes before the next
   `prompt_async()` starts.
   - **How to check:** after adding a command, run it in the REPL and type a few
     characters in the next prompt. If no `^[[…R` garbage appears, the registration
     is correct.
-  - **Agent-planned (LLM) interactive commands:** `_EXCLUSIVE_STDIN_MENU_COMMANDS`
+  - **Agent-selected interactive commands:** `_EXCLUSIVE_STDIN_MENU_COMMANDS`
     only reserves stdin for literal command text that
     `deterministic_command_text` can normalize. When free text like
-    "remove github" is resolved by the action planner into an inline-picker
+    "remove github" is resolved by the action agent into an inline-picker
     command (`/integrations remove`, `/integrations setup`, `/mcp connect`,
     `/mcp disconnect`, or a bare `/integrations` / `/mcp` menu), the loop has not
     reserved stdin, so `slash_tool.py` must NOT run the picker inline. It defers
     via `session.queue_auto_command(...)`, which re-submits the command as
     literal command text so the loop can reserve exclusive stdin before the
-    agent path runs it. New raw-stdin picker/wizard commands the planner can emit
+    agent path runs it. New raw-stdin picker/wizard commands the action agent can emit
     must be added to
     `_INTERACTIVE_PICKER_MENUS` / `_INTERACTIVE_PICKER_SUBCOMMANDS` in
     `orchestration/tools/slash_tool.py`.
 
-## Action Planning And Execution
+## Action Selection And Execution
 
+- **Hard boundary:** do not add regex/keyword/fuzzy intent routing, literal
+  slash-command action shortcuts, or any deterministic action path that bypasses
+  the action agent. Engineers have been fired before for implementing this
+  exact shortcut. This includes "safe" looking mappings like "show integrations"
+  -> `/integrations` or direct `/status` dispatch inside the agent turn.
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
-  action planner never denies a turn. Because every terminal action is read-only,
-  an unmatched/ambiguous/chatty clause is not a safety risk — the planner executes
+  action agent never denies a turn. Because every terminal action is read-only,
+  an unmatched/ambiguous/chatty clause is not a safety risk — the agent executes
   the clauses it can map and lets the rest fall through to the conversational
   assistant. We removed the `denied` decision path, the `mark_unhandled` planner
   tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
@@ -139,8 +144,8 @@ owning area rather than adding more logic to the caller.
   mutating actions are ever introduced, gate them with the
   execution-stage confirmation policy (`orchestration/execution_policy.py`), not a
   planner-stage denial.
-- Keep deterministic command detection in `orchestration/`; use the LLM planner
-  for natural-language action selection.
+- Keep deterministic command detection in `orchestration/` for terminal UI
+  policy only; use the action agent for slash/tool action selection.
 - Send uncertainty to a safe surface: help/chat or a clarification, not direct
   mutation or shell execution.
 - LLM-generated text must never execute directly. Convert proposed actions into

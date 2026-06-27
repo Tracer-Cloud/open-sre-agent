@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import pytest
@@ -19,6 +19,7 @@ from rich.console import Console
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
 
+from interactive_shell.harness.orchestration.tool_contracts import ToolExecutor
 from interactive_shell.harness.orchestration.tool_registry import (
     ACTION_KIND_TO_TOOL,
     REGISTRY,
@@ -334,17 +335,33 @@ def patch_execution_boundary(
 
     tool_to_kind = {tool: kind for kind, tool in ACTION_KIND_TO_TOOL.items()}
 
-    def _fake_dispatch(*, tool_name: str, args: dict[str, Any], ctx: Any) -> bool:
-        kind = tool_to_kind.get(tool_name)
-        if kind is None:
-            return False
-        if kind == "assistant_handoff":
+    def _make_fake_execute(tool_name: str) -> ToolExecutor:
+        def _fake_execute(args: dict[str, Any], ctx: Any) -> bool:
+            kind = tool_to_kind.get(tool_name)
+            if kind is None:
+                return False
+            if kind == "assistant_handoff":
+                return True
+            action_data = dict(args)
+            _record_and_print(kind=kind, action=action_data, ctx=ctx)
             return True
-        action_data = dict(args)
-        _record_and_print(kind=kind, action=action_data, ctx=ctx)
-        return True
 
-    monkeypatch.setattr(REGISTRY, "dispatch", _fake_dispatch)
+        return _fake_execute
+
+    # The live oracle must patch the same first-class ToolEntry execution
+    # boundary that production turns use. Do not resurrect a registry-level
+    # dispatch method here; that would bypass the shared AgentTool harness this
+    # PR is meant to validate.
+    registry_tools = REGISTRY._tools  # noqa: SLF001
+    for tool_name in REGISTRY.names():
+        entry = REGISTRY.get(tool_name)
+        if entry is None:
+            continue
+        monkeypatch.setitem(
+            registry_tools,
+            tool_name,
+            replace(entry, execute=_make_fake_execute(tool_name)),
+        )
 
 
 def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> OracleRunResult:
@@ -441,7 +458,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
             passed = False
     # Always enforce the response contract against actual runtime output;
     # there is no bypass for handoff-only runs. The oracle captures real console
-    # output including any text printed by _execute_planned_actions, so
+    # output including text printed by the action-agent execution path, so
     # must_contain_any / must_contain_all must match what the runtime actually
     # emitted. (There is no planning-stage fail-closed denial in v0.1.)
     if not any_match:

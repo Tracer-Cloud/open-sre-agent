@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,8 +14,8 @@ from core.runtime.context_budget import (
 from core.runtime.execution import execute_tools, public_tool_input
 from core.runtime.llm.agent_llm_client import ToolCall
 from core.runtime.messages import build_assistant_message, build_tool_result_messages
+from core.runtime.types import RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
-from tools.registered_tool import RegisteredTool
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def run_tool_calling_loop(
     llm: Any,
     system: str,
     messages: list[dict[str, Any]],
-    tools: list[RegisteredTool],
+    tools: Sequence[RuntimeTool],
     resolved_integrations: dict[str, Any],
     max_iterations: int,
     on_event: LoopEventCallback | None = None,
@@ -71,7 +71,8 @@ def run_tool_calling_loop(
             except Exception:  # noqa: BLE001 — event rendering must never break the loop
                 logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)
 
-    tool_schemas = llm.tool_schemas(tools)
+    runtime_tools = list(tools)
+    tool_schemas = llm.tool_schemas(runtime_tools)
     ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
     executed: list[tuple[ToolCall, Any]] = []
     final_text = ""
@@ -93,7 +94,7 @@ def run_tool_calling_loop(
                 "tool_start", {"id": tc.id, "name": tc.name, "input": public_tool_input(tc.input)}
             )
 
-        results = execute_tools(response.tool_calls, tools, resolved_integrations)
+        results = execute_tools(response.tool_calls, runtime_tools, resolved_integrations)
         messages.extend(build_tool_result_messages(llm, response.tool_calls, results))
 
         for tc, output in zip(response.tool_calls, results):

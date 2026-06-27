@@ -348,7 +348,7 @@
       ok: true
 
 # A bare incident description (no explicit "investigate") is an assistant_handoff,
-# consistent with new_alert_checkout_502_rate. The planner LLM is the sole tool
+# consistent with new_alert_checkout_502_rate. The action agent is the sole tool
 # selector and the system prompt sends incident descriptions to the assistant
 # unless the user explicitly asks to investigate; there is no regex override that
 # upgrades cpu/spiking pastes to an investigation.

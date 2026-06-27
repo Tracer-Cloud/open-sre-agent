@@ -185,6 +185,11 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 - External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
 - Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
   location. Update callers to the canonical module and delete the old path.
+- Interactive-shell action selection: do not implement regex/keyword/fuzzy
+  intent routing, literal slash-command shortcuts, or deterministic action
+  bypasses around the action-agent AgentTool path. Engineers have been fired
+  before for implementing this exact shortcut. `deterministic_command_text` is
+  terminal UI policy only, not an execution path.
 
 ## 6. New Integration Checklist
 

@@ -69,13 +69,13 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   been dropped from the schema and every fixture. `title` and `notes` remain as
   human-only documentation.
 - **`available_capabilities` is a three-state, production-faithful knob.** It
-  constrains which planner tools the live oracle offers. Its default mirrors
+  constrains which shell action tools the live oracle offers. Its default mirrors
   production: `ReplSession()` carries no capability constraints, so every tool is
   enabled. For each surface (`slash_commands`, `cli_commands`, `synthetic_suites`):
   - **omit the key (or omit the whole block)** → the tool stays enabled (the
     production default). This is the right choice for almost every scenario.
   - **explicit empty list `[]`** → the tool is explicitly disabled (hidden from
-    the planner specs and blocked at dispatch). Use only when a scenario genuinely
+    the action-agent tool set and blocked at execution). Use only when a scenario genuinely
     needs that surface off to test a specific path.
   - **non-empty list** → an allowlist: the tool is enabled and the action
     normalizer drops proposed actions outside the list.
@@ -97,37 +97,43 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
 
 ## Important Turn-Handling Decisions (locked)
 
+- **Employment-impacting rule:** do not implement regex, keyword, fuzzy,
+  literal-slash, or "obvious intent" shortcuts that bypass the action agent.
+  Engineers have been fired before for adding exactly this kind of shortcut.
+  Treat this as a hard architectural boundary, not a style preference.
 - There is no top-level classifier: every turn is handed to
   `handle_message_with_agent`. Do **not** add command/slash/help/alert branches
   or any other top-level phases before the agent.
-- There is no deterministic command-dispatch fast path in
-  `handle_message_with_agent`. Every turn enters the agent pipeline; slash
-  command execution belongs to the planner/tool path (`slash_invoke`) rather than
-  a pre-agent dispatcher.
-- The runtime (`runtime/dispatch.py`) may reuse
-  `orchestration.command_dispatch.deterministic_command_text` for terminal-UI concerns only
-  (spinner suppression and exclusive-stdin gating). This is a presentation
-  concern and must not re-introduce a pre-agent branch.
+- There is no pre-agent command dispatcher in `handle_message_with_agent`.
+  Every turn enters the agent pipeline; slash command execution belongs to the
+  action-agent tool path (`slash_invoke`) rather than a pre-agent dispatcher or
+  deterministic action shortcut.
+- The runtime (`runtime/utils/input_policy.py`) may reuse
+  `orchestration.command_dispatch.deterministic_command_text` for terminal-UI
+  concerns only (spinner suppression and exclusive-stdin gating). It must not
+  grow into natural-language intent inference or an action-execution shortcut.
 - Regex fallback has been intentionally removed. Do **not**
   re-introduce legacy regex fallback phases
-  unless there is an explicit product decision to restore them.
-- **The LLM action planner is the sole tool selector for non-command turns.**
+  unless there is an explicit product decision to restore them. A product
+  decision still requires changing this AGENTS guidance in the same PR; do not
+  sneak a regex or slash short-circuit in as a "small fix."
+- **The shell action agent is the sole tool selector for non-command turns.**
   There is no regex/keyword intent inference and no deterministic
   natural-language → action mapping in `orchestration/`. The former
   `slash_commands/deterministic_action_mapper.py`, `intent_parser` regex
   patterns/extractors, and the regex planner postprocessing overrides were
   removed. Do **not** reintroduce them: change tool selection by editing the
-  planner system prompt (`llm_action_planner/constants.py`) and the per-tool
+  action-agent system prompt (`orchestration/action_system_prompt.py`) and the per-tool
   descriptions in `orchestration/tools/*`, never by adding pattern matching.
-  Tool-call argument *validation* (shape/availability checks in
-  `llm_action_planner/normalization.py` and `parsing.py`) is allowed; intent
-  *classification* by regex is not.
-- When the planner LLM is unavailable or the prompt overflows, hand off to the
-  conversational `assistant` — do not guess an action deterministically and do
-  **not** deny the turn.
+  Tool-call argument *validation* belongs to the first-class AgentTool runtime
+  contract and tool availability gates; intent *classification* by regex is not.
+- When the action-agent prompt overflows, hand off to the conversational
+  `assistant` rather than guessing an action. When the action-agent LLM itself
+  is unavailable, render and persist a failed assistant turn so `/resume` shows
+  the outage.
 - **No planning-stage fail-closed safeguard (v0.1).** There is no "I couldn't
   safely decide actions" denial. Every terminal action is read-only, so an
-  unmatched, ambiguous, or chatty clause never blocks a turn: the planner runs
+  unmatched, ambiguous, or chatty clause never blocks a turn: the action agent runs
   the clauses it can map and the rest fall through to the assistant. The former
   `denied` decision, the `mark_unhandled` planner tool, the `UNHANDLED:` text
   convention, and `render_plan_denied` were removed for this reason. Do **not**
@@ -138,7 +144,7 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   fields were removed (the oracle never asserted on them); the policy block now
   carries a single `executes_terminal_action` boolean. See the `Answer` and
   `AnswerPolicy` docstrings in `tests/scenario_loader.py` for the two execution
-  paths a turn can take (planner→dispatch vs conversational tool-gathering) and
+  paths a turn can take (action-agent tools vs conversational tool-gathering) and
   which fixture fields cover which.
 - Scenario fixtures use a single ``tool_actions`` list (not separate
   ``executed_actions`` / ``gathered_tools_contract`` blocks). Each entry has
@@ -147,8 +153,7 @@ parses only fields the runner asserts on. Do **not** re-add decorative metadata.
   ``valid_data``, ``valid_data_any``). Handoff-only prompts live under
   ``scenarios/chat_handoff/``; integration gather / live / terminal scenarios
   stay in ``complex_shell_prompts/``.
-- Preserve action-planning observability contracts used in tests:
-  planner trace semantics such as `cli_agent_action_plan`.
+- Preserve shell action observability contracts used in tests and analytics.
 
 ## Turn test execution requirements (locked)
 

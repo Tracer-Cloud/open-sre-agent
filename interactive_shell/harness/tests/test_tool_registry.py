@@ -144,15 +144,11 @@ def test_llm_set_provider_offered_by_default() -> None:
     assert "llm_set_provider" in names
 
 
-def test_registry_dispatch_blocks_unavailable_tool() -> None:
+def test_registry_agent_tools_exclude_unavailable_tool() -> None:
     session = ReplSession(available_capabilities={"slash_commands": ()})
     ctx = ToolContext(session=session, console=Console(force_terminal=False))
-    ok = REGISTRY.dispatch(
-        tool_name="slash_invoke",
-        args={"command": "/help", "args": []},
-        ctx=ctx,
-    )
-    assert ok is False
+    names = {tool.name for tool in REGISTRY.agent_tools_for_context(ctx)}
+    assert "slash_invoke" not in names
 
 
 def test_investigation_hidden_from_planner_when_loop_disabled(
@@ -189,3 +185,12 @@ def test_investigation_dispatch_not_gated_by_planner_selectability(
     session = ReplSession()
     assert entry.is_available(session) is True
     assert entry.is_planner_selectable(session) is False
+
+
+def test_investigation_tool_description_preserves_compound_slash_guidance() -> None:
+    entry = REGISTRY.get("investigation_start")
+    assert entry is not None
+    description = entry.description.lower()
+    assert "run /remote and then investigate" in description
+    assert "separate second tool call" in description
+    assert "never drop the quoted investigation" in description

@@ -128,13 +128,13 @@ class AnswerTurn:
 
 @dataclass(frozen=True)
 class AnswerPolicy:
-    """Execution expectation for the planner -> dispatch path only.
+    """Execution expectation for the action-agent tool path only.
 
     ``executes_terminal_action`` is true when the turn is expected to run at
-    least one planned terminal action through the action-tool dispatch gate
-    (``REGISTRY.dispatch``) -- a slash command, shell command, sample alert,
-    investigation start, synthetic run, etc. It is false for conversational
-    turns that answer in chat without dispatching a terminal action.
+    least one shell action AgentTool -- a slash command, shell command, sample
+    alert, investigation start, synthetic run, etc. It is false for
+    conversational turns that answer in chat without executing a terminal
+    action.
 
     This flag does NOT describe the conversational data-gathering path
     (``gather_tool_evidence``), where the assistant may query configured
@@ -189,12 +189,12 @@ class Answer:
     A turn can resolve down one of two independent execution paths, and these
     fields only describe the first:
 
-    1. Planner -> terminal action -> ``REGISTRY.dispatch`` (the "execution"
-       path). Covered by ``policy.executes_terminal_action``,
-       ``planned_actions``, and dispatch entries in ``tool_actions`` (``surface:
-       dispatch``). An empty ``planned_actions`` means the planner is expected to
-       hand the turn to the conversational assistant (an ``assistant_handoff``),
-       i.e. no terminal action runs.
+    1. Action agent -> AgentTool execution (the "execution" path). Covered by
+       ``policy.executes_terminal_action``, ``planned_actions``, and dispatch
+       entries in ``tool_actions`` (``surface: dispatch``). An empty
+       ``planned_actions`` means the action agent is expected to hand the turn to
+       the conversational assistant (an ``assistant_handoff``), i.e. no terminal
+       action runs.
 
     2. Conversational answer + ``gather_tool_evidence`` tool loop (the "chat"
        path). Assert gather behaviour via ``tool_actions`` entries with

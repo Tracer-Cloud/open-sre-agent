@@ -15,34 +15,35 @@ misclassifications (e.g. "investigate a sample test alert?" being treated as an
 informational question instead of running the sample alert), and they were a
 recurring source of precedence drift.
 
-## Decision (current): LLM is the sole tool selector
+## Decision (current): The shell action agent is the sole tool selector
 1. There is no regex/keyword intent inference. Non-command turns are
-   planned entirely by the LLM action planner via native tool-calling.
-2. Tool selection is driven by the planner system prompt
-   (`.../llm_action_planner/constants.py`) and the per-tool descriptions in the
-   tool catalog (`.../orchestration/tools/*`). Keep both precise — they are the
-   only selection signal.
-3. The planner does not post-hoc rewrite the model's actions. Parsed tool calls
-   are validated for argument shape and tool availability
-   (`.../llm_action_planner/normalization.py`, `parsing.py`) and otherwise used
-   as-is. `finalize_planner_result_with_trace` is a thin pass-through.
-4. When the planner LLM is unavailable or the prompt overflows the context
-   window, the turn fails closed to an `assistant_handoff` (conversational
-   reply) rather than guessing an action.
-5. The only deterministic, non-LLM path that remains is *literal* command
-   dispatch — `/slash` commands, bare command aliases (typo-tolerant), and
-   `opensre investigate` quick-starts — in
-   `command_dispatch/detection.py`. That layer must never infer intent from
-   natural language (see the hard rule in its module docstring).
+   selected entirely by the shell action agent via native tool-calling.
+2. Tool selection is driven by the action-agent system prompt
+   (`.../orchestration/action_system_prompt.py`) and the per-tool descriptions
+   in the tool catalog (`.../orchestration/tools/*`). Keep both precise — they
+   are the only selection signal.
+3. The action path does not post-hoc rewrite the model's tool calls. Tool calls
+   execute as first-class `AgentTool`s through the shared `core.runtime`
+   tool-calling loop; argument shape and availability are enforced by the
+   AgentTool runtime contract and per-tool gates.
+4. When the action-agent prompt overflows the context window, the turn falls
+   through to a conversational reply rather than guessing an action. When the
+   action-agent LLM itself is unavailable, the REPL renders and persists a
+   failed assistant turn so `/resume` can show the outage.
+5. `command_dispatch/detection.py` remains terminal-UI policy only: spinner
+   suppression and exclusive-stdin gating for literal command text. It must
+   never infer intent from natural language and must not become an action
+   execution shortcut.
 
 ## What this means for changes
-- To change how a phrasing maps to a tool, edit the planner system prompt and/or
+- To change how a phrasing maps to a tool, edit the action-agent system prompt and/or
   the relevant tool description — never add a regex.
 - To add a new tool, add it to the tool catalog with a clear, self-describing
-  `description` and `input_schema`; the planner selects it from that text.
+  `description` and `input_schema`; the action agent selects it from that text
+  and receives it as an AgentTool.
 - Live turn scenarios under
   `interactive_shell/harness/tests/scenarios/` are the regression
-  surface for planner behavior. Deterministic scenarios (`intent_class:
+  surface for action-agent behavior. Deterministic scenarios (`intent_class:
   deterministic`) assert literal command dispatch only.
 
 ## Original decision (historical, superseded)
@@ -68,8 +69,8 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    assistant prompt (`_build_environment_block` in
    `interactive_shell/chat/cli_agent.py`) lists the configured set as
    facts, letting the model answer directly when state is already known.
-2. LLM-driven discovery. The planner system prompt
-   (`.../llm_action_planner/constants.py`) lets the model, at its own
+2. LLM-driven discovery. The action-agent system prompt
+   (`.../orchestration/action_system_prompt.py`) lets the model, at its own
    discretion, emit a read-only discovery action (for example
    `slash_invoke("/integrations", ["list"])` or `["verify"]`) to discover the
    answer instead of deflecting. There is no keyword mapping for this — the LLM
@@ -77,14 +78,14 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    `execution_policy.py` (`resolve_slash_execution_tier`): `/integrations`
    (list/show) is `SAFE` and auto-runs, while `/integrations verify` is
    `ELEVATED` and prompts for confirmation. No fail-closed regex rule is
-   involved; the planner decides whether to emit a discovery action and the
+   involved; the action agent decides whether to emit a discovery action and the
    execution tier governs safety.
 
 ### Observe→answer summary loop
 
 Addendum — Jun 18, 2026.
 
-When the planner runs a read-only discovery command to answer a question (e.g.
+When the action agent runs a read-only discovery command to answer a question (e.g.
 the user asks "is sentry installed?" and the model runs `/integrations`), the
 raw command output (a verification table) is not a direct answer on its own.
 The pipeline now follows up with a short assistant pass that summarizes that
@@ -94,14 +95,14 @@ output:
    found on `session.last_command_observation`
    (`_record_integrations_observation` in
    `interactive_shell/command_registry/integrations.py`).
-2. `handle_message_with_agent` resets that field at the start of every planner
+2. `handle_message_with_agent` resets that field at the start of every action-agent
    turn and, when a discovery command produced an observation and succeeded,
    calls the conversational assistant with `tool_observation=...`
    (inside the handled-turn observation branch in `pipeline.py`). The assistant
    summarizes the output into a direct answer and is instructed not to emit
    further actions.
 
-This only fires when the planner/tool path executes a read-only discovery command
+This only fires when the action-agent tool path executes a read-only discovery command
 and records an observation. The pipeline no longer has a pre-agent deterministic
 dispatch branch.
 
@@ -138,8 +139,8 @@ command to run.
 
 Addendum — Jun 18, 2026.
 
-The second-phase action planner no longer denies a turn. Previously, any clause
-the planner could not map to an executable tool — flagged via the `mark_unhandled`
+The action agent does not deny a turn. Previously, any clause
+the old planner could not map to an executable tool — flagged via the `mark_unhandled`
 tool, an `UNHANDLED:` text marker, or an unavailable tool call — collapsed the
 whole turn into a hard denial that printed *"I couldn't safely decide actions for
 that request."* In practice this fired on legitimate input (most often a
@@ -148,22 +149,20 @@ conversational question that embedded a quoted, list-style directive such as
 producing a dead end with no safety benefit.
 
 Every terminal action in v0.1 is **read-only**, so an unmatched, ambiguous, or
-chatty clause is not a safety risk. The planner now:
+chatty clause is not a safety risk. The action agent now:
 
 - runs every clause it *can* map to an executable action, and
 - lets everything else fall through to the conversational assistant (or simply
   drops a chatty clause in a compound request).
 
 Removed as part of this change: the `denied` field on `ActionPlanningDecision`,
-`enforce_plan_fail_closed_policy` (replaced by `normalize_terminal_plan`, which
-only strips `assistant_handoff` markers), `render_plan_denied`, the
-`mark_unhandled` planner tool, and the `UNHANDLED:` convention. The
+`enforce_plan_fail_closed_policy`, `normalize_terminal_plan`, `render_plan_denied`,
+the `mark_unhandled` planner tool, and the `UNHANDLED:` convention. The
 `fail_closed`, `has_unhandled_clause`, and `turn.expected_signals` fields were
 also removed from turn scenario fixtures, since the oracle never asserted on
 them; the fixture `policy` block now carries a single `executes_terminal_action`
-`boolean` (true only when a planned terminal action is expected to run through
-the dispatch gate).
+`boolean` (true only when a shell action AgentTool is expected to run).
 
 If write/mutating actions are introduced later, gate them with the
 execution-stage confirmation policy (`orchestration/execution_policy.py`), **not**
-a planner-stage denial.
+an action-selection denial.

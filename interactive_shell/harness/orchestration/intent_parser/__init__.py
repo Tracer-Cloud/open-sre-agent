@@ -1,8 +1,8 @@
 """Structural text helpers shared by literal command detection and shell parsing.
 
 This package intentionally does NOT infer user intent from natural language.
-Tool/action selection is owned entirely by the LLM action planner (see
-``llm_action_planner``); the only logic kept here is:
+Tool/action selection is owned entirely by the shell action agent; the only logic
+kept here is:
 
 - ``normalize_intent_text`` / ``is_single_edit_typo`` — typo-tolerant matching
   of *literal* command aliases for deterministic command-text detection.

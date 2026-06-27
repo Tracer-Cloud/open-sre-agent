@@ -39,11 +39,12 @@ can fire:
 
 | Path | What it does | Oracle coverage |
 |---|---|---|
-| **Planner → `REGISTRY.dispatch`** | LLM proposes a terminal action (slash, investigation, shell, etc.); the oracle intercepts every call through `patch_execution_boundary` | **Fully observed and asserted** |
-| **`gather_tool_evidence` → `run_tool_calling_loop`** | A bounded ReAct loop queries registered tools (Sentry, GitHub, PostHog, etc.) to ground a conversational answer | **Completely unobserved** |
+| **Action agent → AgentTool execution** | LLM proposes shell action tool calls (slash, investigation, shell, etc.); the oracle observes the terminal side effects recorded by the action tools | **Fully observed and asserted** |
+| **`gather_tool_evidence` → shared runtime loop** | A bounded ReAct loop queries registered tools (Sentry, GitHub, PostHog, etc.) to ground a conversational answer | **Completely unobserved** |
 
-The oracle patches `REGISTRY.dispatch`. It does not patch `gather_tool_evidence`,
-`run_tool_calling_loop`, `_run_parallel`, or `_resolve_session_integrations`.
+The oracle observes the action-agent execution path. It does not patch
+`gather_tool_evidence`, the shared tool-gathering harness, or
+`_resolve_session_integrations`.
 Tool calls made during the gather pass are invisible to the test.
 
 ---

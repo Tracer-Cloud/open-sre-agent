@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 from typing import NotRequired, TypedDict, cast
 
 import pytest
+from rich.console import Console
 
+from core.runtime.llm.agent_llm_client import ToolCall
 from interactive_shell.command_registry import SLASH_COMMANDS
+from interactive_shell.harness.orchestration.action_prompt import (
+    build_action_system_prompt,
+    build_action_user_message,
+)
 from interactive_shell.harness.orchestration.command_dispatch import (
     deterministic_command_text,
 )
@@ -16,10 +23,13 @@ from interactive_shell.harness.orchestration.feature_flags import (
     investigation_loop_enabled,
 )
 from interactive_shell.harness.orchestration.interaction_models import (
-    PlannedAction,
+    ActionKind,
+    default_target_surface,
 )
-from interactive_shell.harness.orchestration.llm_action_planner import (
-    plan_actions_with_llm,
+from interactive_shell.harness.orchestration.tool_contracts import ToolContext
+from interactive_shell.harness.orchestration.tool_registry import (
+    ACTION_KIND_TO_TOOL,
+    REGISTRY,
 )
 from interactive_shell.harness.tests._ci_gates import (
     skip_investigation_loop_disabled,
@@ -62,6 +72,7 @@ _DETERMINISTIC_CASES = [
 _LIVE_CASES = iter_scenarios_for_shard(
     [case for case in _ALL_CASES if case.scenario.intent_class != "deterministic"]
 )
+_TOOL_TO_ACTION_KIND = {tool: kind for kind, tool in ACTION_KIND_TO_TOOL.items()}
 
 
 def _slash_content(command: str, args: list[str]) -> str:
@@ -114,37 +125,72 @@ def _skip_if_live_integrations_unavailable(case: ScenarioCase) -> None:
         )
 
 
-def _build_actual_action(action: PlannedAction) -> ExpectedAction:
+def _build_actual_action(action: ToolCall) -> ExpectedAction:
+    kind = _TOOL_TO_ACTION_KIND.get(action.name)
+    if kind is None:
+        msg = f"Unexpected action tool call: {action.name!r}"
+        raise AssertionError(msg)
+    typed_kind = cast(ActionKind, kind)
+    content = _content_from_tool_call(typed_kind, action.input)
     expected: ExpectedAction = {
-        "kind": action.kind,
-        "content": action.content,
-        "source": action.source,
-        "target_surface": action.target_surface or "",
+        "kind": typed_kind,
+        "content": content,
+        "source": "llm",
+        "target_surface": default_target_surface(typed_kind) or "",
     }
-    if action.kind == "slash":
-        parts = action.content.split()
-        command = parts[0] if parts else ""
-        args = parts[1:] if len(parts) > 1 else []
+    if typed_kind == "slash":
+        command = str(action.input.get("command", "")).strip()
+        raw_args = action.input.get("args", [])
+        args = [str(arg).strip() for arg in raw_args] if isinstance(raw_args, list) else []
         expected["command"] = command
         expected["args"] = args
-    elif action.kind == "cli_command":
-        expected["payload"] = action.content
-    elif action.kind == "synthetic_test":
-        suite, _sep, scenario = action.content.partition(":")
+    elif typed_kind == "cli_command":
+        expected["payload"] = content
+    elif typed_kind == "synthetic_test":
+        suite, _sep, scenario = content.partition(":")
         expected["suite"] = suite
         expected["scenario"] = scenario
-    elif action.kind == "sample_alert":
+    elif typed_kind == "sample_alert":
         # ``template`` is the tool's required arg; fixtures include it
         # alongside ``content`` for explicitness — mirror that shape.
-        template_value = action.args.get("template") if action.args else None
+        template_value = action.input.get("template")
         expected["template"] = (
-            str(template_value).strip() if isinstance(template_value, str) else action.content
+            str(template_value).strip() if isinstance(template_value, str) else content
         )
     return expected
 
 
+def _content_from_tool_call(kind: ActionKind, args: dict[str, object]) -> str:
+    if kind == "slash":
+        command = str(args.get("command", "")).strip()
+        raw_args = args.get("args", [])
+        parsed_args = [str(arg).strip() for arg in raw_args] if isinstance(raw_args, list) else []
+        return _slash_content(command, parsed_args)
+    if kind == "llm_provider":
+        return str(args.get("target", args.get("provider", ""))).strip()
+    if kind == "shell":
+        return str(args.get("command", "")).strip()
+    if kind == "sample_alert":
+        return str(args.get("template", "")).strip()
+    if kind == "investigation":
+        return str(args.get("alert_text", "")).strip()
+    if kind == "synthetic_test":
+        suite = str(args.get("suite", "")).strip()
+        scenario = str(args.get("scenario", "")).strip()
+        return f"{suite}:{scenario}" if scenario else suite
+    if kind == "task_cancel":
+        return str(args.get("target", "")).strip()
+    if kind == "cli_command":
+        return str(args.get("payload", "")).strip()
+    if kind == "implementation":
+        return str(args.get("task", "")).strip()
+    if kind == "assistant_handoff":
+        return str(args.get("content", "")).strip()
+    return ""
+
+
 def _action_match_view(action: ExpectedAction) -> ExpectedAction:
-    """Ignore action provenance; live tests assert behavior, not planner path."""
+    """Ignore action provenance; live tests assert behavior, not selector path."""
     return cast(
         ExpectedAction,
         {key: value for key, value in action.items() if key != "source"},
@@ -188,6 +234,39 @@ def _assert_planned_actions_match(
             )
             continue
         assert _action_match_view(actual) == _action_match_view(expected)
+
+
+def _expected_actions_are_assistant_handoff_only(
+    expected_actions: list[ExpectedAction],
+) -> bool:
+    return bool(expected_actions) and all(
+        str(action.get("kind", "")).strip() == "assistant_handoff" for action in expected_actions
+    )
+
+
+def _no_tool_response_is_handoff_equivalent(
+    actual_actions: list[ExpectedAction],
+    expected_actions: list[ExpectedAction],
+) -> bool:
+    # A planner that emits no action tool calls falls through to the conversational
+    # assistant. For live LLM planning tests, that is behaviorally equivalent to
+    # an assistant_handoff-only plan and avoids flaking on harmless provider
+    # differences. Executable expectations still require exact tool calls.
+    return not actual_actions and _expected_actions_are_assistant_handoff_only(expected_actions)
+
+
+def test_no_tool_response_equivalence_is_limited_to_assistant_handoff() -> None:
+    handoff_expected = cast(
+        "list[ExpectedAction]",
+        [{"kind": "assistant_handoff", "content": "answer from chat", "source": "llm"}],
+    )
+    slash_expected = cast(
+        "list[ExpectedAction]",
+        [{"kind": "slash", "content": "/health", "command": "/health", "args": []}],
+    )
+
+    assert _no_tool_response_is_handoff_equivalent([], handoff_expected)
+    assert not _no_tool_response_is_handoff_equivalent([], slash_expected)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
@@ -244,9 +323,17 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     prompt = case.scenario.input.prompt
     answer = case.answer
 
-    llm_plan = plan_actions_with_llm(prompt, session=session)
-    assert llm_plan is not None, "Live LLM action planner did not return a parseable plan."
-    actions, _has_unhandled = llm_plan
+    ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
+    tools = REGISTRY.agent_tools_for_context(ctx)
+    from core.runtime.llm import agent_llm_client
+
+    llm = agent_llm_client.get_agent_llm()
+    response = llm.invoke(
+        [{"role": "user", "content": build_action_user_message(prompt)}],
+        system=build_action_system_prompt(session),
+        tools=llm.tool_schemas(tools),
+    )
+    actions = response.tool_calls
     actual_actions = [_build_actual_action(action) for action in actions]
     expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
 
@@ -264,13 +351,16 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
                 msg = f"Fixture action {action_idx} content must match command+args."
                 raise AssertionError(msg)
 
-    handoff_only = bool(actions) and all(action.kind == "assistant_handoff" for action in actions)
+    handoff_only = bool(actions) and all(action.name == "assistant_handoff" for action in actions)
     # When the fixture specifies planned_actions: [] it means "no executable
     # action expected". A planner response that consists solely of
     # assistant_handoff actions is semantically equivalent and is accepted
     # without a mismatch assertion. Any other actual actions (slash, shell …)
     # with an empty fixture still fall through and fail the match.
-    if not expected_actions and handoff_only:
+    if (not expected_actions and handoff_only) or _no_tool_response_is_handoff_equivalent(
+        actual_actions,
+        expected_actions,
+    ):
         pass
     else:
         _assert_planned_actions_match(actual_actions, expected_actions)
