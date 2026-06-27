@@ -54,7 +54,11 @@ def run_shell_turn(context: ShellTurnContext, deps: ShellTurnDeps) -> ShellTurnR
         )
 
     if turn.handled and (turn.has_unhandled_clause or turn.executed_count > 0):
-        if command_observation and not turn.has_unhandled_clause and turn.executed_success_count > 0:
+        if (
+            command_observation
+            and not turn.has_unhandled_clause
+            and turn.executed_success_count > 0
+        ):
             with apply_reasoning_effort(session.reasoning_effort):
                 run = deps.answer_agent(
                     text,
