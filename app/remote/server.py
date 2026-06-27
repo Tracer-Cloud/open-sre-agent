@@ -21,6 +21,7 @@ import shutil
 import time
 import urllib.error
 import urllib.request
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
@@ -789,13 +790,24 @@ def _check_memory_health() -> DeepHealthCheck:
 
 
 def _make_id(alert_name: str) -> str:
+    """Build a unique investigation id.
+
+    The id keeps its sortable ``YYYYMMDD_HHMMSS_<slug>`` prefix (so ``GET
+    /investigations`` can list newest-first by filename and ``_id_to_iso`` can
+    recover the created-at timestamp) and appends 8 hex chars of randomness so
+    two investigations for the same alert name within the same second cannot
+    collide. Without the suffix, a re-fire from the Vercel poller (or two
+    concurrent ``/investigate`` calls) produced an identical id and
+    ``_save_investigation`` silently overwrote the earlier report.
+    """
     ts = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
     slug = _slugify(alert_name) or "investigation"
-    return f"{ts}_{slug}"
+    suffix = uuid.uuid4().hex[:8]
+    return f"{ts}_{slug}_{suffix}"
 
 
 def _id_to_iso(inv_id: str) -> str:
-    """Best-effort parse of ``YYYYMMDD_HHMMSS_slug`` into ISO 8601."""
+    """Best-effort parse of ``YYYYMMDD_HHMMSS_slug[_suffix]`` into ISO 8601."""
     try:
         date_part = inv_id[:15]  # YYYYMMDD_HHMMSS
         dt = datetime.strptime(date_part, "%Y%m%d_%H%M%S").replace(tzinfo=UTC)
@@ -834,7 +846,17 @@ def _save_investigation(
         f"## Problem Description\n{problem_md}\n"
     )
     path = _safe_investigation_path(inv_id)
-    path.write_text(md, encoding="utf-8")
+    # Atomic write: stage the report in a sibling temp file and rename it into
+    # place. A plain ``write_text`` truncates the destination first, so a crash
+    # (or a concurrent reader) could observe a partial or empty ``.md``.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(md, encoding="utf-8")
+        os.replace(tmp_path, path)
+    finally:
+        with suppress(FileNotFoundError):
+            tmp_path.unlink()
     return path
 
 

@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from app.remote.server import _make_id, _safe_investigation_path, _slugify
+from app.remote.server import (
+    _id_to_iso,
+    _make_id,
+    _safe_investigation_path,
+    _save_investigation,
+    _slugify,
+)
 
 
 def test_slugify_converts_text_to_url_safe_format() -> None:
@@ -41,9 +47,9 @@ def test_slugify_handles_whitespace_only() -> None:
 def test_make_id_generates_timestamp_with_slug() -> None:
     """Test that _make_id combines timestamp with slugified alert name."""
     result = _make_id("Database Connection Failed")
-    # Format: YYYYMMDD_HHMMSS_slug - verify the timestamp structure
+    # Format: YYYYMMDD_HHMMSS_slug_suffix - verify the timestamp structure
     parts = result.split("_")
-    assert len(parts) >= 3  # date, time, slug
+    assert len(parts) >= 3  # date, time, slug (slug may itself contain _)
     assert len(parts[0]) == 8  # YYYYMMDD
     assert parts[0].isdigit()
     assert len(parts[1]) == 6  # HHMMSS
@@ -54,25 +60,22 @@ def test_make_id_generates_timestamp_with_slug() -> None:
 def test_make_id_uses_investigation_fallback_for_empty_alert_name() -> None:
     """Test that empty alert name uses 'investigation' as fallback slug."""
     result = _make_id("")
-    # Format: YYYYMMDD_HHMMSS_investigation
+    # Format: YYYYMMDD_HHMMSS_investigation_<suffix>
+    assert "_investigation_" in result
     parts = result.split("_")
     assert len(parts) >= 3
     assert len(parts[0]) == 8 and parts[0].isdigit()
     assert len(parts[1]) == 6 and parts[1].isdigit()
-    assert result.endswith("_investigation")
-    # Ensure no trailing underscore before investigation
-    assert "_investigation" in result
 
 
 def test_make_id_uses_investigation_fallback_for_whitespace_only() -> None:
     """Test that whitespace-only alert name uses 'investigation' as fallback."""
     result = _make_id("   ")
+    assert "_investigation_" in result
     parts = result.split("_")
     assert len(parts) >= 3
     assert len(parts[0]) == 8 and parts[0].isdigit()
     assert len(parts[1]) == 6 and parts[1].isdigit()
-    assert result.endswith("_investigation")
-    assert "_investigation" in result
 
 
 def test_make_id_handles_special_characters_in_alert_name() -> None:
@@ -89,10 +92,32 @@ def test_make_id_truncates_long_slugs() -> None:
     """Test that very long alert names are truncated to 60 characters in slug."""
     long_name = "Error " * 50  # Creates a very long string
     result = _make_id(long_name)
-    parts = result.split("_", 2)  # Split into date, time, slug
-    slug = parts[2]
-    # Slug should be truncated to 60 chars
+    # Format is YYYYMMDD_HHMMSS_<slug>_<8-hex-suffix>; the slug is the middle.
+    parts = result.split("_", 2)  # date, time, "<slug>_<suffix>"
+    slug_with_suffix = parts[2]
+    # Drop the trailing "_<8 hex>" uniqueness suffix to measure the slug cap.
+    assert slug_with_suffix[-9] == "_"
+    slug = slug_with_suffix[:-9]
     assert len(slug) <= 60
+
+
+def test_make_id_appends_uniqueness_suffix() -> None:
+    """The id ends with 8 hex chars so same-second writes never collide."""
+    result = _make_id("High CPU")
+    suffix = result.split("_")[-1]
+    assert len(suffix) == 8
+    int(suffix, 16)  # raises if not hex
+
+
+def test_make_id_is_unique_across_same_second_calls() -> None:
+    """Regression: two ids for the same alert name must never be equal.
+
+    Previously the id was ``YYYYMMDD_HHMMSS_<slug>`` with no random component,
+    so back-to-back calls in the same second collided and the second
+    investigation silently overwrote the first persisted report.
+    """
+    ids = {_make_id("High CPU") for _ in range(1000)}
+    assert len(ids) == 1000
 
 
 def test_safe_investigation_path_accepts_valid_id() -> None:
@@ -172,3 +197,100 @@ def test_safe_investigation_path_rejects_single_dot() -> None:
     with pytest.raises(HTTPException) as exc_info:
         _safe_investigation_path(".")
     assert exc_info.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Investigation ID uniqueness + atomic persistence (regression coverage).
+# ---------------------------------------------------------------------------
+
+
+def _result(root_cause: str) -> dict[str, str]:
+    return {"root_cause": root_cause, "report": "r", "problem_md": "pm"}
+
+
+def test_save_investigation_does_not_overwrite_same_second_same_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    """Regression: two same-name investigations in the same second must both persist.
+
+    Before the uniqueness suffix, both calls produced an identical id and the
+    second ``_save_investigation`` silently overwrote the first ``.md``, losing
+    the earlier root cause. With the suffix each id maps to its own file.
+    """
+    from pathlib import Path
+
+    from app.remote import server as remote_server
+
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", Path(str(tmp_path)))
+
+    path_a = _save_investigation(
+        inv_id=remote_server._make_id("DB Down"),
+        alert_name="DB Down",
+        pipeline_name="p",
+        severity="high",
+        result=_result("root cause A"),
+    )
+    path_b = _save_investigation(
+        inv_id=remote_server._make_id("DB Down"),
+        alert_name="DB Down",
+        pipeline_name="p",
+        severity="high",
+        result=_result("root cause B"),
+    )
+
+    # Different ids → different files → no silent overwrite.
+    assert path_a != path_b
+    assert path_a.exists() and path_b.exists()
+    assert "root cause A" in path_a.read_text(encoding="utf-8")
+    assert "root cause B" in path_b.read_text(encoding="utf-8")
+
+
+def test_save_investigation_is_atomic(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    """A write must land fully or not at all — never a torn or empty ``.md``.
+
+    Patches ``Path.write_text`` on the *temp* staging path to raise, simulating
+    a crash mid-write. No report file (nor any leftover ``.tmp``) should remain.
+    """
+    from pathlib import Path
+
+    from app.remote import server as remote_server
+
+    monkeypatch.setattr(remote_server, "INVESTIGATIONS_DIR", Path(str(tmp_path)))
+
+    real_write_text = Path.write_text
+
+    def fail_on_tmp(
+        self: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+    ) -> None:
+        if self.name.endswith(".tmp"):
+            raise OSError("simulated crash mid-write")
+        real_write_text(self, data, encoding=encoding, errors=errors)
+
+    monkeypatch.setattr(Path, "write_text", fail_on_tmp)
+
+    with pytest.raises(OSError):
+        _save_investigation(
+            inv_id=remote_server._make_id("Crash Test"),
+            alert_name="Crash Test",
+            pipeline_name="p",
+            severity="high",
+            result=_result("lost in crash"),
+        )
+
+    # No partial report and no stranded temp file leak into the investigations dir.
+    base = Path(str(tmp_path))
+    assert list(base.glob("*.md")) == []
+    assert list(base.glob("*.tmp")) == []
+
+
+def test_id_to_iso_parses_new_suffixed_id() -> None:
+    """The ISO-8601 timestamp is still recoverable from the new id format."""
+    iso = _id_to_iso("20260101_120000_db-down_deadbeef")
+    assert iso.startswith("2026-01-01T12:00:00")
+
+
+def test_id_to_iso_returns_empty_on_garbage() -> None:
+    assert _id_to_iso("nonsense") == ""
