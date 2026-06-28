@@ -372,18 +372,26 @@ final runner summary
 
 
 def test_extract_step_log_step_number_skips_ungrouped_sections() -> None:
-    result = extract_step_log(
-        """##[group]Checkout
+    log_text = """##[group]Checkout
 line 1
 ##[endgroup]
-ungrouped noise between steps
+ungrouped noise 1
+ungrouped noise 2
+##[group]Build
+build output
+##[endgroup]
+more ungrouped
 ##[group]Deploy
 line 2
 ##[endgroup]
-""",
-        step_number=2,
-    )
-    assert result["step_name"] == "Deploy"
-    assert result["match_strategy"] == "step_number"
-    assert "line 2" in result["log_text"]
-    assert "ungrouped noise between steps" not in result["log_text"]
+"""
+    for step_number, expected_name in ((1, "Checkout"), (2, "Build"), (3, "Deploy")):
+        result = extract_step_log(log_text, step_number=step_number)
+        assert result["step_name"] == expected_name
+        assert result["step_name"] != "ungrouped"
+        assert result["match_strategy"] == "step_number"
+
+    deploy = extract_step_log(log_text, step_number=3)
+    assert "line 2" in deploy["log_text"]
+    assert "ungrouped noise 1" not in deploy["log_text"]
+    assert "more ungrouped" not in deploy["log_text"]
