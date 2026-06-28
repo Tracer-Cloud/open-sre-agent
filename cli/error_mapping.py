@@ -4,37 +4,32 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-_INTEGRATION_FAILURE_HINTS: tuple[tuple[str, str, str], ...] = (
+_SERVICE_HINTS: tuple[tuple[str, str, str], ...] = (
     ("datadog", "Datadog", "datadog"),
-    ("dd_api_key", "Datadog", "datadog"),
     ("grafana", "Grafana", "grafana"),
-    ("grafana_read_token", "Grafana", "grafana"),
     ("alertmanager", "Alertmanager", "alertmanager"),
     ("vercel", "Vercel", "vercel"),
 )
 
+_ENV_VAR_HINTS: tuple[tuple[str, str, str], ...] = (
+    ("dd_api_key", "Datadog", "datadog"),
+    ("grafana_read_token", "Grafana", "grafana"),
+    ("alertmanager_url", "Alertmanager", "alertmanager"),
+)
+
+_AUTH_TOKENS = frozenset({"401", "403", "unauthorized", "not configured", "forbidden"})
+_MISSING_TOKENS = frozenset({"missing", "not set", "unavailable", "required", "no api token"})
+
 
 def _integration_failure_hint(message: str) -> tuple[str, str] | None:
     lowered = message.lower()
-    for needle, name, slug in _INTEGRATION_FAILURE_HINTS:
-        if needle in lowered:
+    for env_var, name, slug in _ENV_VAR_HINTS:
+        if env_var in lowered and any(token in lowered for token in _MISSING_TOKENS):
             return name, slug
-    if any(token in lowered for token in ("401", "403", "unauthorized", "not configured")):
-        if "datadog" in lowered or "dd_" in lowered:
-            return "Datadog", "datadog"
-        if "grafana" in lowered:
-            return "Grafana", "grafana"
-        if "alertmanager" in lowered:
-            return "Alertmanager", "alertmanager"
-    for env_var, name, slug in (
-        ("dd_api_key", "Datadog", "datadog"),
-        ("grafana_read_token", "Grafana", "grafana"),
-        ("alertmanager_url", "Alertmanager", "alertmanager"),
-    ):
-        if env_var in lowered and any(
-            token in lowered for token in ("missing", "not set", "unavailable", "required")
-        ):
-            return name, slug
+    if any(token in lowered for token in _AUTH_TOKENS):
+        for needle, name, slug in _SERVICE_HINTS:
+            if needle in lowered:
+                return name, slug
     return None
 
 
@@ -57,18 +52,18 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
         )
         raise OpenSREError(classified.user_message, suggestion=suggestion) from exc
 
-    integration_hint = _integration_failure_hint(str(exc))
-    if integration_hint is not None:
-        name, slug = integration_hint
-        raise OpenSREError(
-            str(exc),
-            suggestion=(
-                f"Verify {name} credentials with `opensre integrations verify {slug}` "
-                "or re-run `opensre onboard` for that integration."
-            ),
-        ) from exc
-
     if isinstance(exc, RuntimeError):
+        integration_hint = _integration_failure_hint(str(exc))
+        if integration_hint is not None:
+            name, slug = integration_hint
+            raise OpenSREError(
+                str(exc),
+                suggestion=(
+                    f"Verify {name} credentials with `opensre integrations verify {slug}` "
+                    "or re-run `opensre onboard` for that integration."
+                ),
+            ) from exc
+
         msg = str(exc).lower()
         if "cli not found" in msg or "not found on path" in msg:
             raise OpenSREError(
