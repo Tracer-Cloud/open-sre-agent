@@ -167,6 +167,15 @@ def test_install_sh_has_step_for_explicit_version_fetch() -> None:
     assert "[1/6] Fetching release metadata for v2026.4.29" in result.stdout
 
 
+def test_install_sh_defaults_to_main_build_channel() -> None:
+    source = INSTALL_SH.read_text()
+
+    assert 'INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-main}"' in source
+    assert 'MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"' in source
+    assert "releases/tags/${MAIN_RELEASE_TAG}" in source
+    assert "releases/tags/nightly" not in source
+
+
 def test_install_sh_defines_progress_helpers() -> None:
     source = INSTALL_SH.read_text()
 

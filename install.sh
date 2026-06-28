@@ -33,7 +33,10 @@ USER_INSTALL_DIR_CANDIDATES="${OPENSRE_USER_INSTALL_DIR_CANDIDATES:-$HOME/.local
 SYSTEM_INSTALL_DIR_CANDIDATES="${OPENSRE_SYSTEM_INSTALL_DIR_CANDIDATES:-/opt/homebrew/bin:/usr/local/bin:/opt/local/bin}"
 INSTALL_DIR="${OPENSRE_INSTALL_DIR:-}"
 INSTALL_DIR_OVERRIDE=0
-INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-release}"
+INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-main}"
+INSTALL_CHANNEL_EXPLICIT=0
+[ -n "${OPENSRE_INSTALL_CHANNEL:-}" ] && INSTALL_CHANNEL_EXPLICIT=1
+MAIN_RELEASE_TAG="${OPENSRE_MAIN_RELEASE_TAG:-main-build}"
 BIN_NAME="opensre"
 INSTALL_WITH_SUDO=0
 PROGRESS_PID=""
@@ -527,13 +530,14 @@ print_installer_header() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--main] [--version <version>] [--install-dir <path>]
+Usage: install.sh [--main] [--release] [--version <version>] [--install-dir <path>]
 
 Installs the OpenSRE CLI.
 
 Options:
-  --main                Install the rolling build published from the main branch.
-  --version <version>   Install a specific release version (for example 2026.4.29).
+  --main                Install the latest build published from the main branch (default).
+  --release             Install the latest versioned release instead of main.
+  --version <version>   Install a specific versioned release (for example 2026.4.29).
   --install-dir <path>  Install into a specific directory.
   -h, --help            Show this help text.
 
@@ -549,9 +553,11 @@ parse_args() {
     case "$1" in
       --main)
         INSTALL_CHANNEL="main"
+        INSTALL_CHANNEL_EXPLICIT=1
         ;;
       --release)
         INSTALL_CHANNEL="release"
+        INSTALL_CHANNEL_EXPLICIT=1
         ;;
       --version)
         [ "$#" -ge 2 ] || die "--version requires a value."
@@ -581,6 +587,10 @@ parse_args() {
       die "Unsupported install channel: ${INSTALL_CHANNEL}"
       ;;
   esac
+
+  if [ -n "$requested_version" ] && [ "$INSTALL_CHANNEL" = "main" ] && [ "$INSTALL_CHANNEL_EXPLICIT" -eq 0 ]; then
+    INSTALL_CHANNEL="release"
+  fi
 
   if [ "$INSTALL_CHANNEL" = "main" ] && [ -n "$requested_version" ]; then
     die "--version cannot be combined with --main."
@@ -629,7 +639,7 @@ fetch_release_json() {
   local api_url
 
   if [ "$INSTALL_CHANNEL" = "main" ]; then
-    api_url="https://api.github.com/repos/${REPO}/releases/tags/nightly"
+    api_url="https://api.github.com/repos/${REPO}/releases/tags/${MAIN_RELEASE_TAG}"
   elif [ -n "$version" ]; then
     api_url="https://api.github.com/repos/${REPO}/releases/tags/v${version}"
   else

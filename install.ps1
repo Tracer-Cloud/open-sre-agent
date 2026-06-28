@@ -1,12 +1,13 @@
 param(
     [ValidateSet("release", "main")]
-    [string]$Channel = $(if ($env:OPENSRE_INSTALL_CHANNEL) { $env:OPENSRE_INSTALL_CHANNEL } else { "release" }),
+    [string]$Channel = $(if ($env:OPENSRE_INSTALL_CHANNEL) { $env:OPENSRE_INSTALL_CHANNEL } else { "main" }),
     [switch]$SkipMain
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $script:OpenSreProgressStep = 0
+$script:OpenSreChannelExplicit = $PSBoundParameters.ContainsKey("Channel") -or [bool]$env:OPENSRE_INSTALL_CHANNEL
 
 function Test-OpenSreVerboseInstall {
     $value = [string]$env:OPENSRE_INSTALL_VERBOSE
@@ -758,8 +759,10 @@ function Get-OpenSreReleaseMetadata {
         throw "OPENSRE_VERSION cannot be combined with the main install channel."
     }
 
+    $mainReleaseTag = if ($env:OPENSRE_MAIN_RELEASE_TAG) { $env:OPENSRE_MAIN_RELEASE_TAG } else { "main-build" }
+
     $releaseUri = if ($Channel -eq "main") {
-        "https://api.github.com/repos/$Repo/releases/tags/nightly"
+        "https://api.github.com/repos/$Repo/releases/tags/$mainReleaseTag"
     }
     elseif ($normalizedVersion) {
         "https://api.github.com/repos/$Repo/releases/tags/v$normalizedVersion"
@@ -1023,6 +1026,11 @@ function Install-OpenSre {
     $binaryName = "opensre.exe"
     $requestedVersion = if ($env:OPENSRE_VERSION) { $env:OPENSRE_VERSION.Trim().TrimStart("v") } else { "" }
     $resolvedChannel = if ($Channel) { $Channel.Trim().ToLowerInvariant() } else { "release" }
+    $channelExplicit = [bool]$script:OpenSreChannelExplicit
+
+    if ($requestedVersion -and $resolvedChannel -eq "main" -and -not $channelExplicit) {
+        $resolvedChannel = "release"
+    }
 
     Show-OpenSreIntro
     Write-OpenSreHeader -Channel $resolvedChannel -RequestedVersion $requestedVersion -InstallDir $installDir -Repo $repo

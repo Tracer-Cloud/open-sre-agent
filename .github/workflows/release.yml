@@ -81,7 +81,7 @@ jobs:
             fi
 
             echo "channel=main" >> "$GITHUB_OUTPUT"
-            echo "tag_name=nightly" >> "$GITHUB_OUTPUT"
+            echo "tag_name=main-build" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -181,7 +181,7 @@ jobs:
           if-no-files-found: error
 
   build-binaries:
-    if: needs.prepare.outputs.channel == 'main' || needs.verify.result == 'success'
+    if: always() && (needs.prepare.outputs.channel == 'main' || needs.verify.result == 'success')
     needs: [verify, prepare]
     strategy:
       fail-fast: false
@@ -454,10 +454,9 @@ jobs:
           CB='```'
           {
             printf '## Install\n\n'
-            printf '### cURL (macOS / Linux)\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash\n%s\n\n' "$CB" "$CB"
-            printf '### cURL (macOS / Linux, latest main build)\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --main\n%s\n\n' "$CB" "$CB"
+            printf '### cURL (macOS / Linux)\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --release --version %s\n%s\n\n' "$CB" "${TAG_NAME#v}" "$CB"
             printf '### Homebrew (macOS / Linux)\n\n%sbash\nbrew tap tracer-cloud/tap\nbrew install tracer-cloud/tap/opensre\n%s\n\n' "$CB" "$CB"
-            printf '### PowerShell (Windows)\n\n%spowershell\nirm https://install.opensre.com | iex\n%s\n\n' "$CB" "$CB"
+            printf '### PowerShell (Windows)\n\n%spowershell\n$env:OPENSRE_INSTALL_CHANNEL="release"; $env:OPENSRE_VERSION="%s"; irm https://install.opensre.com | iex\n%s\n\n' "$CB" "${TAG_NAME#v}" "$CB"
             printf '### Python\n\n%sbash\npipx install opensre\n%s\n\n' "$CB" "$CB"
           } > RELEASE_NOTES.md
           cat GENERATED_CHANGELOG.md >> RELEASE_NOTES.md
@@ -547,7 +546,7 @@ jobs:
           bash .github/scripts/sync-homebrew-tap-formula.sh
 
   publish-main-release:
-    if: needs.prepare.outputs.channel == 'main'
+    if: always() && needs.prepare.outputs.channel == 'main' && needs.build-binaries.result == 'success'
     runs-on: ubuntu-latest
     needs:
       - prepare
@@ -576,19 +575,19 @@ jobs:
           {
             printf '## Main build\n\nRolling binary build from `main`.\n\n'
             printf -- '- Commit: `%s`\n- Built: %s\n\n' "$short_sha" "$built_at"
-            printf '### Install\n\nStable:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash\n%s\n\n' "$CB" "$CB"
-            printf 'Main:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --main\n%s\n\n' "$CB" "$CB"
-            printf 'Windows stable:\n\n%spowershell\nirm https://install.opensre.com | iex\n%s\n' "$CB" "$CB"
+            printf '### Install\n\nmacOS / Linux:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash\n%s\n\n' "$CB" "$CB"
+            printf 'Equivalent explicit main channel:\n\n%sbash\ncurl -fsSL https://install.opensre.com | bash -s -- --main\n%s\n\n' "$CB" "$CB"
+            printf 'Windows:\n\n%spowershell\nirm https://install.opensre.com | iex\n%s\n' "$CB" "$CB"
           } > MAIN_RELEASE_NOTES.md
 
-      - name: Move nightly tag to the latest commit
+      - name: Move main build tag to the latest commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f nightly "$GITHUB_SHA"
-          git push origin refs/tags/nightly --force
+          git tag -f "${{ needs.prepare.outputs.tag_name }}" "$GITHUB_SHA"
+          git push origin "refs/tags/${{ needs.prepare.outputs.tag_name }}" --force
 
       - name: Publish rolling main release
         env:
@@ -597,16 +596,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view nightly --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release upload nightly main-release-assets/* --repo "${{ github.repository }}" --clobber
-            gh release edit nightly \
+          tag_name="${{ needs.prepare.outputs.tag_name }}"
+
+          if gh release view "$tag_name" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$tag_name" main-release-assets/* --repo "${{ github.repository }}" --clobber
+            gh release edit "$tag_name" \
               --repo "${{ github.repository }}" \
               --title "Main" \
               --notes-file MAIN_RELEASE_NOTES.md
             exit 0
           fi
 
-          gh release create nightly \
+          gh release create "$tag_name" \
             main-release-assets/* \
             --repo "${{ github.repository }}" \
             --target "$GITHUB_SHA" \
