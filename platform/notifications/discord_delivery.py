@@ -13,17 +13,37 @@ from platform.notifications.delivery_transport import post_json
 logger = logging.getLogger(__name__)
 
 _SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
+_SLACK_USER_MENTION_RE = re.compile(r"<@([^|>]+)(?:\|([^>]+))?>")
+_SLACK_CHANNEL_MENTION_RE = re.compile(r"<#([^|>]+)(?:\|([^>]+))?>")
+_SLACK_SPECIAL_MENTION_RE = re.compile(r"<!([^>]+)>")
 
 
 def _slack_mrkdwn_to_discord(text: str) -> str:
-    """Convert Slack-style links to Discord markdown before posting."""
+    """Convert Slack-style mrkdwn tokens to Discord-friendly markdown."""
 
-    def _repl(match: re.Match[str]) -> str:
+    def _link_repl(match: re.Match[str]) -> str:
         url = match.group(1)
         label = match.group(2)
         return f"[{label}]({url})" if label else url
 
-    return _SLACK_LINK_RE.sub(_repl, text)
+    def _user_repl(match: re.Match[str]) -> str:
+        label = match.group(2)
+        return f"@{label}" if label else "@user"
+
+    def _channel_repl(match: re.Match[str]) -> str:
+        label = match.group(2)
+        return f"#{label}" if label else "#channel"
+
+    def _special_repl(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name in {"here", "channel", "everyone"}:
+            return f"@{name}"
+        return match.group(0)
+
+    text = _SLACK_LINK_RE.sub(_link_repl, text)
+    text = _SLACK_USER_MENTION_RE.sub(_user_repl, text)
+    text = _SLACK_CHANNEL_MENTION_RE.sub(_channel_repl, text)
+    return _SLACK_SPECIAL_MENTION_RE.sub(_special_repl, text)
 
 
 def _discord_auth_headers(bot_token: str) -> dict[str, str]:

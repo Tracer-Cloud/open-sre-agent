@@ -228,6 +228,38 @@ def test_send_discord_report_converts_slack_links(monkeypatch: pytest.MonkeyPatc
     assert description == "See [workflow run](https://example.com/run) for details."
 
 
+def test_send_discord_report_converts_bare_slack_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "platform.notifications.delivery_transport.httpx.post",
+        lambda *_a, **kw: (
+            captured.update({"embeds": kw["json"].get("embeds", [])})
+            or _mock_response(200, {"id": "m-1"})
+        ),  # type: ignore[misc]
+    )
+    report = "Details at <https://example.com/run>."
+    send_discord_report(report, {"channel_id": "chan-1", "bot_token": "tok"})
+    description = captured["embeds"][0]["description"]
+    assert description == "Details at https://example.com/run."
+
+
+def test_send_discord_report_converts_slack_mentions(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "platform.notifications.delivery_transport.httpx.post",
+        lambda *_a, **kw: (
+            captured.update({"embeds": kw["json"].get("embeds", [])})
+            or _mock_response(200, {"id": "m-1"})
+        ),  # type: ignore[misc]
+    )
+    report = "Page <@U123|alice> in <#C456|incidents> <!here>."
+    send_discord_report(report, {"channel_id": "chan-1", "bot_token": "tok"})
+    description = captured["embeds"][0]["description"]
+    assert description == "Page @alice in #incidents @here."
+
+
 def test_send_discord_report_truncates_description_to_4096(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
