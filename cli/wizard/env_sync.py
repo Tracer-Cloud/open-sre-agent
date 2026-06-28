@@ -378,7 +378,7 @@ def sync_provider_env(
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
-    _write_env(target_path, lines)
+    _write_env_lines(target_path, lines)
 
     for key in keys_to_remove:
         os.environ.pop(key, None)

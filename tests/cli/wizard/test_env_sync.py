@@ -103,6 +103,27 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
+def test_sync_provider_env_preserves_integration_fallback_secrets(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "TELEGRAM_BOT_TOKEN=manual-fallback-token\nLLM_PROVIDER=anthropic\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="gpt-5-mini",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "TELEGRAM_BOT_TOKEN=manual-fallback-token" in content
+    assert "LLM_PROVIDER=openai\n" in content
+
+
 def test_sync_provider_env_updates_wizard_store(tmp_path, monkeypatch) -> None:
     store_path = tmp_path / "opensre.json"
     env_path = tmp_path / ".env"
