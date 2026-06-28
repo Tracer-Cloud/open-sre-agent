@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from infra.deployment.remote.server import (
+    _alert_name_from_inv_id,
     _id_to_iso,
     _make_id,
     _safe_investigation_path,
@@ -290,6 +291,16 @@ def test_id_to_iso_parses_new_suffixed_id() -> None:
     """The ISO-8601 timestamp is still recoverable from the new id format."""
     iso = _id_to_iso("20260101_120000_db-down_deadbeef")
     assert iso.startswith("2026-01-01T12:00:00")
+
+
+def test_alert_name_from_inv_id_strips_collision_suffix() -> None:
+    assert _alert_name_from_inv_id("20260628_123456_cpu-spike-deploy_ab12cd34") == (
+        "cpu spike deploy"
+    )
+
+
+def test_alert_name_from_inv_id_keeps_legacy_ids_without_suffix() -> None:
+    assert _alert_name_from_inv_id("20260101_120000_db-down") == "db down"
 
 
 def test_id_to_iso_returns_empty_on_garbage() -> None:

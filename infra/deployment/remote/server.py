@@ -601,15 +601,13 @@ def list_investigations() -> list[InvestigationMeta]:
     items: list[InvestigationMeta] = []
     for path in sorted(INVESTIGATIONS_DIR.glob("*.md"), reverse=True):
         inv_id = path.stem
-        parts = inv_id.split("_", maxsplit=2)
-        alert = parts[2] if len(parts) > 2 else inv_id
         created = _id_to_iso(inv_id)
         items.append(
             InvestigationMeta(
                 id=inv_id,
                 filename=path.name,
                 created_at=created,
-                alert_name=alert.replace("-", " "),
+                alert_name=_alert_name_from_inv_id(inv_id),
             )
         )
     return items
@@ -649,6 +647,22 @@ def _safe_investigation_path(inv_id: str) -> Path:
 
 def _slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
+
+
+_INV_ID_SUFFIX_RE = re.compile(r"_[0-9a-f]{8}$", re.IGNORECASE)
+
+
+def _alert_name_from_inv_id(inv_id: str) -> str:
+    """Derive a user-visible alert name from a persisted investigation id.
+
+    Ids use ``YYYYMMDD_HHMMSS_<slug>_<8-hex>``; the trailing hex suffix exists
+    only to avoid filename collisions and must not appear in list metadata.
+    """
+    parts = inv_id.split("_", maxsplit=2)
+    slug = parts[2] if len(parts) > 2 else inv_id
+    if _INV_ID_SUFFIX_RE.search(slug):
+        slug = slug[:-9]
+    return slug.replace("-", " ")
 
 
 def _refresh_instance_metadata() -> None:
