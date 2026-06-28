@@ -16,9 +16,12 @@ def test_open_then_record_appends_turn() -> None:
     session.record("chat", "hello world")
 
     records = storage.read(session.session_id)
-    assert records[0]["type"] == "session_start"
-    turns = [r for r in records if r["type"] == "turn"]
-    assert turns == [{"type": "turn", "kind": "chat", "text": "hello world"}]
+    assert records[0]["type"] == "session"
+    assert records[0]["version"] == 2
+    turns = [r for r in records if r["type"] == "custom_message"]
+    assert turns[0]["custom_type"] == "turn_stub"
+    assert turns[0]["kind"] == "chat"
+    assert turns[0]["text"] == "hello world"
 
 
 def test_record_noop_when_not_opened() -> None:
@@ -36,11 +39,9 @@ def test_flush_writes_session_end_with_counts() -> None:
     session.record("alert", "boom")
     storage.flush(session)
 
-    end = storage.read(session.session_id)[-1]
-    assert end["type"] == "session_end"
-    assert end["total_turns"] == 2
-    assert end["chat_turns"] == 1
-    assert end["investigation_turns"] == 1
+    leaf = storage.read(session.session_id)[-1]
+    assert leaf["type"] == "leaf"
+    assert leaf["total_turns"] == 2
 
 
 def test_flush_deletes_empty_session() -> None:
@@ -58,23 +59,19 @@ def test_flush_is_idempotent() -> None:
     session.record("chat", "hi")
     storage.flush(session)
     storage.flush(session)
-    ends = [r for r in storage.read(session.session_id) if r["type"] == "session_end"]
-    assert len(ends) == 1
+    leaves = [r for r in storage.read(session.session_id) if r["type"] == "leaf"]
+    assert len(leaves) == 1
 
 
-def test_flush_writes_conversation_snapshot() -> None:
+def test_append_turn_detail_writes_message_entries() -> None:
     storage = InMemorySessionStorage()
     session = _session(storage)
-    session.agent.messages = [("user", "hello"), ("assistant", "hi")]
-    session.accumulated_context = {"service": "api"}
     storage.open_session(session)
-    session.record("chat", "hello")
-    storage.flush(session)
+    storage.append_turn_detail(session.session_id, "chat", "hello", response="hi")
 
     records = storage.read(session.session_id)
-    snapshot = next(r for r in records if r["type"] == "conversation_snapshot")
-    assert snapshot["cli_agent_messages"] == [["user", "hello"], ["assistant", "hi"]]
-    assert snapshot["accumulated_context"] == {"service": "api"}
+    messages = [r for r in records if r["type"] == "message"]
+    assert [(r["role"], r["content"]) for r in messages] == [("user", "hello"), ("assistant", "hi")]
 
 
 def test_append_tool_call_reopens_finalized_session() -> None:
@@ -87,7 +84,7 @@ def test_append_tool_call_reopens_finalized_session() -> None:
 
     records = storage.read(session.session_id)
     assert any(r["type"] == "tool_call" for r in records)
-    assert all(r["type"] != "session_end" for r in records)
+    assert any(r["type"] == "tool_result" for r in records)
 
 
 def test_append_investigation_result_returns_id() -> None:

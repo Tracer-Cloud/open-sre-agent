@@ -68,6 +68,29 @@ class SessionStorage(Protocol):
     ) -> None:
         raise NotImplementedError
 
+    def append_tool_update(
+        self,
+        session_id: str,
+        *,
+        tool: str,
+        update: Any,
+        tool_call_id: str | None = None,
+    ) -> str:
+        raise NotImplementedError
+
+    def append_compaction(
+        self,
+        session_id: str,
+        *,
+        summary: str,
+        first_kept_entry_id: str,
+        before_chars: int,
+        after_chars: int,
+        before_tokens: int | None = None,
+        after_tokens: int | None = None,
+    ) -> str:
+        raise NotImplementedError
+
     def append_investigation_result(
         self,
         session_id: str,

@@ -13,6 +13,25 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+_IGNORED_SCAN_PARTS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    ".venv-devcontainer",
+    "opensre-ci-fix",
+}
+
+
+def _is_ignored_scan_path(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root)
+    if any(part in _IGNORED_SCAN_PARTS for part in relative.parts):
+        return True
+    return relative.parts[:2] == (".claude", "worktrees")
+
+
 def test_context_state_stays_dependency_light() -> None:
     root = _repo_root()
     forbidden = (
@@ -42,7 +61,7 @@ def test_old_core_domain_state_import_path_is_removed() -> None:
     old_state_module = ".".join(("core", "domain", "state"))
     offenders: list[str] = []
     for path in sorted(root.rglob("*.py")):
-        if ".venv" in path.parts:
+        if _is_ignored_scan_path(path, root):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):

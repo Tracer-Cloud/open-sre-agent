@@ -13,6 +13,7 @@ import os
 import random
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -144,13 +145,21 @@ class AnthropicAgentClient:
     provider_name = "Anthropic"
     auth_error_hint = "Check ANTHROPIC_API_KEY."
 
-    def __init__(self, model: str, max_tokens: int = 4096, *, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        max_tokens: int = 4096,
+        *,
+        client: Any | None = None,
+        credential_resolver: Callable[[str], str] | None = None,
+    ) -> None:
         if client is None:
             from anthropic import Anthropic
 
-            from config.llm_credentials import resolve_llm_api_key
+            from core.runtime.provider import resolve_llm_api_key
 
-            api_key = resolve_llm_api_key("ANTHROPIC_API_KEY")
+            resolver = credential_resolver or resolve_llm_api_key
+            api_key = resolver("ANTHROPIC_API_KEY")
             self._client = Anthropic(api_key=api_key, timeout=_CLIENT_TIMEOUT_SEC)
         else:
             self._client = client
@@ -503,12 +512,14 @@ class OpenAIAgentClient:
         base_url: str | None = None,
         api_key_env: str = "OPENAI_API_KEY",
         api_key_default: str = "",
+        credential_resolver: Callable[[str], str] | None = None,
     ) -> None:
         from openai import OpenAI
 
-        from config.llm_credentials import resolve_llm_api_key
+        from core.runtime.provider import resolve_llm_api_key
 
-        api_key = resolve_llm_api_key(api_key_env) or api_key_default
+        resolver = credential_resolver or resolve_llm_api_key
+        api_key = resolver(api_key_env) or api_key_default
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=_CLIENT_TIMEOUT_SEC)
         self._model = model
         self._max_tokens = max_tokens

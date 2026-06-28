@@ -1601,20 +1601,67 @@ class TestResumeCommand:
                     [
                         json.dumps(
                             {
-                                "type": "session_start",
-                                "session_id": target_id,
-                                "started_at": "2026-05-29T10:00:00+00:00",
+                                "type": "session",
+                                "version": 2,
+                                "id": target_id,
+                                "created_at": "2026-05-29T10:00:00+00:00",
+                                "cwd": "",
                             }
                         ),
-                        json.dumps({"type": "turn", "kind": "chat", "text": "hello"}),
                         json.dumps(
                             {
-                                "type": "conversation_snapshot",
-                                "cli_agent_messages": [["user", "hello"], ["assistant", "hi"]],
-                                "accumulated_context": {"service": "redis"},
+                                "id": "entry1",
+                                "parent_id": None,
+                                "timestamp": "2026-05-29T10:00:01+00:00",
+                                "type": "custom_message",
+                                "custom_type": "turn_stub",
+                                "kind": "chat",
+                                "text": "hello",
+                                "display": False,
                             }
                         ),
-                        json.dumps({"type": "session_end", "total_turns": 1}),
+                        json.dumps(
+                            {
+                                "id": "entry2",
+                                "parent_id": "entry1",
+                                "timestamp": "2026-05-29T10:00:02+00:00",
+                                "type": "message",
+                                "role": "user",
+                                "content": "hello",
+                                "metadata": {"kind": "chat"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "id": "entry3",
+                                "parent_id": "entry2",
+                                "timestamp": "2026-05-29T10:00:03+00:00",
+                                "type": "message",
+                                "role": "assistant",
+                                "content": "hi",
+                                "metadata": {"kind": "chat"},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "id": "entry4",
+                                "parent_id": "entry3",
+                                "timestamp": "2026-05-29T10:00:04+00:00",
+                                "type": "custom_message",
+                                "custom_type": "accumulated_context",
+                                "content": {"service": "redis"},
+                                "display": False,
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "id": "entry5",
+                                "parent_id": "entry4",
+                                "timestamp": "2026-05-29T10:00:05+00:00",
+                                "type": "leaf",
+                                "total_turns": 1,
+                            }
+                        ),
                     ]
                 )
                 + "\n",
@@ -1634,8 +1681,10 @@ class TestResumeCommand:
                 for line in (tmp_path / f"{old_id}.jsonl").read_text().splitlines()
                 if line.strip()
             ]
-            assert old_records[-1]["type"] == "session_end"
-            assert not any(r.get("kind") == "slash" for r in old_records if r.get("type") == "turn")
+            assert old_records[-1]["type"] == "leaf"
+            assert not any(
+                r.get("kind") == "slash" for r in old_records if r.get("type") == "custom_message"
+            )
 
             # Target session is reopened — slash turn recorded on resumed session
             assert session.session_id == target_id
@@ -1644,10 +1693,14 @@ class TestResumeCommand:
                 for line in target_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            assert target_records[0]["type"] == "session_start"
-            assert target_records[-1]["type"] == "turn"
-            assert target_records[-1]["kind"] == "slash"
-            assert target_records[-1]["text"].startswith("/resume")
+            assert target_records[0]["type"] == "session"
+            turn_stubs = [
+                r
+                for r in target_records
+                if r.get("type") == "custom_message" and r.get("custom_type") == "turn_stub"
+            ]
+            assert turn_stubs[-1]["kind"] == "slash"
+            assert turn_stubs[-1]["text"].startswith("/resume")
 
         assert result is True
         assert session.session_id == target_id

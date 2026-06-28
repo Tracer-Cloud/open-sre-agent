@@ -80,8 +80,10 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to clear the screen or terminal",
     ),
     "/compact": _mcp(
-        "Trim old in-memory session history to reduce memory use while keeping recent context.",
-        "User asks to compact, trim, or free memory from session history",
+        "Compact the current long-running session context into a replayable summary entry "
+        "while keeping recent messages available for the next turn.",
+        "User asks to compact or summarize the current session context",
+        "User wants to reduce context size without starting a new session",
     ),
     "/config": _mcp(
         "Show or edit local OpenSRE configuration (~/.opensre/config.yml). "
@@ -241,8 +243,8 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/resume": _mcp(
         "Restore the conversation context from a previous session. "
         "Bare /resume opens an interactive numbered picker. "
-        "Pass a session ID prefix or a name substring to resume directly "
-        "(e.g. /resume 9b2e4f7a or /resume redis).",
+        "Pass a session ID prefix, a session:entry reference, or a name substring to resume directly "
+        "(e.g. /resume 9b2e4f7a, /resume 9b2e4f7a:abc123, or /resume redis).",
         "User asks to resume or continue a previous session",
         "User wants to pick up where they left off in an earlier REPL session",
         "User types /resume with no argument to pick from a list",

@@ -59,9 +59,10 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 | `/trust` | Enable or disable trust mode (skip confirmation prompts) |
 | `/verbose` | Toggle verbose logging |
 | `/clear` | Clear the screen and re-render the banner |
-| `/compact` | Trim in-memory session history to the last 20 entries |
+| `/compact` | Summarize older context into a replayable compaction entry |
 | `/sessions` | List recent REPL sessions on disk |
 | `/resume <id>` | Restore a past session's conversation context |
+| `/resume <id>:<entry>` | Restore a specific session branch point |
 | `/new` | Start a new session file while keeping LLM context |
 
 ### Investigation
@@ -312,13 +313,13 @@ Clears the terminal and re-renders the OpenSRE banner. Does **not** reset sessio
 
 ### `/compact`
 
-Trims **in-memory** session history to the last 20 entries. Does not affect persisted session files under `~/.opensre/sessions/`, up-arrow recall file, or `cli_agent_messages`.
+Summarizes older conversation context, keeps recent messages, and persists a `compaction` entry in the session file. Future `/resume` calls replay the summary before the kept messages.
 
 ```text
 /compact
 ```
 
-If you already have ≤20 entries, the command reports nothing to compact.
+If there are not enough messages to compact, the command reports nothing to compact. OpenSRE also compacts automatically before a shell turn when the replayed branch context exceeds the runtime threshold.
 
 ### `/sessions`
 
@@ -352,6 +353,7 @@ Restore LLM conversation context and accumulated infra context from a previous s
 
 ```text
 /resume 9b2e4f7a
+/resume 9b2e4f7a:abc123
 /resume redis
 /resume
 ```
@@ -359,6 +361,7 @@ Restore LLM conversation context and accumulated infra context from a previous s
 | Form | Behavior |
 | --- | --- |
 | ID prefix | Match session UUID by prefix (must be unique) |
+| ID + entry prefix | Replay the branch ending at the matching entry ID prefix |
 | Name substring | Match when ≥3 characters and exactly one session matches (e.g. `/resume redis`) |
 | Bare `/resume` | Interactive numbered picker of recent sessions (TTY) |
 
@@ -370,6 +373,8 @@ When you resume a **different** session, OpenSRE:
 2. Restores `cli_agent_messages` so the assistant remembers prior turns
 3. Restores `accumulated_context` keys
 4. Reprints conversation history (user prompts, assistant replies, slash commands)
+
+Compaction entries are replayed as summary messages before the kept branch messages.
 
 **Restored vs not restored:**
 
@@ -383,7 +388,7 @@ When you resume a **different** session, OpenSRE:
 
 **Warning:** Resuming a different session replaces the current session's LLM context if messages already exist.
 
-If turn-detail records were never written (prompt logging disabled), history replay may show prompts without assistant responses — enable prompt logging for richer resume display. See [Session History](/sessions).
+Session replay reads the current version-2 session tree format. Older session files are ignored by `/sessions` and `/resume`. See [Session History](/sessions).
 
 ### `/new`
 

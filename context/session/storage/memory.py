@@ -1,11 +1,4 @@
-"""In-memory session storage backend.
-
-A :class:`~context.session.types.SessionStorage` implementation that
-keeps records in process memory instead of on disk. Useful for tests and any
-caller that wants session writes without touching the filesystem. Mirrors the
-observable semantics of :class:`JsonlSessionStorage` (open/append/flush/reopen,
-empty-session deletion, idempotent flush) without JSON serialization.
-"""
+"""In-memory v2 session storage backend."""
 
 from __future__ import annotations
 
@@ -13,46 +6,41 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from context.session.types import CHAT_KINDS, SessionPersistenceSource
+from context.session.types import SessionPersistenceSource
 
 _TRIGGER_MAX_CHARS = 200
 
 
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
 class InMemorySessionStorage:
-    """SessionStorage backend that stores records in a per-session dict."""
+    """SessionStorage backend that stores v2 records in process memory."""
 
     def __init__(self) -> None:
         self._files: dict[str, list[dict[str, Any]]] = {}
 
     def read(self, session_id: str) -> list[dict[str, Any]]:
-        """Return a copy of the records written for ``session_id`` (test helper)."""
-        return list(self._files.get(session_id, []))
+        return [dict(rec) for rec in self._files.get(session_id, [])]
 
     def open_session(self, session: SessionPersistenceSource) -> None:
         self._files[session.session_id] = [
             {
-                "type": "session_start",
-                "session_id": session.session_id,
-                "started_at": datetime.fromtimestamp(session.started_at, tz=UTC).isoformat(),
+                "type": "session",
+                "version": 2,
+                "id": session.session_id,
+                "created_at": datetime.fromtimestamp(session.started_at, tz=UTC).isoformat(),
+                "cwd": "",
             }
         ]
 
-    def _is_finalized(self, session_id: str) -> bool:
-        records = self._files.get(session_id)
-        if not records:
-            return False
-        return records[-1].get("type") == "session_end"
-
-    def _ensure_session_open(self, session_id: str) -> None:
-        if self._is_finalized(session_id):
-            self.reopen_session(session_id)
-
     def append_turn(self, session: SessionPersistenceSource, kind: str, text: str) -> None:
-        records = self._files.get(session.session_id)
-        if records is None:
-            return
-        self._ensure_session_open(session.session_id)
-        records.append({"type": "turn", "kind": kind, "text": text})
+        self._append(
+            session.session_id,
+            "custom_message",
+            {"custom_type": "turn_stub", "kind": kind, "text": text, "display": False},
+        )
 
     def append_turn_detail(
         self,
@@ -66,21 +54,24 @@ class InMemorySessionStorage:
         provider: str | None = None,
         latency_ms: int | None = None,
     ) -> None:
-        records = self._files.get(session_id)
-        if records is None:
-            return
-        record: dict[str, Any] = {"type": "turn_detail", "kind": kind, "prompt": prompt}
-        if response is not None:
-            record["response"] = response
-        if turn_id is not None:
-            record["turn_id"] = turn_id
-        if model is not None:
-            record["model"] = model
-        if provider is not None:
-            record["provider"] = provider
-        if latency_ms is not None:
-            record["latency_ms"] = latency_ms
-        records.append(record)
+        metadata = {
+            key: value
+            for key, value in {
+                "kind": kind,
+                "turn_id": turn_id,
+                "model": model,
+                "provider": provider,
+                "latency_ms": latency_ms,
+            }.items()
+            if value is not None
+        }
+        self._append(session_id, "message", {"role": "user", "content": prompt, "metadata": metadata})
+        if response:
+            self._append(
+                session_id,
+                "message",
+                {"role": "assistant", "content": response, "metadata": metadata},
+            )
 
     def append_tool_call(
         self,
@@ -92,21 +83,55 @@ class InMemorySessionStorage:
         ok: bool,
         source: str | None = None,
     ) -> None:
-        records = self._files.get(session_id)
-        if records is None:
-            return
-        self._ensure_session_open(session_id)
-        record: dict[str, Any] = {
-            "type": "tool_call",
-            "ts": datetime.now(UTC).isoformat(),
-            "tool": tool,
-            "arguments": arguments,
-            "ok": ok,
-            "result": result,
-        }
-        if source is not None:
-            record["source"] = source
-        records.append(record)
+        call_id = self._append(
+            session_id,
+            "tool_call",
+            {"tool": tool, "arguments": arguments, "source": source},
+        )
+        self._append(
+            session_id,
+            "tool_result",
+            {"tool": tool, "ok": ok, "content": result, "source": source},
+            parent_id=call_id,
+        )
+
+    def append_tool_update(
+        self,
+        session_id: str,
+        *,
+        tool: str,
+        update: Any,
+        tool_call_id: str | None = None,
+    ) -> str:
+        return self._append(
+            session_id,
+            "tool_update",
+            {"tool": tool, "update": update, "tool_call_id": tool_call_id},
+        )
+
+    def append_compaction(
+        self,
+        session_id: str,
+        *,
+        summary: str,
+        first_kept_entry_id: str,
+        before_chars: int,
+        after_chars: int,
+        before_tokens: int | None = None,
+        after_tokens: int | None = None,
+    ) -> str:
+        return self._append(
+            session_id,
+            "compaction",
+            {
+                "summary": summary,
+                "first_kept_entry_id": first_kept_entry_id,
+                "before_chars": before_chars,
+                "after_chars": after_chars,
+                "before_tokens": before_tokens,
+                "after_tokens": after_tokens,
+            },
+        )
 
     def append_investigation_result(
         self,
@@ -116,75 +141,96 @@ class InMemorySessionStorage:
         trigger: str = "",
     ) -> str:
         investigation_id = uuid.uuid4().hex[:8]
-        records = self._files.get(session_id)
-        if records is None:
-            return investigation_id
-        self._ensure_session_open(session_id)
         report = state.get("problem_md") or state.get("slack_message") or state.get("report") or ""
-        records.append(
+        self._append(
+            session_id,
+            "investigation_result",
             {
-                "type": "investigation_result",
                 "investigation_id": investigation_id,
-                "completed_at": datetime.now(UTC).isoformat(),
+                "completed_at": _now(),
                 "trigger": trigger.strip()[:_TRIGGER_MAX_CHARS],
                 "root_cause": str(state.get("root_cause") or ""),
                 "report": str(report),
                 "root_cause_category": str(state.get("root_cause_category") or ""),
                 "alert_name": str(state.get("alert_name") or ""),
                 "run_id": str(state.get("run_id") or ""),
-            }
+            },
         )
         return investigation_id
 
     def flush(self, session: SessionPersistenceSource) -> None:
         records = self._files.get(session.session_id)
-        if records is None:
+        if not records:
             return
-        if records and records[-1].get("type") == "session_end":
+        if records[-1].get("type") == "leaf":
             return
-
-        total_turns = sum(1 for r in records if r.get("type") == "turn")
-        detail_turns = sum(1 for r in records if r.get("type") == "turn_detail")
-        if total_turns == 0 and detail_turns == 0:
+        if not any(rec.get("type") != "session" for rec in records):
             del self._files[session.session_id]
             return
-
-        chat_turns = sum(
-            1 for r in records if r.get("type") == "turn" and r.get("kind") in CHAT_KINDS
-        )
-        investigation_turns = sum(
-            1
-            for r in records
-            if r.get("type") == "turn" and r.get("kind") in ("alert", "incoming_alert")
-        )
-        now = datetime.now(UTC)
-        started_at = datetime.fromtimestamp(session.started_at, tz=UTC)
-        duration_secs = max(0, int((now - started_at).total_seconds()))
-
-        if session.agent.messages or session.accumulated_context:
-            snapshot: dict[str, Any] = {"type": "conversation_snapshot"}
-            if session.agent.messages:
-                snapshot["cli_agent_messages"] = [list(m) for m in session.agent.messages]
-            if session.accumulated_context:
-                snapshot["accumulated_context"] = dict(session.accumulated_context)
-            records.append(snapshot)
-
-        records.append(
+        if session.accumulated_context:
+            self._append(
+                session.session_id,
+                "custom_message",
+                {
+                    "custom_type": "accumulated_context",
+                    "content": dict(session.accumulated_context),
+                    "display": False,
+                },
+            )
+            records = self._files.get(session.session_id, records)
+        if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
+            for role, content in session.agent.messages:
+                self._append(
+                    session.session_id,
+                    "message",
+                    {"role": role, "content": content, "metadata": {"kind": "chat"}},
+                )
+            records = self._files.get(session.session_id, records)
+        self._append(
+            session.session_id,
+            "leaf",
             {
-                "type": "session_end",
-                "ended_at": now.isoformat(),
-                "duration_secs": duration_secs,
-                "total_turns": total_turns,
-                "chat_turns": chat_turns,
-                "investigation_turns": investigation_turns,
-            }
+                "total_turns": sum(
+                    1
+                    for rec in records
+                    if rec.get("type") == "custom_message"
+                    and rec.get("custom_type") == "turn_stub"
+                )
+            },
         )
 
     def reopen_session(self, session_id: str) -> None:
+        return
+
+    def _append(
+        self,
+        session_id: str,
+        entry_type: str,
+        payload: dict[str, Any],
+        *,
+        parent_id: str | None = None,
+    ) -> str:
         records = self._files.get(session_id)
-        if not records:
-            return
-        if records[-1].get("type") == "session_end":
-            records.pop()
-        if records and records[-1].get("type") == "conversation_snapshot":
-            records.pop()
+        if records is None:
+            return ""
+        entry_id = uuid.uuid4().hex
+        parent = parent_id if parent_id is not None else self._current_leaf(records)
+        records.append(
+            {
+                "id": entry_id,
+                "parent_id": parent,
+                "timestamp": _now(),
+                "type": entry_type,
+                **{key: value for key, value in payload.items() if value is not None},
+            }
+        )
+        return entry_id
+
+    @staticmethod
+    def _current_leaf(records: list[dict[str, Any]]) -> str | None:
+        for rec in reversed(records):
+            if rec.get("type") == "leaf":
+                return str(rec.get("parent_id") or "") or None
+            if rec.get("type") != "session":
+                return str(rec.get("id") or "") or None
+        return None

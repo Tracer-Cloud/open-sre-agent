@@ -35,6 +35,45 @@ def _read_lines(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
+def _turn_stubs(records: list[dict]) -> list[dict]:
+    return [
+        record
+        for record in records
+        if record.get("type") == "custom_message" and record.get("custom_type") == "turn_stub"
+    ]
+
+
+def _write_v2_session(path: Path, sid: str, *, started_at: str, text: str = "hi") -> None:
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "session",
+                        "version": 2,
+                        "id": sid,
+                        "created_at": started_at,
+                        "cwd": "",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "id": "entry1",
+                        "parent_id": None,
+                        "timestamp": started_at,
+                        "type": "custom_message",
+                        "custom_type": "turn_stub",
+                        "kind": "chat",
+                        "text": text,
+                        "display": False,
+                    }
+                ),
+            ]
+        )
+        + "\n"
+    )
+
+
 def _patch_dir(tmp_path: Path):
     return patch("context.session.paths.sessions_dir", return_value=tmp_path)
 
@@ -62,8 +101,9 @@ def test_open_session_creates_file_with_session_start(tmp_path: Path) -> None:
     files = list(tmp_path.glob("*.jsonl"))
     assert len(files) == 1
     records = _read_lines(files[0])
-    assert records[0]["type"] == "session_start"
-    assert records[0]["session_id"] == session.session_id
+    assert records[0]["type"] == "session"
+    assert records[0]["version"] == 2
+    assert records[0]["id"] == session.session_id
 
 
 def test_open_session_uses_session_id_as_filename(tmp_path: Path) -> None:
@@ -93,10 +133,12 @@ def test_append_turn_adds_record_to_existing_file(tmp_path: Path) -> None:
         SessionStore.append_turn(session, "alert", "HighCPU on prod")
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    turns = [r for r in records if r["type"] == "turn"]
+    turns = _turn_stubs(records)
     assert len(turns) == 2
-    assert turns[0] == {"type": "turn", "kind": "chat", "text": "hello world"}
-    assert turns[1] == {"type": "turn", "kind": "alert", "text": "HighCPU on prod"}
+    assert turns[0]["kind"] == "chat"
+    assert turns[0]["text"] == "hello world"
+    assert turns[1]["kind"] == "alert"
+    assert turns[1]["text"] == "HighCPU on prod"
 
 
 def test_append_turn_stores_full_text_without_truncation(tmp_path: Path) -> None:
@@ -107,7 +149,7 @@ def test_append_turn_stores_full_text_without_truncation(tmp_path: Path) -> None
         SessionStore.append_turn(session, "chat", long_text)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    turn = next(r for r in records if r["type"] == "turn")
+    turn = next(r for r in records if r["type"] == "custom_message")
     assert len(turn["text"]) == 500
 
 
@@ -138,14 +180,16 @@ def test_append_turn_detail_writes_full_prompt_and_response(tmp_path: Path) -> N
         )
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    detail = next(r for r in records if r["type"] == "turn_detail")
-    assert detail["kind"] == "chat"
-    assert detail["prompt"] == "how do I debug high CPU?"
-    assert detail["response"] == "Root cause is a memory leak."
-    assert detail["turn_id"] == "abc-123"
-    assert detail["model"] == "claude-3-5"
-    assert detail["provider"] == "anthropic"
-    assert detail["latency_ms"] == 1500
+    messages = [r for r in records if r["type"] == "message"]
+    assert [(m["role"], m["content"]) for m in messages] == [
+        ("user", "how do I debug high CPU?"),
+        ("assistant", "Root cause is a memory leak."),
+    ]
+    assert messages[0]["metadata"]["kind"] == "chat"
+    assert messages[0]["metadata"]["turn_id"] == "abc-123"
+    assert messages[0]["metadata"]["model"] == "claude-3-5"
+    assert messages[0]["metadata"]["provider"] == "anthropic"
+    assert messages[0]["metadata"]["latency_ms"] == 1500
 
 
 def test_append_turn_detail_omits_none_fields(tmp_path: Path) -> None:
@@ -155,10 +199,11 @@ def test_append_turn_detail_omits_none_fields(tmp_path: Path) -> None:
         SessionStore.append_turn_detail(session.session_id, "chat", "hi")
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    detail = next(r for r in records if r["type"] == "turn_detail")
-    assert "response" not in detail
-    assert "turn_id" not in detail
-    assert "model" not in detail
+    detail = next(r for r in records if r["type"] == "message")
+    assert detail["role"] == "user"
+    assert detail["content"] == "hi"
+    assert "turn_id" not in detail["metadata"]
+    assert "model" not in detail["metadata"]
 
 
 def test_append_turn_detail_noop_when_file_missing(tmp_path: Path) -> None:
@@ -184,12 +229,13 @@ def test_append_tool_call_writes_record(tmp_home: Path) -> None:
 
     records = _read_lines(_sessions_dir() / f"{session.session_id}.jsonl")
     call = next(r for r in records if r["type"] == "tool_call")
+    result = next(r for r in records if r["type"] == "tool_result")
     assert call["tool"] == "call_posthog_tool"
     assert call["arguments"] == {"tool": "execute-sql", "args": {"query": "select 1"}}
-    assert call["result"] == '{"rows": []}'
-    assert call["ok"] is True
+    assert result["content"] == '{"rows": []}'
+    assert result["ok"] is True
     assert call["source"] == "posthog_mcp"
-    assert "ts" in call
+    assert "timestamp" in call
 
 
 def test_append_tool_call_omits_source_when_none(tmp_home: Path) -> None:
@@ -204,8 +250,9 @@ def test_append_tool_call_omits_source_when_none(tmp_home: Path) -> None:
     )
 
     records = _read_lines(_sessions_dir() / f"{session.session_id}.jsonl")
+    result = next(r for r in records if r["type"] == "tool_result")
+    assert result["ok"] is False
     call = next(r for r in records if r["type"] == "tool_call")
-    assert call["ok"] is False
     assert "source" not in call
 
 
@@ -240,11 +287,11 @@ def test_flush_writes_session_end(tmp_path: Path) -> None:
         SessionStore.flush(session)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    end = records[-1]
-    assert end["type"] == "session_end"
-    assert end["total_turns"] == 2
-    assert end["chat_turns"] == 1
-    assert end["investigation_turns"] == 1
+    leaf = records[-1]
+    assert leaf["type"] == "leaf"
+    assert leaf["total_turns"] == 2
+    assert leaf["chat_turns"] == 1
+    assert leaf["investigation_turns"] == 1
 
 
 def test_flush_counts_cli_agent_turns_as_chat(tmp_path: Path) -> None:
@@ -258,9 +305,9 @@ def test_flush_counts_cli_agent_turns_as_chat(tmp_path: Path) -> None:
         SessionStore.flush(session)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    end = records[-1]
-    assert end["chat_turns"] == 3
-    assert end["investigation_turns"] == 0
+    leaf = records[-1]
+    assert leaf["chat_turns"] == 3
+    assert leaf["investigation_turns"] == 0
 
 
 def test_flush_writes_conversation_snapshot_when_messages_present(tmp_path: Path) -> None:
@@ -273,13 +320,20 @@ def test_flush_writes_conversation_snapshot_when_messages_present(tmp_path: Path
         SessionStore.flush(session)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    snapshot = next((r for r in records if r["type"] == "conversation_snapshot"), None)
-    assert snapshot is not None
-    assert snapshot["cli_agent_messages"] == [["user", "hello"], ["assistant", "hi there"]]
-    assert snapshot["accumulated_context"] == {"service": "api", "cluster": "prod"}
-    # snapshot must come before session_end
+    messages = [r for r in records if r["type"] == "message"]
+    context = next(
+        r
+        for r in records
+        if r.get("type") == "custom_message" and r.get("custom_type") == "accumulated_context"
+    )
+    assert [(m["role"], m["content"]) for m in messages] == [
+        ("user", "hello"),
+        ("assistant", "hi there"),
+    ]
+    assert context["content"] == {"service": "api", "cluster": "prod"}
+    # persisted branch entries must come before leaf
     types = [r["type"] for r in records]
-    assert types.index("conversation_snapshot") < types.index("session_end")
+    assert types.index("message") < types.index("leaf")
 
 
 def test_flush_skips_snapshot_when_no_messages(tmp_path: Path) -> None:
@@ -290,7 +344,7 @@ def test_flush_skips_snapshot_when_no_messages(tmp_path: Path) -> None:
         SessionStore.flush(session)
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    assert not any(r["type"] == "conversation_snapshot" for r in records)
+    assert not any(r["type"] == "message" for r in records)
 
 
 def test_flush_deletes_file_when_no_turns(tmp_path: Path) -> None:
@@ -328,8 +382,8 @@ def test_flush_is_idempotent(tmp_path: Path) -> None:
         SessionStore.flush(session)  # second call must not append another session_end
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    end_records = [r for r in records if r["type"] == "session_end"]
-    assert len(end_records) == 1, "flush() must be idempotent — only one session_end"
+    leaf_records = [r for r in records if r["type"] == "leaf"]
+    assert len(leaf_records) == 1, "flush() must be idempotent — only one leaf"
 
 
 def test_append_turn_reopens_finalized_session(tmp_path: Path) -> None:
@@ -342,8 +396,10 @@ def test_append_turn_reopens_finalized_session(tmp_path: Path) -> None:
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
     types = [r["type"] for r in records]
-    assert types.count("session_end") == 0
-    assert records[-1] == {"type": "turn", "kind": "slash", "text": "/status"}
+    assert types.count("leaf") == 1
+    assert records[-1]["type"] == "custom_message"
+    assert records[-1]["kind"] == "slash"
+    assert records[-1]["text"] == "/status"
 
 
 def test_reopen_session_strips_trailing_end_and_snapshot(tmp_path: Path) -> None:
@@ -357,9 +413,9 @@ def test_reopen_session_strips_trailing_end_and_snapshot(tmp_path: Path) -> None
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
     types = [r["type"] for r in records]
-    assert types.count("session_end") == 0
-    assert types.count("conversation_snapshot") == 0
-    assert types[-1] == "turn"
+    assert types.count("leaf") == 1
+    assert "conversation_snapshot" not in types
+    assert types[-1] == "custom_message"
     assert records[-1]["text"] == "continued"
 
 
@@ -373,7 +429,7 @@ def test_reopen_session_noop_for_open_session(tmp_path: Path) -> None:
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
     assert records[-1]["text"] == "still open"
-    assert all(r["type"] != "session_end" for r in records)
+    assert all(r["type"] != "leaf" for r in records)
 
 
 # ── session.record() wiring ───────────────────────────────────────────────────
@@ -386,7 +442,7 @@ def test_session_record_calls_append_turn(tmp_path: Path) -> None:
         session.record("chat", "what's wrong with prod?")
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
-    turns = [r for r in records if r["type"] == "turn"]
+    turns = _turn_stubs(records)
     assert len(turns) == 1
     assert turns[0]["kind"] == "chat"
     assert turns[0]["text"] == "what's wrong with prod?"
@@ -462,12 +518,7 @@ def test_load_recent_reports_has_snapshot_false_without_conversation(tmp_path: P
 def test_load_recent_returns_newest_first(tmp_path: Path) -> None:
     for started in ["2024-01-01T10:00:00+00:00", "2024-01-02T10:00:00+00:00"]:
         sid = str(uuid.uuid4())
-        (tmp_path / f"{sid}.jsonl").write_text(
-            json.dumps({"type": "session_start", "session_id": sid, "started_at": started})
-            + "\n"
-            + json.dumps({"type": "turn", "kind": "chat", "text": "hi"})
-            + "\n"
-        )
+        _write_v2_session(tmp_path / f"{sid}.jsonl", sid, started_at=started)
 
     with _patch_dir(tmp_path):
         results = SessionStore.load_recent()
@@ -480,13 +531,11 @@ def test_load_recent_skips_malformed_files(tmp_path: Path) -> None:
     (tmp_path / "empty.jsonl").write_text("")
 
     sid = str(uuid.uuid4())
-    (tmp_path / f"{sid}.jsonl").write_text(
-        json.dumps(
-            {"type": "session_start", "session_id": sid, "started_at": "2024-01-01T10:00:00+00:00"}
-        )
-        + "\n"
-        + json.dumps({"type": "turn", "kind": "chat", "text": "ok"})
-        + "\n"
+    _write_v2_session(
+        tmp_path / f"{sid}.jsonl",
+        sid,
+        started_at="2024-01-01T10:00:00+00:00",
+        text="ok",
     )
 
     with _patch_dir(tmp_path):
@@ -499,17 +548,10 @@ def test_load_recent_skips_malformed_files(tmp_path: Path) -> None:
 def test_load_recent_respects_n_limit(tmp_path: Path) -> None:
     for _ in range(5):
         sid = str(uuid.uuid4())
-        (tmp_path / f"{sid}.jsonl").write_text(
-            json.dumps(
-                {
-                    "type": "session_start",
-                    "session_id": sid,
-                    "started_at": "2024-01-01T10:00:00+00:00",
-                }
-            )
-            + "\n"
-            + json.dumps({"type": "turn", "kind": "chat", "text": "hi"})
-            + "\n"
+        _write_v2_session(
+            tmp_path / f"{sid}.jsonl",
+            sid,
+            started_at="2024-01-01T10:00:00+00:00",
         )
 
     with _patch_dir(tmp_path):
@@ -541,7 +583,7 @@ def test_load_session_restores_from_conversation_snapshot(tmp_path: Path) -> Non
         data = SessionStore.load_session(session.session_id[:8])
 
     assert data is not None
-    assert data["has_snapshot"] is True
+    assert data["has_snapshot"] is False
     assert data["cli_agent_messages"] == [
         ("user", "how is prod?"),
         ("assistant", "prod is healthy"),
@@ -572,15 +614,10 @@ def test_load_session_ambiguous_prefix_returns_none(tmp_path: Path) -> None:
     # Two sessions sharing the same prefix
     for _ in range(2):
         sid = "aaaabbbb" + str(uuid.uuid4())[8:]
-        (tmp_path / f"{sid}.jsonl").write_text(
-            json.dumps(
-                {
-                    "type": "session_start",
-                    "session_id": sid,
-                    "started_at": "2024-01-01T10:00:00+00:00",
-                }
-            )
-            + "\n"
+        _write_v2_session(
+            tmp_path / f"{sid}.jsonl",
+            sid,
+            started_at="2024-01-01T10:00:00+00:00",
         )
     with _patch_dir(tmp_path):
         result = SessionStore.load_session("aaaa")
@@ -659,11 +696,31 @@ def test_load_recent_name_truncated_at_50_chars(tmp_path: Path) -> None:
 def test_load_recent_name_empty_for_slash_only_session(tmp_path: Path) -> None:
     sid = str(uuid.uuid4())
     (tmp_path / f"{sid}.jsonl").write_text(
-        json.dumps(
-            {"type": "session_start", "session_id": sid, "started_at": "2024-01-01T10:00:00+00:00"}
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "session",
+                        "version": 2,
+                        "id": sid,
+                        "created_at": "2024-01-01T10:00:00+00:00",
+                        "cwd": "",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "id": "entry1",
+                        "parent_id": None,
+                        "timestamp": "2024-01-01T10:00:01+00:00",
+                        "type": "custom_message",
+                        "custom_type": "turn_stub",
+                        "kind": "slash",
+                        "text": "/status",
+                        "display": False,
+                    }
+                ),
+            ]
         )
-        + "\n"
-        + json.dumps({"type": "turn", "kind": "slash", "text": "/status"})
         + "\n"
     )
     with _patch_dir(tmp_path):
@@ -687,15 +744,10 @@ def test_load_session_includes_name(tmp_path: Path) -> None:
 def test_count_prefix_matches_returns_correct_count(tmp_path: Path) -> None:
     for _ in range(3):
         sid = str(uuid.uuid4())
-        (tmp_path / f"{sid}.jsonl").write_text(
-            json.dumps(
-                {
-                    "type": "session_start",
-                    "session_id": sid,
-                    "started_at": "2024-01-01T10:00:00+00:00",
-                }
-            )
-            + "\n"
+        _write_v2_session(
+            tmp_path / f"{sid}.jsonl",
+            sid,
+            started_at="2024-01-01T10:00:00+00:00",
         )
     with _patch_dir(tmp_path):
         # Full UUID prefix matches exactly one
@@ -743,9 +795,9 @@ def test_flush_writes_session_end_even_when_snapshot_serialization_fails(
 
     records = _read_lines(tmp_path / f"{session.session_id}.jsonl")
     types = [r["type"] for r in records]
-    # snapshot may be absent (serialization failed), but session_end must be present.
-    assert "session_end" in types
-    assert records[-1]["type"] == "session_end"
+    # context entry may degrade through default=str, but leaf must be present.
+    assert "leaf" in types
+    assert records[-1]["type"] == "leaf"
 
 
 # ── /new lifecycle ────────────────────────────────────────────────────────────
@@ -767,14 +819,14 @@ def test_new_closes_old_session_and_opens_new(tmp_path: Path) -> None:
         session.record("chat", "post-new question")
 
     assert sid1 != sid2
-    # Old session file has session_end
+    # Old session file has a leaf marker
     old_records = _read_lines(tmp_path / f"{sid1}.jsonl")
-    assert old_records[-1]["type"] == "session_end"
-    # New session file exists with turn but no session_end yet
+    assert old_records[-1]["type"] == "leaf"
+    # New session file exists with turn but no leaf yet
     new_records = _read_lines(tmp_path / f"{sid2}.jsonl")
-    assert new_records[0]["type"] == "session_start"
-    assert any(r["type"] == "turn" for r in new_records)
-    assert new_records[-1]["type"] != "session_end"
+    assert new_records[0]["type"] == "session"
+    assert any(r["type"] == "custom_message" for r in new_records)
+    assert new_records[-1]["type"] != "leaf"
 
 
 # ── ReplSession field behaviour ───────────────────────────────────────────────

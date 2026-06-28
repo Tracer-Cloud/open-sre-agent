@@ -1,8 +1,12 @@
-"""Session lifecycle slash commands: /clear, /new, /sessions, /resume."""
+"""Session lifecycle slash commands: /clear, /new, /sessions, /resume, /compact."""
 
 from __future__ import annotations
 
-from interactive_shell.command_registry.session_cmds.lifecycle import _cmd_clear, _cmd_new
+from interactive_shell.command_registry.session_cmds.lifecycle import (
+    _cmd_clear,
+    _cmd_compact,
+    _cmd_new,
+)
 from interactive_shell.command_registry.session_cmds.list import _cmd_sessions
 from interactive_shell.command_registry.session_cmds.resume import (
     _apply_resume_data,
@@ -22,11 +26,11 @@ COMMANDS: list[SlashCommand] = [
         "/resume",
         "Resume a previous session by restoring its conversation context.",
         _cmd_resume,
-        usage=("/resume <session-id-prefix>",),
+        usage=("/resume <session-id-prefix>", "/resume <session-id-prefix>:<entry-id-prefix>"),
         notes=(
             "Restores cli_agent_messages and accumulated infra context from the chosen session.",
             "Bare /resume opens an interactive session picker in a TTY.",
-            "Accepts a session ID prefix or a name substring (e.g. /resume redis).",
+            "Accepts a session ID prefix, entry ref, or name substring (e.g. /resume redis).",
             "Replaces the current session's LLM conversation context; warns if messages exist.",
         ),
     ),
@@ -37,6 +41,16 @@ COMMANDS: list[SlashCommand] = [
         notes=(
             "Unlike /clear, /new rotates the session ID and resets state while keeping LLM context.",
             "Use after /resume to continue a conversation in a clean session file.",
+        ),
+    ),
+    SlashCommand(
+        "/compact",
+        "Compact the current session context into a replayable summary entry.",
+        _cmd_compact,
+        usage=("/compact",),
+        notes=(
+            "Writes a compaction entry and keeps the most recent messages plus a summary.",
+            "Useful before continuing a long-running investigation in the same REPL.",
         ),
     ),
 ]

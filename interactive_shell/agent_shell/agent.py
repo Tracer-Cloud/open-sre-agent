@@ -139,6 +139,9 @@ def handle_message_with_agent(
     ``(text, session, console, ...)`` shape) and handed to
     :func:`core.agent.turn_orchestrator.run_turn`, which performs the pure path routing.
     """
+    from context.session.compaction import auto_compact_if_needed
+
+    auto_compact_if_needed(session)
     _execute = execute_actions or run_tool_calling_turn
     _gather = gather_evidence or gather_tool_evidence
     _answer = answer_agent or answer_cli_agent

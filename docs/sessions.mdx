@@ -9,6 +9,8 @@ description: 'Pick up any past conversation exactly where you left off — brows
 | --- | --- |
 | `/sessions` | List your recent REPL sessions with name, duration, and turn counts |
 | `/resume <id>` | Restore a past session's conversation so you can keep asking questions |
+| `/resume <id>:<entry>` | Restore a specific branch point by entry ID prefix |
+| `/compact` | Summarize older context into a replayable compaction entry |
 | `/new` | Start a fresh session while carrying forward the current conversation context |
 
 ---
@@ -44,6 +46,14 @@ When you want to continue a past investigation or conversation, use `/resume` wi
 ```
 
 In a TTY, bare `/resume` opens an interactive picker of recent sessions. New turns after a resume append to that same session file — `/resume` does not create a duplicate entry in `/sessions`.
+
+To resume a specific branch point, append an entry ID prefix after the session ID:
+
+```
+/resume 9b2e4f7a:abc123
+```
+
+When the branch contains a compaction entry, replay inserts the saved summary before the kept messages so the assistant has the compacted context.
 
 OpenSRE restores the conversation so the assistant remembers what you were working on. It displays the past exchanges so you can see where you left off, then lets you continue typing:
 
@@ -112,6 +122,18 @@ new session started — conversation context carried forward.
 
 Use `/new` after a long session to keep things tidy in `/sessions` without losing your place in the conversation.
 
+---
+
+## Compacting long sessions — `/compact`
+
+`/compact` summarizes older conversation context, keeps the recent turns, and writes a durable compaction entry into the session file:
+
+```
+/compact
+```
+
+OpenSRE also compacts automatically before a shell turn when the replayed branch context grows past the runtime threshold. The compaction entry stores the summary, the first kept entry ID, and before/after size estimates so future `/resume` calls can replay the compacted branch.
+
 **`/new` vs `/clear`:**
 
 | Command | What it does |
@@ -127,6 +149,7 @@ Each session records:
 
 - When it started and ended, and how long it ran
 - Every message you sent and every response from the assistant
+- Tool calls, tool updates, tool results, model/tool changes, labels, custom messages, and compaction summaries
 - Infra context discovered during investigations (service names, cluster names, regions)
 - Turn counts for investigations and chats
 

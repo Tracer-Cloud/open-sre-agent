@@ -33,6 +33,19 @@ def derive_name(lines: list[str]) -> str:
     Prefers turn_detail.prompt (full text) over the turn stub. Falls back
     to the empty string if no usable turn exists.
     """
+    # Prefer v2 message entries.
+    for line in lines[1:]:
+        with contextlib.suppress(json.JSONDecodeError):
+            rec = json.loads(line)
+            if rec.get("type") == "message" and rec.get("role") == "user":
+                metadata = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
+                kind = metadata.get("kind", "chat")
+                if kind in CHAT_KINDS | {"alert"}:
+                    text = (rec.get("content") or "").strip().replace("\n", " ")
+                    if text:
+                        return text[:_NAME_MAX_CHARS] + (
+                            "…" if len(text) > _NAME_MAX_CHARS else ""
+                        )
     # Prefer first turn_detail (has full prompt, no truncation)
     for line in lines[1:]:
         with contextlib.suppress(json.JSONDecodeError):
@@ -45,7 +58,9 @@ def derive_name(lines: list[str]) -> str:
     for line in lines[1:]:
         with contextlib.suppress(json.JSONDecodeError):
             rec = json.loads(line)
-            if rec.get("type") == "turn" and rec.get("kind") in CHAT_KINDS | {
+            is_v1_turn = rec.get("type") == "turn"
+            is_v2_stub = rec.get("type") == "custom_message" and rec.get("custom_type") == "turn_stub"
+            if (is_v1_turn or is_v2_stub) and rec.get("kind") in CHAT_KINDS | {
                 "alert",
                 "incoming_alert",
             }:

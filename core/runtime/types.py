@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from tools.registered_tool import RegisteredTool
 
@@ -54,20 +54,28 @@ def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
     return True
 
 
-# CodeQL currently misses PEP 695 ``type`` aliases in ``__all__`` export checks.
-ToolUpdateCallback: TypeAlias = Callable[[Any], None]  # noqa: UP040
-
-
 @dataclass(frozen=True)
 class AgentToolContext:
     """Resources available while a first-class agent tool executes."""
 
     resolved_integrations: dict[str, Any]
     resources: dict[str, Any] = field(default_factory=dict)
-    on_update: ToolUpdateCallback | None = None
+    _emit_update: Callable[[Any], None] | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def on_update(self) -> Callable[[Any], None] | None:
+        """Compatibility accessor for older AgentTool implementations."""
+        return self._emit_update
+
+    def emit_update(self, update: Any) -> None:
+        """Publish a partial tool update to the runtime observer, if one is attached."""
+        if self._emit_update is not None:
+            self._emit_update(update)
 
 
+# CodeQL currently misses PEP 695 ``type`` aliases in ``__all__`` export checks.
 AgentToolExecutor: TypeAlias = Callable[[dict[str, Any], AgentToolContext], Any]  # noqa: UP040
+ToolExecutionMode: TypeAlias = Literal["parallel", "sequential"]  # noqa: UP040
 
 
 @dataclass(frozen=True)
@@ -80,6 +88,14 @@ class AgentTool:
     execute: AgentToolExecutor
     source: str = "agent"
     parallel_safe: bool = True
+    execution_mode: ToolExecutionMode | None = None
+
+    @property
+    def effective_execution_mode(self) -> ToolExecutionMode:
+        """Return the explicit execution policy, falling back to ``parallel_safe``."""
+        if self.execution_mode is not None:
+            return self.execution_mode
+        return "parallel" if self.parallel_safe else "sequential"
 
     @property
     def public_input_schema(self) -> dict[str, Any]:
@@ -125,5 +141,5 @@ __all__ = [
     "AgentToolContext",
     "AgentToolExecutor",
     "RuntimeTool",
-    "ToolUpdateCallback",
+    "ToolExecutionMode",
 ]

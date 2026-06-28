@@ -255,10 +255,11 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         return True
 
     prefix = args[0].strip()
+    session_prefix = prefix.split(":", 1)[0]
 
-    if session.session_id.startswith(prefix):
+    if session.session_id.startswith(session_prefix) and ":" not in prefix:
         console.print(
-            f"[{DIM}]session {prefix[:8]} is the current session — "
+            f"[{DIM}]session {session_prefix[:8]} is the current session — "
             "run /sessions to pick a previous one.[/]"
         )
         _record_resume_slash(session, args)

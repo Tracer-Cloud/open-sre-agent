@@ -130,7 +130,7 @@ Configure once, then pick how you want to run investigations:
 opensre onboard
 ```
 
-**Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands for session control (`/help`, `/status`, `/cost`, `/sessions`, `/resume`, `/new`, `/exit`), integrations (`/integrations list`, `/integrations verify`), local agent fleet monitoring (`/agents`), and reasoning depth (`/effort` for **OpenAI** and **Codex** — `low` through `max`). Ctrl+C cancels an in-flight investigation without losing session state. See **[interactive shell commands](https://www.opensre.com/docs/interactive-shell-commands)** for the full reference.
+**Interactive shell** — with no subcommand, `opensre` starts a REPL (TTY required). Describe incidents in plain language, stream investigations, and use slash commands for session control (`/help`, `/status`, `/cost`, `/sessions`, `/resume`, `/compact`, `/new`, `/exit`), integrations (`/integrations list`, `/integrations verify`), local agent fleet monitoring (`/agents`), and reasoning depth (`/effort` for **OpenAI** and **Codex** — `low` through `max`). Ctrl+C cancels an in-flight investigation without losing session state. See **[interactive shell commands](https://www.opensre.com/docs/interactive-shell-commands)** for the full reference.
 
 ```bash
 opensre

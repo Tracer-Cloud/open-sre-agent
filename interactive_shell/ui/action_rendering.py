@@ -12,6 +12,7 @@ file stays focused on orchestration while terminal formatting stays in ``ui/``.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -66,6 +67,15 @@ class ActionRenderObserver:
         self._recorded_cli_agent = False
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
+        if kind == "tool_update":
+            with contextlib.suppress(Exception):
+                self.session.storage.append_tool_update(
+                    self.session.session_id,
+                    tool=str(data.get("name") or "tool"),
+                    update=data.get("update"),
+                    tool_call_id=str(data.get("id") or "") or None,
+                )
+            return
         if kind != "tool_start":
             return
         name = str(data.get("name", "")).strip()

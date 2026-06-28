@@ -19,6 +19,8 @@ from core.runtime.events import (
     LegacyLoopEventCallback,
     MessageStartEvent,
     MessageUpdateEvent,
+    ProviderRequestEndEvent,
+    ProviderRequestStartEvent,
     RuntimeEvent,
     RuntimeEventCallback,
     ToolExecutionEndEvent,
@@ -28,9 +30,14 @@ from core.runtime.events import (
     TurnStartEvent,
     legacy_callback_payload,
     runtime_event_from_legacy,
-    tool_result_is_error,
 )
-from core.runtime.execution import execute_tools, public_tool_input
+from core.runtime.execution import (
+    ToolExecutionHooks,
+    ToolExecutionRequest,
+    ToolExecutionResult,
+    execute_tool_calls,
+    public_tool_input,
+)
 from core.runtime.llm.agent_llm_client import ToolCall
 from core.runtime.messages import (
     RuntimeMessage,
@@ -41,6 +48,7 @@ from core.runtime.messages import (
     runtime_tool_result_message,
     user_runtime_message,
 )
+from core.runtime.provider import ProviderHooks, ProviderRequest
 from core.runtime.types import RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
 
@@ -55,14 +63,15 @@ class AgentRunResult:
     """Outcome of :meth:`Agent.run`.
 
     ``messages`` is the full conversation, ``final_text`` is the assistant's
-    last no-tool-call turn (empty when the loop hit the iteration cap), and
-    ``executed`` is the ordered list of ``(tool_call, output)`` pairs run
-    during the loop.
+    last no-tool-call turn, ``executed`` is the historical ordered list of raw
+    tool payloads, and ``tool_results`` contains the structured runtime results.
     """
 
     messages: list[RuntimeMessage]
     final_text: str
     executed: list[tuple[ToolCall, Any]] = field(default_factory=list)
+    tool_results: list[tuple[ToolCall, ToolExecutionResult]] = field(default_factory=list)
+    terminated_by_tool: bool = False
     hit_iteration_cap: bool = False
 
 
@@ -75,16 +84,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
 
     Owns the think → call-tools → observe loop and exposes hook methods so
     subclasses can customise stopping logic and tool filtering without
-    re-implementing the loop::
-
-        agent = Agent(llm=llm, system=prompt, tools=tools,
-                      resolved_integrations=resolved, max_iterations=8)
-        result = agent.run([{"role": "user", "content": text}])
-
-    Hook methods to override in subclasses:
-
-    * :meth:`_should_accept_conclusion` — decide when the LLM may stop
-    * :meth:`_filter_tools` — narrow the tool list the LLM sees
+    re-implementing the loop.
     """
 
     def __init__(
@@ -97,6 +97,8 @@ class Agent[RuntimeToolT: RuntimeTool]:
         max_iterations: int,
         on_event: LoopEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+        provider_hooks: ProviderHooks | None = None,
     ) -> None:
         self._llm = llm
         self._system = system
@@ -105,6 +107,8 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self._max_iterations = max_iterations
         self._on_legacy_event = on_event
         self._on_runtime_event = on_runtime_event
+        self._tool_hooks = tool_hooks or ToolExecutionHooks()
+        self._provider_hooks = provider_hooks or ProviderHooks()
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
 
@@ -145,8 +149,10 @@ class Agent[RuntimeToolT: RuntimeTool]:
         tool_schemas = self._llm.tool_schemas(runtime_tools)
         ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
         executed: list[tuple[ToolCall, Any]] = []
+        tool_results: list[tuple[ToolCall, ToolExecutionResult]] = []
         final_text = ""
         hit_cap = True
+        terminated_by_tool = False
         self._emit_runtime(
             AgentStartEvent(
                 data={
@@ -165,9 +171,34 @@ class Agent[RuntimeToolT: RuntimeTool]:
                     data={"message_count": len(messages), "tool_count": len(runtime_tools)},
                 )
             )
-            llm_messages = convert_to_llm_messages(self._llm, messages)
+            transformed_messages = self._transform_context(messages)
+            llm_messages = self._convert_to_llm(transformed_messages)
             enforce_context_budget(llm_messages, system=system, tools=tool_schemas, ceiling=ceiling)
-            response = self._llm.invoke(llm_messages, system=system, tools=tool_schemas)
+            provider_request = ProviderRequest(
+                messages=llm_messages,
+                system=system,
+                tools=tool_schemas,
+                metadata={"iteration": iteration},
+            )
+            provider_request = self._before_provider_request(provider_request)
+            self._emit_runtime(
+                ProviderRequestStartEvent(
+                    iteration=iteration,
+                    message_count=len(provider_request.messages),
+                )
+            )
+            response = self._llm.invoke(
+                provider_request.messages,
+                system=provider_request.system,
+                tools=provider_request.tools,
+            )
+            response = self._after_provider_response(provider_request, response)
+            self._emit_runtime(
+                ProviderRequestEndEvent(
+                    iteration=iteration,
+                    has_tool_calls=response.has_tool_calls,
+                )
+            )
             assistant_message = runtime_assistant_message(self._llm, response)
             self._emit_runtime(MessageStartEvent(message=assistant_message, iteration=iteration))
             if response.content:
@@ -234,58 +265,59 @@ class Agent[RuntimeToolT: RuntimeTool]:
                 )
 
             def on_tool_update(
-                tc: ToolCall,
-                partial_result: Any,
+                request: ToolExecutionRequest,
+                update: Any,
                 *,
                 event_iteration: int = iteration,
             ) -> None:
-                self._emit_runtime(
-                    ToolExecutionUpdateEvent(
-                        tool_call_id=tc.id,
-                        tool_name=tc.name,
-                        args=public_tool_input(tc.input),
-                        partial_result=redact_sensitive(partial_result),
-                        iteration=event_iteration,
-                    )
-                )
+                self._emit_tool_update(request, update, event_iteration=event_iteration)
 
-            results = execute_tools(
-                response.tool_calls,
-                runtime_tools,
-                resolved,
+            hooks = ToolExecutionHooks(
+                before_tool_call=self._tool_hooks.before_tool_call,
+                after_tool_call=self._tool_hooks.after_tool_call,
                 on_tool_update=on_tool_update,
             )
+            results = execute_tool_calls(response.tool_calls, runtime_tools, resolved, hooks=hooks)
+            provider_results = [result.provider_content() for result in results]
             tool_result_message = runtime_tool_result_message(
-                self._llm, response.tool_calls, results
+                self._llm, response.tool_calls, provider_results
             )
             messages.append(tool_result_message)
 
-            for tc, output in zip(response.tool_calls, results):
-                executed.append((tc, output))
-                public_output = redact_sensitive(output)
+            for tc, result in zip(response.tool_calls, results):
+                compat_payload = result.compat_payload()
+                executed.append((tc, compat_payload))
+                tool_results.append((tc, result))
                 self._emit_runtime(
                     ToolExecutionEndEvent(
                         tool_call_id=tc.id,
                         tool_name=tc.name,
                         args=public_tool_input(tc.input),
-                        result=public_output,
-                        is_error=tool_result_is_error(output),
+                        result=redact_sensitive(compat_payload),
+                        is_error=result.is_error,
                         iteration=iteration,
+                        data={"terminate": result.terminate},
                     )
                 )
             self._emit_runtime(
                 TurnEndEvent(
                     iteration=iteration,
                     message=assistant_message,
-                    tool_results=tuple(results),
+                    tool_results=tuple(result.compat_payload() for result in results),
                     data={"accepted": False},
                 )
             )
+            if any(result.terminate for result in results):
+                terminated_by_tool = True
+                hit_cap = False
+                break
 
-        result = AgentRunResult(
+        run_result = AgentRunResult(
             messages=messages,
             final_text=final_text,
             executed=executed,
+            tool_results=tool_results,
+            terminated_by_tool=terminated_by_tool,
             hit_iteration_cap=hit_cap,
         )
         self._emit_runtime(
@@ -294,18 +326,19 @@ class Agent[RuntimeToolT: RuntimeTool]:
                 data={
                     "final_text": final_text,
                     "hit_iteration_cap": hit_cap,
+                    "terminated_by_tool": terminated_by_tool,
                     "message_count": len(messages),
                     "executed_count": len(executed),
                 },
             )
         )
-        return result
+        return run_result
 
     def _should_accept_conclusion(
         self,
         *,
-        evidence_count: int,  # noqa: ARG002 — used by overrides
-        iteration: int,  # noqa: ARG002 — used by overrides
+        evidence_count: int,  # noqa: ARG002 - used by overrides
+        iteration: int,  # noqa: ARG002 - used by overrides
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools.
 
@@ -340,7 +373,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         if self._on_runtime_event is not None:
             try:
                 self._on_runtime_event(event)
-            except Exception:  # noqa: BLE001 — event rendering must never break the loop
+            except Exception:  # noqa: BLE001 - event rendering must never break the loop
                 logger.debug(
                     "[runtime] on_runtime_event(%s) raised; ignoring",
                     event.type,
@@ -354,5 +387,61 @@ class Agent[RuntimeToolT: RuntimeTool]:
         if self._on_legacy_event is not None:
             try:
                 self._on_legacy_event(kind, data)
-            except Exception:  # noqa: BLE001 — event rendering must never break the loop
+            except Exception:  # noqa: BLE001 - event rendering must never break the loop
                 logger.debug("[runtime] on_event(%s) raised; ignoring", kind, exc_info=True)
+
+    def _emit_tool_update(
+        self,
+        request: ToolExecutionRequest,
+        update: Any,
+        *,
+        event_iteration: int,
+    ) -> None:
+        if self._tool_hooks.on_tool_update is not None:
+            try:
+                self._tool_hooks.on_tool_update(request, update)
+            except Exception:  # noqa: BLE001 - observer failures must not break execution
+                logger.debug(
+                    "[runtime] on_tool_update(%s) raised; ignoring",
+                    request.tool_call.name,
+                    exc_info=True,
+                )
+        self._emit_runtime(
+            ToolExecutionUpdateEvent(
+                tool_call_id=request.tool_call.id,
+                tool_name=request.tool_call.name,
+                args=public_tool_input(request.tool_call.input),
+                partial_result=redact_sensitive(update),
+                iteration=event_iteration,
+            )
+        )
+
+    def _before_provider_request(self, request: ProviderRequest) -> ProviderRequest:
+        try:
+            return self._provider_hooks.apply_before_request(request)
+        except Exception:  # noqa: BLE001 - provider hooks are observability/customization only
+            logger.debug("[runtime] before_provider_request raised; ignoring", exc_info=True)
+            return request
+
+    def _after_provider_response(self, request: ProviderRequest, response: Any) -> Any:
+        try:
+            return self._provider_hooks.apply_after_response(request, response)
+        except Exception:  # noqa: BLE001 - preserve the transcript if hooks fail
+            logger.debug("[runtime] after_provider_response raised; ignoring", exc_info=True)
+            return response
+
+    def _transform_context(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
+        try:
+            return self._provider_hooks.apply_transform_context(messages)
+        except Exception:  # noqa: BLE001 - fall back to the unmodified transcript
+            logger.debug(
+                "[runtime] transform_context raised; using original messages", exc_info=True
+            )
+            return list(messages)
+
+    def _convert_to_llm(self, messages: list[RuntimeMessage]) -> list[dict[str, Any]]:
+        try:
+            return self._provider_hooks.apply_convert_to_llm(self._llm, messages)
+        except Exception:  # noqa: BLE001 - fall back to the standard provider conversion
+            logger.debug("[runtime] convert_to_llm raised; using default conversion", exc_info=True)
+            return convert_to_llm_messages(self._llm, messages)

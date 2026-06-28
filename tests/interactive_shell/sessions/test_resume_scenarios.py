@@ -32,11 +32,14 @@ def _capture() -> tuple[Console, io.StringIO]:
 def _read_turns(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and json.loads(line).get("type") == "turn"
-    ]
+    turns: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        rec = json.loads(line)
+        if rec.get("type") == "custom_message" and rec.get("custom_type") == "turn_stub":
+            turns.append({"type": "turn", "kind": rec.get("kind"), "text": rec.get("text")})
+    return turns
 
 
 def _write_finalized_session(
@@ -51,23 +54,71 @@ def _write_finalized_session(
     path = sessions_dir / f"{session_id}.jsonl"
     msgs = messages or [("user", chat_text), ("assistant", "check connection pool")]
     ctx = context or {"service": "redis"}
+    ids = [f"entry{i}" for i in range(1, 6)]
     lines = [
         json.dumps(
             {
-                "type": "session_start",
-                "session_id": session_id,
-                "started_at": "2026-05-29T10:00:00+00:00",
+                "type": "session",
+                "version": 2,
+                "id": session_id,
+                "created_at": "2026-05-29T10:00:00+00:00",
+                "cwd": "",
             }
         ),
-        json.dumps({"type": "turn", "kind": "chat", "text": chat_text}),
         json.dumps(
             {
-                "type": "conversation_snapshot",
-                "cli_agent_messages": [list(m) for m in msgs],
-                "accumulated_context": ctx,
+                "id": ids[0],
+                "parent_id": None,
+                "timestamp": "2026-05-29T10:00:01+00:00",
+                "type": "custom_message",
+                "custom_type": "turn_stub",
+                "kind": "chat",
+                "text": chat_text,
+                "display": False,
             }
         ),
-        json.dumps({"type": "session_end", "total_turns": 1}),
+        json.dumps(
+            {
+                "id": ids[1],
+                "parent_id": ids[0],
+                "timestamp": "2026-05-29T10:00:02+00:00",
+                "type": "message",
+                "role": "user",
+                "content": msgs[0][1],
+                "metadata": {"kind": "chat"},
+            }
+        ),
+        json.dumps(
+            {
+                "id": ids[2],
+                "parent_id": ids[1],
+                "timestamp": "2026-05-29T10:00:03+00:00",
+                "type": "message",
+                "role": "assistant",
+                "content": msgs[1][1],
+                "metadata": {"kind": "chat"},
+            }
+        ),
+        json.dumps(
+            {
+                "id": ids[3],
+                "parent_id": ids[2],
+                "timestamp": "2026-05-29T10:00:04+00:00",
+                "type": "custom_message",
+                "custom_type": "accumulated_context",
+                "content": ctx,
+                "display": False,
+            }
+        ),
+        json.dumps(
+            {
+                "id": ids[4],
+                "parent_id": ids[3],
+                "timestamp": "2026-05-29T10:00:05+00:00",
+                "type": "leaf",
+                "total_turns": 1,
+            }
+        ),
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
@@ -171,10 +222,7 @@ class TestResumeScenarioMatrix:
         assert "slash" in kinds
         assert kinds.count("slash") >= 2
         assert "chat" in kinds
-        assert (
-            target_path.read_text(encoding="utf-8").strip().splitlines()[-1].find("session_end")
-            == -1
-        )
+        assert "leaf" in target_path.read_text(encoding="utf-8")
 
     def test_scenario_empty_starter_session_removed_on_resume(
         self,
@@ -253,13 +301,13 @@ class TestResumeScenarioMatrix:
         path.write_text(
             json.dumps(
                 {
-                    "type": "session_start",
-                    "session_id": empty_id,
-                    "started_at": "2026-05-29T10:00:00+00:00",
+                    "type": "session",
+                    "version": 2,
+                    "id": empty_id,
+                    "created_at": "2026-05-29T10:00:00+00:00",
+                    "cwd": "",
                 }
             )
-            + "\n"
-            + json.dumps({"type": "session_end", "total_turns": 0})
             + "\n",
             encoding="utf-8",
         )
@@ -320,7 +368,7 @@ class TestResumeScenarioMatrix:
         assert any(t["kind"] == "chat" for t in old_turns)
         assert not any(t.get("kind") == "slash" for t in old_turns)
         assert (isolated_sessions / f"{current_id}.jsonl").read_text(encoding="utf-8").find(
-            "session_end"
+            '"type": "leaf"'
         ) != -1
 
 

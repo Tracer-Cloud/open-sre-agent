@@ -1,4 +1,4 @@
-"""Session lifecycle slash commands: /clear and /new."""
+"""Session lifecycle slash commands: /clear, /new, and /compact."""
 
 from __future__ import annotations
 
@@ -41,4 +41,20 @@ def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
     )
     if saved_messages:
         console.print(f"[{DIM}]  {len(saved_messages)} messages in context · type to continue[/]")
+    return True
+
+
+def _cmd_compact(session: ReplSession, console: Console, _args: list[str]) -> bool:
+    """Compact the live session branch and persist a compaction entry."""
+    from context.session.compaction import compact_session_branch
+
+    result = compact_session_branch(session)
+    if result is None:
+        console.print(f"[{DIM}]Nothing to compact yet.[/]")
+        return True
+    console.print(
+        f"[{HIGHLIGHT}]compacted session context[/] "
+        f"[{DIM}]({result.before_chars} chars -> {result.after_chars} chars)[/]"
+    )
+    session.record("slash", "/compact")
     return True
