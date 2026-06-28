@@ -21,6 +21,10 @@ def _security_tool_path(name: str) -> str:
     return f"/usr/bin/{name}"
 
 
+def _darwin_platform() -> str:
+    return "Darwin"
+
+
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
@@ -56,9 +60,9 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(llm_credentials.platform, "system", _darwin_platform)
     monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
+    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         assert command == [
@@ -96,9 +100,9 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(llm_credentials.platform, "system", _darwin_platform)
     monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
+    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 44)

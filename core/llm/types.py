@@ -6,6 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+@dataclass(frozen=True)
+class LLMResponse:
+    content: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
 @dataclass
 class ToolCall:
     """A single tool invocation requested by the LLM."""
@@ -35,4 +42,4 @@ class AgentLLMResponse:
         return bool(self.tool_calls)
 
 
-__all__ = ["AgentLLMResponse", "ToolCall"]
+__all__ = ["AgentLLMResponse", "LLMResponse", "ToolCall"]

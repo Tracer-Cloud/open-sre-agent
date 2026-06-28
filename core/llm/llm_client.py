@@ -58,9 +58,18 @@ from config.config import (
 from config.llm_reasoning_effort import get_active_reasoning_effort
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 from core.llm.llm_retry import extract_retry_after_seconds
+from core.llm.structured_output import (
+    StructuredOutputClient,
+    extract_json_payload,
+    safe_json_loads,
+)
+from core.llm.types import LLMResponse
 from core.provider import resolve_llm_api_key
 
 logger = logging.getLogger(__name__)
+
+_safe_json_loads = safe_json_loads
+_extract_json_payload = extract_json_payload
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data Types
@@ -188,13 +197,6 @@ class RootCauseResult:
     non_validated_claims: list[str]
     causal_chain: list[str]
     remediation_steps: list[str]
-
-
-@dataclass(frozen=True)
-class LLMResponse:
-    content: str
-    input_tokens: int | None = None
-    output_tokens: int | None = None
 
 
 class LLMClient:
@@ -1090,33 +1092,6 @@ class OpenAILLMClient:
                 backoff_seconds *= 2
 
 
-class StructuredOutputClient:
-    """Wraps any LLM client with `.invoke` (API or CLI subprocess) for Pydantic JSON parsing."""
-
-    def __init__(self, base: Any, model: type[BaseModel]) -> None:
-        self._base = base
-        self._model = model
-
-    def with_config(self, **_kwargs) -> StructuredOutputClient:
-        return self
-
-    def invoke(self, prompt: str) -> Any:
-        schema = self._model.model_json_schema()
-        schema_json = json.dumps(schema, indent=2)
-        wrapped_prompt = (
-            f"{prompt}\n\nReturn ONLY valid JSON that matches this schema:\n{schema_json}\n"
-        )
-        response = self._base.invoke(wrapped_prompt)
-        payload = _extract_json_payload(response.content)
-        try:
-            return self._model.model_validate(payload)
-        except ValidationError:
-            if isinstance(payload, list) and "actions" in self._model.model_fields:
-                fallback = {"actions": payload, "rationale": "LLM returned actions only."}
-                return self._model.model_validate(fallback)
-            raise
-
-
 class SupportsLLMInvoke(Protocol):
     def with_config(self, **_kwargs: Any) -> SupportsLLMInvoke:
         pass
@@ -1176,51 +1151,6 @@ def _extract_text(response: Any) -> str:
             parts.append(block.text)
     text = "".join(parts).strip()
     return text or str(response)
-
-
-def _safe_json_loads(payload: str) -> Any:
-    try:
-        return json.loads(payload)
-    except json.JSONDecodeError:
-        return json.loads(payload, strict=False)
-
-
-def _extract_json_payload(text: str) -> Any:
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-        cleaned = cleaned.strip()
-    else:
-        # LLM may prefix the code block with prose ("Here is the JSON:")
-        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
-        if fence_match:
-            candidate = fence_match.group(1).strip()
-            try:
-                return _safe_json_loads(candidate)
-            except json.JSONDecodeError:
-                pass
-
-    try:
-        return _safe_json_loads(cleaned)
-    except json.JSONDecodeError:
-        logger.debug("Direct JSON parse failed, trying regex extraction")
-
-    obj_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if obj_match:
-        try:
-            return _safe_json_loads(obj_match.group(0))
-        except json.JSONDecodeError:
-            logger.debug("Object regex JSON parse failed, trying array extraction")
-
-    list_match = re.search(r"\[.*\]", cleaned, re.DOTALL)
-    if list_match:
-        try:
-            return _safe_json_loads(list_match.group(0))
-        except json.JSONDecodeError:
-            logger.debug("Array regex JSON parse also failed")
-
-    raise ValueError("LLM did not return valid JSON payload")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
