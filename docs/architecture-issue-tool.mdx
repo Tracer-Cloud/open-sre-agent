@@ -5,7 +5,7 @@ description: "Detect codebase layering violations, oversized modules, misplaced 
 
 ## Overview
 
-The `architecture_issue_tool` is a built-in static analysis capability in OpenSRE. It allows the agent to scan the repository dynamically, identifying architectural violations against codebase layering conventions, oversized files, compatibility shims, and misplaced modules.
+The `ArchitectureIssueTool` is a built-in static analysis capability in OpenSRE. It allows the agent to scan the repository dynamically, identifying architectural violations against codebase layering conventions, oversized files, compatibility shims, and misplaced modules.
 
 This tool is strictly read-only; it automatically suggests refactoring tasks for the codebase but does not modify any files or execute refactorings on its own.
 
@@ -64,7 +64,7 @@ When invoked, the tool returns a JSON dictionary containing the list of detected
 
 ## Layering Rules and Baselines
 
-Dependency constraints are defined in `tools/architecture_issue_tool/__init__.py`. Currently, the forbidden import direction checks include:
+Dependency constraints are defined in `tools/ArchitectureIssueTool/utils.py`. Currently, the forbidden import direction checks include:
 
 - `core` cannot import from `integrations`, `tools`, or `cli`
 - `integrations` cannot import from `tools` or `cli`

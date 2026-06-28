@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tests.tools.conftest import BaseToolContract
-from tools.architecture_issue_tool import find_architecture_violations
+from tools.ArchitectureIssueTool import find_architecture_violations
 
 
 class TestArchitectureIssueToolContract(BaseToolContract):

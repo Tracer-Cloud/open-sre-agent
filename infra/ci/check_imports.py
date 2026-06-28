@@ -38,16 +38,16 @@ class ImportCheck:
 
 
 def _run_importlinter(*, config: Path | None = None) -> int:
-    lint_imports = Path(sys.executable).with_name("lint-imports")
-    if not lint_imports.is_file():
-        lint_imports = Path(sys.executable).with_name("lint-imports.exe")
-    if not lint_imports.is_file():
+    import shutil
+
+    lint_imports = shutil.which("lint-imports")
+    if not lint_imports:
         print(
             "lint-imports not found — install dev deps (import-linter package).",
             file=sys.stderr,
         )
         return 1
-    command = [str(lint_imports)]
+    command = [lint_imports]
     if config is not None:
         command.extend(["--config", str(config)])
     completed = subprocess.run(command, cwd=_REPO_ROOT, check=False)

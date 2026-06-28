@@ -1,184 +1,16 @@
-"""Tool for detecting architecture issues and proposing refactoring tasks."""
-
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 from typing import Any
 
-from tools.tool_decorator import tool
-
-_SKIP_ROOT_DIRS = frozenset(
-    {
-        ".git",
-        ".github",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".venv",
-        "__pycache__",
-        "docs",
-        "infra",
-        "opensre.egg-info",
-        "packaging",
-        "tests",
-        "venv",
-    }
+from tools.ArchitectureIssueTool.checkers import analyze_misplaced, is_compatibility_shim
+from tools.ArchitectureIssueTool.utils import (
+    _BASELINE_IGNORES,
+    _FORBIDDEN_RULES,
+    discover_packages,
+    get_module_path,
+    resolve_import,
 )
-
-_FORBIDDEN_RULES: dict[str, set[str]] = {
-    "core": {"integrations", "tools", "cli"},
-    "integrations": {"tools", "cli"},
-    "tools": {"cli"},
-    "platform": {"core", "integrations", "tools", "cli"},
-    "config": {"core", "integrations", "tools", "cli", "platform", "infra"},
-}
-
-_BASELINE_IGNORES: set[str] = {
-    "integrations.hermes.sinks -> tools.watch_dog.alarms",
-    "integrations.cli -> cli.wizard.integration_health",
-}
-
-
-def discover_packages(repo_root: Path) -> list[str]:
-    """Dynamically discover package roots in the repository."""
-    packages = []
-    if not repo_root.exists():
-        return list(_FORBIDDEN_RULES.keys())
-    for child in repo_root.iterdir():
-        if (
-            child.is_dir()
-            and not child.name.startswith(".")
-            and child.name not in _SKIP_ROOT_DIRS
-            and any(child.rglob("*.py"))
-        ):
-            packages.append(child.name)
-    return sorted(packages)
-
-
-def get_module_path(file_path: Path, repo_root: Path) -> str:
-    """Compute the python module path for a file relative to the repo root."""
-    try:
-        rel_parts = file_path.relative_to(repo_root).with_suffix("").parts
-        module_path = ".".join(rel_parts)
-        if rel_parts and rel_parts[-1] == "__init__":
-            module_path = ".".join(rel_parts[:-1])
-        return module_path
-    except ValueError:
-        return ""
-
-
-def resolve_import(module_path: str, imported_module: str, level: int) -> str:
-    """Resolve an absolute or relative import to its full absolute module path."""
-    if level == 0:
-        return imported_module
-    parts = module_path.split(".")
-    if level >= len(parts):
-        return imported_module
-    base = ".".join(parts[:-level])
-    if base:
-        if imported_module:
-            return f"{base}.{imported_module}"
-        return base
-    return imported_module
-
-
-def is_compatibility_shim(file_path: str, content: str) -> bool:
-    """Check if a Python file is a compatibility-only forwarding module."""
-    if Path(file_path).name == "__init__.py":
-        return False
-    try:
-        tree = ast.parse(content)
-    except Exception:
-        return False
-
-    has_import_or_alias = False
-
-    for node in tree.body:
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            has_import_or_alias = True
-        elif isinstance(node, ast.Assign):
-            is_alias = True
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "__all__":
-                    continue
-                elif isinstance(target, ast.Name):
-                    if not isinstance(node.value, (ast.Name, ast.Attribute)):
-                        is_alias = False
-                else:
-                    is_alias = False
-            if is_alias:
-                has_import_or_alias = True
-            else:
-                return False
-        elif (
-            isinstance(node, ast.Expr)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-            or isinstance(node, ast.Pass)
-        ):
-            continue
-        else:
-            return False
-
-    return has_import_or_alias
-
-
-def analyze_misplaced(file_path: Path, repo_root: Path, content: str) -> tuple[bool, str]:
-    """Check if a module is misplaced according to architectural guidelines."""
-    # Check for vendors/ or services/ in path
-    parts = file_path.relative_to(repo_root).parts
-    if "vendors" in parts or "services" in parts:
-        return True, "Do not add or import top-level or nested 'vendors/' or 'services/' packages."
-
-    # Parse AST to check for tool decorators or base classes
-    has_tool_decorator = False
-    has_basetool_subclass = False
-    try:
-        tree = ast.parse(content)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for dec in node.decorator_list:
-                    if (isinstance(dec, ast.Name) and dec.id == "tool") or (
-                        isinstance(dec, ast.Call)
-                        and isinstance(dec.func, ast.Name)
-                        and dec.func.id == "tool"
-                    ):
-                        has_tool_decorator = True
-            elif isinstance(node, ast.ClassDef):
-                for base in node.bases:
-                    if isinstance(base, ast.Name) and base.id == "BaseTool":
-                        has_basetool_subclass = True
-    except Exception:
-        pass
-
-    # Tools must reside under tools/ directory
-    is_tool_code = has_tool_decorator or has_basetool_subclass
-    in_tools_dir = parts[0] == "tools"
-    if is_tool_code and not in_tools_dir:
-        return (
-            True,
-            "Tool definitions (functions decorated with @tool or classes inheriting from BaseTool) must reside inside the 'tools/' package.",
-        )
-
-    # Client/Verifier/Config code in tools is misplaced
-    if in_tools_dir and "utils" not in parts:
-        filename = file_path.name
-        is_client_file = (
-            filename == "client.py"
-            or filename == "verifier.py"
-            or filename == "config.py"
-            or filename.endswith("_client.py")
-            or filename.endswith("_verifier.py")
-            or filename.endswith("_config.py")
-        )
-        if is_client_file:
-            return True, (
-                "Treat 'integrations/' as the canonical user/config and external-client boundary, "
-                "and 'tools/' as the canonical agent-callable boundary. Client, config, or verifier "
-                "logic should reside in 'integrations/' rather than 'tools/'."
-            )
-
-    return False, ""
+from tools.tool_decorator import tool
 
 
 @tool(
@@ -189,6 +21,12 @@ def analyze_misplaced(file_path: Path, repo_root: Path, content: str) -> tuple[b
         "oversized files, compatibility shims, misplaced modules) and propose atomic refactor tasks."
     ),
     surfaces=("investigation", "chat"),
+    use_cases=[
+        "Identify cyclic dependencies or forbidden cross-package imports.",
+        "Find overly large files that need to be split.",
+        "Locate compatibility-only forwarding modules that should be deleted.",
+        "Detect tools misplaced in integration directories or vice versa.",
+    ],
     input_schema={
         "type": "object",
         "properties": {
@@ -213,14 +51,12 @@ def find_architecture_violations(
         root_path = Path(repo_root).resolve()
     else:
         current = Path(__file__).resolve()
-        found = False
+        # Default to repo root assuming tools/ArchitectureIssueTool/tool.py
+        root_path = current.parents[2] if len(current.parents) >= 3 else current.parent
         for parent in [current] + list(current.parents):
             if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
                 root_path = parent
-                found = True
                 break
-        if not found:
-            root_path = current.parents[2]
 
     packages = discover_packages(root_path)
     violations: list[dict[str, Any]] = []
@@ -248,6 +84,7 @@ def find_architecture_violations(
         rel_path_str = str(file_path.relative_to(root_path)).replace("\\", "/")
         source_pkg = file_path.relative_to(root_path).parts[0]
         module_path = get_module_path(file_path, root_path)
+        is_init = file_path.name == "__init__.py"
 
         # 1. Dependency Direction Checker
         try:
@@ -261,7 +98,7 @@ def find_architecture_violations(
                             file_imports.append((alias.name, node.lineno))
                 elif isinstance(node, ast.ImportFrom):
                     module_name = node.module or ""
-                    resolved = resolve_import(module_path, module_name, node.level)
+                    resolved = resolve_import(module_path, module_name, node.level, is_init=is_init)
                     top = resolved.split(".", 1)[0]
                     if top in packages:
                         file_imports.append((resolved, node.lineno))
@@ -272,8 +109,20 @@ def find_architecture_violations(
                     # Check if ignored by baseline
                     is_ignored = False
                     for ignore_edge in _BASELINE_IGNORES:
-                        ign_src, ign_dst = [p.strip() for p in ignore_edge.split("->")]
-                        if module_path.startswith(ign_src) and imported_module.startswith(ign_dst):
+                        if "->" not in ignore_edge:
+                            continue
+
+                        ign_src, ign_dst = [p.strip() for p in ignore_edge.split("->", 1)]
+
+                        # Match exactly or dot-prefix to avoid partial-word matches
+                        src_match = (module_path == ign_src) or module_path.startswith(
+                            f"{ign_src}."
+                        )
+                        dst_match = (imported_module == ign_dst) or imported_module.startswith(
+                            f"{ign_dst}."
+                        )
+
+                        if src_match and dst_match:
                             is_ignored = True
                             break
 
@@ -310,6 +159,7 @@ def find_architecture_violations(
                             }
                         )
         except Exception:
+            # Ignore AST parsing errors for invalid Python files
             pass
 
         # 2. Oversized File Checker

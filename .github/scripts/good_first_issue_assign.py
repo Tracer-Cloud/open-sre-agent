@@ -116,7 +116,9 @@ def _request_json(url: str, token: str) -> Any:
         },
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with (
+        urllib.request.urlopen(req, timeout=60) as resp
+    ):  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         return json.loads(resp.read().decode("utf-8"))
 
 
