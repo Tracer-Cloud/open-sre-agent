@@ -338,7 +338,7 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
 
     try:
         storage, env_path = persist_env_secret_with_env_fallback(env_var, value)
-    except (AuthSetupError, RuntimeError, ValueError) as exc:
+    except (AuthSetupError, RuntimeError, ValueError, OSError) as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"

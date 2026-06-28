@@ -443,6 +443,20 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
+@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
+def test_write_env_raw_permission_error(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    env_path.write_text("FOO=bar\n", encoding="utf-8")
+    env_path.chmod(stat.S_IRUSR)
+    try:
+        with pytest.raises(PermissionError, match="permission denied"):
+            _write_env_raw(env_path, ["ANTHROPIC_API_KEY=secret\n"])
+    finally:
+        env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
 def test_persist_env_secret_with_env_fallback_writes_env_when_keyring_unavailable(
     tmp_path, monkeypatch
 ) -> None:

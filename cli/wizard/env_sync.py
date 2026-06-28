@@ -187,9 +187,15 @@ def persist_env_secret_with_env_fallback(
 
 def _write_env_raw(target_path: Path, lines: list[str]) -> None:
     """Write ``.env`` lines including secrets (headless fallback only)."""
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    with target_path.open("w", encoding="utf-8", newline="") as env_file:
-        env_file.writelines(lines)
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with target_path.open("w", encoding="utf-8", newline="") as env_file:
+            env_file.writelines(lines)
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Cannot write to {target_path}: permission denied. "
+            "Ensure you have write access to this file, or run the command as the file owner."
+        ) from exc
     if os.name != "nt":
         with suppress(OSError):
             target_path.chmod(0o600)
