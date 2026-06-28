@@ -57,3 +57,27 @@ def test_parse_diagnosis_falls_back_to_evidence_when_assistant_text_missing(
 def test_parse_diagnosis_returns_unknown_without_text_or_evidence() -> None:
     result = node.parse_diagnosis([], {}, alert_name="SilentAlert")
     assert "insufficient evidence" in result.root_cause.lower()
+
+
+def test_parse_diagnosis_logs_when_evidence_synthesis_is_used(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(
+        node,
+        "_parse_via_structured_output",
+        lambda *_args, **_kwargs: InvestigationResult(
+            root_cause="ok",
+            root_cause_category="unknown",
+            validity_score=0.5,
+        ),
+    )
+
+    with caplog.at_level("INFO", logger=node.logger.name):
+        node.parse_diagnosis(
+            [{"role": "assistant", "content": ""}],
+            {"alertmanager_alerts": [{"status": "firing"}]},
+            alert_name="CheckoutErrors",
+            evidence_entries=[{"tool": "alertmanager", "summary": "2 firing alerts"}],
+        )
+
+    assert any("synthesizing diagnosis prompt" in record.message for record in caplog.records)

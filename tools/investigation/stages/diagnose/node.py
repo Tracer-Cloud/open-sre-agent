@@ -41,6 +41,13 @@ def parse_diagnosis(
             evidence_entries or [],
             alert_name=alert_name,
         )
+        if last_text:
+            logger.info(
+                "Agent emitted no final text; synthesizing diagnosis prompt from "
+                "%d evidence keys and %d evidence entries",
+                len(evidence),
+                len(evidence_entries or []),
+            )
     if not last_text:
         return InvestigationResult.unknown(alert_name)
 
