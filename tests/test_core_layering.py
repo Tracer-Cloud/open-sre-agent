@@ -22,9 +22,7 @@ _CORE_PACKAGES: tuple[Path, ...] = (
     Path("tools/investigation"),
     Path("platform/observability"),
 )
-_CORE_ONLY_PACKAGES: tuple[Path, ...] = (
-    Path("core/domain"),
-)
+_CORE_ONLY_PACKAGES: tuple[Path, ...] = (Path("core/domain"),)
 _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
     Path("core/__init__.py"),
     Path("core/agent_runtime.py"),

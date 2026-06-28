@@ -6,9 +6,8 @@ import logging
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from context.agent_context import AgentContext
 from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -53,6 +52,9 @@ from core.types import RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from context.agent_context import AgentContext
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback
