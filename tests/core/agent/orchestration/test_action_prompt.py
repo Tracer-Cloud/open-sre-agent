@@ -84,6 +84,9 @@ def test_system_prompt_hands_off_natural_language_slash_status_questions() -> No
         "do not run a slash command just because the command can display related information"
         in compact_prompt
     )
+    assert "for model/provider shell-state questions specifically" in compact_prompt
+    assert "unless the user explicitly typed a slash command" in compact_prompt
+    assert "current llm settings in its environment context" in compact_prompt
 
 
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:

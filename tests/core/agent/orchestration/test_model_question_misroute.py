@@ -16,14 +16,17 @@ so the turn router (``core.agent_harness.turn_orchestrator._route_turn``) takes 
 from __future__ import annotations
 
 import io
+from collections.abc import Iterator
 
 import pytest
 from rich.console import Console
 
+import core.llm.llm_client as llm_module
 import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.session import ReplSession
 from interactive_shell.command_registry import dispatch_slash
+from interactive_shell.runtime import agent_harness_adapters as shell_adapters
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
     tool_response,
@@ -154,3 +157,72 @@ def test_model_question_answered_when_handed_off(
     assert result.action_result.handled is False
     assert answer_calls == [_PROMPT]
     assert result.answered is True
+
+
+def test_model_question_handoff_answers_from_active_llm_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fixed UX: handoff prompt carries model settings and no internal action preview."""
+
+    def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("natural-language model question must not dispatch /model")
+
+    class _Settings:
+        provider = "openai"
+
+    class _LLM:
+        last_prompt: str | None = None
+
+        def invoke_stream(self, prompt: str) -> Iterator[str]:
+            self.last_prompt = prompt
+            yield "You are using OpenAI with reasoning model `gpt-5.5` and tool-call model `gpt-5.4-mini`."
+
+    llm = _LLM()
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM([tool_response("assistant_handoff", {"content": "chat:model"})]),
+    )
+    monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: llm)
+    monkeypatch.setattr(shell_adapters, "load_llm_settings", lambda: _Settings())
+    monkeypatch.setattr(
+        shell_adapters,
+        "resolve_provider_models",
+        lambda _settings, _provider: ("gpt-5.5", "gpt-5.4-mini"),
+    )
+    provider = shell_adapters.ShellPromptContextProvider
+    monkeypatch.setattr(provider, "cli_reference", lambda _self: "(ref)")
+    monkeypatch.setattr(provider, "agents_md", lambda _self: "")
+    monkeypatch.setattr(provider, "investigation_flow", lambda _self: "")
+
+    session = ReplSession()
+    session.cli_agent_messages = [
+        ("user", "/model"),
+        (
+            "assistant",
+            "switched LLM provider: openai\nreasoning model: gpt-5.5\ntoolcall model: gpt-5.4-mini",
+        ),
+    ]
+    console, buf = _capture()
+    result = shell_turn_execution.execute_shell_turn(
+        _PROMPT,
+        session,
+        console,
+        recorder=None,
+        gather_evidence=lambda *_a, **_k: None,
+    )
+
+    assert result.action_result.handled is False
+    assert result.answered is True
+    assert "gpt-5.5" in result.assistant_response_text
+    assert "gpt-5.4-mini" in result.assistant_response_text
+    assert llm.last_prompt is not None
+    assert "Active LLM settings in this session" in llm.last_prompt
+    assert "provider openai" in llm.last_prompt
+    assert "reasoning model gpt-5.5" in llm.last_prompt
+    assert "tool-call model gpt-5.4-mini" in llm.last_prompt
+
+    output = buf.getvalue()
+    assert "Requested actions" not in output
+    assert "$ /model" not in output
+    assert "/model" not in result.assistant_response_text

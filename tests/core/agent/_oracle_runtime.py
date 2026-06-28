@@ -294,7 +294,7 @@ def patch_execution_boundary(
         elif kind == "cli_command":
             payload = str(action_data.get("payload", "")).strip()
             action["payload"] = payload
-            content = payload
+            content = f"opensre {payload}" if payload else payload
             history_type = "cli_command"
         elif kind == "sample_alert":
             template = str(action_data.get("template", "")).strip()

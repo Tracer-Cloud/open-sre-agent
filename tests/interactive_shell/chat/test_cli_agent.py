@@ -207,7 +207,7 @@ class TestEnvironmentIntegrationGrounding:
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab", "datadog")
         block = _build_environment_block(session)
-        assert "--- Environment (configured integrations) ---" in block
+        assert "--- Environment (current shell state) ---" in block
         assert "gitlab" in block
         assert "datadog" in block
         assert "not in that list is NOT configured" in block
@@ -218,6 +218,34 @@ class TestEnvironmentIntegrationGrounding:
         session.configured_integrations = ()
         block = _build_environment_block(session)
         assert "No integrations are configured" in block
+
+    def test_block_lists_active_llm_settings_when_available(self) -> None:
+        block = build_environment_block(
+            integrations=("github",),
+            known=True,
+            llm_provider="openai",
+            reasoning_model="gpt-5.5",
+            toolcall_model="gpt-5.4-mini",
+            llm_settings_available=True,
+        )
+
+        assert "--- Environment (current shell state) ---" in block
+        assert "Configured integrations in this session: github" in block
+        assert "provider openai" in block
+        assert "reasoning model gpt-5.5" in block
+        assert "tool-call model gpt-5.4-mini" in block
+        assert "answer directly from these values" in block
+        assert "`/model`, `/status`, or `opensre config show`" in block
+
+    def test_block_states_llm_settings_unavailable(self) -> None:
+        block = build_environment_block(
+            integrations=(),
+            known=False,
+            llm_settings_available=False,
+        )
+
+        assert "Active LLM settings are unavailable" in block
+        assert "could not be read" in block
 
     def test_block_omitted_when_unknown(self) -> None:
         session = ReplSession()
@@ -235,8 +263,31 @@ class TestEnvironmentIntegrationGrounding:
         answer_shell_question("is sentry installed?", session, console)
 
         assert client.last_prompt is not None
-        assert "--- Environment (configured integrations) ---" in client.last_prompt
+        assert "--- Environment (current shell state) ---" in client.last_prompt
         assert "gitlab" in client.last_prompt
+
+    def test_answer_shell_question_injects_active_llm_settings(self, monkeypatch: Any) -> None:
+        client = _patch_llm(monkeypatch, "You are using OpenAI.")
+        _patch_grounding(monkeypatch)
+
+        class _Settings:
+            provider = "openai"
+
+        monkeypatch.setattr(shell_adapters, "load_llm_settings", lambda: _Settings())
+        monkeypatch.setattr(
+            shell_adapters,
+            "resolve_provider_models",
+            lambda _settings, _provider: ("gpt-5.5", "gpt-5.4-mini"),
+        )
+
+        console, _ = _capture()
+        answer_shell_question("what model am I using now?", ReplSession(), console)
+
+        assert client.last_prompt is not None
+        assert "Active LLM settings in this session" in client.last_prompt
+        assert "provider openai" in client.last_prompt
+        assert "reasoning model gpt-5.5" in client.last_prompt
+        assert "tool-call model gpt-5.4-mini" in client.last_prompt
 
 
 class TestObservationSummaryBlock:
