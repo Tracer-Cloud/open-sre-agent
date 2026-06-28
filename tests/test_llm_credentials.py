@@ -5,7 +5,13 @@ import subprocess
 import keyring
 
 import config.llm_credentials as llm_credentials
-from config.llm_auth.credentials import resolve_for_request, status
+import config.llm_keyring as llm_keyring
+from config.llm_auth.credentials import (
+    has_llm_api_key,
+    llm_api_key_source,
+    resolve_for_request,
+    status,
+)
 from config.llm_auth.records import save_provider_auth_record
 from tests.shared.keyring_backend import MemoryKeyring
 
@@ -45,11 +51,11 @@ def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:
-        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
+        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
         llm_credentials.save_llm_api_key("EXPERIMENTAL_API_KEY", "from-keyring")
-        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
+        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
         monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
-        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"
+        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"
     finally:
         keyring.set_keyring(previous_backend)
 
@@ -60,9 +66,9 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_credentials.platform, "system", _darwin_platform)
-    monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", _MacOSKeyringBackend)
+    monkeypatch.setattr(llm_keyring.platform, "system", _darwin_platform)
+    monkeypatch.setattr(llm_keyring.shutil, "which", _security_tool_path)
+    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         assert command == [
@@ -79,8 +85,8 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     def _get_password(_service: str, _username: str) -> str:
         raise AssertionError("metadata source check must not read the keychain secret")
 
-    monkeypatch.setattr(llm_credentials.subprocess, "run", _run)
-    monkeypatch.setattr(llm_credentials.keyring, "get_password", _get_password)
+    monkeypatch.setattr(llm_keyring.subprocess, "run", _run)
+    monkeypatch.setattr(llm_keyring.keyring, "get_password", _get_password)
     save_provider_auth_record(
         provider="openai",
         auth_name="openai",
@@ -90,8 +96,8 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
         env_var="OPENAI_API_KEY",
     )
 
-    assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "metadata"
-    assert llm_credentials.has_llm_api_key("OPENAI_API_KEY") is True
+    assert llm_api_key_source("OPENAI_API_KEY") == "metadata"
+    assert has_llm_api_key("OPENAI_API_KEY") is True
 
 
 def test_managed_missing_metadata_reports_none_without_reading_secret(
@@ -100,9 +106,9 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_credentials.platform, "system", _darwin_platform)
-    monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", _MacOSKeyringBackend)
+    monkeypatch.setattr(llm_keyring.platform, "system", _darwin_platform)
+    monkeypatch.setattr(llm_keyring.shutil, "which", _security_tool_path)
+    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 44)
@@ -110,11 +116,11 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     def _get_password(_service: str, _username: str) -> str:
         raise AssertionError("metadata source check must not read the keychain secret")
 
-    monkeypatch.setattr(llm_credentials.subprocess, "run", _run)
-    monkeypatch.setattr(llm_credentials.keyring, "get_password", _get_password)
+    monkeypatch.setattr(llm_keyring.subprocess, "run", _run)
+    monkeypatch.setattr(llm_keyring.keyring, "get_password", _get_password)
 
-    assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "none"
-    assert llm_credentials.has_llm_api_key("OPENAI_API_KEY") is False
+    assert llm_api_key_source("OPENAI_API_KEY") == "none"
+    assert has_llm_api_key("OPENAI_API_KEY") is False
 
 
 def test_request_resolution_marks_deleted_keychain_metadata_stale(monkeypatch, tmp_path) -> None:
@@ -176,9 +182,9 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
 
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
-    monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(llm_credentials.shutil, "which", lambda _name: None)
-    monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: backend_class())
+    monkeypatch.setattr(llm_keyring.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(llm_keyring.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", lambda: backend_class())
 
     lines = llm_credentials.get_keyring_setup_instructions("ANTHROPIC_API_KEY")
 

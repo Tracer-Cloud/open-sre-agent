@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shlex
+import subprocess
 import sys
 from typing import Literal
 
@@ -45,6 +47,10 @@ from platform.terminal.theme import (
 DEFAULT_GITHUB_MCP_MODE = _integration_configurators_module.DEFAULT_GITHUB_MCP_MODE
 DEFAULT_GITHUB_MCP_URL = _integration_configurators_module.DEFAULT_GITHUB_MCP_URL
 WIZARD_TOTAL_STEPS = 4
+_CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
+    "claude-code": ("auth", "login"),
+    "codex": ("login",),
+}
 
 __all__ = [
     "DEFAULT_GITHUB_MCP_MODE",
@@ -84,6 +90,46 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
     return provider.label
 
 
+def _subscription_login_command(
+    provider: ProviderOption, binary_path: str | None
+) -> list[str] | None:
+    """Return the vendor CLI login command for subscription-backed LLM providers."""
+    if not binary_path:
+        return None
+    args = _CLI_SUBSCRIPTION_LOGIN_ARGS.get(provider.value)
+    if args is None:
+        return None
+    return [binary_path, *args]
+
+
+def _run_subscription_login(provider: ProviderOption, binary_path: str | None) -> bool:
+    """Launch the provider CLI login flow and report whether it exited cleanly."""
+    command = _subscription_login_command(provider, binary_path)
+    if command is None:
+        auth_hint = provider.adapter_factory().auth_hint if provider.adapter_factory else ""
+        _console.print(
+            f"[{WARNING}]  {GLYPH_WARNING}  No browser login command is registered for "
+            f"{provider.label}. {auth_hint}[/]"
+        )
+        return False
+
+    _console.print(f"[{SECONDARY}]Launching {shlex.join(command)} for browser login…[/]")
+    try:
+        result = subprocess.run(command, check=False)
+    except KeyboardInterrupt:
+        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Login cancelled.[/]")
+        return False
+    except OSError as exc:
+        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Could not launch login: {exc}[/]")
+        return False
+    if result.returncode != 0:
+        _console.print(
+            f"[{WARNING}]  {GLYPH_WARNING}  Login exited with code {result.returncode}.[/]"
+        )
+        return False
+    return True
+
+
 def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", "repick"]:
     """Probe CLI binary + auth; recovery menu when missing. ``repick`` = choose another LLM."""
     factory = provider.adapter_factory
@@ -109,8 +155,16 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
                 if probe.logged_in is False
                 else f"Could not verify {provider.label} login. What next?"
             )
-            action = _choose(
-                status_prompt,
+            choices = []
+            if _subscription_login_command(provider, probe.bin_path) is not None:
+                choices.append(
+                    Choice(
+                        value="login",
+                        label="Open browser login now",
+                        hint=auth_hint,
+                    )
+                )
+            choices.extend(
                 [
                     Choice(
                         value="retry",
@@ -122,11 +176,18 @@ def _run_cli_llm_onboarding(provider: ProviderOption) -> Literal["ok", "abort", 
                         label="Pick a different LLM provider",
                         hint=None,
                     ),
-                ],
-                default="retry",
+                ]
+            )
+            action = _choose(
+                status_prompt,
+                choices,
+                default="login" if choices[0].value == "login" else "retry",
             )
             if action == "repick":
                 return "repick"
+            if action == "login":
+                _run_subscription_login(provider, probe.bin_path)
+                continue
             continue
         _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {probe.detail}[/]")
         action = _choose(

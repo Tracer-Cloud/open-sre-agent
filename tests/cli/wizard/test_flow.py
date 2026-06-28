@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from unittest.mock import MagicMock
 
 import pytest
@@ -1181,6 +1182,88 @@ def test_run_cli_llm_onboarding_ok_after_login_retry(monkeypatch) -> None:
     monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "retry")
     result = flow._run_cli_llm_onboarding(provider)
     assert result == "ok"
+    assert len(detect_calls) == 2
+
+
+def test_run_cli_llm_onboarding_launches_codex_browser_login(monkeypatch) -> None:
+    adapter = MagicMock()
+    adapter.name = "codex"
+    adapter.binary_env_key = "CODEX_BIN"
+    adapter.install_hint = "npm i -g @openai/codex"
+    adapter.auth_hint = "Run: codex login"
+    detect_calls: list[object] = []
+
+    def _detect():
+        detect_calls.append(None)
+        if len(detect_calls) == 1:
+            return MagicMock(
+                installed=True,
+                logged_in=False,
+                bin_path="/usr/local/bin/codex",
+                detail="Not logged in.",
+            )
+        return MagicMock(installed=True, logged_in=True, detail="Logged in.")
+
+    adapter.detect = _detect
+    provider = MagicMock()
+    provider.value = "codex"
+    provider.label = "OpenAI Codex CLI"
+    provider.adapter_factory = lambda: adapter
+    login_commands: list[list[str]] = []
+
+    def _fake_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        del check
+        login_commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
+    monkeypatch.setattr(flow.subprocess, "run", _fake_run)
+
+    result = flow._run_cli_llm_onboarding(provider)
+
+    assert result == "ok"
+    assert login_commands == [["/usr/local/bin/codex", "login"]]
+    assert len(detect_calls) == 2
+
+
+def test_run_cli_llm_onboarding_launches_claude_browser_login(monkeypatch) -> None:
+    adapter = MagicMock()
+    adapter.name = "claude-code"
+    adapter.binary_env_key = "CLAUDE_CODE_BIN"
+    adapter.install_hint = "npm i -g @anthropic-ai/claude-code"
+    adapter.auth_hint = "Run: claude auth login"
+    detect_calls: list[object] = []
+
+    def _detect():
+        detect_calls.append(None)
+        if len(detect_calls) == 1:
+            return MagicMock(
+                installed=True,
+                logged_in=False,
+                bin_path="/opt/homebrew/bin/claude",
+                detail="Not authenticated.",
+            )
+        return MagicMock(installed=True, logged_in=True, detail="Authenticated.")
+
+    adapter.detect = _detect
+    provider = MagicMock()
+    provider.value = "claude-code"
+    provider.label = "Anthropic Claude Code CLI"
+    provider.adapter_factory = lambda: adapter
+    login_commands: list[list[str]] = []
+
+    def _fake_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        del check
+        login_commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
+    monkeypatch.setattr(flow.subprocess, "run", _fake_run)
+
+    result = flow._run_cli_llm_onboarding(provider)
+
+    assert result == "ok"
+    assert login_commands == [["/opt/homebrew/bin/claude", "auth", "login"]]
     assert len(detect_calls) == 2
 
 

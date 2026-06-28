@@ -17,9 +17,9 @@ from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
 from cli.wizard.prompts import select as select_prompt
 from cli.wizard.store import get_store_path, load_local_config
-from config.llm_auth.credentials import save_api_key
+from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import get_keyring_setup_instructions, has_llm_api_key, save_llm_api_key
+from config.llm_credentials import get_keyring_setup_instructions, save_llm_api_key
 from config.version import get_version
 from integrations.store import get_integration
 from platform.terminal.theme import (

@@ -10,9 +10,9 @@ from pathlib import Path
 
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 from config.llm_auth.credentials import delete as delete_provider_auth
-from config.llm_auth.credentials import save_api_key
+from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
+from config.llm_credentials import delete_llm_api_key, save_llm_api_key
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
 _NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})

@@ -828,10 +828,10 @@ def get_agent_llm() -> _AgentClientType:
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
-        from core.llm.llm_client import _is_anthropic_bedrock_model
+        from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
 
         model = settings.bedrock_reasoning_model
-        if _is_anthropic_bedrock_model(model):
+        if is_anthropic_bedrock_model(model):
             _agent_client = BedrockAgentClient(
                 model=model,
                 max_tokens=BEDROCK_LLM_CONFIG.max_tokens,

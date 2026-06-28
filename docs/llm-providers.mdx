@@ -49,8 +49,9 @@ opensre onboard
 
 When a provider has more than one supported auth route, onboarding lists the
 auth methods as separate choices. For example, choose **Anthropic API key** for
-`ANTHROPIC_API_KEY` or **Anthropic Claude Code CLI** to reuse a Claude Code
-subscription login.
+`ANTHROPIC_API_KEY` or **Anthropic Claude Code CLI** to use a Claude subscription
+through the Claude Code CLI. If that CLI is installed but not logged in, onboarding
+can launch the vendor browser login and then re-detect the session.
 
 CLI-backed choices delegate browser login, token storage, refresh, and logout to
 the vendor CLI. OpenSRE does not persist those OAuth tokens directly; the
@@ -239,7 +240,7 @@ CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They auth
 
 ```bash
 export LLM_PROVIDER=codex
-# Authenticate the Codex CLI separately:
+# Authenticate through onboarding, `/login chatgpt`, or the Codex CLI directly:
 codex login
 # Optional overrides (all blank-by-default):
 export CODEX_MODEL=
@@ -247,21 +248,23 @@ export CODEX_BIN=
 ```
 
 Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If `CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI's currently configured model. If `CODEX_BIN` is unset, the binary is resolved via `PATH` and known install locations.
-Run `opensre auth login chatgpt` to detect the Codex CLI login and persist `LLM_PROVIDER=codex`.
+Run `opensre onboard`, `/login chatgpt`, or `opensre auth login chatgpt` to launch
+Codex browser login when needed and persist `LLM_PROVIDER=codex`.
 
 ### Claude Code
 
 ```bash
 export LLM_PROVIDER=claude-code
-# Authenticate the Claude Code CLI separately:
-claude login
+# Authenticate through onboarding, `/login claude`, or the Claude Code CLI directly:
+claude auth login
 # Optional overrides (all blank-by-default):
 export CLAUDE_CODE_MODEL=
 export CLAUDE_CODE_BIN=
 ```
 
 Requires the [Claude Code CLI](https://github.com/anthropics/claude-code) (`npm i -g @anthropic-ai/claude-code`). If `CLAUDE_CODE_MODEL` is unset, OpenSRE omits the `--model` flag and the CLI uses its configured default. If `CLAUDE_CODE_BIN` is unset, the binary is resolved via `PATH` and known install locations.
-Run `opensre auth login claude` to detect Claude subscription login and persist `LLM_PROVIDER=claude-code`.
+Run `opensre onboard`, `/login claude`, or `opensre auth login claude` to launch
+Claude browser login when needed and persist `LLM_PROVIDER=claude-code`.
 
 ### GitHub Copilot
 

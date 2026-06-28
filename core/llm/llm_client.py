@@ -57,19 +57,31 @@ from config.config import (
 )
 from config.llm_reasoning_effort import get_active_reasoning_effort
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
+from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
 from core.llm.llm_retry import extract_retry_after_seconds
-from core.llm.structured_output import (
-    StructuredOutputClient,
-    extract_json_payload,
-    safe_json_loads,
-)
+from core.llm.structured_output import StructuredOutputClient
 from core.llm.types import LLMResponse
-from core.provider import resolve_llm_api_key
 
 logger = logging.getLogger(__name__)
 
-_safe_json_loads = safe_json_loads
-_extract_json_payload = extract_json_payload
+
+def _resolve_llm_api_key(env_name: str) -> str:
+    from config.llm_auth.credentials import resolve_api_key_env_for_request
+    from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
+
+    resolved = resolve_api_key_env_for_request(env_name)
+    if resolved:
+        return resolved
+    for provider, provider_env in API_KEY_PROVIDER_ENVS.items():
+        if provider_env == env_name:
+            raise RuntimeError(
+                f"Missing credential for LLM provider '{provider}'. Set {env_name} "
+                f"or run `opensre auth login {provider}`."
+            )
+    return resolved
+
+
+resolve_llm_api_key = _resolve_llm_api_key
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data Types
@@ -369,27 +381,8 @@ class LLMClient:
 
 
 def _is_anthropic_bedrock_model(model_id: str) -> bool:
-    """Return True when *model_id* should be routed through the AnthropicBedrock SDK.
-
-    Anthropic model IDs on Bedrock look like:
-      - ``anthropic.claude-*``
-      - ``us.anthropic.claude-*``  (cross-region inference profiles)
-      - ``arn:aws:bedrock:*:foundation-model/anthropic.claude-*``
-      - ``arn:aws:bedrock:*:application-inference-profile/*`` (unknown vendor → Converse)
-
-    For ARN-based application inference profiles we cannot tell the backing
-    foundation model from the ID alone (it may point at Mistral, Llama, etc.).
-    Those ARNs route to the model-agnostic Converse API rather than forcing
-    the Anthropic SDK (which would fail for non-Claude pools).
-    """
-    model_lower = model_id.lower()
-    if "anthropic.claude" in model_lower:
-        return True
-    # Application inference profile ARNs encode no vendor — use converse (all models).
-    if model_lower.startswith("arn:") and "application-inference-profile" in model_lower:
-        return False
-    # Anything else (mistral.*, openai.*, meta.*, etc.) → boto3 converse
-    return False
+    """Backward-compatible alias for :func:`is_anthropic_bedrock_model`."""
+    return is_anthropic_bedrock_model(model_id)
 
 
 class BedrockLLMClient:
