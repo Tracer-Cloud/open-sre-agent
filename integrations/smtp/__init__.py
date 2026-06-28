@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from integrations.config_models import SMTPIntegrationConfig
+from integrations._validation_helpers import report_classify_failure
+
+logger = logging.getLogger(__name__)
 
 
 def classify(
-    credentials: dict[str, Any], _record_id: str
+    credentials: dict[str, Any], record_id: str
 ) -> tuple[SMTPIntegrationConfig | None, str | None]:
     try:
         cfg = SMTPIntegrationConfig.model_validate(
@@ -22,6 +26,9 @@ def classify(
                 "default_to": credentials.get("default_to"),
             }
         )
-    except Exception:
+    except Exception as exc:
+        report_classify_failure(
+            exc, logger=logger, integration="smtp", record_id=record_id
+        )
         return None, None
     return cfg, "smtp"

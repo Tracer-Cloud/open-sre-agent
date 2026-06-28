@@ -120,6 +120,12 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("victoria_logs", "integrations.victoria_logs", "VictoriaLogsIntegrationConfig"),
     ("splunk", "integrations.splunk", "SplunkIntegrationConfig"),
     ("supabase", "integrations.supabase", "build_supabase_config"),
+    ("whatsapp", "integrations.whatsapp", "WhatsAppConfig"),
+    ("twilio", "integrations.twilio", "TwilioIntegrationConfig"),
+    ("smtp", "integrations.smtp", "SMTPIntegrationConfig"),
+    ("signoz", "integrations.signoz", "build_signoz_config"),
+    ("tempo", "integrations.tempo", "build_tempo_config"),
+    ("bitbucket", "integrations.bitbucket", "BitbucketConfig"),
 ]
 
 
