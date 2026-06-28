@@ -1328,20 +1328,27 @@ def test_run_cli_llm_onboarding_launches_codex_browser_login(monkeypatch) -> Non
     provider.value = "codex"
     provider.label = "OpenAI Codex CLI"
     provider.adapter_factory = lambda: adapter
+    preflight_commands: list[list[str]] = []
     login_commands: list[list[str]] = []
 
-    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
+    def _fake_preflight(command: list[str]) -> flow._LoginProcessResult:
+        preflight_commands.append(command)
+        return flow._LoginProcessResult(returncode=0)
+
+    def _fake_login(command: list[str]) -> flow._LoginProcessResult:
         login_commands.append(command)
         return flow._LoginProcessResult(returncode=0)
 
     monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
-    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
+    monkeypatch.setattr(flow, "_run_login_preflight_process", _fake_preflight)
+    monkeypatch.setattr(flow, "_run_interactive_login_process", _fake_login)
 
     result = flow._run_cli_llm_onboarding(provider)
 
     assert result == "ok"
+    assert preflight_commands == [["/usr/local/bin/codex", "login", "--help"]]
     assert login_commands == [["/usr/local/bin/codex", "login"]]
-    assert len(detect_calls) == 2
+    assert len(detect_calls) == 1
 
 
 def test_run_cli_llm_onboarding_surfaces_codex_config_error(monkeypatch) -> None:
@@ -1366,7 +1373,7 @@ def test_run_cli_llm_onboarding_surfaces_codex_config_error(monkeypatch) -> None
     def _choose(*_args, **_kwargs):
         return choices.pop(0)
 
-    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
+    def _fake_preflight(command: list[str]) -> flow._LoginProcessResult:
         del command
         return flow._LoginProcessResult(
             returncode=1,
@@ -1379,11 +1386,78 @@ def test_run_cli_llm_onboarding_surfaces_codex_config_error(monkeypatch) -> None
         )
 
     monkeypatch.setattr(flow, "_choose", _choose)
-    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
+    monkeypatch.setattr(flow, "_run_login_preflight_process", _fake_preflight)
+    monkeypatch.setattr(flow, "_run_interactive_login_process", MagicMock())
 
     result = flow._run_cli_llm_onboarding(provider, display_label="OpenAI OAuth")
 
     assert result == "repick"
+    flow._run_interactive_login_process.assert_not_called()
+
+
+def test_run_cli_llm_onboarding_repairs_codex_stale_service_tier(monkeypatch, tmp_path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        'model = "gpt-5.5"\nservice_tier = "priority"\n[features]\n',
+        encoding="utf-8",
+    )
+
+    adapter = MagicMock()
+    adapter.name = "codex"
+    adapter.binary_env_key = "CODEX_BIN"
+    adapter.install_hint = "npm i -g @openai/codex"
+    adapter.auth_hint = "Run: codex login"
+    adapter.detect.return_value = MagicMock(
+        installed=True,
+        logged_in=None,
+        bin_path="/opt/homebrew/bin/codex",
+        detail="Auth status unknown.",
+    )
+    provider = MagicMock()
+    provider.value = "codex"
+    provider.label = "OpenAI Codex CLI"
+    provider.adapter_factory = lambda: adapter
+
+    choices = iter(["login", "repair"])
+    preflight_results = iter(
+        [
+            flow._LoginProcessResult(
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "Error loading configuration: "
+                    f"{config_path}:2:16: unknown variant `priority`, expected `fast` or `flex`"
+                ),
+            ),
+            flow._LoginProcessResult(returncode=0),
+        ]
+    )
+    preflight_commands: list[list[str]] = []
+    login_commands: list[list[str]] = []
+
+    def _fake_preflight(command: list[str]) -> flow._LoginProcessResult:
+        preflight_commands.append(command)
+        return next(preflight_results)
+
+    def _fake_login(command: list[str]) -> flow._LoginProcessResult:
+        login_commands.append(command)
+        return flow._LoginProcessResult(returncode=0)
+
+    monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: next(choices))
+    monkeypatch.setattr(flow, "_run_login_preflight_process", _fake_preflight)
+    monkeypatch.setattr(flow, "_run_interactive_login_process", _fake_login)
+
+    result = flow._run_cli_llm_onboarding(provider, display_label="OpenAI OAuth")
+
+    assert result == "ok"
+    assert preflight_commands == [
+        ["/opt/homebrew/bin/codex", "login", "--help"],
+        ["/opt/homebrew/bin/codex", "login", "--help"],
+    ]
+    assert login_commands == [["/opt/homebrew/bin/codex", "login"]]
+    assert config_path.read_text(encoding="utf-8") == (
+        'model = "gpt-5.5"\nservice_tier = "fast"\n[features]\n'
+    )
 
 
 def test_run_cli_llm_onboarding_launches_claude_browser_login(monkeypatch) -> None:
@@ -1412,18 +1486,18 @@ def test_run_cli_llm_onboarding_launches_claude_browser_login(monkeypatch) -> No
     provider.adapter_factory = lambda: adapter
     login_commands: list[list[str]] = []
 
-    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
+    def _fake_login(command: list[str]) -> flow._LoginProcessResult:
         login_commands.append(command)
         return flow._LoginProcessResult(returncode=0)
 
     monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
-    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
+    monkeypatch.setattr(flow, "_run_interactive_login_process", _fake_login)
 
     result = flow._run_cli_llm_onboarding(provider)
 
     assert result == "ok"
     assert login_commands == [["/opt/homebrew/bin/claude", "auth", "login"]]
-    assert len(detect_calls) == 2
+    assert len(detect_calls) == 1
 
 
 def test_run_cli_llm_onboarding_repick_when_auth_status_unclear(monkeypatch) -> None:

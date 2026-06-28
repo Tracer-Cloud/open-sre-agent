@@ -7,8 +7,8 @@ import re
 import shlex
 import subprocess
 import sys
-import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import questionary
@@ -67,6 +67,14 @@ _HIDDEN_ONBOARDING_BACKEND_PROVIDERS = frozenset(OAUTH_BACKEND_PROVIDER_BY_PROVI
 _CODEX_CONFIG_ERROR_RE = re.compile(
     r"Error loading configuration:\s*(?P<location>[^\n]+config\.toml:\d+:\d+):\s*(?P<detail>[^\n]+)"
 )
+_CODEX_CONFIG_LOCATION_RE = re.compile(r"^(?P<path>.+config\.toml):(?P<line>\d+):(?P<column>\d+)$")
+_CODEX_STALE_SERVICE_TIER_DETAIL_RE = re.compile(
+    r"unknown variant [`'\"]priority[`'\"], expected [`'\"]fast[`'\"] or [`'\"]flex[`'\"]"
+)
+_CODEX_PRIORITY_SERVICE_TIER_RE = re.compile(
+    r"^(?P<prefix>[ \t]*service_tier[ \t]*=[ \t]*)(?P<quote>[\"'])"
+    r"priority(?P=quote)(?P<suffix>[ \t]*(?:#.*)?)?(?P<newline>\r?\n)?$"
+)
 
 __all__ = [
     "DEFAULT_GITHUB_MCP_MODE",
@@ -103,6 +111,8 @@ class _SubscriptionLoginResult:
     ok: bool
     detail: str = ""
     config_error: bool = False
+    config_error_location: str = ""
+    config_error_detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -110,6 +120,12 @@ class _LoginProcessResult:
     returncode: int
     stdout: str = ""
     stderr: str = ""
+
+
+@dataclass(frozen=True)
+class _CodexConfigRepairResult:
+    ok: bool
+    detail: str
 
 
 def _provider_choice_label(provider: ProviderOption) -> str:
@@ -204,50 +220,114 @@ def _subscription_login_command(
     return [binary_path, *args]
 
 
-def _stream_login_pipe(pipe, chunks: list[str]) -> None:
+def _subscription_login_preflight_command(
+    provider: ProviderOption, binary_path: str | None
+) -> list[str] | None:
+    """Return a non-OAuth command that validates config before interactive login."""
+    if not binary_path:
+        return None
+    if provider.value == "codex":
+        return [binary_path, "login", "--help"]
+    return None
+
+
+def _parse_codex_config_error_location(location: str) -> tuple[Path, int] | None:
+    match = _CODEX_CONFIG_LOCATION_RE.match(location.strip())
+    if match is None:
+        return None
     try:
-        for line in pipe:
-            chunks.append(line)
-            _console.print(line.rstrip("\n"), markup=False)
-    finally:
-        pipe.close()
+        line_no = int(match.group("line"))
+    except ValueError:
+        return None
+    if line_no < 1:
+        return None
+    return Path(match.group("path")).expanduser(), line_no
 
 
-def _run_login_process(command: list[str]) -> _LoginProcessResult:
-    proc = subprocess.Popen(
+def _codex_priority_service_tier_repair_hint(*, location: str, detail: str) -> str | None:
+    if not _CODEX_STALE_SERVICE_TIER_DETAIL_RE.search(detail):
+        return None
+    parsed = _parse_codex_config_error_location(location)
+    if parsed is None:
+        return None
+    path, line_no = parsed
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError:
+        return None
+    if line_no > len(lines):
+        return None
+    if _CODEX_PRIORITY_SERVICE_TIER_RE.match(lines[line_no - 1]) is None:
+        return None
+    return f"Change {path}:{line_no} service_tier from priority to fast"
+
+
+def _repair_codex_priority_service_tier(*, location: str, detail: str) -> _CodexConfigRepairResult:
+    hint = _codex_priority_service_tier_repair_hint(location=location, detail=detail)
+    if hint is None:
+        return _CodexConfigRepairResult(
+            ok=False,
+            detail="This Codex config error is not one OpenSRE can repair safely.",
+        )
+    parsed = _parse_codex_config_error_location(location)
+    if parsed is None:
+        return _CodexConfigRepairResult(ok=False, detail=f"Could not parse {location}.")
+
+    path, line_no = parsed
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except OSError as exc:
+        return _CodexConfigRepairResult(
+            ok=False,
+            detail=f"Could not read {path}: {exc}",
+        )
+    if line_no > len(lines):
+        return _CodexConfigRepairResult(
+            ok=False,
+            detail=f"Could not repair {path}: line {line_no} is outside the file.",
+        )
+
+    match = _CODEX_PRIORITY_SERVICE_TIER_RE.match(lines[line_no - 1])
+    if match is None:
+        return _CodexConfigRepairResult(
+            ok=False,
+            detail=f'Could not repair {path}: line {line_no} is no longer service_tier = "priority".',
+        )
+
+    lines[line_no - 1] = (
+        f"{match.group('prefix')}{match.group('quote')}fast{match.group('quote')}"
+        f"{match.group('suffix') or ''}{match.group('newline') or ''}"
+    )
+    try:
+        path.write_text("".join(lines), encoding="utf-8")
+    except OSError as exc:
+        return _CodexConfigRepairResult(
+            ok=False,
+            detail=f"Could not update {path}: {exc}",
+        )
+    return _CodexConfigRepairResult(ok=True, detail=hint)
+
+
+def _run_login_preflight_process(command: list[str]) -> _LoginProcessResult:
+    result = subprocess.run(
         command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        check=False,
+        capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    stdout_chunks: list[str] = []
-    stderr_chunks: list[str] = []
-    threads: list[threading.Thread] = []
-    if proc.stdout is not None:
-        thread = threading.Thread(
-            target=_stream_login_pipe,
-            args=(proc.stdout, stdout_chunks),
-            daemon=True,
-        )
-        thread.start()
-        threads.append(thread)
-    if proc.stderr is not None:
-        thread = threading.Thread(
-            target=_stream_login_pipe,
-            args=(proc.stderr, stderr_chunks),
-            daemon=True,
-        )
-        thread.start()
-        threads.append(thread)
-    returncode = proc.wait()
-    for thread in threads:
-        thread.join()
     return _LoginProcessResult(
-        returncode=returncode,
-        stdout="".join(stdout_chunks),
-        stderr="".join(stderr_chunks),
+        returncode=result.returncode,
+        stdout=result.stdout or "",
+        stderr=result.stderr or "",
+    )
+
+
+def _run_interactive_login_process(command: list[str]) -> _LoginProcessResult:
+    result = subprocess.run(command, check=False)
+    return _LoginProcessResult(
+        returncode=result.returncode,
     )
 
 
@@ -262,12 +342,16 @@ def _subscription_login_error(
     if provider.value == "codex":
         match = _CODEX_CONFIG_ERROR_RE.search(text)
         if match:
+            location = match.group("location")
+            detail = match.group("detail")
             return _SubscriptionLoginResult(
                 ok=False,
                 config_error=True,
+                config_error_location=location,
+                config_error_detail=detail,
                 detail=(
                     "Codex CLI could not start because its local config is invalid: "
-                    f"{match.group('location')} ({match.group('detail')}). "
+                    f"{location} ({detail}). "
                     "Fix that file, then retry OAuth login."
                 ),
             )
@@ -293,9 +377,22 @@ def _run_subscription_login(
         _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
         return _SubscriptionLoginResult(ok=False, detail=detail)
 
+    preflight_command = _subscription_login_preflight_command(provider, binary_path)
+    if preflight_command is not None:
+        try:
+            preflight_result = _run_login_preflight_process(preflight_command)
+        except OSError as exc:
+            detail = f"Could not check login config: {exc}"
+            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+            return _SubscriptionLoginResult(ok=False, detail=detail)
+        if preflight_result.returncode != 0:
+            login_result = _subscription_login_error(provider, preflight_result)
+            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
+            return login_result
+
     _console.print(f"[{SECONDARY}]Launching {shlex.join(command)} for browser login…[/]")
     try:
-        result = _run_login_process(command)
+        result = _run_interactive_login_process(command)
     except KeyboardInterrupt:
         _console.print(f"[{WARNING}]  {GLYPH_WARNING}  Login cancelled.[/]")
         return _SubscriptionLoginResult(ok=False, detail="Login cancelled.")
@@ -308,6 +405,68 @@ def _run_subscription_login(
         _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {login_result.detail}[/]")
         return login_result
     return _SubscriptionLoginResult(ok=True)
+
+
+def _recover_subscription_config_error(
+    provider: ProviderOption,
+    *,
+    provider_label: str,
+    binary_path: str | None,
+    login_result: _SubscriptionLoginResult,
+) -> Literal["ok", "continue", "repick"]:
+    repair_hint: str | None = None
+    if provider.value == "codex":
+        repair_hint = _codex_priority_service_tier_repair_hint(
+            location=login_result.config_error_location,
+            detail=login_result.config_error_detail,
+        )
+
+    choices: list[Choice] = []
+    if repair_hint is not None:
+        choices.append(
+            Choice(
+                value="repair",
+                label="Apply known Codex config fix and retry",
+                hint=repair_hint,
+            )
+        )
+    choices.extend(
+        [
+            Choice(
+                value="retry",
+                label="Retry after fixing local config",
+                hint=login_result.detail,
+            ),
+            Choice(
+                value="repick",
+                label="Pick a different LLM provider",
+                hint=None,
+            ),
+        ]
+    )
+    recovery = _choose(
+        f"{provider_label} OAuth could not start. What next?",
+        choices,
+        default="repair" if repair_hint is not None else "retry",
+    )
+    if recovery == "repick":
+        return "repick"
+    if recovery != "repair":
+        return "continue"
+
+    repair_result = _repair_codex_priority_service_tier(
+        location=login_result.config_error_location,
+        detail=login_result.config_error_detail,
+    )
+    if not repair_result.ok:
+        _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {repair_result.detail}[/]")
+        return "continue"
+
+    _console.print(f"[{SECONDARY}]  Updated Codex config: {repair_result.detail}.[/]")
+    retry_result = _run_subscription_login(provider, binary_path)
+    if retry_result.ok:
+        return "ok"
+    return "continue"
 
 
 def _run_cli_llm_onboarding(
@@ -370,23 +529,17 @@ def _run_cli_llm_onboarding(
                 return "repick"
             if action == "login":
                 login_result = _run_subscription_login(provider, probe.bin_path)
+                if login_result.ok:
+                    return "ok"
                 if login_result.config_error:
-                    recovery = _choose(
-                        f"{provider_label} OAuth could not start. What next?",
-                        [
-                            Choice(
-                                value="retry",
-                                label="Retry after fixing local config",
-                                hint=login_result.detail,
-                            ),
-                            Choice(
-                                value="repick",
-                                label="Pick a different LLM provider",
-                                hint=None,
-                            ),
-                        ],
-                        default="retry",
+                    recovery = _recover_subscription_config_error(
+                        provider,
+                        provider_label=provider_label,
+                        binary_path=probe.bin_path,
+                        login_result=login_result,
                     )
+                    if recovery == "ok":
+                        return "ok"
                     if recovery == "repick":
                         return "repick"
                 continue

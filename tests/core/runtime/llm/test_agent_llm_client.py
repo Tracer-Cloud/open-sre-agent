@@ -885,6 +885,48 @@ def test_get_agent_llm_returns_cli_backed_client_for_cli_providers(
     )
 
 
+def test_get_agent_llm_openai_oauth_routes_to_codex_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.llm.agent_llm_client import (
+        CLIBackedAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
+    monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    reset_agent_client()
+    client = get_agent_llm()
+
+    assert isinstance(client, CLIBackedAgentClient)
+    assert client._adapter.name == "codex"
+    assert client._model == "gpt-5.5"
+
+
+def test_get_agent_llm_anthropic_oauth_routes_to_claude_code_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.llm.agent_llm_client import (
+        CLIBackedAgentClient,
+        get_agent_llm,
+        reset_agent_client,
+    )
+
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
+    monkeypatch.setenv("CLAUDE_CODE_MODEL", "claude-opus-4-7")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    reset_agent_client()
+    client = get_agent_llm()
+
+    assert isinstance(client, CLIBackedAgentClient)
+    assert client._adapter.name == "claude-code"
+    assert client._model == "claude-opus-4-7"
+
+
 def test_cli_backed_agent_client_tool_call_parsing() -> None:
     """CLIBackedAgentClient correctly parses a JSON tool_calls response."""
     import types as _types

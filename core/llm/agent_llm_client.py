@@ -815,18 +815,29 @@ def get_agent_llm() -> _AgentClientType:
     except ValidationError as exc:
         raise RuntimeError(str(exc)) from exc
 
+    from config.llm_auth.auth_method import effective_llm_provider, get_configured_llm_auth_method
+
     provider = settings.provider
-    if provider == "openai":
+    runtime_provider = effective_llm_provider(provider, get_configured_llm_auth_method(provider))
+    if runtime_provider == "openai":
         from config.config import OPENAI_LLM_CONFIG
 
         _agent_client = OpenAIAgentClient(
             model=settings.openai_reasoning_model,
             max_tokens=OPENAI_LLM_CONFIG.max_tokens,
         )
-    elif provider in ("openrouter", "deepseek", "gemini", "nvidia", "minimax", "groq", "ollama"):
+    elif runtime_provider in (
+        "openrouter",
+        "deepseek",
+        "gemini",
+        "nvidia",
+        "minimax",
+        "groq",
+        "ollama",
+    ):
         # All OpenAI-compatible providers
-        _agent_client = _create_openai_compat_client(settings, provider)
-    elif provider == "bedrock":
+        _agent_client = _create_openai_compat_client(settings, runtime_provider)
+    elif runtime_provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
         from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
 
@@ -841,7 +852,7 @@ def get_agent_llm() -> _AgentClientType:
                 model=model,
                 max_tokens=BEDROCK_LLM_CONFIG.max_tokens,
             )
-    elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
+    elif (cli_reg := _get_cli_provider_registration(runtime_provider)) is not None:
         model_name = os.getenv(cli_reg.model_env_key, "").strip() or None
         _agent_client = CLIBackedAgentClient(cli_reg.adapter_factory(), model=model_name)
     else:
