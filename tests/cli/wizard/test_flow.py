@@ -50,8 +50,6 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
         flow, "probe_remote_target", lambda: ProbeResult("remote", True, "remote ok")
     )
@@ -240,8 +238,6 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
         _integration_configurators,
         "validate_grafana_integration",
@@ -316,8 +312,6 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(flow.questionary, "text", _mock_text)
     monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
-    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
-    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
         _integration_configurators,
         "validate_honeycomb_integration",

@@ -504,3 +504,42 @@ def test_sync_env_secret_warns_when_keyring_fallback_writes_env(
 
     assert warnings == [f"ANTHROPIC_API_KEY:{env_path}"]
     assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
+
+
+def test_sync_env_secret_fallback_preserves_prior_secrets(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+
+    sync_env_secret("DD_API_KEY", "datadog-api")
+    sync_env_secret("DD_APP_KEY", "datadog-app")
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "DD_API_KEY=datadog-api" in content
+    assert "DD_APP_KEY=datadog-app" in content
+
+
+def test_sync_env_values_preserves_fallback_secrets(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DD_API_KEY=datadog-api\nDD_APP_KEY=datadog-app\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+
+    sync_env_values({"DD_SITE": "datadoghq.com"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "DD_API_KEY=datadog-api" in content
+    assert "DD_APP_KEY=datadog-app" in content
+    assert "DD_SITE=datadoghq.com" in content
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows permission model differs")
+def test_write_env_raw_creates_file_with_owner_only_permissions(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    _write_env_raw(env_path, ["ANTHROPIC_API_KEY=secret\n"])
+
+    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
