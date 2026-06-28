@@ -56,8 +56,8 @@ def _reasoning_model_menu_choices(provider: object) -> list[tuple[str, str]]:
 def _toolcall_model_menu_choices(provider: object) -> list[tuple[str, str]]:
     model_options = list(getattr(provider, "models", ()))
     choices: list[tuple[str, str]] = [
-        ("__keep__", "keep"),
-        ("__match_reasoning__", "match-reasoning"),
+        ("__keep__", "keep current toolcall model"),
+        ("__match_reasoning__", "use same as reasoning model"),
     ]
     for option in model_options:
         value = str(getattr(option, "value", ""))
