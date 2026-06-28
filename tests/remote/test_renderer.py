@@ -1084,6 +1084,32 @@ class TestStreamRendererDiagnoseThrottle:
         monkeypatch.setattr(renderer_module, "Markdown", _SpyMarkdown)
         return fake_time, parse_count
 
+    def test_append_chunk_updates_live_with_text_when_region_is_open(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        from cli.ui.renderer.diagnose import _DiagnoseStreamRenderer
+        from rich.text import Text
+
+        renderer = _DiagnoseStreamRenderer()
+        mock_live = MagicMock()
+        renderer._live = mock_live
+        renderer._last_render = 0.0
+
+        fake_time = [1.0]
+        monkeypatch.setattr(
+            "cli.ui.renderer.diagnose.time.monotonic",
+            lambda: fake_time[0],
+        )
+
+        renderer.append_chunk(self._make_diagnose_chunk("token "))
+
+        mock_live.update.assert_called_once()
+        rendered = mock_live.update.call_args[0][0]
+        assert isinstance(rendered, Text)
+        assert "token " in str(rendered)
+
     @patch("cli.ui.renderer.diagnose.Live")
     @patch("interactive_shell.ui.output.tracker._EventLogDisplay")
     @patch.dict(os.environ, {"TRACER_OUTPUT_FORMAT": "rich"})
