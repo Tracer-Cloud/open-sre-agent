@@ -27,7 +27,7 @@ def load_opensre_env_files() -> None:
     if home_env.is_file():
         load_dotenv(home_env, override=True)
 
-    project_env = os.getenv("OPENSRE_PROJECT_ENV_PATH", "").strip()
+    project_env = shell_exports.get("OPENSRE_PROJECT_ENV_PATH", "").strip()
     if project_env:
         project_path = Path(project_env)
         if project_path.is_file():
