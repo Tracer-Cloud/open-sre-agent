@@ -149,6 +149,39 @@ Findings should appear in the configured chat. Long reports are truncated to Tel
 
 ---
 
+## Programmatic messaging: `telegram_send_message` tool
+
+When the Telegram integration is configured, OpenSRE exposes a
+`telegram_send_message` tool. The tool can send user-requested action messages,
+incident notifications, or follow-up updates to the configured default chat, or
+to an explicit `chat_id` when one is supplied. It uses plain text mode, so
+user-provided `<`, `>`, and `&` characters are sent as ordinary message text
+rather than Telegram HTML.
+
+```json
+{
+  "name": "telegram_send_message",
+  "arguments": {
+    "chat_id": "-1001234567890",
+    "message": "DB CPU is back below 70%; keeping the incident open for 10 minutes."
+  }
+}
+```
+
+The tool resolves the bot token from the same credential chain as the watchdog:
+integration store, then `TELEGRAM_BOT_TOKEN`, then the system keyring.
+If `chat_id` is omitted, it sends through the configured `default_chat_id`, so a
+user can ask OpenSRE to send a message through the configured Telegram bot
+without knowing or exposing the bot token.
+
+Delivery is an external side effect, so the tool is approval-gated in runtime
+surfaces that enforce tool approvals. Its result includes a stable `status`,
+`sent`, `error_type`, `chat_id`, `reply_to_message_id`, and `message_length`
+shape so follow-up tool calls can tell configuration failures from Telegram
+delivery failures.
+
+---
+
 ## Troubleshooting
 
 `opensre integrations verify telegram` only calls Telegram's `getMe` endpoint, so it surfaces token-validity errors but cannot detect chat-routing problems. Delivery-time errors only show up when an investigation actually posts.

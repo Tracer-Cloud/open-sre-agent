@@ -88,10 +88,12 @@ Steps:
 
 1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
-3. Keep the tool self-contained. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body.
-4. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
-5. Add tests that cover schema shape, availability, extraction, and the runtime behavior that the planner depends on.
-6. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
+3. Treat tool packages as production code, not registry placeholders. A tool package may not be an empty or nearly-empty `__init__.py` whose only purpose is discovery. Directionally, non-trivial tools should use focused sibling modules such as `tool.py`, `client.py`/`delivery.py`, `validation.py`, `models.py`, or `results.py`; `__init__.py` should usually be a small registry entrypoint that imports the public tool object.
+4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
+5. Return stable, planner-friendly results. Expected failures should produce a structured error shape; external side effects must declare `side_effect_level`, require approval when appropriate, and avoid leaking secrets through `extract_params`, return values, logs, or traceable tool-call kwargs.
+6. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
+7. Add tests that cover schema shape, availability, extraction, success, failure, and the runtime behavior that the planner depends on.
+8. Before opening or approving the PR, follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) for tool/integration-specific wiring, payload, docs, and regression checks.
 
 ### Changing the investigation pipeline
 
@@ -188,6 +190,13 @@ Test commands, turn-handling rules, CI-only paths: **[CI.md](CI.md)**. Live REPL
 - External-system code: `integrations/` owns config, clients, verifiers, and integration-local helpers; `tools/` owns every `@tool(...)` function and `BaseTool` class. Do not reintroduce top-level `vendors/` or `services/` packages.
 - Compatibility shims: Do not leave modules whose only job is to re-export symbols from a new
   location. Update callers to the canonical module and delete the old path.
+- Empty or monolithic tool packages: Do not add a `tools/<name>/__init__.py`
+  that exists only to make discovery pass, and do not hide a non-trivial tool
+  implementation entirely in `__init__.py`. Use sibling modules for validation,
+  models, delivery/client calls, result shaping, and error handling whenever the
+  tool is more than a small function. Every tool must meet the implementation
+  and quality standards in the Adding a Tool section and
+  [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md).
 - Interactive-shell action selection: do not implement regex/keyword/fuzzy
   intent routing, literal slash-command shortcuts, or deterministic action
   bypasses around the action-agent AgentTool path. Engineers have been fired

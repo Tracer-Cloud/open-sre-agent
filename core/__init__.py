@@ -11,72 +11,83 @@ directly and call ``.run(initial_messages)``.
 
 from __future__ import annotations
 
-from core.agent import Agent, AgentRunResult, LoopEventCallback, ToolLoopResult
-from core.context_budget import (
-    context_budget_ceiling_for_model,
-    enforce_context_budget,
-    estimate_message_tokens,
-    trim_lowest_value_tool_pair,
-    truncate_content,
-)
-from core.events import (
-    AgentEndEvent,
-    AgentStartEvent,
-    LegacyLoopEventCallback,
-    LegacyRuntimeEventCallback,
-    MessageStartEvent,
-    MessageUpdateEvent,
-    ProviderRequestEndEvent,
-    ProviderRequestStartEvent,
-    RuntimeEvent,
-    RuntimeEventCallback,
-    RuntimeEventKind,
-    RuntimeEventType,
-    ToolExecutionEndEvent,
-    ToolExecutionStartEvent,
-    ToolExecutionUpdateEvent,
-    TurnEndEvent,
-    TurnStartEvent,
-    legacy_callback_payload,
-    runtime_event_from_legacy,
-)
-from core.execution import (
-    BeforeToolCallResult,
-    ToolExecutionHooks,
-    ToolExecutionPatch,
-    ToolExecutionRequest,
-    ToolExecutionResult,
-    execute_tool_calls,
-    execute_tools,
-    public_tool_input,
-    summarise,
-    tool_source,
-)
-from core.llm_invoke_errors import LLMInvokeFailure, classify_llm_invoke_failure
-from core.messages import (
-    AppRuntimeMessage,
-    AssistantRuntimeMessage,
-    RuntimeMessage,
-    ToolResultRuntimeMessage,
-    UserRuntimeMessage,
-    build_assistant_message,
-    build_synthetic_assistant_tool_call_message,
-    build_tool_result_messages,
-    convert_to_llm_messages,
-    ensure_runtime_messages,
-    runtime_assistant_message,
-    runtime_synthetic_assistant_tool_call_message,
-    runtime_tool_result_message,
-    user_runtime_message,
-)
-from core.provider import ProviderHooks, ProviderRequest, resolve_llm_api_key
-from core.types import (
-    AgentTool,
-    AgentToolContext,
-    AgentToolExecutor,
-    RuntimeTool,
-    ToolExecutionMode,
-)
+from importlib import import_module
+from typing import Any
+
+_EXPORT_MODULES = {
+    "Agent": "core.agent",
+    "AgentRunResult": "core.agent",
+    "LoopEventCallback": "core.agent",
+    "ToolLoopResult": "core.agent",
+    "context_budget_ceiling_for_model": "core.context_budget",
+    "enforce_context_budget": "core.context_budget",
+    "estimate_message_tokens": "core.context_budget",
+    "trim_lowest_value_tool_pair": "core.context_budget",
+    "truncate_content": "core.context_budget",
+    "AgentEndEvent": "core.events",
+    "AgentStartEvent": "core.events",
+    "LegacyLoopEventCallback": "core.events",
+    "LegacyRuntimeEventCallback": "core.events",
+    "MessageStartEvent": "core.events",
+    "MessageUpdateEvent": "core.events",
+    "ProviderRequestEndEvent": "core.events",
+    "ProviderRequestStartEvent": "core.events",
+    "RuntimeEvent": "core.events",
+    "RuntimeEventCallback": "core.events",
+    "RuntimeEventKind": "core.events",
+    "RuntimeEventType": "core.events",
+    "ToolExecutionEndEvent": "core.events",
+    "ToolExecutionStartEvent": "core.events",
+    "ToolExecutionUpdateEvent": "core.events",
+    "TurnEndEvent": "core.events",
+    "TurnStartEvent": "core.events",
+    "legacy_callback_payload": "core.events",
+    "runtime_event_from_legacy": "core.events",
+    "BeforeToolCallResult": "core.execution",
+    "ToolExecutionHooks": "core.execution",
+    "ToolExecutionPatch": "core.execution",
+    "ToolExecutionRequest": "core.execution",
+    "ToolExecutionResult": "core.execution",
+    "execute_tool_calls": "core.execution",
+    "execute_tools": "core.execution",
+    "public_tool_input": "core.execution",
+    "summarise": "core.execution",
+    "tool_source": "core.execution",
+    "LLMInvokeFailure": "core.llm_invoke_errors",
+    "classify_llm_invoke_failure": "core.llm_invoke_errors",
+    "AppRuntimeMessage": "core.messages",
+    "AssistantRuntimeMessage": "core.messages",
+    "RuntimeMessage": "core.messages",
+    "ToolResultRuntimeMessage": "core.messages",
+    "UserRuntimeMessage": "core.messages",
+    "build_assistant_message": "core.messages",
+    "build_synthetic_assistant_tool_call_message": "core.messages",
+    "build_tool_result_messages": "core.messages",
+    "convert_to_llm_messages": "core.messages",
+    "ensure_runtime_messages": "core.messages",
+    "runtime_assistant_message": "core.messages",
+    "runtime_synthetic_assistant_tool_call_message": "core.messages",
+    "runtime_tool_result_message": "core.messages",
+    "user_runtime_message": "core.messages",
+    "ProviderHooks": "core.provider",
+    "ProviderRequest": "core.provider",
+    "resolve_llm_api_key": "core.provider",
+    "AgentTool": "core.types",
+    "AgentToolContext": "core.types",
+    "AgentToolExecutor": "core.types",
+    "RuntimeTool": "core.types",
+    "ToolExecutionMode": "core.types",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _EXPORT_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name), name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     "Agent",

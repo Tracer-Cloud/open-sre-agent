@@ -24,16 +24,30 @@ This file is the detailed definition of done for tool and integration work. Use 
 functions, `BaseTool` classes, or registry-discovered modules under
 `integrations/`; tools should call integration-local clients and helpers.
 
+Tool packages must be substantive production modules. Do not add an empty
+`tools/<name>/__init__.py`, a discovery-only package, or a thin wrapper that
+only satisfies registry import mechanics. Directionally, any tool with
+validation, credential or parameter resolution, external transport/client
+calls, output normalization, or error handling should split those concerns into
+focused sibling files such as `tool.py`, `models.py`, `validation.py`,
+`delivery.py`/`client.py`, and `results.py`. In that layout, `__init__.py`
+should be a small registry entrypoint that imports the public tool object.
+
 ### Contract and implementation
 
 - [ ] Pick the simplest shape that fits the tool (`@tool(...)` for lightweight tools, richer class only when needed)
+- [ ] The tool package is not an empty or discovery-only `__init__.py`; non-trivial tools use sibling modules for implementation concerns and keep `__init__.py` as a small registry entrypoint
 - [ ] Metadata is complete and accurate: `name`, `description`, `source`, `surfaces`, `requires`, and any `use_cases` / `outputs` / `retrieval_controls`
 - [ ] `input_schema` matches the actual runtime arguments and required fields
 - [ ] `is_available` only returns `True` when the tool can genuinely run
 - [ ] `extract_params` maps resolved integration state into tool args correctly
+- [ ] Secrets are not exposed through `extract_params`, return values, logs, or traceable tool-call kwargs
+- [ ] Validation, parameter/credential resolution, transport/client calls, and result formatting are separated into focused helpers or sibling files so each can be tested or reasoned about independently
 - [ ] Failure responses have a stable, investigation-friendly shape
+- [ ] Expected external failures (missing config, auth failure, rate limit, upstream 4xx/5xx) return structured errors; unexpected exceptions either use the global `BaseTool` wrapper intentionally or are migrated with telemetry coverage
 - [ ] Tool output is normalized enough for the planner/LLM to consume reliably
 - [ ] Reusable transport or integration-specific parsing logic lives in `integrations/<name>/` or `tools/utils/` rather than being copied into the tool body
+- [ ] External side effects declare `side_effect_level`, `requires_approval`, `approval_reason`, and `approval_scope` where appropriate
 - [ ] If the tool should appear in both investigation and chat, set `surfaces=("investigation", "chat")`
 - [ ] Output that may contain secrets, tokens, or PII is run through `platform/masking/` before being returned
 
