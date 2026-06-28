@@ -93,6 +93,12 @@ Use `opensre auth` for provider login without writing secrets to `.env`:
 
 `opensre auth` and `/auth status` are prompt-safe: they do not read API-key secrets from Keychain. For API-key providers they inspect environment variables plus non-secret metadata in `~/.opensre/llm-auth.json`. If a key was deleted directly from Keychain, status may show the old metadata until you run `opensre auth verify <provider>` or start a request; that verification marks the provider `stale` when the secret is gone.
 
+For Codex CLI auth, automated or non-interactive status checks do not run
+`codex login status`, because some Codex versions can open browser OAuth while
+checking a session. Run `codex login`, `/login chatgpt`, or
+`opensre auth login chatgpt` from an interactive terminal when you need to
+refresh the browser login.
+
 Inside the interactive shell, use the same flows through `/auth` or `/login`:
 
 ```bash

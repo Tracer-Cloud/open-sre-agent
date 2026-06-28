@@ -11,9 +11,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from integrations.llm_cli.binary_resolver import diagnose_binary_path, npm_prefix_bin_dirs
-from integrations.llm_cli.codex import CodexAdapter, _fallback_codex_paths
+from integrations.llm_cli.codex import (
+    _AUTH_STATUS_PROBE_ENV,
+    CodexAdapter,
+    _fallback_codex_paths,
+)
 from integrations.llm_cli.text import flatten_messages_to_prompt
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
+
+
+@pytest.fixture(autouse=True)
+def _enable_codex_auth_status_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(_AUTH_STATUS_PROBE_ENV, "1")
 
 
 def _posix_path_set(paths: list[str]) -> set[str]:
@@ -95,6 +104,29 @@ def test_detect_not_logged_in(
     probe = CodexAdapter().detect()
     assert probe.installed is True
     assert probe.logged_in is False
+
+
+@patch("integrations.llm_cli.codex.subprocess.run")
+@patch("integrations.llm_cli.binary_resolver.shutil.which")
+def test_detect_skips_login_status_probe_under_automation(
+    mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(_AUTH_STATUS_PROBE_ENV, raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_codex_adapter.py::case (call)")
+    mock_which.return_value = "/usr/bin/codex"
+
+    def side_effect(args: list[str], **kwargs: object) -> MagicMock:
+        if len(args) >= 2 and args[1] == "--version":
+            return _version_proc()
+        raise AssertionError(f"unexpected auth probe: {args}")
+
+    mock_run.side_effect = side_effect
+    probe = CodexAdapter().detect()
+    assert probe.installed is True
+    assert probe.logged_in is None
+    assert "login status was not checked" in probe.detail
+    assert mock_run.call_count == 1
 
 
 @patch("integrations.llm_cli.codex.subprocess.run")
