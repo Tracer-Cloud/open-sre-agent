@@ -30,6 +30,15 @@ class _Response:
         return json.dumps(self._payload).encode("utf-8")
 
 
+class _RawResponse(_Response):
+    def __init__(self, payload: str, *, headers: dict[str, str] | None = None) -> None:
+        self._raw_payload = payload
+        self.headers = headers or {}
+
+    def read(self) -> bytes:
+        return self._raw_payload.encode("utf-8")
+
+
 def test_resolve_github_token_prefers_explicit_then_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
     assert resolve_github_token("explicit") == "explicit"
@@ -92,3 +101,16 @@ def test_http_error_preserves_status_and_rate_limit_headers(
     assert exc.value.status_code == 403
     assert exc.value.rate_limit_remaining == "0"
     assert exc.value.rate_limit_reset == "123"
+
+
+def test_invalid_json_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(_req: request.Request, timeout: int = 0) -> _RawResponse:  # noqa: ARG001
+        return _RawResponse("not-json")
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    with pytest.raises(GitHubApiError) as exc:
+        client.request("GET", "/repos/o/r/issues")
+
+    assert "invalid JSON" in str(exc.value)

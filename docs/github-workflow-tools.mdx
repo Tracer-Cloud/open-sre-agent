@@ -68,7 +68,7 @@ The proposal includes:
 - rendered GitHub payload
 - source Slack link
 - deterministic `proposal_id`
-- idempotency marker for create operations
+- idempotency marker for retry detection
 
 ### 4. Execute only after runtime approval
 
@@ -77,8 +77,8 @@ The proposal includes:
 Mutation behavior:
 
 - **create**: searches for the idempotency marker first; creates only if no existing issue is found.
-- **update**: fetches the issue, adds the Slack follow-up as a comment, and patches title/labels/assignees only when those fields are explicitly present. It never replaces the issue body.
-- **close**: fetches the issue, adds a closing comment, then patches `state=closed` and `state_reason=completed`. It never replaces the issue body.
+- **update**: fetches the issue, adds the Slack follow-up as a comment unless the proposal marker is already present, and patches title/labels/assignees only when those fields are explicitly present. It never replaces the issue body.
+- **close**: fetches the issue, adds a closing comment unless the proposal marker is already present, then patches `state=closed` and `state_reason=completed`. It never replaces the issue body.
 
 <Warning>
 Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but mutation requires runtime approval.

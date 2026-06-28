@@ -262,6 +262,8 @@ def test_execute_create_searches_idempotency_marker_before_create() -> None:
     assert result["executed"] is True
     assert result["side_effect"] == "created_github_issue"
     assert [call[1] for call in calls] == ["/search/issues", "/repos/o/r/issues"]
+    assert "in:body" in calls[0][2]["params"]["q"]
+    assert proposal["idempotency_marker"] in calls[0][2]["params"]["q"]
 
 
 def test_execute_create_returns_existing_issue_for_idempotency_marker() -> None:
@@ -303,6 +305,9 @@ def test_execute_update_adds_comment_and_preserves_body() -> None:
         calls.append((method, path, kwargs))
         if path == "/repos/o/r/issues/51" and method == "GET":
             return {"number": 51, "body": "original"}
+        if path == "/search/issues":
+            assert "in:comments" in kwargs["params"]["q"]
+            return {"total_count": 0, "items": []}
         if path == "/repos/o/r/issues/51/comments":
             assert "PR shipped" in kwargs["body"]["body"]
             return {"id": 1}
@@ -320,6 +325,7 @@ def test_execute_update_adds_comment_and_preserves_body() -> None:
     assert result["executed"] is True
     assert [call[1] for call in calls] == [
         "/repos/o/r/issues/51",
+        "/search/issues",
         "/repos/o/r/issues/51/comments",
         "/repos/o/r/issues/51",
     ]
@@ -340,6 +346,9 @@ def test_execute_close_comments_before_closing_and_preserves_body() -> None:
         calls.append((method, path, kwargs))
         if path == "/repos/o/r/issues/51" and method == "GET":
             return {"number": 51, "body": "original"}
+        if path == "/search/issues":
+            assert "in:comments" in kwargs["params"]["q"]
+            return {"total_count": 0, "items": []}
         if path == "/repos/o/r/issues/51/comments":
             return {"id": 1}
         if path == "/repos/o/r/issues/51" and method == "PATCH":
@@ -355,9 +364,81 @@ def test_execute_close_comments_before_closing_and_preserves_body() -> None:
     assert result["executed"] is True
     assert [call[1] for call in calls] == [
         "/repos/o/r/issues/51",
+        "/search/issues",
         "/repos/o/r/issues/51/comments",
         "/repos/o/r/issues/51",
     ]
+
+
+def test_execute_update_skips_duplicate_comment_for_seen_marker() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="update",
+        issue_number=51,
+        slack_text="PR shipped",
+        slack_url="https://slack.example/archives/C/p2",
+        labels=["done"],
+    )["proposal"]
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs))
+        if path == "/repos/o/r/issues/51" and method == "GET":
+            return {"number": 51, "body": "original"}
+        if path == "/search/issues":
+            return {"total_count": 1, "items": [{"number": 51}]}
+        if path == "/repos/o/r/issues/51/comments":
+            raise AssertionError("duplicate comment should not be posted")
+        if path == "/repos/o/r/issues/51" and method == "PATCH":
+            return {"number": 51}
+        raise AssertionError((method, path, kwargs))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    assert result["executed"] is True
+    assert result["comment_already_recorded"] is True
+    assert [call[1] for call in calls] == [
+        "/repos/o/r/issues/51",
+        "/search/issues",
+        "/repos/o/r/issues/51",
+    ]
+
+
+def test_execute_mutation_rejects_malformed_proposal_without_api_call() -> None:
+    with patch.object(GitHubRestClient, "request") as request:
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal={"operation": "create"}, github_token="tok"
+        )
+
+    request.assert_not_called()
+    assert result["executed"] is False
+    assert result["side_effect"] == "github_issue_mutation_rejected"
+    assert "missing required field" in result["error"]
+
+
+def test_execute_mutation_rejects_payload_without_marker() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="create",
+        slack_text="ship this",
+        slack_url="https://slack.example/archives/C/p1",
+    )["proposal"]
+    proposal = {**proposal, "payload": {**proposal["payload"], "body": "missing marker"}}
+
+    with patch.object(GitHubRestClient, "request") as request:
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    request.assert_not_called()
+    assert result["executed"] is False
+    assert result["side_effect"] == "github_issue_mutation_rejected"
+    assert "idempotency marker" in result["error"]
 
 
 def test_execute_mutation_returns_api_errors() -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
 from tools.github.workflow import (
@@ -346,6 +346,8 @@ _ALERT_ENDPOINTS = {
     "code_scanning": "code-scanning/alerts",
 }
 
+_ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
+
 
 @tool(
     name="list_github_security_alerts",
@@ -484,16 +486,121 @@ def propose_github_issue_mutation_from_slack(
     }
 
 
-def _proposal_from_payload(payload: dict[str, Any]) -> GitHubIssueMutationProposal:
-    return GitHubIssueMutationProposal(
-        proposal_id=str(payload["proposal_id"]),
-        operation=payload["operation"],
-        owner=str(payload["owner"]),
-        repo=str(payload["repo"]),
-        target=dict(payload.get("target") or {}),
-        payload=dict(payload.get("payload") or {}),
-        slack_url=str(payload.get("slack_url", "")),
-        idempotency_marker=str(payload.get("idempotency_marker", "")),
+def _mutation_rejected(error: str) -> dict[str, Any]:
+    return {
+        "source": "github",
+        "available": False,
+        "executed": False,
+        "error": error,
+        "side_effect": "github_issue_mutation_rejected",
+    }
+
+
+def _proposal_from_payload(
+    payload: Any,
+) -> tuple[GitHubIssueMutationProposal | None, str | None]:
+    if not isinstance(payload, dict):
+        return None, "proposal must be an object"
+
+    required = ("proposal_id", "operation", "owner", "repo", "target", "payload")
+    missing = [key for key in required if key not in payload]
+    if missing:
+        return None, f"proposal missing required field(s): {', '.join(missing)}"
+
+    operation = payload.get("operation")
+    if operation not in _ISSUE_MUTATION_OPERATIONS:
+        return None, f"unsupported proposal operation: {operation}"
+
+    target = payload.get("target")
+    if not isinstance(target, dict):
+        return None, "proposal target must be an object"
+    mutation_payload = payload.get("payload")
+    if not isinstance(mutation_payload, dict):
+        return None, "proposal payload must be an object"
+
+    proposal_id = str(payload.get("proposal_id") or "").strip()
+    owner = str(payload.get("owner") or "").strip()
+    repo = str(payload.get("repo") or "").strip()
+    idempotency_marker = str(payload.get("idempotency_marker") or "").strip()
+    if not proposal_id:
+        return None, "proposal_id is required"
+    if not owner or not repo:
+        return None, "proposal owner and repo are required"
+    if not idempotency_marker or proposal_id not in idempotency_marker:
+        return None, "proposal idempotency_marker is missing or does not match proposal_id"
+
+    return (
+        GitHubIssueMutationProposal(
+            proposal_id=proposal_id,
+            operation=cast(Literal["create", "update", "close"], operation),
+            owner=owner,
+            repo=repo,
+            target=target,
+            payload=mutation_payload,
+            slack_url=str(payload.get("slack_url", "")),
+            idempotency_marker=idempotency_marker,
+        ),
+        None,
+    )
+
+
+def _proposal_marker_text(proposal: GitHubIssueMutationProposal) -> str:
+    if proposal.operation == "create":
+        return str(proposal.payload.get("body", ""))
+    return str(proposal.payload.get("comment_body", ""))
+
+
+def _validate_proposal_marker(proposal: GitHubIssueMutationProposal) -> str | None:
+    if proposal.idempotency_marker not in _proposal_marker_text(proposal):
+        return "proposal payload does not include its idempotency marker"
+    return None
+
+
+def _quoted_search_term(term: str) -> str:
+    cleaned = term.replace('"', "")
+    return f'"{cleaned}"'
+
+
+def _search_issues_for_marker(
+    client: GitHubRestClient,
+    *,
+    owner: str,
+    repo: str,
+    marker: str,
+    search_area: Literal["body", "comments"],
+) -> list[dict[str, Any]]:
+    result = client.request(
+        "GET",
+        "/search/issues",
+        params={
+            "q": (f"repo:{owner}/{repo} is:issue in:{search_area} {_quoted_search_term(marker)}")
+        },
+    )
+    if not isinstance(result, dict):
+        return []
+    items = result.get("items")
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _marker_exists_on_issue(
+    client: GitHubRestClient,
+    *,
+    owner: str,
+    repo: str,
+    issue_number: int,
+    marker: str,
+) -> bool:
+    return any(
+        item.get("number") == issue_number
+        for item in _search_issues_for_marker(
+            client,
+            owner=owner,
+            repo=repo,
+            marker=marker,
+            search_area="comments",
+        )
     )
 
 
@@ -536,38 +643,30 @@ def execute_github_issue_mutation(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     client = GitHubRestClient(github_token)
-    parsed = _proposal_from_payload(proposal)
+    parsed, parse_error = _proposal_from_payload(proposal)
+    if parsed is None:
+        return _mutation_rejected(parse_error or "invalid proposal")
     if parsed.owner != owner or parsed.repo != repo:
-        return {
-            "source": "github",
-            "available": False,
-            "executed": False,
-            "error": "proposal owner/repo does not match request",
-            "side_effect": "github_issue_mutation_rejected",
-        }
-    if parsed.operation not in {"create", "update", "close"}:
-        return {
-            "source": "github",
-            "available": False,
-            "executed": False,
-            "error": f"unsupported proposal operation: {parsed.operation}",
-            "side_effect": "github_issue_mutation_rejected",
-        }
+        return _mutation_rejected("proposal owner/repo does not match request")
+    marker_error = _validate_proposal_marker(parsed)
+    if marker_error is not None:
+        return _mutation_rejected(marker_error)
     try:
         if parsed.operation == "create":
-            existing = client.request(
-                "GET",
-                "/search/issues",
-                params={"q": f"repo:{owner}/{repo} {parsed.idempotency_marker}"},
+            existing_items = _search_issues_for_marker(
+                client,
+                owner=owner,
+                repo=repo,
+                marker=parsed.idempotency_marker,
+                search_area="body",
             )
-            if isinstance(existing, dict) and int(existing.get("total_count") or 0) > 0:
-                items = existing.get("items") if isinstance(existing.get("items"), list) else []
+            if existing_items:
                 return {
                     "source": "github",
                     "available": True,
                     "executed": False,
                     "side_effect": "existing_github_issue",
-                    "issue": items[0] if items else None,
+                    "issue": existing_items[0],
                 }
             issue = client.request("POST", f"/repos/{owner}/{repo}/issues", body=parsed.payload)
             return {
@@ -579,16 +678,17 @@ def execute_github_issue_mutation(
             }
         issue_number = parsed.target.get("issue_number")
         if not isinstance(issue_number, int):
-            return {
-                "source": "github",
-                "available": False,
-                "executed": False,
-                "error": "proposal target.issue_number is required",
-                "side_effect": "github_issue_mutation_rejected",
-            }
+            return _mutation_rejected("proposal target.issue_number is required")
         client.request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
         comment_body = str(parsed.payload.get("comment_body", ""))
-        if comment_body:
+        comment_already_recorded = _marker_exists_on_issue(
+            client,
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+            marker=parsed.idempotency_marker,
+        )
+        if comment_body and not comment_already_recorded:
             client.request(
                 "POST",
                 f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
@@ -613,6 +713,7 @@ def execute_github_issue_mutation(
                 "executed": True,
                 "side_effect": "updated_github_issue",
                 "issue": issue,
+                "comment_already_recorded": comment_already_recorded,
             }
         issue = client.request(
             "PATCH",
@@ -625,6 +726,7 @@ def execute_github_issue_mutation(
             "executed": True,
             "side_effect": "closed_github_issue",
             "issue": issue,
+            "comment_already_recorded": comment_already_recorded,
         }
     except GitHubApiError as exc:
         return {

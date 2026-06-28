@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from json import JSONDecodeError
 from typing import Any
 from urllib import error, parse, request
 
@@ -42,6 +43,18 @@ def _next_link(headers: Any) -> str | None:
         if 'rel="next"' in rel_part or "rel=next" in rel_part:
             return url_part.strip().strip("<>")
     return None
+
+
+def _decode_json_payload(raw: str, *, path: str) -> JsonPayload:
+    if not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except JSONDecodeError as exc:
+        raise GitHubApiError("GitHub API returned invalid JSON.", path=path) from exc
+    if isinstance(parsed, dict | list):
+        return parsed
+    return {"value": parsed}
 
 
 class GitHubRestClient:
@@ -99,12 +112,7 @@ class GitHubRestClient:
         except error.URLError as exc:
             raise GitHubApiError(f"GitHub API request failed: {exc.reason}", path=path) from exc
 
-        if not raw.strip():
-            return {}
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict | list):
-            return parsed
-        return {"value": parsed}
+        return _decode_json_payload(raw, path=path)
 
     def paginate(
         self,
@@ -147,7 +155,7 @@ class GitHubRestClient:
             except error.URLError as exc:
                 raise GitHubApiError(f"GitHub API request failed: {exc.reason}", path=path) from exc
 
-            parsed = json.loads(raw) if raw.strip() else []
+            parsed = _decode_json_payload(raw, path=path) if raw.strip() else []
             if isinstance(parsed, list):
                 items.extend(item for item in parsed if isinstance(item, dict))
             elif isinstance(parsed, dict):
