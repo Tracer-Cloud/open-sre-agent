@@ -302,19 +302,17 @@ def _plan_action_effects(
     action: ActionPlanAction, env: ActionPlanningEnv
 ) -> tuple[HarnessInstruction, ...]:
     """Translate one action into the instructions that realize it (pure)."""
-    match action.kind:
-        case "switch_llm_provider":
-            return _plan_switch_llm_provider(action)
-        case "switch_toolcall_model":
-            return _plan_switch_toolcall_model(action)
-        case "slash":
-            return _plan_slash_action(action, env)
-        case "run_cli_command":
-            return _plan_cli_command(action, env)
-        case "run_interactive":
-            return _plan_interactive_command(action, env)
-        case _:
-            return (_print_error(f"unsupported action: {action.kind or '?'}"),)
+    if action.kind == "switch_llm_provider":
+        return _plan_switch_llm_provider(action)
+    if action.kind == "switch_toolcall_model":
+        return _plan_switch_toolcall_model(action)
+    if action.kind == "slash":
+        return _plan_slash_action(action, env)
+    if action.kind == "run_cli_command":
+        return _plan_cli_command(action, env)
+    if action.kind == "run_interactive":
+        return _plan_interactive_command(action, env)
+    return (_print_error(f"unsupported action: {action.kind or '?'}"),)
 
 
 def _plan_requested_actions_header(

@@ -220,18 +220,16 @@ def _reduce_agent_presentation(
     should_show_spinner: bool,
 ) -> AgentPresentationState:
     """Compute the next presentation state for *event* (pure)."""
-    match event.type:
-        case "turn_start":
-            return AgentPresentationState(
-                show_spinner=should_show_spinner,
-                prompt_suppressed=should_show_spinner,
-            )
-        case "turn_end":
-            return AgentPresentationState()
-        case "turn_interrupted" | "turn_error":
-            return state
-        case _:
-            raise ValueError(f"Unknown agent event type: {event.type!r}")
+    if event.type == "turn_start":
+        return AgentPresentationState(
+            show_spinner=should_show_spinner,
+            prompt_suppressed=should_show_spinner,
+        )
+    if event.type == "turn_end":
+        return AgentPresentationState()
+    if event.type in {"turn_interrupted", "turn_error"}:
+        return state
+    raise ValueError(f"Unknown agent event type: {event.type!r}")
 
 
 async def _render_agent_presentation_transition(

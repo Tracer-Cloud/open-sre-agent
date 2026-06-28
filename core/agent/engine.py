@@ -459,48 +459,45 @@ def run_turn(
     observation = session.last_command_observation
     route = _route_turn(_routing_input_from_result(action_result, observation))
 
-    match route.intent:
-        case "summarize_observation":
-            with apply_reasoning_effort(turn_ctx.reasoning_effort):
-                run = answer(
-                    text,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                    tool_observation=observation,
-                    turn_ctx=turn_ctx,
-                )
-            result = ShellTurnResult(
-                final_intent="cli_agent_summarized",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
-                llm_run=run,
+    if route.intent == "summarize_observation":
+        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+            run = answer(
+                text,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                tool_observation=observation,
+                turn_ctx=turn_ctx,
             )
-
-        case "handled_without_llm":
-            result = ShellTurnResult(
-                final_intent="cli_agent_handled",
-                action_result=action_result,
-                assistant_response_text=action_result.response_text,
+        result = ShellTurnResult(
+            final_intent="cli_agent_summarized",
+            action_result=action_result,
+            assistant_response_text=_response_text(run),
+            llm_run=run,
+        )
+    elif route.intent == "handled_without_llm":
+        result = ShellTurnResult(
+            final_intent="cli_agent_handled",
+            action_result=action_result,
+            assistant_response_text=action_result.response_text,
+        )
+    elif route.intent == "gather_and_answer":
+        with apply_reasoning_effort(turn_ctx.reasoning_effort):
+            run = _gather_and_answer(
+                text=text,
+                answer=answer,
+                gather=gather,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                turn_ctx=turn_ctx,
             )
-
-        case "gather_and_answer":
-            with apply_reasoning_effort(turn_ctx.reasoning_effort):
-                run = _gather_and_answer(
-                    text=text,
-                    answer=answer,
-                    gather=gather,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                    turn_ctx=turn_ctx,
-                )
-            result = ShellTurnResult(
-                final_intent="cli_agent_fallback",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
-                llm_run=run,
-            )
-        case _:
-            raise AssertionError(f"Unknown route intent: {route.intent!r}")
+        result = ShellTurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=action_result,
+            assistant_response_text=_response_text(run),
+            llm_run=run,
+        )
+    else:
+        raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
     return accounting.finalize(result)
 
