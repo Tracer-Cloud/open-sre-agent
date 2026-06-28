@@ -1,4 +1,4 @@
-"""Characterization snapshot for llm_context prompt assembly.
+"""Characterization snapshot for core agent prompt assembly.
 
 This is the safety net for the typed/DRY/functional refactor of
 ``context``: the action-agent system prompt, the
@@ -12,7 +12,7 @@ exact strings against a committed snapshot
 an intentional prompt-text change is made::
 
     UPDATE_PROMPT_SNAPSHOT=1 uv run python -m pytest \
-        tests/interactive_shell/llm_context/test_prompt_characterization.py
+        tests/core/agent/prompts/test_prompt_characterization.py
 
 The grounding caches are stubbed with fixed text so the snapshot is independent
 of the on-disk ``docs/`` tree and the installed CLI surface; only the prompt

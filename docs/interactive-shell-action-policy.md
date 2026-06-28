@@ -19,7 +19,7 @@ recurring source of precedence drift.
 1. There is no regex/keyword intent inference. Non-command turns are
    selected entirely by the shell action agent via native tool-calling.
 2. Tool selection is driven by the action-agent system prompt
-   (`.../llm_context/system_prompt.py`) and the per-tool descriptions
+   (`core/agent_harness/prompts/action_agent_prompt.py`) and the per-tool descriptions
    in the tool catalog (`tools/interactive_shell/*`). Keep both precise — they
    are the only selection signal.
 3. The action path does not post-hoc rewrite the model's tool calls. Tool calls
@@ -30,11 +30,15 @@ recurring source of precedence drift.
    through to a conversational reply rather than guessing an action. When the
    action-agent LLM itself is unavailable, the REPL renders and persists a
    failed assistant turn so `/resume` can show the outage.
-5. The runtime's literal-`/slash` detection
-   (`runtime/utils/input_policy._literal_slash_command_text`) is terminal-UI
-   policy only: spinner suppression and exclusive-stdin gating for literal
-   `/slash` command text. It must never infer intent from natural language and
-   must not become an action execution shortcut.
+5. Literal `/slash` command text the user types verbatim is dispatched
+   deterministically, without the action-agent LLM (see the "Deterministic
+   literal-`/slash` dispatch" addendum below). This is an explicit-command
+   bypass, not natural-language intent inference: free-form text is still
+   selected entirely by the action agent. The runtime's literal-`/slash`
+   detection in `runtime/utils/input_policy._literal_slash_command_text` remains
+   terminal-UI policy (spinner suppression and exclusive-stdin gating); the
+   execution-side deterministic dispatch lives in
+   `core/agent_harness/action_agent.py`.
 
 ## What this means for changes
 - To change how a phrasing maps to a tool, edit the action-agent system prompt and/or
@@ -63,7 +67,7 @@ Factual questions about live state (for example "is sentry installed?") are
 answered without adding keyword/regex rules. Two complementary mechanisms:
 
 1. Context grounding (not action planning). At REPL boot, `repl_main`
-   (`interactive_shell/entrypoint.py`) hydrates
+   (`interactive_shell/main.py`) hydrates
    `session.configured_integrations` from the shared
    `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat
@@ -71,7 +75,7 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    `core/agent_harness/prompts/assistant.py`) lists the configured set as
    facts, letting the model answer directly when state is already known.
 2. LLM-driven discovery. The action-agent system prompt
-   (`core/agent_harness/prompts/action.py`) lets the model, at its own
+   (`core/agent_harness/prompts/action_agent_prompt.py`) lets the model, at its own
    discretion, emit a read-only discovery action (for example
    `slash_invoke("/integrations", ["list"])` or `["verify"]`) to discover the
    answer instead of deflecting. There is no keyword mapping for this — the LLM
@@ -117,23 +121,23 @@ capturing the exception to Sentry.
 Addendum — Jun 18, 2026.
 
 When the user asks to configure, connect, set up, or add an integration
-("can you configure sentry?", "connect datadog"), the assistant does not just
-print a command to copy — it launches the setup wizard for them. The
-conversational assistant emits a `run_interactive` action
-(`{"action":"run_interactive","command":"/integrations setup <service>"}`, only
-`/integrations setup <service>` or `/mcp connect <server>` are allowed). The
-model chooses the service; there is no per-vendor hardcoding.
+("can you configure sentry?", "connect datadog"), the action agent does not just
+hand off to the conversational assistant — it launches the setup wizard for
+them. The action agent emits a `slash_invoke` tool call for
+`/integrations setup <service>` or `/mcp connect <server>`. The model chooses
+the service; there is no per-vendor hardcoding.
 
 The setup wizard is a child process that needs exclusive stdin, so it cannot run
-inline mid-turn (the live prompt is competing for stdin). Instead the action
-queues the command via `session.queue_auto_command(...)`, which prefills the next
-prompt and marks it for auto-submit. The prompt refresh hook
+inline mid-turn (the live prompt is competing for stdin). Instead
+`interactive_shell/tools/slash_tool.py` queues the command via
+`session.queue_auto_command(...)`, which prefills the next prompt and marks it
+for auto-submit. The prompt refresh hook
 (`wire_prompt_refresh` in `prompting/prompt_surface.py`) then submits it, so the
 command flows through the normal exclusive-stdin turn path of the REPL
 (`turn_needs_exclusive_stdin` recognizes `/integrations setup`) — the only
 place an interactive child process gets clean stdin. In a non-TTY/scripted
-context (no prompt to submit into) the action degrades to telling the user the
-command to run.
+context (no prompt to submit into), the slash command path degrades to normal
+non-interactive slash behavior.
 
 ### Removal of the planning-stage fail-closed safeguard (v0.1)
 
@@ -201,3 +205,54 @@ interaction (`execution_allowed` — console output, the `Proceed? [Y/n]` prompt
 analytics) lives in `interactive_shell/ui/execution_confirm.py`. If command
 guardrails are reintroduced after alpha, gate them here at the execution stage —
 never with an action-selection denial in the planner.
+
+### Deterministic literal-`/slash` dispatch (no LLM)
+
+Addendum — Jun 28, 2026.
+
+**Decision:** input the user types as a literal `/slash` command is dispatched
+deterministically, **without consulting the action-agent LLM**. This supersedes
+the earlier "the literal-`/slash` detection must never become an action
+execution shortcut" wording.
+
+**Why:** all REPL turns previously routed through the action-agent LLM, so when
+that LLM was unavailable (a provider with no credit, a failed auth, an outage)
+every slash command failed — including the exact commands needed to recover
+(`/login`, `/auth`, `/onboard`, `/model`). That is a deadlock: you could not log
+in because logging in required the LLM you were trying to fix. Typed commands
+should not depend on a funded LLM.
+
+**Scope — the line that keeps the original concern intact.** The original ADR
+removed regex/keyword heuristics because they *inferred intent from natural
+language* and competed with the LLM. This bypass does the opposite: it fires
+**only** when the message text itself is a literal `/command` the user typed
+verbatim. There is no inference. Free-form natural language ("log me in",
+"show my integrations") is still selected entirely by the action agent. The line
+is "explicit typed command" vs "natural language", identical to the line the
+terminal-UI policy (`_literal_slash_command_text`) already draws.
+
+**How it works.** `core/agent_harness/action_agent.run_agent_turn` recognizes
+literal `/slash` input and emits a deterministic `slash_invoke` tool call through
+the same static-LLM path as the explicit `!cmd` shell escape
+(`_StaticToolCallLLM`). Execution then flows through the normal `slash_invoke`
+AgentTool → `dispatch_slash`, so recording, execution policy, exclusive-stdin
+gating, pickers, and exit behavior are identical to an LLM-selected slash call —
+the only difference is the tool *selection* is deterministic instead of
+LLM-driven. The bypass no-ops (falls back to the LLM path) when `slash_invoke` is
+not an available tool that turn.
+
+**Consequences.**
+
+- Literal slash commands are faster, free, and reliable even with no LLM credit.
+- Compound requests that *start with* a literal slash are dispatched as that one
+  command (a single `slash_invoke`); compound phrasing that does not start with a
+  slash (e.g. `run /health and then investigate …`) is unaffected and still
+  LLM-routed. No turn scenario uses a prompt beginning with a literal `/`.
+- A literal discovery command (e.g. `/integrations list`) shows its raw output
+  directly; the optional LLM summary pass only runs if the action-agent LLM is
+  available, and degrades cleanly (no summary) when it is not.
+
+**Still forbidden:** regex/keyword/fuzzy intent routing for natural language,
+post-hoc rewriting of LLM-selected tool calls, and any deterministic mapping from
+non-`/`-prefixed text to an action. Those compete with the LLM and were removed
+for good reason.

@@ -8,7 +8,7 @@ shell runtime. The top-level bootstrap and controller live one level up in
 
 In simple terms:
 
-- `../entrypoint.py` starts the interactive session and handles startup/shutdown.
+- `../main.py` starts the interactive session and handles process/bootstrap gates.
 - `startup/first_launch_github.py` owns the first-launch GitHub sign-in gate.
 - `../controller.py` owns the `InteractiveShellController` orchestration class,
   including prompt input, submitted prompt handling, queued turn consumption,
@@ -45,8 +45,7 @@ The runtime package is intentionally split into focused concerns:
 - `core/turn_detection.py` — pure prompt text classification only.
 - `utils/input_policy.py` — terminal stdin/spinner gating decisions only.
 - `agent_presentation.py` — terminal presentation for the agent prompt only (agent
-  lifecycle events, presentation-state reducer/renderer, `ConsoleAgentEventSink`,
-  JSON-like assistant response rendering).
+  lifecycle events, presentation-state reducer/renderer, `ConsoleAgentEventSink`).
 - `turn_host.py` — terminal/runtime host for `ShellAgent` prompts only.
 - `../controller.py` — stable async entrypoint and async prompt runtime/event loop
   orchestration, submitted prompt handling, queued-turn consumption,
@@ -60,7 +59,7 @@ The runtime package is intentionally split into focused concerns:
   preferences only.
 - `background/runner.py` — session-local background investigation launchers only.
 - `background/notifications.py` — background RCA completion notification delivery only.
-- `../entrypoint.py` — process/bootstrap boundary only.
+- `../main.py` — process/bootstrap boundary only.
 - `startup/initial_input.py` — scripted initial-input replay only.
 - `startup/first_launch_github.py` — first-launch GitHub sign-in gate only.
 - `core.agent_harness.session.tasks` — task registry + persistence only.
@@ -73,8 +72,8 @@ owner module instead of broadening module responsibilities.
 
 The interactive runtime must keep this shape:
 
-1. `interactive_shell.entrypoint.run_repl` sets up process-level concerns and calls `repl_main`.
-2. `interactive_shell.entrypoint.repl_main` creates `InteractiveShellController`.
+1. `interactive_shell.main.run_repl` sets up process-level concerns and calls `repl_main`.
+2. `interactive_shell.main.repl_main` creates `InteractiveShellController`.
 3. `InteractiveShellController.start_interactive_shell` owns prompt lifecycle,
    submitted input handling, queued-turn consumption, and per-turn task
    scheduling.
@@ -84,7 +83,7 @@ The interactive runtime must keep this shape:
 5. `runtime.turn_host.AgentTurnRunner` owns terminal/runtime dependencies
    (`session`, `state`, `spinner`, `invalidate_prompt`), presentation setup,
    prompt-mediated confirmation, dispatch state, and per-turn task execution.
-6. `agent_shell.turn_entry.handle_message_with_agent` binds shell adapters
+6. `interactive_shell.runtime.shell_turn_execution.execute_shell_turn` binds shell adapters
    around `core.agent_harness.turn_orchestrator.run_turn`.
 7. `core.agent_harness` owns one prompt's action/answer mechanics and accounting
    finalization. The terminal presentation for `AgentEvent` emissions lives in
@@ -96,10 +95,10 @@ Do not invert this dependency direction.
 
 ```mermaid
 flowchart TD
-  runRepl["interactive_shell.entrypoint.run_repl"] --> replMain["interactive_shell.entrypoint.repl_main"]
+  runRepl["interactive_shell.main.run_repl"] --> replMain["interactive_shell.main.repl_main"]
   replMain --> controller["interactive_shell.controller.InteractiveShellController"]
   controller --> turnHost["runtime.turn_host.AgentTurnRunner.run_agent_turn"]
-  turnHost --> turnEntry["agent_shell.turn_entry.handle_message_with_agent"]
+  turnHost --> turnEntry["interactive_shell.runtime.shell_turn_execution.execute_shell_turn"]
   turnEntry --> coreHarness["core.agent_harness.turn_orchestrator.run_turn"]
   coreHarness --> sideEffects["slash/help/agent/follow-up/investigation side effects"]
   controller --> replState["core.state.ReplState"]
@@ -140,8 +139,8 @@ flowchart TD
 - The terminal host lives in `runtime/turn_host.py`: `AgentTurnRunner` and
   `run_agent_turn` own shell presentation (StreamingConsole, spinner, recorder,
   progress scope), construct a `ConsoleAgentEventSink`, own dispatch state, and
-  call `agent_shell.turn_entry.handle_message_with_agent`.
-- The shell adapter entry lives in `agent_shell/turn_entry.py`: it binds shell
+  call `interactive_shell.runtime.shell_turn_execution.execute_shell_turn`.
+- The shell adapter entry lives in `runtime/shell_turn_execution.py`: it binds shell
   adapters and accounting around `core.agent_harness.turn_orchestrator.run_turn`.
 - The reusable per-prompt loop lives in `core.agent_harness`: turn snapshots,
   observation reset, action/response routing, and core result construction stay
@@ -154,18 +153,19 @@ flowchart TD
 - Keep prompt-mediated confirmation waiting in `runtime/core/confirmation.py`.
 - Turn accounting is consolidated behind `ShellTurnAccounting` in
   `interactive_shell/runtime/core/turn_accounting.py`, invoked from
-  `agent_shell.turn_entry.handle_message_with_agent`. It owns action-agent analytics, terminal-turn aggregate
+  `interactive_shell.runtime.shell_turn_execution.execute_shell_turn`. It owns action-agent analytics, terminal-turn aggregate
   telemetry, prompt-recorder flush, conversational-turn persistence, and the final
-  assistant-intent stamp. `run_tool_calling_turn` (in `agent_shell/tool_calling.py`)
-  returns facts only (`ToolCallingTurnResult` with `accounting_status` of
-  `completed` / `not_run`) and emits no analytics itself. Do not re-scatter
-  accounting back into `run_tool_calling_turn` or standalone `_record_*` helpers.
+  assistant-intent stamp. `interactive_shell.runtime.shell_turn_execution.run_action_tool_turn` returns facts
+  only (`ToolCallingTurnResult` with `accounting_status` of `completed` / `not_run`)
+  and emits no analytics itself. Do not re-scatter accounting back into
+  `run_action_tool_turn` or standalone `_record_*` helpers.
 
 ## Controller rules
 
 - `../controller.py` owns:
   - `InteractiveShellController`
   - `start_interactive_shell` shell lifecycle orchestration
+  - alert listener setup/teardown
   - `AgentTurnRunner` construction and shutdown
   - queued prompt submission
 - `turn_host.py` owns:
@@ -177,7 +177,7 @@ flowchart TD
   - per-turn task lifecycle
   - dispatch start/finish state transitions
   - prompt-mediated confirmation waiting
-  - turn telemetry and `handle_message_with_agent` invocation
+  - turn telemetry and `execute_shell_turn` invocation
   - current turn cancellation helpers
   - coordination between prompt, background, and shutdown helpers
 - `core/prompt_manager.py` owns:
@@ -197,15 +197,16 @@ flowchart TD
 - Keep prompt rendering concerns in runtime/prompting modules, not in
   dispatch/execution.
 
-## Entry-point rules
+## Main/bootstrap rules
 
-- `../entrypoint.py` owns:
+- `../main.py` owns:
   - startup sweep
   - TTY/non-TTY gate
   - banner display for interactive runs
-  - alert listener setup/teardown
   - async boundary (`asyncio.run`)
-- Do not move per-turn dispatch/runtime logic back into startup entrypoint.
+- `../controller.py` owns alert listener setup/teardown because the inbox is
+  part of the running shell lifecycle.
+- Do not move per-turn dispatch/runtime logic back into startup bootstrap.
 
 ## Compatibility surface policy
 
@@ -223,7 +224,7 @@ flowchart TD
 - Prefer patching canonical module seams:
   - `interactive_shell.controller.*` for prompt-loop, queued-turn, confirmation behavior,
     one-turn pipeline execution, and side effects
-  - `interactive_shell.entrypoint.*` for process/bootstrap behavior
+  - `interactive_shell.main.*` for process/bootstrap behavior
   - `runtime.core.state.*` for state-specific behavior
 - Avoid adding new tests that monkeypatch package-root internals in
   `runtime.__init__` unless there is no stable canonical seam.

@@ -57,9 +57,6 @@ class BufferOutputSink:
     def render_error(self, message: str) -> None:
         self.lines.append(f"ERROR: {message}")
 
-    def render_markdown(self, text: str) -> None:
-        self.lines.append(text)
-
     def stream(
         self,
         *,
@@ -115,20 +112,6 @@ class NullToolProvider:
         return _observer
 
 
-class NoopActionDispatch:
-    """Never executes any planned action (headless has no runtime to mutate)."""
-
-    def execute(
-        self,
-        actions: tuple[Any, ...],
-        *,
-        confirm_fn: ConfirmFn | None,
-        is_tty: bool | None,
-    ) -> bool:
-        _ = (actions, confirm_fn, is_tty)
-        return False
-
-
 class NoopTurnAccounting:
     """Records nothing and returns the result unchanged."""
 
@@ -179,7 +162,6 @@ __all__ = [
     "BufferOutputSink",
     "EmptyPromptContextProvider",
     "InMemorySessionStore",
-    "NoopActionDispatch",
     "NoopErrorReporter",
     "NoopTurnAccounting",
     "NullToolProvider",

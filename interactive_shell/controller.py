@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
+from config.repl_config import ReplConfig
 from core.agent_harness.session import ReplSession
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.runtime.background.workers import BackgroundTaskManager
@@ -34,8 +37,45 @@ from interactive_shell.runtime.turn_host import (
     run_agent_turn_queue,
     run_input_loop,
 )
+from interactive_shell.ui import DIM
 
 log = logging.getLogger(__name__)
+
+
+@contextmanager
+def _alert_listener(
+    cfg: ReplConfig | None,
+    console: Console,
+    *,
+    existing: _alert_inbox.AlertInbox | None = None,
+) -> Iterator[_alert_inbox.AlertInbox | None]:
+    if existing is not None:
+        yield existing
+        return
+    if cfg is None or not cfg.alert_listener_enabled:
+        yield None
+        return
+
+    inbox: _alert_inbox.AlertInbox | None = None
+    handle: _alert_inbox.AlertListenerHandle | None = None
+    try:
+        inbox = _alert_inbox.AlertInbox()
+        handle = _alert_inbox.start_alert_listener(
+            inbox,
+            host=cfg.alert_listener_host,
+            port=cfg.alert_listener_port,
+            token=cfg.alert_listener_token,
+        )
+        _alert_inbox.set_current_inbox(inbox)
+        console.print(f"[{DIM}]listening for alerts on http://{handle.bound_address}/alerts[/]")
+    except Exception as exc:
+        log.warning("Alert listener could not start: %s — continuing without it.", exc)
+    try:
+        yield inbox
+    finally:
+        if handle is not None:
+            handle.stop()
+            _alert_inbox.set_current_inbox(None)
 
 
 def _resolve_runtime_context(
@@ -72,10 +112,12 @@ class InteractiveShellController:
         self,
         session: ReplSession | ReplRuntimeContext | None = None,
         *,
+        config: ReplConfig | None = None,
         state: ReplState | None = None,
         spinner: SpinnerState | None = None,
         pt_session: PromptSession[str] | None = None,
         inbox: _alert_inbox.AlertInbox | None = None,
+        console: Console | None = None,
     ) -> None:
         self.runtime_context = _resolve_runtime_context(
             session,
@@ -84,10 +126,17 @@ class InteractiveShellController:
             pt_session=pt_session,
             inbox=inbox,
         )
+        self.config = config
         self.session = self.runtime_context.session
         self.inbox = self.runtime_context.inbox
         self.state = self.runtime_context.state
         self.spinner = self.runtime_context.spinner
+        self.service_console = console or Console(
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
         self.prompt = PromptManager(
             self.session,
             self.state,
@@ -112,19 +161,22 @@ class InteractiveShellController:
 
     async def start_interactive_shell(self) -> None:
         self.session.schedule_warm_resolved_integrations()
-        self._start_runtime_services()
-        try:
-            with patch_stdout(raw=True):
-                await run_input_loop(
-                    state=self.state,
-                    session=self.session,
-                    background=self.background,
-                    input_reader=self.input_reader,
-                    echo_console=self.echo_console,
-                    handle_input_action=self._handle_input_action,
-                )
-        finally:
-            await self._shutdown_runtime()
+        with _alert_listener(self.config, self.service_console, existing=self.inbox) as inbox:
+            self.inbox = inbox
+            self.runtime_context.inbox = inbox
+            self._start_runtime_services()
+            try:
+                with patch_stdout(raw=True):
+                    await run_input_loop(
+                        state=self.state,
+                        session=self.session,
+                        background=self.background,
+                        input_reader=self.input_reader,
+                        echo_console=self.echo_console,
+                        handle_input_action=self._handle_input_action,
+                    )
+            finally:
+                await self._shutdown_runtime()
 
     def _start_runtime_services(self) -> None:
         self.prompt.setup()

@@ -571,7 +571,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
     with (
         patch("interactive_shell.run_repl", return_value=0),
-        patch("interactive_shell.entrypoint.run_repl", return_value=0),
+        patch("interactive_shell.main.run_repl", return_value=0),
     ):
         exit_code = main([])
 
@@ -619,7 +619,7 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
 
     with (
         patch("interactive_shell.run_repl", return_value=0),
-        patch("interactive_shell.entrypoint.run_repl", return_value=0),
+        patch("interactive_shell.main.run_repl", return_value=0),
     ):
         exit_code = main(["--theme", "BLUE"])
 

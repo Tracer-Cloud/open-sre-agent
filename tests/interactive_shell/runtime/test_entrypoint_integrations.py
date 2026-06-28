@@ -12,8 +12,8 @@ from typing import Any
 
 from rich.console import Console
 
+import interactive_shell.main as main_entrypoint
 from core.agent_harness.session import ReplSession
-from interactive_shell import entrypoint
 from interactive_shell.runtime.startup import first_launch_github as flg
 
 
@@ -210,10 +210,10 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
         lambda: identified.append("called"),
     )
 
-    async def _run_initial_input(*_args: Any, **_kwargs: Any) -> int:
+    def _run_initial_input(*_args: Any, **_kwargs: Any) -> int:
         return 0
 
-    monkeypatch.setattr(entrypoint, "run_initial_input", _run_initial_input)
+    monkeypatch.setattr(main_entrypoint, "run_initial_input", _run_initial_input)
 
     class _Session:
         active_theme_name = None
@@ -225,7 +225,7 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
             return None
 
     monkeypatch.setattr(
-        entrypoint,
+        main_entrypoint,
         "create_repl_runtime_context",
         lambda **_kwargs: SimpleNamespace(session=_Session(), inbox=None),
     )
@@ -237,14 +237,14 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
         return _PromptSession()
 
     monkeypatch.setattr(
-        entrypoint._input_prompt,
+        main_entrypoint._input_prompt,
         "_build_prompt_session",
         _build_prompt_session,
     )
 
     import asyncio
 
-    asyncio.run(entrypoint.repl_main(initial_input="hello"))
+    asyncio.run(main_entrypoint.repl_main(initial_input="hello"))
 
     assert identified == ["called"]
 

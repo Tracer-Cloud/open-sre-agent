@@ -4,10 +4,10 @@ This module owns the *user-facing* half of tool-calling execution: it formats
 tool calls into human-readable labels and prints the "Requested actions" preview
 as the action agent streams its tool calls. The execution orchestration that
 drives it lives in
-:mod:`interactive_shell.agent_shell.tool_calling`.
+:func:`interactive_shell.runtime.shell_turn_execution.run_action_tool_turn`.
 
-Keeping rendering here (rather than in ``tool_calling``) means the execution
-file stays focused on orchestration while terminal formatting stays in ``ui/``.
+Keeping rendering here means the shell turn-entry adapter stays focused on
+binding core ports while terminal formatting stays in ``ui/``.
 """
 
 from __future__ import annotations

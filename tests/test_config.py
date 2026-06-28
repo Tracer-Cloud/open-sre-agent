@@ -216,7 +216,10 @@ def test_has_credentials_for_active_llm_provider_missing_key(monkeypatch) -> Non
 
 def test_resolve_llm_settings_does_not_fall_back_to_openai_when_default_anthropic_key_missing(
     monkeypatch,
+    tmp_path,
 ) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")

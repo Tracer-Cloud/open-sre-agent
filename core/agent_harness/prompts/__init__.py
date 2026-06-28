@@ -13,10 +13,12 @@ from core.agent_harness.prompts.action_agent_prompt import (
 )
 from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
 from core.agent_harness.prompts.assistant import (
+    AssistantPromptContextProvider,
     ShellPromptSession,
     build_assistant_system_prompt,
     build_cli_agent_prompt,
     build_cli_agent_prompt_envelope,
+    build_cli_agent_prompt_from_provider,
     build_observation_block,
     build_shell_environment_block,
 )
@@ -32,6 +34,7 @@ __all__ = [
     "_build_observation_block",
     "_build_system_prompt",
     "ActionPlannerPrompt",
+    "AssistantPromptContextProvider",
     "PromptBlock",
     "PromptEnvelope",
     "ShellPromptSession",
@@ -42,6 +45,7 @@ __all__ = [
     "build_assistant_system_prompt",
     "build_cli_agent_prompt",
     "build_cli_agent_prompt_envelope",
+    "build_cli_agent_prompt_from_provider",
     "build_environment_block",
     "build_observation_block",
     "build_shell_environment_block",

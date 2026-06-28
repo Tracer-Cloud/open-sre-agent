@@ -24,7 +24,7 @@ class ToolContext:
     is_tty: bool | None = None
     # Defaults False to match ``execution_allowed`` and the ``run_*`` helpers:
     # nothing has been listed yet, so the confirmation UX should show the action
-    # summary. The tool-calling turn dispatcher (``run_tool_calling_turn``) passes
+    # summary. The tool-calling turn dispatcher (``run_action_tool_turn``) passes
     # ``action_already_listed=True`` explicitly because it prints a numbered plan.
     action_already_listed: bool = False
 

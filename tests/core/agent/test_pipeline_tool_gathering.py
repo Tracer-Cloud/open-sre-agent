@@ -9,10 +9,10 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
 
 def _console() -> Console:
@@ -42,7 +42,7 @@ def _record_answer() -> tuple[list[dict[str, Any]], Callable[..., None]]:
 def test_gather_string_threads_offscreen_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    handle_message_with_agent(
+    execute_shell_turn(
         "question",
         ReplSession(),
         _console(),
@@ -60,7 +60,7 @@ def test_gather_string_threads_offscreen_observation() -> None:
 def test_gather_none_passes_through_without_observation() -> None:
     calls, fake_answer = _record_answer()
 
-    handle_message_with_agent(
+    execute_shell_turn(
         "question",
         ReplSession(),
         _console(),
@@ -79,7 +79,7 @@ def test_existing_command_observation_skips_gather() -> None:
     calls, fake_answer = _record_answer()
 
     def _should_not_run(*_a: Any, **_k: Any) -> str:
-        raise AssertionError("gather_tool_evidence must not run on the summarize path")
+        raise AssertionError("gather_integration_tool_evidence must not run on the summarize path")
 
     def _handled_with_observation(
         _text: str,
@@ -96,7 +96,7 @@ def test_existing_command_observation_skips_gather() -> None:
             handled=True,
         )
 
-    handle_message_with_agent(
+    execute_shell_turn(
         "question",
         ReplSession(),
         _console(),

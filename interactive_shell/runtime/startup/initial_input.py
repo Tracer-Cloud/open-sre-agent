@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.ui import render_banner
 from interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
 from interactive_shell.utils.telemetry import PromptRecorder
@@ -33,7 +33,7 @@ def run_initial_input(
         session_token = bind_cli_session_id(session.session_id)
         try:
             recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
-            handle_message_with_agent(
+            execute_shell_turn(
                 stripped,
                 session,
                 console,

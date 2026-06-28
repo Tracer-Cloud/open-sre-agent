@@ -6,7 +6,7 @@ from typing import Any
 
 
 def run_repl(*args: Any, **kwargs: Any) -> Any:
-    from interactive_shell.entrypoint import run_repl as runtime_run_repl
+    from interactive_shell.main import run_repl as runtime_run_repl
 
     return runtime_run_repl(*args, **kwargs)
 

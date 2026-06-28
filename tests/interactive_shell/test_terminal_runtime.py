@@ -54,7 +54,7 @@ from platform.terminal.theme import (
 )
 
 
-def test_agent_presentation_import_does_not_load_agent_shell_modules() -> None:
+def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
     result = subprocess.run(
         [
             sys.executable,
@@ -62,7 +62,7 @@ def test_agent_presentation_import_does_not_load_agent_shell_modules() -> None:
             (
                 "import sys; "
                 "import interactive_shell.runtime.agent_presentation; "
-                "print(any(name.startswith('interactive_shell.agent_shell') for name in sys.modules))"
+                "print('interactive_shell.runtime.shell_turn_execution' in sys.modules)"
             ),
         ],
         check=True,
@@ -496,7 +496,7 @@ def test_run_initial_input_dispatches_as_non_tty(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(
         startup_initial_input,
-        "handle_message_with_agent",
+        "execute_shell_turn",
         _fake_handle_message,
     )
 
@@ -1512,7 +1512,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     new contract: the confirm callable raises ``DispatchCancelled`` and
     the exception propagates out of ``execution_allowed`` *without*
     silently confirming the action. The action loop in
-    ``run_tool_calling_turn`` therefore exits via the exception, the
+    ``run_action_tool_turn`` therefore exits via the exception, the
     in-flight action never runs, and any further actions in the same
     plan are skipped.
     """

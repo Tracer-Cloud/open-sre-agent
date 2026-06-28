@@ -8,11 +8,11 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
 from interactive_shell.runtime.core.state import ReplState, SpinnerState
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.runtime.turn_host import AgentTurnRunner
 from interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
@@ -50,7 +50,7 @@ def test_recorder_flushes_once_for_chat_fallback() -> None:
     def _answer(*_args: Any, **_kwargs: Any) -> LlmRunInfo:
         return run_info
 
-    result = handle_message_with_agent(
+    result = execute_shell_turn(
         "question",
         ReplSession(),
         _console(),
@@ -79,7 +79,7 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
             response_text="command output",
         )
 
-    result = handle_message_with_agent(
+    result = execute_shell_turn(
         "run something",
         ReplSession(),
         _console(),

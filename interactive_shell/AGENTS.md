@@ -17,17 +17,14 @@ should be predictable, interruptible, explainable, and safe by default.
 
 | Area | Owns | Keep out |
 | --- | --- | --- |
-| `controller.py` | top-level REPL wiring | feature-specific business logic or compatibility-only forwarding |
-| `entrypoint.py` | process/bootstrap boundary for starting the REPL | per-turn dispatch/runtime logic |
+| `main.py` | process/bootstrap boundary for starting the REPL | per-turn dispatch/runtime logic |
+| `controller.py` | top-level REPL wiring, alert listener lifecycle, prompt loop, background workers, and shutdown | feature-specific business logic or compatibility-only forwarding |
 | `runtime/core/turn_accounting.py` | shell turn accounting (`ShellTurnAccounting`) for analytics, telemetry, recorder flush, turn persistence, and intent stamps | turn-flow control (owned by `core.agent_harness`) or tool-calling turn execution |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
-| `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, controller/entrypoint support modules | UI rendering, prompt text, and reusable session persistence |
-| `orchestration/` | action planning, execution policy, subprocess runner, deterministic command detection, and interaction models | raw UI formatting |
+| `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, semantic shell-turn execution, and core harness adapters | prompt text, reusable session persistence, or compatibility shims |
 | `tools/interactive_shell/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/interactive_shell/actions/shell.py`) | slash-command execution |
-| `harness/response.py` | final response generation (`generate_response`), action-plan parsing, and capability validation | direct mutation of runtime state outside the subprocess runner |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
-| `agent_shell/` | terminal adapters for `core.agent_harness`, including `turn_entry.py` and shell tool-calling adapters | reusable prompt builders, grounding corpora, session state, prompt history, or turn-host lifecycle |
 | `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `incoming_alerts.py` (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the
@@ -128,11 +125,18 @@ owning area rather than adding more logic to the caller.
 
 ## Action Selection And Execution
 
-- **Hard boundary:** do not add regex/keyword/fuzzy intent routing, literal
-  slash-command action shortcuts, or any deterministic action path that bypasses
-  the action agent. Engineers have been fired before for implementing this
-  exact shortcut. This includes "safe" looking mappings like "show integrations"
-  -> `/integrations` or direct `/status` dispatch inside the agent turn.
+- **Hard boundary:** do not add regex/keyword/fuzzy intent routing for natural
+  language, or any deterministic mapping from non-`/`-prefixed prose to an action
+  (e.g. "show integrations" -> `/integrations`). Engineers have been fired before
+  for reintroducing intent heuristics that compete with the action agent.
+  - **Sanctioned exception:** input the user types as a literal `/slash` command
+    is dispatched deterministically (a static `slash_invoke` call in
+    `core/agent_harness/action_agent.py`), so slash commands keep working when the
+    action-agent LLM is unavailable. This is an explicit-command bypass, not
+    intent inference — it fires only when the message *is* a `/command`, and
+    free-form text is still LLM-selected. See
+    `docs/interactive-shell-action-policy.md` ("Deterministic literal-`/slash`
+    dispatch").
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
   action agent never denies a turn. Because every terminal action is read-only,
   an unmatched/ambiguous/chatty clause is not a safety risk — the agent executes
@@ -166,8 +170,8 @@ owning area rather than adding more logic to the caller.
   rather than inventing steps.
 - Do not include secrets in prompts. Redact or omit tokens, auth headers, env
   values, local credentials, and raw integration config.
-- Keep prompt rules reusable in `harness/llm_context/` so chat/help/action surfaces use
-  consistent terminology and formatting.
+- Keep prompt rules reusable in `core.agent_harness.prompts` so chat/help/action
+  surfaces use consistent terminology and formatting.
 - Reference caches should be deterministic, invalidatable when source files
   change, and cheap to rebuild in tests.
 

@@ -60,6 +60,7 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
 
 
 def test_check_llm_provider_not_set(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
@@ -70,6 +71,7 @@ def test_check_llm_provider_not_set(monkeypatch, tmp_path) -> None:
 
 
 def test_check_llm_provider_hosted_missing_key(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))

@@ -22,8 +22,8 @@ terminal and be invoked headlessly via `agent_harness.headless_agent`.
 ## Layout
 
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
-  store, tool provider, prompt-context provider, action dispatch, telemetry,
-  error reporter, evidence gatherer).
+  store, tool provider, prompt-context provider, telemetry, error reporter,
+  evidence gatherer).
 - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
   object satisfying `TurnContextSource`, not `ReplSession` directly).
 - `conversation_memory.py` — recent-conversation rendering shared by prompts.

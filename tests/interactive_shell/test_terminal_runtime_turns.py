@@ -9,10 +9,10 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from core.llm.types import AgentLLMResponse, ToolCall
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.runtime.utils import input_policy as loop_input_policy
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
@@ -155,7 +155,7 @@ def test_turn_needs_exclusive_stdin_for_config(
     )
 
 
-def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
+def test_execute_shell_turn_nitro_prompt_uses_cli_agent_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -180,7 +180,7 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
             handled=True,
         )
 
-    def _fake_answer_cli_agent(
+    def _fake_answer_shell_question(
         text: str,
         _session: ReplSession,
         _console: Console,
@@ -190,7 +190,7 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    handle_message_with_agent(
+    execute_shell_turn(
         nitro_prompt,
         session,
         console,
@@ -198,14 +198,14 @@ def test_handle_message_with_agent_nitro_prompt_uses_cli_agent_actions(
         confirm_fn=None,
         is_tty=None,
         execute_actions=_fake_execute_cli_actions,
-        answer_agent=_fake_answer_cli_agent,
+        answer_agent=_fake_answer_shell_question,
     )
 
     assert action_calls == [nitro_prompt]
     assert llm_calls == []
 
 
-def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigation(
+def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     nitro_prompt = (
@@ -234,7 +234,7 @@ def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigati
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "interactive_shell.agent_shell.tool_calling._default_llm_factory",
+        "interactive_shell.runtime.shell_turn_execution._default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(
@@ -261,7 +261,7 @@ def test_handle_message_with_agent_nitro_prompt_executes_remote_then_investigati
 
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
-    handle_message_with_agent(
+    execute_shell_turn(
         nitro_prompt,
         session,
         console,

@@ -63,7 +63,7 @@ class TestNonTtyFallback:
         assert "thinking" not in output
 
     def test_suppression_drains_silently_in_non_tty(self) -> None:
-        """Suppressed payloads (JSON action plans) must not appear in piped output."""
+        """Suppressed payloads (machine-readable payloads) must not appear in piped output."""
         console, buf = _non_tty_console()
         result = stream_to_console(
             console,
@@ -622,7 +622,7 @@ class TestTimingFooter:
         assert re.search(r"·\s+\d+\.\d+s", output) is None
 
     def test_footer_skipped_when_response_is_suppressed(self) -> None:
-        """Suppressed JSON action plans should not get a timing footer either."""
+        """Suppressed machine-readable payloads should not get a timing footer either."""
         console, buf = _tty_console()
         stream_to_console(
             console,
@@ -637,7 +637,7 @@ class TestTimingFooter:
 
 class TestRenderResponseHeader:
     """``render_response_header`` is the bullet-row marker shared with
-    ``tool_calling.run_tool_calling_turn`` — three call sites collapsed
+    ``shell_turn_execution.run_action_tool_turn`` — three call sites collapsed
     to one helper, so we lock in the visible output here.
     """
 

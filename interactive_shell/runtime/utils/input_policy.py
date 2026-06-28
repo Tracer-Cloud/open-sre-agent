@@ -9,9 +9,10 @@ from interactive_shell.ui.components.choice_menu import repl_tty_interactive
 def _literal_slash_command_text(text: str) -> str | None:
     """Return literal ``/slash`` command text for command-shaped input, else ``None``.
 
-    Terminal-UI policy only (spinner suppression and exclusive-stdin gating). This
-    recognizes explicit literal slash commands; it must never become an execution
-    shortcut around the action agent.
+    Terminal-UI policy only (spinner suppression and exclusive-stdin gating). The
+    matching execution-side deterministic dispatch lives separately in
+    ``core/agent_harness/action_agent.py``; keep this function UI-only and do not
+    grow natural-language intent inference here.
     """
     stripped = text.strip()
     return stripped if stripped.startswith("/") else None
@@ -75,9 +76,9 @@ _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
 
 
 def turn_should_show_spinner(text: str, _session: ReplSession) -> bool:
-    # This literal-command check is UI-only. It must never become an
-    # execution shortcut; submitted turns still go through the LLM planner before
-    # any slash or shell action can run.
+    # UI-only: suppress the "thinking" spinner for literal slash commands, which
+    # dispatch deterministically (no LLM) and would otherwise show a misleading
+    # spinner. Natural-language turns still go through the action-agent LLM.
     return _literal_slash_command_text(text.strip()) is None
 
 
@@ -90,7 +91,8 @@ def turn_needs_exclusive_stdin(text: str, _session: ReplSession) -> bool:
         return False
 
     # Reserve stdin early for literal command-shaped input, but do not dispatch
-    # here. Execution remains planner-owned so there are no command fast paths.
+    # here. This stays UI-only; deterministic slash execution lives in the turn
+    # engine (core/agent_harness/action_agent.py), not in this gating layer.
     dispatch_text = _literal_slash_command_text(t)
     if dispatch_text is None:
         return False

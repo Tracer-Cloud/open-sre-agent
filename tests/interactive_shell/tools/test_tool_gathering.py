@@ -1,6 +1,6 @@
 """Tests for the interactive-shell tool-gathering pass.
 
-``gather_tool_evidence`` runs a bounded tool-calling loop over the same
+``gather_integration_tool_evidence`` runs a bounded tool-calling loop over the same
 registered tools the investigation uses and returns the collected outputs as a
 formatted observation block (or ``None`` when there is nothing to add). These
 tests exercise the no-tools, executed-results, no-executed, and exception paths
@@ -20,11 +20,11 @@ import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from core.agent_harness.session import ReplSession
 from core.llm.types import ToolCall
-from tools.interactive_shell.tool_gathering import (
+from interactive_shell.runtime.integration_tool_gathering import (
     _format_gathering_progress_line,
     _resolve_gather_integrations,
     _tool_input_hint,
-    gather_tool_evidence,
+    gather_integration_tool_evidence,
 )
 
 
@@ -55,7 +55,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(investigate_tools, "get_available_tools", lambda _resolved: [])
 
-    assert gather_tool_evidence("any question", session, _console()) is None
+    assert gather_integration_tool_evidence("any question", session, _console()) is None
 
 
 def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
@@ -73,7 +73,7 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", _unexpected_llm)
 
-    assert gather_tool_evidence("why did it fail?", session, _console()) is None
+    assert gather_integration_tool_evidence("why did it fail?", session, _console()) is None
 
 
 def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None:
@@ -101,7 +101,7 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
     _patch_agent_run(monkeypatch, _fake_run)
 
-    observation = gather_tool_evidence("any open issues?", session, _console())
+    observation = gather_integration_tool_evidence("any open issues?", session, _console())
 
     assert observation is not None
     assert "search_github_issues" in observation
@@ -127,7 +127,7 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
 
     _patch_agent_run(monkeypatch, _fake_run)
 
-    assert gather_tool_evidence("any question", session, _console()) is None
+    assert gather_integration_tool_evidence("any question", session, _console()) is None
 
 
 def test_exception_path_returns_none(monkeypatch: Any) -> None:
@@ -145,7 +145,7 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(agent_llm_client, "get_agent_llm", _boom)
 
-    assert gather_tool_evidence("any question", session, _console()) is None
+    assert gather_integration_tool_evidence("any question", session, _console()) is None
 
 
 def test_tool_input_hint_prefers_distinguishing_fields() -> None:
@@ -172,11 +172,11 @@ def test_format_gathering_progress_line_escapes_display_and_hint_markup(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
-        "tools.interactive_shell.tool_gathering.tool_source_label",
+        "interactive_shell.runtime.integration_tool_gathering.tool_source_label",
         lambda _name: "Grafana [prod]",
     )
     monkeypatch.setattr(
-        "tools.interactive_shell.tool_gathering.tool_short_label",
+        "interactive_shell.runtime.integration_tool_gathering.tool_short_label",
         lambda _name, _source: "Mimir",
     )
 
@@ -230,7 +230,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
 
     _patch_agent_run(monkeypatch, _fake_run)
 
-    gather_tool_evidence("check metrics", session, console)
+    gather_integration_tool_evidence("check metrics", session, console)
     output = console.file.getvalue()
     assert "Grafana · Mimir — pipeline_runs_total" in output
     assert "Grafana · Mimir (2) — http_errors_total" in output
@@ -294,7 +294,7 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
 
     _patch_agent_run(monkeypatch, _fake_run)
 
-    gather_tool_evidence(
+    gather_integration_tool_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
         session,
         _console(),
@@ -326,7 +326,7 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
 
     _patch_agent_run(monkeypatch, _fake_run)
 
-    gather_tool_evidence("follow up", session, _console())
+    gather_integration_tool_evidence("follow up", session, _console())
 
     content = captured["messages"][0]["content"]
     assert "Recent conversation:" in content

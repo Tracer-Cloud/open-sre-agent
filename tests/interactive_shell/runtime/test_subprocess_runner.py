@@ -262,6 +262,7 @@ def test_run_claude_code_implementation_starts_tracked_task(
         return _FakeProcess()
 
     monkeypatch.delenv("CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_MODEL", raising=False)
     monkeypatch.setattr(
         "tools.interactive_shell.implementation.claude_code_executor.ClaudeCodeAdapter",
         _FakeAdapter,

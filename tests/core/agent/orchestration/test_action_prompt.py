@@ -61,6 +61,14 @@ def test_system_prompt_requires_same_response_for_slash_then_investigation() -> 
     assert "valid investigation payload" in prompt
 
 
+def test_system_prompt_maps_setup_requests_to_slash_invoke() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "configure, connect, set up, add, or enable" in prompt
+    assert 'slash_invoke(command="/integrations", args=["setup", "<service>"])' in prompt
+    assert 'slash_invoke(command="/mcp", args=["connect", "<server>"])' in prompt
+    assert "do not hand off just to tell the user" in prompt
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt

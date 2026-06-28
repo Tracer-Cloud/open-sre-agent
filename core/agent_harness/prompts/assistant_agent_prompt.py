@@ -1,6 +1,5 @@
 """System prompt building for the terminal assistant."""
 
-from config.llm_auth.provider_catalog import SUPPORTED_PROVIDER_VALUES
 from core.agent_harness.prompts.rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -8,29 +7,6 @@ from core.agent_harness.prompts.rules import (
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
-_ACTION_PROVIDER_LIST = ", ".join(SUPPORTED_PROVIDER_VALUES)
-
-_ACTION_RULE = (
-    "Action planning: if the user asks you to change OpenSRE runtime state, "
-    "return ONLY a compact JSON object with an `actions` array. Do not give "
-    "instructions when an allowed action can satisfy the request. Allowed "
-    "action object schemas: "
-    '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
-    f"where provider is one of {_ACTION_PROVIDER_LIST}; both `model` (reasoning) "
-    "and `toolcall_model` are optional; "
-    '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
-    "to change ONLY the toolcall model on the currently active provider; "
-    '`{"action":"slash","command":"/model show"}` where command is one of '
-    "/model show, /health, /doctor, /version; "
-    '`{"action":"run_cli_command","args":"<subcommand> <flags>"}` '
-    "to run any opensre subcommand (agent is blocked); "
-    '`{"action":"run_interactive","command":"/<command> <args>"}` '
-    "to launch any registered OpenSRE interactive slash command the user asked for. "
-    "For ordinary "
-    "questions, return normal Markdown. Do not return action JSON for vague "
-    "local model requests such as `connect to local llama`; answer with a brief "
-    "clarification or mention `/model set ollama` as an option instead."
-)
 
 _SOURCE_SCOPED_INVESTIGATION_RULE = (
     "Source-scoped investigation requests: when the user asks you to find or "
@@ -47,15 +23,11 @@ _SOURCE_SCOPED_INVESTIGATION_RULE = (
 
 _SETUP_GUIDANCE_RULE = (
     "Configuring or connecting an integration: when the user asks to configure, "
-    "connect, set up, add, or enable a specific integration they already named "
-    "(for example 'can you configure sentry?' or 'connect datadog'), do NOT just "
-    "tell them the command to type and do NOT talk about 'changing runtime state'. "
-    "Launch it for them by returning an action plan: "
-    '`{"action":"run_interactive","command":"/integrations setup <service>"}` '
-    "using the service they named (for an MCP server use "
-    '`{"action":"run_interactive","command":"/mcp connect <server>"}`). The '
-    "interactive wizard then prompts them for the credentials that integration "
-    "needs. This applies to any integration; never hardcode advice to one vendor."
+    "connect, set up, add, or enable a specific integration they already named, "
+    "the action agent should normally have launched the setup wizard before this "
+    "assistant runs. If you still receive the turn, explain the exact slash command "
+    "briefly: `/integrations setup <service>` for integrations, or `/mcp connect "
+    "<server>` for MCP servers. Do not emit JSON or claim you changed runtime state."
 )
 
 
@@ -130,7 +102,7 @@ def _build_system_prompt(
         "ask for the target system, service, or alert context.\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
-        f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n{_ACTION_RULE}\n\n"
+        f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
         f"{environment}"
         f"--- CLI reference ---\n{reference}\n\n"
         f"{investigation_flow_block}"
@@ -172,7 +144,6 @@ def _build_observation_block(tool_observation: str | None, *, on_screen: bool = 
 
 
 __all__ = [
-    "_ACTION_RULE",
     "_MARKDOWN_RULE",
     "_SOURCE_SCOPED_INVESTIGATION_RULE",
     "_SETUP_GUIDANCE_RULE",

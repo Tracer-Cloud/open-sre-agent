@@ -132,16 +132,47 @@ def _render_tool_calling_error(output: OutputSink, message: str) -> None:
 
 
 def _bang_shell_command(message: str) -> str | None:
-    # The only deterministic action bypass allowed in this module is the explicit
-    # `!cmd` shell escape. Do NOT copy this pattern for `/slash` commands, bare
-    # aliases, regex/keyword matches, or "obvious" natural-language intents.
-    # Those must go through the action-agent LLM selecting first-class AgentTools.
-    # Engineers have been fired before for reintroducing slash/regex shortcuts here.
+    # Explicit `!cmd` shell escape: a deterministic bypass for input the user
+    # typed verbatim as a shell command. This is NOT natural-language intent
+    # inference — do NOT copy this pattern for bare aliases, regex/keyword
+    # matches, or "obvious" natural-language intents. Those must go through the
+    # action-agent LLM selecting first-class AgentTools. Engineers have been
+    # fired before for reintroducing regex/keyword intent shortcuts here.
     stripped = message.strip()
     if not stripped.startswith("!") or len(stripped) <= 1:
         return None
     cmd = " ".join(stripped[1:].split())
     return f"!{cmd}" if cmd else None
+
+
+def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall | None:
+    """Deterministic ``slash_invoke`` for input the user typed as a literal ``/command``.
+
+    Like the ``!cmd`` shell escape, this dispatches an *explicit, verbatim* command;
+    it is NOT natural-language intent inference (free-form text such as "log me in"
+    still goes through the action-agent LLM). Routing the typed command straight to
+    the ``slash_invoke`` tool means slash commands keep working when the action-agent
+    LLM is unavailable — e.g. a provider with no credit — so users can still run
+    ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
+
+    Returns ``None`` (so the normal LLM path runs) when the input is not literal
+    slash text or when ``slash_invoke`` is not an available tool this turn.
+    """
+    stripped = message.strip()
+    if not stripped.startswith("/"):
+        return None
+    if not any(getattr(tool, "name", None) == "slash_invoke" for tool in agent_tools):
+        return None
+    if stripped == "/":
+        command, args = "/", []
+    else:
+        parts = stripped.split()
+        command, args = parts[0], parts[1:]
+    return ToolCall(
+        id="direct_slash_0",
+        name="slash_invoke",
+        input={"command": command, "args": args},
+    )
 
 
 def _default_llm_factory() -> Any:
@@ -174,12 +205,13 @@ def run_agent_turn(
     observer = tools.observer(message=message)
 
     bang_command = _bang_shell_command(message)
+    slash_call = (
+        None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
+    )
     if bang_command is not None:
-        # This is intentionally limited to the `!` shell escape. It is not a
-        # general "deterministic command" fast path. In particular, do not add
-        # `deterministic_command_text`, slash-command parsing, or regex intent
-        # matching here. Slash execution still belongs to the `slash_invoke`
-        # AgentTool selected by the action core.agent_harness.
+        # Explicit `!` shell escape. This is not a general "deterministic command"
+        # fast path or regex/keyword intent matcher — it dispatches only input the
+        # user typed verbatim as a shell command.
         def llm_factory() -> _StaticToolCallLLM:
             return _StaticToolCallLLM(
                 [ToolCall(id="direct_shell_0", name="shell_run", input={"command": bang_command})]
@@ -187,6 +219,18 @@ def run_agent_turn(
 
         user_message = message
         system_prompt = "Execute the explicit shell_run tool call."
+    elif slash_call is not None:
+        # Explicit literal `/slash` command. Dispatch it deterministically through
+        # the same `slash_invoke` AgentTool the LLM would otherwise pick, so typed
+        # commands run without the action-agent LLM (and keep working when it is
+        # unavailable). Natural-language intent is still LLM-selected below.
+        slash_tool_call = slash_call
+
+        def llm_factory() -> _StaticToolCallLLM:
+            return _StaticToolCallLLM([slash_tool_call])
+
+        user_message = message
+        system_prompt = "Execute the explicit slash_invoke tool call."
     else:
         llm_factory = (
             deps.llm_factory if deps is not None and deps.llm_factory else _default_llm_factory

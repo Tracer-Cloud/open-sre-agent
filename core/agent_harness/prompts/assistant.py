@@ -46,6 +46,28 @@ class ShellPromptSession(Protocol):
     grounding: _GroundingBundle
 
 
+class AssistantPromptContextProvider(Protocol):
+    """Grounding provider used by the surface-agnostic assistant turn."""
+
+    def cli_reference(self) -> str:
+        raise NotImplementedError
+
+    def agents_md(self) -> str:
+        raise NotImplementedError
+
+    def investigation_flow(self) -> str:
+        raise NotImplementedError
+
+    def environment_block(self) -> str:
+        raise NotImplementedError
+
+    def suggested_synthetic_prompt(self) -> str:
+        raise NotImplementedError
+
+    def log_diagnostics(self, reason: str) -> None:
+        raise NotImplementedError
+
+
 def build_assistant_system_prompt(
     reference: str,
     history: str,
@@ -123,12 +145,15 @@ def _summarize_last_state(state: dict[str, Any]) -> str:
     return "\n\n".join(parts) or "(no prior investigation details available)"
 
 
-def _user_message_requests_synthetic_failure_explanation(message: str) -> bool:
+def _user_message_requests_synthetic_failure_explanation(
+    message: str,
+    suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+) -> bool:
     """True when the user is likely asking about a failed synthetic benchmark."""
     m = message.strip().lower()
     if not m:
         return False
-    suggested = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST.lower().rstrip("?")
+    suggested = suggested_prompt.lower().rstrip("?")
     if m.rstrip("?") == suggested:
         return True
     if "why" in m and "fail" in m:
@@ -158,19 +183,26 @@ def _build_integration_guard(ctx: TurnContext) -> str:
 
     return (
         "No integrations are configured in this session. You may still help the user "
-        "configure one: when they ask to set up, connect, or add an integration, emit a "
-        "run_interactive action for `/integrations setup <service>` (or `/mcp connect "
-        "<server>`). Do NOT emit run_cli_command or slash actions to show/verify/remove "
-        "integrations that are not configured; for those, answer with guidance only.\n\n"
+        "configure one: explain `/integrations setup <service>` for integrations or "
+        "`/mcp connect <server>` for MCP servers. Do not claim any integration is "
+        "already connected, and for show/verify/remove requests against unconfigured "
+        "integrations, answer with guidance only.\n\n"
     )
 
 
-def _build_synthetic_failure_block(ctx: TurnContext) -> str:
+def _build_synthetic_failure_block(
+    ctx: TurnContext,
+    *,
+    suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
+) -> str:
     obs_path = ctx.last_synthetic_observation_path
     if not obs_path:
         return ""
 
-    if not _user_message_requests_synthetic_failure_explanation(ctx.text):
+    if not _user_message_requests_synthetic_failure_explanation(
+        ctx.text,
+        suggested_prompt=suggested_prompt,
+    ):
         return ""
 
     obs_text = _load_synthetic_observation_text(obs_path)
@@ -224,6 +256,35 @@ def build_cli_agent_prompt_envelope(
     )
 
 
+def build_cli_agent_prompt_from_provider(
+    *,
+    message: str,
+    prompts: AssistantPromptContextProvider,
+    tool_observation: str | None,
+    tool_observation_on_screen: bool,
+    turn_ctx: TurnContext,
+) -> str:
+    """Render an assistant prompt from the core prompt-provider port."""
+    prompts.log_diagnostics("cli_agent_grounding")
+    system = build_assistant_system_prompt(
+        prompts.cli_reference(),
+        format_recent_conversation(list(turn_ctx.conversation_messages)),
+        agents_md=prompts.agents_md(),
+        investigation_flow=prompts.investigation_flow(),
+        prior_investigation=(
+            _summarize_last_state(turn_ctx.last_state) if turn_ctx.last_state is not None else ""
+        ),
+        environment=prompts.environment_block(),
+    )
+    return (
+        f"{system}\n"
+        f"{_build_integration_guard(turn_ctx)}"
+        f"{build_observation_block(tool_observation, on_screen=tool_observation_on_screen)}"
+        f"{_build_synthetic_failure_block(turn_ctx, suggested_prompt=prompts.suggested_synthetic_prompt())}"
+        f"--- User message ---\n{message}"
+    )
+
+
 def build_cli_agent_prompt(
     *,
     message: str,
@@ -243,10 +304,12 @@ def build_cli_agent_prompt(
 
 
 __all__ = [
+    "AssistantPromptContextProvider",
     "ShellPromptSession",
     "build_cli_agent_prompt_envelope",
     "build_assistant_system_prompt",
     "build_cli_agent_prompt",
+    "build_cli_agent_prompt_from_provider",
     "build_observation_block",
     "build_shell_environment_block",
 ]

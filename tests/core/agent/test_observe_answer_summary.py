@@ -13,10 +13,10 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
 _OBSERVATION = "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
@@ -54,7 +54,7 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         return LlmRunInfo(response_text="No — Sentry is not configured.")
 
     session = ReplSession()
-    handle_message_with_agent(
+    execute_shell_turn(
         "is sentry installed?",
         session,
         _console(),
@@ -91,7 +91,7 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
         return None
 
     session = ReplSession()
-    handle_message_with_agent(
+    execute_shell_turn(
         "deploy the remote instance",
         session,
         _console(),
@@ -128,7 +128,7 @@ def test_failed_discovery_is_not_summarized() -> None:
         return None
 
     session = ReplSession()
-    handle_message_with_agent(
+    execute_shell_turn(
         "is sentry installed?",
         session,
         _console(),
@@ -166,7 +166,7 @@ def test_observation_is_reset_each_turn() -> None:
 
     session = ReplSession()
     session.last_command_observation = "stale observation from a previous turn"
-    handle_message_with_agent(
+    execute_shell_turn(
         "deploy the remote instance",
         session,
         _console(),

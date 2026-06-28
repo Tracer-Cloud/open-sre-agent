@@ -1,10 +1,10 @@
-"""Live tool-gathering pass for the interactive-shell assistant (terminal adapter).
+"""Gather integration evidence for a conversational shell answer.
 
 The bounded think -> call-tools -> observe loop lives in the decoupled
 :func:`core.agent_harness.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
 it renders each gathering step to the console and persists the gathered tool
 calls into the shell's session storage, then hands the collected observation back
-to :func:`interactive_shell.agent_shell.turn_entry.answer_cli_agent`.
+to :func:`interactive_shell.runtime.shell_turn_execution.answer_shell_question`.
 """
 
 from __future__ import annotations
@@ -141,7 +141,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
             )
 
 
-def gather_tool_evidence(
+def gather_integration_tool_evidence(
     message: str,
     session: ReplSession,
     console: Console,
@@ -181,4 +181,4 @@ def gather_tool_evidence(
     )
 
 
-__all__ = ["gather_tool_evidence"]
+__all__ = ["gather_integration_tool_evidence"]

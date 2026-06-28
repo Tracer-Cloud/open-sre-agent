@@ -1,4 +1,4 @@
-"""Shell turn entry adapters for the interactive OpenSRE shell."""
+"""Execute submitted interactive-shell turns through the shared agent harness."""
 
 from __future__ import annotations
 
@@ -7,31 +7,66 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_orchestrator import answer_cli_agent as run_core_answer_cli_agent
 from core.agent_harness.turn_orchestrator import run_turn
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
-from interactive_shell.agent_shell.adapters import (
-    ShellActionDispatch,
+from interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
     ShellOutputSink,
     ShellPromptContextProvider,
     ShellReasoningClientProvider,
     ShellRunRecordFactory,
+    ShellToolProvider,
 )
-from interactive_shell.agent_shell.tool_calling import run_tool_calling_turn
-from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
+from interactive_shell.runtime.integration_tool_gathering import gather_integration_tool_evidence
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
-from tools.interactive_shell.tool_gathering import gather_tool_evidence
 
 # Dependency seams used by the harness turn-routing tests.
-RunToolCallingTurn = Callable[..., ToolCallingTurnResult]
+RunActionToolTurn = Callable[..., ToolCallingTurnResult]
 GatherEvidence = Callable[..., "str | None"]
-AnswerAgent = Callable[..., "LlmRunInfo | None"]
+AnswerShellQuestion = Callable[..., "LlmRunInfo | None"]
 
 
-def answer_cli_agent(
+def _default_llm_factory() -> Any:
+    from core.llm import agent_llm_client
+
+    return agent_llm_client.get_agent_llm()
+
+
+def run_action_tool_turn(
+    message: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    confirm_fn: Callable[[str], str] | None = None,
+    is_tty: bool | None = None,
+    deps: ToolCallingDeps | None = None,
+    turn_ctx: TurnContext | None = None,
+) -> ToolCallingTurnResult:
+    """Run one action-selection turn through core with shell adapters bound."""
+    effective_deps = (
+        deps
+        if deps is not None and deps.llm_factory is not None
+        else ToolCallingDeps(llm_factory=_default_llm_factory)
+    )
+    return run_agent_turn(
+        message,
+        session,
+        output=ShellOutputSink(console),
+        tools=ShellToolProvider(session, console),
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+        deps=effective_deps,
+        turn_ctx=turn_ctx,
+        error_reporter=ShellErrorReporter(),
+    )
+
+
+def answer_shell_question(
     message: str,
     session: ReplSession,
     console: Console,
@@ -42,11 +77,10 @@ def answer_cli_agent(
     tool_observation_on_screen: bool = True,
     turn_ctx: TurnContext | None = None,
 ) -> LlmRunInfo | None:
-    """Run one turn of the terminal assistant (guidance only; no investigation run).
+    """Answer one shell question through the grounded conversational assistant.
 
     Delegates to :func:`core.agent_harness.turn_orchestrator.answer_cli_agent`, supplying the shell
-    adapters (Rich output, grounding caches, reasoning client, telemetry, action
-    dispatch).
+    adapters for Rich output, grounding caches, reasoning client, and telemetry.
     """
     return run_core_answer_cli_agent(
         message,
@@ -55,7 +89,6 @@ def answer_cli_agent(
         prompts=ShellPromptContextProvider(session),
         reasoning=ShellReasoningClientProvider(console),
         run_factory=ShellRunRecordFactory(session),
-        dispatch=ShellActionDispatch(session, console),
         error_reporter=ShellErrorReporter(),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
@@ -65,7 +98,7 @@ def answer_cli_agent(
     )
 
 
-def handle_message_with_agent(
+def execute_shell_turn(
     text: str,
     session: ReplSession,
     console: Console,
@@ -73,11 +106,11 @@ def handle_message_with_agent(
     recorder: PromptRecorder | None,
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
-    execute_actions: RunToolCallingTurn | None = None,
+    execute_actions: RunActionToolTurn | None = None,
     gather_evidence: GatherEvidence | None = None,
-    answer_agent: AnswerAgent | None = None,
+    answer_agent: AnswerShellQuestion | None = None,
 ) -> ShellTurnResult:
-    """Run one interactive-shell turn through the decoupled three-path engine.
+    """Execute one submitted interactive-shell turn.
 
     The action driver, gather pass, and conversational assistant are bound to the
     live ``session``/``console`` here (so injected test doubles keep their
@@ -87,9 +120,9 @@ def handle_message_with_agent(
     from core.agent_harness.session.compaction import auto_compact_if_needed
 
     auto_compact_if_needed(session)
-    _execute = execute_actions or run_tool_calling_turn
-    _gather = gather_evidence or gather_tool_evidence
-    _answer = answer_agent or answer_cli_agent
+    _execute = execute_actions or run_action_tool_turn
+    _gather = gather_evidence or gather_integration_tool_evidence
+    _answer = answer_agent or answer_shell_question
     accounting = ShellTurnAccounting(session=session, text=text, recorder=recorder)
 
     def execute_bound(
@@ -125,9 +158,10 @@ def handle_message_with_agent(
 
 
 __all__ = [
-    "AnswerAgent",
+    "AnswerShellQuestion",
     "GatherEvidence",
-    "RunToolCallingTurn",
-    "answer_cli_agent",
-    "handle_message_with_agent",
+    "RunActionToolTurn",
+    "answer_shell_question",
+    "execute_shell_turn",
+    "run_action_tool_turn",
 ]

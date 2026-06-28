@@ -38,9 +38,6 @@ class OutputSink(Protocol):
     def render_error(self, message: str) -> None:
         """Render an error/notice line."""
 
-    def render_markdown(self, text: str) -> None:
-        """Render a block of Markdown (used for JSON-like assistant replies)."""
-
     def stream(
         self,
         *,
@@ -149,20 +146,6 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-@runtime_checkable
-class ActionDispatch(Protocol):
-    """Executes a parsed action plan emitted by the conversational assistant."""
-
-    def execute(
-        self,
-        actions: tuple[Any, ...],
-        *,
-        confirm_fn: ConfirmFn | None,
-        is_tty: bool | None,
-    ) -> bool:
-        """Run the eligible actions; return True iff anything was eligible."""
-
-
 # Bound conversational-answer callable. Returns an opaque LLM-run record (or
 # None). The shell binds session/console/grounding; headless binds a simple
 # core-LLM call.
@@ -188,7 +171,6 @@ class TurnAccounting(Protocol):
 
 
 __all__ = [
-    "ActionDispatch",
     "AnswerAgent",
     "ConfirmFn",
     "ErrorReporter",

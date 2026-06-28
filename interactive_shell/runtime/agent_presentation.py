@@ -2,12 +2,11 @@
 
 This module owns the **UI / presentation** side of one submitted shell prompt:
 the pure presentation-state reducer, the effectful terminal transition renderer,
-the ``ConsoleAgentEventSink`` imperative shell that wires them together, and the
-JSON-like assistant response renderer.
+and the ``ConsoleAgentEventSink`` imperative shell that wires them together.
 
-Keeping this separate from ``agent_shell/turn_entry.py`` isolates spinner lifecycle,
-prompt suppression, markdown rendering, interruption/error messages, and stale
-CPR draining from the turn's action-routing and prompt-construction logic.
+Keeping this separate from ``runtime/shell_turn_execution.py`` isolates spinner
+lifecycle, prompt suppression, interruption/error messages, and stale CPR
+draining from the turn's action-routing and prompt-construction logic.
 """
 
 from __future__ import annotations
@@ -17,18 +16,13 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from rich.console import Console
-from rich.markdown import Markdown
 from rich.markup import escape
 
 from core.agent_harness.session import ReplSession
 from interactive_shell.runtime.core.state import SpinnerState
 from interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
 from interactive_shell.ui import (
-    BOLD_BRAND,
     ERROR,
-    MARKDOWN_THEME,
-    STREAM_LABEL_ASSISTANT,
     WARNING,
 )
 from interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
@@ -143,22 +137,9 @@ class ConsoleAgentEventSink:
         )
 
 
-def render_json_like_response(console: Console, text: str) -> None:
-    """Render a JSON-looking assistant response as markdown (fallback path)."""
-    if not text.lstrip().startswith("{") or not text.strip():
-        return
-
-    console.print()
-    console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")
-    with console.use_theme(MARKDOWN_THEME):
-        console.print(Markdown(text, code_theme="ansi_dark"))
-    console.print()
-
-
 __all__ = [
     "AgentEvent",
     "AgentPresentationState",
     "ConsoleAgentEventSink",
     "AgentEventSink",
-    "render_json_like_response",
 ]

@@ -30,7 +30,6 @@ from core.agent_harness.headless import (
     BufferOutputSink,
     EmptyPromptContextProvider,
     InMemorySessionStore,
-    NoopActionDispatch,
     NoopErrorReporter,
     NoopTurnAccounting,
     NullToolProvider,
@@ -38,7 +37,6 @@ from core.agent_harness.headless import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.ports import (
-    ActionDispatch,
     ConfirmFn,
     ErrorReporter,
     OutputSink,
@@ -63,7 +61,6 @@ def run_agent_turn(
     prompts: PromptContextProvider | None = None,
     reasoning: ReasoningClientProvider | None = None,
     run_factory: RunRecordFactory | None = None,
-    dispatch: ActionDispatch | None = None,
     accounting: TurnAccounting | None = None,
     error_reporter: ErrorReporter | None = None,
     gather_enabled: bool = False,
@@ -85,7 +82,6 @@ def run_agent_turn(
     prompts = prompts if prompts is not None else EmptyPromptContextProvider()
     reasoning = reasoning if reasoning is not None else StaticReasoningClientProvider()
     run_factory = run_factory if run_factory is not None else SimpleRunRecordFactory()
-    dispatch = dispatch if dispatch is not None else NoopActionDispatch()
     accounting = accounting if accounting is not None else NoopTurnAccounting()
     error_reporter = error_reporter if error_reporter is not None else NoopErrorReporter()
 
@@ -115,7 +111,6 @@ def run_agent_turn(
             prompts=prompts,
             reasoning=reasoning,
             run_factory=run_factory,
-            dispatch=dispatch,
             error_reporter=error_reporter,
             **kwargs,  # type: ignore[arg-type]
         )

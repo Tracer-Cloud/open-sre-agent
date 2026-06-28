@@ -12,23 +12,17 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.markup import escape
 
-from core.agent_harness.action_plan import ActionPlanAction
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from interactive_shell.agent_shell.action_dispatch import execute_action_plan
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
 from interactive_shell.ui import (
-    BOLD_BRAND,
     ERROR,
-    MARKDOWN_THEME,
-    STREAM_LABEL_ASSISTANT,
     stream_to_console,
 )
 from interactive_shell.ui.action_rendering import ActionRenderObserver
@@ -52,13 +46,6 @@ class ShellOutputSink:
 
     def render_error(self, message: str) -> None:
         self._console.print(f"[yellow]{escape(message)}[/]")
-
-    def render_markdown(self, text: str) -> None:
-        self._console.print()
-        self._console.print(f"[{BOLD_BRAND}]{STREAM_LABEL_ASSISTANT}:[/]")
-        with self._console.use_theme(MARKDOWN_THEME):
-            self._console.print(Markdown(text, code_theme="ansi_dark"))
-        self._console.print()
 
     def stream(
         self,
@@ -158,30 +145,6 @@ class ShellRunRecordFactory:
         )
 
 
-class ShellActionDispatch:
-    """:class:`core.agent_harness.ports.ActionDispatch` over the shell action interpreter."""
-
-    def __init__(self, session: ReplSession, console: Console) -> None:
-        self._session = session
-        self._console = console
-
-    def execute(
-        self,
-        actions: tuple[Any, ...],
-        *,
-        confirm_fn: Callable[[str], str] | None,
-        is_tty: bool | None,
-    ) -> bool:
-        typed: tuple[ActionPlanAction, ...] = actions  # type: ignore[assignment]
-        return execute_action_plan(
-            typed,
-            self._session,
-            self._console,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-        )
-
-
 class ShellErrorReporter:
     """:class:`core.agent_harness.ports.ErrorReporter` over ``report_exception``."""
 
@@ -190,7 +153,6 @@ class ShellErrorReporter:
 
 
 __all__ = [
-    "ShellActionDispatch",
     "ShellErrorReporter",
     "ShellOutputSink",
     "ShellPromptContextProvider",

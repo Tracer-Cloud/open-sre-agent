@@ -60,7 +60,7 @@ copy and the REPL status bar. It does not control which integrations are
 entirely:
 
 ```python
-# tools/interactive_shell/tool_gathering.py
+# interactive_shell/runtime/integration_tool_gathering.py
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache
@@ -317,7 +317,7 @@ to distinguish between two separate things:
   providing test credentials and does not involve the LLM.
 
 Add an AST check that specifically permits `monkeypatch.setattr` on
-`tool_gathering._resolve_session_integrations` and
+`integration_tool_gathering._resolve_session_integrations` and
 `core.agent.Agent.run` while continuing to prohibit `patch`,
 `MagicMock`, and LLM client stubs.
 

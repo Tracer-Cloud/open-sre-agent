@@ -13,7 +13,6 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
 from interactive_shell.runtime.agent_presentation import (
     AgentEvent,
     AgentEventSink,
@@ -31,6 +30,7 @@ from interactive_shell.runtime.input.actions import (
     ShellInputSnapshot,
     decide_input_action,
 )
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
@@ -151,7 +151,7 @@ async def _execute_agent_turn(
 ) -> None:
     with _bound_cli_session(session.session_id):
         await asyncio.to_thread(
-            handle_message_with_agent,
+            execute_shell_turn,
             text,
             session,
             output,

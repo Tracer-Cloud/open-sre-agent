@@ -484,6 +484,10 @@ def test_live_action_planning(
             _assert_live_action_planning_once(live_planning_case)
         except LLMCreditExhaustedError as exc:
             _skip_or_fail_provider_credit_exhausted(str(exc))
+        except RuntimeError as exc:
+            if _provider_credit_exhausted_message(str(exc)):
+                _skip_or_fail_provider_credit_exhausted(str(exc))
+            raise
         except AssertionError as exc:
             failures.append(str(exc))
         else:

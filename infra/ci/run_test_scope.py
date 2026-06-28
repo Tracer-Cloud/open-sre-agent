@@ -24,10 +24,37 @@ if str(_CI_DIR) not in sys.path:
 from test_scope_rules import classify  # noqa: E402
 
 
+def _commit_ref_exists(ref: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
+
+
+def _resolve_base_ref(base: str) -> str:
+    """Prefer branch refs for unqualified bases so same-named tags do not win."""
+    if "/" in base or base.startswith("refs/"):
+        return base
+    for ref in (
+        f"refs/heads/{base}",
+        f"refs/remotes/origin/{base}",
+        f"refs/remotes/upstream/{base}",
+    ):
+        if _commit_ref_exists(ref):
+            return ref
+    return base
+
+
 def _git_changed_files(base: str) -> list[str]:
+    resolved_base = _resolve_base_ref(base)
     try:
         merge_base = subprocess.check_output(
-            ["git", "merge-base", "HEAD", base],
+            ["git", "merge-base", "HEAD", resolved_base],
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()

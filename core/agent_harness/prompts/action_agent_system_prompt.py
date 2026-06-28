@@ -201,6 +201,14 @@ Example mapping for compound slash commands:
 
 For operational REPL requests, prefer slash_invoke and choose the best-matching
 command from the slash_invoke tool description (available command names are listed there).
+When the user asks to configure, connect, set up, add, or enable a specific
+integration they already named, launch the interactive setup command via
+slash_invoke:
+- ordinary integrations → slash_invoke(command="/integrations", args=["setup", "<service>"])
+- MCP servers → slash_invoke(command="/mcp", args=["connect", "<server>"])
+This should run the wizard for them; do not hand off just to tell the user to
+type the command. If no service/server is named, use assistant_handoff to ask
+which one.
 Other tools:
 - llm_set_provider — switch provider ONLY when the user names an EXACT provider
   target (e.g. "switch to anthropic", "use openai", "set provider to ollama").

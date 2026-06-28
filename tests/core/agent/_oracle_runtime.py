@@ -9,18 +9,8 @@ from typing import Any, cast
 import pytest
 from rich.console import Console
 
-# Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
-# live-resolved config for a service instead of a pinned fake one. The oracle
-# replaces ``<service>: "@live"`` with the integration resolved from the local
-# store / env (real credentials) and forces ``connection_verified: true`` so the
-# tool is available. Scenarios that use it pair it with
-# ``gathered_tools_contract.must_return_valid_data`` to assert the tool reached
-# the live integration and returned valid data (not a 401). When the credential
-# cannot be resolved the scenario is skipped, never failed (env gap, not bug).
-LIVE_INTEGRATION_SENTINEL = "@live"
-
 from core.agent_harness.session import ReplSession
-from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
+from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from tests.core.agent._oracle_normalize import (
@@ -378,7 +368,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     patch_execution_boundary(monkeypatch, executed)
 
     # Record which registered tools fire during the conversational
-    # gather_tool_evidence pass. Both gather_tool_evidence and the action agent
+    # gather_integration_tool_evidence pass. Both gather_integration_tool_evidence and the action agent
     # create Agent instances and call .run(), so patch Agent.run on the class
     # and ignore the interactive-shell action-agent tool surface.
     import core.agent as _agent_mod
@@ -409,7 +399,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     session_token = bind_cli_session_id(session.session_id)
     try:
         recorder = PromptRecorder.start(session=session, text=prompt, turn_kind=_AGENT_TURN_KIND)
-        handle_message_with_agent(
+        execute_shell_turn(
             prompt,
             session,
             console,
