@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import click
-from dotenv import load_dotenv
 
 from cli.wizard.flow import run_wizard
+from config.local_env import bootstrap_opensre_env_once
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
 from platform.analytics.provider import capture_first_run_if_needed, shutdown_analytics
 from platform.observability.sentry_sdk import init_sentry
@@ -15,7 +15,7 @@ _ENTRYPOINT = "python -m cli.wizard"
 
 
 def main() -> int:
-    load_dotenv(override=False)
+    bootstrap_opensre_env_once(override=False)
     init_sentry(entrypoint="wizard")
     install_questionary_escape_cancel()
 

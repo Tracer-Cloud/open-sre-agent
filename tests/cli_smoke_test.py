@@ -635,6 +635,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             ),
         ],
         timeout=30.0,
+        extra_env={"OPENSRE_AUTO_LAUNCH": "0"},
     )
 
     assert result.exit_code == 0
@@ -751,6 +752,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
             actions=actions,
             timeout=pty_timeout,
             extra_env={
+                "OPENSRE_AUTO_LAUNCH": "0",
                 "OPENAI_API_KEY": "",
                 "OPENAI_ORG_ID": "",
                 "OPENAI_PROJECT_ID": "",

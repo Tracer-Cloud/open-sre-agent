@@ -98,8 +98,22 @@ def build_demo_action_response():
     return _build_demo_action_response()
 
 
-def _credential_line_for_saved_summary(provider: ProviderOption) -> str:
+def _provider_label_for_saved_summary(
+    provider: ProviderOption, auth_method: str | None = None
+) -> str:
+    if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD:
+        return f"{_provider_choice_label(provider)} OAuth"
+    return provider.label
+
+
+def _credential_line_for_saved_summary(
+    provider: ProviderOption, auth_method: str | None = None
+) -> str:
     """One-line credential description for the post-wizard saved summary."""
+    if normalize_llm_auth_method(auth_method) == OAUTH_AUTH_METHOD:
+        if provider.value == "openai":
+            return "OpenAI OAuth tokens (Codex CLI)"
+        return f"{_provider_choice_label(provider)} OAuth session"
     if provider.credential_kind != "cli":
         return "system keychain"
     if provider.adapter_factory is None:
@@ -848,12 +862,12 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
     _step_header(4, WIZARD_TOTAL_STEPS, "Summary")
     _render_saved_summary(
-        provider_label=provider.label,
+        provider_label=_provider_label_for_saved_summary(provider, persisted_auth_method),
         model=model,
         saved_path=str(saved_path),
         env_path=summary_env_path,
         configured_integrations=configured_integrations,
-        credential_line=_credential_line_for_saved_summary(provider),
+        credential_line=_credential_line_for_saved_summary(provider, persisted_auth_method),
     )
     _render_next_steps()
     return 0

@@ -73,6 +73,16 @@ def test_install_ps1_defaults_to_main_build_channel() -> None:
     assert "releases/tags/nightly" not in source
 
 
+def test_install_ps1_contains_auto_onboarding_launch_hook() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "function Test-OpenSreAutoLaunchEnabled" in source
+    assert "function Start-OpenSreOnboardingAfterInstall" in source
+    assert "OPENSRE_AUTO_LAUNCH" in source
+    assert "& $BinaryPath onboard" in source
+    assert "Start-OpenSreOnboardingAfterInstall -BinaryPath $installedBinaryPath" in source
+
+
 def test_install_ps1_keeps_download_urls_verbose_only() -> None:
     source = INSTALL_PS1.read_text()
 

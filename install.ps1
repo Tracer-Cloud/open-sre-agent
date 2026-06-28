@@ -1020,6 +1020,33 @@ function Get-OpenSreBinaryVersionInfo {
     }
 }
 
+function Test-OpenSreAutoLaunchEnabled {
+    $value = [string]$env:OPENSRE_AUTO_LAUNCH
+    return -not ($value -eq "0" -or $value -eq "false" -or $value -eq "FALSE" -or $value -eq "no" -or $value -eq "NO" -or $value -eq "off" -or $value -eq "OFF")
+}
+
+function Start-OpenSreOnboardingAfterInstall {
+    param(
+        [string]$BinaryPath,
+        [string]$DisplayName
+    )
+
+    if (-not (Test-OpenSreAutoLaunchEnabled) -or -not (Test-OpenSreInteractiveHost)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
+        Write-Warning "Could not auto-launch onboarding; $BinaryPath was not found."
+        return
+    }
+
+    Write-Host "Launching $DisplayName onboard..."
+    & $BinaryPath onboard
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Onboarding exited before completion. Run '$DisplayName onboard' to retry."
+    }
+}
+
 function Install-OpenSre {
     $repo = if ($env:OPENSRE_INSTALL_REPO) { $env:OPENSRE_INSTALL_REPO } else { "Tracer-Cloud/opensre" }
     $installDir = if ($env:OPENSRE_INSTALL_DIR) { $env:OPENSRE_INSTALL_DIR } else { Get-OpenSreDefaultInstallDir }
@@ -1195,6 +1222,8 @@ function Install-OpenSre {
     Write-Host ""
     Write-Host "Docs: https://www.opensre.com/docs"
     Write-Host ""
+
+    Start-OpenSreOnboardingAfterInstall -BinaryPath $installedBinaryPath -DisplayName $exe
 }
 
 if (-not $SkipMain) {

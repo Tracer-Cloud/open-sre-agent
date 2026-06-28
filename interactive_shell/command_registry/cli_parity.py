@@ -27,6 +27,7 @@ _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
 _TEST_SUBCOMMANDS = ("list", "run", "synthetic", "cloudopsbench")
 _TEST_PICKER_SELECTION_FILE_ENV = "OPENSRE_TEST_PICKER_SELECTION_FILE"
+_PARENT_INTERACTIVE_SHELL_ENV = "OPENSRE_PARENT_INTERACTIVE_SHELL"
 
 
 def _decode_subprocess_stream(value: str | bytes | None) -> str:
@@ -66,6 +67,8 @@ def run_cli_command(
     console.print()
     cmd = build_opensre_cli_argv(args)
     should_capture = capture_output or subprocess_timeout is not None
+    child_env = os.environ.copy()
+    child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
     try:
         if should_capture:
             captured_result = subprocess.run(
@@ -76,6 +79,7 @@ def run_cli_command(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                env=child_env,
             )
             print_command_output(console, captured_result.stdout or "")
             print_command_output(console, captured_result.stderr or "", style=ERROR)
@@ -84,7 +88,7 @@ def run_cli_command(
                     f"[{ERROR}]CLI command exited with non-zero code {captured_result.returncode}[/]"
                 )
         else:
-            interactive_result = subprocess.run(cmd, check=False)
+            interactive_result = subprocess.run(cmd, check=False, env=child_env)
             if interactive_result.returncode != 0:
                 console.print(
                     f"[{ERROR}]CLI command exited with non-zero code {interactive_result.returncode}[/]"

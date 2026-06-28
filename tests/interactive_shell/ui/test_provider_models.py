@@ -33,3 +33,13 @@ def test_antigravity_cli_does_not_use_hyphenated_settings_attr() -> None:
 
     assert reasoning == "CLI default"
     assert toolcall == "CLI default"
+
+
+def test_openai_oauth_displays_codex_model(monkeypatch: object) -> None:
+    monkeypatch.setenv("LLM_AUTH_METHOD", "oauth")
+    monkeypatch.setenv("CODEX_MODEL", "gpt-5.5")
+
+    reasoning, toolcall = resolve_provider_models(SimpleNamespace(), "openai")
+
+    assert reasoning == "gpt-5.5"
+    assert toolcall == "gpt-5.5"

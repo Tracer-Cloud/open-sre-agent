@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 from config.config import (
@@ -22,10 +20,11 @@ from config.config import (
     OPENROUTER_REASONING_MODEL,
 )
 from config.llm_auth.provider_catalog import require_provider_spec
+from config.local_env import PROJECT_ROOT as PROJECT_ROOT
+from config.local_env import get_project_env_path
 from integrations.llm_cli.base import LLMCLIAdapter
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_ENV_PATH = Path(os.getenv("OPENSRE_PROJECT_ENV_PATH", PROJECT_ROOT / ".env"))
+PROJECT_ENV_PATH = get_project_env_path()
 
 CredentialKind = Literal["api_key", "host", "cli", "none"]
 

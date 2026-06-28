@@ -2173,9 +2173,11 @@ class TestRunCliCommand:
             text: bool,
             encoding: str,
             errors: str,
+            env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
             del check, timeout, text, encoding, errors
             assert capture_output is True
+            assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             assert cmd[:3] == [sys.executable, "-m", "cli"]
             assert cmd[3:] == ["update"]
             return subprocess.CompletedProcess(
@@ -2205,9 +2207,11 @@ class TestRunCliCommand:
             text: bool,
             encoding: str,
             errors: str,
+            env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
             del check, timeout, text, encoding, errors
             assert capture_output is True
+            assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             assert cmd[:3] == [sys.executable, "-m", "cli"]
             assert cmd[3:] == ["config", "show"]
             return subprocess.CompletedProcess(
@@ -2241,9 +2245,11 @@ class TestRunCliCommand:
             text: bool,
             encoding: str,
             errors: str,
+            env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
             del check, text, encoding, errors
             assert capture_output is True
+            assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             assert timeout is None
             return subprocess.CompletedProcess(
                 cmd,
@@ -2313,8 +2319,10 @@ class TestRunCliCommand:
             cmd: list[str],
             *,
             check: bool,
+            env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
             del check
+            assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             captured.append(cmd)
             return subprocess.CompletedProcess(cmd, 0)
 
@@ -2347,8 +2355,10 @@ class TestRunCliCommand:
             cmd: list[str],
             *,
             check: bool,
+            env: dict[str, str],
         ) -> subprocess.CompletedProcess[str]:
             del check
+            assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
             captured.append(cmd)
             return subprocess.CompletedProcess(cmd, 0)
 
@@ -2357,6 +2367,30 @@ class TestRunCliCommand:
 
         assert m.run_cli_command(console, ["onboard"]) is True
         assert captured == [["/tmp/bin/opensre", "onboard"]]
+
+    def test_cli_delegate_marks_parent_interactive_shell(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from interactive_shell.command_registry import cli_parity as m
+
+        captured_envs: list[dict[str, str]] = []
+
+        def _fake_run(
+            cmd: list[str],
+            *,
+            check: bool,
+            env: dict[str, str],
+        ) -> subprocess.CompletedProcess[str]:
+            del check
+            captured_envs.append(env)
+            return subprocess.CompletedProcess(cmd, 0)
+
+        monkeypatch.setattr(m.subprocess, "run", _fake_run)
+        console, _ = _capture()
+
+        assert m.run_cli_command(console, ["onboard"]) is True
+        assert captured_envs[0]["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
 
 
 class TestCliDelegatedCommands:

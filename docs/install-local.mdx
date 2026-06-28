@@ -3,7 +3,7 @@ title: "Local and on-prem setup"
 description: "Run OpenSRE locally with the CLI binary and onboard integrations from your environment"
 ---
 
-This guide is for teams running OpenSRE with the local `opensre` binary on developer machines, VMs, or on-prem
+This guide is for teams running OpenSRE with the local `opensre` binary on developer machines, virtual machines, or on-prem
 hosts.
 
 ## What mode should I use?
@@ -30,6 +30,12 @@ brew tap tracer-cloud/tap
 brew install tracer-cloud/tap/opensre
 # or
 curl -fsSL https://install.opensre.com | bash
+```
+
+The install script launches onboarding automatically in an interactive terminal. To install only the binary:
+
+```bash
+curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
 ### 2) Enter the OpenSRE shell

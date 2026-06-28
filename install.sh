@@ -1124,6 +1124,36 @@ print_success_screen() {
   log ""
 }
 
+auto_launch_disabled() {
+  case "${OPENSRE_AUTO_LAUNCH:-}" in
+    0|false|FALSE|no|NO|off|OFF)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+launch_onboarding_after_install() {
+  if auto_launch_disabled; then
+    return
+  fi
+  if [ ! -t 1 ] || [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
+    return
+  fi
+
+  local installed_binary="${INSTALL_DIR}/${BIN_NAME}"
+  if [ ! -x "$installed_binary" ]; then
+    warn "Could not auto-launch onboarding; ${installed_binary} is not executable."
+    return
+  fi
+
+  log "Launching ${BIN_NAME} onboard..."
+  "$installed_binary" onboard </dev/tty >/dev/tty 2>&1 || \
+    warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
+}
+
 os="$(uname -s)"
 arch="$(uname -m)"
 
@@ -1278,3 +1308,4 @@ fi
 
 configure_path
 print_success_screen "$installed_version"
+launch_onboarding_after_install

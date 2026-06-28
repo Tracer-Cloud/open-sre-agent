@@ -1027,9 +1027,10 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
 
 
 def test_run_wizard_openai_oauth_is_onboarding_auth_method(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "openai", "oauth", "", "skip"])
+    select_responses = iter(["quickstart", "openai", "oauth", "gpt-5.5", "skip"])
     saved_llm_keys: list[tuple[str, str]] = []
     cli_onboarding_providers: list[str] = []
+    saved_summary: dict[str, object] = {}
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -1063,6 +1064,9 @@ def test_run_wizard_openai_oauth_is_onboarding_auth_method(monkeypatch, tmp_path
         "save_api_key",
         lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
+    monkeypatch.setattr(
+        flow, "_render_saved_summary", lambda **kwargs: saved_summary.update(kwargs)
+    )
 
     exit_code = flow.run_wizard()
 
@@ -1076,10 +1080,13 @@ def test_run_wizard_openai_oauth_is_onboarding_auth_method(monkeypatch, tmp_path
     assert payload["targets"]["local"]["auth_method"] == "oauth"
     assert payload["targets"]["local"]["api_key_env"] == "OPENAI_API_KEY"
     assert payload["targets"]["local"]["model_env"] == "CODEX_MODEL"
+    assert payload["targets"]["local"]["model"] == "gpt-5.5"
     assert "LLM_PROVIDER=openai\n" in env_values
     assert "LLM_AUTH_METHOD=oauth\n" in env_values
-    assert "CODEX_MODEL=\n" in env_values
+    assert "CODEX_MODEL=gpt-5.5\n" in env_values
     assert "OPENAI_API_KEY=" not in env_values
+    assert saved_summary["provider_label"] == "OpenAI OAuth"
+    assert saved_summary["credential_line"] == "OpenAI OAuth tokens (Codex CLI)"
 
 
 def test_run_wizard_anthropic_oauth_is_onboarding_auth_method(monkeypatch, tmp_path) -> None:

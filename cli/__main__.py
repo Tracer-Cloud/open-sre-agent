@@ -440,9 +440,9 @@ def main(argv: list[str] | None = None) -> int:
         _print_fast_version()
         return 0
 
-    from dotenv import load_dotenv
+    from config.local_env import bootstrap_opensre_env_once
 
-    load_dotenv(override=False)
+    bootstrap_opensre_env_once(override=False)
     try:
         init_sentry(entrypoint=_sentry_entrypoint_for_invocation(cli_argv))
     except ModuleNotFoundError as exc:

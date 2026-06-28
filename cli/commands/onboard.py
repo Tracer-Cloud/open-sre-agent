@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -16,6 +18,10 @@ from platform.analytics.cli import (
 ConfigLoader = Callable[[], dict[str, Any]]
 RunCommand = Callable[[], int]
 
+OPENSRE_AUTO_LAUNCH_ENV = "OPENSRE_AUTO_LAUNCH"
+OPENSRE_PARENT_INTERACTIVE_SHELL_ENV = "OPENSRE_PARENT_INTERACTIVE_SHELL"
+_DISABLED_ENV_VALUES = {"0", "false", "no", "off"}
+
 
 def _load_local_config() -> dict[str, Any]:
     from cli.wizard.store import get_store_path, load_local_config
@@ -24,7 +30,10 @@ def _load_local_config() -> dict[str, Any]:
 
 
 def _run_onboarding_command(
-    run_command: RunCommand, *, load_config: ConfigLoader = _load_local_config
+    run_command: RunCommand,
+    *,
+    ctx: click.Context | None = None,
+    load_config: ConfigLoader = _load_local_config,
 ) -> None:
     from interactive_shell.utils.error_handling.errors import OpenSREError
 
@@ -43,9 +52,42 @@ def _run_onboarding_command(
 
     if exit_code == 0:
         capture_onboard_completed(load_config())
+        if _should_launch_shell_after_onboarding(ctx):
+            exit_code = _launch_interactive_shell()
     else:
         capture_onboard_failed()
     raise SystemExit(exit_code)
+
+
+def _env_auto_launch_disabled() -> bool:
+    return os.getenv(OPENSRE_AUTO_LAUNCH_ENV, "").strip().lower() in _DISABLED_ENV_VALUES
+
+
+def _launched_from_interactive_shell() -> bool:
+    return bool(os.getenv(OPENSRE_PARENT_INTERACTIVE_SHELL_ENV, "").strip())
+
+
+def _click_interactive_enabled(ctx: click.Context | None) -> bool:
+    if ctx is None:
+        return True
+    root = ctx.find_root()
+    obj = root.obj if isinstance(root.obj, dict) else {}
+    return bool(obj.get("interactive", True))
+
+
+def _should_launch_shell_after_onboarding(ctx: click.Context | None) -> bool:
+    if _env_auto_launch_disabled() or _launched_from_interactive_shell():
+        return False
+    if not _click_interactive_enabled(ctx):
+        return False
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _launch_interactive_shell() -> int:
+    from config.repl_config import ReplConfig
+    from interactive_shell import run_repl
+
+    return int(run_repl(config=ReplConfig.load(cli_enabled=True)))
 
 
 @click.group(name="onboard", invoke_without_command=True)
@@ -57,12 +99,13 @@ def onboard(ctx: click.Context) -> None:
 
     from cli.wizard.flow import run_wizard
 
-    _run_onboarding_command(run_wizard)
+    _run_onboarding_command(run_wizard, ctx=ctx)
 
 
 @onboard.command(name="local_llm")
-def onboard_local_llm() -> None:
+@click.pass_context
+def onboard_local_llm(ctx: click.Context) -> None:
     """Zero-config local LLM setup via Ollama. No API key required."""
     from cli.wizard.local_llm.command import run_local_llm_setup
 
-    _run_onboarding_command(run_local_llm_setup)
+    _run_onboarding_command(run_local_llm_setup, ctx=ctx)

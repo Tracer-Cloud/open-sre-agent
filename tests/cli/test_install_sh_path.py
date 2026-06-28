@@ -160,6 +160,27 @@ def test_install_sh_success_screen_has_visual_structure() -> None:
     assert "Next steps:" in output
 
 
+def test_install_sh_contains_auto_onboarding_launch_hook() -> None:
+    source = INSTALL_SH.read_text()
+
+    assert "OPENSRE_AUTO_LAUNCH" in source
+    assert "launch_onboarding_after_install" in source
+    assert '"$installed_binary" onboard </dev/tty >/dev/tty 2>&1' in source
+
+
+def test_install_sh_auto_onboarding_noops_without_tty() -> None:
+    result = _run_logging_snippet(
+        """
+        INSTALL_DIR="/tmp"
+        BIN_NAME="opensre"
+        launch_onboarding_after_install
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Launching opensre onboard" not in result.stdout + result.stderr
+
+
 def test_install_sh_has_step_for_explicit_version_fetch() -> None:
     result = _run_release_metadata_step(version="2026.4.29")
 

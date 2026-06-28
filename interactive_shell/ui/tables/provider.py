@@ -13,6 +13,20 @@ import os
 
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     """Return the active (reasoning_model, toolcall_model) for a provider."""
+    try:
+        from config.llm_auth.auth_method import (
+            effective_llm_provider,
+            get_configured_llm_auth_method,
+        )
+
+        runtime_provider = effective_llm_provider(
+            provider, get_configured_llm_auth_method(provider)
+        )
+    except Exception:
+        runtime_provider = provider
+    if runtime_provider != provider:
+        return resolve_provider_models(settings, runtime_provider)
+
     if provider in {
         "codex",
         "claude-code",

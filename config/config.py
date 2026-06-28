@@ -13,7 +13,6 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
-from config.grafana_cloud import load_env
 from config.llm_auth.auth_method import (
     LLM_AUTH_METHOD_ENV,
     effective_llm_provider,
@@ -25,6 +24,7 @@ from config.llm_auth.provider_catalog import (
     KEYLESS_PROVIDER_VALUES,
     SUPPORTED_PROVIDER_VALUES,
 )
+from config.local_env import bootstrap_opensre_env
 from config.strict_config import StrictConfigModel
 
 
@@ -187,7 +187,7 @@ LLM_PROVIDER_API_KEY_ENVS = API_KEY_PROVIDER_ENVS
 
 def get_configured_llm_provider() -> str:
     """Return the active LLM provider from env/project .env."""
-    load_env(override=False)
+    bootstrap_opensre_env(override=False)
     return os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
 
 
@@ -424,7 +424,7 @@ class LLMSettings(StrictConfigModel):
     @classmethod
     def from_env(cls) -> "LLMSettings":
         """Build validated LLM settings from environment variables."""
-        load_env(override=False)
+        bootstrap_opensre_env(override=False)
         return cls.model_validate(_llm_settings_env_payload(get_configured_llm_provider()))
 
 
@@ -452,7 +452,7 @@ def resolve_llm_settings_verbose(
     fallback_providers: Sequence[str] = (),
 ) -> LLMResolution:
     """Resolve LLM settings without implicit provider fallback."""
-    load_env(override=False)
+    bootstrap_opensre_env(override=False)
     _ = fallback_providers
     configured_provider = get_configured_llm_provider()
     settings = LLMSettings.model_validate(_llm_settings_env_payload(configured_provider))
