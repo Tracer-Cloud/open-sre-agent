@@ -81,11 +81,11 @@ def get_grafana_client_from_credentials(
             config.tempo_datasource_uid,
             config.mimir_datasource_uid,
         )
-    else:
-        logger.warning(
-            "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
-            account_id,
-        )
+        _grafana_client_cache[cache_key] = client
+        return client
 
-    _grafana_client_cache[cache_key] = client
+    logger.warning(
+        "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
+        account_id,
+    )
     return client

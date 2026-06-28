@@ -71,3 +71,13 @@ def test_get_auth_headers_raises_when_token_missing() -> None:
     client = GrafanaClientBase(config=config)
     with pytest.raises(ValueError, match="no API token"):
         client._get_auth_headers()
+
+
+def test_get_auth_headers_allows_localhost_anonymous() -> None:
+    config = GrafanaAccountConfig(
+        account_id="test",
+        instance_url="http://localhost:3000",
+        read_token="",
+    )
+    client = GrafanaClientBase(config=config)
+    assert client._get_auth_headers() == {}
