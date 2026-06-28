@@ -102,6 +102,10 @@ def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
         raise RuntimeError(
             f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
         )
+    return _set_env_value_unchecked(lines, key, value)
+
+
+def _set_env_value_unchecked(lines: list[str], key: str, value: str) -> list[str]:
     updated: list[str] = []
     replaced = False
     for line in lines:
@@ -150,7 +154,59 @@ def sync_env_secret(key: str, value: str) -> None:
     """Persist a sensitive env value in the system keyring, not in ``.env``."""
     if not _is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
-    _persist_env_secret(key, value)
+    storage, env_path = persist_env_secret_with_env_fallback(key, value)
+    if storage == "env" and env_path is not None:
+        _print_env_fallback_warning(key, env_path)
+
+
+def persist_env_secret_with_env_fallback(
+    key: str,
+    value: str,
+    *,
+    env_path: Path | None = None,
+) -> tuple[str, Path | None]:
+    """Persist a secret to the keyring, falling back to ``.env`` when unavailable."""
+    if not _is_sensitive_env_key(key):
+        raise ValueError(f"{key!r} is not classified as sensitive.")
+    if _persist_env_secret(key, value):
+        return "keyring", None
+
+    target_path = env_path or PROJECT_ENV_PATH
+    existing = (
+        target_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if target_path.exists()
+        else []
+    )
+    lines = _strip_sensitive_env_lines(existing)
+    lines = _set_env_value_unchecked(lines, key, value)
+    _write_env_raw(target_path, lines)
+    return "env", target_path
+
+
+def _write_env_raw(target_path: Path, lines: list[str]) -> None:
+    """Write ``.env`` lines including secrets (headless fallback only)."""
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with target_path.open("w", encoding="utf-8", newline="") as env_file:
+            env_file.writelines(lines)
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Cannot write to {target_path}: permission denied. "
+            "Ensure you have write access to this file, or run the command as the file owner."
+        ) from exc
+    if os.name != "nt":
+        with suppress(OSError):
+            target_path.chmod(0o600)
+
+
+def _print_env_fallback_warning(key: str, env_path: Path) -> None:
+    from cli.wizard._ui import _console
+    from platform.terminal.theme import GLYPH_WARNING, WARNING
+
+    _console.print(
+        f"[{WARNING}]  {GLYPH_WARNING}  Secure storage unavailable — saved {key} to {env_path} "
+        f"(owner-only permissions). Prefer a system keychain when available.[/]"
+    )
 
 
 def sync_env_values(

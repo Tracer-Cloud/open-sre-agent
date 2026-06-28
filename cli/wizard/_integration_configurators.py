@@ -1131,7 +1131,14 @@ def _configure_jira() -> tuple[str, str]:
                     }
                 },
             )
-            env_path = sync_env_values({})
+            sync_env_secret("JIRA_API_TOKEN", api_token)
+            env_path = sync_env_values(
+                {
+                    "JIRA_BASE_URL": base_url,
+                    "JIRA_EMAIL": email,
+                    "JIRA_PROJECT_KEY": project_key,
+                }
+            )
             return "Jira", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -1195,8 +1202,7 @@ def _configure_vercel() -> tuple[str, str]:
                 {"credentials": {"api_token": api_token, "team_id": team_id}},
             )
             sync_env_secret("VERCEL_API_TOKEN", api_token)
-            env_values = {"VERCEL_TEAM_ID": team_id} if team_id else {}
-            env_path = sync_env_values(env_values)
+            env_path = sync_env_values({"VERCEL_TEAM_ID": team_id})
             return "Vercel", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -1244,7 +1250,14 @@ def _configure_betterstack() -> tuple[str, str]:
                     }
                 },
             )
-            env_path = sync_env_values({})
+            sync_env_secret("BETTERSTACK_PASSWORD", password)
+            env_path = sync_env_values(
+                {
+                    "BETTERSTACK_QUERY_ENDPOINT": query_endpoint,
+                    "BETTERSTACK_USERNAME": username,
+                    "BETTERSTACK_SOURCES": ",".join(sources),
+                }
+            )
             return "Better Stack", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -1349,7 +1362,8 @@ def _configure_pagerduty() -> tuple[str, str]:
                 "pagerduty",
                 {"credentials": {"api_key": api_key, "base_url": base_url}},
             )
-            env_path = sync_env_values({})
+            sync_env_secret("PAGERDUTY_API_KEY", api_key)
+            env_path = sync_env_values({"PAGERDUTY_BASE_URL": base_url})
             return "PagerDuty", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 

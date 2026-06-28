@@ -441,3 +441,26 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
             sync_env_values({"FOO": "baz"}, env_path=env_path)
     finally:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_sync_env_secret_falls_back_to_env_when_keyring_unavailable(
+    tmp_path, monkeypatch
+) -> None:
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+
+    sync_env_secret("DD_API_KEY", "datadog-secret")
+
+    assert "DD_API_KEY=datadog-secret" in env_path.read_text(encoding="utf-8")
+
+
+def test_sync_env_values_clears_vercel_team_id_on_reconfigure(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("VERCEL_TEAM_ID=team_old\n", encoding="utf-8")
+
+    sync_env_values({"VERCEL_TEAM_ID": ""}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "VERCEL_TEAM_ID=\n" in content
+    assert "team_old" not in content
