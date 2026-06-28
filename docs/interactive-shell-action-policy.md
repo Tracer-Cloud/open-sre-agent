@@ -68,10 +68,10 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    `configured_integration_services()` helper in `integrations/catalog.py`
    (the same source the welcome banner uses, so they never diverge). The chat
    assistant prompt (`build_environment_block` in
-   `context/assistant_prompt.py`) lists the configured set as
+   `core/agent_harness/prompts/assistant.py`) lists the configured set as
    facts, letting the model answer directly when state is already known.
 2. LLM-driven discovery. The action-agent system prompt
-   (`context/action_prompt_text.py`) lets the model, at its own
+   (`core/agent_harness/prompts/action.py`) lets the model, at its own
    discretion, emit a read-only discovery action (for example
    `slash_invoke("/integrations", ["list"])` or `["verify"]`) to discover the
    answer instead of deflecting. There is no keyword mapping for this — the LLM

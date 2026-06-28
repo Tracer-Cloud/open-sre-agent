@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from interactive_shell.agent_shell.grounding.agents_md_reference import (
+from core.agent_harness.grounding.agents_md_reference import (
     AgentsMdReference,
 )
-from interactive_shell.agent_shell.grounding.cli_reference import CliReference
-from interactive_shell.agent_shell.grounding.diagnostics import (
+from core.agent_harness.grounding.cli_reference import CliReference, SlashCommandProvider
+from core.agent_harness.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
 )
-from interactive_shell.agent_shell.grounding.docs_reference import DocsReference
+from core.agent_harness.grounding.docs_reference import DocsReference
 
 
 @dataclass
@@ -46,6 +46,10 @@ class GroundingContext:
         self.cli.invalidate()
         self.docs.invalidate()
         self.agents_md.invalidate()
+
+    def set_slash_commands_provider(self, provider: SlashCommandProvider | None) -> None:
+        """Bind a surface-owned slash command registry for CLI reference grounding."""
+        self.cli.set_slash_commands_provider(provider)
 
 
 __all__ = ["GroundingContext"]

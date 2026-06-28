@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.session.prompt_history.policy import (
+from core.agent_harness.session.prompt_history.policy import (
     DEFAULT_MAX_ENTRIES,
     DEFAULT_REDACTION_RULES,
     HistoryPolicy,
@@ -10,7 +10,7 @@ from interactive_shell.session.prompt_history.policy import (
     RedactionRule,
     redact_text,
 )
-from interactive_shell.session.prompt_history.storage import (
+from core.agent_harness.session.prompt_history.storage import (
     clear_persisted_history,
     load_command_history_entries,
     load_prompt_history,

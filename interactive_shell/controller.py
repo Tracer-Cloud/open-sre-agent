@@ -9,6 +9,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
+from core.agent_harness.session import ReplSession
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.agent_shell.agent import (
     AgentTurnRunner,
@@ -16,6 +17,7 @@ from interactive_shell.agent_shell.agent import (
     run_input_loop,
 )
 from interactive_shell.runtime.background.workers import BackgroundTaskManager
+from interactive_shell.runtime.context import ReplRuntimeContext, create_repl_runtime_context
 from interactive_shell.runtime.core.prompt_manager import PromptManager
 from interactive_shell.runtime.core.state import (
     ReplState,
@@ -31,11 +33,6 @@ from interactive_shell.runtime.input.actions import (
     IgnoreInput,
     InputAction,
     SubmitTurn,
-)
-from interactive_shell.session import (
-    ReplRuntimeContext,
-    ReplSession,
-    create_repl_runtime_context,
 )
 
 log = logging.getLogger(__name__)

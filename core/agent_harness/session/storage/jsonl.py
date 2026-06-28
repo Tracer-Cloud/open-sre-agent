@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from config.version import get_version
-from interactive_shell.session.paths import session_path
-from interactive_shell.session.types import CHAT_KINDS, SessionPersistenceSource
+from core.agent_harness.session.paths import session_path
+from core.agent_harness.session.types import CHAT_KINDS, SessionPersistenceSource
 
 _TRIGGER_MAX_CHARS = 200
 

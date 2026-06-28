@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from interactive_shell.session.types import SessionPersistenceSource
+from core.agent_harness.session.types import SessionPersistenceSource
 
 _TRIGGER_MAX_CHARS = 200
 

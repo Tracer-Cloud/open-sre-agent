@@ -46,12 +46,12 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
-from interactive_shell.agent_shell.grounding._cache import excerpt
-from interactive_shell.agent_shell.grounding.diagnostics import GroundingSource
-from interactive_shell.agent_shell.grounding.models import CacheStats
+from core.agent_harness.grounding._cache import excerpt
+from core.agent_harness.grounding.diagnostics import GroundingSource
+from core.agent_harness.grounding.models import CacheStats
 
 # Docs live at the repository root, three levels above this file
-# (.../interactive_shell/agent_shell/grounding/docs_reference.py -> repo root).
+# (.../core/agent_harness/grounding/docs_reference.py -> repo root).
 _DOCS_ROOT = Path(__file__).resolve().parents[3] / "docs"
 
 # Extensions we read for grounding. Mintlify content is .mdx; .md is included

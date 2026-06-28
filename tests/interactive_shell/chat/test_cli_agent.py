@@ -28,10 +28,10 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_system_prompt,
     build_environment_block,
 )
+from core.agent_harness.session import ReplSession
 from interactive_shell.agent_shell import adapters as shell_adapters
 from interactive_shell.agent_shell import agent as cli_agent
 from interactive_shell.agent_shell.agent import answer_cli_agent
-from interactive_shell.session import ReplSession
 
 
 def _build_environment_block(session: ReplSession) -> str:

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Self
 
 from prompt_toolkit import PromptSession
 from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, model_validator
 
+from core.agent_harness.session.state import ReplSession
+from core.agent_harness.session.tasks import TaskRegistry
 from core.domain.alerts import inbox as _alert_inbox
 from interactive_shell.runtime.core.state import ReplState, SpinnerState, create_repl_mutable_state
-from interactive_shell.runtime.core.tasks import TaskRegistry
-from interactive_shell.session.state import ReplSession
 
 
 class ReplSessionBootstrapSpec(BaseModel):
@@ -35,6 +36,7 @@ class ReplSessionBootstrapSpec(BaseModel):
     def apply_to_session(self) -> Self:
         """Apply the canonical startup mutations to the validated session."""
         self.session.active_theme_name = self.active_theme_name or _current_theme_name()
+        _bind_shell_grounding(self.session)
         if self.hydrate_integrations:
             self.session.hydrate_configured_integrations()
         if self.persistent_tasks:
@@ -89,6 +91,15 @@ def _current_theme_name() -> str:
     from platform.terminal.theme import get_active_theme_name
 
     return get_active_theme_name()
+
+
+def _bind_shell_grounding(session: ReplSession) -> None:
+    def _slash_commands() -> Mapping[str, object]:
+        from interactive_shell.command_registry import SLASH_COMMANDS
+
+        return SLASH_COMMANDS
+
+    session.grounding.set_slash_commands_provider(_slash_commands)
 
 
 def prepare_repl_session(

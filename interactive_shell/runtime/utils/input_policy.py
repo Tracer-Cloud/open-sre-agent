@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.session import ReplSession
+from core.agent_harness.session import ReplSession
 from interactive_shell.ui.components.choice_menu import repl_tty_interactive
 
 

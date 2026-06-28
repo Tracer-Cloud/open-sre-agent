@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-paths = importlib.import_module("interactive_shell.session.paths")
+paths = importlib.import_module("core.agent_harness.session.paths")
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50

@@ -139,7 +139,7 @@ def handle_message_with_agent(
     ``(text, session, console, ...)`` shape) and handed to
     :func:`core.agent_harness.turn_orchestrator.run_turn`, which performs the pure path routing.
     """
-    from interactive_shell.session.compaction import auto_compact_if_needed
+    from core.agent_harness.session.compaction import auto_compact_if_needed
 
     auto_compact_if_needed(session)
     _execute = execute_actions or run_tool_calling_turn

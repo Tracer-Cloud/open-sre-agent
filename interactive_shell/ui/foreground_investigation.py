@@ -14,7 +14,7 @@ from platform.common.task_types import TaskKind, TaskRecord
 from platform.terminal.theme import ERROR, WARNING
 
 if TYPE_CHECKING:
-    from interactive_shell.session import ReplSession
+    from core.agent_harness.session import ReplSession
 
 
 def run_foreground_investigation(

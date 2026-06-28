@@ -8,17 +8,17 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from core.agent_harness.conversation_memory import format_recent_conversation
-from core.agent_harness.prompts import (
-    PromptEnvelope,
+from core.agent_harness.grounding.investigation_flow_reference import (
+    build_investigation_flow_reference_text,
+)
+from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
     build_environment_block,
 )
+from core.agent_harness.prompts.envelope import PromptEnvelope
+from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.turn_context import TurnContext
-from interactive_shell.agent_shell.grounding.investigation_flow_reference import (
-    build_investigation_flow_reference_text,
-)
-from interactive_shell.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
 _logger = logging.getLogger(__name__)
 

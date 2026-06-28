@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from interactive_shell.session import ReplSession
+from core.agent_harness.session import ReplSession
 from interactive_shell.utils.telemetry.config import PromptLogConfig
 from interactive_shell.utils.telemetry.recorder import LlmRunInfo, PromptRecorder
 

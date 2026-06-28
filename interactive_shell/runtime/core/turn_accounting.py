@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.agent_harness.session import ReplSession
+
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
 from core.agent_harness.turn_results import (
@@ -19,7 +21,6 @@ from core.agent_harness.turn_results import (
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,
 )
-from interactive_shell.session import ReplSession
 from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.cli import capture_terminal_turn_summarized
 

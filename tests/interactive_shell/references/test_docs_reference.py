@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from interactive_shell.agent_shell.grounding import docs_reference
-from interactive_shell.agent_shell.grounding._cache import excerpt
-from interactive_shell.agent_shell.grounding.docs_reference import (
+from core.agent_harness.grounding import docs_reference
+from core.agent_harness.grounding._cache import excerpt
+from core.agent_harness.grounding.docs_reference import (
     DocPage,
     DocsReference,
     _query_tokens,

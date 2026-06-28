@@ -10,12 +10,12 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from core.agent_harness.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
-from interactive_shell.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 from tools.watch_dog.alarms import AlarmCredentials
 
@@ -146,7 +146,7 @@ def test_unwatch_rejects_non_watchdog_task() -> None:
 def test_run_watchdog_respects_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import UTC, datetime, timedelta
 
-    from interactive_shell.runtime.core.tasks import TaskRegistry
+    from core.agent_harness.session.tasks import TaskRegistry
     from tools.fleet_monitoring.probe import ProcessSnapshot
     from tools.watch_dog.monitor import run_watchdog
 
@@ -195,7 +195,7 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     """``--once`` with no threshold flags must finish after one sample (Greptile #1969)."""
     from datetime import UTC, datetime, timedelta
 
-    from interactive_shell.runtime.core.tasks import TaskRegistry
+    from core.agent_harness.session.tasks import TaskRegistry
     from tools.fleet_monitoring.probe import ProcessSnapshot
     from tools.watch_dog.monitor import run_watchdog
 

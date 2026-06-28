@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from interactive_shell.session.prompt_history.policy import (
+from core.agent_harness.session.prompt_history.policy import (
     DEFAULT_MAX_ENTRIES,
     DEFAULT_REDACTION_RULES,
     HistoryPolicy,

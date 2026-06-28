@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from interactive_shell.agent_shell.grounding.models import CacheStats
+from core.agent_harness.grounding.models import CacheStats
 
 _logger = logging.getLogger(__name__)
 

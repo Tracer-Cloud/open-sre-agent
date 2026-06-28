@@ -28,12 +28,12 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.turn_context import TurnContext
-from interactive_shell.agent_shell.prompts import (
+from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
     build_cli_agent_prompt,
 )
+from core.agent_harness.turn_context import TurnContext
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 

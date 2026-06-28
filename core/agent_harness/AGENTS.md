@@ -13,10 +13,11 @@ terminal and be invoked headlessly via `agent_harness.headless_agent`.
   `tests/core/agent/test_import_boundaries.py`. The dependency direction is strictly
   one-way: `interactive_shell -> agent_harness -> core`.
 - `agent_harness/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
-  `tools/`. It must not depend on terminal/REPL concerns (Rich, prompt-toolkit,
-  `ReplSession`, slash dispatch, the shell `REGISTRY`). Those are reached through
-  the Protocols in `agent_harness/ports.py`, which `interactive_shell` implements as
-  adapters.
+  `tools/`. It must not depend on terminal UI concerns (Rich rendering,
+  prompt-toolkit mutable UI state, slash dispatch, the shell `REGISTRY`). The
+  reusable session model, prompt history, grounding cache contracts, and task
+  records live here; `interactive_shell` supplies adapters and registry
+  providers at runtime.
 
 ## Layout
 
@@ -28,6 +29,10 @@ terminal and be invoked headlessly via `agent_harness.headless_agent`.
 - `conversation_memory.py` — recent-conversation rendering shared by prompts.
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
   string assembly; grounding text is supplied via `PromptContextProvider`).
+- `grounding/` — reusable grounding cache and rendering contracts; surfaces
+  inject surface-owned command registries instead of being imported here.
+- `session/` — reusable agent session state, JSONL storage, prompt history,
+  task registry, and session-scoped background records.
 - `turn_results.py` — neutral turn-result models.
 - `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports,
   wrapping `core.agent.Agent`.

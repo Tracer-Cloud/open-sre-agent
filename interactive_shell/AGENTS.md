@@ -5,10 +5,10 @@ subdirectories. The repo-root `AGENTS.md` still applies.
 
 ## Purpose
 
-`interactive_shell/` owns the interactive OpenSRE terminal: the REPL
-loop, slash-command surface, local alert ingestion, LLM-backed help/chat,
-action planning, shell execution, session state, history, and Rich /
-prompt-toolkit UI.
+`interactive_shell/` owns the interactive OpenSRE terminal surface: the REPL
+loop, slash-command surface, local alert ingestion, shell execution, and Rich /
+prompt-toolkit UI. Reusable agent session state, prompt history, grounding, and
+prompt construction live under `core.agent`.
 
 Design for a terminal user who may be in the middle of an incident: behavior
 should be predictable, interruptible, explainable, and safe by default.
@@ -21,14 +21,13 @@ should be predictable, interruptible, explainable, and safe by default.
 | `entrypoint.py` | process/bootstrap boundary for starting the REPL | per-turn dispatch/runtime logic |
 | `turn_accounting.py` | turn-result data model (`ToolCallingTurnResult`, `ShellTurnResult`) and `ShellTurnAccounting` (analytics, telemetry, recorder flush, turn persistence, intent stamp) | turn-flow control (owned by `harness/agent.py`) or tool-calling turn execution (owned by `harness/tool_calling.py`) |
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
-| `session/` | `ReplSession`, runtime context assembly, and session persistence (storage backends + cross-session repo) | UI rendering, prompt text, and runtime task scheduling |
-| `runtime/` | background tasks, lifecycle/`ReplState`, controller/entrypoint support modules (lazily re-exports the `session/` surface for back-compat) | UI rendering, prompt text, and session persistence |
+| `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, controller/entrypoint support modules | UI rendering, prompt text, and reusable session persistence |
 | `orchestration/` | action planning, execution policy, subprocess runner, deterministic command detection, and interaction models | raw UI formatting |
 | `tools/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/shell_tool.py`) | slash-command execution |
 | `harness/response.py` | final response generation (`generate_response`), action-plan parsing, and capability validation | direct mutation of runtime state outside the subprocess runner |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
-| `harness/llm_context/` | LLM prompt + grounding context: action/assistant system prompts, the shared recent-conversation helper (`conversation_memory.py`), the session-scoped grounding caches (`grounding/` CLI/docs/AGENTS.md, aggregated by `GroundingContext`), and prompt-toolkit input-history persistence + secret redaction (`prompt_history/`) | session persistence (owned by `session/`) |
+| `agent_shell/` | adapters between the terminal surface and `core.agent` turn engine | reusable prompt builders, grounding corpora, session state, or prompt history |
 | `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `incoming_alerts.py` (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the

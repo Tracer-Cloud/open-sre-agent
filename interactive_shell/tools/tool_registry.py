@@ -5,8 +5,8 @@ from __future__ import annotations
 import functools
 from typing import Any, Literal
 
+from core.agent_harness.session import ReplSession
 from core.types import AgentTool
-from interactive_shell.session import ReplSession
 from interactive_shell.tools.tool_contracts import (
     ToolContext,
     ToolEntry,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.session import InMemorySessionStorage, ReplSession
+from core.agent_harness.session import InMemorySessionStorage, ReplSession
 
 
 def _session(storage: InMemorySessionStorage) -> ReplSession:

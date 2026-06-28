@@ -6,11 +6,11 @@ import logging
 
 import pytest
 
-from interactive_shell.agent_shell.grounding.diagnostics import (
+from core.agent_harness.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
 )
-from interactive_shell.agent_shell.grounding.models import CacheStats
+from core.agent_harness.grounding.models import CacheStats
 
 
 def _sources() -> list[GroundingSource]:

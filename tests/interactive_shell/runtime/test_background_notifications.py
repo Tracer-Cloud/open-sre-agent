@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from interactive_shell.runtime.background.models import BackgroundInvestigationRecord
+from core.agent_harness.session.background import BackgroundInvestigationRecord
 from interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )

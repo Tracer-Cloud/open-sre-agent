@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from rich.console import Console
 
+from core.agent_harness.session import ReplSession
 from interactive_shell.runtime.core.state import ReplState
 from interactive_shell.runtime.input import (
     InputCancelled,
@@ -19,7 +20,6 @@ from interactive_shell.runtime.input import (
     PromptInputReader,
 )
 from interactive_shell.runtime.input import prompt_input_reader as reader_module
-from interactive_shell.session import ReplSession
 
 
 class FakePrompt:

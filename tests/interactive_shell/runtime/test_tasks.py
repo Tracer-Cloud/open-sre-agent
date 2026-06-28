@@ -13,12 +13,12 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.runtime.core.tasks import TaskRegistry
-from interactive_shell.session import (
+from core.agent_harness.session import (
     SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
     ReplSession,
 )
+from core.agent_harness.session.tasks import TaskRegistry
+from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.tools.synthetic.runner import watch_synthetic_subprocess
 from platform.common.task_types import TaskKind, TaskStatus
 
@@ -96,7 +96,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("interactive_shell.runtime.core.tasks.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("core.agent_harness.session.tasks.secrets.token_hex", _fake_hex)
         session = ReplSession()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)

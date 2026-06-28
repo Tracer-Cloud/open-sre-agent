@@ -1,8 +1,7 @@
-"""Interactive-shell LLM context package.
+"""Interactive-shell LLM context adapters.
 
-The action/assistant prompt builders now live in the decoupled :mod:`core.agent_harness.prompts`
-package, with shell prompt adapters under :mod:`interactive_shell.agent_shell.prompts`.
-Shell-owned grounding corpora live at :mod:`interactive_shell.agent_shell.grounding`.
+Reusable prompt builders and grounding corpora live under :mod:`core.agent_harness`.
+This package remains only for shell-local LLM context code.
 """
 
 from __future__ import annotations

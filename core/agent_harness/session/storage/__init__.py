@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.session.storage.jsonl import JsonlSessionStorage
-from interactive_shell.session.storage.memory import InMemorySessionStorage
+from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
+from core.agent_harness.session.storage.memory import InMemorySessionStorage
 
 __all__ = ["InMemorySessionStorage", "JsonlSessionStorage"]

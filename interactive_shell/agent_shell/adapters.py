@@ -16,14 +16,14 @@ from rich.markdown import Markdown
 from rich.markup import escape
 
 from core.agent_harness.action_plan import ActionPlanAction
-from core.agent_harness.prompts import build_environment_block
-from interactive_shell.agent_shell.action_dispatch import execute_action_plan
-from interactive_shell.agent_shell.grounding.investigation_flow_reference import (
+from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
+from core.agent_harness.prompts import build_environment_block
+from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from interactive_shell.agent_shell.action_dispatch import execute_action_plan
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
-from interactive_shell.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from interactive_shell.tools.tool_contracts import ToolContext
 from interactive_shell.tools.tool_registry import REGISTRY
 from interactive_shell.ui import (

@@ -16,20 +16,20 @@ from pydantic import ConfigDict
 from core.domain.alerts.inbox import IncomingAlert
 
 if TYPE_CHECKING:
-    from interactive_shell.agent_shell.grounding.context import GroundingContext
+    from core.agent_harness.grounding.context import GroundingContext
 else:
     GroundingContext = Any
 
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from config.strict_config import StrictConfigModel
 from context.state import MutableAgentState
-from interactive_shell.runtime.background.models import (
+from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
-from interactive_shell.runtime.core.tasks import TaskRegistry
-from interactive_shell.session.storage.jsonl import JsonlSessionStorage
-from interactive_shell.session.types import SessionStorage
+from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
+from core.agent_harness.session.tasks import TaskRegistry
+from core.agent_harness.session.types import SessionStorage
 
 InterventionKind = Literal["ctrl_c", "correction"]
 
@@ -56,10 +56,10 @@ def _scenario_id_from_synthetic_label(label: str) -> str:
 def _default_grounding() -> GroundingContext:
     """Build a fresh per-session grounding cache bundle.
 
-    Imported lazily so the session package keeps a one-way static dependency
-    direction (``harness -> session``) and avoids an import cycle.
+    Imported lazily so the session package can expose the state model without
+    eagerly constructing grounding caches.
     """
-    from interactive_shell.agent_shell.grounding.context import GroundingContext
+    from core.agent_harness.grounding.context import GroundingContext
 
     return GroundingContext()
 

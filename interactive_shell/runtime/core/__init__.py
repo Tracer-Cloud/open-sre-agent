@@ -1,12 +1,13 @@
 """Core runtime engine for the interactive shell.
 
-Session state and context now live in ``interactive_shell.session``; this
-package owns the remaining runtime engine concerns (task registry, mutable
-runtime state, prompt manager, token accounting, turn detection).
+Reusable session state lives in ``core.agent_harness.session`` and terminal runtime
+context lives in ``interactive_shell.runtime.context``. This package owns the
+remaining runtime engine concerns (mutable runtime state, prompt manager,
+token accounting, turn detection).
 """
 
 from __future__ import annotations
 
-from interactive_shell.runtime.core.tasks import TaskRegistry
+from core.agent_harness.session.tasks import TaskRegistry
 
 __all__ = ["TaskRegistry"]

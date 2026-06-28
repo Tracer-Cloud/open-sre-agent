@@ -14,6 +14,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_results import ToolCallingTurnResult
 from interactive_shell.agent_shell.adapters import (
@@ -21,7 +22,6 @@ from interactive_shell.agent_shell.adapters import (
     ShellOutputSink,
     ShellToolProvider,
 )
-from interactive_shell.session import ReplSession
 
 
 def _default_llm_factory() -> Any:

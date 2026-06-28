@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable, Mapping
+from typing import Any
 
 import click
 
-from interactive_shell.agent_shell.grounding.diagnostics import GroundingSource
-from interactive_shell.agent_shell.grounding.models import CacheStats
+from core.agent_harness.grounding.diagnostics import GroundingSource
+from core.agent_harness.grounding.models import CacheStats
 
 _logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ _MAX_REFERENCE_CHARS = 28_000
 # assistant would keep an empty reference for the whole process.
 _MIN_CACHEABLE_CLI_REFERENCE_CHARS = 80
 _CLI_REFERENCE_SENTINEL = "=== opensre --help ==="
+SlashCommandProvider = Callable[[], Mapping[str, Any]]
 
 
 def _is_cacheable_cli_reference(text: str) -> bool:
@@ -27,7 +30,13 @@ def _is_cacheable_cli_reference(text: str) -> bool:
     return _CLI_REFERENCE_SENTINEL in text
 
 
-def _current_cli_signature() -> str:
+def _slash_command_names(provider: SlashCommandProvider | None) -> list[str]:
+    if provider is None:
+        return []
+    return sorted(provider().keys())
+
+
+def _current_cli_signature(provider: SlashCommandProvider | None = None) -> str:
     """Stable signature of the CLI command surface and interactive slash commands.
 
     Bumps cache when subcommands change, slash-command metadata changes, or the
@@ -35,10 +44,9 @@ def _current_cli_signature() -> str:
     """
     from cli.__main__ import cli
     from config.version import get_version
-    from interactive_shell.command_registry import SLASH_COMMANDS
 
     cmd_names = ",".join(sorted(cli.commands.keys()))
-    slash_names = ",".join(sorted(SLASH_COMMANDS.keys()))
+    slash_names = ",".join(_slash_command_names(provider))
     return f"opensre={get_version()}|commands={cmd_names}|slash={slash_names}"
 
 
@@ -114,7 +122,7 @@ def _format_command_reference(
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _build_cli_reference_text_uncached() -> str:
+def _build_cli_reference_text_uncached(provider: SlashCommandProvider | None = None) -> str:
     """Build a side-effect-free CLI reference without invoking Click commands."""
     from cli.__main__ import cli
 
@@ -132,7 +140,7 @@ def _build_cli_reference_text_uncached() -> str:
             parts.append(_format_command_reference(command, path=f"opensre {name}"))
 
     parts.append("\n=== Interactive-shell slash commands ===\n")
-    parts.append(_interactive_shell_slash_hints())
+    parts.append(_interactive_shell_slash_hints(provider))
 
     text = "".join(parts)
     if len(text) > _MAX_REFERENCE_CHARS:
@@ -140,9 +148,7 @@ def _build_cli_reference_text_uncached() -> str:
     return text
 
 
-def _interactive_shell_slash_hints() -> str:
-    from interactive_shell.command_registry import SLASH_COMMANDS
-
+def _interactive_shell_slash_hints(provider: SlashCommandProvider | None = None) -> str:
     lines = [
         "In the interactive shell, describe an incident or paste alert JSON to run "
         + "a investigation pipeline, or chat with the terminal assistant for CLI help.",
@@ -153,8 +159,14 @@ def _interactive_shell_slash_hints() -> str:
         "Slash commands:",
         "",
     ]
-    for cmd in SLASH_COMMANDS.values():
-        lines.append(f"  {cmd.name} - {cmd.description}")
+    if provider is not None:
+        for cmd in provider().values():
+            name = getattr(cmd, "name", "")
+            description = getattr(cmd, "description", "")
+            if name:
+                lines.append(f"  {name} - {description}".rstrip())
+    else:
+        lines.append("  (slash command registry is supplied by the interactive shell runtime)")
     lines.extend(
         [
             "",
@@ -181,19 +193,30 @@ class CliReference:
         self._created_at_monotonic: float = 0.0
         self._hits: int = 0
         self._misses: int = 0
+        self._slash_commands_provider: SlashCommandProvider | None = None
+
+    def set_slash_commands_provider(self, provider: SlashCommandProvider | None) -> None:
+        """Set the shell-owned slash command source used for grounding text."""
+        self._slash_commands_provider = provider
+        self.invalidate()
 
     def build_text(self) -> str:
         """Assemble ``opensre`` and subcommand ``--help`` output for LLM grounding.
 
         Cached on this instance while the command registry signature matches.
         """
-        sig = _current_cli_signature()
+        provider = self._slash_commands_provider
+        sig = _current_cli_signature() if provider is None else _current_cli_signature(provider)
         if self._text is not None and self._signature == sig:
             self._hits += 1
             return self._text
 
         self._misses += 1
-        text = _build_cli_reference_text_uncached()
+        text = (
+            _build_cli_reference_text_uncached()
+            if provider is None
+            else _build_cli_reference_text_uncached(provider)
+        )
         if _is_cacheable_cli_reference(text):
             self._signature = sig
             self._text = text

@@ -11,7 +11,7 @@ import io
 
 from rich.console import Console
 
-from interactive_shell.session import ReplSession
+from core.agent_harness.session import ReplSession
 from interactive_shell.tools.shared import (
     ExecutionPolicyResult,
     allow_tool,

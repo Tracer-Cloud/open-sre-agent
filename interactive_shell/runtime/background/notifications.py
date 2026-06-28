@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.runtime.background.models import BackgroundInvestigationRecord
+from core.agent_harness.session.background import BackgroundInvestigationRecord
 from platform.notifications.smtp_delivery import format_background_rca_email, send_smtp_report
 
 

@@ -1,9 +1,9 @@
 """AGENTS.md grounding helpers for OpenSRE interactive-shell answers.
 
 The conversational interactive-shell assistant grounds answers on the
-``opensre --help`` reference (via :class:`~interactive_shell.agent_shell.grounding.cli_reference.CliReference`)
+``opensre --help`` reference (via :class:`~core.agent_harness.grounding.cli_reference.CliReference`)
 and, for procedural questions, excerpts from ``docs/`` (via
-:class:`~interactive_shell.agent_shell.grounding.docs_reference.DocsReference`). Neither surface
+:class:`~core.agent_harness.grounding.docs_reference.DocsReference`). Neither surface
 includes internal repo-map content, so the assistant cannot answer questions
 like "where do I add a new tool?" or "how does the remote threads pipeline
 work?" from maintained internal documentation.
@@ -11,7 +11,7 @@ work?" from maintained internal documentation.
 This module surfaces the repo's ``AGENTS.md`` files (root + per-package) as a
 third grounding source for the conversational shell. It is purely static
 (no embeddings, no DB, no new dependencies) and mirrors the shape of
-:class:`~interactive_shell.agent_shell.grounding.docs_reference.DocsReference` so the two stay
+:class:`~core.agent_harness.grounding.docs_reference.DocsReference` so the two stay
 symmetric.
 
 Source of truth
@@ -45,12 +45,12 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 
-from interactive_shell.agent_shell.grounding._cache import excerpt
-from interactive_shell.agent_shell.grounding.diagnostics import GroundingSource
-from interactive_shell.agent_shell.grounding.models import CacheStats
+from core.agent_harness.grounding._cache import excerpt
+from core.agent_harness.grounding.diagnostics import GroundingSource
+from core.agent_harness.grounding.models import CacheStats
 
 # Repo root is three levels above this file
-# (.../interactive_shell/agent_shell/grounding/agents_md_reference.py -> repo root).
+# (.../core/agent_harness/grounding/agents_md_reference.py -> repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 _AGENTS_MD_FILENAME = "AGENTS.md"
