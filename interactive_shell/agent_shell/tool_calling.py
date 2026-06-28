@@ -8,7 +8,6 @@ output sink, registry-backed tool provider, error reporter) and delegates to it.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -23,8 +22,6 @@ from interactive_shell.agent_shell.adapters import (
     ShellOutputSink,
     ShellToolProvider,
 )
-
-log = logging.getLogger(__name__)
 
 
 def _default_llm_factory() -> Any:

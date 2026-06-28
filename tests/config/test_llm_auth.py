@@ -119,7 +119,7 @@ def test_configure_cli_subscription_syncs_provider(
         default_model="",
         models=(ModelOption(value="", label="default"),),
         credential_kind="cli",
-        adapter_factory=lambda: _FakeAdapter(),
+        adapter_factory=_FakeAdapter,
     )
     monkeypatch.setattr("cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider)
 

@@ -46,16 +46,20 @@ _DEFAULT_IMPLEMENT_PERMISSION_MODE = "acceptEdits"
 
 class _ClaudeInvocation(Protocol):
     @property
-    def argv(self) -> tuple[str, ...]: ...
+    def argv(self) -> tuple[str, ...]:
+        raise NotImplementedError
 
     @property
-    def stdin(self) -> str | None: ...
+    def stdin(self) -> str | None:
+        raise NotImplementedError
 
     @property
-    def cwd(self) -> str: ...
+    def cwd(self) -> str:
+        raise NotImplementedError
 
     @property
-    def env(self) -> dict[str, str] | None: ...
+    def env(self) -> dict[str, str] | None:
+        raise NotImplementedError
 
 
 def _recent_cli_agent_context(session: ReplSession, *, limit: int = 6) -> str:

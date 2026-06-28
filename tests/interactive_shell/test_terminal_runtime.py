@@ -964,7 +964,7 @@ class TestReplState:
             cancel = threading.Event()
             state.start_dispatch(task=task, cancel_event=cancel)
             assert state.is_dispatch_running() is True
-            await task
+            assert await task is None
             state.finish_dispatch(cancel)
             assert state.phase is loop_state.TurnPhase.IDLE
             state.clear_current_task()

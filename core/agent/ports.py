@@ -66,7 +66,8 @@ class SessionStore(Protocol):
     # Read-only here; ``ReplSession`` stores a tuple. A property matches
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
-    def configured_integrations(self) -> Sequence[str]: ...
+    def configured_integrations(self) -> Sequence[str]:
+        raise NotImplementedError
 
     last_state: dict[str, Any] | None
     last_synthetic_observation_path: str | None
@@ -100,7 +101,8 @@ class ToolProvider(Protocol):
 class ErrorReporter(Protocol):
     """Reports caught exceptions (telemetry / logging)."""
 
-    def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None: ...
+    def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -112,31 +114,39 @@ class PromptContextProvider(Protocol):
     caches, the headless adapter returns empty strings.
     """
 
-    def cli_reference(self) -> str: ...
+    def cli_reference(self) -> str:
+        raise NotImplementedError
 
-    def agents_md(self) -> str: ...
+    def agents_md(self) -> str:
+        raise NotImplementedError
 
-    def investigation_flow(self) -> str: ...
+    def investigation_flow(self) -> str:
+        raise NotImplementedError
 
-    def environment_block(self) -> str: ...
+    def environment_block(self) -> str:
+        raise NotImplementedError
 
-    def suggested_synthetic_prompt(self) -> str: ...
+    def suggested_synthetic_prompt(self) -> str:
+        raise NotImplementedError
 
-    def log_diagnostics(self, reason: str) -> None: ...
+    def log_diagnostics(self, reason: str) -> None:
+        raise NotImplementedError
 
 
 @runtime_checkable
 class ReasoningClientProvider(Protocol):
     """Provides the streaming reasoning LLM client for the assistant answer."""
 
-    def get(self) -> Any | None: ...
+    def get(self) -> Any | None:
+        raise NotImplementedError
 
 
 @runtime_checkable
 class RunRecordFactory(Protocol):
     """Builds the opaque per-answer LLM-run record (telemetry) from raw inputs."""
 
-    def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any: ...
+    def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any:
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -170,9 +180,11 @@ ExecuteActions = Callable[..., ToolCallingTurnResult]
 class TurnAccounting(Protocol):
     """Records analytics/telemetry for a turn and finalizes the result."""
 
-    def record_action_result(self, action_result: ToolCallingTurnResult) -> None: ...
+    def record_action_result(self, action_result: ToolCallingTurnResult) -> None:
+        raise NotImplementedError
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult: ...
+    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        raise NotImplementedError
 
 
 __all__ = [

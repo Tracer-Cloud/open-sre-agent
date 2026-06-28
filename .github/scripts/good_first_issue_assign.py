@@ -121,7 +121,6 @@ def _request_json(url: str, token: str) -> Any:
 
 
 def _search_issue_total_count(query: str, token: str) -> int:
-    params = urllib.parse.urlencode({"q": query})
     url = _github_api_url("/search/issues", {"q": query})
     try:
         data = _request_json(url, token)

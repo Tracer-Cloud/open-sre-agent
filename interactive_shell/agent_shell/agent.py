@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent import engine
-from core.agent.action_plan import ActionPlanAction, parse_action_plan
+from core.agent.action_plan import ActionPlanAction
 from core.agent.context import TurnContext
 from core.agent.results import ShellTurnResult, ToolCallingTurnResult
 from interactive_shell.agent_shell.adapters import (
@@ -69,9 +69,6 @@ from interactive_shell.ui.streaming.console import StreamingConsole
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
-
-# Re-exported for the parser's pure helpers; execution lives in action_dispatch.
-_parse_action_plan = parse_action_plan
 
 _logger = logging.getLogger(__name__)
 

@@ -499,6 +499,8 @@ def run_turn(
                 assistant_response_text=_response_text(run),
                 llm_run=run,
             )
+        case _:
+            raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
     return accounting.finalize(result)
 

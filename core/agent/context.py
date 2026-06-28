@@ -43,7 +43,8 @@ class TurnContextSource(Protocol):
     # Read-only here; ``ReplSession`` stores a tuple. A property matches
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
-    def configured_integrations(self) -> Sequence[str]: ...
+    def configured_integrations(self) -> Sequence[str]:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
