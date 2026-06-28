@@ -11,15 +11,14 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from cli.llm_auth.service import AuthSetupError, persist_api_key_secret
+from cli.llm_auth.service import AuthSetupError
 from cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
 from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
 from cli.wizard.prompts import select as select_prompt
 from cli.wizard.store import get_store_path, load_local_config
-from config.llm_auth.credentials import has_llm_api_key, save_api_key
-from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
-from config.llm_credentials import get_keyring_setup_instructions, save_llm_api_key
+from config.llm_auth.credentials import has_llm_api_key
+from config.llm_credentials import get_keyring_setup_instructions
 from config.version import get_version
 from integrations.store import get_integration
 from platform.terminal.theme import (
@@ -335,19 +334,10 @@ def _prompt_value(
 
 
 def _persist_llm_api_key(env_var: str, value: str) -> bool:
+    from cli.wizard.env_sync import persist_env_secret_with_env_fallback
+
     try:
-        provider = next(
-            (
-                name
-                for name, provider_env in API_KEY_PROVIDER_ENVS.items()
-                if provider_env == env_var
-            ),
-            "",
-        )
-        if provider:
-            save_api_key(provider, value)
-        else:
-            persist_api_key_secret(env_var, value, save_secret=save_llm_api_key)
+        storage, env_path = persist_env_secret_with_env_fallback(env_var, value)
     except (AuthSetupError, RuntimeError, ValueError) as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
@@ -356,6 +346,12 @@ def _persist_llm_api_key(env_var: str, value: str) -> bool:
         for line in get_keyring_setup_instructions(env_var):
             _console.print(f"[{SECONDARY}]    {line}[/]")
         return False
+
+    if storage == "env" and env_path is not None:
+        _console.print(
+            f"[{WARNING}]  {GLYPH_WARNING}  Secure storage unavailable — saved {env_var} to {env_path} "
+            f"(owner-only permissions). Prefer a system keychain when available.[/]"
+        )
     return True
 
 

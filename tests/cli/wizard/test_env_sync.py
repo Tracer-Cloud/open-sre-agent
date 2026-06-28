@@ -441,3 +441,22 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
             sync_env_values({"FOO": "baz"}, env_path=env_path)
     finally:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_persist_env_secret_with_env_fallback_writes_env_when_keyring_unavailable(
+    tmp_path, monkeypatch
+) -> None:
+    from cli.wizard.env_sync import persist_env_secret_with_env_fallback
+
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+
+    storage, written_path = persist_env_secret_with_env_fallback(
+        "ANTHROPIC_API_KEY",
+        "secret-value",
+        env_path=env_path,
+    )
+
+    assert storage == "env"
+    assert written_path == env_path
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")

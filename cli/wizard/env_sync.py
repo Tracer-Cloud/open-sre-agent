@@ -102,6 +102,10 @@ def _set_env_value(lines: list[str], key: str, value: str) -> list[str]:
         raise RuntimeError(
             f"Refusing to write sensitive env key {key!r} to .env; use sync_env_secret()."
         )
+    return _set_env_value_unchecked(lines, key, value)
+
+
+def _set_env_value_unchecked(lines: list[str], key: str, value: str) -> list[str]:
     updated: list[str] = []
     replaced = False
     for line in lines:
@@ -151,6 +155,44 @@ def sync_env_secret(key: str, value: str) -> None:
     if not _is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
     _persist_env_secret(key, value)
+
+
+def persist_env_secret_with_env_fallback(
+    key: str,
+    value: str,
+    *,
+    env_path: Path | None = None,
+) -> tuple[str, Path | None]:
+    """Persist a secret to the keyring, falling back to ``.env`` when unavailable.
+
+    Returns ``("keyring", None)`` on keyring success, or ``("env", path)`` when
+    the value was written to the project ``.env`` for headless hosts.
+    """
+    if not _is_sensitive_env_key(key):
+        raise ValueError(f"{key!r} is not classified as sensitive.")
+    if _persist_env_secret(key, value):
+        return "keyring", None
+
+    target_path = env_path or PROJECT_ENV_PATH
+    existing = (
+        target_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if target_path.exists()
+        else []
+    )
+    lines = _strip_sensitive_env_lines(existing)
+    lines = _set_env_value_unchecked(lines, key, value)
+    _write_env_raw(target_path, lines)
+    return "env", target_path
+
+
+def _write_env_raw(target_path: Path, lines: list[str]) -> None:
+    """Write ``.env`` lines including secrets (headless fallback only)."""
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with target_path.open("w", encoding="utf-8", newline="") as env_file:
+        env_file.writelines(lines)
+    if os.name != "nt":
+        with suppress(OSError):
+            target_path.chmod(0o600)
 
 
 def sync_env_values(
