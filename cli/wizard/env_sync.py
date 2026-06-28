@@ -186,6 +186,9 @@ def _write_env_raw(target_path: Path, lines: list[str]) -> None:
             f"Cannot write to {target_path}: permission denied. "
             "Ensure you have write access to this file, or run the command as the file owner."
         ) from exc
+    if os.name != "nt":
+        with suppress(OSError):
+            target_path.chmod(0o600)
 
 
 def _write_env_lines(target_path: Path, lines: list[str]) -> None:

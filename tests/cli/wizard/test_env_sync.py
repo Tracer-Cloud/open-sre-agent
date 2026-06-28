@@ -514,3 +514,16 @@ def test_write_env_raw_creates_file_with_owner_only_permissions(tmp_path) -> Non
     content = env_path.read_text(encoding="utf-8")
     assert "TELEGRAM_BOT_TOKEN=fallback" in content
     assert "DD_SITE=datadoghq.eu" in content
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows permission model differs")
+def test_write_env_raw_tightens_permissions_on_existing_file(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    env_path.write_text("TELEGRAM_BOT_TOKEN=old\n", encoding="utf-8")
+    env_path.chmod(0o644)
+
+    _write_env_raw(env_path, ["TELEGRAM_BOT_TOKEN=fallback\n"])
+
+    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
