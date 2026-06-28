@@ -33,7 +33,7 @@ def _record_resume_slash(
 
 def _interactive_resume_menu(session: ReplSession, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from context.session import default_session_repo
+    from interactive_shell.session import default_session_repo
 
     entries = [
         e for e in default_session_repo().load_recent(10) if e["session_id"] != session.session_id
@@ -227,7 +227,7 @@ def _do_resume(
     slash_command: str | None = None,
 ) -> bool:
     """Load session by ID prefix and restore context into the running session."""
-    from context.session import default_session_repo
+    from interactive_shell.session import default_session_repo
 
     repo = default_session_repo()
     data = repo.load_session(prefix)
@@ -265,7 +265,7 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         _record_resume_slash(session, args)
         return True
 
-    from context.session import default_session_repo
+    from interactive_shell.session import default_session_repo
 
     repo = default_session_repo()
     data = repo.load_session(prefix)

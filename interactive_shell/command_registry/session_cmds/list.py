@@ -20,7 +20,7 @@ from interactive_shell.ui.components.time_format import format_repl_duration, fo
 def _cmd_sessions(session: ReplSession, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
-    from context.session import default_session_repo
+    from interactive_shell.session import default_session_repo
 
     entries = default_session_repo().load_recent(20)
     if not entries:

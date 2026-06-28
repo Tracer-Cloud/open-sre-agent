@@ -7,12 +7,12 @@ from typing import Any
 
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.agent_shell.agent import AgentTurnRunner, handle_message_with_agent
 from interactive_shell.runtime.core.state import ReplState, SpinnerState
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.session import ReplSession
 from interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
 

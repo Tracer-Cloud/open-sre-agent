@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from context.grounding.context import GroundingContext
-from context.grounding.diagnostics import (
+from interactive_shell.agent_shell.grounding.context import GroundingContext
+from interactive_shell.agent_shell.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
 )
-from context.models import CacheStats
+from interactive_shell.agent_shell.grounding.models import CacheStats
 
 
 def _make_source(name: str, hits: int = 0) -> GroundingSource:
@@ -42,7 +42,7 @@ def test_log_grounding_iterates_provided_sources(monkeypatch: object) -> None:
     """log_grounding_cache_diagnostics logs each provided source when verbose."""
     import os
 
-    from context.grounding import diagnostics as _gd
+    from interactive_shell.agent_shell.grounding import diagnostics as _gd
 
     logged: list[str] = []
     try:

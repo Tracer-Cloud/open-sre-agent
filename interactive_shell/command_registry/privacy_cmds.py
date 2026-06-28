@@ -6,17 +6,17 @@ from prompt_toolkit.history import FileHistory, InMemoryHistory
 from rich.console import Console
 from rich.markup import escape
 
-from context.prompt_history import (
+from interactive_shell.command_registry.types import SlashCommand
+from interactive_shell.runtime import ReplSession
+from interactive_shell.session.prompt_history import (
     clear_persisted_history,
     load_command_history_entries,
     prompt_history_path,
 )
-from context.prompt_history.policy import (
+from interactive_shell.session.prompt_history.policy import (
     DEFAULT_REDACTION_RULES,
     RedactingFileHistory,
 )
-from interactive_shell.command_registry.types import SlashCommand
-from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import (
     BOLD_BRAND,
     DIM,

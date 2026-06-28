@@ -46,7 +46,7 @@ def _cmd_new(session: ReplSession, console: Console, _args: list[str]) -> bool:
 
 def _cmd_compact(session: ReplSession, console: Console, _args: list[str]) -> bool:
     """Compact the live session branch and persist a compaction entry."""
-    from context.session.compaction import compact_session_branch
+    from interactive_shell.session.compaction import compact_session_branch
 
     result = compact_session_branch(session)
     if result is None:

@@ -12,7 +12,6 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from context.session import ReplSession
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
@@ -26,6 +25,7 @@ from interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
     terminate_child_process,
 )
+from interactive_shell.session import ReplSession
 from interactive_shell.tools.claude_code_executor import (
     run_claude_code_implementation,
 )

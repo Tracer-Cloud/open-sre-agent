@@ -19,8 +19,8 @@ from rich.console import Console
 # cannot be resolved the scenario is skipped, never failed (env gap, not bug).
 LIVE_INTEGRATION_SENTINEL = "@live"
 
-from context.session import ReplSession
 from interactive_shell.agent_shell.agent import handle_message_with_agent
+from interactive_shell.session import ReplSession
 from interactive_shell.tools.tool_contracts import ToolExecutor
 from interactive_shell.tools.tool_registry import (
     REGISTRY,

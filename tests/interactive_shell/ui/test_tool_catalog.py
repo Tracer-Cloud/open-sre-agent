@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
+from interactive_shell.session import ReplSession
 from interactive_shell.ui.tables import tool_catalog
 from interactive_shell.ui.tables.tool_catalog import (
     ToolCatalogEntry,

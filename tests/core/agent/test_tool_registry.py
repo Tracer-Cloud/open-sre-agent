@@ -7,8 +7,8 @@ import re
 from rich.console import Console
 
 from cli.wizard.config import PROVIDER_BY_VALUE
-from context.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS
+from interactive_shell.session import ReplSession
 from interactive_shell.tools.tool_contracts import (
     ToolContext,
 )

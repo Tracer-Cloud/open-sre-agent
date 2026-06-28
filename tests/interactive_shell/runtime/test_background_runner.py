@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from context.session import ReplSession
 from interactive_shell.runtime.background.runner import drain_background_notices
+from interactive_shell.session import ReplSession
 
 
 def test_enqueue_and_drain_background_notices() -> None:

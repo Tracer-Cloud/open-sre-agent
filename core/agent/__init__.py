@@ -13,6 +13,7 @@ See ``agent/AGENTS.md``.
 from __future__ import annotations
 
 from core.agent.agent import (
+    AgentRuntimeRequest,
     ShellTurnResult,
     ToolCallingDeps,
     ToolCallingTurnResult,
@@ -27,6 +28,7 @@ from core.agent.agent import (
 )
 
 __all__ = [
+    "AgentRuntimeRequest",
     "ShellTurnResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",

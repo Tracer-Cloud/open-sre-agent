@@ -12,7 +12,6 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from interactive_shell.command_registry import repl_data as repl_data_module
 from interactive_shell.command_registry.investigation import (
@@ -21,6 +20,7 @@ from interactive_shell.command_registry.investigation import (
 )
 from interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
 from interactive_shell.runtime.background.models import BackgroundInvestigationRecord
+from interactive_shell.session import ReplSession
 from interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 from platform.common.task_types import TaskKind, TaskStatus
 
@@ -1576,11 +1576,11 @@ class TestResumeCommand:
         reopen its file, and restore cli_agent_messages + accumulated_context."""
         from unittest.mock import patch
 
-        from context.session import (
+        from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from interactive_shell.session import (
             JsonlSessionStorage,
             default_session_repo,
         )
-        from interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         SessionStore = JsonlSessionStorage()
         session = ReplSession()
@@ -1588,7 +1588,7 @@ class TestResumeCommand:
         target_id = "old-abc-1234567890"
 
         with patch(
-            "context.session.paths.sessions_dir",
+            "interactive_shell.session.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)
@@ -1737,8 +1737,8 @@ class TestResumeCommand:
         """History display uses REPL turn order and includes slash commands."""
         from unittest.mock import patch
 
-        from context.session import JsonlSessionStorage
         from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from interactive_shell.session import JsonlSessionStorage
 
         SessionStore = JsonlSessionStorage()
         data = {
@@ -1760,7 +1760,7 @@ class TestResumeCommand:
         console, buf = _capture()
 
         with patch(
-            "context.session.paths.sessions_dir",
+            "interactive_shell.session.paths.sessions_dir",
             return_value=tmp_path,
         ):
             SessionStore.open_session(session)

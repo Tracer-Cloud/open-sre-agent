@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from config.version import get_version
-from context.prompt_history.policy import redact_text
+from interactive_shell.session.prompt_history.policy import redact_text
 from interactive_shell.utils.telemetry.config import PromptLogConfig
 from interactive_shell.utils.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
@@ -160,7 +160,7 @@ class PromptRecorder:
 
         # Also write enriched turn to the session file so /resume can restore context.
         with contextlib.suppress(Exception):
-            from context.session import default_session_storage
+            from interactive_shell.session import default_session_storage
 
             session_kind = _TURN_TO_SESSION_KIND.get(self._turn_kind, self._turn_kind)
             default_session_storage().append_turn_detail(

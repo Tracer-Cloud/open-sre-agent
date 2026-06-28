@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from context.conversation_history import (
+from core.agent.conversation_memory import (
     MAX_CONVERSATION_MESSAGES,
     MAX_CONVERSATION_TURNS,
     NO_HISTORY_PLACEHOLDER,

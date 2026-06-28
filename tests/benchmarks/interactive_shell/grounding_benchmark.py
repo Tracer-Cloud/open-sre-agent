@@ -11,8 +11,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from context.grounding.cli_reference import CliReference
-from context.grounding.docs_reference import DocsReference
+from interactive_shell.agent_shell.grounding.cli_reference import CliReference
+from interactive_shell.agent_shell.grounding.docs_reference import DocsReference
 
 
 def _timed(label: str, fn: Callable[[], object]) -> tuple[float, object]:

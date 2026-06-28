@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.runtime.core.prompt_manager import PromptManager
 from interactive_shell.runtime.core.state import ReplState
 from interactive_shell.runtime.input.events import (
@@ -13,6 +12,7 @@ from interactive_shell.runtime.input.events import (
     InputEvent,
     InputSubmitted,
 )
+from interactive_shell.session import ReplSession
 from interactive_shell.ui.components.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,

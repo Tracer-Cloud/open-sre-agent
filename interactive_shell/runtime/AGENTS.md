@@ -216,10 +216,10 @@ flowchart TD
 - Do not duplicate business logic in `__init__.py`.
 - `runtime/__init__.py` lazily re-exports the session surface
   (`ReplSession`, `ReplRuntimeContext`, `create_repl_runtime_context`, …) from
-  `context.session` via `__getattr__` (PEP 562). This is the one
+  `interactive_shell.session` via `__getattr__` (PEP 562). This is the one
   sanctioned indirection — it exists to avoid an import cycle
   (`session.context` depends on `runtime.core.state`). New code should import
-  these names directly from `context.session`; the re-export only
+  these names directly from `interactive_shell.session`; the re-export only
   keeps existing `from interactive_shell.runtime import ReplSession` callers
   working.
 - Do not re-add `_xxx` underscore aliases or wrapper functions for

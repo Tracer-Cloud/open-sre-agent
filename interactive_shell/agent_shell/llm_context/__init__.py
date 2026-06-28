@@ -1,9 +1,8 @@
-"""Interactive-shell grounding sources for the agent prompts.
+"""Interactive-shell LLM context package.
 
 The action/assistant prompt builders now live in the decoupled :mod:`core.agent.prompts`
-package. This package retains only the shell-specific *grounding* corpora under
-:mod:`interactive_shell.agent_shell.llm_context.grounding` (CLI help, repo map, docs),
-which the shell exposes to the engine through a ``PromptContextProvider`` adapter.
+package, with shell prompt adapters under :mod:`interactive_shell.agent_shell.prompts`.
+Shell-owned grounding corpora live at :mod:`interactive_shell.agent_shell.grounding`.
 """
 
 from __future__ import annotations

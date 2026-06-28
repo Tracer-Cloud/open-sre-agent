@@ -54,7 +54,7 @@ from platform.observability.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from context.agent_context import AgentContext
+    from core.agent.turn_context import AgentRuntimeRequest
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback
@@ -128,13 +128,17 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self,
         initial_messages: Sequence[RuntimeMessageLike] | None = None,
         *,
-        agent_context: AgentContext | None = None,
+        agent_context: AgentRuntimeRequest | None = None,
     ) -> AgentRunResult:
         """Run the think → call-tools → observe loop and return its outcome."""
         if agent_context is not None:
             agent_context.validate_runtime_request()
             messages = agent_context.runtime_messages()
-            system = agent_context.system_prompt
+            render_system_prompt = getattr(agent_context, "render_system_prompt", None)
+            if callable(render_system_prompt):
+                system = render_system_prompt()
+            else:
+                system = str(agent_context.system_prompt)
             tools = list(agent_context.active_tools)
             resolved = agent_context.resolved_integrations
             max_iterations = agent_context.max_iterations

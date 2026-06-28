@@ -6,7 +6,6 @@ import io
 
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from interactive_shell.command_registry.integrations import (
     _INTEGRATIONS_FIRST_ARGS,
@@ -22,6 +21,7 @@ from interactive_shell.command_registry.settings_cmds import (
     _VERBOSE_FIRST_ARGS,
 )
 from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS
+from interactive_shell.session import ReplSession
 
 
 def _capture() -> tuple[Console, io.StringIO]:

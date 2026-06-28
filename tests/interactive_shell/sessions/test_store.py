@@ -10,12 +10,12 @@ from unittest.mock import patch
 
 import pytest
 
-from context.session import (
+from interactive_shell.session import (
     JsonlSessionRepo,
     JsonlSessionStorage,
     ReplSession,
 )
-from context.session.paths import sessions_dir as _sessions_dir
+from interactive_shell.session.paths import sessions_dir as _sessions_dir
 
 
 class _SessionStoreFacade(JsonlSessionStorage, JsonlSessionRepo):
@@ -75,7 +75,7 @@ def _write_v2_session(path: Path, sid: str, *, started_at: str, text: str = "hi"
 
 
 def _patch_dir(tmp_path: Path):
-    return patch("context.session.paths.sessions_dir", return_value=tmp_path)
+    return patch("interactive_shell.session.paths.sessions_dir", return_value=tmp_path)
 
 
 @pytest.fixture
@@ -116,7 +116,7 @@ def test_open_session_uses_session_id_as_filename(tmp_path: Path) -> None:
 def test_open_session_never_raises_on_bad_path() -> None:
     session = _make_session()
     with patch(
-        "context.session.paths.sessions_dir",
+        "interactive_shell.session.paths.sessions_dir",
         return_value=Path("/nonexistent/cannot/write"),
     ):
         SessionStore.open_session(session)  # must not raise

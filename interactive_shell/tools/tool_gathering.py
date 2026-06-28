@@ -16,8 +16,8 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from context.session import ReplSession
 from core.agent import evidence_agent
+from interactive_shell.session import ReplSession
 from interactive_shell.ui import DIM
 from interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -118,7 +118,7 @@ def _persist_tool_calls(session: ReplSession, executed: list[tuple[Any, Any]]) -
     Arguments and results are redacted and bounded before writing; failures are
     swallowed so logging never breaks the turn.
     """
-    from context.session import default_session_storage
+    from interactive_shell.session import default_session_storage
     from platform.observability.tool_trace import redact_sensitive
 
     storage = default_session_storage()

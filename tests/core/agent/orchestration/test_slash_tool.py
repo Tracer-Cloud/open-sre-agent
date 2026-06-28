@@ -14,7 +14,7 @@ import pytest
 from rich.console import Console
 
 import interactive_shell.tools.slash_tool as slash_tool
-from context.session import ReplSession
+from interactive_shell.session import ReplSession
 from interactive_shell.tools.tool_contracts import (
     ToolContext,
 )

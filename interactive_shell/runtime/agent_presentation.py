@@ -19,10 +19,10 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
-from context.session import ReplSession
 from interactive_shell.agent_shell.agent import AgentEvent, AgentEventSink
 from interactive_shell.runtime.core.state import SpinnerState
 from interactive_shell.runtime.utils.input_policy import turn_should_show_spinner
+from interactive_shell.session import ReplSession
 from interactive_shell.ui import (
     BOLD_BRAND,
     ERROR,

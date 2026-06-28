@@ -5,11 +5,11 @@ from __future__ import annotations
 from rich.console import Console
 
 import interactive_shell.tools.slash_tool as slash_tool
-from context.session import ReplSession
 from interactive_shell.agent_shell.tool_calling import (
     ToolCallingDeps,
     run_tool_calling_turn,
 )
+from interactive_shell.session import ReplSession
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,

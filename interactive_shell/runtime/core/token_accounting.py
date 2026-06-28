@@ -9,8 +9,8 @@ from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from interactive_shell.utils.telemetry import LlmRunInfo
 
 if TYPE_CHECKING:
-    from context.session import ReplSession
     from core.llm.llm_client import LLMResponse
+    from interactive_shell.session import ReplSession
 
 
 def estimate_tokens(text: str) -> int:

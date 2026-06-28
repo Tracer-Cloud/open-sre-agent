@@ -18,7 +18,6 @@ from typing import Any
 
 from rich.console import Console
 
-from context.session import ReplSession
 from core.agent.action_plan import ActionPlanAction
 from core.agent.action_plan import parse_action_plan as _parse_action_plan
 from core.agent.prompts.assistant_agent_prompt import (
@@ -32,6 +31,7 @@ from core.agent.prompts.assistant_agent_prompt import (
 from interactive_shell.agent_shell import adapters as shell_adapters
 from interactive_shell.agent_shell import agent as cli_agent
 from interactive_shell.agent_shell.agent import answer_cli_agent
+from interactive_shell.session import ReplSession
 
 
 def _build_environment_block(session: ReplSession) -> str:

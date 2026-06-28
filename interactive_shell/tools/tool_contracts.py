@@ -8,8 +8,8 @@ from typing import Any
 
 from rich.console import Console
 
-from context.session import ReplSession
 from core.types import AgentTool, AgentToolContext
+from interactive_shell.session import ReplSession
 
 ToolExecutor = Callable[[dict[str, Any], "ToolContext"], bool]
 ToolAvailability = Callable[[ReplSession], bool]

@@ -18,7 +18,7 @@ import core as runtime_module
 import core.agent_runtime as runtime_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
-from context.session import ReplSession
+from interactive_shell.session import ReplSession
 from interactive_shell.tools.tool_gathering import (
     _format_gathering_progress_line,
     _resolve_gather_integrations,

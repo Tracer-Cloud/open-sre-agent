@@ -28,14 +28,12 @@ from typing import Any
 
 import pytest
 
-from context import (
+from core.agent.turn_context import TurnContext
+from interactive_shell.agent_shell.prompts import (
     build_action_system_prompt,
     build_action_user_message,
+    build_cli_agent_prompt,
 )
-from context.agent_context import AgentContext
-from context.assistant_prompt import build_cli_agent_prompt
-from context.models import coerce_messages
-from context.session import InMemorySessionStorage, ReplSession
 
 _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json")
 
@@ -72,10 +70,10 @@ def _agent_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
-) -> AgentContext:
-    return AgentContext(
+) -> TurnContext:
+    return TurnContext(
         text=text,
-        conversation_messages=coerce_messages(conversation_messages),
+        conversation_messages=conversation_messages,
         configured_integrations=configured_integrations,
         configured_integrations_known=configured_integrations_known,
         last_state=last_state,
@@ -84,16 +82,29 @@ def _agent_ctx(
     )
 
 
+class _StubSession:
+    """Minimal shell session shape needed by the prompt adapter."""
+
+    def __init__(
+        self,
+        *,
+        configured_integrations: tuple[str, ...] = (),
+        configured_integrations_known: bool = False,
+    ) -> None:
+        self.configured_integrations = configured_integrations
+        self.configured_integrations_known = configured_integrations_known
+        self.grounding = _StubGrounding()
+
+
 def _session(
     *,
     configured_integrations: tuple[str, ...] = (),
     configured_integrations_known: bool = False,
-) -> ReplSession:
-    session = ReplSession(storage=InMemorySessionStorage())
-    session.configured_integrations = configured_integrations
-    session.configured_integrations_known = configured_integrations_known
-    session.grounding = _StubGrounding()  # type: ignore[assignment]
-    return session
+) -> _StubSession:
+    return _StubSession(
+        configured_integrations=configured_integrations,
+        configured_integrations_known=configured_integrations_known,
+    )
 
 
 def _build_cases(tmp_path: Path) -> dict[str, str]:
@@ -132,7 +143,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        agent_ctx=_agent_ctx(text="how do I configure datadog?"),
+        turn_ctx=_agent_ctx(text="how do I configure datadog?"),
     )
 
     cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt(
@@ -140,7 +151,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(configured_integrations_known=True),
         tool_observation=None,
         tool_observation_on_screen=True,
-        agent_ctx=_agent_ctx(text="set up sentry", configured_integrations_known=True),
+        turn_ctx=_agent_ctx(text="set up sentry", configured_integrations_known=True),
     )
 
     cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt(
@@ -151,7 +162,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation=None,
         tool_observation_on_screen=True,
-        agent_ctx=_agent_ctx(
+        turn_ctx=_agent_ctx(
             text="why did checkout fail?",
             configured_integrations=("datadog", "github"),
             configured_integrations_known=True,
@@ -174,7 +185,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="datadog: configured (connection_verified=true)",
         tool_observation_on_screen=True,
-        agent_ctx=_agent_ctx(
+        turn_ctx=_agent_ctx(
             text="is datadog configured?",
             configured_integrations=("datadog",),
             configured_integrations_known=True,
@@ -189,7 +200,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         ),
         tool_observation="sentry issues: [#1 NPE in checkout]",
         tool_observation_on_screen=False,
-        agent_ctx=_agent_ctx(
+        turn_ctx=_agent_ctx(
             text="any open sentry issues for checkout?",
             configured_integrations=("sentry",),
             configured_integrations_known=True,
@@ -206,7 +217,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         session=_session(),
         tool_observation=None,
         tool_observation_on_screen=True,
-        agent_ctx=_agent_ctx(
+        turn_ctx=_agent_ctx(
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),

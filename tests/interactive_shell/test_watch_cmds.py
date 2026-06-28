@@ -10,12 +10,12 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
+from interactive_shell.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
 from tools.watch_dog.alarms import AlarmCredentials
 

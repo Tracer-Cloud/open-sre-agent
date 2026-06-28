@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from prompt_toolkit import PromptSession
 
-from context.prompt_history import load_prompt_history
 from interactive_shell.runtime import ReplSession
+from interactive_shell.session.prompt_history import load_prompt_history
 from interactive_shell.ui.input_prompt.completion import ShellCompleter
 from interactive_shell.ui.input_prompt.key_bindings import _build_prompt_key_bindings
 from interactive_shell.ui.input_prompt.lexer import ReplInputLexer

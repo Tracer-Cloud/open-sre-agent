@@ -8,11 +8,11 @@ from typing import Any
 
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.agent_shell.agent import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
+from interactive_shell.session import ReplSession
 
 
 def _console() -> Console:

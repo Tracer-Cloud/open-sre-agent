@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import pytest
 from prompt_toolkit.completion import Completion
 
-from context.session import ReplSession
 from interactive_shell.runtime.core import state as loop_state
+from interactive_shell.session import ReplSession
 from interactive_shell.ui.input_prompt import completion as prompt_completion
 from interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi

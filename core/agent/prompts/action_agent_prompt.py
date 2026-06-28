@@ -6,6 +6,7 @@ import re
 
 from core.agent.conversation_memory import format_recent_conversation
 from core.agent.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent.prompts.envelope import PromptBlock, PromptEnvelope
 from core.agent.turn_context import TurnContext
 
 _MAX_TEXT_LEN = 512
@@ -13,11 +14,33 @@ _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"
 
 
 def build_action_system_prompt(turn_ctx: TurnContext) -> str:
-    return (
-        _SYSTEM_PROMPT_BASE
-        + "\n\n"
-        + connected_integrations_block(turn_ctx)
-        + recent_conversation_block(turn_ctx)
+    return build_action_system_prompt_envelope(turn_ctx).render()
+
+
+def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope:
+    return PromptEnvelope.from_blocks(
+        (
+            PromptBlock(
+                id="action-agent-system-base",
+                kind="system",
+                content=_SYSTEM_PROMPT_BASE + "\n\n",
+                provenance="core.agent.prompts.action_agent_system_prompt",
+            ),
+            PromptBlock(
+                id="connected-integrations",
+                kind="context",
+                content=connected_integrations_block(turn_ctx),
+                provenance="core.agent.turn_context",
+            ),
+            PromptBlock(
+                id="recent-conversation",
+                kind="conversation",
+                content=recent_conversation_block(turn_ctx),
+                provenance="core.agent.turn_context",
+            ),
+        ),
+        separator="",
+        metadata={"prompt": "action_agent_system"},
     )
 
 
@@ -61,6 +84,7 @@ def sanitize_action_text(text: str) -> str:
 
 
 __all__ = [
+    "build_action_system_prompt_envelope",
     "build_action_system_prompt",
     "build_action_user_message",
     "connected_integrations_block",

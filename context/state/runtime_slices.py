@@ -65,7 +65,12 @@ class InvestigationPlanSlice(TypedDict, total=False):
 
 
 class InvestigationRuntimeSlice(TypedDict, total=False):
-    """Integrations, collected evidence, and investigate-loop metadata."""
+    """Integrations, collected incident evidence, and investigate-loop metadata.
+
+    ``context`` is a legacy flat-state key for investigation evidence envelopes
+    such as ``agent_incident``. Do not use it for REPL session state, shell
+    prompt grounding, or generic runtime request metadata.
+    """
 
     resolved_integrations: dict[str, Any]
     context: dict[str, Any]

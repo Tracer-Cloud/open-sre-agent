@@ -10,12 +10,12 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.runtime.core.state import (
     PROMPT_REFRESH_INTERVAL_S,
     ReplState,
     SpinnerState,
 )
+from interactive_shell.session import ReplSession
 from interactive_shell.ui import input_prompt
 from interactive_shell.ui.components.cpr_stdin import (
     drain_stale_cpr_bytes,

@@ -9,7 +9,6 @@ from typing import Any
 
 from rich.console import Console
 
-from context.session import ReplSession
 from interactive_shell.agent_shell.agent import answer_cli_agent
 from interactive_shell.runtime.core.token_accounting import (
     build_llm_run_info,
@@ -17,6 +16,7 @@ from interactive_shell.runtime.core.token_accounting import (
     format_token_total,
     record_llm_turn,
 )
+from interactive_shell.session import ReplSession
 from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 
 

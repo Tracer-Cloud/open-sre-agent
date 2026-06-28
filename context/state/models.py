@@ -90,7 +90,13 @@ class AgentStateModel(StrictConfigModel):
         default_factory=dict, description="Audit trail for planning step"
     )
     resolved_integrations: dict[str, Any] = Field(default_factory=dict)
-    context: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Legacy investigation evidence envelope. Not for REPL session state, "
+            "prompt grounding, or generic runtime request metadata."
+        ),
+    )
     evidence: dict[str, Any] = Field(default_factory=dict)
     correlation: dict[str, Any] = Field(default_factory=dict)
     root_cause: str = ""

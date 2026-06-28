@@ -7,11 +7,11 @@ import re
 from rich.console import Console
 from rich.markup import escape
 
-from context.prompt_history import load_command_history_entries
 from interactive_shell.command_registry.types import (
     SlashCommand,
 )
 from interactive_shell.runtime import ReplSession, TaskKind, TaskRecord, TaskStatus
+from interactive_shell.session.prompt_history import load_command_history_entries
 from interactive_shell.ui import (
     BOLD_BRAND,
     DIM,

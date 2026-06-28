@@ -6,19 +6,15 @@ import logging
 
 import pytest
 
-from context.grounding.diagnostics import (
+from interactive_shell.agent_shell.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
 )
-from context.models import CacheStats
+from interactive_shell.agent_shell.grounding.models import CacheStats
 
 
 def _sources() -> list[GroundingSource]:
     return [GroundingSource(name="unit", stats_fn=lambda: CacheStats(name="unit", hits=1))]
-
-
-def _sources() -> list[GroundingSource]:
-    return [GroundingSource(name="unit", stats_fn=lambda: {"hits": 1})]
 
 
 def test_log_skips_when_tracer_verbose_unset(

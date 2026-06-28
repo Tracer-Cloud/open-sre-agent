@@ -126,8 +126,9 @@ def make_agent_incident_state(
 ) -> AgentState:
     """Create initial state for :func:`node_agent_incident` (local agent fleet SLO breach).
 
-    The synthesizer reads ``context["agent_incident"]``. Callers should populate it
-    with at least ``agent_name`` and ``breach_reason``.
+    The synthesizer reads the legacy investigation evidence envelope at
+    ``context["agent_incident"]``. Callers should populate it with at least
+    ``agent_name`` and ``breach_reason``.
     """
     payload: dict[str, Any] = {
         "agent_name": str(agent_name).strip(),

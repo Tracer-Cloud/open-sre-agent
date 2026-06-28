@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from context.grounding import cli_reference as cli_reference_module
-from context.grounding.cli_reference import CliReference
+from interactive_shell.agent_shell.grounding import cli_reference as cli_reference_module
+from interactive_shell.agent_shell.grounding.cli_reference import CliReference
 
 
 def test_second_build_is_cache_hit() -> None:
