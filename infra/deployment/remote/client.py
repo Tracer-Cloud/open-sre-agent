@@ -82,14 +82,18 @@ def normalize_url(url: str) -> str:
     """Normalize a URL or bare IP into a full base URL.
 
     Accepts:
-        - "http://1.2.3.4:2024" -> returned as-is
-        - "1.2.3.4:2024"        -> "http://1.2.3.4:2024"
-        - "1.2.3.4"             -> "http://1.2.3.4:2024"
+        - "http://1.2.3.4:2024"         -> returned as-is
+        - "1.2.3.4:2024"                -> "http://1.2.3.4:2024"
+        - "1.2.3.4"                     -> "http://1.2.3.4:2024"
+        - "https://agent.example.com"   -> returned as-is (https implies port 443)
     """
     url = url.rstrip("/")
+    explicit_https = url.startswith("https://")
     if not url.startswith(("http://", "https://")):
         url = f"http://{url}"
-    if url.count(":") == 1 and not url.split("//")[1].count(":"):
+    # Only default the agent port for plaintext/bare hosts. An explicit https://
+    # URL implies the standard port 443, so leave it untouched.
+    if not explicit_https and url.count(":") == 1 and not url.split("//")[1].count(":"):
         url = f"{url}:{DEFAULT_PORT}"
     return url
 
