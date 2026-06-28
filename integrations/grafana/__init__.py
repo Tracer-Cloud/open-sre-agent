@@ -12,12 +12,11 @@ logger = logging.getLogger(__name__)
 
 _GRAFANA_TOKEN_KEYS = (
     "api_key",
-    "token",
     "api_token",
     "read_token",
     "service_account_token",
     "bearer_token",
-    "key",
+    "token",
     "apiKey",
     "readToken",
 )
@@ -27,8 +26,8 @@ def _resolve_grafana_api_key(credentials: dict[str, Any]) -> str:
     """Return the first non-empty Grafana token field from stored credentials."""
     for key in _GRAFANA_TOKEN_KEYS:
         value = credentials.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
+        if isinstance(value, str) and (stripped := value.strip()):
+            return stripped
     return ""
 
 
