@@ -101,7 +101,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
         crumb_model = f"{crumb_set}{CRUMB_SEP}{provider_value}"
         while True:
             reasoning_choice = repl_choose_one(
-                title="reasoning model",
+                title="Reasoning model (analysis and final answers)",
                 breadcrumb=crumb_model,
                 choices=_reasoning_model_menu_choices(provider),
             )
@@ -124,7 +124,7 @@ def _interactive_set_provider(console: Console) -> bool | None:
                 crumb_tc = f"{crumb_model}{CRUMB_SEP}toolcall"
                 while True:
                     toolcall_value = repl_choose_one(
-                        title="toolcall model",
+                        title="Toolcall model (investigation tool selection)",
                         breadcrumb=crumb_tc,
                         choices=_toolcall_model_menu_choices(provider),
                     )
@@ -184,7 +184,7 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
         )
         return False
     model_value = repl_choose_one(
-        title="toolcall model",
+        title="Toolcall model (investigation tool selection)",
         breadcrumb=f"{crumb_tc}{CRUMB_SEP}{provider_value}",
         choices=_toolcall_model_menu_choices(provider),
     )
@@ -207,13 +207,13 @@ def _interactive_set_toolcall(console: Console) -> bool | None:
 def _interactive_model_menu(session: ReplSession, console: Console) -> bool:
     while True:
         action = repl_choose_one(
-            title="Select Model and Effort",
+            title="LLM settings",
             breadcrumb=f"{_ROOT}",
             choices=[
-                ("show", "show"),
-                ("set", "set"),
-                ("restore", "restore"),
-                ("toolcall", "toolcall"),
+                ("show", "show current provider and models"),
+                ("set", "change provider and/or reasoning model"),
+                ("restore", "restore provider defaults"),
+                ("toolcall", "set toolcall model (separate from reasoning)"),
                 ("done", "done"),
             ],
         )

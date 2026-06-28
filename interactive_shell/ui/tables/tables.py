@@ -114,8 +114,8 @@ _INTEGRATION_COLS: list[ColumnDef] = [
 
 _MODEL_COLS: list[ColumnDef] = [
     ColumnDef("provider", style="bold", no_wrap=True),
-    ColumnDef("reasoning model"),
-    ColumnDef("toolcall model"),
+    ColumnDef("reasoning model", style=HIGHLIGHT),
+    ColumnDef("toolcall model", style=DIM),
 ]
 
 _TOOL_COLS: list[ColumnDef] = [
@@ -163,9 +163,15 @@ def render_models_table(console: Console, settings: Any) -> None:
         return
     provider = str(getattr(settings, "provider", "unknown"))
     reasoning_model, toolcall_model = resolve_provider_models(settings, provider)
+    repl_print(
+        console,
+        f"[{DIM}]Active provider and model tiers. "
+        "Reasoning handles analysis; toolcall drives investigation tool selection "
+        "(when the provider supports a separate tier).[/]",
+    )
     render_table(
         console,
-        "LLM connection",
+        "LLM settings",
         _MODEL_COLS,
         [(provider, reasoning_model, toolcall_model)],
     )
