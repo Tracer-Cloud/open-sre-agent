@@ -1,0 +1,75 @@
+---
+title: "Architecture Issue Tool"
+description: "Detect codebase layering violations, oversized modules, misplaced logic, and compatibility shims."
+---
+
+## Overview
+
+The `architecture_issue_tool` is a built-in static analysis capability in OpenSRE. It allows the agent to scan the repository dynamically, identifying architectural violations against codebase layering conventions, oversized files, compatibility shims, and misplaced modules.
+
+This tool is strictly read-only; it automatically suggests refactoring tasks for the codebase but does not modify any files or execute refactorings on its own.
+
+## Features
+
+The tool runs four distinct checkers over all first-party Python source files:
+
+1. **Dependency Direction Checker**: Validates that imports respect the strict package layering hierarchy (e.g., `core` should never import from `integrations`, `tools`, or `cli`).
+2. **Oversized File Checker**: Flags any Python source files exceeding a configured line limit (default: 500 lines) to suggest extracting logic.
+3. **Compatibility Shim Checker**: Identifies backward-compatible alias and forwarding modules that should be cleaned up.
+4. **Misplaced Module Checker**: Ensures that tool definitions remain in the `tools/` package, and integration-specific client/verifier logic does not bleed into the core or tools packages.
+
+---
+
+## Usage
+
+The tool is exposed to the AI agent planner under the name `find_architecture_violations`.
+
+### Input Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `repo_root` | `string` | *(auto-detected)* | Optional absolute path to the repository root. |
+| `max_file_lines` | `integer` | `500` | Line count limit used to identify oversized files. |
+
+### Example Output
+
+When invoked, the tool returns a JSON dictionary containing the list of detected `violations` and the `proposed_refactor_tasks`:
+
+```json
+{
+  "violations": [
+    {
+      "type": "dependency_direction",
+      "file_path": "tools/interactive_shell/actions/investigation.py",
+      "description": "Module 'tools.interactive_shell.actions.investigation' imports 'cli.investigation', violating the 'tools -> cli' dependency restriction.",
+      "details": {
+        "source_module": "tools.interactive_shell.actions.investigation",
+        "imported_module": "cli.investigation",
+        "line_number": 12,
+        "is_baseline_ignore": false
+      }
+    }
+  ],
+  "proposed_refactor_tasks": [
+    {
+      "title": "Fix dependency direction violation in tools/interactive_shell/actions/investigation.py",
+      "description": "Module 'tools.interactive_shell.actions.investigation' imports 'cli.investigation', which violates the dependency layering rules. Resolve this by moving shared logic to a lower layer or using dependency injection/interfaces.",
+      "target_file": "tools/interactive_shell/actions/investigation.py",
+      "priority": "high",
+      "difficulty": "medium"
+    }
+  ]
+}
+```
+
+## Layering Rules and Baselines
+
+Dependency constraints are defined in `tools/architecture_issue_tool/__init__.py`. Currently, the forbidden import direction checks include:
+
+- `core` cannot import from `integrations`, `tools`, or `cli`
+- `integrations` cannot import from `tools` or `cli`
+- `tools` cannot import from `cli`
+- `platform` cannot import from `core`, `integrations`, `tools`, or `cli`
+- `config` cannot import from any of the above, nor from `platform` or `infra`
+
+Known exceptions to these layering rules can be added to the `_BASELINE_IGNORES` set in the tool codebase to suppress them from raising high-priority refactor tasks.
