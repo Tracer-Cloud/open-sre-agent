@@ -15,6 +15,7 @@ from core.domain.diagnosis import (
     build_investigation_result,
     extract_last_assistant_text,
     result_to_state,
+    synthesize_diagnosis_text_from_evidence,
     taxonomy_categories_for_alert_source,
 )
 
@@ -26,6 +27,7 @@ def parse_diagnosis(
     evidence: dict[str, Any],
     alert_name: str = "",
     alert_source: str = "",
+    evidence_entries: list[dict[str, Any]] | None = None,
 ) -> InvestigationResult:
     """Parse the agent's final response into a structured InvestigationResult.
 
@@ -33,6 +35,12 @@ def parse_diagnosis(
     Falls back to parse_root_cause() if structured output fails.
     """
     last_text = extract_last_assistant_text(messages)
+    if not last_text:
+        last_text = synthesize_diagnosis_text_from_evidence(
+            evidence,
+            evidence_entries or [],
+            alert_name=alert_name,
+        )
     if not last_text:
         return InvestigationResult.unknown(alert_name)
 
@@ -62,6 +70,7 @@ def diagnose(state: InvestigationState) -> dict[str, Any]:
         evidence,
         str(state.get("alert_name") or ""),
         alert_source=resolve_alert_source(cast(dict[str, Any], state)),
+        evidence_entries=_list_of_dicts(state.get("evidence_entries")),
     )
     result.evidence = evidence
     result.evidence_entries = _list_of_dicts(state.get("evidence_entries"))

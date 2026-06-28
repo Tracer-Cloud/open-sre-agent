@@ -120,6 +120,40 @@ def extract_last_assistant_text(messages: list[dict[str, Any]]) -> str:
     return ""
 
 
+def synthesize_diagnosis_text_from_evidence(
+    evidence: dict[str, Any],
+    evidence_entries: list[dict[str, Any]],
+    *,
+    alert_name: str = "",
+) -> str:
+    """Build a parseable conclusion when the agent collected evidence but emitted no text."""
+    if not evidence and not evidence_entries:
+        return ""
+
+    title = alert_name.strip() or "alert"
+    lines = [
+        f"## Investigation summary for {title}",
+        "",
+        "The investigation gathered tool evidence but did not emit a final text conclusion.",
+        "Infer root cause from the collected evidence below.",
+        "",
+    ]
+    for key, value in evidence.items():
+        if value in (None, {}, [], ""):
+            continue
+        lines.append(f"- **{key}**: evidence collected")
+    for entry in evidence_entries[:8]:
+        tool = str(entry.get("tool") or entry.get("source") or "tool")
+        summary = str(
+            entry.get("summary") or entry.get("content") or entry.get("output") or ""
+        ).strip()
+        if summary:
+            lines.append(f"- **{tool}**: {summary[:400]}")
+        else:
+            lines.append(f"- **{tool}**: result recorded")
+    return "\n".join(lines)
+
+
 def taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
     source = alert_source.strip().lower()
     if source == "hermes":

@@ -13,6 +13,7 @@ from core.domain.diagnosis.result import (
     normalize_root_cause_category,
     result_to_state,
     root_cause_category_instruction_for_source,
+    synthesize_diagnosis_text_from_evidence,
     taxonomy_categories_for_alert_source,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "normalize_root_cause_category",
     "result_to_state",
     "root_cause_category_instruction_for_source",
+    "synthesize_diagnosis_text_from_evidence",
     "taxonomy_categories_for_alert_source",
 ]
