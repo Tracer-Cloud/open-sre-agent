@@ -18,7 +18,7 @@
 > non-empty = allowlist) instead of disabling slash/cli/synthetic by default, and
 > the dead `risk_level`/`tier`/`remote_connected`/`surface` fields were removed.
 > See the "Scenario schema and `available_capabilities` semantics" section of
-> `interactive_shell/harness/AGENTS.md` for the canonical contract.
+> `core/agent/AGENTS.md` for the canonical contract.
 
 ---
 

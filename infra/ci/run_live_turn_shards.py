@@ -4,7 +4,7 @@ This mirrors the CI ``turn-live`` job
 (``.github/workflows/interactive-shell-live.yml``): each shard sets
 ``TURN_SHARD_TOTAL`` / ``TURN_SHARD_INDEX`` and runs the live pytest selection
 ``-m live_llm -k "test_live_turn_execution_oracle or test_live_action_planning"``
-against ``interactive_shell/harness/tests/test_turn_scenarios.py``.
+against ``tests/core/agent/test_turn_scenarios.py``.
 
 The suite is IO-bound (it waits on real LLM API calls), so running all shards
 concurrently finishes in roughly one shard's wall time instead of the serial
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
-_TARGET = "interactive_shell/harness/tests/test_turn_scenarios.py"
+_TARGET = "tests/core/agent/test_turn_scenarios.py"
 _K_EXPR = "test_live_turn_execution_oracle or test_live_action_planning"
 _LOG_DIR = Path(".turn-shard-logs")
 

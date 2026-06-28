@@ -23,7 +23,7 @@ import pytest
 _ORCHESTRATION_PIPELINE_FILES: tuple[Path, ...] = (
     Path("tools/investigation/lifecycle.py"),
     Path("tools/investigation/capability.py"),
-    Path("tools/investigation/state_updates.py"),
+    Path("tools/investigation/state_factory.py"),
     Path("tools/investigation/streaming.py"),
 )
 # ``infra.deployment.remote`` is a transport-layer package (HTTP client, SSE parser). The

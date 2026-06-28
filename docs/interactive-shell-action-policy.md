@@ -43,7 +43,7 @@ recurring source of precedence drift.
   `description` and `input_schema`; the action agent selects it from that text
   and receives it as an AgentTool.
 - Live turn scenarios under
-  `interactive_shell/harness/tests/scenarios/` are the regression
+  `tests/core/agent/scenarios/` are the regression
   surface for action-agent behavior. Deterministic scenarios (`intent_class:
   deterministic`) assert literal command dispatch only.
 

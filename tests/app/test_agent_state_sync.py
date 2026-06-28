@@ -2,7 +2,7 @@
 
 If this test fails, a field was added/removed in one definition but not the other.
 Fix drift by updating ``AgentStateModel`` and the matching slice in
-``core/domain/state/runtime_slices.py`` or ``core/domain/state/slices.py``.
+``context/state/runtime_slices.py`` or ``context/state/slices.py``.
 """
 
 from context.state.models import AgentState, AgentStateModel

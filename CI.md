@@ -95,7 +95,7 @@ Rules with `always_escalate=True` map to `make test-cov`; all others list their
 
 Run `make test-cov` (instead of only targeted tests) when any of these are true:
 
-- Shared/core code changed (`core/domain/state/`, `core/domain/types/`, `tools/investigation/`, `tools/investigation/stages/`)
+- Shared/core code changed (`context/state/`, `core/domain/types/`, `tools/investigation/`, `tools/investigation/stages/`)
 - 3+ app areas changed in one diff
 - New files with unclear blast radius
 - Cross-cutting refactor
@@ -129,9 +129,9 @@ For fast **local** iteration only, you can narrow the live suite with `--turn-se
 
 ```bash
 # Most complex five scenarios
-uv run python -m pytest interactive_shell/harness/tests/test_turn_scenarios.py --turn-select=complex:5
+uv run python -m pytest tests/core/agent/test_turn_scenarios.py --turn-select=complex:5
 # Random ~5% sample, reproducible
-TURN_SELECT=sample:5% TURN_SELECT_SEED=7 uv run python -m pytest interactive_shell/harness/tests/test_turn_scenarios.py
+TURN_SELECT=sample:5% TURN_SELECT_SEED=7 uv run python -m pytest tests/core/agent/test_turn_scenarios.py
 ```
 
 This is an iteration aid, not a substitute for full coverage: leave it unset for the pre-push/PR validation run, and never set it in CI (the sharded `turn-live` job runs every scenario).

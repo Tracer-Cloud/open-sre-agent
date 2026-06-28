@@ -382,6 +382,6 @@ def test_turn_tests_are_fully_colocated() -> None:
         if path.name not in ALLOWED_LEGACY_TESTS
     )
     assert not unexpected, (
-        "Turn tests must be colocated under interactive_shell/harness/tests/. "
+        "Turn tests must be colocated under tests/core/agent/. "
         "No turn tests should remain under split legacy test directories: " + ", ".join(unexpected)
     )

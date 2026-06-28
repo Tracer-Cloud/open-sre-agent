@@ -1,6 +1,6 @@
 """Local-host pub/sub bus for cross-agent findings over a Unix-domain socket.
 
-Carries the same shape as ``core/domain/state/agent_state.py``'s ``evidence`` records so
+Carries the same shape as ``context/state/models.py``'s ``evidence`` records so
 findings published by one agent (claude-code, cursor, aider, ...) can later be
 lifted into ``AgentState.evidence`` without re-mapping fields. See
 ``docs/fleet.mdx`` for the on-the-wire schema.

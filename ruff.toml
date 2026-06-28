@@ -41,11 +41,6 @@ ignore = [
 # Tests: pytest fixtures/parameters often appear unused — keep ignoring those.
 # F401 is enforced so unused imports surface in lint (and CI) like in app/.
 "tests/**/*.py" = ["ARG001", "E402"]
-# Harness tests are colocated with the source package but are still tests: fake
-# callables match real signatures and leave some keyword params unused, exactly
-# like the tests/ tree above.
-"interactive_shell/harness/tests/**/*.py" = ["ARG001", "E402"]
-
 # CLI entry points
 "cli/__main__.py" = ["ARG001"]
 

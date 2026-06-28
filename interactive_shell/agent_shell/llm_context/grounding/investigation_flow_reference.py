@@ -2,22 +2,22 @@
 
 The interactive-shell assistant does not run investigations itself, but users
 ask how alerts are processed. Keep this aligned with
-``core/orchestration/pipeline.py`` and the investigation packages under
-``core/``.
+``tools/investigation/lifecycle.py`` and the shared state contracts under
+``context/state``.
 """
 
 from __future__ import annotations
 
 _INVESTIGATION_FLOW_REFERENCE = """\
 Source files:
-- core/orchestration/pipeline.py coordinates resolve → extract → investigate → deliver.
-- core/orchestration/entrypoints.py exposes run_investigation for CLI, SDK, and tests.
-- core/orchestration/node/resolve_integrations/node.py resolves integrations.
-- core/orchestration/node/extract_alert/node.py parses the raw alert into structured state.
-- core/orchestration/node/investigate/core.agent.py runs the connected investigation agent (tools + LLM).
-- core/orchestration/node/diagnose/node.py parses the agent conclusion into structured RCA fields.
-- core/orchestration/node/publish_findings/ publishes findings (terminal, Slack, GitLab writeback, etc.).
-- core/domain/state/agent_state.py defines AgentState / InvestigationState.
+- tools/investigation/lifecycle.py coordinates resolve → extract → investigate → deliver.
+- tools/investigation/capability.py exposes run_investigation for CLI, SDK, and tests.
+- tools/investigation/stages/resolve_integrations/node.py resolves integrations.
+- tools/investigation/stages/intake/node.py parses the raw alert into structured state.
+- tools/investigation/stages/gather_evidence/agent.py runs the connected investigation agent (tools + LLM).
+- tools/investigation/stages/diagnose/node.py parses the agent conclusion into structured RCA fields.
+- tools/investigation/reporting/ publishes findings (terminal, Slack, GitLab writeback, etc.).
+- context/state/models.py defines AgentState / InvestigationState.
 
 Entry:
 - ``opensre investigate`` and pasted alerts in the interactive shell invoke

@@ -4,13 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "interactive_shell/harness/**"
+      - "core/agent/**"
+      - "tests/core/agent/**"
       - "interactive_shell/runtime/**"
       - "interactive_shell/command_registry/**"
       - "core/runtime/**"
       - "tools/**"
       - "integrations/**"
-      - "interactive_shell/harness/tests/**"
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
@@ -18,13 +18,13 @@ on:
   push:
     branches: [main]
     paths:
-      - "interactive_shell/harness/**"
+      - "core/agent/**"
+      - "tests/core/agent/**"
       - "interactive_shell/runtime/**"
       - "interactive_shell/command_registry/**"
       - "core/runtime/**"
       - "tools/**"
       - "integrations/**"
-      - "interactive_shell/harness/tests/**"
       - "pytest.ini"
       - "pyproject.toml"
       - "uv.lock"
@@ -75,7 +75,7 @@ jobs:
       - name: Deterministic turn + fixture integrity
         run: >-
           uv run python -m pytest -n auto -v
-          interactive_shell/harness/tests/
+          tests/core/agent/
           -m "not live_llm"
 
   turn-live:
@@ -156,5 +156,5 @@ jobs:
         run: >-
           uv run python -m pytest -n auto -v
           -m live_llm
-          interactive_shell/harness/tests/test_turn_scenarios.py
+          tests/core/agent/test_turn_scenarios.py
           -k "test_live_turn_execution_oracle or test_live_action_planning"

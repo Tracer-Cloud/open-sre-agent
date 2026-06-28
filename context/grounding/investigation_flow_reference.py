@@ -2,8 +2,8 @@
 
 The interactive-shell assistant does not run investigations itself, but users
 ask how alerts are processed. Keep this aligned with
-``tools/investigation/lifecycle.py`` and the investigation packages under
-``core/``.
+``tools/investigation/lifecycle.py`` and the shared state contracts under
+``context/state``.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ Source files:
 - tools/investigation/stages/gather_evidence/agent.py runs the connected investigation agent (tools + LLM).
 - tools/investigation/stages/diagnose/node.py parses the agent conclusion into structured RCA fields.
 - tools/investigation/reporting/ publishes findings (terminal, Slack, GitLab writeback, etc.).
-- core/domain/state/agent_state.py defines AgentState / InvestigationState.
+- context/state/models.py defines AgentState / InvestigationState.
 
 Entry:
 - ``opensre investigate`` and pasted alerts in the interactive shell invoke

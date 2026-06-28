@@ -51,7 +51,7 @@ from interactive_shell.agent_shell.llm_context.grounding.grounding_diagnostics i
 )
 
 # Repo root is five levels above this file
-# (.../interactive_shell/harness/llm_context/grounding/agents_md_reference.py -> repo root).
+# (.../interactive_shell/agent_shell/llm_context/grounding/agents_md_reference.py -> repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 _AGENTS_MD_FILENAME = "AGENTS.md"

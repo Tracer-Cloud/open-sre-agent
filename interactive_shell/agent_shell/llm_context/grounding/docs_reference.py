@@ -52,7 +52,7 @@ from interactive_shell.agent_shell.llm_context.grounding.grounding_diagnostics i
 )
 
 # Docs live at the repository root, five levels above this file
-# (.../interactive_shell/harness/llm_context/grounding/docs_reference.py -> repo root).
+# (.../interactive_shell/agent_shell/llm_context/grounding/docs_reference.py -> repo root).
 _DOCS_ROOT = Path(__file__).resolve().parents[4] / "docs"
 
 # Extensions we read for grounding. Mintlify content is .mdx; .md is included

@@ -142,7 +142,7 @@ owning area rather than adding more logic to the caller.
   tool, the `UNHANDLED:` convention, and the "I couldn't safely decide actions"
   message because they caused frequent false denials (e.g. a conversational
   question that embedded a quoted, list-style directive) with no safety upside.
-  Details and rationale live in `interactive_shell/harness/AGENTS.md`. If
+  Details and rationale live in `core/agent/AGENTS.md`. If
   mutating actions are ever introduced, gate them with the
   execution-stage confirmation policy (`tools/shared/execution_policy.py`), not a
   planner-stage denial.

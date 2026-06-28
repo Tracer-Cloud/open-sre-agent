@@ -167,17 +167,30 @@ systemd
 tailer
 traceback
 # Interactive-shell routing / agent architecture terms
+argv
 dedupe
+deque
+fd
+Flatpak
 hardcoding
+inode
+keypress
+liveness
+opencode
 postprocessing
 prefills
+psutil
+ritmo
 runtime
 sandboxing
+SLOs
 stdin
 validator
+vendored
 docstring
 misclassifications
 pid
+yaml
 # GitHub / Sentry MCP integration docs terms
 OAuth
 args
