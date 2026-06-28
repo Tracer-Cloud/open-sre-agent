@@ -25,7 +25,6 @@ from cli.ui.renderer.constants import (
     _WHITE,
     _render_source,
 )
-from rich.text import Text
 from core.domain.stream import StreamEvent
 from interactive_shell.ui.output import (
     ProgressTracker,
@@ -159,9 +158,8 @@ class _DiagnoseStreamRenderer:
                     preview = "…" + preview[-77:]
                 self._tracker.update_subtext(_DIAGNOSE_NODE, preview, duration=30.0)
             return
-        # Throttle Markdown re-parse to once per refresh window; the final
-        # flush in :meth:`finish` guarantees the latest buffer is rendered
-        # before the Live region closes.
+        # Throttle Live updates; final Markdown renders once in finish().
+        now = time.monotonic()
         if now - self._last_render >= _DIAGNOSE_RENDER_INTERVAL_S:
             # Plain text during Live avoids Markdown re-layout flicker/duplication (#1782).
             self._live.update(Text("".join(self.buffer)))
