@@ -16,7 +16,7 @@ from context.session import ReplSession
 
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
-from core.agent.results import (
+from core.agent.turn_results import (
     ShellTurnResult,
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,

@@ -25,8 +25,7 @@ from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent.action_plan import parse_action_plan
-from core.agent.context import TurnContext
-from core.agent.conversation_history import MAX_CONVERSATION_MESSAGES, format_recent_conversation
+from core.agent.conversation_memory import MAX_CONVERSATION_MESSAGES, format_recent_conversation
 from core.agent.ports import (
     ActionDispatch,
     AnswerAgent,
@@ -42,7 +41,8 @@ from core.agent.ports import (
     TurnAccounting,
 )
 from core.agent.prompts import _build_observation_block, _build_system_prompt
-from core.agent.results import ShellTurnResult, ToolCallingTurnResult
+from core.agent.turn_context import TurnContext
+from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
 from integrations.llm_cli.errors import CLITimeoutError
 
 _logger = logging.getLogger(__name__)
@@ -261,7 +261,7 @@ def _stream_cli_agent_response(
         if error_reporter is not None:
             error_reporter.report(
                 exc,
-                context="core.agent.engine.stream",
+                context="core.agent.turn_orchestrator.stream",
                 expected=isinstance(exc, CLITimeoutError),
             )
         output.render_error(f"assistant failed: {exc}")

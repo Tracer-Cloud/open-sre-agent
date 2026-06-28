@@ -1,7 +1,7 @@
 """Live tool-gathering pass for the interactive-shell assistant (terminal adapter).
 
 The bounded think -> call-tools -> observe loop lives in the decoupled
-:func:`core.agent.gather.gather_tool_evidence`. This module is the terminal adapter:
+:func:`core.agent.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
 it renders each gathering step to the console and persists the gathered tool
 calls into the shell's session storage, then hands the collected observation back
 to :func:`interactive_shell.agent_shell.core.agent.answer_cli_agent`.
@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from context.session import ReplSession
-from core.agent import gather as agent_gather
+from core.agent import evidence_agent
 from interactive_shell.ui import DIM
 from interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -103,7 +103,7 @@ def _format_gathering_progress_line(
 
 def _resolve_gather_integrations(session: ReplSession, message: str) -> dict[str, Any]:
     """Resolve gather integrations through the decoupled agent helper."""
-    return agent_gather._resolve_gather_integrations(session, message)  # noqa: SLF001
+    return evidence_agent._resolve_gather_integrations(session, message)  # noqa: SLF001
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -171,7 +171,7 @@ def gather_tool_evidence(
     def persist(executed: list[tuple[Any, Any]]) -> None:
         _persist_tool_calls(session, executed)
 
-    return agent_gather.gather_tool_evidence(
+    return evidence_agent.gather_tool_evidence(
         message,
         session,
         on_progress=on_progress,

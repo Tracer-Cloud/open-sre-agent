@@ -1,10 +1,10 @@
 # agent/ package rules
 
-`agent/` owns the **decoupled agentic turn engine**: the surface-agnostic
+`agent/` owns the **decoupled agent subsystem**: the surface-agnostic
 think -> call-tools -> observe loop and the turn harness (action tool-calling
 turn, three-path routing, conversational answer, evidence gather), extracted out
 of `interactive_shell` so the same engine can run the interactive terminal and
-be invoked headlessly via `agent.api`.
+be invoked headlessly via `agent.headless_agent`.
 
 ## Hard boundary (enforced by tests)
 
@@ -23,19 +23,20 @@ be invoked headlessly via `agent.api`.
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, action dispatch, telemetry,
   error reporter, evidence gatherer).
-- `context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
+- `agent.py` — public semantic façade for the main agent concepts.
+- `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
   object satisfying `TurnContextSource`, not `ReplSession` directly).
-- `conversation_history.py` — recent-conversation rendering shared by prompts.
+- `conversation_memory.py` — recent-conversation rendering shared by prompts.
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
   string assembly; grounding text is supplied via `PromptContextProvider`).
-- `results.py` — neutral turn-result models.
-- `driver.py` — `run_agent_turn`: one action tool-calling turn over the ports,
+- `turn_results.py` — neutral turn-result models.
+- `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports,
   wrapping `core.runtime.agent.Agent`.
-- `engine.py` — `run_turn`: the three-path routing (summarize-observation /
+- `turn_orchestrator.py` — `run_turn`: the three-path routing (summarize-observation /
   handled / gather+answer) and the conversational answer.
-- `gather.py` — bounded evidence-gather loop over the `core` investigation tools.
+- `evidence_agent.py` — bounded evidence-gather loop over the `core` investigation tools.
 - `headless/` — minimal in-memory port adapters for API / test execution.
-- `api.py` — the headless programmatic entry point.
+- `headless_agent.py` — the headless programmatic entry point.
 
 ## Keep the loop primitive in core
 

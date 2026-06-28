@@ -1,6 +1,6 @@
-"""Headless programmatic entry point for the agentic turn engine.
+"""Headless programmatic entry point for the agent subsystem.
 
-This is the proof that the engine is decoupled from any terminal: a caller (an
+This is the proof that the agent is decoupled from any terminal: a caller (an
 HTTP handler, a script, a test) can run a full turn with only a message. All the
 surface concerns are satisfied by the in-memory adapters in
 :mod:`core.agent.headless`, but every dependency is injectable so a real surface can
@@ -8,7 +8,7 @@ override any of them.
 
 Example::
 
-    from core.agent.api import run_agent_turn
+    from core.agent.headless_agent import run_agent_turn
     from core.agent.headless import InMemorySessionStore, StaticReasoningClientProvider
 
     class _Echo:
@@ -24,9 +24,8 @@ Example::
 
 from __future__ import annotations
 
-from core.agent import driver, engine
-from core.agent import gather as gather_mod
-from core.agent.context import TurnContext
+from core.agent.action_agent import run_agent_turn as run_action_agent_turn
+from core.agent.evidence_agent import gather_tool_evidence
 from core.agent.headless import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -50,7 +49,9 @@ from core.agent.ports import (
     ToolProvider,
     TurnAccounting,
 )
-from core.agent.results import ShellTurnResult, ToolCallingTurnResult
+from core.agent.turn_context import TurnContext
+from core.agent.turn_orchestrator import answer_cli_agent, run_turn
+from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 
 def run_agent_turn(
@@ -95,7 +96,7 @@ def run_agent_turn(
         is_tty: bool | None = None,
         turn_ctx: TurnContext | None = None,
     ) -> ToolCallingTurnResult:
-        return driver.run_agent_turn(
+        return run_action_agent_turn(
             text,
             store,
             output=output,
@@ -107,7 +108,7 @@ def run_agent_turn(
         )
 
     def answer(text: str, **kwargs: object) -> object:
-        return engine.answer_cli_agent(
+        return answer_cli_agent(
             text,
             store,
             output,
@@ -122,14 +123,14 @@ def run_agent_turn(
     def gather(text: str, *, is_tty: bool | None = None) -> str | None:
         if not gather_enabled:
             return None
-        return gather_mod.gather_tool_evidence(
+        return gather_tool_evidence(
             text,
             store,
             error_reporter=error_reporter,
             is_tty=is_tty,
         )
 
-    return engine.run_turn(
+    return run_turn(
         message,
         store,
         execute_actions=execute_actions,

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 
-from core.agent.context import TurnContext
-from core.agent.conversation_history import format_recent_conversation
-from core.agent.prompts.system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent.conversation_memory import format_recent_conversation
+from core.agent.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent.turn_context import TurnContext
 
 _MAX_TEXT_LEN = 512
 _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"

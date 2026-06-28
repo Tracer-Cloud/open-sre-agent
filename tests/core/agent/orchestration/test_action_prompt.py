@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from core.agent.context import TurnContext
-from core.agent.conversation_history import NO_HISTORY_PLACEHOLDER
+from core.agent.conversation_memory import NO_HISTORY_PLACEHOLDER
 from core.agent.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     connected_integrations_block,
     recent_conversation_block,
 )
+from core.agent.turn_context import TurnContext
 
 
 def _ctx(

@@ -19,7 +19,7 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from core.agent.conversation_history import (
+from core.agent.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
@@ -160,7 +160,9 @@ def gather_tool_evidence(
             # Tool-calling client unavailable (e.g. unsupported provider): fall
             # back to the text-only assistant rather than failing the turn.
             if error_reporter is not None:
-                error_reporter.report(exc, context="core.agent.gather.client", expected=True)
+                error_reporter.report(
+                    exc, context="core.agent.evidence_agent.client", expected=True
+                )
             return None
 
         def on_runtime_event(event: RuntimeEvent) -> None:
@@ -184,7 +186,7 @@ def gather_tool_evidence(
         return None
     except Exception as exc:
         if error_reporter is not None:
-            error_reporter.report(exc, context="core.agent.gather")
+            error_reporter.report(exc, context="core.agent.evidence_agent")
         return None
 
     if not result.executed:

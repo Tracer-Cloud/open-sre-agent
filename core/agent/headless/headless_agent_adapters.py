@@ -17,7 +17,7 @@ from core.agent.ports import (
     ConfirmFn,
     ToolEventObserver,
 )
-from core.agent.results import ShellTurnResult, ToolCallingTurnResult
+from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 
 @dataclass

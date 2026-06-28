@@ -4,7 +4,7 @@ Runs one turn through the shared :class:`core.runtime.agent.Agent` tool-calling
 loop: it assembles the available agent tools (via a :class:`~core.agent.ports.ToolProvider`),
 drives the loop while a tool-event observer streams each tool call to the
 surface, and summarizes the executed tool calls into a facts-only
-:class:`~core.agent.results.ToolCallingTurnResult`.
+:class:`~core.agent.turn_results.ToolCallingTurnResult`.
 
 Accounting/analytics for the turn are the caller's concern (see
 :class:`core.agent.ports.TurnAccounting`); this module emits none itself.
@@ -18,11 +18,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent.context import TurnContext
-from core.agent.conversation_history import MAX_CONVERSATION_MESSAGES
+from core.agent.conversation_memory import MAX_CONVERSATION_MESSAGES
 from core.agent.ports import ConfirmFn, ErrorReporter, OutputSink, SessionStore, ToolProvider
 from core.agent.prompts import build_action_system_prompt, build_action_user_message
-from core.agent.results import ToolCallingTurnResult
+from core.agent.turn_context import TurnContext
+from core.agent.turn_results import ToolCallingTurnResult
 from core.runtime.agent import Agent
 from core.runtime.events import RuntimeEvent, legacy_callback_payload
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall

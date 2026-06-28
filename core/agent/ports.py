@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent.results import ShellTurnResult, ToolCallingTurnResult
+from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 if TYPE_CHECKING:
     pass
@@ -59,7 +59,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent.context.TurnContextSource) ---
+    # --- turn-context snapshot fields (see core.agent.turn_context.TurnContextSource) ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 

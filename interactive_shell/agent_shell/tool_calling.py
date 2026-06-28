@@ -1,6 +1,6 @@
 """Interactive-shell entry to the action tool-calling turn.
 
-The loop body itself is the decoupled :func:`core.agent.driver.run_agent_turn`; this
+The loop body itself is the decoupled :func:`core.agent.action_agent.run_agent_turn`; this
 module is the thin terminal adapter that builds the shell ports (Rich console
 output sink, registry-backed tool provider, error reporter) and delegates to it.
 ``_default_llm_factory`` is kept here as the patch point the harness tests use.
@@ -14,9 +14,9 @@ from typing import Any
 from rich.console import Console
 
 from context.session import ReplSession
-from core.agent.context import TurnContext
-from core.agent.driver import ToolCallingDeps, run_agent_turn
-from core.agent.results import ToolCallingTurnResult
+from core.agent.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent.turn_context import TurnContext
+from core.agent.turn_results import ToolCallingTurnResult
 from interactive_shell.agent_shell.adapters import (
     ShellErrorReporter,
     ShellOutputSink,

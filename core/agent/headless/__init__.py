@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent.headless.adapters import (
+from core.agent.headless.headless_agent_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
     InMemorySessionStore,

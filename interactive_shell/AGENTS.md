@@ -28,7 +28,7 @@ should be predictable, interruptible, explainable, and safe by default.
 | `harness/response.py` | final response generation (`generate_response`), action-plan parsing, and capability validation | direct mutation of runtime state outside the subprocess runner |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
-| `harness/llm_context/` | LLM prompt + grounding context: action/assistant system prompts, the shared recent-conversation helper (`conversation_history.py`), the session-scoped grounding caches (`grounding/` CLI/docs/AGENTS.md, aggregated by `GroundingContext`), and prompt-toolkit input-history persistence + secret redaction (`prompt_history/`) | session persistence (owned by `session/`) |
+| `harness/llm_context/` | LLM prompt + grounding context: action/assistant system prompts, the shared recent-conversation helper (`conversation_memory.py`), the session-scoped grounding caches (`grounding/` CLI/docs/AGENTS.md, aggregated by `GroundingContext`), and prompt-toolkit input-history persistence + secret redaction (`prompt_history/`) | session persistence (owned by `session/`) |
 | `ui/` | Rich/prompt-toolkit rendering, theme, menus, streaming output, and domain views such as `incoming_alerts.py` (receiver/queue/listener lifecycle lives in `core.domain.alerts.inbox`) | business logic or network calls |
 
 When a change crosses these boundaries, prefer extracting a small helper in the

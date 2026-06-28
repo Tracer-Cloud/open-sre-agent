@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 
 _COMPLEXITY_LIMITS: dict[str, int] = {
-    "core/agent/prompts/action.py": 7,
+    "core/agent/prompts/action_agent_prompt.py": 7,
 }
 
 

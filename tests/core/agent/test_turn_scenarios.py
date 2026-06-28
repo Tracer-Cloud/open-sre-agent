@@ -420,7 +420,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     from core.runtime.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
-    from core.agent.context import TurnContext
+    from core.agent.turn_context import TurnContext
 
     result = Agent(
         llm=llm,
