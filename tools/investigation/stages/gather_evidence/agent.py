@@ -10,6 +10,7 @@ from context.state import InvestigationState
 from context.state.evidence import EvidenceEntry
 from core.runtime import (
     LoopEventCallback,
+    RuntimeEventCallback,
     build_assistant_message,
     build_synthetic_assistant_tool_call_message,
     build_tool_result_messages,
@@ -113,9 +114,11 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         self,
         state: InvestigationState,
         on_event: LoopEventCallback | None = None,
+        on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
         """Run the full investigation. Returns a dict of state updates."""
-        self._on_event = on_event
+        self._on_legacy_event = on_event
+        self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 

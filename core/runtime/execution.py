@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -23,10 +23,11 @@ def execute_tools(
     tool_calls: list[ToolCall],
     tools: Sequence[RuntimeTool],
     resolved_integrations: dict[str, Any],
+    *,
+    on_tool_update: Callable[[ToolCall, Any], None] | None = None,
 ) -> list[Any]:
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
-    agent_tool_context = AgentToolContext(resolved_integrations=resolved_integrations)
 
     def _call(tc: ToolCall) -> Any:
         tool = tool_map.get(tc.name)
@@ -37,6 +38,15 @@ def execute_tools(
             if validation_error:
                 return {"error": validation_error}
             if isinstance(tool, AgentTool):
+
+                def _on_update(partial_result: Any) -> None:
+                    if on_tool_update is not None:
+                        on_tool_update(tc, partial_result)
+
+                agent_tool_context = AgentToolContext(
+                    resolved_integrations=resolved_integrations,
+                    on_update=_on_update if on_tool_update is not None else None,
+                )
                 return tool.execute(tc.input, agent_tool_context)
             injected = tool.extract_params(tool_sources)
             kwargs = {**injected, **tc.input}

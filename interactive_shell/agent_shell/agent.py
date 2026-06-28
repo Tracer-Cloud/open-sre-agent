@@ -445,8 +445,33 @@ class AgentTurnRunner:
     def spinner(self) -> SpinnerState:
         return self.runtime.spinner
 
+    def steer(self, text: str) -> None:
+        """Queue text intended to steer the active or next shell turn."""
+        self._queue_shell_turn(text)
+
+    def follow_up(self, text: str) -> None:
+        """Queue a shell follow-up to run after the current submitted turn."""
+        self._queue_shell_turn(text)
+
+    def followUp(self, text: str) -> None:  # noqa: N802 - Pi-compatible alias
+        """CamelCase alias matching Pi's higher-level harness API."""
+        self.follow_up(text)
+
+    def next_turn(self, text: str) -> None:
+        """Queue text for the next prompt turn."""
+        self._queue_shell_turn(text)
+
+    def nextTurn(self, text: str) -> None:  # noqa: N802 - Pi-compatible alias
+        """CamelCase alias matching Pi's higher-level harness API."""
+        self.next_turn(text)
+
     async def run_agent_turn(self, text: str) -> None:
         await run_agent_turn(self.runtime, text)
+
+    def _queue_shell_turn(self, text: str) -> None:
+        stripped = text.strip()
+        if stripped:
+            self.runtime.state.queue.put_nowait(stripped)
 
 
 async def run_input_loop(

@@ -143,6 +143,7 @@ def gather_tool_evidence(
     """
     try:
         from core.runtime.agent import Agent
+        from core.runtime.events import RuntimeEvent, legacy_callback_payload
         from core.runtime.llm.agent_llm_client import get_agent_llm
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
@@ -162,13 +163,20 @@ def gather_tool_evidence(
                 error_reporter.report(exc, context="core.agent.gather.client", expected=True)
             return None
 
+        def on_runtime_event(event: RuntimeEvent) -> None:
+            if on_progress is None:
+                return
+            legacy = legacy_callback_payload(event)
+            if legacy is not None:
+                on_progress(*legacy)
+
         result = Agent(
             llm=llm,
             system=_build_gather_system_prompt(session),
             tools=tools,
             resolved_integrations=resolved,
             max_iterations=_MAX_GATHER_ITERATIONS,
-            on_event=on_progress or (lambda _kind, _data: None),
+            on_runtime_event=on_runtime_event,
         ).run([{"role": "user", "content": _build_gather_user_message(session, message)}])
     except KeyboardInterrupt:
         if on_progress is not None:

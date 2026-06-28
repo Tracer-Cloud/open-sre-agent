@@ -24,6 +24,7 @@ from core.agent.ports import ConfirmFn, ErrorReporter, OutputSink, SessionStore,
 from core.agent.prompts import build_action_system_prompt, build_action_user_message
 from core.agent.results import ToolCallingTurnResult
 from core.runtime.agent import Agent
+from core.runtime.events import RuntimeEvent, legacy_callback_payload
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
@@ -189,13 +190,19 @@ def run_agent_turn(
         system_prompt = build_action_system_prompt(effective_ctx)
 
     try:
+
+        def on_runtime_event(event: RuntimeEvent) -> None:
+            legacy = legacy_callback_payload(event)
+            if legacy is not None:
+                observer(*legacy)
+
         result = Agent(
             llm=llm_factory(),
             system=system_prompt,
             tools=agent_tools,
             resolved_integrations={},
             max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
-            on_event=observer,
+            on_runtime_event=on_runtime_event,
         ).run([{"role": "user", "content": user_message}])
     except Exception as exc:
         if is_context_length_overflow(str(exc)):

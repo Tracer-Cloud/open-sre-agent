@@ -7,6 +7,11 @@ from typing import Any, cast
 import pytest
 
 from core.runtime.agent import Agent, AgentRunResult
+from core.runtime.events import (
+    MessageUpdateEvent,
+    RuntimeEvent,
+    ToolExecutionUpdateEvent,
+)
 from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from core.runtime.messages import (
     ToolResultRuntimeMessage,
@@ -14,6 +19,7 @@ from core.runtime.messages import (
     app_runtime_message,
     user_runtime_message,
 )
+from core.runtime.types import AgentTool, AgentToolContext
 from tools.registered_tool import RegisteredTool
 
 
@@ -102,7 +108,11 @@ def _tool_call_response(call_id: str, name: str) -> AgentLLMResponse:
 
 
 def _agent(
-    llm: FakeLLM, tools: list[RegisteredTool], max_iterations: int = 5, on_event: Any = None
+    llm: FakeLLM,
+    tools: list[Any],
+    max_iterations: int = 5,
+    on_event: Any = None,
+    on_runtime_event: Any = None,
 ) -> Agent:
     return Agent(
         llm=llm,
@@ -111,6 +121,7 @@ def _agent(
         resolved_integrations={},
         max_iterations=max_iterations,
         on_event=on_event,
+        on_runtime_event=on_runtime_event,
     )
 
 
@@ -173,7 +184,39 @@ def test_agent_transcript_can_keep_app_messages_out_of_provider_context() -> Non
     assert len(result.messages) == 4
 
 
-def test_on_event_emits_kinds_in_order() -> None:
+def test_runtime_events_emit_typed_lifecycle_and_streaming_order() -> None:
+    llm = FakeLLM(
+        iter(
+            [
+                _tool_call_response("c1", "query_logs"),
+                _text_response("final"),
+            ]
+        )
+    )
+    events: list[RuntimeEvent] = []
+
+    _agent(llm, _tools(FakeTool("query_logs")), on_runtime_event=events.append).run(
+        [{"role": "user", "content": "hello"}]
+    )
+
+    assert [event.type for event in events] == [
+        "agent_start",
+        "turn_start",
+        "message_start",
+        "tool_execution_start",
+        "tool_execution_end",
+        "turn_end",
+        "turn_start",
+        "message_start",
+        "message_update",
+        "turn_end",
+        "agent_end",
+    ]
+    message_updates = [event for event in events if isinstance(event, MessageUpdateEvent)]
+    assert [event.delta for event in message_updates] == ["final"]
+
+
+def test_legacy_on_event_bridge_emits_kinds_in_order() -> None:
     llm = FakeLLM(
         iter(
             [
@@ -191,7 +234,14 @@ def test_on_event_emits_kinds_in_order() -> None:
         [{"role": "user", "content": "hello"}]
     )
 
-    assert events == ["llm_start", "tool_start", "tool_end", "llm_start"]
+    assert events == [
+        "agent_start",
+        "llm_start",
+        "tool_start",
+        "tool_end",
+        "llm_start",
+        "agent_end",
+    ]
 
 
 def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixture) -> None:
@@ -206,7 +256,64 @@ def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixtu
         )
 
     assert result.final_text == "final"
-    assert "[runtime] on_event(llm_start) raised; ignoring" in caplog.text
+    assert "[runtime] on_event(agent_start) raised; ignoring" in caplog.text
+
+
+def test_steer_injects_message_before_next_llm_turn() -> None:
+    llm = FakeLLM(iter([_text_response("final")]))
+    agent = _agent(llm, _tools(FakeTool("query_logs")))
+
+    agent.steer("look at the newest deploy first")
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "final"
+    assert [message["content"] for message in llm.seen_messages[0]] == [
+        "hello",
+        "look at the newest deploy first",
+    ]
+
+
+def test_follow_up_runs_after_an_accepted_final_answer() -> None:
+    llm = FakeLLM(iter([_text_response("first answer"), _text_response("follow-up answer")]))
+    agent = _agent(llm, _tools(FakeTool("query_logs")), max_iterations=3)
+
+    agent.follow_up("now summarize the remediation")
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "follow-up answer"
+    assert llm.invocations == 2
+    assert [message["content"] for message in llm.seen_messages[1]] == [
+        "hello",
+        "first answer",
+        "now summarize the remediation",
+    ]
+
+
+def test_agent_tool_context_update_emits_tool_execution_update() -> None:
+    def execute(_payload: dict[str, Any], context: AgentToolContext) -> dict[str, Any]:
+        assert context.on_update is not None
+        context.on_update({"status": "halfway"})
+        return {"ok": True}
+
+    tool = AgentTool(
+        name="agent_tool",
+        description="test tool",
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        execute=execute,
+    )
+    llm = FakeLLM(iter([_tool_call_response("c1", "agent_tool"), _text_response("done")]))
+    events: list[RuntimeEvent] = []
+
+    result = _agent(llm, [tool], on_runtime_event=events.append).run(
+        [{"role": "user", "content": "hello"}]
+    )
+
+    assert result.final_text == "done"
+    updates = [event for event in events if isinstance(event, ToolExecutionUpdateEvent)]
+    assert len(updates) == 1
+    assert updates[0].tool_call_id == "c1"
+    assert updates[0].tool_name == "agent_tool"
+    assert updates[0].partial_result == {"status": "halfway"}
 
 
 def test_rejecting_conclusion_without_nudge_raises() -> None:

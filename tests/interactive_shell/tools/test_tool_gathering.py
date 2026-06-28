@@ -209,23 +209,23 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
     def _fake_run(
         kwargs: dict[str, Any], _initial_messages: list[dict[str, Any]]
     ) -> runtime_module.ToolLoopResult:
-        on_event = kwargs.get("on_event")
-        if on_event is not None:
-            on_event(
-                "tool_start",
-                {
-                    "id": "t1",
-                    "name": "query_grafana_metrics",
-                    "input": {"metric_name": "pipeline_runs_total"},
-                },
+        on_runtime_event = kwargs.get("on_runtime_event")
+        if on_runtime_event is not None:
+            on_runtime_event(
+                runtime_module.ToolExecutionStartEvent(
+                    tool_call_id="t1",
+                    tool_name="query_grafana_metrics",
+                    args={"metric_name": "pipeline_runs_total"},
+                    iteration=0,
+                )
             )
-            on_event(
-                "tool_start",
-                {
-                    "id": "t2",
-                    "name": "query_grafana_metrics",
-                    "input": {"metric_name": "http_errors_total"},
-                },
+            on_runtime_event(
+                runtime_module.ToolExecutionStartEvent(
+                    tool_call_id="t2",
+                    tool_name="query_grafana_metrics",
+                    args={"metric_name": "http_errors_total"},
+                    iteration=0,
+                )
             )
         return runtime_module.ToolLoopResult(messages=[], final_text="", executed=[])
 

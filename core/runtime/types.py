@@ -54,15 +54,19 @@ def _value_matches_schema(value: Any, schema: dict[str, Any]) -> bool:
     return True
 
 
+# CodeQL currently misses PEP 695 ``type`` aliases in ``__all__`` export checks.
+ToolUpdateCallback: TypeAlias = Callable[[Any], None]  # noqa: UP040
+
+
 @dataclass(frozen=True)
 class AgentToolContext:
     """Resources available while a first-class agent tool executes."""
 
     resolved_integrations: dict[str, Any]
     resources: dict[str, Any] = field(default_factory=dict)
+    on_update: ToolUpdateCallback | None = None
 
 
-# CodeQL currently misses PEP 695 ``type`` aliases in ``__all__`` export checks.
 AgentToolExecutor: TypeAlias = Callable[[dict[str, Any], AgentToolContext], Any]  # noqa: UP040
 
 
@@ -121,4 +125,5 @@ __all__ = [
     "AgentToolContext",
     "AgentToolExecutor",
     "RuntimeTool",
+    "ToolUpdateCallback",
 ]

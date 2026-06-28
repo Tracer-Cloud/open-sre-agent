@@ -8,7 +8,8 @@ from typing import Any
 from rich.console import Console
 
 from context.session import ReplSession
-from interactive_shell.agent_shell.agent import handle_message_with_agent
+from interactive_shell.agent_shell.agent import AgentTurnRunner, handle_message_with_agent
+from interactive_shell.runtime.core.state import ReplState, SpinnerState
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -91,3 +92,32 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
     assert result.final_intent == "cli_agent_handled"
     assert recorder.responses == [("command output", None)]
     assert recorder.flush_count == 1
+
+
+def test_agent_turn_runner_exposes_pi_style_queue_methods() -> None:
+    state = ReplState()
+    runner = AgentTurnRunner(
+        session=ReplSession(),
+        state=state,
+        spinner=SpinnerState(),
+        invalidate_prompt=lambda: None,
+    )
+
+    runner.steer(" steer the current work ")
+    runner.follow_up(" follow up ")
+    runner.next_turn(" next turn ")
+    runner.followUp(" camel follow ")
+    runner.nextTurn(" camel next ")
+
+    queued: list[str] = []
+    while not state.queue.empty():
+        queued.append(state.queue.get_nowait())
+        state.queue.task_done()
+
+    assert queued == [
+        "steer the current work",
+        "follow up",
+        "next turn",
+        "camel follow",
+        "camel next",
+    ]
