@@ -177,15 +177,12 @@ def resolve_agent_arg(arg: str, registry: AgentRegistry | None = None) -> int:
     if not token:
         raise AgentResolveError("invalid pid or unknown agent name")
 
-    parsed_pid: int | None = None
     try:
         candidate = int(token)
     except ValueError:
         candidate = -1
     if candidate > 0:
-        parsed_pid = candidate
-        if reg.get(candidate) is not None:
-            return candidate
+        return candidate
 
     name_matches = [record for record in reg.list() if record.name == token]
     if len(name_matches) == 1:
@@ -195,8 +192,5 @@ def resolve_agent_arg(arg: str, registry: AgentRegistry | None = None) -> int:
         raise AgentResolveError(
             f"ambiguous: {len(name_matches)} registered agents named {token} (pids: {pids})"
         )
-
-    if parsed_pid is not None:
-        return parsed_pid
 
     raise AgentResolveError(f"invalid pid or unknown agent name: {token}")
