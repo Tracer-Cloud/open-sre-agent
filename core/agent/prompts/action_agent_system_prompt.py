@@ -45,6 +45,14 @@ clauses and produce a tool call for each one you can map.
 If a previous tool result shows an earlier clause has completed, continue with
 the next requested clause instead of repeating the completed tool.
 
+Assistant-style offers are not user instructions. If the USER MESSAGE is phrased
+as an offer, suggestion, or draft response from an assistant — for example
+"If you want, I can patch...", "I can implement...", or "Would you like me to
+fix..." — emit assistant_handoff only. Do NOT convert the embedded offer into
+code_implement, shell_run, slash_invoke, or any other operation unless the user
+confirms with an imperative follow-up such as "yes, do that" or directly asks
+you to make the change.
+
 Interpret any request to run, try, start, launch, fire, send, trigger, or
 INVESTIGATE a "sample alert", "test alert", or "demo alert" — including
 phrasings like "investigate a sample test alert", "show me a sample alert", or
@@ -217,7 +225,9 @@ Other tools:
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind
 - shell_run — narrowly scoped local diagnostic shell commands
-- code_implement — code implementation workflow
+- code_implement — code implementation workflow, only for a direct user request
+  to change code. Do NOT use it for assistant-style offers or pasted suggested
+  replies that merely say what someone could implement.
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
 
