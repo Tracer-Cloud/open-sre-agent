@@ -19,6 +19,7 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 )
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from interactive_shell.command_registry.repl_data import load_llm_settings
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
 from interactive_shell.ui import (
@@ -27,6 +28,7 @@ from interactive_shell.ui import (
 )
 from interactive_shell.ui.action_rendering import ActionRenderObserver
 from interactive_shell.ui.streaming import render_response_header
+from interactive_shell.ui.tables.provider import resolve_provider_models
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.contracts import ToolContext
 from tools.interactive_shell.registry import REGISTRY
@@ -109,9 +111,24 @@ class ShellPromptContextProvider:
         return build_investigation_flow_reference_text()
 
     def environment_block(self) -> str:
+        settings = load_llm_settings()
+        llm_provider: str | None = None
+        reasoning_model: str | None = None
+        toolcall_model: str | None = None
+        llm_settings_available = settings is not None
+        if settings is not None:
+            llm_provider = str(getattr(settings, "provider", "") or "unknown")
+            try:
+                reasoning_model, toolcall_model = resolve_provider_models(settings, llm_provider)
+            except Exception:
+                llm_settings_available = False
         return build_environment_block(
             integrations=tuple(self._session.configured_integrations),
             known=self._session.configured_integrations_known,
+            llm_provider=llm_provider,
+            reasoning_model=reasoning_model,
+            toolcall_model=toolcall_model,
+            llm_settings_available=llm_settings_available,
         )
 
     def suggested_synthetic_prompt(self) -> str:

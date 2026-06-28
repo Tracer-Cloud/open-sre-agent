@@ -1,9 +1,9 @@
 """Rendering for the shell tool-calling turn.
 
-This module owns the *user-facing* half of tool-calling execution: it formats
-tool calls into human-readable labels and prints the "Requested actions" preview
-as the action agent streams its tool calls. The execution orchestration that
-drives it lives in
+This module owns the terminal-facing action observer. Planner tool calls are
+internal state by default: the observer records them for history/storage while
+the concrete action executors render user-facing command output. The execution
+orchestration that drives it lives in
 :func:`interactive_shell.runtime.shell_turn_execution.run_action_tool_turn`.
 
 Keeping rendering here means the shell turn-entry adapter stays focused on
@@ -17,11 +17,8 @@ import json
 from typing import Any
 
 from rich.console import Console
-from rich.markup import escape
 
 from interactive_shell.runtime import ReplSession
-from interactive_shell.ui import BOLD_BRAND, DIM
-from interactive_shell.ui.streaming import render_response_header
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
@@ -57,7 +54,7 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
 
 
 class ActionRenderObserver:
-    """Agent event observer that prints the "Requested actions" preview."""
+    """Agent event observer that records internal planner actions."""
 
     def __init__(self, *, session: ReplSession, console: Console, message: str) -> None:
         self.session = session
@@ -81,19 +78,10 @@ class ActionRenderObserver:
         name = str(data.get("name", "")).strip()
         if not name or name == "assistant_handoff":
             return
-        tool_input = data.get("input")
-        args = tool_input if isinstance(tool_input, dict) else {}
         if self.planned_count == 0:
-            self.console.print()
-            render_response_header(self.console, "assistant")
-            self.console.print(f"[{DIM}]Requested actions:[/]")
             self.session.record("cli_agent", self.message)
             self._recorded_cli_agent = True
         self.planned_count += 1
-        label, content = tool_call_display(name, args)
-        self.console.print(
-            f"[{DIM}]{self.planned_count}.[/] [{BOLD_BRAND}]{label}[/] {escape(content)}"
-        )
 
 
 __all__ = [

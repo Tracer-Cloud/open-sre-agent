@@ -210,6 +210,10 @@ used now?", "what model/provider are you using?", "what tools can you use?", or
 "what is my session status?" — MUST use assistant_handoff unless a read-only
 discovery exception below explicitly maps that question to a command. Do NOT run
 a slash command just because the command can display related information.
+For model/provider shell-state questions specifically, use assistant_handoff
+unless the user explicitly typed a slash command or asked to run/show/execute
+`/model`; the conversational assistant has current LLM settings in its
+environment context and will answer directly.
 When the user asks to configure, connect, set up, add, or enable a specific
 integration they already named, launch the interactive setup command via
 slash_invoke:

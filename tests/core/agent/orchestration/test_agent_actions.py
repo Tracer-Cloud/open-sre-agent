@@ -299,9 +299,9 @@ def test_execute_cli_actions_dispatches_planned_commands(monkeypatch: object) ->
         {"type": "slash", "text": "/integrations list", "ok": True},
     ]
     output = buf.getvalue()
-    assert output.index("Requested actions") < output.index("$ /health")
-    assert output.index("1.") < output.index("$ /health")
-    assert output.index("2.") < output.index("$ /health")
+    assert "Requested actions" not in output
+    assert "1. command" not in output
+    assert "2. command" not in output
     assert "ran /health" in output
     assert "ran /integrations list" in output
 
@@ -525,7 +525,7 @@ def test_execute_cli_actions_runs_implementation_action(monkeypatch: object) -> 
         {"type": "implementation", "text": "/history search", "ok": True},
     ]
     output = buf.getvalue()
-    assert "implementation" in output
+    assert "Requested actions" not in output
     assert "implemented /history search" in output
 
 
@@ -868,11 +868,10 @@ def test_execute_cli_actions_lists_all_actions_before_synthetic_rds(monkeypatch:
     assert "task:" in synthetic_entry["text"]
 
     output = buf.getvalue()
-    assert output.index("1.") < output.index("$ /integrations list")
-    assert output.index("2.") < output.index("$ /integrations list")
-    assert "synthetic test rds_postgres:001-replication-lag" in output
-    assert output.index("synthetic test") < output.index("$ opensre tests synthetic")
+    assert "Requested actions" not in output
+    assert "synthetic test started" in output
     assert output.index("$ /integrations list") < output.index("$ opensre tests synthetic")
+    assert output.index("$ opensre tests synthetic") < output.index("synthetic test started")
 
 
 def test_execute_cli_actions_runs_requested_synthetic_scenario(monkeypatch: object) -> None:
@@ -926,7 +925,7 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
         {"type": "slash", "text": f"/cancel {task.task_id}", "ok": True},
     ]
     output = buf.getvalue()
-    assert "cancel task" in output
+    assert "Requested actions" not in output
     assert f"$ /cancel {task.task_id}" in output
     assert "stop requested" in output
 
