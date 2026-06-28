@@ -53,7 +53,15 @@ def get_grafana_client_from_credentials(
     )
     client = GrafanaClient(config=config)
 
-    discovered = client.discover_datasource_uids()
+    try:
+        discovered = client.discover_datasource_uids()
+    except Exception as exc:
+        logger.warning(
+            "[grafana] Datasource discovery failed for account_id=%s: %s",
+            account_id,
+            exc,
+        )
+        discovered = {}
     if discovered:
         config = GrafanaAccountConfig(
             account_id=account_id,

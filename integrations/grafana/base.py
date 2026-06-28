@@ -183,88 +183,84 @@ class GrafanaClientBase:
             return {}
 
         url = f"{self.instance_url}/api/datasources"
-        try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
+        response = requests.get(
+            url,
+            headers=self._get_auth_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        datasources = response.json()
+
+        # Collect all candidates per type, then pick the best one.
+        candidates: dict[str, list[dict]] = {key: [] for key in self._TYPE_MAP.values()}
+
+        for ds in datasources:
+            ds_type = ds.get("type", "").lower()
+            uid = ds.get("uid", "")
+            name = ds.get("name", "")
+            is_default = bool(ds.get("isDefault"))
+            if not uid:
+                continue
+
+            for type_keyword, result_key in self._TYPE_MAP.items():
+                if type_keyword in ds_type:
+                    candidates[result_key].append(
+                        {
+                            "uid": uid,
+                            "name": name,
+                            "is_default": is_default,
+                        }
+                    )
+                    break
+
+        result: dict[str, str] = {}
+        for result_key, ds_list in candidates.items():
+            if not ds_list:
+                continue
+
+            logger.info(
+                "[grafana] Candidates for %s: %s",
+                result_key,
+                [(d["uid"], d["name"]) for d in ds_list],
             )
-            response.raise_for_status()
-            datasources = response.json()
 
-            # Collect all candidates per type, then pick the best one.
-            candidates: dict[str, list[dict]] = {key: [] for key in self._TYPE_MAP.values()}
-
-            for ds in datasources:
-                ds_type = ds.get("type", "").lower()
-                uid = ds.get("uid", "")
-                name = ds.get("name", "")
-                is_default = bool(ds.get("isDefault"))
-                if not uid:
-                    continue
-
-                for type_keyword, result_key in self._TYPE_MAP.items():
-                    if type_keyword in ds_type:
-                        candidates[result_key].append(
-                            {
-                                "uid": uid,
-                                "name": name,
-                                "is_default": is_default,
-                            }
-                        )
-                        break
-
-            result: dict[str, str] = {}
-            for result_key, ds_list in candidates.items():
-                if not ds_list:
-                    continue
-
-                logger.info(
-                    "[grafana] Candidates for %s: %s",
-                    result_key,
-                    [(d["uid"], d["name"]) for d in ds_list],
+            def _is_deprioritized(d: dict) -> bool:
+                return any(
+                    kw in d["uid"].lower() or kw in d["name"].lower()
+                    for kw in self._DEPRIORITIZE_KEYWORDS
                 )
 
-                def _is_deprioritized(d: dict) -> bool:
-                    return any(
-                        kw in d["uid"].lower() or kw in d["name"].lower()
-                        for kw in self._DEPRIORITIZE_KEYWORDS
-                    )
+            # 1. Prefer the default datasource for this type
+            defaults = [d for d in ds_list if d["is_default"]]
+            if defaults:
+                result[result_key] = defaults[0]["uid"]
+                continue
 
-                # 1. Prefer the default datasource for this type
-                defaults = [d for d in ds_list if d["is_default"]]
-                if defaults:
-                    result[result_key] = defaults[0]["uid"]
+            # Filter out deprioritized datasources for hint matching
+            non_deprioritized = [d for d in ds_list if not _is_deprioritized(d)]
+
+            # 2. Prefer non-deprioritized datasources matching primary hints
+            hints = self._PRIMARY_HINTS.get(result_key, [])
+            if hints and non_deprioritized:
+                hinted = [
+                    d
+                    for d in non_deprioritized
+                    if any(h in d["uid"].lower() or h in d["name"].lower() for h in hints)
+                ]
+                if hinted:
+                    result[result_key] = hinted[0]["uid"]
                     continue
 
-                # Filter out deprioritized datasources for hint matching
-                non_deprioritized = [d for d in ds_list if not _is_deprioritized(d)]
+            # 3. Use any non-deprioritized datasource
+            if non_deprioritized:
+                result[result_key] = non_deprioritized[0]["uid"]
+                continue
 
-                # 2. Prefer non-deprioritized datasources matching primary hints
-                hints = self._PRIMARY_HINTS.get(result_key, [])
-                if hints and non_deprioritized:
-                    hinted = [
-                        d
-                        for d in non_deprioritized
-                        if any(h in d["uid"].lower() or h in d["name"].lower() for h in hints)
-                    ]
-                    if hinted:
-                        result[result_key] = hinted[0]["uid"]
-                        continue
+            # 4. Fallback to first (even if deprioritized)
+            result[result_key] = ds_list[0]["uid"]
 
-                # 3. Use any non-deprioritized datasource
-                if non_deprioritized:
-                    result[result_key] = non_deprioritized[0]["uid"]
-                    continue
-
-                # 4. Fallback to first (even if deprioritized)
-                result[result_key] = ds_list[0]["uid"]
-
-            logger.info("[grafana] Discovered datasource UIDs: %s", result)
-            return result
-        except Exception as e:
-            logger.warning("[grafana] Failed to discover datasource UIDs: %s", e)
-            return {}
+        logger.info("[grafana] Discovered datasource UIDs: %s", result)
+        return result
 
     def query_loki_label_values(self, label: str = "service_name") -> list[str]:
         """Query Loki for available values of a label."""
@@ -274,50 +270,42 @@ class GrafanaClientBase:
             self.loki_datasource_uid,
             f"/loki/api/v1/label/{label}/values",
         )
-        try:
-            data = self._make_request(url)
-            values: list[str] = data.get("data", [])
-            return values
-        except Exception:
-            logger.debug("Failed to fetch Loki label values for %s", label, exc_info=True)
-            return []
+        data = self._make_request(url)
+        values: list[str] = data.get("data", [])
+        return values
 
     def query_alert_rules(self, folder: str | None = None) -> list[dict[str, Any]]:
         """Query Grafana alert rules, optionally filtered by folder title."""
         url = f"{self.instance_url}/api/ruler/grafana/api/v1/rules"
-        try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
+        response = requests.get(
+            url,
+            headers=self._get_auth_headers(),
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
 
-            rules: list[dict[str, Any]] = []
-            for folder_name, groups in data.items():
-                if folder and folder.lower() not in folder_name.lower():
-                    continue
-                for group in groups:
-                    for rule in group.get("rules", []):
-                        rules.append(
-                            {
-                                "folder": folder_name,
-                                "group": group.get("name", ""),
-                                "rule_name": rule.get("grafana_alert", {}).get("title", ""),
-                                "condition": rule.get("grafana_alert", {}).get("condition", ""),
-                                "datasource_uid": _extract_datasource_uid(rule),
-                                "queries": _extract_rule_queries(rule),
-                                "state": rule.get("grafana_alert", {}).get("current_state", ""),
-                                "no_data_state": rule.get("grafana_alert", {}).get(
-                                    "no_data_state", ""
-                                ),
-                            }
-                        )
-            return rules
-        except Exception as e:
-            logger.warning("[grafana] Failed to query alert rules: %s", e)
-            return []
+        rules: list[dict[str, Any]] = []
+        for folder_name, groups in data.items():
+            if folder and folder.lower() not in folder_name.lower():
+                continue
+            for group in groups:
+                for rule in group.get("rules", []):
+                    rules.append(
+                        {
+                            "folder": folder_name,
+                            "group": group.get("name", ""),
+                            "rule_name": rule.get("grafana_alert", {}).get("title", ""),
+                            "condition": rule.get("grafana_alert", {}).get("condition", ""),
+                            "datasource_uid": _extract_datasource_uid(rule),
+                            "queries": _extract_rule_queries(rule),
+                            "state": rule.get("grafana_alert", {}).get("current_state", ""),
+                            "no_data_state": rule.get("grafana_alert", {}).get(
+                                "no_data_state", ""
+                            ),
+                        }
+                    )
+        return rules
 
     def query_annotations(
         self,
@@ -341,26 +329,26 @@ class GrafanaClientBase:
         }
         if tags:
             params["tags"] = tags  # requests repeats the param once per tag
-        try:
-            response = requests.get(
-                url,
-                headers=self._get_auth_headers(),
-                params=params,
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return [_map_annotation(item) for item in data if isinstance(item, dict)]
-        except Exception as e:
-            logger.warning("[grafana] Failed to query annotations: %s", e)
-            return []
+        response = requests.get(
+            url,
+            headers=self._get_auth_headers(),
+            params=params,
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return [_map_annotation(item) for item in data if isinstance(item, dict)]
 
     def _get_auth_headers(self) -> dict[str, str]:
         if self.username and self.password:
             credentials = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
             return {"Authorization": f"Basic {credentials}"}
         if not self.read_token:
-            return {}
+            if self.uses_local_anonymous_auth:
+                return {}
+            raise ValueError(
+                f"Grafana client for account '{self.account_id}' has no API token configured"
+            )
         return {"Authorization": f"Bearer {self.read_token}"}
 
     def _make_request(
