@@ -19,7 +19,8 @@ from config.platform_bootstrap import ensure_project_platform_package
 ensure_project_platform_package()
 
 import click  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
+
+from config.env_loading import load_opensre_env_files  # noqa: E402
 
 from cli.commands import register_commands  # noqa: E402
 from config.version import get_version  # noqa: E402
@@ -245,7 +246,7 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
     _ensure_utf8_stdio()
-    load_dotenv(override=False)
+    load_opensre_env_files()
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     try:
         init_sentry(entrypoint=_sentry_entrypoint_for_invocation(cli_argv))
