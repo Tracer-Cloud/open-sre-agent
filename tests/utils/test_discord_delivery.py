@@ -212,6 +212,22 @@ def test_send_discord_report_returns_false_on_api_error(monkeypatch: pytest.Monk
     assert "Forbidden" in error
 
 
+def test_send_discord_report_converts_slack_links(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "platform.notifications.delivery_transport.httpx.post",
+        lambda *_a, **kw: (
+            captured.update({"embeds": kw["json"].get("embeds", [])})
+            or _mock_response(200, {"id": "m-1"})
+        ),  # type: ignore[misc]
+    )
+    report = "See <https://example.com/run|workflow run> for details."
+    send_discord_report(report, {"channel_id": "chan-1", "bot_token": "tok"})
+    description = captured["embeds"][0]["description"]
+    assert description == "See [workflow run](https://example.com/run) for details."
+
+
 def test_send_discord_report_truncates_description_to_4096(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 

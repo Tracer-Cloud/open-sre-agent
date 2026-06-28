@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -10,6 +11,19 @@ from platform.common.truncation import truncate
 from platform.notifications.delivery_transport import post_json
 
 logger = logging.getLogger(__name__)
+
+_SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
+
+
+def _slack_mrkdwn_to_discord(text: str) -> str:
+    """Convert Slack-style links to Discord markdown before posting."""
+
+    def _repl(match: re.Match[str]) -> str:
+        url = match.group(1)
+        label = match.group(2)
+        return f"[{label}]({url})" if label else url
+
+    return _SLACK_LINK_RE.sub(_repl, text)
 
 
 def _discord_auth_headers(bot_token: str) -> dict[str, str]:
@@ -112,7 +126,7 @@ def send_discord_report(report: str, discord_ctx: dict[str, Any]) -> tuple[bool,
     embed = {
         "title": truncate("Investigation Complete", _EMBED_TITLE_LIMIT, suffix="…"),
         "color": 15158332,
-        "description": truncate(report, _EMBED_DESCRIPTION_LIMIT, suffix="…"),
+        "description": truncate(_slack_mrkdwn_to_discord(report), _EMBED_DESCRIPTION_LIMIT, suffix="…"),
         "footer": {"text": "OpenSRE Investigation"},
     }
     target = thread_id if thread_id else channel_id
