@@ -17,17 +17,23 @@ def is_compatibility_shim(file_path: str, content: str) -> bool:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             has_import_or_alias = True
         elif isinstance(node, ast.Assign):
-            is_alias = True
+            is_alias = False
+            is_all = False
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id == "__all__":
+                    is_all = True
                     continue
                 elif isinstance(target, ast.Name):
-                    if not isinstance(node.value, (ast.Name, ast.Attribute)):
-                        is_alias = False
+                    if isinstance(node.value, (ast.Name, ast.Attribute)):
+                        is_alias = True
+                    else:
+                        return False
                 else:
-                    is_alias = False
+                    return False
             if is_alias:
                 has_import_or_alias = True
+            elif is_all:
+                continue
             else:
                 return False
         elif (
