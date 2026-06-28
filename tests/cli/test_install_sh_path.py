@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 import sys
@@ -30,6 +31,15 @@ pytestmark = pytest.mark.skipif(
 INSTALL_SH = Path(__file__).parents[2] / "install.sh"
 _INSTALL_SH_SHELL = shlex.quote(str(INSTALL_SH))
 _LOCAL_BIN = ".local/bin"
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _strip_ansi(value: str) -> str:
+    return _ANSI_RE.sub("", value)
+
+
+def _visible_terminal_text(value: str) -> str:
+    return _strip_ansi(value).replace("\r", "").replace("\n", "")
 
 
 def _run(
@@ -162,7 +172,13 @@ def test_install_sh_defines_progress_helpers() -> None:
 
     for helper in (
         "is_interactive_terminal()",
+        "intro_disabled()",
         "terminal_supports_unicode()",
+        "terminal_columns()",
+        "truncate_text()",
+        "friendly_progress_label()",
+        "draw_intro_frame()",
+        "show_installer_intro()",
         "progress_frame()",
         "draw_progress()",
         "finish_progress()",
@@ -172,8 +188,74 @@ def test_install_sh_defines_progress_helpers() -> None:
         assert helper in source
 
     assert "OPENSRE_INSTALL_VERBOSE" in source
+    assert "OPENSRE_INSTALL_NO_INTRO" in source
     assert "\\033[?25h" in source
     assert 'trap \'kill "$command_pid"' in source
+    assert "trap 'printf \"\\033[0m\\033[?25h\\033[2J\\033[H\"; exit 130'" in source
+
+
+def test_install_sh_draw_progress_fits_terminal_width_with_long_labels() -> None:
+    long_checksum = (
+        "[4/6] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
+    )
+    result = _run_logging_snippet(
+        f"""
+        terminal_columns() {{ printf '60\\n'; }}
+        terminal_supports_unicode() {{ return 1; }}
+        draw_progress {shlex.quote(long_checksum)} 9
+        """
+    )
+    output = result.stdout + result.stderr
+    visible_segments = [
+        _visible_terminal_text(segment) for segment in re.split(r"[\r\n]", output) if segment
+    ]
+
+    assert result.returncode == 0, result.stderr
+    assert visible_segments
+    assert all(len(segment) <= 60 for segment in visible_segments)
+    assert "verifying checksum" in visible_segments[-1]
+    assert "opensre_main_darwin-arm64" not in visible_segments[-1]
+
+
+def test_install_sh_animated_repaints_do_not_wrap_or_leave_long_label_residue() -> None:
+    long_checksum = (
+        "[4/6] Downloading and verifying checksum (opensre_main_darwin-arm64.tar.gz.sha256)"
+    )
+    result = _run_logging_snippet(
+        f"""
+        is_interactive_terminal() {{ return 0; }}
+        terminal_columns() {{ printf '56\\n'; }}
+        terminal_supports_unicode() {{ return 1; }}
+        run_with_progress {shlex.quote(long_checksum)} bash -c 'sleep 0.25'
+        """
+    )
+    output = result.stdout + result.stderr
+    animated_segments = [
+        _visible_terminal_text(segment)
+        for segment in re.split(r"[\r\n]", output)
+        if "Installing OpenSRE" in _visible_terminal_text(segment)
+    ]
+
+    assert result.returncode == 0, result.stderr
+    assert animated_segments
+    assert all(len(segment) <= 56 for segment in animated_segments)
+    assert all("opensre_main_darwin-arm64" not in segment for segment in animated_segments)
+
+
+def test_install_sh_no_intro_disables_intro_only() -> None:
+    result = _run_logging_snippet(
+        """
+        is_interactive_terminal() { return 0; }
+        OPENSRE_INSTALL_NO_INTRO=1
+        print_installer_header
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, result.stderr
+    assert "OpenSRE Installer" in output
+    assert "Installing the OpenSRE CLI" in output
+    assert "\x1b[2J" not in output
 
 
 def test_install_sh_progress_plain_when_not_tty() -> None:

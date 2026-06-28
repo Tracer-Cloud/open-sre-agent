@@ -6,9 +6,15 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$script:OpenSreProgressStep = 0
 
 function Test-OpenSreVerboseInstall {
     $value = [string]$env:OPENSRE_INSTALL_VERBOSE
+    return ($value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "yes" -or $value -eq "YES")
+}
+
+function Test-OpenSreIntroDisabled {
+    $value = [string]$env:OPENSRE_INSTALL_NO_INTRO
     return ($value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "yes" -or $value -eq "YES")
 }
 
@@ -36,6 +42,232 @@ function Test-OpenSreInteractiveHost {
     }
 
     return $true
+}
+
+function Get-OpenSreConsoleWidth {
+    [int]$width = 0
+
+    try {
+        if ($null -ne $Host -and $null -ne $Host.UI -and $null -ne $Host.UI.RawUI) {
+            $hostWidth = [int]$Host.UI.RawUI.WindowSize.Width
+            if ($hostWidth -gt 0) {
+                $width = $hostWidth
+            }
+        }
+    }
+    catch {
+        $width = 0
+    }
+
+    if ($width -le 0) {
+        try {
+            $consoleWidth = [int][System.Console]::WindowWidth
+            if ($consoleWidth -gt 0) {
+                $width = $consoleWidth
+            }
+        }
+        catch {
+            $width = 0
+        }
+    }
+
+    if ($width -lt 20) {
+        $width = 80
+    }
+
+    return $width
+}
+
+function Limit-OpenSreText {
+    param(
+        [AllowEmptyString()]
+        [string]$Text,
+        [int]$MaxWidth
+    )
+
+    $value = [string]$Text
+    $value = $value.Replace("`r", " ").Replace("`n", " ")
+
+    if ($MaxWidth -le 0) {
+        return ""
+    }
+
+    if ($value.Length -le $MaxWidth) {
+        return $value
+    }
+
+    if ($MaxWidth -le 3) {
+        return $value.Substring(0, $MaxWidth)
+    }
+
+    return ($value.Substring(0, $MaxWidth - 3) + "...")
+}
+
+function Get-OpenSreFriendlyProgressLabel {
+    param(
+        [AllowEmptyString()]
+        [string]$Label
+    )
+
+    if ($Label -like "*Fetching latest main build metadata*" -or
+        $Label -like "*Fetching latest release version*" -or
+        $Label -like "*Fetching release metadata*") {
+        return "fetching metadata"
+    }
+
+    if ($Label -like "*Preparing opensre*") {
+        return "resolving build"
+    }
+
+    if ($Label -like "*Downloading release archive*" -or
+        $Label -like "*.zip" -or
+        $Label -like "*.tar.gz") {
+        return "downloading archive"
+    }
+
+    if ($Label -like "*Downloading and verifying checksum*" -or
+        $Label -like "*Verifying release archive*" -or
+        $Label -like "*.sha256") {
+        return "verifying checksum"
+    }
+
+    if ($Label -like "*Extracting and verifying binary*") {
+        return "verifying binary"
+    }
+
+    if ($Label -like "*Installing*binary*" -or
+        $Label -like "*Installing*opensre*") {
+        return "installing binary"
+    }
+
+    return ([System.Text.RegularExpressions.Regex]::Replace([string]$Label, '^\[[0-9]+/[0-9]+\]\s*', ""))
+}
+
+function Get-OpenSreProgressFrame {
+    param(
+        [int]$Step
+    )
+
+    $frames = @("-", "\", "|", "/")
+    return $frames[$Step % $frames.Count]
+}
+
+function New-OpenSreProgressBar {
+    param(
+        [int]$Step,
+        [int]$Width
+    )
+
+    if ($Width -lt 1) {
+        return ""
+    }
+
+    [int]$trail = 8
+    [int]$head = $Step % ($Width + $trail)
+    $builder = New-Object System.Text.StringBuilder
+
+    for ($i = 0; $i -lt $Width; $i += 1) {
+        $age = $head - $i
+        if ($age -ge 0 -and $age -lt $trail) {
+            if ($age -eq 0 -or $age -eq 1) {
+                [void]$builder.Append("#")
+            }
+            elseif ($age -eq 2 -or $age -eq 3) {
+                [void]$builder.Append("=")
+            }
+            elseif ($age -eq 4 -or $age -eq 5) {
+                [void]$builder.Append("+")
+            }
+            else {
+                [void]$builder.Append("-")
+            }
+        }
+        else {
+            [void]$builder.Append(".")
+        }
+    }
+
+    return $builder.ToString()
+}
+
+function Write-OpenSreCenteredLine {
+    param(
+        [AllowEmptyString()]
+        [string]$Message,
+        [string]$Color = ""
+    )
+
+    $width = Get-OpenSreConsoleWidth
+    $text = Limit-OpenSreText -Text $Message -MaxWidth ([Math]::Max(1, $width - 2))
+    [int]$pad = [Math]::Floor(($width - $text.Length) / 2)
+    if ($pad -lt 0) {
+        $pad = 0
+    }
+
+    Write-OpenSreLine -Message ((" " * $pad) + $text) -Color $Color
+}
+
+function Show-OpenSreIntro {
+    if (-not (Test-OpenSreInteractiveHost) -or (Test-OpenSreVerboseInstall) -or (Test-OpenSreIntroDisabled)) {
+        return
+    }
+
+    $oldCursorVisible = $true
+    try {
+        $oldCursorVisible = [System.Console]::CursorVisible
+    }
+    catch {
+        $oldCursorVisible = $true
+    }
+
+    try {
+        try {
+            [System.Console]::CursorVisible = $false
+        }
+        catch {
+        }
+
+        for ($frame = 0; $frame -lt 10; $frame += 1) {
+            Clear-Host
+            Write-Host ""
+            Write-Host ""
+            Write-OpenSreCenteredLine -Message "OpenSRE" -Color "Cyan"
+            Write-Host ""
+
+            $width = Get-OpenSreConsoleWidth
+            [int]$barWidth = $width - 12
+            if ($barWidth -gt 32) {
+                $barWidth = 32
+            }
+            if ($barWidth -lt 12) {
+                $barWidth = 12
+            }
+
+            $bar = New-OpenSreProgressBar -Step $frame -Width $barWidth
+            Write-OpenSreCenteredLine -Message $bar -Color "Yellow"
+            Write-Host ""
+            Write-OpenSreCenteredLine -Message "Installing the OpenSRE CLI"
+
+            $status = "preparing installer"
+            switch ($frame % 5) {
+                0 { $status = "preparing installer" }
+                1 { $status = "checking platform" }
+                2 { $status = "resolving release" }
+                3 { $status = "staging binary" }
+                default { $status = "ready" }
+            }
+            Write-OpenSreCenteredLine -Message $status -Color "DarkGray"
+            Start-Sleep -Milliseconds 65
+        }
+    }
+    finally {
+        try {
+            [System.Console]::CursorVisible = $oldCursorVisible
+        }
+        catch {
+        }
+        Clear-Host
+    }
 }
 
 function Write-OpenSreLine {
@@ -105,13 +337,61 @@ function Write-OpenSreProgressLine {
         return
     }
 
-    if ($TotalBytes -gt 0) {
-        $percent = [Math]::Min(100, [Math]::Floor(($DownloadedBytes * 100) / $TotalBytes))
-        [System.Console]::Write("`r  {0}% {1} ({2}/{3} bytes)" -f $percent, $Label, $DownloadedBytes, $TotalBytes)
-        return
+    $width = Get-OpenSreConsoleWidth
+    [int]$clearWidth = $width - 1
+    if ($clearWidth -lt 1) {
+        $clearWidth = 1
     }
 
-    [System.Console]::Write("`r  {0} ({1} bytes)" -f $Label, $DownloadedBytes)
+    $title = "Installing OpenSRE"
+    if ($width -lt 56) {
+        $title = "OpenSRE"
+    }
+
+    $percentText = ""
+    if ($TotalBytes -gt 0) {
+        $percent = [Math]::Min(100, [Math]::Floor(($DownloadedBytes * 100) / $TotalBytes))
+        $percentText = " $percent%"
+    }
+
+    [int]$reserve = 2 + 1 + 1 + 1 + $title.Length + 1 + $percentText.Length
+    [int]$available = $clearWidth - $reserve
+    [int]$barWidth = 8
+    if ($available -lt 12) {
+        $barWidth = 4
+    }
+    else {
+        $barWidth = [Math]::Floor($available / 2)
+        if ($barWidth -gt 28) {
+            $barWidth = 28
+        }
+        if ($barWidth -lt 8) {
+            $barWidth = 8
+        }
+    }
+
+    [int]$labelWidth = $clearWidth - $reserve - $barWidth
+    if ($labelWidth -lt 8 -and $barWidth -gt 4) {
+        $barWidth = $clearWidth - $reserve - 8
+        if ($barWidth -lt 4) {
+            $barWidth = 4
+        }
+        $labelWidth = $clearWidth - $reserve - $barWidth
+    }
+    if ($labelWidth -lt 0) {
+        $labelWidth = 0
+    }
+
+    $script:OpenSreProgressStep += 1
+    $frame = Get-OpenSreProgressFrame -Step $script:OpenSreProgressStep
+    $bar = New-OpenSreProgressBar -Step $script:OpenSreProgressStep -Width $barWidth
+    $status = Limit-OpenSreText -Text (Get-OpenSreFriendlyProgressLabel -Label $Label) -MaxWidth $labelWidth
+    $content = "  $frame $bar $title $status$percentText"
+    if ($content.Length -gt $clearWidth) {
+        $content = $content.Substring(0, $clearWidth)
+    }
+
+    [System.Console]::Write("`r{0}`r{1}" -f (" " * $clearWidth), $content)
 }
 
 function Clear-OpenSreProgressLine {
@@ -119,7 +399,13 @@ function Clear-OpenSreProgressLine {
         return
     }
 
-    [System.Console]::Write("`r{0}`r" -f (" " * 100))
+    $width = Get-OpenSreConsoleWidth
+    [int]$clearWidth = $width - 1
+    if ($clearWidth -lt 1) {
+        $clearWidth = 1
+    }
+
+    [System.Console]::Write("`r{0}`r" -f (" " * $clearWidth))
 }
 
 function Invoke-OpenSreStep {
@@ -738,6 +1024,7 @@ function Install-OpenSre {
     $requestedVersion = if ($env:OPENSRE_VERSION) { $env:OPENSRE_VERSION.Trim().TrimStart("v") } else { "" }
     $resolvedChannel = if ($Channel) { $Channel.Trim().ToLowerInvariant() } else { "release" }
 
+    Show-OpenSreIntro
     Write-OpenSreHeader -Channel $resolvedChannel -RequestedVersion $requestedVersion -InstallDir $installDir -Repo $repo
     Enable-OpenSreTls
 

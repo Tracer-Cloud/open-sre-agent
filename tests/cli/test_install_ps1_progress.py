@@ -22,12 +22,20 @@ def test_install_ps1_defines_branded_progress_helpers() -> None:
     for helper in (
         "function Write-OpenSreHeader",
         "function Test-OpenSreInteractiveHost",
+        "function Test-OpenSreIntroDisabled",
+        "function Get-OpenSreConsoleWidth",
+        "function Limit-OpenSreText",
+        "function Get-OpenSreFriendlyProgressLabel",
+        "function Get-OpenSreProgressFrame",
+        "function New-OpenSreProgressBar",
+        "function Show-OpenSreIntro",
         "function Invoke-OpenSreStep",
         "function Invoke-OpenSreDownloadFileWithProgress",
     ):
         assert helper in source
 
     assert "OPENSRE_INSTALL_VERBOSE" in source
+    assert "OPENSRE_INSTALL_NO_INTRO" in source
     assert '$ProgressPreference = "SilentlyContinue"' in source
     assert "$ProgressPreference = $previousProgressPreference" in source
 
@@ -63,6 +71,18 @@ def test_install_ps1_keeps_download_urls_verbose_only() -> None:
     assert "-Detail $checksumUrl" not in source
 
 
+def test_install_ps1_uses_bounded_short_progress_labels() -> None:
+    source = INSTALL_PS1.read_text()
+
+    assert "Get-OpenSreConsoleWidth" in source
+    assert "Limit-OpenSreText -Text (Get-OpenSreFriendlyProgressLabel -Label $Label)" in source
+    assert "Installing OpenSRE" in source
+    assert "downloading archive" in source
+    assert "verifying checksum" in source
+    assert '" " * 100' not in source
+    assert '[System.Console]::Write("`r{0}`r{1}"' in source
+
+
 def test_install_ps1_dot_sources_when_powershell_available() -> None:
     shell = _powershell()
     if shell is None:
@@ -70,9 +90,13 @@ def test_install_ps1_dot_sources_when_powershell_available() -> None:
 
     script = textwrap.dedent(
         f"""
+        $env:OPENSRE_INSTALL_NO_INTRO = '1'
         . '{INSTALL_PS1}' -SkipMain
+        Show-OpenSreIntro
         Write-OpenSreHeader -Channel release -RequestedVersion '' -InstallDir 'C:\\opensre' -Repo 'Tracer-Cloud/opensre'
         Invoke-OpenSreStep -Name 'Unit progress step' -Operation {{ 'result-value' }}
+        Write-OpenSreProgressLine -Label 'opensre_main_windows-arm64.zip.sha256' -DownloadedBytes 10 -TotalBytes 100
+        Clear-OpenSreProgressLine
         """
     )
 

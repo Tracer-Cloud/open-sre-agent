@@ -10,6 +10,7 @@ set -euo pipefail
 if [ -t 1 ]; then
   COLOR_RESET=$'\033[0m'
   COLOR_BOLD=$'\033[1m'
+  COLOR_DIM=$'\033[2m'
   COLOR_RED=$'\033[31m'
   COLOR_GREEN=$'\033[32m'
   COLOR_YELLOW=$'\033[33m'
@@ -18,6 +19,7 @@ if [ -t 1 ]; then
 else
   COLOR_RESET=""
   COLOR_BOLD=""
+  COLOR_DIM=""
   COLOR_RED=""
   COLOR_GREEN=""
   COLOR_YELLOW=""
@@ -76,6 +78,17 @@ is_interactive_terminal() {
   [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
 }
 
+intro_disabled() {
+  case "${OPENSRE_INSTALL_NO_INTRO:-}" in
+    1|true|TRUE|yes|YES)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 terminal_supports_unicode() {
   local locale_value="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
 
@@ -92,6 +105,182 @@ terminal_supports_unicode() {
   esac
 
   return 1
+}
+
+terminal_columns() {
+  local cols=""
+
+  if command -v tput >/dev/null 2>&1; then
+    cols="$(tput cols 2>/dev/null || true)"
+  fi
+  if [ -z "$cols" ]; then
+    cols="${COLUMNS:-}"
+  fi
+
+  case "$cols" in
+    ''|*[!0-9]*)
+      cols=80
+      ;;
+  esac
+  if [ "$cols" -lt 20 ]; then
+    cols=20
+  fi
+
+  printf '%s\n' "$cols"
+}
+
+truncate_text() {
+  local value="$1"
+  local max_width="$2"
+
+  value="${value//$'\r'/ }"
+  value="${value//$'\n'/ }"
+
+  if [ "$max_width" -le 0 ]; then
+    return
+  fi
+  if [ "${#value}" -le "$max_width" ]; then
+    printf '%s' "$value"
+    return
+  fi
+  if [ "$max_width" -le 3 ]; then
+    printf '%.*s' "$max_width" "$value"
+    return
+  fi
+
+  printf '%.*s...' "$((max_width - 3))" "$value"
+}
+
+friendly_progress_label() {
+  local label="$1"
+
+  case "$label" in
+    *Fetching\ latest\ main\ build\ metadata*|*Fetching\ latest\ release\ version*|*Fetching\ release\ metadata*)
+      printf 'fetching metadata'
+      ;;
+    *Preparing\ opensre*)
+      printf 'resolving build'
+      ;;
+    *Downloading\ release\ archive*)
+      printf 'downloading archive'
+      ;;
+    *Downloading\ and\ verifying\ checksum*|*Verifying\ release\ archive*)
+      printf 'verifying checksum'
+      ;;
+    *Extracting\ and\ verifying\ binary*)
+      printf 'verifying binary'
+      ;;
+    *Installing\ *opensre*)
+      printf 'installing binary'
+      ;;
+    *)
+      label="${label#*\] }"
+      printf '%s' "$label"
+      ;;
+  esac
+}
+
+center_intro_text() {
+  local text="$1"
+  local color="${2:-}"
+  local columns
+  local pad
+
+  columns="$(terminal_columns)"
+  text="$(truncate_text "$text" "$((columns - 2))")"
+  pad=$(((columns - ${#text}) / 2))
+  [ "$pad" -lt 0 ] && pad=0
+
+  printf '%*s%s%s%s\n' "$pad" "" "$color" "$text" "${COLOR_RESET:-}"
+}
+
+draw_intro_bar() {
+  local step_count="$1"
+  local columns
+  local width
+  local pad
+  local trail=8
+  local head
+  local i=0
+  local full="#"
+  local empty="-"
+
+  if terminal_supports_unicode; then
+    full="█"
+    empty="░"
+  fi
+
+  columns="$(terminal_columns)"
+  width=$((columns - 12))
+  if [ "$width" -gt 32 ]; then
+    width=32
+  fi
+  if [ "$width" -lt 12 ]; then
+    width=12
+  fi
+
+  pad=$(((columns - width) / 2))
+  [ "$pad" -lt 0 ] && pad=0
+  head=$((step_count % (width + trail)))
+
+  printf '%*s' "$pad" ""
+  while [ "$i" -lt "$width" ]; do
+    local age=$((head - i))
+    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
+      case "$age" in
+        0|1) printf '%s%s%s' "${COLOR_GREEN:-}" "$full" "${COLOR_RESET:-}" ;;
+        2|3) printf '%s%s%s' "${COLOR_CYAN:-}" "$full" "${COLOR_RESET:-}" ;;
+        4|5) printf '%s%s%s' "${COLOR_RED:-}" "$full" "${COLOR_RESET:-}" ;;
+        *) printf '%s%s%s' "${COLOR_YELLOW:-}" "$full" "${COLOR_RESET:-}" ;;
+      esac
+    else
+      printf '%s%s%s' "${COLOR_DIM:-}" "$empty" "${COLOR_RESET:-}"
+    fi
+    i=$((i + 1))
+  done
+  printf '\n'
+}
+
+draw_intro_frame() {
+  local step_count="$1"
+  local status
+
+  case $((step_count % 6)) in
+    0) status="preparing installer" ;;
+    1) status="checking platform" ;;
+    2) status="resolving release" ;;
+    3) status="warming runtime" ;;
+    4) status="staging binary" ;;
+    *) status="ready" ;;
+  esac
+
+  printf '\033[2J\033[H'
+  printf '\n\n'
+  center_intro_text "OpenSRE" "${COLOR_BOLD:-}${COLOR_CYAN:-}"
+  printf '\n'
+  draw_intro_bar "$step_count"
+  printf '\n'
+  center_intro_text "Installing the OpenSRE CLI" "${COLOR_BOLD:-}"
+  center_intro_text "$status" "${COLOR_DIM:-}"
+}
+
+show_installer_intro() {
+  if ! is_interactive_terminal || intro_disabled; then
+    return
+  fi
+
+  printf '\033[?25l'
+  trap 'printf "\033[0m\033[?25h\033[2J\033[H"; exit 130' INT TERM
+
+  local frame=0
+  while [ "$frame" -lt 13 ]; do
+    draw_intro_frame "$frame"
+    frame=$((frame + 1))
+    sleep 0.055
+  done
+
+  printf '\033[0m\033[?25h\033[2J\033[H'
+  trap - INT TERM
 }
 
 progress_frame() {
@@ -124,13 +313,51 @@ progress_frame() {
 draw_progress() {
   local label="$1"
   local step_count="$2"
+  local title="${3:-Installing OpenSRE}"
   local frame
-  local width=24
-  local trail=7
+  local columns
+  local reserve
+  local available
+  local width
+  local label_width
+  local short_label
+  local trail=8
   local head
   local bar=""
   local i=0
 
+  columns="$(terminal_columns)"
+  if [ "$columns" -lt 56 ]; then
+    title="OpenSRE"
+  fi
+
+  reserve=$((2 + 1 + 1 + 1 + ${#title} + 1))
+  available=$((columns - reserve))
+  if [ "$available" -lt 12 ]; then
+    width=4
+  else
+    width=$((available / 2))
+    if [ "$width" -gt 28 ]; then
+      width=28
+    fi
+    if [ "$width" -lt 8 ]; then
+      width=8
+    fi
+  fi
+
+  label_width=$((columns - reserve - width))
+  if [ "$label_width" -lt 8 ] && [ "$width" -gt 4 ]; then
+    width=$((columns - reserve - 8))
+    if [ "$width" -lt 4 ]; then
+      width=4
+    fi
+    label_width=$((columns - reserve - width))
+  fi
+  if [ "$label_width" -lt 0 ]; then
+    label_width=0
+  fi
+
+  short_label="$(truncate_text "$(friendly_progress_label "$label")" "$label_width")"
   frame="$(progress_frame "$step_count")"
   head=$((step_count % (width + trail)))
 
@@ -138,13 +365,18 @@ draw_progress() {
     local age=$((head - i))
     if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
       if terminal_supports_unicode; then
-        bar="${bar}${COLOR_GREEN:-}█${COLOR_RESET:-}"
+        case "$age" in
+          0|1) bar="${bar}${COLOR_GREEN:-}█${COLOR_RESET:-}" ;;
+          2|3) bar="${bar}${COLOR_CYAN:-}█${COLOR_RESET:-}" ;;
+          4|5) bar="${bar}${COLOR_RED:-}█${COLOR_RESET:-}" ;;
+          *) bar="${bar}${COLOR_YELLOW:-}█${COLOR_RESET:-}" ;;
+        esac
       else
         bar="${bar}#"
       fi
     else
       if terminal_supports_unicode; then
-        bar="${bar}${COLOR_CYAN:-}░${COLOR_RESET:-}"
+        bar="${bar}${COLOR_DIM:-}░${COLOR_RESET:-}"
       else
         bar="${bar}-"
       fi
@@ -152,9 +384,9 @@ draw_progress() {
     i=$((i + 1))
   done
 
-  printf '\r\033[K  %s%s%s %s %s%s%s' \
+  printf '\r\033[K  %s%s%s %s %s%s%s %s' \
     "${COLOR_YELLOW:-}" "$frame" "${COLOR_RESET:-}" \
-    "$bar" "${COLOR_BOLD:-}" "$label" "${COLOR_RESET:-}"
+    "$bar" "${COLOR_BOLD:-}" "$title" "${COLOR_RESET:-}" "$short_label"
 }
 
 animate_progress() {
@@ -287,6 +519,7 @@ print_installer_header() {
     return
   fi
 
+  show_installer_intro
   log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
   log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
   log ""
