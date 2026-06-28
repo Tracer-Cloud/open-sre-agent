@@ -69,6 +69,23 @@ def test_system_prompt_maps_setup_requests_to_slash_invoke() -> None:
     assert "do not hand off just to tell the user" in prompt
 
 
+def test_system_prompt_hands_off_natural_language_slash_status_questions() -> None:
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    compact_prompt = " ".join(prompt.split())
+    assert 'literal slash text like "/model"' in prompt
+    assert '"run /model show"' in prompt
+    assert "natural-language questions about the active model/provider" in compact_prompt
+    assert "which model is being used now?" in compact_prompt
+    assert "what tools can you use?" in compact_prompt
+    assert "what is my session status?" in compact_prompt
+    assert "must use assistant_handoff" in compact_prompt
+    assert "unless a read-only discovery exception below explicitly maps" in compact_prompt
+    assert (
+        "do not run a slash command just because the command can display related information"
+        in compact_prompt
+    )
+
+
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt

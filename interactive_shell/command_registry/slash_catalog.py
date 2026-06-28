@@ -203,9 +203,14 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         ),
     ),
     "/model": _mcp(
-        "Show or change active LLM provider and models. Subcommands: show, set, restore, toolcall.",
-        "User asks to show current model or provider settings",
+        "Explicit /model command operations: show the model table, open the model menu, "
+        "set/restore the active LLM provider or reasoning model, or manage the toolcall model.",
+        "User explicitly types /model or asks to run /model show",
+        "User asks to change, set, restore, or switch the active provider or model",
         anti_examples=(
+            "User asks a natural-language model status question like 'which model is being used now?' (assistant_handoff)",
+            "User asks what model/provider the assistant is using (assistant_handoff)",
+            "User asks whether OpenAI is configured now without explicitly asking to run /model or verify credentials (assistant_handoff)",
             "User says switch to local llama without a concrete provider (assistant_handoff)",
         ),
     ),
@@ -264,9 +269,13 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         anti_examples=("User asks for the current session status (use /status)",),
     ),
     "/status": _mcp(
-        "Show REPL session status: provider, models, trust mode, and active flags.",
-        "User asks for session status",
-        anti_examples=("User asks if integrations are healthy (use /health)",),
+        "Explicit /status command operation: show REPL session status, including "
+        "provider, models, trust mode, and active flags.",
+        "User explicitly types /status or asks to run /status",
+        anti_examples=(
+            "User asks conversationally what the current session status is (assistant_handoff)",
+            "User asks if integrations are healthy (use /health)",
+        ),
     ),
     "/stop": _mcp(
         "Print guidance for stopping in-flight investigations and background tasks.",
@@ -282,9 +291,13 @@ _MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks for an alert template or example payload format",
     ),
     "/tools": _mcp(
-        "List registered investigation/chat tools wired into this OpenSRE build.",
-        "User asks what tools the REPL can use",
-        "User asks to list investigation or chat tools",
+        "Explicit /tools command operation: list registered investigation/chat tools "
+        "wired into this OpenSRE build.",
+        "User explicitly types /tools or asks to run /tools",
+        "User explicitly asks to list registered tools as a shell command",
+        anti_examples=(
+            "User asks conversationally what tools or capabilities the assistant can use (assistant_handoff)",
+        ),
     ),
     "/tests": _mcp(
         "Browse and run inventoried tests from the terminal. Subcommands: list, run, synthetic.",
@@ -437,10 +450,17 @@ def slash_invoke_tool_description(specs: list[SlashCommandSpec] | None = None) -
     entries = specs if specs is not None else build_slash_command_specs()
     header = (
         "Run a slash command in the OpenSRE interactive shell. "
-        "Pick the command whose use-case best matches the user request, then supply "
-        "positional args in the args array. This tool covers only the slash-command "
-        "clause of a request. For compound requests, still emit a separate tool call "
-        "for every other actionable clause in order; for example "
+        "Use this only for explicit slash-command operations: literal /command "
+        "text, requests that explicitly ask to run a slash command, or "
+        "operation/discovery cases that the system prompt explicitly maps to a "
+        "slash command. Do not use this as a natural-language router for "
+        "ordinary informational, how-to, capability, or status questions merely "
+        "because a slash command can display related information; hand those to "
+        "assistant_handoff unless a prompt rule names a read-only discovery "
+        "exception. Supply positional args in the args array. This tool covers "
+        "only the slash-command clause of a request. For compound requests, "
+        "still emit a separate tool call for every other actionable clause in "
+        "order; for example "
         '`run /remote and then investigate "hello world"` requires '
         'slash_invoke(command="/remote", args=[]) followed by '
         'investigation_start(alert_text="hello world").'

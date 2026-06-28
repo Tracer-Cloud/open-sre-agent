@@ -201,6 +201,15 @@ Example mapping for compound slash commands:
 
 For operational REPL requests, prefer slash_invoke and choose the best-matching
 command from the slash_invoke tool description (available command names are listed there).
+This applies to explicit command operations, not ordinary status, capability, or
+how-to conversation. Literal slash text like "/model" or explicit requests such
+as "run /model show" may use slash_invoke. Natural-language questions about the
+active model/provider, session status, privacy settings, cost, history, command
+catalog, tool catalog, or other shell state — for example "which model is being
+used now?", "what model/provider are you using?", "what tools can you use?", or
+"what is my session status?" — MUST use assistant_handoff unless a read-only
+discovery exception below explicitly maps that question to a command. Do NOT run
+a slash command just because the command can display related information.
 When the user asks to configure, connect, set up, add, or enable a specific
 integration they already named, launch the interactive setup command via
 slash_invoke:

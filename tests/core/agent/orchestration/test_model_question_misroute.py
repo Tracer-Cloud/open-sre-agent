@@ -1,0 +1,156 @@
+"""Repro: an informational model question routed to /model never gets answered.
+
+Reproduces the REPL transcript where the user typed "which model is being used
+now?" and the turn rendered ``Requested actions: 1. command /model`` / ``$ /model``
+but never produced a conversational answer.
+
+The selection itself (the action agent choosing ``slash_invoke("/model")`` for an
+informational question) is exercised by the live planning scenario
+``chat_handoff/342-which-model-is-used-now``. These tests pin the *deterministic*
+half: given that the action agent picks ``/model``, the turn ends without
+answering the user, because ``/model`` records no ``last_command_observation`` and
+so the turn router (``core.agent_harness.turn_orchestrator._route_turn``) takes the
+``handled_without_llm`` path instead of summarizing an observation.
+"""
+
+from __future__ import annotations
+
+import io
+
+import pytest
+from rich.console import Console
+
+import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import tools.interactive_shell.actions.slash as slash_tool
+from core.agent_harness.session import ReplSession
+from interactive_shell.command_registry import dispatch_slash
+from tests.core.agent.orchestration.action_execution_test_harness import (
+    FakeActionLLM,
+    tool_response,
+)
+
+_ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+_PROMPT = "which model is being used now?"
+
+
+def _capture() -> tuple[Console, io.StringIO]:
+    buf = io.StringIO()
+    return Console(file=buf, force_terminal=False, highlight=False, width=100), buf
+
+
+def test_model_show_records_no_observation() -> None:
+    """Root cause: /model does not stash a discovery observation.
+
+    The observe->answer summary loop only fires when a discovery slash command
+    sets ``last_command_observation`` (integrations list/verify do). /model does
+    not, so a turn that runs /model has nothing to summarize into an answer.
+    """
+    session = ReplSession()
+    console, _ = _capture()
+    session.last_command_observation = "stale"
+    session.last_command_observation = None
+
+    dispatch_slash("/model show", session, console)
+
+    assert session.last_command_observation is None
+
+
+def test_model_question_routed_to_slash_is_never_answered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Full-turn repro: action agent picks /model -> turn handled, no answer.
+
+    When the action agent selects ``slash_invoke("/model")`` for the
+    informational question, ``/model`` runs and the turn is marked handled. Because
+    no observation was recorded, the conversational assistant is never invoked, so
+    the user's actual question ("which model is being used now?") goes unanswered —
+    exactly the transcript behavior.
+    """
+    dispatched: list[str] = []
+
+    def _fake_dispatch(
+        command: str,
+        session: ReplSession,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        dispatched.append(command)
+        session.record("slash", command, ok=True)
+        console.print(f"$ {command}")
+        return True
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+    monkeypatch.setattr(
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM([tool_response("slash_invoke", {"command": "/model", "args": []})]),
+    )
+
+    answer_calls: list[str] = []
+
+    def _spy_answer(text: str, *_args: object, **_kwargs: object) -> None:
+        answer_calls.append(text)
+        return None
+
+    session = ReplSession()
+    console, buf = _capture()
+    result = shell_turn_execution.execute_shell_turn(
+        _PROMPT,
+        session,
+        console,
+        recorder=None,
+        answer_agent=_spy_answer,
+    )
+
+    # The action agent's /model choice executed and "handled" the turn.
+    assert dispatched == ["/model"]
+    assert result.action_result.handled is True
+
+    # The bug: the conversational assistant was never called, so the user's
+    # question is never answered (no summary pass, no fallback answer).
+    assert answer_calls == []
+    assert result.final_intent == "cli_agent_handled"
+    assert result.answered is False
+
+    output = buf.getvalue()
+    assert "$ /model" in output
+
+
+def test_model_question_answered_when_handed_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Contrast / desired behavior: an assistant_handoff lets the turn answer.
+
+    If the action agent had instead emitted ``assistant_handoff`` (or no action),
+    the turn falls through to the conversational assistant, which answers the
+    question. This pins the intended outcome the misroute breaks.
+    """
+
+    def _unexpected_dispatch(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("handoff turn must not dispatch a slash command")
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _unexpected_dispatch)
+    monkeypatch.setattr(
+        _ACTION_LLM_FACTORY_PATCH,
+        lambda: FakeActionLLM([tool_response("assistant_handoff", {"content": "chat:model"})]),
+    )
+
+    answer_calls: list[str] = []
+
+    def _spy_answer(text: str, *_args: object, **_kwargs: object) -> object:
+        answer_calls.append(text)
+        return object()
+
+    session = ReplSession()
+    console, _ = _capture()
+    result = shell_turn_execution.execute_shell_turn(
+        _PROMPT,
+        session,
+        console,
+        recorder=None,
+        gather_evidence=lambda *_a, **_k: None,
+        answer_agent=_spy_answer,
+    )
+
+    assert result.action_result.handled is False
+    assert answer_calls == [_PROMPT]
+    assert result.answered is True
