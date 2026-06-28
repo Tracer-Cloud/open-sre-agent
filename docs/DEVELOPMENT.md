@@ -165,3 +165,23 @@ export OPENSRE_ANALYTICS_LOG_EVENTS=0
 ```
 
 We do not collect alert contents, file contents, hostnames, credentials, raw CLI arguments, or PII by design.
+
+## Agent Regression Tool
+
+To help monitor agent runs and convert conversational failures into regression test cases, the `tools/agent_regression_tool.py` module defines two agent-callable tools:
+
+### `summarize_agent_test_status`
+Queries active system processes using `psutil` to report whether synthetic, prompting (deterministic turn checks), or live-turn agent test suites are currently running.
+
+### `create_agent_regression_scenario`
+Parses a Slack transcript (in JSON array, dict, or raw text format), extracts the initial user prompt, identifies planned slash/CLI commands (stopping at conjunction words like "and", "then"), resolves configured integrations, and outputs a structured YAML configuration representing a replayable turn scenario.
+
+Example usage from the agent loop:
+```python
+create_agent_regression_scenario(
+    transcript="...",
+    id="206-my-scenario",
+    title="My Scenario",
+    behavior_class="local_execution"
+)
+```
