@@ -14,14 +14,14 @@ from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
 from interactive_shell.runtime.utils import input_policy as loop_input_policy
-from interactive_shell.tools import (
-    investigation_tool as _investigation_tool,
-)
-from interactive_shell.tools import (
-    slash_tool as _slash_tool,
-)
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
+)
+from tools.interactive_shell.actions import (
+    investigation as _investigation_tool,
+)
+from tools.interactive_shell.actions import (
+    slash as _slash_tool,
 )
 
 

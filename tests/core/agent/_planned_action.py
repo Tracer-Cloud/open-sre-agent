@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from interactive_shell.tools.tool_registry import ToolKind
+from tools.interactive_shell.registry import ToolKind
 
 ActionSource = Literal["deterministic", "llm"]
 TargetSurface = Literal["slash", "terminal", "investigation", "implementation"]

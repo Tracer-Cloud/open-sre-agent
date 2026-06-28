@@ -63,7 +63,7 @@ def _filter_actions_by_capabilities(
 
 def _read_capability_snapshot(session: ReplSession) -> CapabilitySnapshot:
     """Snapshot the session's disabled capability surfaces once."""
-    from interactive_shell.tools.tool_contracts import capability_not_explicitly_disabled
+    from tools.interactive_shell.contracts import capability_not_explicitly_disabled
 
     disabled = frozenset(
         capability
@@ -359,8 +359,8 @@ class ActionRuntime:
 
 
 def _confirm_instruction(instruction: ConfirmedEffects, runtime: ActionRuntime) -> bool:
-    from interactive_shell.tools.shared import allow_tool
     from interactive_shell.ui.execution_confirm import execution_allowed
+    from tools.interactive_shell.shared import allow_tool
 
     return execution_allowed(
         allow_tool(instruction.policy_tool),

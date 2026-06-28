@@ -13,9 +13,9 @@ import io
 import pytest
 from rich.console import Console
 
-import interactive_shell.tools.slash_tool as slash_tool
+import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.session import ReplSession
-from interactive_shell.tools.tool_contracts import (
+from tools.interactive_shell.contracts import (
     ToolContext,
 )
 

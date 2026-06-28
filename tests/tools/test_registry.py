@@ -265,6 +265,191 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     ) == {"incident_id": "inc-1"}
 
 
+def test_manifest_discovery_imports_nested_tool_modules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_pkg: Any = ModuleType("tools.fake_provider")
+    provider_pkg.__path__ = []  # type: ignore[attr-defined]
+    provider_pkg.TOOL_MODULES = ("nested.incident_tools",)
+    nested_module: Any = ModuleType("tools.fake_provider.nested.incident_tools")
+
+    @tool(
+        name="lookup_nested_incident",
+        description="Lookup nested incident metadata.",
+        source="knowledge",
+    )
+    def lookup_nested_incident(incident_id: str) -> dict[str, str]:
+        return {"incident_id": incident_id}
+
+    lookup_nested_incident.__module__ = nested_module.__name__
+    nested_module.lookup_nested_incident = lookup_nested_incident
+
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(
+        registry_module,
+        "_iter_tool_module_names",
+        lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
+    )
+
+    def mock_import(package: ModuleType, name: str) -> ModuleType:
+        if package is registry_module.tools_package and name == "fake_provider":
+            return provider_pkg
+        if package is provider_pkg and name == "nested.incident_tools":
+            return nested_module
+        raise AssertionError(f"unexpected import: {package.__name__}.{name}")
+
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+
+    tools = registry_module.get_registered_tools()
+
+    assert [tool_def.name for tool_def in tools] == ["lookup_nested_incident"]
+    assert registry_module.get_registered_tool_map()["lookup_nested_incident"].run(
+        incident_id="inc-1"
+    ) == {"incident_id": "inc-1"}
+
+
+def test_manifest_discovery_logs_nested_import_failure_with_full_module_path(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    provider_pkg: Any = ModuleType("tools.fake_provider")
+    provider_pkg.__path__ = []  # type: ignore[attr-defined]
+    provider_pkg.TOOL_MODULES = ("nested.broken_tools", "nested.valid_tools")
+    valid_module: Any = ModuleType("tools.fake_provider.nested.valid_tools")
+
+    @tool(
+        name="valid_nested_tool",
+        description="A valid nested tool.",
+        source="knowledge",
+    )
+    def valid_nested_tool() -> dict[str, str]:
+        return {"status": "ok"}
+
+    valid_nested_tool.__module__ = valid_module.__name__
+    valid_module.valid_nested_tool = valid_nested_tool
+
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(
+        registry_module,
+        "_iter_tool_module_names",
+        lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
+    )
+
+    def mock_import(package: ModuleType, name: str) -> ModuleType:
+        if package is registry_module.tools_package and name == "fake_provider":
+            return provider_pkg
+        if package is provider_pkg and name == "nested.broken_tools":
+            raise RuntimeError("nested initialization failed")
+        if package is provider_pkg and name == "nested.valid_tools":
+            return valid_module
+        raise AssertionError(f"unexpected import: {package.__name__}.{name}")
+
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+
+    with caplog.at_level(logging.WARNING, logger="tools.registry"):
+        tools = registry_module.get_registered_tools()
+
+    assert [tool_def.name for tool_def in tools] == ["valid_nested_tool"]
+    assert any(
+        "tools.fake_provider.nested.broken_tools" in record.message
+        and "nested initialization failed" in record.message
+        for record in caplog.records
+    )
+
+
+def test_manifest_discovery_preserves_duplicate_name_first_wins(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    provider_pkg: Any = ModuleType("tools.fake_provider")
+    provider_pkg.__path__ = []  # type: ignore[attr-defined]
+    provider_pkg.TOOL_MODULES = ("nested.shadow_tools",)
+    nested_module: Any = ModuleType("tools.fake_provider.nested.shadow_tools")
+
+    @tool(
+        name="shared_manifest_tool",
+        description="Top-level package tool.",
+        source="knowledge",
+    )
+    def top_level_tool() -> dict[str, str]:
+        return {"source": "top-level"}
+
+    @tool(
+        name="shared_manifest_tool",
+        description="Nested package tool.",
+        source="knowledge",
+    )
+    def nested_tool() -> dict[str, str]:
+        return {"source": "nested"}
+
+    top_level_tool.__module__ = provider_pkg.__name__
+    nested_tool.__module__ = nested_module.__name__
+    provider_pkg.top_level_tool = top_level_tool
+    nested_module.nested_tool = nested_tool
+
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(
+        registry_module,
+        "_iter_tool_module_names",
+        lambda package: ["fake_provider"] if package is registry_module.tools_package else [],
+    )
+    monkeypatch.setattr(
+        registry_module,
+        "_import_tool_module",
+        lambda package, name: (
+            provider_pkg
+            if package is registry_module.tools_package and name == "fake_provider"
+            else nested_module
+        ),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="tools.registry"):
+        tool_map = registry_module.get_registered_tool_map()
+
+    assert list(tool_map) == ["shared_manifest_tool"]
+    assert tool_map["shared_manifest_tool"].run() == {"source": "top-level"}
+    assert any(
+        "Duplicate tool name 'shared_manifest_tool' across modules" in record.message
+        for record in caplog.records
+    )
+
+
+def test_top_level_discovery_unchanged_without_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    top_level_module: Any = ModuleType("tools.fake_top_level_tool")
+
+    @tool(
+        name="top_level_status",
+        description="Return top-level status.",
+        source="knowledge",
+    )
+    def top_level_status() -> dict[str, str]:
+        return {"status": "ok"}
+
+    top_level_status.__module__ = top_level_module.__name__
+    top_level_module.top_level_status = top_level_status
+    import_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(registry_module, "_external_tool_packages", [])
+    monkeypatch.setattr(
+        registry_module,
+        "_iter_tool_module_names",
+        lambda package: ["fake_top_level_tool"] if package is registry_module.tools_package else [],
+    )
+
+    def mock_import(package: ModuleType, name: str) -> ModuleType:
+        import_calls.append((package.__name__, name))
+        return top_level_module
+
+    monkeypatch.setattr(registry_module, "_import_tool_module", mock_import)
+
+    tools = registry_module.get_registered_tools()
+
+    assert [tool_def.name for tool_def in tools] == ["top_level_status"]
+    assert import_calls == [("tools", "fake_top_level_tool")]
+
+
 def test_resolve_tool_display_name_prefers_registered_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

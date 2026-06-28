@@ -7,7 +7,7 @@ from typing import NoReturn
 
 import pytest
 
-from interactive_shell.tools.shell.execution import (
+from tools.interactive_shell.shell.execution import (
     ShellExecutionResult,
     execute_shell_command,
 )
@@ -23,7 +23,7 @@ def test_execute_shell_command_reports_timeout_argv_mode(monkeypatch: pytest.Mon
         )
 
     monkeypatch.setattr(
-        "interactive_shell.tools.shell.execution.subprocess.run",
+        "tools.interactive_shell.shell.execution.subprocess.run",
         _raise,
     )
 
@@ -57,7 +57,7 @@ def test_execute_shell_command_reports_timeout_shell_mode(monkeypatch: pytest.Mo
         )
 
     monkeypatch.setattr(
-        "interactive_shell.tools.shell.execution.subprocess.run",
+        "tools.interactive_shell.shell.execution.subprocess.run",
         _raise,
     )
 

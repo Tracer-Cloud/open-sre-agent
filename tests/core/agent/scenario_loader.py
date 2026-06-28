@@ -12,11 +12,11 @@ from typing import Any, cast
 import yaml
 
 from interactive_shell.command_registry import SLASH_COMMANDS
-from interactive_shell.tools.synthetic_tool import (
-    list_rds_postgres_scenarios,
-)
 from tests.core.agent._planned_action import (
     default_target_surface,
+)
+from tools.interactive_shell.actions.synthetic import (
+    list_rds_postgres_scenarios,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent

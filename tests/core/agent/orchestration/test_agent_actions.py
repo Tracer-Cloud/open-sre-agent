@@ -16,17 +16,13 @@ from rich.console import Console
 import config.constants.platform as platform_module
 import interactive_shell.agent_shell.tool_calling as tool_calling
 import interactive_shell.runtime.subprocess_runner as subprocess_runner
-import interactive_shell.tools.implementation_tool as implementation_tool
-import interactive_shell.tools.llm_provider_tool as llm_provider_tool
-import interactive_shell.tools.shell.execution as shell_execution
-import interactive_shell.tools.slash_tool as slash_tool
+import tools.interactive_shell.actions.implementation as implementation_tool
+import tools.interactive_shell.actions.llm_provider as llm_provider_tool
+import tools.interactive_shell.actions.slash as slash_tool
+import tools.interactive_shell.shell.execution as shell_execution
 from core.agent_harness.session import ReplSession
 from core.llm.types import AgentLLMResponse, ToolCall
 from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
-from interactive_shell.tools.tool_registry import (
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
 from platform.common.task_types import TaskKind, TaskStatus
 from tests.core.agent._planned_action import (
     PlannedAction,
@@ -34,6 +30,10 @@ from tests.core.agent._planned_action import (
 )
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
+)
+from tools.interactive_shell.registry import (
+    TOOL_KIND_TO_NAME,
+    ToolKind,
 )
 
 _ACTION_LLM_FACTORY_PATCH = "interactive_shell.agent_shell.tool_calling._default_llm_factory"

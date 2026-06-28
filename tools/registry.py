@@ -25,6 +25,7 @@ _SKIP_MODULE_NAMES = {
     "investigation_registry",
     "utils",
 }
+_TOOL_MODULES_ATTR = "TOOL_MODULES"
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -75,7 +76,82 @@ def _iter_tool_module_names(package: ModuleType) -> list[str]:
 
 
 def _import_tool_module(package: ModuleType, module_name: str) -> ModuleType:
-    return importlib.import_module(f"{package.__name__}.{module_name}")
+    return importlib.import_module(_qualify_tool_module_name(package, module_name))
+
+
+def _qualify_tool_module_name(package: ModuleType, module_name: str) -> str:
+    if module_name == package.__name__ or module_name.startswith(f"{package.__name__}."):
+        return module_name
+    return f"{package.__name__}.{module_name}"
+
+
+def _iter_manifest_tool_module_names(module: ModuleType) -> tuple[str, ...]:
+    manifest = getattr(module, _TOOL_MODULES_ATTR, ())
+    if manifest is None:
+        return ()
+    if isinstance(manifest, str):
+        logger.warning(
+            "[tools] Ignoring %s.%s because it must be an iterable of module names, not a string",
+            module.__name__,
+            _TOOL_MODULES_ATTR,
+        )
+        return ()
+
+    try:
+        module_names = tuple(manifest)
+    except TypeError:
+        logger.warning(
+            "[tools] Ignoring %s.%s because it is not iterable",
+            module.__name__,
+            _TOOL_MODULES_ATTR,
+        )
+        return ()
+
+    valid_module_names: list[str] = []
+    for module_name in module_names:
+        if not isinstance(module_name, str) or not module_name:
+            logger.warning(
+                "[tools] Ignoring invalid %s entry on %s: %r",
+                _TOOL_MODULES_ATTR,
+                module.__name__,
+                module_name,
+            )
+            continue
+        valid_module_names.append(module_name)
+    return tuple(valid_module_names)
+
+
+def _import_tool_module_or_none(package: ModuleType, module_name: str) -> ModuleType | None:
+    full_module_name = _qualify_tool_module_name(package, module_name)
+    try:
+        return _import_tool_module(package, module_name)
+    except ModuleNotFoundError as exc:
+        logger.warning("[tools] Skipping %s: %s", full_module_name, exc)
+        return None
+    except Exception as exc:
+        logger.warning(
+            "[tools] Skipping %s due to import failure: %s",
+            full_module_name,
+            exc,
+            exc_info=True,
+        )
+        return None
+
+
+def _iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
+    modules: list[ModuleType] = []
+    for module_name in _iter_tool_module_names(package):
+        module = _import_tool_module_or_none(package, module_name)
+        if module is None:
+            continue
+        modules.append(module)
+
+        for manifest_module_name in _iter_manifest_tool_module_names(module):
+            manifest_module = _import_tool_module_or_none(module, manifest_module_name)
+            if manifest_module is not None:
+                modules.append(manifest_module)
+
+    return modules
 
 
 def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
@@ -142,22 +218,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     # First definition of a given tool name wins; duplicates are logged and skipped.
     packages: list[ModuleType] = [tools_package, *_external_tool_packages]
     for package in packages:
-        for module_name in _iter_tool_module_names(package):
-            try:
-                module = _import_tool_module(package, module_name)
-            except ModuleNotFoundError as exc:
-                logger.warning("[tools] Skipping %s.%s: %s", package.__name__, module_name, exc)
-                continue
-            except Exception as exc:
-                logger.warning(
-                    "[tools] Skipping %s.%s due to import failure: %s",
-                    package.__name__,
-                    module_name,
-                    exc,
-                    exc_info=True,
-                )
-                continue
-
+        for module in _iter_discovered_tool_modules(package):
             for tool in _collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(

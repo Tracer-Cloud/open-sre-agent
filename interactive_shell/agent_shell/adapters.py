@@ -24,8 +24,6 @@ from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_T
 from interactive_shell.agent_shell.action_dispatch import execute_action_plan
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
-from interactive_shell.tools.tool_contracts import ToolContext
-from interactive_shell.tools.tool_registry import REGISTRY
 from interactive_shell.ui import (
     BOLD_BRAND,
     ERROR,
@@ -36,6 +34,8 @@ from interactive_shell.ui import (
 from interactive_shell.ui.action_rendering import ActionRenderObserver
 from interactive_shell.ui.streaming import render_response_header
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from tools.interactive_shell.contracts import ToolContext
+from tools.interactive_shell.registry import REGISTRY
 
 
 class ShellOutputSink:

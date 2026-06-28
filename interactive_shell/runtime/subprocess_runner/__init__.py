@@ -1,14 +1,14 @@
 """Execute planned opensre CLI actions.
 
-Shell command execution lives in ``interactive_shell.tools.shell`` (parsing,
+Shell command execution lives in ``tools.interactive_shell.shell`` (parsing,
 policy, ``execute_shell_command``, and the ``run_shell_command`` / ``run_cd`` /
 ``run_pwd`` runner); it is intentionally not re-exported here. Synthetic test
-execution lives in ``interactive_shell.tools.synthetic`` (the
+execution lives in ``tools.interactive_shell.synthetic`` (the
 ``run_synthetic_test`` / ``watch_synthetic_subprocess`` runner), Claude Code
-implementation execution lives in ``interactive_shell.tools.claude_code_executor``
+implementation execution lives in ``tools.interactive_shell.implementation.claude_code_executor``
 (``run_claude_code_implementation``), and sample-alert / free-text investigation
-execution lives in ``interactive_shell.tools.sample_alert_tool`` /
-``interactive_shell.tools.investigation_tool`` (``run_sample_alert`` /
+execution lives in ``tools.interactive_shell.actions.sample_alert`` /
+``tools.interactive_shell.actions.investigation`` (``run_sample_alert`` /
 ``run_text_investigation``); none are re-exported here. All reuse the shared
 subprocess-streaming primitives in ``task_streaming``.
 

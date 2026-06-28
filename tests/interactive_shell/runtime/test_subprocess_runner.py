@@ -26,22 +26,22 @@ from interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
     terminate_child_process,
 )
-from interactive_shell.tools.claude_code_executor import (
+from platform.common.task_types import TaskKind, TaskStatus
+from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
-from interactive_shell.tools.shell.execution import (
+from tools.interactive_shell.shell.execution import (
     ShellExecutionResult,
 )
-from interactive_shell.tools.shell.runner import (
+from tools.interactive_shell.shell.runner import (
     run_cd_command,
     run_pwd_command,
     run_shell_command,
 )
-from interactive_shell.tools.synthetic.runner import (
+from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
     watch_synthetic_subprocess,
 )
-from platform.common.task_types import TaskKind, TaskStatus
 
 
 class _ImmediateThread:
@@ -263,15 +263,15 @@ def test_run_claude_code_implementation_starts_tracked_task(
 
     monkeypatch.delenv("CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE", raising=False)
     monkeypatch.setattr(
-        "interactive_shell.tools.claude_code_executor.ClaudeCodeAdapter",
+        "tools.interactive_shell.implementation.claude_code_executor.ClaudeCodeAdapter",
         _FakeAdapter,
     )
     monkeypatch.setattr(
-        "interactive_shell.tools.claude_code_executor.subprocess.Popen",
+        "tools.interactive_shell.implementation.claude_code_executor.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.tools.claude_code_executor.threading.Thread",
+        "tools.interactive_shell.implementation.claude_code_executor.threading.Thread",
         _ImmediateThread,
     )
 
@@ -343,7 +343,7 @@ def test_run_shell_command_silent_success_prints_checkmark(monkeypatch: pytest.M
         )
 
     monkeypatch.setattr(
-        "interactive_shell.tools.shell.execution.execute_shell_command",
+        "tools.interactive_shell.shell.execution.execute_shell_command",
         _fake_execute,
     )
 
@@ -370,7 +370,7 @@ def test_run_shell_command_failure_prints_exit_line(monkeypatch: pytest.MonkeyPa
         )
 
     monkeypatch.setattr(
-        "interactive_shell.tools.shell.execution.execute_shell_command",
+        "tools.interactive_shell.shell.execution.execute_shell_command",
         _fake_execute,
     )
 
@@ -397,7 +397,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         raise RuntimeError("spawn failed")
 
     monkeypatch.setattr(
-        "interactive_shell.tools.shell.execution.execute_shell_command",
+        "tools.interactive_shell.shell.execution.execute_shell_command",
         _raise,
     )
     monkeypatch.setattr(

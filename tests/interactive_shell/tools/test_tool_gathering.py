@@ -20,7 +20,7 @@ import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from core.agent_harness.session import ReplSession
 from core.llm.types import ToolCall
-from interactive_shell.tools.tool_gathering import (
+from tools.interactive_shell.tool_gathering import (
     _format_gathering_progress_line,
     _resolve_gather_integrations,
     _tool_input_hint,
@@ -172,11 +172,11 @@ def test_format_gathering_progress_line_escapes_display_and_hint_markup(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
-        "interactive_shell.tools.tool_gathering.tool_source_label",
+        "tools.interactive_shell.tool_gathering.tool_source_label",
         lambda _name: "Grafana [prod]",
     )
     monkeypatch.setattr(
-        "interactive_shell.tools.tool_gathering.tool_short_label",
+        "tools.interactive_shell.tool_gathering.tool_short_label",
         lambda _name, _source: "Mimir",
     )
 

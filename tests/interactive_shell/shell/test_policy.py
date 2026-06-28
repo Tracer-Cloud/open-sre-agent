@@ -6,7 +6,7 @@ operators, substitution) and only rejects genuinely empty input.
 
 from __future__ import annotations
 
-from interactive_shell.tools.shell.policy import evaluate_shell_command
+from tools.interactive_shell.shell.policy import evaluate_shell_command
 
 
 def test_read_only_shell_is_allow() -> None:

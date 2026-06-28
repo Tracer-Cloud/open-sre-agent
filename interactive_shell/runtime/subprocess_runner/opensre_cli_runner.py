@@ -14,14 +14,14 @@ from rich.console import Console
 from rich.markup import escape
 
 from interactive_shell.runtime import ReplSession
-from interactive_shell.tools.shared import (
+from interactive_shell.ui import DIM, ERROR, WARNING, print_command_output
+from interactive_shell.ui.execution_confirm import execution_allowed
+from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
     ToolExecutionMode,
     ToolExecutionPlan,
 )
-from interactive_shell.ui import DIM, ERROR, WARNING, print_command_output
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 from .background_task_executor import (
     start_background_cli_task as _start_background_cli_task_default,

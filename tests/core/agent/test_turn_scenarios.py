@@ -19,12 +19,6 @@ from core.agent_harness.prompts import (
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from interactive_shell.command_registry import SLASH_COMMANDS
-from interactive_shell.tools.tool_contracts import ToolContext
-from interactive_shell.tools.tool_registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
 from tests.core.agent._ci_gates import (
     skip_or_fail,
 )
@@ -47,6 +41,12 @@ from tests.core.agent.scenario_loader import (
     read_shard_config,
     select_cases,
     select_representative,
+)
+from tools.interactive_shell.contracts import ToolContext
+from tools.interactive_shell.registry import (
+    REGISTRY,
+    TOOL_KIND_TO_NAME,
+    ToolKind,
 )
 
 

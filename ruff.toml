@@ -46,7 +46,7 @@ ignore = [
 
 # stderr/stdout buffers outlive the function — closed in a watcher thread's `finally`,
 # so a `with` block at the call site would close them before the subprocess runs.
-"interactive_shell/tools/synthetic/runner.py" = ["SIM115"]
+"tools/interactive_shell/synthetic/runner.py" = ["SIM115"]
 "interactive_shell/runtime/subprocess_runner/background_task_executor.py" = ["SIM115"]
 
 # self._fd is opened in __init__ and must remain open for the lifetime of the

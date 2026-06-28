@@ -1007,7 +1007,7 @@ class TestStreamRendererFocusedUXAndParsing:
 
     def test_strip_outer_quotes_does_not_fire_on_linux(self) -> None:
         """Windows-only outer quote normalization does not alter POSIX shlex tokens."""
-        from interactive_shell.tools.shell.parsing import (
+        from tools.interactive_shell.shell.parsing import (
             parse_shell_command,
         )
 

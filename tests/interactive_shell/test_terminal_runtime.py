@@ -455,7 +455,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
 ) -> None:
     from rich.console import Console
 
-    from interactive_shell.tools.investigation_tool import (
+    from tools.interactive_shell.actions.investigation import (
         run_text_investigation,
     )
 
@@ -1522,10 +1522,10 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     ) -> None:
         from rich.console import Console
 
-        from interactive_shell.tools.shared import (
+        from interactive_shell.ui.execution_confirm import execution_allowed
+        from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
         )
-        from interactive_shell.ui.execution_confirm import execution_allowed
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         session = ReplSession()
@@ -1564,10 +1564,10 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         """
         from rich.console import Console
 
-        from interactive_shell.tools.shared import (
+        from interactive_shell.ui.execution_confirm import execution_allowed
+        from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
         )
-        from interactive_shell.ui.execution_confirm import execution_allowed
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
         session = ReplSession()

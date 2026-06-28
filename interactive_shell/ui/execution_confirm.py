@@ -4,7 +4,7 @@ This module owns the *user-facing* half of the execution gate: it renders the
 policy decision (``Action blocked``, the non-TTY warning, the ``Proceed? [Y/n]``
 prompt), reads the user's confirmation, and emits analytics. The pure decision
 itself is computed by
-:func:`interactive_shell.tools.shared.resolve_confirmation`,
+:func:`tools.interactive_shell.shared.resolve_confirmation`,
 which has no console, ``input``, or analytics dependency.
 
 Keeping interaction here (rather than in ``execution_policy``) means the policy
@@ -21,15 +21,15 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.markup import escape
 
-from interactive_shell.tools.shared import (
+from platform.analytics.cli import capture_repl_execution_policy_decision
+from platform.analytics.provider import Properties
+from platform.terminal.theme import DIM, WARNING
+from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,
     ExecutionVerdict,
     resolve_confirmation,
 )
-from platform.analytics.cli import capture_repl_execution_policy_decision
-from platform.analytics.provider import Properties
-from platform.terminal.theme import DIM, WARNING
 
 if TYPE_CHECKING:
     from interactive_shell.runtime import ReplSession

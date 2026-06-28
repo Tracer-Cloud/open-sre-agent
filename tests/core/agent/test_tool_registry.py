@@ -9,10 +9,10 @@ from rich.console import Console
 from cli.wizard.config import PROVIDER_BY_VALUE
 from core.agent_harness.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS
-from interactive_shell.tools.tool_contracts import (
+from tools.interactive_shell.contracts import (
     ToolContext,
 )
-from interactive_shell.tools.tool_registry import (
+from tools.interactive_shell.registry import (
     REGISTRY,
     TOOL_KIND_TO_NAME,
 )

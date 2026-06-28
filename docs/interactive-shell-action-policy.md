@@ -20,7 +20,7 @@ recurring source of precedence drift.
    selected entirely by the shell action agent via native tool-calling.
 2. Tool selection is driven by the action-agent system prompt
    (`.../llm_context/system_prompt.py`) and the per-tool descriptions
-   in the tool catalog (`interactive_shell/tools/*`). Keep both precise — they
+   in the tool catalog (`tools/interactive_shell/*`). Keep both precise — they
    are the only selection signal.
 3. The action path does not post-hoc rewrite the model's tool calls. Tool calls
    execute as first-class `AgentTool`s through the shared `core`
@@ -164,7 +164,7 @@ them; the fixture `policy` block now carries a single `executes_terminal_action`
 `boolean` (true only when a shell action AgentTool is expected to run).
 
 If write/mutating actions are introduced later, gate them with the
-execution-stage confirmation policy (`interactive_shell/tools/shared/execution_policy.py`), **not**
+execution-stage confirmation policy (`tools/interactive_shell/shared/execution_policy.py`), **not**
 an action-selection denial.
 
 ### Removal of the shell-command safety policy (alpha)
@@ -196,7 +196,7 @@ What changed:
 
 The `ask`/confirmation machinery (`trust_mode` plus the confirmation UX) is
 retained as an unused hook, split across two layers: the pure decision lives in
-`interactive_shell/tools/shared/execution_policy.py` (`resolve_confirmation`), and the terminal
+`tools/interactive_shell/shared/execution_policy.py` (`resolve_confirmation`), and the terminal
 interaction (`execution_allowed` — console output, the `Proceed? [Y/n]` prompt,
 analytics) lives in `interactive_shell/ui/execution_confirm.py`. If command
 guardrails are reintroduced after alpha, gate them here at the execution stage —

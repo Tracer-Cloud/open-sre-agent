@@ -21,11 +21,6 @@ LIVE_INTEGRATION_SENTINEL = "@live"
 
 from core.agent_harness.session import ReplSession
 from interactive_shell.agent_shell.turn_entry import handle_message_with_agent
-from interactive_shell.tools.tool_contracts import ToolExecutor
-from interactive_shell.tools.tool_registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-)
 from interactive_shell.utils.telemetry import PromptRecorder
 from platform.analytics.repl_context import bind_cli_session_id, reset_cli_session_id
 from tests.core.agent._oracle_normalize import (
@@ -37,6 +32,11 @@ from tests.core.agent.scenario_loader import (
     GatheredToolsContract,
     ScenarioCapabilities,
     ScenarioCase,
+)
+from tools.interactive_shell.contracts import ToolExecutor
+from tools.interactive_shell.registry import (
+    REGISTRY,
+    TOOL_KIND_TO_NAME,
 )
 
 # Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from interactive_shell.command_registry.types import SlashCommand
-from interactive_shell.tools.tool_contracts import (
+from tools.interactive_shell.contracts import (
     object_schema,
     string_array_property,
     string_property,

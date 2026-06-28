@@ -9,11 +9,6 @@ from typing import cast
 import pytest
 import yaml
 
-from interactive_shell.tools.tool_registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
 from tests.core.agent.scenario_loader import (
     DEFAULT_GATE_PER_CLASS,
     INTENT_TO_BEHAVIOR_CLASS,
@@ -28,6 +23,11 @@ from tests.core.agent.scenario_loader import (
     select_cases,
     select_representative,
     validate_action_shape,
+)
+from tools.interactive_shell.registry import (
+    REGISTRY,
+    TOOL_KIND_TO_NAME,
+    ToolKind,
 )
 
 TESTS_DIR = Path(__file__).resolve().parent

@@ -52,9 +52,9 @@ from interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMM
 from interactive_shell.command_registry.types import SlashCommand
 from interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from interactive_shell.runtime import ReplSession
-from interactive_shell.tools.shared import allow_tool
 from interactive_shell.ui import ERROR
 from interactive_shell.ui.execution_confirm import execution_allowed
+from tools.interactive_shell.shared import allow_tool
 
 _MERGED_SEQUENCE = tuple(
     chain(

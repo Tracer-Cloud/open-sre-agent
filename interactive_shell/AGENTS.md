@@ -23,7 +23,7 @@ should be predictable, interruptible, explainable, and safe by default.
 | `command_registry/` | slash-command definitions, argument validation, command dispatch | long-running implementation details better placed in services/runtime modules |
 | `runtime/` | background task workers, lifecycle/`ReplState`, runtime context assembly, controller/entrypoint support modules | UI rendering, prompt text, and reusable session persistence |
 | `orchestration/` | action planning, execution policy, subprocess runner, deterministic command detection, and interaction models | raw UI formatting |
-| `tools/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/shell_tool.py`) | slash-command execution |
+| `tools/interactive_shell/shell/` | shell command parsing, shell execution policy, subprocess execution, and the `run_shell_command`/`run_cd`/`run_pwd` runner (next to the `shell_run` tool in `tools/interactive_shell/actions/shell.py`) | slash-command execution |
 | `harness/response.py` | final response generation (`generate_response`), action-plan parsing, and capability validation | direct mutation of runtime state outside the subprocess runner |
 | `references/` | CLI/docs/source/AGENTS reference loading and caching | generated model prose |
 | `config/` | interactive-shell config loading and tool catalog metadata | global app config unrelated to the REPL |
@@ -118,13 +118,13 @@ owning area rather than adding more logic to the caller.
     "remove github" is resolved by the action agent into an inline-picker
     command (`/integrations remove`, `/integrations setup`, `/mcp connect`,
     `/mcp disconnect`, or a bare `/integrations` / `/mcp` menu), the loop has not
-    reserved stdin, so `slash_tool.py` must NOT run the picker inline. It defers
+    reserved stdin, so `tools/interactive_shell/actions/slash.py` must NOT run the picker inline. It defers
     via `session.queue_auto_command(...)`, which re-submits the command as
     literal command text so the loop can reserve exclusive stdin before the
     agent path runs it. New raw-stdin picker/wizard commands the action agent can emit
     must be added to
     `_INTERACTIVE_PICKER_MENUS` / `_INTERACTIVE_PICKER_SUBCOMMANDS` in
-    `interactive_shell/tools/slash_tool.py`.
+    `tools/interactive_shell/actions/slash.py`.
 
 ## Action Selection And Execution
 

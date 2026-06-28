@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-import interactive_shell.tools.slash_tool as slash_tool
+import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.session import ReplSession
 from interactive_shell.agent_shell.tool_calling import (
     ToolCallingDeps,

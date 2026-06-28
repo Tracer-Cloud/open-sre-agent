@@ -19,8 +19,8 @@ from core.agent_harness.session import (
 )
 from core.agent_harness.session.tasks import TaskRegistry
 from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.tools.synthetic.runner import watch_synthetic_subprocess
 from platform.common.task_types import TaskKind, TaskStatus
+from tools.interactive_shell.synthetic.runner import watch_synthetic_subprocess
 
 
 def _capture() -> tuple[Console, io.StringIO]:

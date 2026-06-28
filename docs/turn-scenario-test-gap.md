@@ -60,7 +60,7 @@ copy and the REPL status bar. It does not control which integrations are
 entirely:
 
 ```python
-# interactive_shell/tools/tool_gathering.py
+# tools/interactive_shell/tool_gathering.py
 def _resolve_session_integrations(session: ReplSession) -> dict[str, Any]:
     if session.resolved_integrations_cache is not None:
         return session.resolved_integrations_cache

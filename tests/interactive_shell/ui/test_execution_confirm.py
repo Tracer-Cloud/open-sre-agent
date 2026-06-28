@@ -2,7 +2,7 @@
 
 These cover the terminal-facing half of the execution gate: console output and
 the confirmation prompt. The pure decision is tested in
-``tests/interactive_shell/tools/shared/test_execution_policy.py``.
+``tests/tools/interactive_shell/shared/test_execution_policy.py``.
 """
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.tools.shared import (
+from interactive_shell.ui.execution_confirm import execution_allowed
+from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
     allow_tool,
 )
-from interactive_shell.ui.execution_confirm import execution_allowed
 
 
 def _ask_result() -> ExecutionPolicyResult:

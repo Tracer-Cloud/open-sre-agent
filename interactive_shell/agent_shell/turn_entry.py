@@ -22,8 +22,8 @@ from interactive_shell.agent_shell.adapters import (
 from interactive_shell.agent_shell.tool_calling import run_tool_calling_turn
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
-from interactive_shell.tools.tool_gathering import gather_tool_evidence
 from interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
+from tools.interactive_shell.tool_gathering import gather_tool_evidence
 
 # Dependency seams used by the harness turn-routing tests.
 RunToolCallingTurn = Callable[..., ToolCallingTurnResult]

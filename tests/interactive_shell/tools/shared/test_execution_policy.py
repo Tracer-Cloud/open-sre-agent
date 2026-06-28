@@ -9,13 +9,13 @@ by exercising :func:`resolve_confirmation` with explicitly-constructed ``ask`` /
 This module is pure (no console, no ``input``, no analytics). The interaction
 layer (``execution_allowed``) and its terminal/analytics behavior are covered by
 ``tests/interactive_shell/ui/test_execution_confirm.py``. Shell-specific policy
-lives in ``interactive_shell.tools.shell.policy`` and is covered by
+lives in ``tools.interactive_shell.shell.policy`` and is covered by
 ``tests/interactive_shell/shell/test_policy.py``.
 """
 
 from __future__ import annotations
 
-from interactive_shell.tools.shared import (
+from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,
     ToolExecutionMode,

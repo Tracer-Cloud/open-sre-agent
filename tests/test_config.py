@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -331,9 +333,12 @@ def test_resolve_llm_settings_verbose_attempts_only_configured_provider(monkeypa
     assert resolution.fell_back is False
 
 
-def test_describe_llm_resolution_reports_no_fallback(monkeypatch) -> None:
+def test_describe_llm_resolution_reports_no_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
 
     report = describe_llm_resolution()
 
@@ -343,9 +348,12 @@ def test_describe_llm_resolution_reports_no_fallback(monkeypatch) -> None:
     assert "credential status   : none" in report
 
 
-def test_describe_llm_resolution_reports_missing_configured_credentials(monkeypatch) -> None:
+def test_describe_llm_resolution_reports_missing_configured_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
 
     report = describe_llm_resolution()
 
