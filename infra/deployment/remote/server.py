@@ -661,7 +661,7 @@ def _alert_name_from_inv_id(inv_id: str) -> str:
     parts = inv_id.split("_", maxsplit=2)
     slug = parts[2] if len(parts) > 2 else inv_id
     if _INV_ID_SUFFIX_RE.search(slug):
-        slug = slug[:-9]
+        slug = _INV_ID_SUFFIX_RE.sub("", slug)
     return slug.replace("-", " ")
 
 
