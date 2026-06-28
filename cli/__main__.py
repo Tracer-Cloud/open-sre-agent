@@ -12,40 +12,219 @@ from __future__ import annotations
 import os
 import signal
 import sys
+from collections.abc import Iterator, Mapping
 from contextlib import suppress
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from config.platform_bootstrap import ensure_project_platform_package
 
 ensure_project_platform_package()
 
 import click  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
 
-from cli.commands import register_commands  # noqa: E402
 from config.version import get_version  # noqa: E402
-from interactive_shell.ui.layout import RichGroup, render_landing  # noqa: E402
-from interactive_shell.utils.error_handling.exception_reporting import (  # noqa: E402
-    report_exception,
-    should_report_exception,
-)
-from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked  # noqa: E402
-from platform.analytics.provider import (  # noqa: E402
-    Properties,
-    capture_first_run_if_needed,
-    shutdown_analytics,
-)
-from platform.common.errors import OpenSREError as _StructuredError  # noqa: E402
-from platform.observability.sentry_sdk import capture_exception, init_sentry  # noqa: E402
-from platform.terminal.prompt_support import (  # noqa: E402
-    handle_ctrl_c_press,
-    install_questionary_ctrl_c_double_exit,
-    install_questionary_escape_cancel,
-)
-from platform.terminal.theme import list_theme_names  # noqa: E402
+
+if TYPE_CHECKING:
+    from platform.analytics.provider import Properties
+    from platform.common.errors import OpenSREError
 
 _CAPTURE_CLI_ANALYTICS = "capture_cli_analytics"
 _CLI_ANALYTICS_CAPTURED = "cli_analytics_captured"
 _CLI_ARGV = "cli_argv"
+_GetDefault = TypeVar("_GetDefault")
+
+
+class _ThemeParamType(click.ParamType):
+    """Validate theme names without importing terminal UI dependencies at startup."""
+
+    name = "theme"
+
+    def _choices(self) -> tuple[str, ...]:
+        from platform.terminal.theme import list_theme_names
+
+        return list_theme_names()
+
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str:
+        normalized = str(value).strip().lower()
+        choices = self._choices()
+        if normalized in choices:
+            return normalized
+        self.fail(
+            f"{value!r} is not one of: {', '.join(choices)}.",
+            param,
+            ctx,
+        )
+
+
+class _LazyCommandsDict(dict[str, click.Command]):
+    """Click command mapping that loads the command tree on first read."""
+
+    def __init__(self, owner: _LazyRichGroup, initial: Mapping[str, click.Command]) -> None:
+        super().__init__(initial)
+        self._owner = owner
+
+    def _ensure(self) -> None:
+        self._owner.ensure_commands_registered()
+
+    def __contains__(self, key: object) -> bool:
+        self._ensure()
+        return super().__contains__(key)
+
+    def __iter__(self) -> Iterator[str]:
+        self._ensure()
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._ensure()
+        return super().__len__()
+
+    def __getitem__(self, key: str) -> click.Command:
+        self._ensure()
+        return super().__getitem__(key)
+
+    @overload
+    def get(self, key: str, default: None = None, /) -> click.Command | None: ...
+
+    @overload
+    def get(self, key: str, default: click.Command, /) -> click.Command: ...
+
+    @overload
+    def get(self, key: str, default: _GetDefault, /) -> click.Command | _GetDefault: ...
+
+    def get(self, key: str, default: object = None, /) -> object:
+        self._ensure()
+        return super().get(key, default)
+
+    def keys(self) -> Any:
+        self._ensure()
+        return super().keys()
+
+    def values(self) -> Any:
+        self._ensure()
+        return super().values()
+
+    def items(self) -> Any:
+        self._ensure()
+        return super().items()
+
+
+class _LazyRichGroup(click.Group):
+    """Root CLI group with lazy command registration and Rich help rendering."""
+
+    _commands_registered: bool
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._commands_registered = False
+        self.commands = _LazyCommandsDict(self, self.commands)
+
+    def ensure_commands_registered(self) -> None:
+        if self._commands_registered:
+            return
+        self._commands_registered = True
+        from cli.commands import register_commands
+
+        register_commands(self)
+
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        self.ensure_commands_registered()
+        return super().list_commands(ctx)
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        self.ensure_commands_registered()
+        return super().get_command(ctx, cmd_name)
+
+    def format_help(self, ctx: click.Context, _formatter: click.HelpFormatter) -> None:
+        assert isinstance(ctx.command, click.Group)
+        from interactive_shell.ui.layout import render_help
+
+        render_help(ctx.command)
+
+
+def capture_first_run_if_needed() -> None:
+    from platform.analytics.provider import capture_first_run_if_needed as _capture
+
+    _capture()
+
+
+def capture_cli_invoked(properties: Properties | None = None) -> None:
+    from platform.analytics.cli import capture_cli_invoked as _capture
+
+    _capture(properties)
+
+
+def shutdown_analytics(*, flush: bool = True) -> None:
+    from platform.analytics.provider import shutdown_analytics as _shutdown
+
+    _shutdown(flush=flush)
+
+
+def build_cli_invoked_properties(
+    *,
+    entrypoint: str,
+    command_parts: list[str],
+    json_output: bool,
+    verbose: bool,
+    debug: bool,
+    yes: bool,
+    interactive: bool,
+) -> Properties:
+    from platform.analytics.cli import build_cli_invoked_properties as _build
+
+    return _build(
+        entrypoint=entrypoint,
+        command_parts=command_parts,
+        json_output=json_output,
+        verbose=verbose,
+        debug=debug,
+        yes=yes,
+        interactive=interactive,
+    )
+
+
+def report_exception(exc: BaseException, *, context: str) -> None:
+    from interactive_shell.utils.error_handling.exception_reporting import (
+        report_exception as _report_exception,
+    )
+
+    _report_exception(exc, context=context)
+
+
+def should_report_exception(exc: click.ClickException) -> bool:
+    from interactive_shell.utils.error_handling.exception_reporting import (
+        should_report_exception as _should_report_exception,
+    )
+
+    return _should_report_exception(exc)
+
+
+def init_sentry(*, entrypoint: str | None = None) -> None:
+    from platform.observability.sentry_sdk import init_sentry as _init_sentry
+
+    _init_sentry(entrypoint=entrypoint)
+
+
+def capture_exception(exc: BaseException, *, context: str) -> None:
+    from platform.observability.sentry_sdk import capture_exception as _capture_exception
+
+    _capture_exception(exc, context=context)
+
+
+def render_landing(group: click.Group) -> None:
+    from interactive_shell.ui.layout import render_landing as _render_landing
+
+    _render_landing(group)
+
+
+def _load_structured_error_type() -> type[OpenSREError]:
+    from platform.common.errors import OpenSREError
+
+    return OpenSREError
 
 
 def _ensure_utf8_stdio() -> None:
@@ -129,7 +308,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
 
 
 @click.group(
-    cls=RichGroup,
+    cls=_LazyRichGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
     invoke_without_command=True,
 )
@@ -154,7 +333,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
 )
 @click.option(
     "--theme",
-    type=click.Choice(list(list_theme_names()), case_sensitive=False),
+    type=_ThemeParamType(),
     default=None,
     help="Interactive-shell color palette. Overrides OPENSRE_THEME env var "
     "and ~/.opensre/config.yml interactive.theme.",
@@ -208,9 +387,6 @@ def cli(
     ReplConfig.load(cli_theme=theme)
 
 
-register_commands(cli)
-
-
 def _install_sigint_handler() -> None:
     """Handle Ctrl+C between prompts (when prompt_toolkit is not active).
 
@@ -220,6 +396,8 @@ def _install_sigint_handler() -> None:
     """
 
     def _handler(_signum: int, _frame: object) -> None:
+        from platform.terminal.prompt_support import handle_ctrl_c_press
+
         handle_ctrl_c_press()
 
     signal.signal(signal.SIGINT, _handler)
@@ -242,11 +420,26 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
     return should_report_exception(exc)
 
 
+def _is_fast_version_invocation(argv: list[str]) -> bool:
+    """Return whether argv can be answered before bootstrapping the full CLI."""
+    return argv == ["--version"]
+
+
+def _print_fast_version() -> None:
+    click.echo(f"opensre, version {get_version()}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``opensre`` console script."""
     _ensure_utf8_stdio()
-    load_dotenv(override=False)
     cli_argv = list(sys.argv[1:] if argv is None else argv)
+    if _is_fast_version_invocation(cli_argv):
+        _print_fast_version()
+        return 0
+
+    from dotenv import load_dotenv
+
+    load_dotenv(override=False)
     try:
         init_sentry(entrypoint=_sentry_entrypoint_for_invocation(cli_argv))
     except ModuleNotFoundError as exc:
@@ -261,9 +454,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     install_product_adapters()
+    from platform.terminal.prompt_support import (
+        install_questionary_ctrl_c_double_exit,
+        install_questionary_escape_cancel,
+    )
+
     install_questionary_escape_cancel()
     install_questionary_ctrl_c_double_exit()
     _install_sigint_handler()
+    StructuredError = _load_structured_error_type()
 
     try:
         cli(
@@ -288,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
             report_exception(exc, context="cli.main")
         exc.show()
         return exc.exit_code
-    except _StructuredError as exc:
+    except StructuredError as exc:
         # A structured error raised by non-CLI code (tools/integrations) is not
         # a ClickException, so render it here the same way the CLI subclass'
         # show() does (clean panel, no traceback) and exit with its code.
@@ -303,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
                 parts.append(f"Docs: {exc.docs_url}")
             hint = "  ".join(parts)
         render_error(exc, console=Console(stderr=True, highlight=False), hint=hint)
-        return exc.exit_code
+        return int(exc.exit_code)
     except click.exceptions.Exit as exc:
         return exc.exit_code
     except SystemExit as exc:

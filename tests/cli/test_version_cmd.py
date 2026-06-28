@@ -19,3 +19,16 @@ def test_version_subcommand(monkeypatch, capsys) -> None:
     assert lines[0] == f"opensre {get_version()}"
     assert lines[1] == f"Python  {platform.python_version()}"
     assert lines[2] == f"OS      {platform.system().lower()} ({platform.machine()})"
+
+
+def test_version_flag_uses_fast_path(monkeypatch, capsys) -> None:
+    def fail_bootstrap(*_args, **_kwargs) -> None:
+        raise AssertionError("--version should not bootstrap the full CLI")
+
+    monkeypatch.setattr("cli.__main__.init_sentry", fail_bootstrap)
+    monkeypatch.setattr("cli.__main__._sentry_entrypoint_for_invocation", fail_bootstrap)
+
+    rc = main(["--version"])
+
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == f"opensre, version {get_version()}"
