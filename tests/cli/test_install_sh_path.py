@@ -100,6 +100,7 @@ def _run_release_metadata_step(
         INSTALL_CHANNEL="{install_channel}"
         version="{version}"
         {block}
+        printf '%s\\n' "$metadata_step"
     """)
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
 
@@ -153,7 +154,106 @@ def test_install_sh_has_step_for_explicit_version_fetch() -> None:
     result = _run_release_metadata_step(version="2026.4.29")
 
     assert result.returncode == 0, result.stderr
-    assert "[1/4] Fetching release metadata for v2026.4.29..." in result.stdout
+    assert "[1/6] Fetching release metadata for v2026.4.29" in result.stdout
+
+
+def test_install_sh_defines_progress_helpers() -> None:
+    source = INSTALL_SH.read_text()
+
+    for helper in (
+        "is_interactive_terminal()",
+        "terminal_supports_unicode()",
+        "progress_frame()",
+        "draw_progress()",
+        "finish_progress()",
+        "run_with_progress()",
+        "capture_with_progress()",
+    ):
+        assert helper in source
+
+    assert "OPENSRE_INSTALL_VERBOSE" in source
+    assert "\\033[?25h" in source
+    assert 'trap \'kill "$command_pid"' in source
+
+
+def test_install_sh_progress_plain_when_not_tty() -> None:
+    result = _run_logging_snippet(
+        """
+        run_with_progress "Plain progress step" bash -c 'printf "work complete\\\\n"'
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, result.stderr
+    assert "Plain progress step" in output
+    assert "work complete" in output
+    assert "\x1b[" not in output
+    assert "\r" not in output
+
+
+def test_install_sh_capture_with_progress_keeps_stdout_value_clean() -> None:
+    result = _run_logging_snippet(
+        """
+        is_interactive_terminal() { return 0; }
+        terminal_supports_unicode() { return 1; }
+        capture_with_progress captured_value "Capture value" bash -c 'printf "release-json"'
+        printf '\\nRESULT:%s\\n' "$captured_value"
+        """
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "RESULT:release-json" in result.stdout
+    assert "RESULT:Capture value" not in result.stdout
+
+
+def test_install_sh_capture_with_progress_preserves_failure_status_and_logs() -> None:
+    result = _run_logging_snippet(
+        """
+        if capture_with_progress captured_value "Failing capture step" bash -c 'echo hidden-out; echo hidden-err >&2; exit 7'; then
+            exit 99
+        else
+            progress_status=$?
+        fi
+        exit "$progress_status"
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 7
+    assert "Failing capture step" in output
+    assert "hidden-out" in output
+    assert "hidden-err" in output
+
+
+def test_install_sh_run_with_progress_prints_captured_logs_on_failure() -> None:
+    result = _run_logging_snippet(
+        """
+        is_interactive_terminal() { return 0; }
+        terminal_supports_unicode() { return 1; }
+        if run_with_progress "Failing progress step" bash -c 'echo hidden-out; echo hidden-err >&2; exit 7'; then
+            exit 99
+        else
+            progress_status=$?
+        fi
+        exit "$progress_status"
+        """
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 7
+    assert "Failing progress step failed" in output
+    assert "hidden-out" in output
+    assert "hidden-err" in output
+
+
+def test_install_sh_uses_six_step_extract_verify_install_labels() -> None:
+    source = INSTALL_SH.read_text()
+
+    assert "[4/6] Downloading and verifying checksum" in source
+    assert "[5/6] Extracting and verifying binary" in source
+    assert "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" in source
+    assert "[6/6] Extracting release archive" not in source
+    assert 'capture_with_progress installed_version "Verifying installed binary"' not in source
 
 
 def test_zsh_writes_export_to_zshrc(tmp_path: Path) -> None:

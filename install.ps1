@@ -7,6 +7,206 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Test-OpenSreVerboseInstall {
+    $value = [string]$env:OPENSRE_INSTALL_VERBOSE
+    return ($value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "yes" -or $value -eq "YES")
+}
+
+function Test-OpenSreInteractiveHost {
+    try {
+        if ([System.Console]::IsOutputRedirected) {
+            return $false
+        }
+    }
+    catch {
+        if ($null -eq $Host -or $null -eq $Host.UI) {
+            return $false
+        }
+    }
+
+    try {
+        if ($null -eq $Host -or $null -eq $Host.UI -or $null -eq $Host.UI.RawUI) {
+            return $false
+        }
+
+        $null = $Host.UI.RawUI.WindowSize
+    }
+    catch {
+        return $false
+    }
+
+    return $true
+}
+
+function Write-OpenSreLine {
+    param(
+        [AllowEmptyString()]
+        [string]$Message,
+        [string]$Color = ""
+    )
+
+    if ((Test-OpenSreInteractiveHost) -and $Color) {
+        Write-Host $Message -ForegroundColor $Color
+        return
+    }
+
+    Write-Host $Message
+}
+
+function Write-OpenSreDetail {
+    param(
+        [AllowEmptyString()]
+        [string]$Message
+    )
+
+    if (-not $Message) {
+        return
+    }
+
+    Write-OpenSreLine -Message "  $Message" -Color "DarkGray"
+}
+
+function Write-OpenSreHeader {
+    param(
+        [string]$Channel = "",
+        [string]$RequestedVersion = "",
+        [string]$InstallDir = "",
+        [string]$Repo = ""
+    )
+
+    Write-OpenSreLine -Message "OpenSRE installer" -Color "Cyan"
+    Write-OpenSreLine -Message "Installing the OpenSRE CLI for Windows." -Color "DarkGray"
+
+    if (Test-OpenSreVerboseInstall) {
+        Write-OpenSreDetail -Message "Verbose logging enabled by OPENSRE_INSTALL_VERBOSE=1."
+        if ($Repo) {
+            Write-OpenSreDetail -Message "Repository: $Repo"
+        }
+        if ($Channel) {
+            Write-OpenSreDetail -Message "Channel: $Channel"
+        }
+        if ($RequestedVersion) {
+            Write-OpenSreDetail -Message "Requested version: $RequestedVersion"
+        }
+        if ($InstallDir) {
+            Write-OpenSreDetail -Message "Install directory: $InstallDir"
+        }
+    }
+}
+
+function Write-OpenSreProgressLine {
+    param(
+        [string]$Label,
+        [Int64]$DownloadedBytes,
+        [Int64]$TotalBytes = -1
+    )
+
+    if (-not (Test-OpenSreInteractiveHost) -or (Test-OpenSreVerboseInstall)) {
+        return
+    }
+
+    if ($TotalBytes -gt 0) {
+        $percent = [Math]::Min(100, [Math]::Floor(($DownloadedBytes * 100) / $TotalBytes))
+        [System.Console]::Write("`r  {0}% {1} ({2}/{3} bytes)" -f $percent, $Label, $DownloadedBytes, $TotalBytes)
+        return
+    }
+
+    [System.Console]::Write("`r  {0} ({1} bytes)" -f $Label, $DownloadedBytes)
+}
+
+function Clear-OpenSreProgressLine {
+    if (-not (Test-OpenSreInteractiveHost) -or (Test-OpenSreVerboseInstall)) {
+        return
+    }
+
+    [System.Console]::Write("`r{0}`r" -f (" " * 100))
+}
+
+function Invoke-OpenSreStep {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [scriptblock]$Operation,
+        [string]$Detail = ""
+    )
+
+    Write-OpenSreLine -Message $Name -Color "Cyan"
+    Write-OpenSreDetail -Message $Detail
+
+    if ($Operation) {
+        try {
+            $result = & $Operation
+            Write-OpenSreLine -Message "  OK $Name" -Color "Green"
+            return $result
+        }
+        catch {
+            Write-OpenSreLine -Message "  FAILED $Name" -Color "Red"
+            throw
+        }
+    }
+}
+
+function Invoke-OpenSreStreamDownload {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+        [Parameter(Mandatory = $true)]
+        [string]$OutFile,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    $request = [System.Net.HttpWebRequest]::Create($Uri)
+    $headers = Get-OpenSreRequestHeaders
+    foreach ($key in $headers.Keys) {
+        if ($key -eq "User-Agent") {
+            $request.UserAgent = [string]$headers[$key]
+        }
+        elseif ($key -eq "Accept") {
+            $request.Accept = [string]$headers[$key]
+        }
+        else {
+            $request.Headers[$key] = [string]$headers[$key]
+        }
+    }
+
+    $response = $request.GetResponse()
+    try {
+        $totalBytes = [Int64]$response.ContentLength
+        $inputStream = $response.GetResponseStream()
+        $outputStream = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+        try {
+            $buffer = New-Object byte[] 65536
+            [Int64]$downloadedBytes = 0
+
+            while ($true) {
+                $read = $inputStream.Read($buffer, 0, $buffer.Length)
+                if ($read -le 0) {
+                    break
+                }
+
+                $outputStream.Write($buffer, 0, $read)
+                $downloadedBytes += $read
+                Write-OpenSreProgressLine -Label $Label -DownloadedBytes $downloadedBytes -TotalBytes $totalBytes
+            }
+        }
+        finally {
+            if ($outputStream) {
+                $outputStream.Dispose()
+            }
+            if ($inputStream) {
+                $inputStream.Dispose()
+            }
+            Clear-OpenSreProgressLine
+        }
+    }
+    finally {
+        if ($response) {
+            $response.Dispose()
+        }
+    }
+}
+
 function Get-OpenSreDefaultInstallDir {
     $userHome = if ($HOME) { $HOME } else { [System.Environment]::GetFolderPath("UserProfile") }
     return Join-Path $userHome ".local\bin"
@@ -123,18 +323,31 @@ function Invoke-OpenSreRestMethod {
         $params.UseBasicParsing = $true
     }
 
+    if (Test-OpenSreVerboseInstall) {
+        Write-OpenSreDetail -Message "GET $Uri"
+    }
+
     return Invoke-OpenSreWithRetry -Description "fetch release metadata from GitHub" -Operation {
         Invoke-RestMethod @params
     }
 }
 
-function Invoke-OpenSreWebRequest {
+function Invoke-OpenSreDownloadFileWithProgress {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Uri,
         [Parameter(Mandatory = $true)]
-        [string]$OutFile
+        [string]$OutFile,
+        [string]$Label = ""
     )
+
+    if (-not $Label) {
+        $Label = [System.IO.Path]::GetFileName($OutFile)
+    }
+
+    if (-not $Label) {
+        $Label = "file"
+    }
 
     $params = @{
         Uri = $Uri
@@ -147,9 +360,40 @@ function Invoke-OpenSreWebRequest {
         $params.UseBasicParsing = $true
     }
 
+    if (Test-OpenSreVerboseInstall) {
+        Write-OpenSreDetail -Message "Download URL: $Uri"
+        Write-OpenSreDetail -Message "Destination: $OutFile"
+    }
+    else {
+        Write-OpenSreDetail -Message $Label
+    }
+
     Invoke-OpenSreWithRetry -Description "download '$Uri'" -Operation {
-        Invoke-WebRequest @params | Out-Null
+        if ((Test-OpenSreInteractiveHost) -and -not (Test-OpenSreVerboseInstall)) {
+            Invoke-OpenSreStreamDownload -Uri $Uri -OutFile $OutFile -Label $Label
+        }
+        else {
+            $previousProgressPreference = $ProgressPreference
+            try {
+                $ProgressPreference = "SilentlyContinue"
+                Invoke-WebRequest @params | Out-Null
+            }
+            finally {
+                $ProgressPreference = $previousProgressPreference
+            }
+        }
     } | Out-Null
+}
+
+function Invoke-OpenSreWebRequest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+        [Parameter(Mandatory = $true)]
+        [string]$OutFile
+    )
+
+    Invoke-OpenSreDownloadFileWithProgress -Uri $Uri -OutFile $OutFile
 }
 
 function Get-OpenSreRuntimeArchitecture {
@@ -226,13 +470,6 @@ function Get-OpenSreReleaseMetadata {
 
     if ($Channel -eq "main" -and $normalizedVersion) {
         throw "OPENSRE_VERSION cannot be combined with the main install channel."
-    }
-
-    if ($Channel -eq "main") {
-        Write-Host "Fetching latest main build metadata..."
-    }
-    elseif (-not $normalizedVersion) {
-        Write-Host "Fetching latest release version..."
     }
 
     $releaseUri = if ($Channel -eq "main") {
@@ -501,12 +738,34 @@ function Install-OpenSre {
     $requestedVersion = if ($env:OPENSRE_VERSION) { $env:OPENSRE_VERSION.Trim().TrimStart("v") } else { "" }
     $resolvedChannel = if ($Channel) { $Channel.Trim().ToLowerInvariant() } else { "release" }
 
+    Write-OpenSreHeader -Channel $resolvedChannel -RequestedVersion $requestedVersion -InstallDir $installDir -Repo $repo
     Enable-OpenSreTls
 
     $targetArch = Resolve-OpenSreWindowsArchitecture
-    $releaseMetadata = Get-OpenSreReleaseMetadata -Repo $repo -Channel $resolvedChannel -RequestedVersion $requestedVersion
+    $metadataStepName = ""
+    if ($resolvedChannel -eq "main") {
+        $metadataStepName = "[1/6] Fetching latest main build metadata"
+    }
+    elseif ($requestedVersion) {
+        $metadataStepName = "[1/6] Fetching release metadata for v$requestedVersion"
+    }
+    else {
+        $metadataStepName = "[1/6] Fetching latest release version"
+    }
+    $releaseMetadata = Invoke-OpenSreStep -Name $metadataStepName -Operation {
+        Get-OpenSreReleaseMetadata -Repo $repo -Channel $resolvedChannel -RequestedVersion $requestedVersion
+    }
     $version = [string]$releaseMetadata.Version
-    $downloadPlan = Resolve-OpenSreArchiveDownload -Release $releaseMetadata.Release -Version $version -Channel $resolvedChannel -TargetArch $targetArch
+
+    $assetStepName = if ($resolvedChannel -eq "main") {
+        "[2/6] Preparing opensre main build (windows/$targetArch)"
+    }
+    else {
+        "[2/6] Preparing opensre v$version (windows/$targetArch)"
+    }
+    $downloadPlan = Invoke-OpenSreStep -Name $assetStepName -Operation {
+        Resolve-OpenSreArchiveDownload -Release $releaseMetadata.Release -Version $version -Channel $resolvedChannel -TargetArch $targetArch
+    }
     $archive = [string]$downloadPlan.ArchiveName
     $downloadUrl = [string]$downloadPlan.ArchiveUrl
     $checksumUrl = [string]$downloadPlan.ChecksumUrl
@@ -514,33 +773,30 @@ function Install-OpenSre {
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("opensre-install-" + [System.Guid]::NewGuid().ToString("N"))
 
     New-Item -ItemType Directory -Path $tmpDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 
     try {
         $archivePath = Join-Path $tmpDir $archive
         $checksumPath = "$archivePath.sha256"
 
-        if ($resolvedChannel -eq "main") {
-            Write-Host "Installing opensre main build (windows/$targetArch)..."
-        }
-        else {
-            Write-Host "Installing opensre v$version (windows/$targetArch)..."
-        }
         if ($resolvedArch -ne $targetArch) {
-            Write-Host "Using release asset built for windows/$resolvedArch."
+            Write-OpenSreDetail -Message "Using release asset built for windows/$resolvedArch."
         }
-        Write-Host "Downloading $downloadUrl"
-        Invoke-OpenSreWebRequest -Uri $downloadUrl -OutFile $archivePath
+
+        Invoke-OpenSreStep -Name "[3/6] Downloading release archive" -Operation {
+            Invoke-OpenSreDownloadFileWithProgress -Uri $downloadUrl -OutFile $archivePath -Label $archive
+        }
 
         if ($checksumUrl) {
-            Write-Host "Verifying archive checksum"
-            Invoke-OpenSreWebRequest -Uri $checksumUrl -OutFile $checksumPath
+            $checksumName = [string]$downloadPlan.ChecksumName
+            Invoke-OpenSreStep -Name "[4/6] Downloading and verifying checksum" -Operation {
+                Invoke-OpenSreDownloadFileWithProgress -Uri $checksumUrl -OutFile $checksumPath -Label $checksumName
 
-            $expectedHash = Get-OpenSreExpectedSha256 -ChecksumPath $checksumPath -ArchiveName $archive
-            $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $expectedHash = Get-OpenSreExpectedSha256 -ChecksumPath $checksumPath -ArchiveName $archive
+                $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 
-            if ($actualHash -ne $expectedHash) {
-                throw "Checksum verification failed for '$archive'. Expected '$expectedHash' but got '$actualHash'."
+                if ($actualHash -ne $expectedHash) {
+                    throw "Checksum verification failed for '$archive'. Expected '$expectedHash' but got '$actualHash'."
+                }
             }
         }
         else {
@@ -552,27 +808,45 @@ function Install-OpenSre {
             }
         }
 
-        Expand-Archive -LiteralPath $archivePath -DestinationPath $tmpDir -Force
+        $verifiedBinary = Invoke-OpenSreStep -Name "[5/6] Extracting and verifying binary" -Operation {
+            Expand-Archive -LiteralPath $archivePath -DestinationPath $tmpDir -Force
 
-        $binaryPath = Get-OpenSreBinaryPathFromArchive -ExtractionRoot $tmpDir -BinaryName $binaryName
-        $binaryVersionInfo = Get-OpenSreBinaryVersionInfo -BinaryPath $binaryPath
-        $binaryVersionText = [string]$binaryVersionInfo.Text
-        $binaryVersion = [string]$binaryVersionInfo.Version
+            $binaryPath = Get-OpenSreBinaryPathFromArchive -ExtractionRoot $tmpDir -BinaryName $binaryName
+            $binaryVersionInfo = Get-OpenSreBinaryVersionInfo -BinaryPath $binaryPath
+            $binaryVersionText = [string]$binaryVersionInfo.Text
+            $binaryVersion = [string]$binaryVersionInfo.Version
+            $installVersion = $version
 
-        if ($resolvedChannel -ne "main" -and $binaryVersionText -notmatch [Regex]::Escape($version)) {
-            if ($requestedVersion) {
-                throw "Downloaded binary version mismatch. Expected '$version' but got '$binaryVersionText'."
+            if ($resolvedChannel -ne "main" -and $binaryVersionText -notmatch [Regex]::Escape($version)) {
+                if ($requestedVersion) {
+                    throw "Downloaded binary version mismatch. Expected '$version' but got '$binaryVersionText'."
+                }
+
+                if (-not $binaryVersion) {
+                    throw "Downloaded binary version mismatch. Expected '$version' but got '$binaryVersionText'."
+                }
+
+                Write-Warning "Latest release metadata reports v$version, but the downloaded binary reports v$binaryVersion. Installing the verified binary anyway."
+                $installVersion = $binaryVersion
             }
 
-            if (-not $binaryVersion) {
-                throw "Downloaded binary version mismatch. Expected '$version' but got '$binaryVersionText'."
+            return [pscustomobject]@{
+                Path = $binaryPath
+                VersionText = $binaryVersionText
+                Version = $binaryVersion
+                InstallVersion = $installVersion
             }
-
-            Write-Warning "Latest release metadata reports v$version, but the downloaded binary reports v$binaryVersion. Installing the verified binary anyway."
-            $version = $binaryVersion
         }
 
-        Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $installDir $binaryName) -Force
+        $binaryPath = [string]$verifiedBinary.Path
+        $binaryVersionText = [string]$verifiedBinary.VersionText
+        $binaryVersion = [string]$verifiedBinary.Version
+        $version = [string]$verifiedBinary.InstallVersion
+
+        Invoke-OpenSreStep -Name "[6/6] Installing binary" -Detail (Join-Path $installDir $binaryName) -Operation {
+            New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+            Copy-Item -LiteralPath $binaryPath -Destination (Join-Path $installDir $binaryName) -Force
+        }
     }
     finally {
         Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue

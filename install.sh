@@ -34,6 +34,7 @@ INSTALL_DIR_OVERRIDE=0
 INSTALL_CHANNEL="${OPENSRE_INSTALL_CHANNEL:-release}"
 BIN_NAME="opensre"
 INSTALL_WITH_SUDO=0
+PROGRESS_PID=""
 requested_version="${OPENSRE_VERSION:-}"
 
 [ -n "$INSTALL_DIR" ] && INSTALL_DIR_OVERRIDE=1
@@ -58,6 +59,237 @@ success() {
 
 step() {
   printf '%s%s%s\n' "${COLOR_CYAN:-}" "$*" "${COLOR_RESET:-}"
+}
+
+install_verbose() {
+  case "${OPENSRE_INSTALL_VERBOSE:-}" in
+    1|true|TRUE|yes|YES)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_interactive_terminal() {
+  [ -t 1 ] && [ "${TERM:-}" != "dumb" ] && ! install_verbose
+}
+
+terminal_supports_unicode() {
+  local locale_value="${LC_ALL:-${LC_CTYPE:-${LANG:-}}}"
+
+  case "$locale_value" in
+    *UTF-8*|*utf-8*|*UTF8*|*utf8*)
+      return 0
+      ;;
+  esac
+
+  case "${TERM_PROGRAM:-}" in
+    Apple_Terminal|iTerm.app|vscode|WezTerm)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+progress_frame() {
+  local step_count="$1"
+
+  if terminal_supports_unicode; then
+    case $((step_count % 10)) in
+      0) printf '⠋' ;;
+      1) printf '⠙' ;;
+      2) printf '⠹' ;;
+      3) printf '⠸' ;;
+      4) printf '⠼' ;;
+      5) printf '⠴' ;;
+      6) printf '⠦' ;;
+      7) printf '⠧' ;;
+      8) printf '⠇' ;;
+      *) printf '⠏' ;;
+    esac
+    return
+  fi
+
+  case $((step_count % 4)) in
+    0) printf '-' ;;
+    1) printf '\\' ;;
+    2) printf '|' ;;
+    *) printf '/' ;;
+  esac
+}
+
+draw_progress() {
+  local label="$1"
+  local step_count="$2"
+  local frame
+  local width=24
+  local trail=7
+  local head
+  local bar=""
+  local i=0
+
+  frame="$(progress_frame "$step_count")"
+  head=$((step_count % (width + trail)))
+
+  while [ "$i" -lt "$width" ]; do
+    local age=$((head - i))
+    if [ "$age" -ge 0 ] && [ "$age" -lt "$trail" ]; then
+      if terminal_supports_unicode; then
+        bar="${bar}${COLOR_GREEN:-}█${COLOR_RESET:-}"
+      else
+        bar="${bar}#"
+      fi
+    else
+      if terminal_supports_unicode; then
+        bar="${bar}${COLOR_CYAN:-}░${COLOR_RESET:-}"
+      else
+        bar="${bar}-"
+      fi
+    fi
+    i=$((i + 1))
+  done
+
+  printf '\r\033[K  %s%s%s %s %s%s%s' \
+    "${COLOR_YELLOW:-}" "$frame" "${COLOR_RESET:-}" \
+    "$bar" "${COLOR_BOLD:-}" "$label" "${COLOR_RESET:-}"
+}
+
+animate_progress() {
+  local label="$1"
+  local step_count=0
+
+  while :; do
+    draw_progress "$label" "$step_count"
+    step_count=$((step_count + 1))
+    sleep 0.08
+  done
+}
+
+finish_progress() {
+  local progress_pid="${1:-}"
+
+  if [ -n "$progress_pid" ]; then
+    kill "$progress_pid" 2>/dev/null || true
+    wait "$progress_pid" 2>/dev/null || true
+  fi
+  printf '\r\033[K\033[?25h'
+}
+
+run_with_progress() {
+  local label="$1"
+  shift
+
+  if ! is_interactive_terminal; then
+    step "$label"
+    "$@"
+    return
+  fi
+
+  local log_file
+  local command_pid
+  local status
+  log_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-progress.XXXXXX")"
+
+  "$@" >"$log_file" 2>&1 &
+  command_pid=$!
+
+  printf '\033[?25l'
+  animate_progress "$label" &
+  PROGRESS_PID=$!
+  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$log_file"; exit 130' INT TERM
+
+  if wait "$command_pid"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  finish_progress "$PROGRESS_PID"
+  PROGRESS_PID=""
+  trap - INT TERM
+
+  if [ "$status" -ne 0 ]; then
+    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
+    cat "$log_file" >&2
+    rm -f "$log_file"
+    return "$status"
+  fi
+
+  rm -f "$log_file"
+  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
+}
+
+capture_with_progress() {
+  local __result_var="$1"
+  local label="$2"
+  shift 2
+
+  if ! is_interactive_terminal; then
+    step "$label"
+    local captured
+    local status
+    if captured="$("$@")"; then
+      printf -v "$__result_var" '%s' "$captured"
+      return
+    else
+      status=$?
+    fi
+
+    if [ -n "$captured" ]; then
+      printf '%s\n' "$captured" >&2
+    fi
+    return "$status"
+  fi
+
+  local stdout_file
+  local stderr_file
+  local command_pid
+  local status
+  stdout_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stdout.XXXXXX")"
+  stderr_file="$(mktemp "${TMPDIR:-/tmp}/opensre-install-stderr.XXXXXX")"
+
+  "$@" >"$stdout_file" 2>"$stderr_file" &
+  command_pid=$!
+
+  printf '\033[?25l'
+  animate_progress "$label" &
+  PROGRESS_PID=$!
+  trap 'kill "$command_pid" 2>/dev/null || true; finish_progress "$PROGRESS_PID"; rm -f "$stdout_file" "$stderr_file"; exit 130' INT TERM
+
+  if wait "$command_pid"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  finish_progress "$PROGRESS_PID"
+  PROGRESS_PID=""
+  trap - INT TERM
+
+  if [ "$status" -ne 0 ]; then
+    printf '%sError:%s %s failed.%s\n' "${COLOR_RED:-}" "${COLOR_RESET:-}" "$label" "${COLOR_RESET:-}" >&2
+    cat "$stdout_file" >&2
+    cat "$stderr_file" >&2
+    rm -f "$stdout_file" "$stderr_file"
+    return "$status"
+  fi
+
+  printf -v "$__result_var" '%s' "$(cat "$stdout_file")"
+  rm -f "$stdout_file" "$stderr_file"
+  printf '  %s%s%s %s\n' "${COLOR_GREEN:-}" "${SUCCESS_MARK:-ok}" "${COLOR_RESET:-}" "$label"
+}
+
+print_installer_header() {
+  if ! is_interactive_terminal; then
+    return
+  fi
+
+  log "${COLOR_BOLD:-}${COLOR_CYAN:-}OpenSRE Installer${COLOR_RESET:-}"
+  log "${COLOR_BOLD:-}Installing the OpenSRE CLI${COLOR_RESET:-}"
+  log ""
 }
 
 usage() {
@@ -440,6 +672,51 @@ install_binary() {
   run_with_privilege chmod 0755 "$destination_path" 2>/dev/null || true
 }
 
+prepare_privileged_install() {
+  if [ "$INSTALL_WITH_SUDO" -ne 1 ]; then
+    return
+  fi
+
+  log "Installing into ${INSTALL_DIR} with sudo so '${BIN_NAME}' is available immediately in this shell."
+  if is_interactive_terminal; then
+    sudo -v || die "Could not authorize sudo for install into '${INSTALL_DIR}'."
+  fi
+}
+
+install_verified_binary() {
+  local source_path="$1"
+  local destination_path="$2"
+
+  run_with_privilege mkdir -p "$INSTALL_DIR"
+  install_binary "$source_path" "$destination_path"
+}
+
+download_and_verify_checksum() {
+  local checksum_url="$1"
+  local checksum_path="$2"
+  local archive_path="$3"
+
+  download_to "$checksum_url" "$checksum_path"
+  verify_checksum "$checksum_path" "$archive_path"
+}
+
+extract_and_verify_binary() {
+  local archive_path="$1"
+  local extraction_dir="$2"
+  local extracted_binary_path
+  local extracted_version
+
+  extract_archive "$archive_path" "$extraction_dir"
+  extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
+  if [ "$INSTALL_CHANNEL" = "main" ]; then
+    extracted_version="$(verify_binary_version "$extracted_binary_path")"
+  else
+    extracted_version="$(verify_binary_version "$extracted_binary_path" "$version")"
+  fi
+
+  printf '%s\n%s\n' "$extracted_binary_path" "$extracted_version"
+}
+
 get_binary_path_from_archive() {
   local extraction_root="$1"
   local binary_name="$2"
@@ -638,18 +915,20 @@ esac
 
 resolve_install_dir
 
+print_installer_header
+
 version="$requested_version"
 release_tag=""
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  step "[1/4] Fetching latest main build metadata..."
+  metadata_step="[1/6] Fetching latest main build metadata"
 elif [ -n "$version" ]; then
-  step "[1/4] Fetching release metadata for v${version}..."
+  metadata_step="[1/6] Fetching release metadata for v${version}"
 else
-  step "[1/4] Fetching latest release version..."
+  metadata_step="[1/6] Fetching latest release version"
 fi
 
-release_json="$(fetch_release_json "$version")" || {
+capture_with_progress release_json "$metadata_step" fetch_release_json "$version" || {
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     die "Failed to query main build metadata from GitHub."
   fi
@@ -698,15 +977,16 @@ checksum_asset="${archive}.sha256"
 checksum_url="${download_url}.sha256"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
-  step "[2/4] Preparing opensre main build (${platform}/${target_arch})..."
+  step "[2/6] Preparing opensre main build (${platform}/${target_arch})"
 else
-  step "[2/4] Preparing opensre v${version} (${platform}/${target_arch})..."
+  step "[2/6] Preparing opensre v${version} (${platform}/${target_arch})"
 fi
 if [ "$asset_arch" != "$target_arch" ]; then
   log "Using release asset built for ${platform}/${asset_arch}."
 fi
-step "[3/4] Downloading release archive..."
-log "  ${download_url}"
+if install_verbose; then
+  log "  ${download_url}"
+fi
 
 need_cmd mktemp
 tmp_dir="$(mktemp -d)"
@@ -720,12 +1000,14 @@ cleanup() {
 trap cleanup EXIT
 
 archive_path="${tmp_dir}/${archive}"
-download_to "$download_url" "$archive_path" || die "Failed to download '${archive}'."
+run_with_progress "[3/6] Downloading release archive (${archive})" download_to "$download_url" "$archive_path" \
+  || die "Failed to download '${archive}'."
 
 if release_has_asset "$release_json" "$checksum_asset"; then
   checksum_path="${tmp_dir}/${checksum_asset}"
-  download_to "$checksum_url" "$checksum_path" || die "Failed to download checksum '${checksum_asset}'."
-  verify_checksum "$checksum_path" "$archive_path"
+  run_with_progress "[4/6] Downloading and verifying checksum (${checksum_asset})" \
+    download_and_verify_checksum "$checksum_url" "$checksum_path" "$archive_path" \
+    || die "Failed to download or verify checksum '${checksum_asset}'."
 else
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     warn "Main build release is missing checksum asset '${checksum_asset}'."
@@ -734,21 +1016,12 @@ else
   fi
 fi
 
-if [ "$INSTALL_WITH_SUDO" -eq 1 ]; then
-  log "Installing into ${INSTALL_DIR} with sudo so '${BIN_NAME}' is available immediately in this shell."
-fi
+prepare_privileged_install
 
-step "[4/4] Installing binary..."
-run_with_privilege mkdir -p "$INSTALL_DIR"
-extract_archive "$archive_path" "$tmp_dir"
-
-binary_path="$(get_binary_path_from_archive "$tmp_dir" "$BIN_NAME")"
-if [ "$INSTALL_CHANNEL" = "main" ]; then
-  installed_version="$(verify_binary_version "$binary_path")"
-else
-  installed_version="$(verify_binary_version "$binary_path" "$version")"
-fi
-install_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
+capture_with_progress verified_binary "[5/6] Extracting and verifying binary" extract_and_verify_binary "$archive_path" "$tmp_dir"
+binary_path="${verified_binary%%$'\n'*}"
+installed_version="${verified_binary#*$'\n'}"
+run_with_progress "[6/6] Installing ${BIN_NAME} to ${INSTALL_DIR}" install_verified_binary "$binary_path" "${INSTALL_DIR}/${BIN_NAME}"
 
 if [ "$INSTALL_CHANNEL" = "main" ]; then
   if [ "$installed_version" = "main" ]; then
