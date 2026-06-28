@@ -151,7 +151,12 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
 
 
 def sync_env_secret(key: str, value: str) -> None:
-    """Persist a sensitive env value in the system keyring, not in ``.env``."""
+    """Persist a sensitive env value in the keyring, with ``.env`` fallback.
+
+    When the system keyring is unavailable (headless hosts, CI, Docker), the
+    secret is written to the project ``.env`` with owner-only permissions and
+    a warning is printed so onboarding does not silently drop credentials.
+    """
     if not _is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
     storage, env_path = persist_env_secret_with_env_fallback(key, value)
@@ -217,7 +222,6 @@ def sync_env_values(
     """Write multiple non-sensitive environment values into the target .env file.
 
     Sensitive keys must be persisted with :func:`sync_env_secret` instead.
-    When keyring storage is unavailable, sensitive values are not written to ``.env``.
     """
     sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
     if sensitive_keys:

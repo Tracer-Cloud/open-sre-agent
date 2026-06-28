@@ -455,6 +455,24 @@ def test_sync_env_secret_falls_back_to_env_when_keyring_unavailable(
     assert "DD_API_KEY=datadog-secret" in env_path.read_text(encoding="utf-8")
 
 
+def test_sync_env_secret_warns_when_keyring_fallback_writes_env(
+    tmp_path, monkeypatch
+) -> None:
+    env_path = tmp_path / ".env"
+    warnings: list[str] = []
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "cli.wizard.env_sync._print_env_fallback_warning",
+        lambda key, path: warnings.append(f"{key}:{path}"),
+    )
+
+    sync_env_secret("HONEYCOMB_API_KEY", "hc-secret")
+
+    assert warnings == [f"HONEYCOMB_API_KEY:{env_path}"]
+    assert "HONEYCOMB_API_KEY=hc-secret" in env_path.read_text(encoding="utf-8")
+
+
 def test_sync_env_values_clears_vercel_team_id_on_reconfigure(tmp_path) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text("VERCEL_TEAM_ID=team_old\n", encoding="utf-8")
