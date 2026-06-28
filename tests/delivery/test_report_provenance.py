@@ -67,6 +67,20 @@ def test_format_telegram_message_does_not_treat_lonely_asterisk_as_bold() -> Non
     assert "<b>3</b>" not in body
 
 
+def test_format_telegram_message_renders_double_star_bold_in_root_cause() -> None:
+    state = _make_state()
+    state["severity"] = "high"
+    state["alert_name"] = "HighMemory"
+    state["pipeline_name"] = "checkout"
+    state["root_cause"] = "The pod **api-server** exhausted its memory limit"
+    ctx = build_report_context(state)
+    body = format_telegram_message(ctx)
+    assert "<b>api-server</b>" in body
+    # Internal bold placeholders must never leak into the rendered message.
+    assert "«B" not in body
+    assert "**" not in body
+
+
 def test_format_telegram_message_omits_banner_only_root_cause() -> None:
     state = _make_state()
     state["severity"] = "info"
