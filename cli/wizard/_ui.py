@@ -17,6 +17,12 @@ from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
 from cli.wizard.prompts import select as select_prompt
 from cli.wizard.store import get_store_path, load_local_config
+from config.llm_auth.auth_method import (
+    OAUTH_AUTH_METHOD,
+    canonical_llm_provider,
+    get_configured_llm_auth_method,
+    normalize_llm_auth_method,
+)
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, save_llm_api_key
@@ -71,6 +77,10 @@ class Choice:
     hint: str | None = None
 
 
+class WizardBack(KeyboardInterrupt):
+    """Raised when a prompt-level cancel should move back one wizard step."""
+
+
 def _as_mapping(value: object) -> Mapping[str, object]:
     return value if isinstance(value, Mapping) else {}
 
@@ -93,12 +103,28 @@ def _local_defaults() -> dict[str, str | bool | None]:
     targets = _as_mapping(stored.get("targets"))
     local = _as_mapping(targets.get("local"))
     raw_provider = local.get("provider")
-    provider = PROVIDER_BY_VALUE.get(_string_value(raw_provider)) if raw_provider else None
-    api_key_env = _string_value(local.get("api_key_env"), provider.api_key_env if provider else "")
-    is_cli = bool(provider and provider.credential_kind == "cli")
+    raw_provider_value = _string_value(raw_provider) if raw_provider else ""
+    provider_value = canonical_llm_provider(raw_provider_value) if raw_provider_value else ""
+    provider = PROVIDER_BY_VALUE.get(provider_value) if provider_value else None
+    raw_provider_option = PROVIDER_BY_VALUE.get(raw_provider_value) if raw_provider_value else None
+    api_key_provider = raw_provider_option or provider
+    api_key_env = _string_value(
+        local.get("api_key_env"), api_key_provider.api_key_env if api_key_provider else ""
+    )
+    is_cli = bool(raw_provider_option and raw_provider_option.credential_kind == "cli")
+    is_oauth_backend = bool(raw_provider_value and raw_provider_value != provider_value)
+    raw_auth_method = local.get("auth_method")
+    auth_method = (
+        normalize_llm_auth_method(raw_auth_method if isinstance(raw_auth_method, str) else None)
+        if raw_auth_method
+        else get_configured_llm_auth_method(_string_value(raw_provider))
+    )
+    if is_oauth_backend:
+        auth_method = OAUTH_AUTH_METHOD
     return {
         "wizard_mode": _string_value(wizard.get("mode"), "quickstart"),
-        "provider": _string_value(raw_provider) if raw_provider else None,
+        "provider": provider_value if raw_provider_value else None,
+        "auth_method": auth_method,
         "model": _string_value(local.get("model")),
         "api_key_env": api_key_env,
         "has_api_key": True if is_cli else bool(api_key_env and has_llm_api_key(api_key_env)),
@@ -205,7 +231,13 @@ def _provider_model_prompt_label(provider: ProviderOption) -> str:
     return provider.label
 
 
-def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
+def _choose_model(
+    provider: ProviderOption,
+    *,
+    default: str | None,
+    prompt_label: str | None = None,
+    back_on_cancel: bool = False,
+) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
     Choices come from the curated config in ``cli/wizard/config.py``.
@@ -240,11 +272,12 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
     if default_value and not any(c.value == default_value for c in choices):
         default_value = curated_choices[0].value if curated_choices else _CUSTOM_MODEL_SENTINEL
 
-    provider_label = _provider_model_prompt_label(provider)
+    provider_label = prompt_label or _provider_model_prompt_label(provider)
     selection = _choose(
         f"Choose {provider_label} model",
         choices,
         default=default_value or None,
+        back_on_cancel=back_on_cancel,
     )
 
     if selection != _CUSTOM_MODEL_SENTINEL:
@@ -254,6 +287,7 @@ def _choose_model(provider: ProviderOption, *, default: str | None) -> str:
         f"Custom {provider_label} model ID ({provider.model_env})",
         default=resolved_default,
         allow_empty=False,
+        back_on_cancel=back_on_cancel,
     )
 
 
@@ -264,6 +298,7 @@ def _choose(
     default: str | None = None,
     group_order: tuple[str, ...] | None = None,
     trailing_choices: list[Choice] | None = None,
+    back_on_cancel: bool = False,
 ) -> str:
     if group_order is not None:
         q_choices = _grouped_questionary_choices(
@@ -286,6 +321,8 @@ def _choose(
     ).ask()
 
     if result is None:
+        if back_on_cancel:
+            raise WizardBack
         raise KeyboardInterrupt
     return str(result)
 
@@ -303,6 +340,7 @@ def _prompt_value(
     default: str = "",
     secret: bool = False,
     allow_empty: bool = False,
+    back_on_cancel: bool = False,
 ) -> str:
     while True:
         instruction = "(Enter to keep current)" if default else None
@@ -322,6 +360,8 @@ def _prompt_value(
             ).ask()
 
         if result is None:
+            if back_on_cancel:
+                raise WizardBack
             raise KeyboardInterrupt
 
         value = str(result).strip()

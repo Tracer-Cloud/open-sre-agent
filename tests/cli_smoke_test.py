@@ -620,6 +620,11 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
         actions=[
             PtyAction(expect="How do you want to get started?", send=b"\r"),
             PtyAction(expect="Choose your LLM provider", send=b"\r"),
+            PtyAction(
+                expect="Choose Anthropic auth method",
+                send=b"\r",
+                stagger_j=1,
+            ),
             PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
             PtyAction(
@@ -645,12 +650,13 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
 
 
 @pytest.mark.parametrize(
-    ("_cli_binary", "provider_key", "provider_label", "pty_timeout"),
+    ("_cli_binary", "provider_key", "provider_label", "uses_oauth", "pty_timeout"),
     [
         pytest.param(
             "codex",
-            "codex",
-            "OpenAI Codex CLI",
+            "openai",
+            "OpenAI OAuth",
+            True,
             60.0,
             marks=pytest.mark.skipif(
                 shutil.which("codex") is None,
@@ -661,6 +667,7 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
             "opencode",
             "opencode",
             "OpenCode CLI",
+            False,
             120.0,
             marks=pytest.mark.skipif(
                 shutil.which("opencode") is None,
@@ -675,6 +682,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     _cli_binary: str,
     provider_key: str,
     provider_label: str,
+    uses_oauth: bool,
     pty_timeout: float,
 ) -> None:
     """PTY: quickstart → local CLI LLM → repick when unauthenticated, then finish as Anthropic.
@@ -684,13 +692,17 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     is accepted before choosing repick. Skips when the CLI binary for each parametrized
     case is not on PATH.
     """
-    from cli.wizard.config import SUPPORTED_PROVIDERS
+    from cli.wizard.flow import _onboarding_provider_options
 
     stagger_j = next(
-        (i for i, provider in enumerate(SUPPORTED_PROVIDERS) if provider.value == provider_key),
+        (
+            i
+            for i, provider in enumerate(_onboarding_provider_options())
+            if provider.value == provider_key
+        ),
         -1,
     )
-    assert stagger_j >= 0, f"Provider '{provider_key}' missing from SUPPORTED_PROVIDERS"
+    assert stagger_j >= 0, f"Provider '{provider_key}' missing from onboarding providers"
 
     login_prompt: tuple[str, ...] = (
         f"{provider_label} requires login. What next?",
@@ -700,30 +712,43 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         f"Choose {provider_label} model",
         "Model",
     )
+    actions = [
+        PtyAction(expect="How do you want to get started?", send=b"\r"),
+        PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
+    ]
+    if uses_oauth:
+        actions.append(PtyAction(expect="Choose OpenAI auth method", send=b"\r"))
+    actions.extend(
+        [
+            PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
+            PtyAction(
+                expect=login_prompt,
+                send=b"\r",
+                stagger_j=2 if uses_oauth else 1,
+                timeout=90.0,
+            ),
+            PtyAction(expect="Choose your LLM provider", send=b"\r"),
+            PtyAction(
+                expect="Choose Anthropic auth method",
+                send=b"\r",
+                stagger_j=1,
+            ),
+            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            PtyAction(expect="Choose Anthropic model", send=b"\r"),
+            PtyAction(
+                expect="Choose an integration to configure",
+                send=b"\r",
+                stagger_j=1,
+                stagger_key=b"k",
+            ),
+        ]
+    )
+
     try:
         result = _run_cli_pty(
             cli_sandbox,
             "onboard",
-            actions=[
-                PtyAction(expect="How do you want to get started?", send=b"\r"),
-                PtyAction(expect="Choose your LLM provider", send=b"\r", stagger_j=stagger_j),
-                PtyAction(expect=model_prompt, send=b"\r", timeout=30.0),
-                PtyAction(
-                    expect=login_prompt,
-                    send=b"\r",
-                    stagger_j=1,
-                    timeout=90.0,
-                ),
-                PtyAction(expect="Choose your LLM provider", send=b"\r"),
-                PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
-                PtyAction(expect="Choose Anthropic model", send=b"\r"),
-                PtyAction(
-                    expect="Choose an integration to configure",
-                    send=b"\r",
-                    stagger_j=1,
-                    stagger_key=b"k",
-                ),
-            ],
+            actions=actions,
             timeout=pty_timeout,
             extra_env={
                 "OPENAI_API_KEY": "",
@@ -736,7 +761,7 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
         msg = str(exc)
         if (
             _cli_binary == "codex"
-            and "Choose OpenAI Codex CLI model" in msg
+            and "Choose OpenAI OAuth model" in msg
             and "requires login" in msg
         ):
             pytest.skip(

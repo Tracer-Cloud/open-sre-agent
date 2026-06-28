@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, SUPPORTED_PROVIDERS
+from cli.wizard.flow import _onboarding_provider_options
 
 
 def test_project_env_path_defaults_to_repo_root() -> None:
@@ -11,8 +12,8 @@ def test_project_env_path_defaults_to_repo_root() -> None:
     assert PROJECT_ENV_PATH == PROJECT_ROOT / ".env"
 
 
-def test_provider_catalog_shows_auth_method_alternatives_together() -> None:
-    """Onboarding should expose API-key and CLI choices where both exist."""
+def test_provider_catalog_keeps_legacy_cli_providers_registered() -> None:
+    """Legacy CLI provider values remain registered for existing configs."""
     labels_by_value = {provider.value: provider.label for provider in SUPPORTED_PROVIDERS}
     values = [provider.value for provider in SUPPORTED_PROVIDERS]
 
@@ -37,3 +38,13 @@ def test_provider_catalog_shows_auth_method_alternatives_together() -> None:
     assert labels_by_value["groq"] == "Groq API key"
     assert labels_by_value["grok-cli"] == "xAI Grok Build CLI"
     assert values.index("groq") < values.index("grok-cli") < values.index("cursor")
+
+
+def test_onboarding_provider_options_hide_openai_anthropic_oauth_backends() -> None:
+    """Onboarding presents OpenAI/Anthropic auth methods under the provider."""
+    values = [provider.value for provider in _onboarding_provider_options()]
+
+    assert "anthropic" in values
+    assert "openai" in values
+    assert "claude-code" not in values
+    assert "codex" not in values

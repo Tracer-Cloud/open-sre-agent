@@ -55,6 +55,7 @@ from config.config import (
     LLMModelConfig,
     resolve_llm_settings,
 )
+from config.llm_auth.auth_method import effective_llm_provider, get_configured_llm_auth_method
 from config.llm_reasoning_effort import get_active_reasoning_effort
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 from core.llm.bedrock_model_ids import is_anthropic_bedrock_model
@@ -1229,29 +1230,30 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             raise RuntimeError(msg or str(exc)) from exc
         raise RuntimeError(str(exc)) from exc
     provider = settings.provider
+    runtime_provider = effective_llm_provider(provider, get_configured_llm_auth_method(provider))
 
     def _fallback_model(provider_prefix: str) -> str | None:
         if model_type == "toolcall":
             return None
         return _select_model(settings, provider_prefix, "toolcall")
 
-    if provider == "openai":
+    if runtime_provider == "openai":
         config = OPENAI_LLM_CONFIG
         return OpenAILLMClient(
             model=_select_model(settings, "openai", model_type),
             model_fallback=_fallback_model("openai"),
             max_tokens=config.max_tokens,
         )
-    elif (compat := _OPENAI_COMPATIBLE_PROVIDERS.get(provider)) is not None:
+    elif (compat := _OPENAI_COMPATIBLE_PROVIDERS.get(runtime_provider)) is not None:
         return OpenAILLMClient(
-            model=_select_model(settings, provider, model_type),
-            model_fallback=_fallback_model(provider),
+            model=_select_model(settings, runtime_provider, model_type),
+            model_fallback=_fallback_model(runtime_provider),
             max_tokens=compat.config.max_tokens,
             base_url=compat.base_url,
             api_key_env=compat.api_key_env,
             temperature=compat.temperature,
         )
-    elif provider == "ollama":
+    elif runtime_provider == "ollama":
         from config.config import OLLAMA_LLM_CONFIG
 
         # Ollama exposes a single local model regardless of tier.
@@ -1264,7 +1266,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             api_key_env="OLLAMA_API_KEY",
             api_key_default="ollama",
         )
-    elif provider == "bedrock":
+    elif runtime_provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
 
         config = BEDROCK_LLM_CONFIG
@@ -1272,7 +1274,7 @@ def _create_llm_client(model_type: ModelType) -> _LLMClientType:
             model=_select_model(settings, "bedrock", model_type),
             max_tokens=config.max_tokens,
         )
-    elif (cli_reg := _get_cli_provider_registration(provider)) is not None:
+    elif (cli_reg := _get_cli_provider_registration(runtime_provider)) is not None:
         from config.config import DEFAULT_MAX_TOKENS
         from integrations.llm_cli.runner import CLIBackedLLMClient
 

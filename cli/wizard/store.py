@@ -47,6 +47,7 @@ def save_local_config(
     api_key_env: str,
     model_env: str,
     probes: dict[str, dict[str, object]],
+    auth_method: str | None = None,
     path: Path | None = None,
 ) -> Path:
     """Persist the local wizard configuration to disk."""
@@ -67,6 +68,8 @@ def save_local_config(
         "model_env": model_env,
         "updated_at": timestamp,
     }
+    if auth_method:
+        targets["local"]["auth_method"] = auth_method
     data["probes"] = probes
 
     store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +83,7 @@ def update_local_llm_selection(
     model: str,
     api_key_env: str = "",
     model_env: str = "",
+    auth_method: str | None = None,
     path: Path | None = None,
 ) -> Path:
     """Merge LLM provider/model into the wizard store without resetting other fields."""
@@ -92,6 +96,10 @@ def update_local_llm_selection(
     local["model"] = model
     local["api_key_env"] = api_key_env
     local["model_env"] = model_env
+    if auth_method:
+        local["auth_method"] = auth_method
+    else:
+        local.pop("auth_method", None)
     local["updated_at"] = timestamp
     store_path.parent.mkdir(parents=True, exist_ok=True)
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

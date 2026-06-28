@@ -1,5 +1,17 @@
 """Config-owned storage helpers for LLM provider auth metadata."""
 
+from config.llm_auth.auth_method import (
+    API_KEY_AUTH_METHOD,
+    LLM_AUTH_METHOD_ENV,
+    OAUTH_AUTH_METHOD,
+    OAUTH_BACKEND_PROVIDER_BY_PROVIDER,
+    OAUTH_PROVIDER_BY_BACKEND_PROVIDER,
+    canonical_llm_provider,
+    effective_llm_provider,
+    get_configured_llm_auth_method,
+    normalize_llm_auth_method,
+    supports_oauth_auth_method,
+)
 from config.llm_auth.credentials import (
     CredentialResolution,
     CredentialSource,
@@ -32,17 +44,26 @@ from config.llm_auth.records import (
 
 __all__ = [
     "API_KEY_PROVIDER_ENVS",
+    "API_KEY_AUTH_METHOD",
     "CredentialResolution",
     "CredentialSource",
     "CredentialStatus",
     "KEYLESS_PROVIDER_VALUES",
+    "LLM_AUTH_METHOD_ENV",
     "MissingLLMCredentialError",
+    "OAUTH_AUTH_METHOD",
+    "OAUTH_BACKEND_PROVIDER_BY_PROVIDER",
+    "OAUTH_PROVIDER_BY_BACKEND_PROVIDER",
     "PROVIDER_SPECS",
     "ProviderSpec",
     "SUPPORTED_PROVIDER_VALUES",
+    "canonical_llm_provider",
     "delete",
     "delete_provider_auth_record",
+    "effective_llm_provider",
+    "get_configured_llm_auth_method",
     "has_api_key_env_status",
+    "normalize_llm_auth_method",
     "provider_auth_record_name",
     "provider_spec",
     "require_for_request",
@@ -53,5 +74,6 @@ __all__ = [
     "save_provider_auth_record",
     "source_for_api_key_env",
     "status",
+    "supports_oauth_auth_method",
     "verify",
 ]

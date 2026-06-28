@@ -184,6 +184,36 @@ def test_sync_provider_env_codex_writes_codex_model(tmp_path, monkeypatch) -> No
     assert "CODEX_MODEL=\n" in content
 
 
+def test_sync_provider_env_openai_oauth_writes_auth_method_and_codex_model(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_AUTH_METHOD", raising=False)
+    monkeypatch.delenv("CODEX_MODEL", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=anthropic\nANTHROPIC_REASONING_MODEL=claude-opus-4-7\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["openai"],
+        model="",
+        model_provider=PROVIDER_BY_VALUE["codex"],
+        auth_method="oauth",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=openai\n" in content
+    assert "LLM_AUTH_METHOD=oauth\n" in content
+    assert "CODEX_MODEL=\n" in content
+    assert "ANTHROPIC_REASONING_MODEL=" not in content
+    assert os.environ["LLM_PROVIDER"] == "openai"
+    assert os.environ["LLM_AUTH_METHOD"] == "oauth"
+    assert os.environ["CODEX_MODEL"] == ""
+
+
 def test_sync_provider_env_gemini_cli_writes_model(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("GEMINI_CLI_MODEL", raising=False)

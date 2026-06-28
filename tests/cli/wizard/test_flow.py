@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from unittest.mock import MagicMock
 
 import pytest
@@ -22,7 +21,9 @@ def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
     # advanced -> falls back to local -> change provider? Yes -> pick anthropic -> skip integrations
-    select_responses = iter(["advanced", "remote", "anthropic", "claude-opus-4-7", "skip"])
+    select_responses = iter(
+        ["advanced", "remote", "anthropic", "api_key", "claude-opus-4-7", "skip"]
+    )
     confirm_responses = iter([True, True])  # "use local instead?" and "Change provider?"
 
     def _mock_select(*_args, **_kwargs):
@@ -80,9 +81,21 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert output.index("Summary") < output.index("Done.")
 
 
+def test_prompt_value_can_signal_wizard_back(monkeypatch) -> None:
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = None
+        return m
+
+    monkeypatch.setattr(_ui.questionary, "password", _mock_password)
+
+    with pytest.raises(_ui.WizardBack):
+        _ui._prompt_value("OpenAI API key", secret=True, back_on_cancel=True)
+
+
 def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> None:
     """With no saved config the provider list is shown immediately (no confirm prompt)."""
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "skip"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "skip"])
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -109,7 +122,7 @@ def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> 
 def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
     monkeypatch, tmp_path, capsys
 ) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7"])
 
     def _mock_select(*_args, **_kwargs):
         m = MagicMock()
@@ -153,7 +166,7 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
 
 
 def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, capsys) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "grafana"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "grafana"])
     saved_integrations: list[tuple[str, dict]] = []
     synced_env_values: list[dict[str, str]] = []
 
@@ -234,7 +247,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
 
 
 def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "honeycomb"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "honeycomb"])
     password_responses = iter(["llm-secret", "hny_test"])
     text_responses = iter(["prod-api", "https://api.honeycomb.io"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -304,7 +317,7 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
 
 
 def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "coralogix"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "coralogix"])
     password_responses = iter(["llm-secret", "cx_test"])
     text_responses = iter(
         [
@@ -382,7 +395,7 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
 
 
 def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "dagster"])
     password_responses = iter(["llm-secret", "dag_test_token"])
     text_responses = iter(["http://localhost:3000"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -454,7 +467,7 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
 
 def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -> None:
     """OSS path: empty api_token must not call sync_env_secret."""
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "dagster"])
     password_responses = iter(["llm-secret", ""])
     text_responses = iter(["http://localhost:3000"])
     synced_env_values: list[dict[str, str]] = []
@@ -518,7 +531,7 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     readable afterwards). The webhook is a secret, so it belongs in the store,
     not `.env` — `sync_env_values` is called with an empty mapping.
     """
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "slack"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "slack"])
     # webhook_url is prompted with secret=True, so it comes from the password mock.
     password_responses = iter(["llm-secret", "https://hooks.slack.com/services/T0/B0/XXXXX"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -584,7 +597,7 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
     Proves the retry loop recovers from N consecutive failures (not just one),
     and that only the final successful attempt reaches the persistence layer.
     """
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "dagster"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "dagster"])
     # Two wrong tokens, then the correct one.
     password_responses = iter(["llm-secret", "bad_token_1", "bad_token_2", "dag_good"])
     # endpoint is prompted on each retry (three attempts total).
@@ -673,6 +686,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
         [
             "quickstart",
             "anthropic",
+            "api_key",
             "claude-opus-4-7",
             "github",
             flow.DEFAULT_GITHUB_MCP_MODE,
@@ -904,7 +918,7 @@ def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path
 
 
 def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "openai", "gpt-5.4-mini", "skip"])
+    select_responses = iter(["quickstart", "openai", "api_key", "gpt-5.4-mini", "skip"])
     saved_llm_keys: list[tuple[str, str]] = []
 
     def _mock_select(*_args, **_kwargs):
@@ -968,7 +982,7 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
         m.ask.return_value = next(select_responses)
         return m
 
-    def _cli_onboarding(provider):
+    def _cli_onboarding(provider, **_kwargs):
         cli_onboarding_providers.append(provider.value)
         return "ok"
 
@@ -1008,6 +1022,111 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     assert payload["targets"]["local"]["model_env"] == "CODEX_MODEL"
     assert "LLM_PROVIDER=codex\n" in env_values
     assert "CODEX_MODEL=\n" in env_values
+    assert "LLM_AUTH_METHOD=oauth\n" in env_values
+
+
+def test_run_wizard_openai_oauth_is_onboarding_auth_method(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "openai", "oauth", "", "skip"])
+    saved_llm_keys: list[tuple[str, str]] = []
+    cli_onboarding_providers: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _cli_onboarding(provider, **kwargs):
+        cli_onboarding_providers.append(provider.value)
+        assert kwargs["display_label"] == "OpenAI OAuth"
+        return "ok"
+
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: store_path)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(
+        flow,
+        "save_local_config",
+        lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert cli_onboarding_providers == ["codex"]
+    assert saved_llm_keys == []
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    env_values = env_path.read_text(encoding="utf-8")
+    assert payload["targets"]["local"]["provider"] == "openai"
+    assert payload["targets"]["local"]["auth_method"] == "oauth"
+    assert payload["targets"]["local"]["api_key_env"] == "OPENAI_API_KEY"
+    assert payload["targets"]["local"]["model_env"] == "CODEX_MODEL"
+    assert "LLM_PROVIDER=openai\n" in env_values
+    assert "LLM_AUTH_METHOD=oauth\n" in env_values
+    assert "CODEX_MODEL=\n" in env_values
+    assert "OPENAI_API_KEY=" not in env_values
+
+
+def test_run_wizard_anthropic_oauth_is_onboarding_auth_method(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "anthropic", "oauth", "", "skip"])
+    cli_onboarding_providers: list[str] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _cli_onboarding(provider, **kwargs):
+        cli_onboarding_providers.append(provider.value)
+        assert kwargs["display_label"] == "Anthropic OAuth"
+        return "ok"
+
+    store_path = tmp_path / "opensre.json"
+    env_path = tmp_path / ".env"
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: store_path)
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "_run_cli_llm_onboarding", _cli_onboarding)
+    monkeypatch.setattr(
+        flow,
+        "save_local_config",
+        lambda **kwargs: wizard_store.save_local_config(path=store_path, **kwargs),
+    )
+    monkeypatch.setattr(
+        flow,
+        "sync_provider_env",
+        lambda **kwargs: sync_provider_env(env_path=env_path, **kwargs),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert cli_onboarding_providers == ["claude-code"]
+
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    env_values = env_path.read_text(encoding="utf-8")
+    assert payload["targets"]["local"]["provider"] == "anthropic"
+    assert payload["targets"]["local"]["auth_method"] == "oauth"
+    assert payload["targets"]["local"]["api_key_env"] == "ANTHROPIC_API_KEY"
+    assert payload["targets"]["local"]["model_env"] == "CLAUDE_CODE_MODEL"
+    assert "LLM_PROVIDER=anthropic\n" in env_values
+    assert "LLM_AUTH_METHOD=oauth\n" in env_values
+    assert "CLAUDE_CODE_MODEL=\n" in env_values
 
 
 def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
@@ -1022,7 +1141,7 @@ def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
         m.ask.return_value = next(select_responses)
         return m
 
-    def _cli_onboarding(provider):
+    def _cli_onboarding(provider, **_kwargs):
         cli_onboarding_providers.append(provider.value)
         return "ok"
 
@@ -1074,7 +1193,7 @@ def test_run_wizard_gemini_cli_skips_api_key_and_runs_cli_onboarding(monkeypatch
         m.ask.return_value = next(select_responses)
         return m
 
-    def _cli_onboarding(provider):
+    def _cli_onboarding(provider, **_kwargs):
         cli_onboarding_providers.append(provider.value)
         return "ok"
 
@@ -1211,19 +1330,60 @@ def test_run_cli_llm_onboarding_launches_codex_browser_login(monkeypatch) -> Non
     provider.adapter_factory = lambda: adapter
     login_commands: list[list[str]] = []
 
-    def _fake_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
-        del check
+    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
         login_commands.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return flow._LoginProcessResult(returncode=0)
 
     monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
-    monkeypatch.setattr(flow.subprocess, "run", _fake_run)
+    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
 
     result = flow._run_cli_llm_onboarding(provider)
 
     assert result == "ok"
     assert login_commands == [["/usr/local/bin/codex", "login"]]
     assert len(detect_calls) == 2
+
+
+def test_run_cli_llm_onboarding_surfaces_codex_config_error(monkeypatch) -> None:
+    adapter = MagicMock()
+    adapter.name = "codex"
+    adapter.binary_env_key = "CODEX_BIN"
+    adapter.install_hint = "npm i -g @openai/codex"
+    adapter.auth_hint = "Run: codex login"
+    adapter.detect.return_value = MagicMock(
+        installed=True,
+        logged_in=None,
+        bin_path="/opt/homebrew/bin/codex",
+        detail="Auth status unknown.",
+    )
+    provider = MagicMock()
+    provider.value = "codex"
+    provider.label = "OpenAI Codex CLI"
+    provider.adapter_factory = lambda: adapter
+
+    choices: list[str] = ["login", "repick"]
+
+    def _choose(*_args, **_kwargs):
+        return choices.pop(0)
+
+    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
+        del command
+        return flow._LoginProcessResult(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "Error loading configuration: "
+                "/Users/me/.codex/config.toml:17:16: unknown variant `priority`, "
+                "expected `fast` or `flex`"
+            ),
+        )
+
+    monkeypatch.setattr(flow, "_choose", _choose)
+    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
+
+    result = flow._run_cli_llm_onboarding(provider, display_label="OpenAI OAuth")
+
+    assert result == "repick"
 
 
 def test_run_cli_llm_onboarding_launches_claude_browser_login(monkeypatch) -> None:
@@ -1252,13 +1412,12 @@ def test_run_cli_llm_onboarding_launches_claude_browser_login(monkeypatch) -> No
     provider.adapter_factory = lambda: adapter
     login_commands: list[list[str]] = []
 
-    def _fake_run(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
-        del check
+    def _fake_run(command: list[str]) -> flow._LoginProcessResult:
         login_commands.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return flow._LoginProcessResult(returncode=0)
 
     monkeypatch.setattr(flow, "_choose", lambda *_args, **_kwargs: "login")
-    monkeypatch.setattr(flow.subprocess, "run", _fake_run)
+    monkeypatch.setattr(flow, "_run_login_process", _fake_run)
 
     result = flow._run_cli_llm_onboarding(provider)
 
@@ -1462,7 +1621,7 @@ def test_credential_line_for_saved_summary_cli_without_factory() -> None:
 
 
 def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "gitlab"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "gitlab"])
     password_responses = iter(["llm-secret", "glpat_test"])
     text_responses = iter(["https://gitlab.example.com/api/v4"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -1537,7 +1696,7 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
 
 def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
     """When GitLab validation fails the first time, the wizard retries and succeeds."""
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "gitlab"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "gitlab"])
     # First attempt: wrong token; second attempt: correct token
     password_responses = iter(["llm-secret", "bad_token", "glpat_good"])
     # base_url is prompted on each retry
@@ -1626,7 +1785,7 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     monkeypatch, tmp_path
 ) -> None:
     # Saved: anthropic. User says yes to "Change provider?" and picks openai.
-    select_responses = iter(["quickstart", "openai", "gpt-5.4-mini", "skip"])
+    select_responses = iter(["quickstart", "openai", "api_key", "gpt-5.4-mini", "skip"])
     confirm_responses = iter([True])  # "Change provider?" -> Yes
     saved_llm_keys: list[tuple[str, str]] = []
 
@@ -1708,7 +1867,9 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
 
 def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     """Happy path: user picks opensearch, enters URL + basic auth, all gets persisted."""
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic"])
+    select_responses = iter(
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic"]
+    )
     password_responses = iter(["llm-secret", "secret-pass"])
     text_responses = iter(["https://my-cluster.example.com", "admin"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -1791,7 +1952,7 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
 def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
     """When OpenSearch validation fails the first time, the wizard retries and succeeds."""
     select_responses = iter(
-        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"]
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
     )
     password_responses = iter(["llm-secret", "wrong-pass", "correct-pass"])
     text_responses = iter(
@@ -1888,7 +2049,15 @@ def test_run_wizard_opensearch_rejects_empty_api_key(monkeypatch, tmp_path) -> N
     """
     # User picks: opensearch -> api_key auth -> (rejected, empty) -> api_key auth retry
     select_responses = iter(
-        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "api_key", "api_key"]
+        [
+            "quickstart",
+            "anthropic",
+            "api_key",
+            "claude-opus-4-7",
+            "opensearch",
+            "api_key",
+            "api_key",
+        ]
     )
     # First api_key prompt: empty (rejected). Second: valid key.
     password_responses = iter(["llm-secret", "", "valid-api-key"])
@@ -1983,7 +2152,7 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     """
     # User picks: opensearch -> basic auth -> (rejected, empty pass) -> basic auth retry
     select_responses = iter(
-        ["quickstart", "anthropic", "claude-opus-4-7", "opensearch", "basic", "basic"]
+        ["quickstart", "anthropic", "api_key", "claude-opus-4-7", "opensearch", "basic", "basic"]
     )
     # First password prompt: empty (rejected). Second attempt: valid password.
     password_responses = iter(["llm-secret", "", "real-pass"])
@@ -2068,7 +2237,7 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
 
 
 def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "telegram"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "telegram"])
     password_responses = iter(["llm-secret", "123:ABC"])
     text_responses = iter(["-1001234567890"])
     saved_integrations: list[tuple[str, dict]] = []
@@ -2140,7 +2309,7 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
 
 
 def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path) -> None:
-    select_responses = iter(["quickstart", "anthropic", "claude-opus-4-7", "telegram"])
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "telegram"])
     password_responses = iter(["llm-secret", "bad-token", "123:GOOD"])
     text_responses = iter(["-1001", "-1001"])
     saved_integrations: list[tuple[str, dict]] = []

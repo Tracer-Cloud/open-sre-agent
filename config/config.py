@@ -14,6 +14,11 @@ from typing import Literal
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from config.grafana_cloud import load_env
+from config.llm_auth.auth_method import (
+    LLM_AUTH_METHOD_ENV,
+    effective_llm_provider,
+    get_configured_llm_auth_method,
+)
 from config.llm_auth.credentials import status as credential_status
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
@@ -189,6 +194,9 @@ def get_configured_llm_provider() -> str:
 def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:
     """Return the API-key env var required by an LLM provider, if any."""
     provider_name = (provider or get_configured_llm_provider()).strip().lower()
+    auth_method = get_configured_llm_auth_method(provider_name)
+    if effective_llm_provider(provider_name, auth_method) != provider_name:
+        return None
     return LLM_PROVIDER_API_KEY_ENVS.get(provider_name)
 
 
@@ -492,10 +500,15 @@ def describe_llm_resolution(
     lines = [
         f"configured provider : {resolution.configured_provider}",
         f"resolved provider   : {resolution.resolved_provider}",
+        f"auth method         : {get_configured_llm_auth_method(resolution.resolved_provider)}",
         "fell back           : no",
         f"providers attempted : {', '.join(resolution.attempted_providers)}",
     ]
-    auth_status = credential_status(resolution.resolved_provider)
+    auth_provider = effective_llm_provider(
+        resolution.resolved_provider,
+        get_configured_llm_auth_method(resolution.resolved_provider),
+    )
+    auth_status = credential_status(auth_provider)
     lines.append(f"credential status   : {auth_status.source} ({auth_status.detail})")
     return "\n".join(lines)
 
@@ -519,7 +532,9 @@ def llm_provider_error_context(
 def has_credentials_for_active_llm_provider() -> bool:
     """Return prompt-safe auth availability for the configured LLM provider."""
     settings = resolve_llm_settings()
-    auth_status = credential_status(settings.provider)
+    auth_status = credential_status(
+        effective_llm_provider(settings.provider, os.getenv(LLM_AUTH_METHOD_ENV))
+    )
     return auth_status.configured and not auth_status.stale
 
 

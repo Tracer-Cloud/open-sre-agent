@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
+from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
@@ -199,14 +200,22 @@ def sync_reasoning_model_env(
     return target_path
 
 
-def _sync_llm_selection_to_store(*, provider: ProviderOption, model: str) -> None:
+def _sync_llm_selection_to_store(
+    *,
+    provider: ProviderOption,
+    model: str,
+    model_provider: ProviderOption | None = None,
+    auth_method: str | None = None,
+) -> None:
     from cli.wizard.store import update_local_llm_selection
 
+    resolved_model_provider = model_provider or provider
     update_local_llm_selection(
         provider=provider.value,
         model=model,
         api_key_env=provider.api_key_env or "",
-        model_env=provider.model_env,
+        model_env=resolved_model_provider.model_env,
+        auth_method=auth_method,
     )
 
 
@@ -267,6 +276,8 @@ def sync_provider_env(
     provider: ProviderOption,
     model: str,
     toolcall_model: str | None = None,
+    model_provider: ProviderOption | None = None,
+    auth_method: str | None = None,
     env_path: Path | None = None,
 ) -> Path:
     """Write non-secret provider settings into the project .env.
@@ -278,6 +289,7 @@ def sync_provider_env(
     """
     from cli.wizard.config import SUPPORTED_PROVIDERS
 
+    resolved_model_provider = model_provider or provider
     target_path = env_path or PROJECT_ENV_PATH
     existing = (
         target_path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -291,14 +303,16 @@ def sync_provider_env(
     for p in SUPPORTED_PROVIDERS:
         keys_to_remove |= _provider_specific_keys(p)
 
+    keys_to_remove.add(LLM_AUTH_METHOD_ENV)
+
     # Keep the active provider's model keys but always remove API key entries
     # (API keys are persisted via the system keyring, not .env).
-    active_non_secret: set[str] = {provider.model_env}
-    if provider.legacy_model_env:
-        active_non_secret.add(provider.legacy_model_env)
-    if provider.toolcall_model_env:
-        active_non_secret.add(provider.toolcall_model_env)
-    classification_env = _classification_model_env(provider)
+    active_non_secret: set[str] = {resolved_model_provider.model_env}
+    if resolved_model_provider.legacy_model_env:
+        active_non_secret.add(resolved_model_provider.legacy_model_env)
+    if resolved_model_provider.toolcall_model_env:
+        active_non_secret.add(resolved_model_provider.toolcall_model_env)
+    classification_env = _classification_model_env(resolved_model_provider)
     if classification_env:
         active_non_secret.add(classification_env)
     keys_to_remove -= active_non_secret
@@ -314,11 +328,16 @@ def sync_provider_env(
 
     lines = _remove_keys(existing, keys_to_remove)
 
-    values: dict[str, str] = {"LLM_PROVIDER": provider.value, provider.model_env: model}
-    if provider.legacy_model_env:
-        values[provider.legacy_model_env] = model
-    if toolcall_model and provider.toolcall_model_env:
-        values[provider.toolcall_model_env] = toolcall_model
+    values: dict[str, str] = {
+        "LLM_PROVIDER": provider.value,
+        resolved_model_provider.model_env: model,
+    }
+    if auth_method:
+        values[LLM_AUTH_METHOD_ENV] = auth_method
+    if resolved_model_provider.legacy_model_env:
+        values[resolved_model_provider.legacy_model_env] = model
+    if toolcall_model and resolved_model_provider.toolcall_model_env:
+        values[resolved_model_provider.toolcall_model_env] = toolcall_model
 
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
@@ -332,6 +351,11 @@ def sync_provider_env(
         if preserved is not None:
             values[key] = preserved
     os.environ.update(values)
-    _sync_llm_selection_to_store(provider=provider, model=model)
+    _sync_llm_selection_to_store(
+        provider=provider,
+        model=model,
+        model_provider=resolved_model_provider,
+        auth_method=auth_method,
+    )
 
     return target_path
