@@ -441,3 +441,76 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
             sync_env_values({"FOO": "baz"}, env_path=env_path)
     finally:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_strip_keyring_backed_secret_lines_removes_only_keyring_backed(
+    monkeypatch,
+) -> None:
+    from cli.wizard.env_sync import _strip_keyring_backed_secret_lines
+
+    lines = [
+        "TELEGRAM_BOT_TOKEN=fallback\n",
+        "DD_API_KEY=in-keyring\n",
+        "DD_SITE=old\n",
+    ]
+    monkeypatch.setattr(
+        "cli.wizard.env_sync.has_llm_api_key",
+        lambda key: key == "DD_API_KEY",
+    )
+
+    kept = _strip_keyring_backed_secret_lines(lines)
+
+    assert kept == ["TELEGRAM_BOT_TOKEN=fallback\n", "DD_SITE=old\n"]
+
+
+def test_sync_env_values_preserves_telegram_bot_token_fallback(tmp_path) -> None:
+    """Regression for #3223: headless fallback secrets must survive unrelated syncs."""
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "TELEGRAM_BOT_TOKEN=manual-fallback-token\nDD_SITE=old\n",
+        encoding="utf-8",
+    )
+
+    sync_env_values({"DD_SITE": "datadoghq.eu"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "TELEGRAM_BOT_TOKEN=manual-fallback-token" in content
+    assert "DD_SITE=datadoghq.eu" in content
+
+
+def test_sync_env_values_preserves_multiple_fallback_secrets(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DD_API_KEY=datadog-api\nDD_APP_KEY=datadog-app\n",
+        encoding="utf-8",
+    )
+
+    sync_env_values({"DD_SITE": "datadoghq.com"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "DD_API_KEY=datadog-api" in content
+    assert "DD_APP_KEY=datadog-app" in content
+    assert "DD_SITE=datadoghq.com" in content
+
+
+def test_sync_env_values_empty_update_preserves_fallback_secrets(tmp_path) -> None:
+    """Wizard paths call ``sync_env_values({})`` after integration setup."""
+    env_path = tmp_path / ".env"
+    env_path.write_text("TELEGRAM_BOT_TOKEN=manual-fallback-token\n", encoding="utf-8")
+
+    sync_env_values({}, env_path=env_path)
+
+    assert "TELEGRAM_BOT_TOKEN=manual-fallback-token" in env_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows permission model differs")
+def test_write_env_raw_creates_file_with_owner_only_permissions(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    _write_env_raw(env_path, ["TELEGRAM_BOT_TOKEN=fallback\n", "DD_SITE=datadoghq.eu\n"])
+
+    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+    content = env_path.read_text(encoding="utf-8")
+    assert "TELEGRAM_BOT_TOKEN=fallback" in content
+    assert "DD_SITE=datadoghq.eu" in content

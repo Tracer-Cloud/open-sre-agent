@@ -74,6 +74,25 @@ def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
     return stripped
 
 
+def _strip_keyring_backed_secret_lines(lines: list[str]) -> list[str]:
+    """Drop sensitive lines already stored in the keyring; keep headless fallback secrets."""
+    kept: list[str] = []
+    for line in lines:
+        match = _ENV_ASSIGNMENT.match(line)
+        if match and _is_sensitive_env_key(match.group(1)) and has_llm_api_key(match.group(1)):
+            continue
+        kept.append(line)
+    return kept
+
+
+def _lines_contain_sensitive(lines: list[str]) -> bool:
+    for line in lines:
+        match = _ENV_ASSIGNMENT.match(line)
+        if match and _is_sensitive_env_key(match.group(1)):
+            return True
+    return False
+
+
 def _persist_env_secret(key: str, value: str) -> bool:
     """Store a secret in the keyring. Returns False when keyring is unavailable."""
     normalized = value.strip()
@@ -146,6 +165,37 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
+def _write_env_raw(target_path: Path, lines: list[str]) -> None:
+    """Write ``.env`` lines including headless fallback secrets (owner-only on Unix)."""
+    content = "".join(lines)
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if os.name == "nt":
+            with target_path.open("w", encoding="utf-8", newline="") as env_file:
+                env_file.write(content)
+        else:
+            fd = os.open(
+                target_path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                0o600,
+            )
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as env_file:
+                env_file.write(content)
+    except PermissionError as exc:
+        raise PermissionError(
+            f"Cannot write to {target_path}: permission denied. "
+            "Ensure you have write access to this file, or run the command as the file owner."
+        ) from exc
+
+
+def _write_env_lines(target_path: Path, lines: list[str]) -> None:
+    """Write merged env lines, using the secure raw path when fallback secrets remain."""
+    if _lines_contain_sensitive(lines):
+        _write_env_raw(target_path, lines)
+    else:
+        _write_env(target_path, lines)
+
+
 def sync_env_secret(key: str, value: str) -> None:
     """Persist a sensitive env value in the system keyring, not in ``.env``."""
     if not _is_sensitive_env_key(key):
@@ -161,7 +211,9 @@ def sync_env_values(
     """Write multiple non-sensitive environment values into the target .env file.
 
     Sensitive keys must be persisted with :func:`sync_env_secret` instead.
-    When keyring storage is unavailable, sensitive values are not written to ``.env``.
+    Existing sensitive assignments are removed from ``.env`` only when the same
+    key is already stored in the keyring, so headless fallback secrets survive
+    unrelated non-secret updates.
     """
     sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
     if sensitive_keys:
@@ -175,11 +227,11 @@ def sync_env_values(
         else []
     )
 
-    lines = _strip_sensitive_env_lines(existing)
+    lines = _strip_keyring_backed_secret_lines(list(existing))
     for key, value in values.items():
         lines = _set_env_value(lines, key, value)
 
-    _write_env(target_path, lines)
+    _write_env_lines(target_path, lines)
     return target_path
 
 
