@@ -161,7 +161,6 @@ class InteractiveShellController:
         self.tasks: list[tuple[str, asyncio.Task[None]]] = []
 
     async def start_interactive_shell(self) -> None:
-        self.session.schedule_warm_resolved_integrations()
         with _alert_listener(self.config, self.service_console, existing=self.inbox) as inbox:
             self.inbox = inbox
             self.runtime_context.inbox = inbox

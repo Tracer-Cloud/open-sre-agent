@@ -453,20 +453,19 @@ class ReplSession:
                 self.accumulated_context[key] = value
 
     def hydrate_configured_integrations(self) -> None:
-        """Resolve configured integrations (env + local store) onto the session.
+        """Load configured integration names (env + local store) onto the session.
 
         Run at REPL boot and again whenever an integration is added or removed
         so capability checks and the tool-gathering pass reflect the current
-        store state instead of a stale boot-time snapshot. Resolution covers
-        both environment variables and the local ``~/.opensre`` store, so an
-        integration configured via ``/integrations setup`` (which writes to the
-        store) is seen here. Best-effort: any failure leaves the previously
-        known state untouched.
+        store state instead of a stale boot-time snapshot. This startup path is
+        intentionally metadata-only: it must not resolve keyring-backed secrets.
+        Full integration configs are resolved on demand when a turn needs tools
+        or an investigation starts.
         """
         try:
-            from integrations.verify import resolve_effective_integrations
+            from integrations.catalog import configured_integration_services
 
-            self.configured_integrations = tuple(sorted(resolve_effective_integrations()))
+            self.configured_integrations = tuple(sorted(configured_integration_services()))
             self.configured_integrations_known = True
         except Exception:
             # Best-effort: keep whatever state we already had (default unknown).
