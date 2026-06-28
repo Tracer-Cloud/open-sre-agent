@@ -25,6 +25,7 @@ from cli.ui.renderer.constants import (
     _WHITE,
     _render_source,
 )
+from rich.text import Text
 from core.domain.stream import StreamEvent
 from interactive_shell.ui.output import (
     ProgressTracker,
@@ -36,6 +37,7 @@ from interactive_shell.ui.output import (
 )
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
+from platform.terminal.theme import MARKDOWN_THEME
 
 
 class _DiagnoseStreamRenderer:
@@ -110,7 +112,7 @@ class _DiagnoseStreamRenderer:
             spinner,
             console=self._console,
             refresh_per_second=_DIAGNOSE_LIVE_REFRESH,
-            transient=False,
+            transient=True,
         )
 
         # Shrink the gap: stop previous display immediately before starting new one
@@ -160,9 +162,9 @@ class _DiagnoseStreamRenderer:
         # Throttle Markdown re-parse to once per refresh window; the final
         # flush in :meth:`finish` guarantees the latest buffer is rendered
         # before the Live region closes.
-        now = time.monotonic()
         if now - self._last_render >= _DIAGNOSE_RENDER_INTERVAL_S:
-            self._live.update(Markdown("".join(self.buffer)))
+            # Plain text during Live avoids Markdown re-layout flicker/duplication (#1782).
+            self._live.update(Text("".join(self.buffer)))
             self._last_render = now
 
     def finish(self, message: str | None = None) -> None:
@@ -174,16 +176,14 @@ class _DiagnoseStreamRenderer:
         elapsed = time.monotonic() - self._started
 
         if self._live is not None:
-            # Final flush: any chunks pending in the last throttle window
-            # render here so the user sees the complete reasoning.
-            if self.buffer:
-                self._live.update(Markdown("".join(self.buffer)))
             try:
                 self._live.stop()
             finally:
                 self._live = None
-                # Unregister only if we own it (safeguard against subsequent activations)
                 unregister_live_console(self._console)
+            if self.buffer and self._console is not None:
+                with self._console.use_theme(MARKDOWN_THEME):
+                    self._console.print(Markdown("".join(self.buffer)))
             sys.stdout.write(
                 f"  {_GREEN}●{_RESET}  {_BOLD}{_WHITE}{_DIAGNOSE_NODE}{_RESET}"
                 f"  {_DIM}{elapsed:.1f}s{_RESET}"

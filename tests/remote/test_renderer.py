@@ -1103,9 +1103,7 @@ class TestStreamRendererDiagnoseThrottle:
             renderer._handle_event(self._make_diagnose_chunk(f"c{i} "))
         renderer._handle_event(self._make_diagnose_end())
 
-        # Clock never advanced past 0.0 — every per-chunk render was gated.
-        # Only the unconditional final flush in _DiagnoseStreamRenderer.finish
-        # fires, producing exactly one Markdown parse.
+        # Streaming uses plain Text in Live; one Markdown render happens at finish.
         assert parse_count[0] == 1, (
             f"expected 1 parse (final flush only), got {parse_count[0]}; "
             "throttle is letting intra-window updates through"
@@ -1136,9 +1134,9 @@ class TestStreamRendererDiagnoseThrottle:
             renderer._handle_event(self._make_diagnose_chunk(f"c{i} "))
         renderer._handle_event(self._make_diagnose_end())
 
-        # 10 in-loop renders + 1 final flush. Tolerance for boundary effects.
-        assert 9 <= parse_count[0] <= 12, (
-            f"expected ~10–11 parses across 10 windows, got {parse_count[0]}"
+        # Plain-text Live updates during windows; one Markdown render at finish.
+        assert 1 <= parse_count[0] <= 2, (
+            f"expected 1–2 parses across 10 windows, got {parse_count[0]}"
         )
         # Throttle's purpose: parse count must stay << total chunks.
         assert parse_count[0] < 50
@@ -1165,10 +1163,9 @@ class TestStreamRendererDiagnoseThrottle:
         renderer._handle_event(self._make_diagnose_chunk("tail-2"))
         renderer._handle_event(self._make_diagnose_end())
 
-        # All chunks must be in the buffer at finish (final flush picks them up).
+        # All chunks must be in the buffer at finish (final Markdown print picks them up).
         assert "".join(renderer._diagnose.buffer) == "early tail-1 tail-2"
-        # Two parses: one in-loop render at "early " + one final flush.
-        assert parse_count[0] == 2
+        assert parse_count[0] == 1
 
     @patch("cli.ui.renderer.diagnose.Live")
     @patch("interactive_shell.ui.output.tracker._EventLogDisplay")
