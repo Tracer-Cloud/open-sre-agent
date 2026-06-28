@@ -46,7 +46,9 @@ from config.llm_auth.auth_method import (
     normalize_llm_auth_method,
     supports_oauth_auth_method,
 )
+from config.llm_auth.records import save_provider_auth_record
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
+from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
 from platform.terminal.theme import (
     ERROR,
     GLYPH_ERROR,
@@ -370,6 +372,26 @@ def _run_subscription_login(
     provider: ProviderOption, binary_path: str | None
 ) -> _SubscriptionLoginResult:
     """Launch the provider CLI login flow and report whether it exited cleanly."""
+    if provider.value == "codex":
+        _console.print(
+            f"[{SECONDARY}]Starting OpenSRE Codex OAuth server on http://localhost:1455[/]"
+        )
+        try:
+            oauth_result = run_codex_oauth_login()
+        except CodexOAuthError as exc:
+            detail = str(exc)
+            _console.print(f"[{WARNING}]  {GLYPH_WARNING}  {detail}[/]")
+            return _SubscriptionLoginResult(ok=False, detail=detail)
+        save_provider_auth_record(
+            provider="codex",
+            auth_name="chatgpt",
+            kind="cli_subscription",
+            source="codex-oauth",
+            detail=oauth_result.detail,
+        )
+        _console.print(f"[{SECONDARY}]{oauth_result.detail}[/]")
+        return _SubscriptionLoginResult(ok=True, detail=oauth_result.detail)
+
     command = _subscription_login_command(provider, binary_path)
     if command is None:
         auth_hint = provider.adapter_factory().auth_hint if provider.adapter_factory else ""

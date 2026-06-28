@@ -12,7 +12,7 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | Anthropic API key | `anthropic` + `LLM_AUTH_METHOD=api_key` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | `claude-haiku-4-5-20251001` |
 | Anthropic OAuth | `anthropic` + `LLM_AUTH_METHOD=oauth` | Onboarding launches `claude auth login` | Claude Code CLI default | Claude Code CLI default |
 | OpenAI API key | `openai` + `LLM_AUTH_METHOD=api_key` | `OPENAI_API_KEY` | `gpt-5.4-mini` | `gpt-5.4-mini` |
-| OpenAI OAuth | `openai` + `LLM_AUTH_METHOD=oauth` | Onboarding launches `codex login` | Codex CLI default | Codex CLI default |
+| OpenAI OAuth | `openai` + `LLM_AUTH_METHOD=oauth` | OpenSRE opens `localhost:1455` for Codex-compatible OAuth | Codex CLI default | Codex CLI default |
 | OpenRouter   | `openrouter`   | `OPENROUTER_API_KEY`            | `openrouter/auto`                             | `openrouter/auto`                               |
 | DeepSeek     | `deepseek`     | `DEEPSEEK_API_KEY`              | `deepseek-v4-pro`                             | `deepseek-v4-flash`                             |
 | Google Gemini API key | `gemini` | `GEMINI_API_KEY`               | `gemini-3.1-pro-preview`                      | `gemini-3.1-flash-lite-preview`                 |
@@ -84,18 +84,24 @@ Use `opensre auth` for provider login without writing secrets to `.env`:
 | `opensre auth` | Show auth status for subscription and API-key providers |
 | `opensre auth login deepseek` | Open DeepSeek setup guidance, validate `DEEPSEEK_API_KEY`, store it in the system keychain, and select DeepSeek |
 | `opensre auth login claude` | Configure the `claude-code` provider through Claude Code CLI subscription login |
-| `opensre auth login chatgpt` | Configure the `codex` provider through Codex CLI / ChatGPT subscription login |
+| `opensre auth login chatgpt` | Configure the `codex` provider through OpenSRE-managed ChatGPT OAuth |
 | `opensre auth verify deepseek` | Intentionally resolve DeepSeek credentials and refresh stale local metadata |
 | `opensre auth logout deepseek` | Remove OpenSRE-managed DeepSeek credentials and metadata |
 
-`opensre auth login` never reads browser cookies, browser profiles, browser local storage, or IndexedDB. API-key providers use hidden paste prompts plus keyring storage. Subscription providers delegate OAuth/session handling to the vendor CLI that owns the browser login flow.
+`opensre auth login` never reads browser cookies, browser profiles, browser local storage, or IndexedDB. API-key providers use hidden paste prompts plus keyring storage. OpenAI OAuth is handled by OpenSRE's local Codex-compatible callback server; other subscription providers delegate OAuth/session handling to the vendor CLI that owns the browser login flow.
 
 `opensre auth` and `/auth status` are prompt-safe: they do not read API-key secrets from Keychain. For API-key providers they inspect environment variables plus non-secret metadata in `~/.opensre/llm-auth.json`. If a key was deleted directly from Keychain, status may show the old metadata until you run `opensre auth verify <provider>` or start a request; that verification marks the provider `stale` when the secret is gone.
 
 For Codex CLI auth, status checks do not run `codex login status` by default,
 because some Codex versions can open browser OAuth while checking a session.
-Run `codex login`, `/login chatgpt`, or `opensre auth login chatgpt` from an
-interactive terminal when you need to refresh the browser login.
+Run `/login chatgpt` or `opensre auth login chatgpt` from an interactive
+terminal when you need to refresh the browser login. OpenSRE starts its own
+temporary callback server on `http://localhost:1455/auth/callback`, exchanges
+the short-lived OAuth code, and writes Codex-compatible tokens to the local
+Codex auth store before redirecting the browser to the Codex-style
+`/success?id_token=...` completion page. If a browser flow reaches `/success`
+with token material directly, OpenSRE stores that token material instead of
+dropping the callback. Use `codex login` only as a direct CLI fallback.
 
 Inside the interactive shell, use the same flows through `/auth` or `/login`:
 
@@ -236,7 +242,7 @@ Run any local model exposed by an [Ollama](https://ollama.com/) daemon. No API k
 
 ## CLI providers (subprocess)
 
-CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They authenticate via the vendor's own login command; OpenSRE detects the binary on `PATH` (or via an explicit env var) and reuses the existing session.
+CLI-backed providers shell out to a vendor CLI instead of an HTTP API during inference. OpenSRE detects the binary on `PATH` (or via an explicit env var) and reuses the existing session. OpenAI OAuth is stored by OpenSRE in Codex-compatible auth format; other CLI-backed providers authenticate via the vendor's own login command.
 
 **Investigation timeouts:** Each ReAct turn runs one full CLI subprocess with the system prompt, tool schemas, and conversation history. The shared default subprocess budget is **300 seconds** (Python adds a small buffer). Override per provider when needed, for example `GEMINI_CLI_TIMEOUT_SECONDS`, `CLAUDE_CODE_TIMEOUT_SECONDS`, or `ANTIGRAVITY_CLI_TIMEOUT_SECONDS` (clamped 30–600 where the adapter supports it).
 
@@ -245,8 +251,8 @@ CLI-backed providers shell out to a vendor CLI instead of an HTTP API. They auth
 ```bash
 export LLM_PROVIDER=openai
 export LLM_AUTH_METHOD=oauth
-# Authenticate through onboarding, `/login chatgpt`, or the Codex CLI directly:
-codex login
+# Authenticate through onboarding or `/login chatgpt`:
+opensre auth login chatgpt
 # Optional overrides (all blank-by-default):
 export CODEX_MODEL=
 export CODEX_BIN=
@@ -254,9 +260,9 @@ export CODEX_BIN=
 
 Requires the [OpenAI Codex CLI](https://github.com/openai/codex). If `CODEX_MODEL` is unset, OpenSRE omits `-m` so `codex exec` uses the CLI's currently configured model. If `CODEX_BIN` is unset, the binary is resolved via `PATH` and known install locations.
 Run `opensre onboard`, `/login chatgpt`, or `opensre auth login chatgpt` to launch
-Codex browser login when needed and persist `LLM_PROVIDER=openai` with
-`LLM_AUTH_METHOD=oauth`. Existing `LLM_PROVIDER=codex` configs still work for
-backward compatibility.
+OpenSRE-managed Codex browser login on `localhost:1455` and persist
+`LLM_PROVIDER=openai` with `LLM_AUTH_METHOD=oauth`. Existing
+`LLM_PROVIDER=codex` configs still work for backward compatibility.
 
 ### Anthropic OAuth backend
 

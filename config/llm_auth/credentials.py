@@ -152,6 +152,19 @@ def status(provider: str) -> CredentialStatus:
         )
 
     if spec.credential_kind == "cli":
+        record = resolve_provider_auth_record(spec.value)
+        record_source = _normalize_source(record.get("source"), fallback="metadata")
+        stale = _bool_record_value(record, "stale", False)
+        verified = _bool_record_value(record, "verified", False)
+        if record and verified and not stale:
+            return CredentialStatus(
+                provider=spec.value,
+                configured=True,
+                source="cli" if record_source in {"metadata", "unknown", "none"} else record_source,
+                verified=True,
+                stale=False,
+                detail=record.get("detail") or f"{spec.label} auth metadata is present.",
+            )
         try:
             from integrations.llm_cli.registry import get_cli_provider_registration
 
