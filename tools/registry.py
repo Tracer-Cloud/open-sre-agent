@@ -7,12 +7,15 @@ import inspect
 import logging
 import pkgutil
 import threading
+from dataclasses import replace
 from functools import lru_cache
+from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
 from tools.base import BaseTool
 from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +24,14 @@ _SKIP_MODULE_NAMES = {
     "base",
     "registry",
     "registered_tool",
+    "skill_guidance",
     "tool_decorator",
     "investigation_registry",
     "utils",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
+_MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
+_SKILL_GUIDANCE_FILES = (Path(__file__).resolve().parent / "github" / "workflow" / "SKILL.md",)
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -209,6 +215,44 @@ def _collect_registered_tools_from_module(module: ModuleType) -> list[Registered
     return sorted(tools_by_name.values(), key=lambda tool: tool.name)
 
 
+def _truncate_skill_guidance(text: str) -> str:
+    if len(text) <= _MAX_TOOL_SKILL_GUIDANCE_CHARS:
+        return text
+    return text[: _MAX_TOOL_SKILL_GUIDANCE_CHARS - 3].rstrip() + "..."
+
+
+def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
+    if not guidance:
+        return tool
+    return replace(
+        tool,
+        description=f"{tool.description}\n\nWorkflow guidance:\n{guidance}",
+        skill_guidance=guidance,
+    )
+
+
+def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
+    known_tool_names = frozenset(tools_by_name)
+    for skill_path in _SKILL_GUIDANCE_FILES:
+        result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
+        for diagnostic in result.diagnostics:
+            logger.warning(
+                "[tools] Skill guidance %s (%s): %s",
+                diagnostic.path,
+                diagnostic.code,
+                diagnostic.message,
+            )
+        skill = result.skill
+        if skill is None or skill.disable_model_invocation:
+            continue
+        guidance = _truncate_skill_guidance(format_tool_skill_guidance(skill))
+        for tool_name in skill.tool_names:
+            tool_def = tools_by_name.get(tool_name)
+            if tool_def is None:
+                continue
+            tools_by_name[tool_name] = _with_skill_guidance(tool_def, guidance)
+
+
 @lru_cache(maxsize=1)
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
@@ -228,6 +272,7 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
                     continue
                 tools_by_name[tool.name] = tool
 
+    _apply_skill_guidance(tools_by_name)
     return tuple(sorted(tools_by_name.values(), key=lambda tool: tool.name))
 
 

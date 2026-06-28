@@ -265,6 +265,64 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     ) == {"incident_id": "inc-1"}
 
 
+def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_tools() -> None:
+    marker = "Use this workflow when the user asks about GitHub engineering status"
+    shared_guided_tool_names = {
+        "list_github_work_items",
+        "summarize_github_pr_status",
+        "list_github_security_alerts",
+        "generate_work_status_report",
+        "summarize_community_followups",
+    }
+
+    for surface in ("chat", "investigation"):
+        tools_by_name = {
+            tool_def.name: tool_def for tool_def in registry_module.get_registered_tools(surface)
+        }
+        for tool_name in shared_guided_tool_names:
+            tool_def = tools_by_name[tool_name]
+            assert marker in tool_def.description
+            assert "Workflow guidance:" in tool_def.description
+            assert marker in tool_def.skill_guidance
+
+    chat_tools_by_name = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
+    }
+    for tool_name in {
+        "propose_github_issue_mutation_from_slack",
+        "execute_github_issue_mutation",
+    }:
+        tool_def = chat_tools_by_name[tool_name]
+        assert marker in tool_def.description
+        assert "Workflow guidance:" in tool_def.description
+        assert marker in tool_def.skill_guidance
+
+
+def test_github_workflow_skill_guidance_does_not_attach_to_unrelated_github_tools() -> None:
+    tools_by_name = {tool_def.name: tool_def for tool_def in registry_module.get_registered_tools()}
+
+    tool_def = tools_by_name["get_github_file_contents"]
+
+    assert "Workflow guidance:" not in tool_def.description
+    assert tool_def.skill_guidance == ""
+
+
+def test_github_issue_mutation_execution_remains_chat_only_and_approval_gated() -> None:
+    chat_tools = {
+        tool_def.name: tool_def for tool_def in registry_module.get_registered_tools("chat")
+    }
+    investigation_tools = {
+        tool_def.name for tool_def in registry_module.get_registered_tools("investigation")
+    }
+
+    tool_def = chat_tools["execute_github_issue_mutation"]
+
+    assert "execute_github_issue_mutation" not in investigation_tools
+    assert tool_def.surfaces == ("chat",)
+    assert tool_def.requires_approval is True
+    assert "never an investigation action" in tool_def.description
+
+
 def test_manifest_discovery_imports_nested_tool_modules(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

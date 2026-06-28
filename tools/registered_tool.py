@@ -219,6 +219,7 @@ class RegisteredTool:
     approval_scope: str = "one_shot"
     origin_module: str = ""
     origin_name: str = ""
+    skill_guidance: str = ""
 
     def __post_init__(self) -> None:
         metadata = ToolMetadata.model_validate(
