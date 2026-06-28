@@ -13,6 +13,7 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
+from interactive_shell.command_registry import dispatch_slash
 from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
 from interactive_shell.ui.tables import tool_catalog
 from interactive_shell.ui.tables.tool_catalog import (
@@ -260,6 +261,33 @@ class TestListToolsSlashCommand:
         assert "investigation" in out
         assert "chat" in out
         assert "Search GitHub code." in out
+
+    def test_bare_tools_command_prints_full_registered_catalog(self) -> None:
+        console, buf = self._capture()
+        session = ReplSession()
+        fake = [
+            ToolCatalogEntry(
+                name="telegram_send_message",
+                surfaces=("investigation", "chat"),
+                description="Send a Telegram message.",
+                source_file="tools/telegram_send_message_tool/tool.py",
+                input_schema_summary="message: string",
+            )
+        ]
+        with patch(
+            "interactive_shell.command_registry.tools_cmds.build_tool_catalog",
+            return_value=fake,
+        ) as catalog:
+            assert dispatch_slash("/tools", session, console) is True
+        catalog.assert_called_once_with()
+        out = buf.getvalue()
+        assert "telegram_send_message" in out
+        assert "investigation" in out
+        assert "chat" in out
+
+    def test_live_catalog_includes_telegram_send_message(self) -> None:
+        names = {entry.name for entry in build_tool_catalog()}
+        assert "telegram_send_message" in names
 
     def test_list_tools_disables_markup_for_plain_catalog_text(self) -> None:
         console, buf = self._capture()

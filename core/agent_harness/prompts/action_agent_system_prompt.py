@@ -245,6 +245,10 @@ Other tools:
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind
+- telegram_send_message — send a Telegram message ONLY when Telegram is connected
+  and the user explicitly asks to send, post, notify, or message Telegram. Use the
+  user's requested message body as `message`; do NOT use this for generic alerts
+  or investigations unless the user specifically asks to send the result to Telegram.
 - shell_run — narrowly scoped local diagnostic shell commands
 - code_implement — code implementation workflow, only for a direct user request
   to change code. Do NOT use it for assistant-style offers or pasted suggested

@@ -133,6 +133,20 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
     assert "llm_set_provider" not in names
 
 
+def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
+    session = ReplSession(
+        configured_integrations=("telegram",),
+        configured_integrations_known=True,
+    )
+    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(session)}
+    assert "telegram_send_message" in names
+
+
+def test_telegram_send_message_hidden_when_telegram_is_not_configured() -> None:
+    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    assert "telegram_send_message" not in names
+
+
 def test_llm_set_provider_offered_by_default() -> None:
     """With no capability constraints (the production default), the planner is
     still offered the provider-switch tool."""

@@ -48,6 +48,7 @@ _EXECUTED_HISTORY_TYPES = {
     "synthetic_test",
     "implementation",
     "cli_command",
+    "telegram_send_message",
 }
 
 

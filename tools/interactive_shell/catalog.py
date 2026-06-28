@@ -13,6 +13,7 @@ from tools.interactive_shell.actions import (
     slash,
     synthetic,
     task_cancel,
+    telegram_message,
 )
 from tools.interactive_shell.contracts import (
     ToolEntry,
@@ -29,6 +30,7 @@ TOOL_CATALOG: tuple[ToolEntry, ...] = (
     cli_command.TOOL_ENTRY,
     implementation.TOOL_ENTRY,
     llm_provider.TOOL_ENTRY,
+    telegram_message.TOOL_ENTRY,
     assistant_handoff.TOOL_ENTRY,
 )
 
