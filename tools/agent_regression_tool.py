@@ -204,7 +204,7 @@ def _extract_cli_command(line: str) -> str | None:
             break
         if w.startswith("/"):
             break
-        args.append(w)
+        args.append(w_clean)
 
     if not args:
         return None
