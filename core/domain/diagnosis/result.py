@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -141,7 +142,11 @@ def synthesize_diagnosis_text_from_evidence(
     for key, value in evidence.items():
         if value in (None, {}, [], ""):
             continue
-        lines.append(f"- **{key}**: evidence collected")
+        try:
+            snippet = json.dumps(value, default=str)[:200]
+        except TypeError:
+            snippet = str(value)[:200]
+        lines.append(f"- **{key}**: {snippet}")
     for entry in evidence_entries[:8]:
         tool = str(entry.get("tool") or entry.get("source") or "tool")
         summary = str(

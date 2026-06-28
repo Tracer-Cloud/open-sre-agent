@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from core.domain.diagnosis import (
@@ -20,6 +18,7 @@ def test_synthesize_diagnosis_text_from_evidence_includes_tool_summaries() -> No
     assert "CheckoutErrors" in text
     assert "alertmanager" in text
     assert "2 firing alerts" in text
+    assert "firing" in text
 
 
 def test_parse_diagnosis_falls_back_to_evidence_when_assistant_text_missing(
