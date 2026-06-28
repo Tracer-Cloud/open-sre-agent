@@ -211,7 +211,9 @@ def _configure_datadog() -> tuple[str, str]:
                 "datadog",
                 {"credentials": {"api_key": api_key, "app_key": app_key, "site": site}},
             )
-            env_path = sync_env_values({})
+            sync_env_secret("DD_API_KEY", api_key)
+            sync_env_secret("DD_APP_KEY", app_key)
+            env_path = sync_env_values({"DD_SITE": site})
             return "Datadog", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -244,6 +246,7 @@ def _configure_honeycomb() -> tuple[str, str]:
                 "honeycomb",
                 {"credentials": {"api_key": api_key, "dataset": dataset, "base_url": base_url}},
             )
+            sync_env_secret("HONEYCOMB_API_KEY", api_key)
             env_path = sync_env_values(
                 {
                     "HONEYCOMB_DATASET": dataset,
@@ -1191,7 +1194,9 @@ def _configure_vercel() -> tuple[str, str]:
                 "vercel",
                 {"credentials": {"api_token": api_token, "team_id": team_id}},
             )
-            env_path = sync_env_values({})
+            sync_env_secret("VERCEL_API_TOKEN", api_token)
+            env_values = {"VERCEL_TEAM_ID": team_id} if team_id else {}
+            env_path = sync_env_values(env_values)
             return "Vercel", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -1287,7 +1292,13 @@ def _configure_alertmanager() -> tuple[str, str]:
                 creds["username"] = username
                 creds["password"] = password
             upsert_integration("alertmanager", {"credentials": creds})
-            env_path = sync_env_values({})
+            env_values: dict[str, str] = {"ALERTMANAGER_URL": base_url}
+            if username:
+                env_values["ALERTMANAGER_USERNAME"] = username
+                sync_env_secret("ALERTMANAGER_PASSWORD", password)
+            if bearer_token:
+                sync_env_secret("ALERTMANAGER_BEARER_TOKEN", bearer_token)
+            env_path = sync_env_values(env_values)
             return "Alertmanager", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
@@ -1312,7 +1323,8 @@ def _configure_opsgenie() -> tuple[str, str]:
                 "opsgenie",
                 {"credentials": {"api_key": api_key, "region": region}},
             )
-            env_path = sync_env_values({})
+            sync_env_secret("OPSGENIE_API_KEY", api_key)
+            env_path = sync_env_values({"OPSGENIE_REGION": region})
             return "OpsGenie", str(env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")
 
