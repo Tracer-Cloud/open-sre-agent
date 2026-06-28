@@ -37,7 +37,7 @@ from core.execution import (
     execute_tool_calls,
     public_tool_input,
 )
-from core.llm.agent_llm_client import ToolCall
+from core.llm.types import ToolCall
 from core.messages import (
     RuntimeMessage,
     RuntimeMessageLike,

@@ -16,7 +16,8 @@ from core import (
     execute_tools,
     trim_lowest_value_tool_pair,
 )
-from core.llm.agent_llm_client import CLIBackedAgentClient, ToolCall
+from core.llm.agent_llm_client import CLIBackedAgentClient
+from core.llm.types import ToolCall
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
     ConnectedInvestigationAgent,

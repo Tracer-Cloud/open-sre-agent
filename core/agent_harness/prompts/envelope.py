@@ -95,4 +95,4 @@ class PromptEnvelope:
         return self.separator.join(text for text in rendered if text)
 
 
-__all__ = ["PromptBlock", "PromptBlockKind", "PromptEnvelope"]
+__all__ = ["PromptBlock", "PromptEnvelope"]

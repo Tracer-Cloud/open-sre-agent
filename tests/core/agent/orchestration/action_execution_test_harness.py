@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ToolCall
 from interactive_shell.agent_shell.tool_calling import ToolCallingDeps
 
 

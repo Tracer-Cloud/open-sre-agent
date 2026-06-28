@@ -216,7 +216,6 @@ class TurnContext:
 __all__ = [
     "AgentRuntimeRequest",
     "PromptRenderable",
-    "SystemPromptInput",
     "TurnContext",
     "TurnContextSource",
 ]

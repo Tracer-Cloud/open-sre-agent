@@ -21,7 +21,8 @@ from core import (
 from core.agent import Agent
 from core.context.state import InvestigationState
 from core.context.state.evidence import EvidenceEntry
-from core.llm.agent_llm_client import ToolCall, get_agent_llm
+from core.llm.agent_llm_client import get_agent_llm
+from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker

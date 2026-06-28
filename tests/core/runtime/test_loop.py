@@ -12,7 +12,7 @@ from core.events import (
     RuntimeEvent,
     ToolExecutionUpdateEvent,
 )
-from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
     ToolResultRuntimeMessage,
     UserRuntimeMessage,

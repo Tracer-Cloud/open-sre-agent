@@ -15,6 +15,10 @@ class _MacOSKeyringBackend:
 _MacOSKeyringBackend.__module__ = "keyring.backends.macOS"
 
 
+def _security_tool_path(name: str) -> str:
+    return f"/usr/bin/{name}"
+
+
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
@@ -48,7 +52,7 @@ def test_llm_api_key_source_uses_macos_metadata_without_reading_secret(monkeypat
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(llm_credentials.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
     monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
 
     def _run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -77,7 +81,7 @@ def test_macos_metadata_missing_item_reports_none_without_reading_secret(monkeyp
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(llm_credentials.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(llm_credentials.shutil, "which", _security_tool_path)
     monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
 
     def _run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:

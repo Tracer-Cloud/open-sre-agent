@@ -16,8 +16,8 @@ from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
-from core.llm.agent_llm_client import ToolCall
 from core.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.types import ToolCall
 from interactive_shell.command_registry import SLASH_COMMANDS
 from interactive_shell.tools.tool_contracts import ToolContext
 from interactive_shell.tools.tool_registry import (

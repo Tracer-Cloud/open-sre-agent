@@ -14,7 +14,6 @@ import random
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import Any
 
 from core.llm.llm_retry import (
@@ -23,6 +22,7 @@ from core.llm.llm_retry import (
     is_credit_exhausted_error,
 )
 from core.llm.tool_schema_normalize import normalize_openai_tool_input_schema
+from core.llm.types import AgentLLMResponse, ToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -85,35 +85,6 @@ def _rate_limit_sleep_seconds(err: BaseException, fallback_backoff: float) -> fl
     return sleep_sec
 
 
-@dataclass
-class ToolCall:
-    """A single tool invocation requested by the LLM."""
-
-    id: str
-    name: str
-    input: dict[str, Any]
-
-
-@dataclass
-class AgentLLMResponse:
-    """Response from the agent LLM — may include text and/or tool calls."""
-
-    content: str
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    stop_reason: str = "end_turn"
-    # Raw provider message data for the next assistant turn.
-    # Anthropic: list of content blocks (always populated).
-    # OpenAI-compatible: dict with role/content/tool_calls, populated only when
-    # provider-specific extras (e.g. Gemini's thought_signature) need to be
-    # preserved; otherwise None and the assistant message is reconstructed via
-    # build_assistant_message.
-    raw_content: Any = None
-
-    @property
-    def has_tool_calls(self) -> bool:
-        return bool(self.tool_calls)
-
-
 def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     return {
         "type": "custom",
@@ -156,7 +127,7 @@ class AnthropicAgentClient:
         if client is None:
             from anthropic import Anthropic
 
-            from core.provider import resolve_llm_api_key
+            from config.llm_credentials import resolve_llm_api_key
 
             resolver = credential_resolver or resolve_llm_api_key
             api_key = resolver("ANTHROPIC_API_KEY")
@@ -516,7 +487,7 @@ class OpenAIAgentClient:
     ) -> None:
         from openai import OpenAI
 
-        from core.provider import resolve_llm_api_key
+        from config.llm_credentials import resolve_llm_api_key
 
         resolver = credential_resolver or resolve_llm_api_key
         api_key = resolver(api_key_env) or api_key_default

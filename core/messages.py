@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from core.llm.agent_llm_client import ToolCall
+from core.llm.types import ToolCall
 
 type MessageMetadata = dict[str, Any]
 type ProviderMessage = dict[str, Any]

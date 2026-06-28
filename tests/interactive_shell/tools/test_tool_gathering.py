@@ -19,6 +19,7 @@ import core.agent as runtime_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from core.agent_harness.session import ReplSession
+from core.llm.types import ToolCall
 from interactive_shell.tools.tool_gathering import (
     _format_gathering_progress_line,
     _resolve_gather_integrations,
@@ -88,9 +89,7 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
 
     executed = [
         (
-            agent_llm_client.ToolCall(
-                id="t1", name="search_github_issues", input={"owner": "o", "repo": "r"}
-            ),
+            ToolCall(id="t1", name="search_github_issues", input={"owner": "o", "repo": "r"}),
             {"issues": ["#1", "#2"]},
         )
     ]

@@ -31,7 +31,7 @@ from core.agent_harness.prompts import build_action_system_prompt, build_action_
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_results import ToolCallingTurnResult
 from core.events import RuntimeEvent, legacy_callback_payload
-from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
 log = logging.getLogger(__name__)

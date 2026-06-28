@@ -9,7 +9,7 @@ from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
     resolve_alert_source,
 )
-from core.llm.agent_llm_client import ToolCall
+from core.llm.types import ToolCall
 from platform.observability.tool_trace import redact_sensitive
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools

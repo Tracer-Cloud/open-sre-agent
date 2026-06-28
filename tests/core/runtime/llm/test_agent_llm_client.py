@@ -933,7 +933,8 @@ def test_cli_backed_agent_client_tool_call_parsing() -> None:
 
 def test_cli_backed_agent_client_build_assistant_message_includes_tool_json() -> None:
     """Assistant history must retain tool_calls JSON for multi-turn CLI prompts."""
-    from core.llm.agent_llm_client import CLIBackedAgentClient, ToolCall
+    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.types import ToolCall
 
     msg = CLIBackedAgentClient.build_assistant_message(
         "",

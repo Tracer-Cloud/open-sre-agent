@@ -13,7 +13,7 @@ from core.execution import (
     execute_tool_calls,
     execute_tools,
 )
-from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
 from core.types import AgentTool, AgentToolContext
 

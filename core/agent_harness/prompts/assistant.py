@@ -26,14 +26,16 @@ _MAX_SYNTHETIC_OBSERVATION_PROMPT_CHARS = 120_000
 
 
 class _Reference(Protocol):
-    def build_text(self, *_args: Any, **_kwargs: Any) -> str: ...
+    def build_text(self, *_args: Any, **_kwargs: Any) -> str:
+        raise NotImplementedError
 
 
 class _GroundingBundle(Protocol):
     cli: _Reference
     agents_md: _Reference
 
-    def log_cache_diagnostics(self, reason: str) -> None: ...
+    def log_cache_diagnostics(self, reason: str) -> None:
+        raise NotImplementedError
 
 
 class ShellPromptSession(Protocol):

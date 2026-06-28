@@ -7,7 +7,6 @@ from datetime import datetime
 
 import pytest
 
-from core.llm.agent_llm_client import ToolCall
 from core.llm.bedrock_converse import (
     build_assistant_tool_use_message,
     build_converse_tool_specs,
@@ -19,6 +18,7 @@ from core.llm.bedrock_converse import (
     sanitize_converse_schema,
     to_converse_messages,
 )
+from core.llm.types import ToolCall
 from platform.guardrails.apply import apply_guardrails_to_converse_payload
 
 
