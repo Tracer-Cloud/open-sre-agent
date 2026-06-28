@@ -11,7 +11,7 @@ from pathlib import Path
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
 from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
-from config.llm_auth.credentials import has_llm_api_key, save_api_key
+from config.llm_auth.credentials import save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import delete_llm_api_key, save_llm_api_key
 
@@ -76,22 +76,14 @@ def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
 
 
 def _strip_keyring_backed_secret_lines(lines: list[str]) -> list[str]:
-    """Drop sensitive lines already stored in the keyring; keep headless fallback secrets."""
+    """Drop sensitive assignments so `.env` writes never persist secrets."""
     kept: list[str] = []
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
-        if match and _is_sensitive_env_key(match.group(1)) and has_llm_api_key(match.group(1)):
+        if match and _is_sensitive_env_key(match.group(1)):
             continue
         kept.append(line)
     return kept
-
-
-def _lines_contain_sensitive(lines: list[str]) -> bool:
-    for line in lines:
-        match = _ENV_ASSIGNMENT.match(line)
-        if match and _is_sensitive_env_key(match.group(1)):
-            return True
-    return False
 
 
 def _persist_env_secret(key: str, value: str) -> bool:
@@ -166,38 +158,9 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
-def _write_env_raw(target_path: Path, lines: list[str]) -> None:
-    """Write ``.env`` lines including headless fallback secrets (owner-only on Unix)."""
-    content = "".join(lines)
-    try:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        if os.name == "nt":
-            with target_path.open("w", encoding="utf-8", newline="") as env_file:
-                env_file.write(content)
-        else:
-            fd = os.open(
-                target_path,
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                0o600,
-            )
-            with os.fdopen(fd, "w", encoding="utf-8", newline="") as env_file:
-                env_file.write(content)
-    except PermissionError as exc:
-        raise PermissionError(
-            f"Cannot write to {target_path}: permission denied. "
-            "Ensure you have write access to this file, or run the command as the file owner."
-        ) from exc
-    if os.name != "nt":
-        with suppress(OSError):
-            target_path.chmod(0o600)
-
-
 def _write_env_lines(target_path: Path, lines: list[str]) -> None:
-    """Write merged env lines, using the secure raw path when fallback secrets remain."""
-    if _lines_contain_sensitive(lines):
-        _write_env_raw(target_path, lines)
-    else:
-        _write_env(target_path, lines)
+    """Write merged env lines after rejecting sensitive assignments."""
+    _write_env(target_path, lines)
 
 
 def sync_env_secret(key: str, value: str) -> None:
@@ -215,9 +178,8 @@ def sync_env_values(
     """Write multiple non-sensitive environment values into the target .env file.
 
     Sensitive keys must be persisted with :func:`sync_env_secret` instead.
-    Existing sensitive assignments are removed from ``.env`` only when the same
-    key is already stored in the keyring, so headless fallback secrets survive
-    unrelated non-secret updates.
+    Existing sensitive assignments are removed from ``.env`` whenever this file
+    is rewritten so secrets do not remain in clear text.
     """
     sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
     if sensitive_keys:
@@ -297,15 +259,6 @@ def _provider_specific_keys(p: ProviderOption) -> set[str]:
     return keys
 
 
-def _llm_provider_value_from_lines(lines: list[str]) -> str | None:
-    for line in lines:
-        match = _ENV_ASSIGNMENT.match(line)
-        if match and match.group(1) == "LLM_PROVIDER":
-            _, _, rhs = line.partition("=")
-            return rhs.strip().strip("\"'") or None
-    return None
-
-
 def _env_value_from_lines(lines: list[str], key: str) -> str | None:
     for line in lines:
         match = _ENV_ASSIGNMENT.match(line)
@@ -337,10 +290,8 @@ def sync_provider_env(
 ) -> Path:
     """Write non-secret provider settings into the project .env.
 
-    Removes stale keys from other providers and API-key lines once the secret
-    is in the keyring, or when switching LLM provider. If the user still has
-    the active provider's key only in ``.env`` (same ``LLM_PROVIDER``), that
-    line is kept until they save to the keyring.
+    Removes stale keys from other providers and every API-key line. Secrets are
+    stored in the system keyring, not in ``.env``.
     """
     from cli.wizard.config import SUPPORTED_PROVIDERS
 
@@ -371,15 +322,6 @@ def sync_provider_env(
     if classification_env:
         active_non_secret.add(classification_env)
     keys_to_remove -= active_non_secret
-
-    prior_provider = _llm_provider_value_from_lines(existing)
-    if (
-        provider.api_key_env
-        and prior_provider is not None
-        and prior_provider.lower() == provider.value.lower()
-        and not has_llm_api_key(provider.api_key_env)
-    ):
-        keys_to_remove.discard(provider.api_key_env)
 
     lines = _remove_keys(existing, keys_to_remove)
 

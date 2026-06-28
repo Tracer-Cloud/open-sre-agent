@@ -54,7 +54,7 @@ class _ThemeParamType(click.ParamType):
         choices = self._choices()
         if normalized in choices:
             return normalized
-        self.fail(
+        return self.fail(
             f"{value!r} is not one of: {', '.join(choices)}.",
             param,
             ctx,
@@ -88,13 +88,16 @@ class _LazyCommandsDict(dict[str, click.Command]):
         return super().__getitem__(key)
 
     @overload
-    def get(self, key: str, default: None = None, /) -> click.Command | None: ...
+    def get(self, key: str, default: None = None, /) -> click.Command | None:
+        pass
 
     @overload
-    def get(self, key: str, default: click.Command, /) -> click.Command: ...
+    def get(self, key: str, default: click.Command, /) -> click.Command:
+        pass
 
     @overload
-    def get(self, key: str, default: _GetDefault, /) -> click.Command | _GetDefault: ...
+    def get(self, key: str, default: _GetDefault, /) -> click.Command | _GetDefault:
+        pass
 
     def get(self, key: str, default: object = None, /) -> object:
         self._ensure()

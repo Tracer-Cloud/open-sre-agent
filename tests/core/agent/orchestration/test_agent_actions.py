@@ -22,7 +22,6 @@ import tools.interactive_shell.actions.slash as slash_tool
 import tools.interactive_shell.shell.execution as shell_execution
 from core.agent_harness.session import ReplSession
 from core.llm.types import AgentLLMResponse, ToolCall
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from platform.common.task_types import TaskKind, TaskStatus
 from tests.core.agent._planned_action import (
     PlannedAction,
@@ -37,6 +36,7 @@ from tools.interactive_shell.registry import (
 )
 
 _ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
 def _capture() -> tuple[Console, io.StringIO]:
