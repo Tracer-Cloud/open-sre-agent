@@ -82,6 +82,8 @@ def _resolve_config(
     posthog_token: str | None,
     posthog_command: str | None = None,
     posthog_args: list[str] | None = None,
+    posthog_organization_id: str | None = None,
+    posthog_project_id: str | None = None,
 ) -> PostHogMCPConfig | None:
     env_config = posthog_mcp_config_from_env()
     if any((posthog_url, posthog_mode, posthog_token, posthog_command, posthog_args)):
@@ -112,8 +114,9 @@ def _resolve_config(
             "command": command,
             "args": posthog_args or (list(env_config.args) if env_config else []),
             "headers": env_config.headers if env_config else {},
-            "organization_id": env_config.organization_id if env_config else "",
-            "project_id": env_config.project_id if env_config else "",
+            "organization_id": posthog_organization_id
+            or (env_config.organization_id if env_config else ""),
+            "project_id": posthog_project_id or (env_config.project_id if env_config else ""),
             "features": list(env_config.features) if env_config else [],
             "read_only": env_config.read_only if env_config else True,
         }
@@ -135,6 +138,10 @@ def _posthog_mcp_extract_params(sources: dict[str, dict]) -> PostHogMCPParams:
         "posthog_token": _first_string(posthog, "posthog_token", "auth_token"),
         "posthog_command": _first_string(posthog, "posthog_command", "command"),
         "posthog_args": _first_list(posthog, "posthog_args", "args"),
+        "posthog_organization_id": _first_string(
+            posthog, "posthog_organization_id", "organization_id"
+        ),
+        "posthog_project_id": _first_string(posthog, "posthog_project_id", "project_id"),
     }
 
 
@@ -195,6 +202,8 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
             "posthog_token": {"type": "string"},
             "posthog_command": {"type": "string"},
             "posthog_args": {"type": "array", "items": {"type": "string"}},
+            "posthog_organization_id": {"type": "string"},
+            "posthog_project_id": {"type": "string"},
         },
         "required": [],
     },
@@ -208,6 +217,8 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
         "posthog_token",
         "posthog_command",
         "posthog_args",
+        "posthog_organization_id",
+        "posthog_project_id",
     ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
@@ -220,6 +231,8 @@ def list_posthog_tools(
     posthog_token: str | None = None,
     posthog_command: str | None = None,
     posthog_args: list[str] | None = None,
+    posthog_organization_id: str | None = None,
+    posthog_project_id: str | None = None,
     **_kwargs: object,
 ) -> PostHogMCPResponse:
     """List tools available from the configured PostHog MCP server.
@@ -234,6 +247,8 @@ def list_posthog_tools(
         posthog_token,
         posthog_command,
         posthog_args,
+        posthog_organization_id,
+        posthog_project_id,
     )
     if config is None:
         payload = _unavailable_response("PostHog MCP integration is not configured.")
@@ -299,6 +314,8 @@ def list_posthog_tools(
             "posthog_token": {"type": "string"},
             "posthog_command": {"type": "string"},
             "posthog_args": {"type": "array", "items": {"type": "string"}},
+            "posthog_organization_id": {"type": "string"},
+            "posthog_project_id": {"type": "string"},
         },
         "required": ["tool_name"],
     },
@@ -312,6 +329,8 @@ def list_posthog_tools(
         "posthog_token",
         "posthog_command",
         "posthog_args",
+        "posthog_organization_id",
+        "posthog_project_id",
     ),
     is_available=_posthog_mcp_available,
     extract_params=_posthog_mcp_extract_params,
@@ -324,6 +343,8 @@ def call_posthog_tool(
     posthog_token: str | None = None,
     posthog_command: str | None = None,
     posthog_args: list[str] | None = None,
+    posthog_organization_id: str | None = None,
+    posthog_project_id: str | None = None,
     **_kwargs: object,
 ) -> PostHogMCPResponse:
     """Call a specific PostHog MCP tool by name."""
@@ -340,6 +361,8 @@ def call_posthog_tool(
         posthog_token,
         posthog_command,
         posthog_args,
+        posthog_organization_id,
+        posthog_project_id,
     )
     if config is None:
         return _unavailable_response(
