@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from core.runtime.messages import ProviderMessage, RuntimeMessage, convert_to_llm_messages
+if TYPE_CHECKING:
+    from core.runtime.messages import ProviderMessage, RuntimeMessage
 
 
 @dataclass(frozen=True)
@@ -19,8 +20,8 @@ class ProviderRequest:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-TransformContextHook = Callable[[Sequence[RuntimeMessage]], Sequence[RuntimeMessage]]
-ConvertToLlmHook = Callable[[Any, Sequence[RuntimeMessage]], list[ProviderMessage]]
+TransformContextHook = Callable[[Sequence["RuntimeMessage"]], Sequence["RuntimeMessage"]]
+ConvertToLlmHook = Callable[[Any, Sequence["RuntimeMessage"]], list["ProviderMessage"]]
 BeforeProviderRequestHook = Callable[[ProviderRequest], ProviderRequest | None]
 AfterProviderResponseHook = Callable[[ProviderRequest, Any], Any | None]
 ApiKeyResolver = Callable[[str], str]
@@ -50,6 +51,8 @@ class ProviderHooks:
         messages: Sequence[RuntimeMessage],
     ) -> list[ProviderMessage]:
         if self.convert_to_llm is None:
+            from core.runtime.messages import convert_to_llm_messages
+
             return convert_to_llm_messages(llm, messages)
         return self.convert_to_llm(llm, messages)
 
