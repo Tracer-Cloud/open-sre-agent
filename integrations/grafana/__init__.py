@@ -10,6 +10,27 @@ from integrations.config_models import GrafanaIntegrationConfig
 
 logger = logging.getLogger(__name__)
 
+_GRAFANA_TOKEN_KEYS = (
+    "api_key",
+    "token",
+    "api_token",
+    "read_token",
+    "service_account_token",
+    "bearer_token",
+    "key",
+    "apiKey",
+    "readToken",
+)
+
+
+def _resolve_grafana_api_key(credentials: dict[str, Any]) -> str:
+    """Return the first non-empty Grafana token field from stored credentials."""
+    for key in _GRAFANA_TOKEN_KEYS:
+        value = credentials.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
 
 def classify(
     credentials: dict[str, Any], record_id: str
@@ -18,7 +39,7 @@ def classify(
         cfg = GrafanaIntegrationConfig.model_validate(
             {
                 "endpoint": credentials.get("endpoint", ""),
-                "api_key": credentials.get("api_key", ""),
+                "api_key": _resolve_grafana_api_key(credentials),
                 "username": credentials.get("username", ""),
                 "password": credentials.get("password", ""),
                 "integration_id": record_id,
