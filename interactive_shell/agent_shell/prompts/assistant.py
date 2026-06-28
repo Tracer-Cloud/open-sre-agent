@@ -7,14 +7,14 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol
 
-from core.agent.conversation_memory import format_recent_conversation
-from core.agent.prompts import (
+from core.agent_harness.conversation_memory import format_recent_conversation
+from core.agent_harness.prompts import (
     PromptEnvelope,
     _build_observation_block,
     _build_system_prompt,
     build_environment_block,
 )
-from core.agent.turn_context import TurnContext
+from core.agent_harness.turn_context import TurnContext
 from interactive_shell.agent_shell.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )

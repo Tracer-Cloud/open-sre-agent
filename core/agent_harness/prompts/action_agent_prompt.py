@@ -1,13 +1,13 @@
-"""Prompt context for the shell action core.agent."""
+"""Prompt context for the shell action core.agent_harness."""
 
 from __future__ import annotations
 
 import re
 
-from core.agent.conversation_memory import format_recent_conversation
-from core.agent.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
-from core.agent.prompts.envelope import PromptBlock, PromptEnvelope
-from core.agent.turn_context import TurnContext
+from core.agent_harness.conversation_memory import format_recent_conversation
+from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.turn_context import TurnContext
 
 _MAX_TEXT_LEN = 512
 _USER_TEMPLATE = "USER MESSAGE (literal): <<<{text}>>>"
@@ -24,19 +24,19 @@ def build_action_system_prompt_envelope(turn_ctx: TurnContext) -> PromptEnvelope
                 id="action-agent-system-base",
                 kind="system",
                 content=_SYSTEM_PROMPT_BASE + "\n\n",
-                provenance="core.agent.prompts.action_agent_system_prompt",
+                provenance="core.agent_harness.prompts.action_agent_system_prompt",
             ),
             PromptBlock(
                 id="connected-integrations",
                 kind="context",
                 content=connected_integrations_block(turn_ctx),
-                provenance="core.agent.turn_context",
+                provenance="core.agent_harness.turn_context",
             ),
             PromptBlock(
                 id="recent-conversation",
                 kind="conversation",
                 content=recent_conversation_block(turn_ctx),
-                provenance="core.agent.turn_context",
+                provenance="core.agent_harness.turn_context",
             ),
         ),
         separator="",

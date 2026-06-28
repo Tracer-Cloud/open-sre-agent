@@ -18,9 +18,9 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent.action_plan import ActionPlanAction
-from core.agent.action_plan import parse_action_plan as _parse_action_plan
-from core.agent.prompts.assistant_agent_prompt import (
+from core.agent_harness.action_plan import ActionPlanAction
+from core.agent_harness.action_plan import parse_action_plan as _parse_action_plan
+from core.agent_harness.prompts.assistant_agent_prompt import (
     _ACTION_RULE,
     _MARKDOWN_RULE,
     _TERMINOLOGY_RULE,

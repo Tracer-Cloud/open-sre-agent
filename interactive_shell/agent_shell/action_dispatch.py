@@ -1,9 +1,9 @@
 """Execution of the conversational assistant's action plan (shell surface).
 
-Parsing the action plan is pure and lives in :mod:`core.agent.action_plan`. *Executing*
+Parsing the action plan is pure and lives in :mod:`core.agent_harness.action_plan`. *Executing*
 it — capability gating, confirmation, slash/CLI/provider dispatch — is a terminal
 concern and lives here. This module is the shell-side implementation behind the
-:class:`core.agent.ports.ActionDispatch` port.
+:class:`core.agent_harness.ports.ActionDispatch` port.
 
 Structured as a functional core (pure planners that emit
 :class:`HarnessInstruction` values) wrapped by a thin effect interpreter.
@@ -18,7 +18,7 @@ from typing import Literal
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent.action_plan import ALL_ACTION_CAPABILITIES, ActionPlanAction
+from core.agent_harness.action_plan import ALL_ACTION_CAPABILITIES, ActionPlanAction
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import (
     BOLD_BRAND,

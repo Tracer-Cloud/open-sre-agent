@@ -3,7 +3,7 @@
 The conversational assistant may answer with a compact JSON object describing
 runtime actions to perform (switch provider, run a slash command, etc.). This
 module turns raw model output into a typed, immutable action plan. *Executing*
-the plan is a surface concern handled by an :class:`core.agent.ports.ActionDispatch`
+the plan is a surface concern handled by an :class:`core.agent_harness.ports.ActionDispatch`
 adapter; parsing is pure and lives here so both the engine and the dispatcher
 share one representation.
 """
@@ -34,7 +34,7 @@ def _as_text(value: object) -> str:
 
 @dataclass(frozen=True)
 class ActionPlanAction:
-    """Typed representation of a single action emitted by the CLI core.agent."""
+    """Typed representation of a single action emitted by the CLI core.agent_harness."""
 
     kind: str
     provider: str = ""

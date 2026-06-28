@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from core.agent_runtime import Agent
+from core.agent import Agent
 from core.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,

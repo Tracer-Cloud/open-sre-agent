@@ -1,13 +1,13 @@
 """Action tool-calling turn driver (decoupled from any terminal surface).
 
-Runs one turn through the shared :class:`core.agent_runtime.Agent` tool-calling
-loop: it assembles the available agent tools (via a :class:`~core.agent.ports.ToolProvider`),
+Runs one turn through the shared :class:`core.agent.Agent` tool-calling
+loop: it assembles the available agent tools (via a :class:`~core.agent_harness.ports.ToolProvider`),
 drives the loop while a tool-event observer streams each tool call to the
 surface, and summarizes the executed tool calls into a facts-only
-:class:`~core.agent.turn_results.ToolCallingTurnResult`.
+:class:`~core.agent_harness.turn_results.ToolCallingTurnResult`.
 
 Accounting/analytics for the turn are the caller's concern (see
-:class:`core.agent.ports.TurnAccounting`); this module emits none itself.
+:class:`core.agent_harness.ports.TurnAccounting`); this module emits none itself.
 """
 
 from __future__ import annotations
@@ -18,12 +18,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent.conversation_memory import MAX_CONVERSATION_MESSAGES
-from core.agent.ports import ConfirmFn, ErrorReporter, OutputSink, SessionStore, ToolProvider
-from core.agent.prompts import build_action_system_prompt, build_action_user_message
-from core.agent.turn_context import TurnContext
-from core.agent.turn_results import ToolCallingTurnResult
-from core.agent_runtime import Agent
+from core.agent import Agent
+from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.ports import (
+    ConfirmFn,
+    ErrorReporter,
+    OutputSink,
+    SessionStore,
+    ToolProvider,
+)
+from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
+from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.turn_results import ToolCallingTurnResult
 from core.events import RuntimeEvent, legacy_callback_payload
 from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
@@ -173,7 +179,7 @@ def run_agent_turn(
         # general "deterministic command" fast path. In particular, do not add
         # `deterministic_command_text`, slash-command parsing, or regex intent
         # matching here. Slash execution still belongs to the `slash_invoke`
-        # AgentTool selected by the action core.agent.
+        # AgentTool selected by the action core.agent_harness.
         def llm_factory() -> _StaticToolCallLLM:
             return _StaticToolCallLLM(
                 [ToolCall(id="direct_shell_0", name="shell_run", input={"command": bang_command})]
@@ -211,7 +217,7 @@ def run_agent_turn(
 
         error_text = str(exc)
         if error_reporter is not None:
-            error_reporter.report(exc, context="core.agent.action_driver", expected=True)
+            error_reporter.report(exc, context="core.agent_harness.action_driver", expected=True)
         _render_tool_calling_error(output, error_text)
         _persist_tool_calling_error(session, message, error_text)
         session.record("cli_agent", message, ok=False)

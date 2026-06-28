@@ -3,7 +3,7 @@
 The assistant is grounded text generation — it cannot reach integrations on its
 own. This module gives a free-form turn access to the **same registered tools
 the investigation pipeline uses**: it runs a bounded think -> call-tools ->
-observe loop (:class:`core.agent_runtime.Agent`) over the available
+observe loop (:class:`core.agent.Agent`) over the available
 ``"investigation"`` surface tools, then returns the collected tool outputs as an
 observation block the assistant can summarize.
 
@@ -19,11 +19,11 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from core.agent.conversation_memory import (
+from core.agent_harness.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
-from core.agent.ports import ErrorReporter, SessionStore, ToolEventObserver
+from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from tools.utils.github_repo_scope import (
     apply_github_repo_scope,
@@ -142,7 +142,7 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from core.agent_runtime import Agent
+        from core.agent import Agent
         from core.events import RuntimeEvent, legacy_callback_payload
         from core.llm.agent_llm_client import get_agent_llm
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
@@ -161,7 +161,7 @@ def gather_tool_evidence(
             # back to the text-only assistant rather than failing the turn.
             if error_reporter is not None:
                 error_reporter.report(
-                    exc, context="core.agent.evidence_agent.client", expected=True
+                    exc, context="core.agent_harness.evidence_agent.client", expected=True
                 )
             return None
 
@@ -186,7 +186,7 @@ def gather_tool_evidence(
         return None
     except Exception as exc:
         if error_reporter is not None:
-            error_reporter.report(exc, context="core.agent.evidence_agent")
+            error_reporter.report(exc, context="core.agent_harness.evidence_agent")
         return None
 
     if not result.executed:

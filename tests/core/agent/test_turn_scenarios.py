@@ -12,7 +12,7 @@ import pytest
 from rich.console import Console
 
 from core import Agent, AgentTool, AgentToolContext
-from core.agent.prompts import (
+from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
@@ -420,7 +420,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
-    from core.agent.turn_context import TurnContext
+    from core.agent_harness.turn_context import TurnContext
 
     result = Agent(
         llm=llm,

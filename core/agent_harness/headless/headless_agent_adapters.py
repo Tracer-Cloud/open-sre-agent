@@ -1,4 +1,4 @@
-"""In-memory implementations of the :mod:`core.agent.ports` Protocols.
+"""In-memory implementations of the :mod:`core.agent_harness.ports` Protocols.
 
 These let a turn run with no terminal: a buffer output sink, an in-memory
 session store, empty grounding, no tools, and no analytics. They are the
@@ -13,16 +13,16 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.agent.ports import (
+from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
 )
-from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 
 @dataclass
 class InMemorySessionStore:
-    """List-backed :class:`core.agent.ports.SessionStore` for headless runs."""
+    """List-backed :class:`core.agent_harness.ports.SessionStore` for headless runs."""
 
     session_id: str = "headless"
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)

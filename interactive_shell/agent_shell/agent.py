@@ -1,12 +1,12 @@
 """Terminal lifecycle + turn entry for the interactive OpenSRE shell.
 
 The agentic turn engine itself now lives in the decoupled :mod:`agent` package
-(``core.agent.turn_orchestrator`` for routing + the conversational assistant, ``core.agent.action_agent``
-for the action tool-calling turn, ``core.agent.evidence_agent`` for evidence gathering). This
+(``core.agent_harness.turn_orchestrator`` for routing + the conversational assistant, ``core.agent_harness.action_agent``
+for the action tool-calling turn, ``core.agent_harness.evidence_agent`` for evidence gathering). This
 module keeps only what is intrinsically terminal:
 
 * ``handle_message_with_agent`` / ``answer_cli_agent`` — thin shell entry points
-  that build the :mod:`core.agent.ports` adapters and delegate to the engine.
+  that build the :mod:`core.agent_harness.ports` adapters and delegate to the engine.
 * the async REPL plumbing (``AgentTurnRunner``, ``ConsoleAgentEventSink``, the
   input/queue loops, prompt-driven confirmation) that drives presentation around
   each submitted turn.
@@ -25,11 +25,11 @@ from typing import Any, Literal
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent.action_plan import ActionPlanAction
-from core.agent.turn_context import TurnContext
-from core.agent.turn_orchestrator import answer_cli_agent as run_core_answer_cli_agent
-from core.agent.turn_orchestrator import run_turn
-from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.action_plan import ActionPlanAction
+from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.turn_orchestrator import answer_cli_agent as run_core_answer_cli_agent
+from core.agent_harness.turn_orchestrator import run_turn
+from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from interactive_shell.agent_shell.adapters import (
     ShellActionDispatch,
     ShellErrorReporter,
@@ -82,7 +82,7 @@ AnswerAgent = Callable[..., "LlmRunInfo | None"]
 
 
 # ---------------------------------------------------------------------------
-# Conversational assistant + turn routing (shell entry -> core.agent.turn_orchestrator)
+# Conversational assistant + turn routing (shell entry -> core.agent_harness.turn_orchestrator)
 # ---------------------------------------------------------------------------
 
 
@@ -99,7 +99,7 @@ def answer_cli_agent(
 ) -> LlmRunInfo | None:
     """Run one turn of the terminal assistant (guidance only; no investigation run).
 
-    Delegates to :func:`core.agent.turn_orchestrator.answer_cli_agent`, supplying the shell
+    Delegates to :func:`core.agent_harness.turn_orchestrator.answer_cli_agent`, supplying the shell
     adapters (Rich output, grounding caches, reasoning client, telemetry, action
     dispatch).
     """
@@ -137,7 +137,7 @@ def handle_message_with_agent(
     The action driver, gather pass, and conversational assistant are bound to the
     live ``session``/``console`` here (so injected test doubles keep their
     ``(text, session, console, ...)`` shape) and handed to
-    :func:`core.agent.turn_orchestrator.run_turn`, which performs the pure path routing.
+    :func:`core.agent_harness.turn_orchestrator.run_turn`, which performs the pure path routing.
     """
     from interactive_shell.session.compaction import auto_compact_if_needed
 

@@ -3,13 +3,13 @@
 This is the proof that the agent is decoupled from any terminal: a caller (an
 HTTP handler, a script, a test) can run a full turn with only a message. All the
 surface concerns are satisfied by the in-memory adapters in
-:mod:`core.agent.headless`, but every dependency is injectable so a real surface can
+:mod:`core.agent_harness.headless`, but every dependency is injectable so a real surface can
 override any of them.
 
 Example::
 
-    from core.agent.headless_agent import run_agent_turn
-    from core.agent.headless import InMemorySessionStore, StaticReasoningClientProvider
+    from core.agent_harness.headless_agent import run_agent_turn
+    from core.agent_harness.headless import InMemorySessionStore, StaticReasoningClientProvider
 
     class _Echo:
         def invoke_stream(self, prompt):
@@ -24,9 +24,9 @@ Example::
 
 from __future__ import annotations
 
-from core.agent.action_agent import run_agent_turn as run_action_agent_turn
-from core.agent.evidence_agent import gather_tool_evidence
-from core.agent.headless import (
+from core.agent_harness.action_agent import run_agent_turn as run_action_agent_turn
+from core.agent_harness.evidence_agent import gather_tool_evidence
+from core.agent_harness.headless import (
     BufferOutputSink,
     EmptyPromptContextProvider,
     InMemorySessionStore,
@@ -37,7 +37,7 @@ from core.agent.headless import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
-from core.agent.ports import (
+from core.agent_harness.ports import (
     ActionDispatch,
     ConfirmFn,
     ErrorReporter,
@@ -49,9 +49,9 @@ from core.agent.ports import (
     ToolProvider,
     TurnAccounting,
 )
-from core.agent.turn_context import TurnContext
-from core.agent.turn_orchestrator import answer_cli_agent, run_turn
-from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.turn_orchestrator import answer_cli_agent, run_turn
+from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 
 
 def run_agent_turn(

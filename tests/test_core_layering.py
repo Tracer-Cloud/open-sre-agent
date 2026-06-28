@@ -25,7 +25,7 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 _CORE_ONLY_PACKAGES: tuple[Path, ...] = (Path("core/domain"),)
 _CORE_RUNTIME_MODULES: tuple[Path, ...] = (
     Path("core/__init__.py"),
-    Path("core/agent_runtime.py"),
+    Path("core/agent.py"),
     Path("core/context_budget.py"),
     Path("core/events.py"),
     Path("core/execution.py"),

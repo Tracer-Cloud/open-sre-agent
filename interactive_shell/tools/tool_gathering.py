@@ -1,10 +1,10 @@
 """Live tool-gathering pass for the interactive-shell assistant (terminal adapter).
 
 The bounded think -> call-tools -> observe loop lives in the decoupled
-:func:`core.agent.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
+:func:`core.agent_harness.evidence_agent.gather_tool_evidence`. This module is the terminal adapter:
 it renders each gathering step to the console and persists the gathered tool
 calls into the shell's session storage, then hands the collected observation back
-to :func:`interactive_shell.agent_shell.core.agent.answer_cli_agent`.
+to :func:`interactive_shell.agent_shell.core.agent_harness.answer_cli_agent`.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent import evidence_agent
+from core.agent_harness import evidence_agent
 from interactive_shell.session import ReplSession
 from interactive_shell.ui import DIM
 from interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
@@ -51,7 +51,7 @@ _GATHER_INPUT_HINT_KEYS: tuple[str, ...] = (
 
 
 class _ShellGatherErrorReporter:
-    """Minimal :class:`core.agent.ports.ErrorReporter` over ``report_exception``."""
+    """Minimal :class:`core.agent_harness.ports.ErrorReporter` over ``report_exception``."""
 
     def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
         report_exception(exc, context=context, expected=expected)

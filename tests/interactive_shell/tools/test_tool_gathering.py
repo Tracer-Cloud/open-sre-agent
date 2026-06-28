@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 import core as runtime_module
-import core.agent_runtime as runtime_agent_module
+import core.agent as runtime_agent_module
 import core.llm.agent_llm_client as agent_llm_client
 import tools.investigation.stages.gather_evidence.tools as investigate_tools
 from interactive_shell.session import ReplSession

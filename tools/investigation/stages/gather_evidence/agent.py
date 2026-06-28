@@ -20,7 +20,7 @@ from core import (
     summarise,
     tool_source,
 )
-from core.agent_runtime import Agent
+from core.agent import Agent
 from core.llm.agent_llm_client import ToolCall, get_agent_llm
 from core.llm_invoke_errors import classify_llm_invoke_failure
 from platform.observability import debug_print
@@ -72,7 +72,7 @@ def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[
 class ConnectedInvestigationAgent(Agent[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Subclasses :class:`~core.agent_runtime.Agent` to inherit the shared hook
+    Subclasses :class:`~core.agent.Agent` to inherit the shared hook
     interface. The investigation loop is more specialised than the generic
     :meth:`Agent.run` (seed calls, evidence collection, duplicate detection,
     stagnation handling), so it overrides ``run()`` entirely.

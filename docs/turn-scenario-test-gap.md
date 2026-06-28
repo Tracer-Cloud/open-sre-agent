@@ -18,7 +18,7 @@
 > non-empty = allowlist) instead of disabling slash/cli/synthetic by default, and
 > the dead `risk_level`/`tier`/`remote_connected`/`surface` fields were removed.
 > See the "Scenario schema and `available_capabilities` semantics" section of
-> `core/agent/AGENTS.md` for the canonical contract.
+> `core/agent_harness/AGENTS.md` for the canonical contract.
 
 ---
 
@@ -318,7 +318,7 @@ to distinguish between two separate things:
 
 Add an AST check that specifically permits `monkeypatch.setattr` on
 `tool_gathering._resolve_session_integrations` and
-`core.agent_runtime.Agent.run` while continuing to prohibit `patch`,
+`core.agent.Agent.run` while continuing to prohibit `patch`,
 `MagicMock`, and LLM client stubs.
 
 ### 7.5 — Rename or reclassify misleading existing scenarios

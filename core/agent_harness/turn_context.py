@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.agent_harness.conversation_memory import MAX_CONVERSATION_MESSAGES
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice
@@ -63,7 +63,7 @@ class TurnContextSource(Protocol):
 
 @runtime_checkable
 class AgentRuntimeRequest(Protocol):
-    """Runtime request contract consumed by ``core.agent_runtime.Agent``."""
+    """Runtime request contract consumed by ``core.agent.Agent``."""
 
     system_prompt: Any
     active_tools: Sequence[RuntimeTool]

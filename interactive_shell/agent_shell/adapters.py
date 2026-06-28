@@ -1,4 +1,4 @@
-"""Interactive-shell adapters implementing the :mod:`core.agent.ports` Protocols.
+"""Interactive-shell adapters implementing the :mod:`core.agent_harness.ports` Protocols.
 
 These wire the decoupled :mod:`agent` turn engine to the terminal surface: the
 Rich console, the ``ReplSession``, the tool registry, the grounding caches, and
@@ -15,8 +15,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
 
-from core.agent.action_plan import ActionPlanAction
-from core.agent.prompts import build_environment_block
+from core.agent_harness.action_plan import ActionPlanAction
+from core.agent_harness.prompts import build_environment_block
 from interactive_shell.agent_shell.action_dispatch import execute_action_plan
 from interactive_shell.agent_shell.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
@@ -39,7 +39,7 @@ from interactive_shell.utils.error_handling.exception_reporting import report_ex
 
 
 class ShellOutputSink:
-    """:class:`core.agent.ports.OutputSink` over a Rich console."""
+    """:class:`core.agent_harness.ports.OutputSink` over a Rich console."""
 
     def __init__(self, console: Console) -> None:
         self._console = console
@@ -76,7 +76,7 @@ class ShellOutputSink:
 
 
 class ShellToolProvider:
-    """:class:`core.agent.ports.ToolProvider` backed by the shell tool registry."""
+    """:class:`core.agent_harness.ports.ToolProvider` backed by the shell tool registry."""
 
     def __init__(self, session: ReplSession, console: Console) -> None:
         self._session = session
@@ -99,7 +99,7 @@ class ShellToolProvider:
 
 
 class ShellPromptContextProvider:
-    """:class:`core.agent.ports.PromptContextProvider` over the session grounding caches."""
+    """:class:`core.agent_harness.ports.PromptContextProvider` over the session grounding caches."""
 
     def __init__(self, session: ReplSession) -> None:
         self._session = session
@@ -127,7 +127,7 @@ class ShellPromptContextProvider:
 
 
 class ShellReasoningClientProvider:
-    """:class:`core.agent.ports.ReasoningClientProvider` for the streaming assistant."""
+    """:class:`core.agent_harness.ports.ReasoningClientProvider` for the streaming assistant."""
 
     def __init__(self, console: Console) -> None:
         self._console = console
@@ -143,7 +143,7 @@ class ShellReasoningClientProvider:
 
 
 class ShellRunRecordFactory:
-    """:class:`core.agent.ports.RunRecordFactory` producing the shell ``LlmRunInfo``."""
+    """:class:`core.agent_harness.ports.RunRecordFactory` producing the shell ``LlmRunInfo``."""
 
     def __init__(self, session: ReplSession) -> None:
         self._session = session
@@ -159,7 +159,7 @@ class ShellRunRecordFactory:
 
 
 class ShellActionDispatch:
-    """:class:`core.agent.ports.ActionDispatch` over the shell action interpreter."""
+    """:class:`core.agent_harness.ports.ActionDispatch` over the shell action interpreter."""
 
     def __init__(self, session: ReplSession, console: Console) -> None:
         self._session = session
@@ -183,7 +183,7 @@ class ShellActionDispatch:
 
 
 class ShellErrorReporter:
-    """:class:`core.agent.ports.ErrorReporter` over ``report_exception``."""
+    """:class:`core.agent_harness.ports.ErrorReporter` over ``report_exception``."""
 
     def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
         report_exception(exc, context=context, expected=expected)

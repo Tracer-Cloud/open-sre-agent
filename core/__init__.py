@@ -4,14 +4,14 @@ Provider-agnostic machinery for running a think → call tools → observe loop:
 parallel tool execution, provider-specific message shaping, and context-window
 budget enforcement.
 
-The top-level primitive is :class:`~core.agent_runtime.Agent`. Surfaces that
+The top-level primitive is :class:`~core.agent.Agent`. Surfaces that
 previously called ``run_tool_calling_loop`` should instantiate ``Agent``
 directly and call ``.run(initial_messages)``.
 """
 
 from __future__ import annotations
 
-from core.agent_runtime import Agent, AgentRunResult, LoopEventCallback, ToolLoopResult
+from core.agent import Agent, AgentRunResult, LoopEventCallback, ToolLoopResult
 from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,

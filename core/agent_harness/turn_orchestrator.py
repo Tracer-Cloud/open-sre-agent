@@ -11,7 +11,7 @@ interactive shell. It owns:
   assistant.
 
 All terminal/session/grounding/telemetry concerns are reached through the
-Protocols in :mod:`core.agent.ports`. Nothing here imports ``interactive_shell``.
+Protocols in :mod:`core.agent_harness.ports`. Nothing here imports ``interactive_shell``.
 """
 
 from __future__ import annotations
@@ -24,9 +24,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent.action_plan import parse_action_plan
-from core.agent.conversation_memory import MAX_CONVERSATION_MESSAGES, format_recent_conversation
-from core.agent.ports import (
+from core.agent_harness.action_plan import parse_action_plan
+from core.agent_harness.conversation_memory import (
+    MAX_CONVERSATION_MESSAGES,
+    format_recent_conversation,
+)
+from core.agent_harness.ports import (
     ActionDispatch,
     AnswerAgent,
     ConfirmFn,
@@ -40,9 +43,9 @@ from core.agent.ports import (
     SessionStore,
     TurnAccounting,
 )
-from core.agent.prompts import _build_observation_block, _build_system_prompt
-from core.agent.turn_context import TurnContext
-from core.agent.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.prompts import _build_observation_block, _build_system_prompt
+from core.agent_harness.turn_context import TurnContext
+from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from integrations.llm_cli.errors import CLITimeoutError
 
 _logger = logging.getLogger(__name__)
@@ -261,7 +264,7 @@ def _stream_cli_agent_response(
         if error_reporter is not None:
             error_reporter.report(
                 exc,
-                context="core.agent.turn_orchestrator.stream",
+                context="core.agent_harness.turn_orchestrator.stream",
                 expected=isinstance(exc, CLITimeoutError),
             )
         output.render_error(f"assistant failed: {exc}")

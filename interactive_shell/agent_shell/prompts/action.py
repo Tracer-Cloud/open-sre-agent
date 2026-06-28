@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.agent.prompts import (
+from core.agent_harness.prompts import (
     PromptEnvelope,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
@@ -13,7 +13,7 @@ from core.agent.prompts import (
     recent_conversation_block,
     sanitize_action_text,
 )
-from core.agent.turn_context import TurnContext
+from core.agent_harness.turn_context import TurnContext
 
 
 @dataclass(frozen=True)

@@ -28,7 +28,7 @@ from typing import Any
 
 import pytest
 
-from core.agent.turn_context import TurnContext
+from core.agent_harness.turn_context import TurnContext
 from interactive_shell.agent_shell.prompts import (
     build_action_system_prompt,
     build_action_user_message,

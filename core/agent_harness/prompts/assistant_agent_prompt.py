@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent.prompts.rules import (
+from core.agent_harness.prompts.rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )

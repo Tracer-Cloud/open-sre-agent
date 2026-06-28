@@ -54,7 +54,7 @@ from platform.observability.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from core.agent.turn_context import AgentRuntimeRequest
+    from core.agent_harness.turn_context import AgentRuntimeRequest
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback

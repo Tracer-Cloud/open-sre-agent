@@ -13,10 +13,10 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def test_core_agent_does_not_import_interactive_shell() -> None:
+def test_core_agent_harness_does_not_import_interactive_shell() -> None:
     root = _repo_root()
     offenders: list[str] = []
-    for path in sorted((root / "core" / "agent").rglob("*.py")):
+    for path in sorted((root / "core" / "agent_harness").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

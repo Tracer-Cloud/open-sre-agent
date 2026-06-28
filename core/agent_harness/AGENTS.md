@@ -1,21 +1,21 @@
-# agent/ package rules
+# agent_harness/ package rules
 
-`agent/` owns the **decoupled agent subsystem**: the surface-agnostic
-think -> call-tools -> observe loop and the turn harness (action tool-calling
-turn, three-path routing, conversational answer, evidence gather), extracted out
-of `interactive_shell` so the same engine can run the interactive terminal and
-be invoked headlessly via `agent.headless_agent`.
+`agent_harness/` owns the **decoupled agent harness** around the shared
+`core.agent.Agent` loop: action tool-calling turns, three-path routing,
+conversational answers, evidence gather, and headless execution. It was
+extracted out of `interactive_shell` so the same harness can run the interactive
+terminal and be invoked headlessly via `agent_harness.headless_agent`.
 
 ## Hard boundary (enforced by tests)
 
-- **No `import interactive_shell` anywhere under `agent/`.** This is the whole
+- **No `import interactive_shell` anywhere under `agent_harness/`.** This is the whole
   point of the package and is checked by
-  `tests/agent/test_import_boundary.py`. The dependency direction is strictly
-  one-way: `interactive_shell -> agent -> core`.
-- `agent/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
+  `tests/core/agent/test_import_boundaries.py`. The dependency direction is strictly
+  one-way: `interactive_shell -> agent_harness -> core`.
+- `agent_harness/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
   `tools/`. It must not depend on terminal/REPL concerns (Rich, prompt-toolkit,
   `ReplSession`, slash dispatch, the shell `REGISTRY`). Those are reached through
-  the Protocols in `agent/ports.py`, which `interactive_shell` implements as
+  the Protocols in `agent_harness/ports.py`, which `interactive_shell` implements as
   adapters.
 
 ## Layout
@@ -23,7 +23,6 @@ be invoked headlessly via `agent.headless_agent`.
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, action dispatch, telemetry,
   error reporter, evidence gatherer).
-- `agent.py` — public semantic façade for the main agent concepts.
 - `turn_context.py` — `TurnContext`, the immutable per-turn snapshot (built from any
   object satisfying `TurnContextSource`, not `ReplSession` directly).
 - `conversation_memory.py` — recent-conversation rendering shared by prompts.
@@ -31,7 +30,7 @@ be invoked headlessly via `agent.headless_agent`.
   string assembly; grounding text is supplied via `PromptContextProvider`).
 - `turn_results.py` — neutral turn-result models.
 - `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports,
-  wrapping `core.agent_runtime.Agent`.
+  wrapping `core.agent.Agent`.
 - `turn_orchestrator.py` — `run_turn`: the three-path routing (summarize-observation /
   handled / gather+answer) and the conversational answer.
 - `evidence_agent.py` — bounded evidence-gather loop over the `core` investigation tools.
@@ -40,5 +39,5 @@ be invoked headlessly via `agent.headless_agent`.
 
 ## Keep the loop primitive in core
 
-The ReAct loop primitive is `core.agent_runtime.Agent`. `agent/` orchestrates it;
+The ReAct loop primitive is `core.agent.Agent`. `agent_harness/` orchestrates it;
 it does not re-implement it. Do not fork the loop here.

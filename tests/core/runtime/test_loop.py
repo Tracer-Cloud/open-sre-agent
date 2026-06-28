@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from core.agent_runtime import Agent, AgentRunResult
+from core.agent import Agent, AgentRunResult
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
@@ -254,7 +254,7 @@ def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixtu
     def on_event(_kind: str, _data: dict[str, Any]) -> None:
         raise RuntimeError("broken renderer")
 
-    with caplog.at_level(logging.DEBUG, logger="core.agent_runtime"):
+    with caplog.at_level(logging.DEBUG, logger="core.agent"):
         result = _agent(llm, _tools(FakeTool("query_logs")), on_event=on_event).run(
             [{"role": "user", "content": "hello"}]
         )
