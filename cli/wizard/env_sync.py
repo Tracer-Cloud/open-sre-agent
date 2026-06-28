@@ -151,10 +151,17 @@ def _write_env(target_path: Path, lines: list[str]) -> None:
 
 
 def sync_env_secret(key: str, value: str) -> None:
-    """Persist a sensitive env value in the system keyring, not in ``.env``."""
+    """Persist a sensitive env value in the keyring, with ``.env`` fallback.
+
+    When the system keyring is unavailable (headless hosts, CI, Docker), the
+    secret is written to the project ``.env`` with owner-only permissions and
+    a warning is printed so onboarding does not silently drop credentials.
+    """
     if not _is_sensitive_env_key(key):
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
-    _persist_env_secret(key, value)
+    storage, env_path = persist_env_secret_with_env_fallback(key, value)
+    if storage == "env" and env_path is not None:
+        _print_env_fallback_warning(key, env_path)
 
 
 def persist_env_secret_with_env_fallback(
@@ -201,6 +208,16 @@ def _write_env_raw(target_path: Path, lines: list[str]) -> None:
             target_path.chmod(0o600)
 
 
+def _print_env_fallback_warning(key: str, env_path: Path) -> None:
+    from cli.wizard._ui import _console
+    from platform.terminal.theme import GLYPH_WARNING, WARNING
+
+    _console.print(
+        f"[{WARNING}]  {GLYPH_WARNING}  Secure storage unavailable — saved {key} to {env_path} "
+        f"(owner-only permissions). Prefer a system keychain when available.[/]"
+    )
+
+
 def sync_env_values(
     values: dict[str, str],
     *,
@@ -209,7 +226,6 @@ def sync_env_values(
     """Write multiple non-sensitive environment values into the target .env file.
 
     Sensitive keys must be persisted with :func:`sync_env_secret` instead.
-    When keyring storage is unavailable, sensitive values are not written to ``.env``.
     """
     sensitive_keys = [key for key in values if _is_sensitive_env_key(key)]
     if sensitive_keys:

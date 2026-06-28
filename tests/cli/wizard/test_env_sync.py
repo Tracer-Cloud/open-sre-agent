@@ -474,3 +474,33 @@ def test_persist_env_secret_with_env_fallback_writes_env_when_keyring_unavailabl
     assert storage == "env"
     assert written_path == env_path
     assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
+
+
+def test_sync_env_secret_falls_back_to_env_when_keyring_unavailable(
+    tmp_path, monkeypatch
+) -> None:
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+
+    sync_env_secret("ANTHROPIC_API_KEY", "secret-value")
+
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
+
+
+def test_sync_env_secret_warns_when_keyring_fallback_writes_env(
+    tmp_path, monkeypatch
+) -> None:
+    env_path = tmp_path / ".env"
+    warnings: list[str] = []
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "cli.wizard.env_sync._print_env_fallback_warning",
+        lambda key, path: warnings.append(f"{key}:{path}"),
+    )
+
+    sync_env_secret("ANTHROPIC_API_KEY", "secret-value")
+
+    assert warnings == [f"ANTHROPIC_API_KEY:{env_path}"]
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
