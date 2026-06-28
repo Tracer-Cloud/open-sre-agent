@@ -32,8 +32,8 @@ class _Response:
 
 class _RawResponse(_Response):
     def __init__(self, payload: str, *, headers: dict[str, str] | None = None) -> None:
+        super().__init__({}, headers=headers)
         self._raw_payload = payload
-        self.headers = headers or {}
 
     def read(self) -> bytes:
         return self._raw_payload.encode("utf-8")

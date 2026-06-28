@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from json import JSONDecodeError
 from typing import Any
 from urllib import error, parse, request
 
@@ -50,7 +49,7 @@ def _decode_json_payload(raw: str, *, path: str) -> JsonPayload:
         return {}
     try:
         parsed = json.loads(raw)
-    except JSONDecodeError as exc:
+    except json.JSONDecodeError as exc:
         raise GitHubApiError("GitHub API returned invalid JSON.", path=path) from exc
     if isinstance(parsed, dict | list):
         return parsed
