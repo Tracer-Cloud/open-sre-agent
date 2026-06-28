@@ -23,20 +23,20 @@ def _console() -> Console:
 
 def test_hydrate_populates_session_from_effective_resolution(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: {"gitlab": {}, "datadog": {}},
+        "integrations.catalog.configured_integration_services",
+        lambda: ["gitlab", "datadog"],
     )
     session = ReplSession()
     session.hydrate_configured_integrations()
     assert session.configured_integrations_known is True
-    # Resolution covers env + local store and is returned in sorted order.
+    # Metadata discovery covers env + local store and is returned in sorted order.
     assert session.configured_integrations == ("datadog", "gitlab")
 
 
 def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        dict,
+        "integrations.catalog.configured_integration_services",
+        list,
     )
     session = ReplSession()
     session.hydrate_configured_integrations()
@@ -124,8 +124,8 @@ def test_stale_background_warm_does_not_overwrite_refreshed_cache() -> None:
 
 def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: {"datadog": {}},
+        "integrations.catalog.configured_integration_services",
+        lambda: ["datadog"],
     )
     resolve_calls: list[str] = []
 
@@ -166,11 +166,11 @@ def test_schedule_warm_resolved_integrations_runs_in_background(
 
 
 def test_hydrate_leaves_unknown_on_failure(monkeypatch: Any) -> None:
-    def _boom() -> dict[str, Any]:
+    def _boom() -> list[str]:
         raise RuntimeError("catalog blew up")
 
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
+        "integrations.catalog.configured_integration_services",
         _boom,
     )
     session = ReplSession()

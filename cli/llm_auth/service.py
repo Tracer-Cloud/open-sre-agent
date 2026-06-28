@@ -160,6 +160,23 @@ def _managed_codex_login_detail() -> str:
     return result.detail
 
 
+def _subscription_login_command(profile: ProviderAuthProfile, binary_path: str) -> list[str]:
+    if profile.provider_value == "codex":
+        return [binary_path, "login"]
+    if profile.provider_value == "claude-code":
+        return [binary_path, "auth", "login"]
+    raise AuthSetupError(f"No interactive login command is registered for {profile.label}.")
+
+
+def _run_vendor_login(profile: ProviderAuthProfile, binary_path: str) -> None:
+    try:
+        result = subprocess.run(_subscription_login_command(profile, binary_path), check=False)
+    except OSError as exc:
+        raise AuthSetupError(f"Could not launch {profile.label} login: {exc}") from exc
+    if result.returncode != 0:
+        raise AuthSetupError(f"{profile.label} login exited with code {result.returncode}.")
+
+
 def configure_cli_subscription_provider(
     *,
     profile: ProviderAuthProfile,
@@ -178,6 +195,7 @@ def configure_cli_subscription_provider(
     if not probe.installed:
         raise AuthSetupError(f"{probe.detail} Install: {adapter.install_hint}")
 
+    login_completed = False
     if probe.logged_in is not True:
         if profile.provider_value == "codex" and launch_login:
             detail = _managed_codex_login_detail()
@@ -207,15 +225,11 @@ def configure_cli_subscription_provider(
                 detail=detail,
                 env_path=written_path,
             )
-        if profile.provider_value == "claude-code" and launch_login and probe.bin_path:
-            try:
-                result = subprocess.run([probe.bin_path, "auth", "login"], check=False)
-            except OSError as exc:
-                raise AuthSetupError(f"Could not launch {profile.label} login: {exc}") from exc
-            if result.returncode != 0:
-                raise AuthSetupError(f"{profile.label} login exited with code {result.returncode}.")
+        if launch_login and probe.bin_path:
+            _run_vendor_login(profile, probe.bin_path)
+            login_completed = True
             probe = adapter.detect()
-        if probe.logged_in is not True:
+        if probe.logged_in is not True and not login_completed:
             raise AuthSetupError(f"{probe.detail} {adapter.auth_hint}")
 
     selected_model = (model if model is not None else provider.default_model).strip()
@@ -224,7 +238,11 @@ def configure_cli_subscription_provider(
         if set_provider
         else None
     )
-    detail = probe.detail or f"{provider.label} is authenticated."
+    detail = (
+        f"{provider.label} login completed via {adapter.auth_hint.replace('Run: ', '')}."
+        if login_completed and probe.logged_in is not True
+        else probe.detail or f"{provider.label} is authenticated."
+    )
     _save_auth_record(provider=provider, profile=profile, source="vendor-cli", detail=detail)
     return AuthSetupResult(
         provider=provider.value,

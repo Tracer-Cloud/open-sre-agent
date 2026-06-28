@@ -29,8 +29,8 @@ def _noop_cli_command(*_args: Any, **_kwargs: Any) -> bool:
 
 def test_refresh_integration_state_rehydrates_and_clears_cache(monkeypatch: Any) -> None:
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: {"gitlab": {}, "sentry": {}},
+        "integrations.catalog.configured_integration_services",
+        lambda: ["gitlab", "sentry"],
     )
     refreshed = {"gitlab": {"token": "x"}, "sentry": {"dsn": "y"}}
     monkeypatch.setattr(
@@ -57,8 +57,12 @@ def test_setup_subcommand_refreshes_configured_integrations(monkeypatch: Any) ->
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}}
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: dict(store),
+        "integrations.catalog.configured_integration_services",
+        lambda: list(store),
+    )
+    monkeypatch.setattr(
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: dict(store),
     )
 
     session = ReplSession()
@@ -78,8 +82,12 @@ def test_remove_subcommand_refreshes_configured_integrations(monkeypatch: Any) -
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}, "sentry": {}}
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: dict(store),
+        "integrations.catalog.configured_integration_services",
+        lambda: list(store),
+    )
+    monkeypatch.setattr(
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: dict(store),
     )
 
     session = ReplSession()
@@ -98,8 +106,12 @@ def test_mcp_connect_refreshes_configured_integrations(monkeypatch: Any) -> None
 
     store: dict[str, dict[str, Any]] = {"gitlab": {}}
     monkeypatch.setattr(
-        "integrations.verify.resolve_effective_integrations",
-        lambda: dict(store),
+        "integrations.catalog.configured_integration_services",
+        lambda: list(store),
+    )
+    monkeypatch.setattr(
+        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        lambda _state: dict(store),
     )
 
     session = ReplSession()
