@@ -1,12 +1,16 @@
 """Typed event contract for the shared agent runtime."""
 
+# ruff: noqa: UP040
+
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
-type RuntimeEventType = Literal[
+# CodeQL's explicit-export query does not recognize Python 3.12 ``type``
+# statements in __all__, so keep these exported aliases as TypeAlias assignments.
+RuntimeEventType: TypeAlias = Literal[
     "agent_start",
     "turn_start",
     "message_start",
@@ -98,7 +102,7 @@ class AgentEndEvent:
     data: dict[str, Any] = field(default_factory=dict)
 
 
-type RuntimeEvent = (
+RuntimeEvent: TypeAlias = (
     AgentStartEvent
     | TurnStartEvent
     | MessageStartEvent
@@ -109,8 +113,8 @@ type RuntimeEvent = (
     | TurnEndEvent
     | AgentEndEvent
 )
-type RuntimeEventCallback = Callable[[RuntimeEvent], None]
-type LegacyLoopEventCallback = Callable[[str, dict[str, Any]], None]
+RuntimeEventCallback: TypeAlias = Callable[[RuntimeEvent], None]
+LegacyLoopEventCallback: TypeAlias = Callable[[str, dict[str, Any]], None]
 
 
 def tool_result_is_error(result: Any) -> bool:
