@@ -13,11 +13,11 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from config.config import (
-    DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings_verbose,
 )
+from config.llm_auth.credentials import status as credential_status
 from core.agent_harness.session import JsonlSessionStorage, ReplSession
 from interactive_shell.command_registry import dispatch_slash
 
@@ -149,16 +149,22 @@ def _require_live_llm_for_repl_planner() -> None:
         hint = f" configured provider={provider!r}"
         if env_var is not None:
             hint += f", required key={env_var}"
-        hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
         pytest.skip(f"Skipping live REPL planner smoke; missing LLM configuration:{hint}. {msg}")
 
     if resolution is None:
         pytest.skip("Skipping live REPL planner smoke; LLM configuration was not resolved.")
 
-    if explicit_pin and resolution.fell_back:
+    if explicit_pin and resolution.resolved_provider != explicit_pin:
         pytest.skip(
-            f"Skipping live REPL planner smoke; LLM_PROVIDER={explicit_pin!r} fell back to "
+            f"Skipping live REPL planner smoke; LLM_PROVIDER={explicit_pin!r} resolved as "
             f"{resolution.resolved_provider!r}."
+        )
+
+    auth = credential_status(resolution.resolved_provider)
+    if not auth.configured or auth.stale:
+        pytest.skip(
+            "Skipping live REPL planner smoke; missing LLM credentials:"
+            f" provider={resolution.resolved_provider!r}, auth={auth.source}, detail={auth.detail}"
         )
 
     env_var = get_llm_provider_api_key_env(resolution.resolved_provider)

@@ -4,11 +4,19 @@ import json
 import os
 from unittest.mock import MagicMock
 
+import pytest
+
 from cli.wizard import _integration_configurators, _ui, flow
 from cli.wizard import store as wizard_store
 from cli.wizard.env_sync import sync_provider_env
 from cli.wizard.probes import ProbeResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
+
+
+@pytest.fixture(autouse=True)
+def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wizard flow tests should not touch the developer's real keychain."""
+    monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
 
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
@@ -51,8 +59,8 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -61,7 +69,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved["wizard_mode"] == "advanced"
     assert saved["provider"] == "anthropic"
     assert "api_key" not in saved
-    assert saved_llm_keys == [("ANTHROPIC_API_KEY", "secret-key")]
+    assert saved_llm_keys == [("anthropic", "secret-key")]
 
     output = capsys.readouterr().out
     assert "Summary" in output
@@ -118,7 +126,7 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
+        "save_api_key",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("Secure local credential storage is unavailable on this machine.")
         ),
@@ -816,8 +824,8 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -827,7 +835,7 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     assert saved["provider"] == "openai"
     assert saved["model"] == "gpt-5.4-mini"
     assert "api_key" not in saved
-    assert saved_llm_keys == [("OPENAI_API_KEY", "saved-secret")]
+    assert saved_llm_keys == [("openai", "saved-secret")]
 
 
 def test_run_wizard_changes_model_when_user_keeps_provider(monkeypatch, tmp_path) -> None:
@@ -927,8 +935,8 @@ def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path
     )
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -946,7 +954,7 @@ def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path
 
     assert "LLM_PROVIDER=openai\n" in env_values
     assert "OPENAI_API_KEY=" not in env_values
-    assert saved_llm_keys == [("OPENAI_API_KEY", "openai-secret")]
+    assert saved_llm_keys == [("openai", "openai-secret")]
 
 
 def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp_path) -> None:
@@ -982,8 +990,8 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     )
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -1036,8 +1044,8 @@ def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
     )
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -1088,8 +1096,8 @@ def test_run_wizard_gemini_cli_skips_api_key_and_runs_cli_onboarding(monkeypatch
     )
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -1356,15 +1364,16 @@ def test_credential_line_for_saved_summary_cli_without_factory() -> None:
     from cli.wizard.config import ModelOption, ProviderOption
 
     p = ProviderOption(
-        value="fakecli",
+        value="codex",
         label="Fake CLI",
         group="Local CLI providers",
         api_key_env="",
-        model_env="FAKE_MODEL",
+        model_env="CODEX_MODEL",
         default_model="",
         models=(ModelOption(value="", label="default"),),
         credential_kind="cli",
         adapter_factory=None,
+        allow_custom_models=True,
     )
     assert flow._credential_line_for_saved_summary(p) == "Fake CLI (CLI)"
 
@@ -1591,8 +1600,8 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     )
     monkeypatch.setattr(
         _ui,
-        "save_llm_api_key",
-        lambda env_var, value: saved_llm_keys.append((env_var, value)),
+        "save_api_key",
+        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
     )
 
     exit_code = flow.run_wizard()
@@ -1611,7 +1620,7 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     assert "OPENAI_API_KEY=" not in env_values
     assert "ANTHROPIC_API_KEY=" not in env_values
     assert "OPENAI_REASONING_MODEL=" in env_values
-    assert saved_llm_keys == [("OPENAI_API_KEY", "fresh-openai-key")]
+    assert saved_llm_keys == [("openai", "fresh-openai-key")]
 
 
 def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:

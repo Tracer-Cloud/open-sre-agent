@@ -1,7 +1,6 @@
 """System prompt building for the terminal assistant."""
 
-from __future__ import annotations
-
+from config.llm_auth.provider_catalog import SUPPORTED_PROVIDER_VALUES
 from core.agent_harness.prompts.rules import (
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
@@ -9,6 +8,7 @@ from core.agent_harness.prompts.rules import (
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
 _MARKDOWN_RULE = CLI_ASSISTANT_MARKDOWN_RULE
+_ACTION_PROVIDER_LIST = ", ".join(SUPPORTED_PROVIDER_VALUES)
 
 _ACTION_RULE = (
     "Action planning: if the user asks you to change OpenSRE runtime state, "
@@ -16,8 +16,8 @@ _ACTION_RULE = (
     "instructions when an allowed action can satisfy the request. Allowed "
     "action object schemas: "
     '`{"action":"switch_llm_provider","provider":"anthropic","model":"","toolcall_model":""}` '
-    "where provider is one of anthropic, openai, openrouter, deepseek, gemini, nvidia, "
-    "ollama, codex, claude-code, gemini-cli, antigravity-cli; both `model` (reasoning) and `toolcall_model` are optional; "
+    f"where provider is one of {_ACTION_PROVIDER_LIST}; both `model` (reasoning) "
+    "and `toolcall_model` are optional; "
     '`{"action":"switch_toolcall_model","model":"claude-opus-4-7"}` '
     "to change ONLY the toolcall model on the currently active provider; "
     '`{"action":"slash","command":"/model show"}` where command is one of '

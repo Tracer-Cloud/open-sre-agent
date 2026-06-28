@@ -11,12 +11,12 @@ import pytest
 from pydantic import ValidationError
 
 from config.config import (
-    DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS,
     get_configured_llm_provider,
     get_llm_provider_api_key_env,
     resolve_llm_settings,
 )
 from config.grafana_cloud import load_env
+from config.llm_auth.credentials import status as credential_status
 from config.platform_bootstrap import ensure_project_platform_package
 from tests.core.agent._ci_gates import (
     running_in_github_actions,
@@ -39,6 +39,12 @@ _TURN_TEST_DEFAULT_ENV = {
     "OPENSRE_NO_TELEMETRY": "1",
     "OPENSRE_INVESTIGATION_SOURCE": "test",
 }
+
+
+def _skip_or_fail_live_llm(message: str) -> None:
+    if running_in_github_actions():
+        pytest.fail(message)
+    pytest.skip(message)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -113,10 +119,16 @@ def _resolve_live_llm_configuration(
         hint = f" configured provider={provider!r}"
         if env_var is not None:
             hint += f", required key={env_var}"
-        hint += f", fallback providers={DEFAULT_LLM_RESOLUTION_FALLBACK_PROVIDERS!r}"
-        # Keep live_llm tests fail-closed for credential/config regressions.
-        # Live suites must run with real credentials and fail on misconfiguration.
-        pytest.fail(f"Live LLM turn tests require usable LLM configuration:{hint}. {msg}")
+        _skip_or_fail_live_llm(
+            f"Live LLM turn tests require usable LLM configuration:{hint}. {msg}"
+        )
+
+    auth = credential_status(settings.provider)
+    if not auth.configured or auth.stale:
+        _skip_or_fail_live_llm(
+            "Live LLM turn tests require usable LLM credentials:"
+            f" configured provider={settings.provider!r}, auth={auth.source}, detail={auth.detail}"
+        )
 
     from core.llm.llm_client import reset_llm_singletons
 

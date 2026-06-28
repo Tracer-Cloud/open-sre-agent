@@ -55,10 +55,10 @@ from config.config import (
     LLMModelConfig,
     resolve_llm_settings,
 )
-from config.llm_credentials import resolve_llm_api_key
 from config.llm_reasoning_effort import get_active_reasoning_effort
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 from core.llm.llm_retry import extract_retry_after_seconds
+from core.provider import resolve_llm_api_key
 
 logger = logging.getLogger(__name__)
 

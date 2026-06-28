@@ -68,7 +68,7 @@ def switch_llm_provider(
 ) -> bool:
     from cli.wizard.config import PROVIDER_BY_VALUE
     from cli.wizard.env_sync import sync_provider_env
-    from config.llm_credentials import has_llm_api_key
+    from config.llm_auth.credentials import status as credential_status
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
@@ -81,30 +81,30 @@ def switch_llm_provider(
         )
         return False
 
-    # Refuse to half-update .env when the target provider has no usable
-    # credential. Without this the user lands in a state where LLM_PROVIDER
-    # points at e.g. anthropic but ANTHROPIC_API_KEY is unset, so the very
-    # next call into LLMSettings.from_env() raises and /model show prints
-    # "LLM settings unavailable" — which is exactly what reviewers caught
-    # in #1192. Skip the check for providers whose credential isn't a
-    # secret (ollama uses OLLAMA_HOST which has a working default) and for
-    # CLI-backed providers (codex, claude-code) that authenticate through
-    # the vendor CLI and have no api_key_env at all.
-    if (
-        provider.credential_secret
-        and provider.api_key_env
-        and not has_llm_api_key(provider.api_key_env)
-    ):
+    # Refuse to half-update .env when prompt-safe status says the target
+    # provider has no credential path. Stale metadata gets a warning, because
+    # confirming it requires an intentional request-time credential read.
+    auth_status = credential_status(provider.value)
+    if provider.credential_secret and provider.api_key_env and not auth_status.configured:
         console.print(
             f"[{ERROR}]missing credential for {provider.value}:[/] "
-            f"{provider.api_key_env} is not set in env or the keyring."
+            f"{provider.api_key_env} is not set in env or OpenSRE auth metadata."
         )
         console.print(
             f"[{DIM}]set it with[/] [bold]export {provider.api_key_env}=<your-key>[/bold] "
-            f"[{DIM}]or run[/] [bold]opensre onboard[/bold] "
-            f"[{DIM}]to save it to the keyring, then rerun this command.[/]"
+            f"[{DIM}]or run[/] [bold]opensre auth login {provider.value}[/bold] "
+            f"[{DIM}]to save it, then rerun this command.[/]"
         )
         return False
+    if provider.credential_secret and provider.api_key_env and auth_status.stale:
+        console.print(
+            f"[{WARNING}]credential status for {provider.value} is stale:[/] "
+            f"{escape(auth_status.detail)}"
+        )
+        console.print(
+            f"[{DIM}]run[/] [bold]opensre auth verify {provider.value}[/bold] "
+            f"[{DIM}]to refresh metadata if the next LLM request fails.[/]"
+        )
 
     selected_model = _normalize_model_id(model) if model else provider.default_model
     if selected_model and not _is_model_allowed(provider, selected_model):

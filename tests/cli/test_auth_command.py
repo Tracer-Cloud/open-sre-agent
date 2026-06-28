@@ -15,6 +15,7 @@ def _patch_auth_env(monkeypatch, tmp_path: Path) -> Path:
     env_path = tmp_path / ".env"
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
     monkeypatch.setattr("cli.wizard.store.get_store_path", lambda: tmp_path / "opensre.json")
     return env_path
@@ -49,7 +50,9 @@ def test_auth_login_deepseek_stores_keyring_not_env(monkeypatch, tmp_path: Path)
         keyring.set_keyring(previous_backend)
 
 
-def test_auth_status_provider_reports_keyring_source(monkeypatch, tmp_path: Path) -> None:
+def test_auth_status_provider_reports_metadata_without_keychain_verify(
+    monkeypatch, tmp_path: Path
+) -> None:
     _patch_auth_env(monkeypatch, tmp_path)
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
@@ -72,7 +75,36 @@ def test_auth_status_provider_reports_keyring_source(monkeypatch, tmp_path: Path
         assert result.exit_code == 0, result.output
         assert "deepseek" in result.output
         assert "ok" in result.output
-        assert "keyring" in result.output
+        assert "metadata" in result.output
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+def test_auth_verify_provider_reports_keyring_source(monkeypatch, tmp_path: Path) -> None:
+    _patch_auth_env(monkeypatch, tmp_path)
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        CliRunner().invoke(
+            cli,
+            [
+                "auth",
+                "login",
+                "deepseek",
+                "--api-key",
+                "deepseek-secret",
+                "--no-validate",
+                "--no-open-browser",
+            ],
+        )
+
+        result = CliRunner().invoke(cli, ["auth", "verify", "deepseek"])
+
+        assert result.exit_code == 0, result.output
+        assert "Provider : deepseek" in result.output
+        assert "Status   : ok" in result.output
+        assert "Source   : keyring" in result.output
+        assert "secure local storage" in result.output
     finally:
         keyring.set_keyring(previous_backend)
 

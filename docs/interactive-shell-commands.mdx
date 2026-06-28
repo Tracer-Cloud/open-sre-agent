@@ -614,7 +614,7 @@ Show or change LLM provider and models. Updates project `.env` (default: reposit
 | `restore [provider]` | Reset to provider's default reasoning model |
 | `toolcall set <model>` | Set investigation tool-call model for active provider |
 
-**Credential guard:** Switching to a provider without an API key (or keyring entry) fails fast with setup instructions — run `/onboard` or export the key before switching.
+**Credential guard:** Switching to a provider without prompt-safe auth status fails fast with setup instructions. Run `/auth login <provider>` or export the provider API key before switching. If status is stale, run `/auth verify <provider>`.
 
 **Reasoning vs toolcall model:** Reasoning model drives chat and planning; toolcall model drives investigation tool invocation when the provider exposes a separate slot (common on Anthropic/OpenAI).
 
@@ -1158,7 +1158,7 @@ Continue chatting, then optionally:
 | `/cost` shows zero | No LLM turns yet this session; chat once and retry |
 | `/resume` not found | Run `/sessions`; use longer ID prefix |
 | `/resume` ambiguous prefix | Add more characters from Session ID column |
-| `/model set` missing credential | `/onboard` or export `ANTHROPIC_API_KEY` / etc. |
+| `/model set` missing credential | `/auth login <provider>` or export `ANTHROPIC_API_KEY` / etc.; use `/auth verify <provider>` for stale metadata |
 | `/watch` Telegram error | Configure messaging via `/messaging status` |
 | `/integrations show` not found | Run `/integrations list` for exact service slug |
 | History pause not working | Requires redacting backend — see `/privacy` |

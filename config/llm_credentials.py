@@ -84,6 +84,14 @@ def resolve_llm_api_key(env_var: str) -> str:
 
 def llm_api_key_source(env_var: str) -> str:
     """Return where an LLM credential resolves from: ``env``, ``keyring``, or ``none``."""
+    from config.llm_auth.credentials import source_for_api_key_env
+    from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
+
+    prompt_safe_source = source_for_api_key_env(env_var)
+    if prompt_safe_source != "none":
+        return prompt_safe_source
+    if env_var.strip() in set(API_KEY_PROVIDER_ENVS.values()):
+        return "none"
     if os.getenv(env_var, "").strip():
         return "env"
     if _keyring_is_disabled():
@@ -101,6 +109,13 @@ def llm_api_key_source(env_var: str) -> str:
 
 def has_llm_api_key(env_var: str) -> bool:
     """Return True when an API key is available from env or secure local storage."""
+    from config.llm_auth.credentials import has_api_key_env_status
+    from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
+
+    if has_api_key_env_status(env_var):
+        return True
+    if env_var.strip() in set(API_KEY_PROVIDER_ENVS.values()):
+        return False
     if os.getenv(env_var, "").strip():
         return True
     if _keyring_is_disabled():

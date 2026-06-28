@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
+from config.llm_auth.credentials import delete as delete_provider_auth
+from config.llm_auth.credentials import save_api_key
+from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import delete_llm_api_key, has_llm_api_key, save_llm_api_key
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
@@ -74,11 +77,21 @@ def _strip_sensitive_env_lines(lines: list[str]) -> list[str]:
 def _persist_env_secret(key: str, value: str) -> bool:
     """Store a secret in the keyring. Returns False when keyring is unavailable."""
     normalized = value.strip()
+    provider = next(
+        (name for name, env_var in API_KEY_PROVIDER_ENVS.items() if env_var == key),
+        "",
+    )
     if not normalized:
-        delete_llm_api_key(key)
+        if provider:
+            delete_provider_auth(provider)
+        else:
+            delete_llm_api_key(key)
         return True
     try:
-        save_llm_api_key(key, normalized)
+        if provider:
+            save_api_key(provider, normalized)
+        else:
+            save_llm_api_key(key, normalized)
     except RuntimeError:
         return False
     return True

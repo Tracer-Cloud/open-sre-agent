@@ -17,6 +17,8 @@ from cli.wizard.integration_health import IntegrationHealthResult
 from cli.wizard.probes import ProbeResult
 from cli.wizard.prompts import select as select_prompt
 from cli.wizard.store import get_store_path, load_local_config
+from config.llm_auth.credentials import save_api_key
+from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, has_llm_api_key, save_llm_api_key
 from config.version import get_version
 from integrations.store import get_integration
@@ -334,8 +336,19 @@ def _prompt_value(
 
 def _persist_llm_api_key(env_var: str, value: str) -> bool:
     try:
-        persist_api_key_secret(env_var, value, save_secret=save_llm_api_key)
-    except AuthSetupError as exc:
+        provider = next(
+            (
+                name
+                for name, provider_env in API_KEY_PROVIDER_ENVS.items()
+                if provider_env == env_var
+            ),
+            "",
+        )
+        if provider:
+            save_api_key(provider, value)
+        else:
+            persist_api_key_secret(env_var, value, save_secret=save_llm_api_key)
+    except (AuthSetupError, RuntimeError, ValueError) as exc:
         _console.print(f"[{ERROR}]  {GLYPH_ERROR}  {exc}[/]")
         _console.print(
             f"[{WARNING}]  {GLYPH_WARNING}  OpenSRE could not save your API key to the local system keychain.[/]"

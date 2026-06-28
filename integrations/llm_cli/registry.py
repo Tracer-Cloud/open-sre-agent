@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from config.llm_auth.provider_catalog import require_provider_spec
 from integrations.llm_cli.base import LLMCLIAdapter
 
 
@@ -78,30 +79,47 @@ def _pi_factory() -> LLMCLIAdapter:
 
 
 CLI_PROVIDER_REGISTRY: dict[str, CLIProviderRegistration] = {
-    "codex": CLIProviderRegistration(adapter_factory=_codex_factory, model_env_key="CODEX_MODEL"),
+    "codex": CLIProviderRegistration(
+        adapter_factory=_codex_factory,
+        model_env_key=require_provider_spec("codex").cli_model_env or "CODEX_MODEL",
+    ),
     "cursor": CLIProviderRegistration(
-        adapter_factory=_cursor_factory, model_env_key="CURSOR_MODEL"
+        adapter_factory=_cursor_factory,
+        model_env_key=require_provider_spec("cursor").cli_model_env or "CURSOR_MODEL",
     ),
     "claude-code": CLIProviderRegistration(
-        adapter_factory=_claude_code_factory, model_env_key="CLAUDE_CODE_MODEL"
+        adapter_factory=_claude_code_factory,
+        model_env_key=require_provider_spec("claude-code").cli_model_env or "CLAUDE_CODE_MODEL",
     ),
     "gemini-cli": CLIProviderRegistration(
-        adapter_factory=_gemini_cli_factory, model_env_key="GEMINI_CLI_MODEL"
+        adapter_factory=_gemini_cli_factory,
+        model_env_key=require_provider_spec("gemini-cli").cli_model_env or "GEMINI_CLI_MODEL",
     ),
     "antigravity-cli": CLIProviderRegistration(
-        adapter_factory=_antigravity_cli_factory, model_env_key="ANTIGRAVITY_CLI_MODEL"
+        adapter_factory=_antigravity_cli_factory,
+        model_env_key=require_provider_spec("antigravity-cli").cli_model_env
+        or "ANTIGRAVITY_CLI_MODEL",
     ),
     "opencode": CLIProviderRegistration(
-        adapter_factory=_opencode_factory, model_env_key="OPENCODE_MODEL"
+        adapter_factory=_opencode_factory,
+        model_env_key=require_provider_spec("opencode").cli_model_env or "OPENCODE_MODEL",
     ),
-    "kimi": CLIProviderRegistration(adapter_factory=_kimi_factory, model_env_key="KIMI_MODEL"),
+    "kimi": CLIProviderRegistration(
+        adapter_factory=_kimi_factory,
+        model_env_key=require_provider_spec("kimi").cli_model_env or "KIMI_MODEL",
+    ),
     "copilot": CLIProviderRegistration(
-        adapter_factory=_copilot_factory, model_env_key="COPILOT_MODEL"
+        adapter_factory=_copilot_factory,
+        model_env_key=require_provider_spec("copilot").cli_model_env or "COPILOT_MODEL",
     ),
     "grok-cli": CLIProviderRegistration(
-        adapter_factory=_grok_cli_factory, model_env_key="GROK_CLI_MODEL"
+        adapter_factory=_grok_cli_factory,
+        model_env_key=require_provider_spec("grok-cli").cli_model_env or "GROK_CLI_MODEL",
     ),
-    "pi": CLIProviderRegistration(adapter_factory=_pi_factory, model_env_key="PI_MODEL"),
+    "pi": CLIProviderRegistration(
+        adapter_factory=_pi_factory,
+        model_env_key=require_provider_spec("pi").cli_model_env or "PI_MODEL",
+    ),
 }
 
 

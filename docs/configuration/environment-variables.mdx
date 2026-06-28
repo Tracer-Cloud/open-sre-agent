@@ -9,7 +9,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`) | `config` |
+| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
 | `LLM_MAX_TOKENS` | `4096` | Maximum tokens for LLM responses | `config` |
 
 ### Anthropic
@@ -116,6 +116,13 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `COPILOT_MODEL` | | Model override for Copilot | `config` |
 | `COPILOT_HOME` | | Copilot config directory override | `config` |
 | `COPILOT_GITHUB_TOKEN` | | GitHub token for Copilot auth | `config` |
+| `GROK_CLI_BIN` | | Path to Grok Build CLI binary | `config` |
+| `GROK_CLI_MODEL` | | Model override for Grok Build CLI | `config` |
+| `XAI_API_KEY` | | API-key auth for Grok Build CLI | `integrations/llm_cli` |
+| `PI_BIN` | | Path to Pi CLI binary | `config` |
+| `PI_MODEL` | | Model override for Pi CLI (`provider/model`) | `config` |
+| `PI_AGENT_DIR` | | Pi agent config directory override | `integrations/llm_cli` |
+| `PI_CONFIG_DIR` | | Pi config directory override | `integrations/llm_cli` |
 
 ## Output & Debugging
 
@@ -133,6 +140,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `OPENSRE_DISABLE_KEYRING` | `0` | Disable OS keyring for credential storage | `llm_credentials` |
+| `OPENSRE_LLM_AUTH_METADATA_PATH` | `~/.opensre/llm-auth.json` | Non-secret LLM auth metadata path used by prompt-safe status checks | `llm_auth/records` |
 | `OPENSRE_API_KEY` | | API key for remote OpenSRE instances | `remote/server` |
 | `DBUS_SESSION_BUS_ADDRESS` | | D-Bus socket address (Linux keyring) | `llm_credentials` |
 

@@ -74,9 +74,19 @@ class ProviderHooks:
 
 def resolve_llm_api_key(env_name: str) -> str:
     """Default runtime credential resolver."""
-    from config.llm_credentials import resolve_llm_api_key as _resolve
+    from config.llm_auth.credentials import resolve_api_key_env_for_request as _resolve
+    from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 
-    return _resolve(env_name)
+    resolved = _resolve(env_name)
+    if resolved:
+        return resolved
+    for provider, provider_env in API_KEY_PROVIDER_ENVS.items():
+        if provider_env == env_name:
+            raise RuntimeError(
+                f"Missing credential for LLM provider '{provider}'. Set {env_name} "
+                f"or run `opensre auth login {provider}`."
+            )
+    return resolved
 
 
 __all__ = [

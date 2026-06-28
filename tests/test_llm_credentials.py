@@ -5,6 +5,8 @@ import subprocess
 import keyring
 
 import config.llm_credentials as llm_credentials
+from config.llm_auth.credentials import resolve_for_request, status
+from config.llm_auth.records import save_provider_auth_record
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -28,25 +30,28 @@ def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
         keyring.set_keyring(previous_backend)
 
 
-def test_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) -> None:
+def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("EXPERIMENTAL_API_KEY", raising=False)
 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:
-        assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "none"
-        llm_credentials.save_llm_api_key("OPENAI_API_KEY", "from-keyring")
-        assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "keyring"
-        monkeypatch.setenv("OPENAI_API_KEY", "from-env")
-        assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "env"
+        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
+        llm_credentials.save_llm_api_key("EXPERIMENTAL_API_KEY", "from-keyring")
+        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
+        monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
+        assert llm_credentials.llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"
     finally:
         keyring.set_keyring(previous_backend)
 
 
-def test_llm_api_key_source_uses_macos_metadata_without_reading_secret(monkeypatch) -> None:
+def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(llm_credentials.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
@@ -68,14 +73,25 @@ def test_llm_api_key_source_uses_macos_metadata_without_reading_secret(monkeypat
 
     monkeypatch.setattr(llm_credentials.subprocess, "run", _run)
     monkeypatch.setattr(llm_credentials.keyring, "get_password", _get_password)
+    save_provider_auth_record(
+        provider="openai",
+        auth_name="openai",
+        kind="api_key",
+        source="keyring",
+        detail="OPENAI_API_KEY stored in the system keychain.",
+        env_var="OPENAI_API_KEY",
+    )
 
-    assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "keyring"
+    assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "metadata"
     assert llm_credentials.has_llm_api_key("OPENAI_API_KEY") is True
 
 
-def test_macos_metadata_missing_item_reports_none_without_reading_secret(monkeypatch) -> None:
+def test_managed_missing_metadata_reports_none_without_reading_secret(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(llm_credentials.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(llm_credentials.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr(llm_credentials.keyring, "get_keyring", lambda: _MacOSKeyringBackend())
@@ -91,6 +107,37 @@ def test_macos_metadata_missing_item_reports_none_without_reading_secret(monkeyp
 
     assert llm_credentials.llm_api_key_source("OPENAI_API_KEY") == "none"
     assert llm_credentials.has_llm_api_key("OPENAI_API_KEY") is False
+
+
+def test_request_resolution_marks_deleted_keychain_metadata_stale(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    save_provider_auth_record(
+        provider="deepseek",
+        auth_name="deepseek",
+        kind="api_key",
+        source="keyring",
+        detail="DEEPSEEK_API_KEY stored in the system keychain.",
+        env_var="DEEPSEEK_API_KEY",
+    )
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        before = status("deepseek")
+        resolution = resolve_for_request("deepseek")
+        after = status("deepseek")
+    finally:
+        keyring.set_keyring(previous_backend)
+
+    assert before.configured is True
+    assert before.stale is False
+    assert resolution.ok is False
+    assert after.configured is True
+    assert after.stale is True
+    assert after.verified is False
+    assert "Missing credential" in after.detail
 
 
 def test_llm_credential_record_round_trips_in_keyring(monkeypatch) -> None:

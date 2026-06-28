@@ -46,6 +46,7 @@ def test_create_llm_client_dispatches_registry_provider(
     # stub only needs the provider name and the toolcall model attribute.
     settings = SimpleNamespace(provider=provider, **{f"{provider}_toolcall_model": "stub-model"})
     monkeypatch.setattr(llm_client, "resolve_llm_settings", lambda: settings)
+    monkeypatch.setattr(llm_client, "resolve_llm_api_key", lambda _env_var: "test-key")
 
     client = _create_llm_client("toolcall")
 

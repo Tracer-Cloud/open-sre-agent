@@ -16,14 +16,24 @@ from cli.llm_auth.providers import (
 from cli.wizard.config import ProviderOption
 from cli.wizard.env_sync import sync_provider_env
 from cli.wizard.validation import validate_provider_credentials
+from config.llm_auth.credentials import (
+    delete as delete_provider_auth,
+)
+from config.llm_auth.credentials import (
+    save_api_key,
+)
+from config.llm_auth.credentials import (
+    status as provider_auth_status,
+)
+from config.llm_auth.credentials import (
+    verify as verify_provider_auth,
+)
 from config.llm_auth.records import (
     delete_provider_auth_record,
     resolve_provider_auth_record,
     save_provider_auth_record,
 )
 from config.llm_credentials import (
-    delete_llm_api_key,
-    llm_api_key_source,
     save_llm_api_key,
 )
 
@@ -44,6 +54,8 @@ class AuthStatus:
     authenticated: bool
     source: str
     detail: str
+    verified: bool = False
+    stale: bool = False
 
 
 @dataclass(frozen=True)
@@ -115,8 +127,12 @@ def configure_api_key_provider(
             raise AuthSetupError(validation.detail)
 
     try:
-        save_llm_api_key(provider.api_key_env, normalized_key)
-    except RuntimeError as exc:
+        save_api_key(
+            provider.value,
+            normalized_key,
+            detail=f"{provider.api_key_env} stored in the system keychain.",
+        )
+    except (RuntimeError, ValueError) as exc:
         raise AuthSetupError(str(exc)) from exc
 
     written_path = (
@@ -201,26 +217,51 @@ def provider_status(raw_name: str) -> AuthStatus:
     record = resolve_provider_auth_record(provider.value)
 
     if profile.kind == "api_key":
-        source = llm_api_key_source(provider.api_key_env)
-        authenticated = source != "none"
-        detail = (
-            f"{provider.api_key_env} resolved from {source}."
-            if authenticated
-            else f"{provider.api_key_env} is not configured."
-        )
+        resolved = provider_auth_status(provider.value)
+        source = resolved.source
+        authenticated = resolved.configured and not resolved.stale
+        detail = resolved.detail
         if record.get("detail") and authenticated:
             detail = record["detail"]
-        return AuthStatus(provider.value, profile.label, authenticated, source, detail)
+        return AuthStatus(
+            provider.value,
+            profile.label,
+            authenticated,
+            source,
+            detail,
+            verified=resolved.verified,
+            stale=resolved.stale,
+        )
 
     if provider.adapter_factory is None:
         return AuthStatus(provider.value, profile.label, False, "none", "No adapter registered.")
     probe = provider.adapter_factory().detect()
     authenticated = probe.installed and probe.logged_in is True
-    source = "vendor-cli" if authenticated else "none"
+    cli_source = "vendor-cli" if authenticated else "none"
     detail = probe.detail
     if record.get("detail") and authenticated:
         detail = record["detail"]
-    return AuthStatus(provider.value, profile.label, authenticated, source, detail)
+    return AuthStatus(
+        provider.value, profile.label, authenticated, cli_source, detail, verified=authenticated
+    )
+
+
+def verify_provider(raw_name: str) -> AuthStatus:
+    """Intentionally resolve request-time credentials and refresh metadata."""
+    profile = resolve_auth_profile(raw_name)
+    provider = provider_for_profile(profile)
+    if profile.kind != "api_key":
+        return provider_status(raw_name)
+    resolved = verify_provider_auth(provider.value)
+    return AuthStatus(
+        provider.value,
+        profile.label,
+        resolved.configured and not resolved.stale,
+        resolved.source,
+        resolved.detail,
+        verified=resolved.verified,
+        stale=resolved.stale,
+    )
 
 
 def logout_provider(raw_name: str, *, vendor: bool = False) -> str:
@@ -235,7 +276,7 @@ def logout_provider(raw_name: str, *, vendor: bool = False) -> str:
     delete_provider_auth_record(provider.value)
 
     if profile.kind == "api_key":
-        delete_llm_api_key(provider.api_key_env)
+        delete_provider_auth(provider.value)
         return f"Removed {provider.api_key_env} from OpenSRE's keyring store."
 
     if not vendor:
@@ -268,4 +309,5 @@ __all__ = [
     "logout_provider",
     "persist_api_key_secret",
     "provider_status",
+    "verify_provider",
 ]

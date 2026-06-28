@@ -33,7 +33,7 @@ def _check_llm_settings() -> None:
     from interactive_shell.utils.error_handling.errors import OpenSREError
 
     try:
-        resolve_llm_settings()
+        settings = resolve_llm_settings()
     except ValidationError as exc:
         errors = exc.errors()
         if errors:
@@ -46,6 +46,23 @@ def _check_llm_settings() -> None:
             msg,
             suggestion="Run `opensre onboard` to configure your LLM provider and API credentials.",
         ) from exc
+
+    provider = getattr(settings, "provider", None)
+    if not isinstance(provider, str):
+        return
+    from config.llm_auth.credentials import status as credential_status
+
+    auth_status = credential_status(provider)
+    if auth_status.configured and not auth_status.stale:
+        return
+    state = "stale" if auth_status.stale else "missing"
+    raise OpenSREError(
+        f"LLM provider '{provider}' credentials are {state}: {auth_status.detail}",
+        suggestion=(
+            f"Run `opensre auth verify {provider}` or `opensre auth login {provider}` "
+            "before starting an investigation."
+        ),
+    )
 
 
 def _reraise_investigation_failure(exc: BaseException) -> NoReturn:

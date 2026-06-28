@@ -16,10 +16,12 @@ from config.config import (
     DEFAULT_OLLAMA_MODEL,
     GEMINI_REASONING_MODEL,
     GROQ_REASONING_MODEL,
+    MINIMAX_REASONING_MODEL,
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
 )
+from config.llm_auth.provider_catalog import require_provider_spec
 from integrations.llm_cli.base import LLMCLIAdapter
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -74,6 +76,31 @@ class ProviderOption:
     #: Use this for providers whose model catalogs are large, account-gated, or
     #: updated independently of OpenSRE releases.
     allow_custom_models: bool = False
+
+    def __post_init__(self) -> None:
+        spec = require_provider_spec(self.value)
+        kind_map = {"api_key": "api_key", "cli": "cli", "none": "ambient", "host": "local"}
+        catalog_kind = kind_map[self.credential_kind]
+        mismatches = {
+            "api_key_env": (self.api_key_env, spec.api_key_env),
+            "model_env": (self.model_env, spec.model_env),
+            "legacy_model_env": (self.legacy_model_env, spec.legacy_model_env),
+            "toolcall_model_env": (self.toolcall_model_env, spec.toolcall_model_env),
+            "classification_model_env": (
+                self.classification_model_env,
+                spec.classification_model_env,
+            ),
+            "credential_kind": (catalog_kind, spec.credential_kind),
+            "allow_custom_models": (self.allow_custom_models, spec.allow_custom_models),
+        }
+        drift = {name: values for name, values in mismatches.items() if values[0] != values[1]}
+        if drift:
+            details = ", ".join(
+                f"{name}: {actual!r} != {expected!r}" for name, (actual, expected) in drift.items()
+            )
+            raise ValueError(
+                f"ProviderOption {self.value!r} drifts from provider catalog: {details}"
+            )
 
 
 # Source: https://docs.anthropic.com/en/docs/about-claude/models/overview
@@ -149,6 +176,11 @@ NVIDIA_MODELS = (
         label="Nemotron 3 Super 120B (5x higher throughput for agentic AI)",
     ),
     ModelOption(value="nvidia/nemotron-3-nano-30b-a3b", label="Nemotron 3 Nano 30B"),
+)
+
+MINIMAX_MODELS = (
+    ModelOption(value=MINIMAX_REASONING_MODEL, label="MiniMax M3"),
+    ModelOption(value="MiniMax-M2.7-highspeed", label="MiniMax M2.7 highspeed"),
 )
 
 GROQ_MODELS = (
@@ -598,6 +630,19 @@ SUPPORTED_PROVIDERS = (
         allow_custom_models=True,
     ),
     ProviderOption(
+        value="minimax",
+        label="MiniMax",
+        group="Hosted providers",
+        api_key_env="MINIMAX_API_KEY",
+        model_env="MINIMAX_REASONING_MODEL",
+        default_model=MINIMAX_REASONING_MODEL,
+        models=MINIMAX_MODELS,
+        legacy_model_env="MINIMAX_MODEL",
+        toolcall_model_env="MINIMAX_TOOLCALL_MODEL",
+        classification_model_env="MINIMAX_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
         value="bedrock",
         label="Amazon Bedrock (IAM auth)",
         group="Hosted providers",
@@ -720,6 +765,7 @@ SUPPORTED_PROVIDERS = (
         credential_label="host URL",
         credential_secret=False,
         credential_default=DEFAULT_OLLAMA_HOST,
+        credential_kind="host",
         allow_custom_models=True,
     ),
 )

@@ -839,11 +839,8 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        """Reviewer ask (#1192): if the target provider has no API key in env
-        or keyring, /model set must NOT touch .env or os.environ — otherwise
-        the user lands in a broken half-state where LLM_PROVIDER points at a
-        provider with no usable credential and the next /model show prints
-        'LLM settings unavailable'."""
+        """If prompt-safe status has no credential path, /model set must not
+        touch .env or os.environ."""
         self._patch_llm(monkeypatch)
         import cli.wizard.env_sync as env_sync
 
@@ -851,6 +848,7 @@ class TestModelCommand:
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
         # Keyring lookups in CI / sandboxes are flaky; force the helper into
         # the env-only path so the test is deterministic.
         monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")

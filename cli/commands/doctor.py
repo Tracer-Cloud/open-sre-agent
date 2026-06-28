@@ -76,35 +76,16 @@ def _check_env_file() -> tuple[bool, str]:
 
 
 def _check_llm_provider() -> tuple[bool, str]:
-    from config.config import get_configured_llm_provider, get_llm_provider_api_key
+    from config.config import get_configured_llm_provider
+    from config.llm_auth.credentials import status as credential_status
 
     provider = get_configured_llm_provider()
-    env_vars = {
-        "bedrock": "AWS_DEFAULT_REGION",
-        "ollama": "OLLAMA_HOST",
-    }
-
-    from integrations.llm_cli.registry import get_cli_provider_registration
-
-    cli_reg = get_cli_provider_registration(provider)
-    if cli_reg is not None:
-        probe = cli_reg.adapter_factory().detect()
-        if not probe.installed or not probe.bin_path:
-            return False, f"provider={provider}, CLI not installed ({probe.detail})"
-        if probe.logged_in is False:
-            return False, f"provider={provider}, CLI not authenticated ({probe.detail})"
-        if probe.logged_in is None:
-            return False, f"provider={provider}, CLI auth status unclear ({probe.detail})"
-        return True, f"provider={provider}, CLI ready ({probe.detail})"
-
-    expected_key, api_key = get_llm_provider_api_key(provider)
-    if expected_key and not api_key:
-        return False, f"provider={provider}, but {expected_key} is not available in env or keyring"
-
-    expected_env = env_vars.get(provider)
-    if expected_env and not os.getenv(expected_env):
-        return False, f"provider={provider}, but {expected_env} is not set"
-    return True, f"provider={provider}"
+    auth = credential_status(provider)
+    if auth.configured and not auth.stale:
+        return True, f"provider={provider}, auth={auth.source} ({auth.detail})"
+    if auth.stale:
+        return False, f"provider={provider}, auth stale ({auth.detail})"
+    return False, f"provider={provider}, auth missing ({auth.detail})"
 
 
 def _check_integrations() -> tuple[bool, str]:

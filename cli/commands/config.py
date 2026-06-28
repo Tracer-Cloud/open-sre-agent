@@ -31,12 +31,13 @@ def _emit_llm_config() -> None:
     """Print current LLM provider and model from environment (legacy `opensre config`)."""
     from config.config import (
         get_configured_llm_provider,
-        get_llm_provider_api_key,
         get_llm_provider_api_key_env,
     )
+    from config.llm_auth.credentials import status as credential_status
     from platform.common.runtime_flags import is_json_output
 
     provider = get_configured_llm_provider()
+    auth_status = credential_status(provider)
 
     model_env_by_provider: dict[str, str] = {
         "anthropic": "ANTHROPIC_REASONING_MODEL",
@@ -54,8 +55,7 @@ def _emit_llm_config() -> None:
         "bedrock": "AWS_DEFAULT_REGION",
         "ollama": "OLLAMA_HOST",
     }.get(provider, "")
-    _api_key_env, resolved_api_key = get_llm_provider_api_key(provider)
-    key_value = resolved_api_key if resolved_api_key else os.getenv(key_env, "") if key_env else ""
+    key_value = os.getenv(key_env, "") if key_env and auth_status.source == "env" else ""
     model_env = model_env_by_provider.get(provider, "")
     model_value = os.getenv(model_env, "") if model_env else ""
 
@@ -65,7 +65,9 @@ def _emit_llm_config() -> None:
                 {
                     "provider": provider,
                     "model": model_value or None,
-                    "api_key_set": bool(key_value),
+                    "api_key_set": auth_status.configured and not auth_status.stale,
+                    "auth_source": auth_status.source,
+                    "auth_stale": auth_status.stale,
                 }
             )
         )
@@ -75,7 +77,9 @@ def _emit_llm_config() -> None:
     if model_value:
         click.echo(f"Model    : {model_value}")
     if key_env:
-        click.echo(f"{key_env:<16}: {_masked(key_value)}")
+        masked = _masked(key_value) if key_value else f"({auth_status.source})"
+        click.echo(f"{key_env:<16}: {masked}")
+    click.echo(f"Auth     : {auth_status.detail}")
     click.echo()
     click.echo("To log in or change LLM auth, run: opensre auth login")
     click.echo("To rerun the full setup wizard, run: opensre onboard")

@@ -85,9 +85,12 @@ Use `opensre auth` for provider login without writing secrets to `.env`:
 | `opensre auth login deepseek` | Open DeepSeek setup guidance, validate `DEEPSEEK_API_KEY`, store it in the system keychain, and select DeepSeek |
 | `opensre auth login claude` | Configure the `claude-code` provider through Claude Code CLI subscription login |
 | `opensre auth login chatgpt` | Configure the `codex` provider through Codex CLI / ChatGPT subscription login |
-| `opensre auth logout deepseek` | Remove OpenSRE-managed DeepSeek credentials from the keychain |
+| `opensre auth verify deepseek` | Intentionally resolve DeepSeek credentials and refresh stale local metadata |
+| `opensre auth logout deepseek` | Remove OpenSRE-managed DeepSeek credentials and metadata |
 
 `opensre auth login` never reads browser cookies, browser profiles, browser local storage, or IndexedDB. API-key providers use hidden paste prompts plus keyring storage. Subscription providers delegate OAuth/session handling to the vendor CLI that owns the browser login flow.
+
+`opensre auth` and `/auth status` are prompt-safe: they do not read API-key secrets from Keychain. For API-key providers they inspect environment variables plus non-secret metadata in `~/.opensre/llm-auth.json`. If a key was deleted directly from Keychain, status may show the old metadata until you run `opensre auth verify <provider>` or start a request; that verification marks the provider `stale` when the secret is gone.
 
 Inside the interactive shell, use the same flows through `/auth` or `/login`:
 
@@ -395,33 +398,21 @@ export OPENSRE_REASONING_EFFORT=high   # low | medium | high | xhigh
 
 Session `/effort` overrides this for interactive runs. Implementation: [`config/llm_reasoning_effort.py`](https://github.com/Tracer-Cloud/opensre/blob/main/config/llm_reasoning_effort.py).
 
-## Provider fallback and diagnostics
+## Provider diagnostics
 
-If the provider you set in `LLM_PROVIDER` is missing its API key, OpenSRE does **not** fail outright — it falls back to the next configured provider (by default it tries `openai`, then `anthropic`) so a partially configured machine still works. The trade-off is that calls can quietly go to a different provider than you intended, and you would otherwise only find out via a confusing error naming the *fallback* provider (for example "Anthropic credit balance too low" when you actually configured OpenAI).
+OpenSRE does not silently switch LLM providers when the provider in `LLM_PROVIDER` is missing credentials. It keeps the configured provider selected and reports missing or stale auth status before starting LLM work.
 
-To make this visible:
-
-- **A warning is logged** the first time a fallback happens, naming the configured provider, the missing key, and the provider actually used:
-
-  ```
-  Configured LLM provider 'openai' is unusable (OPENAI_API_KEY is not set);
-  falling back to 'anthropic'. Set OPENAI_API_KEY or change LLM_PROVIDER to use it.
-  ```
-
-- **`/status`** (in the interactive shell) shows the **resolved** provider and flags a fallback inline, instead of just echoing `LLM_PROVIDER`:
+- **`opensre auth` and `/auth status`** show prompt-safe status from environment variables, provider metadata, CLI probes, or ambient/local config.
+- **`opensre auth verify <provider>`** intentionally checks request-time credentials and refreshes metadata.
+- **`opensre config llm` and `opensre doctor`** report the configured provider plus credential status without resolving secrets.
+- **Provider errors** are prefixed with the configured provider that served the request:
 
   ```
-  provider   anthropic (fallback from 'openai': OPENAI_API_KEY not set)
+  [LLM provider: openai]
+  Missing credential for LLM provider 'openai'. Set OPENAI_API_KEY or run `opensre auth login openai`.
   ```
 
-- **Provider errors in the interactive shell** are prefixed with which provider served the request and whether it was a fallback, so the message is actionable:
-
-  ```
-  [LLM provider: anthropic — fell back from configured 'openai' (OPENAI_API_KEY not set)]
-  Anthropic request rejected (HTTP 400): Your credit balance is too low ...
-  ```
-
-To remove a fallback, either set the missing key for your configured provider or change `LLM_PROVIDER` to a provider you have credentials for.
+If credentials are missing, set the provider's API-key environment variable, run `opensre auth login <provider>`, or change `LLM_PROVIDER` to a provider you have configured.
 
 ## Switching providers at runtime
 

@@ -1208,7 +1208,7 @@ def test_create_llm_client_missing_api_key_raises_runtime_error(monkeypatch) -> 
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("config.llm_auth.credentials.resolve_api_key_env_for_request", lambda _: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
@@ -1223,7 +1223,7 @@ def test_create_llm_client_missing_api_key_omits_pydantic_boilerplate(monkeypatc
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _env_var: "")
+    monkeypatch.setattr("config.llm_auth.credentials.resolve_api_key_env_for_request", lambda _: "")
     llm_client.reset_llm_singletons()
     try:
         with pytest.raises(RuntimeError) as exc_info:

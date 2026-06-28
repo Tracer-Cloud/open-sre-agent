@@ -15,6 +15,7 @@ from cli.llm_auth.service import (
     configure_cli_subscription_provider,
     logout_provider,
     provider_status,
+    verify_provider,
 )
 
 
@@ -57,7 +58,7 @@ def _status_lines(providers: Iterable[ProviderAuthProfile]) -> list[str]:
     lines = [f"{'Provider':<14} {'Status':<8} {'Source':<11} Detail"]
     for profile in providers:
         status = provider_status(profile.name)
-        state = "ok" if status.authenticated else "missing"
+        state = "stale" if status.stale else "ok" if status.authenticated else "missing"
         lines.append(f"{profile.name:<14} {state:<8} {status.source:<11} {status.detail}")
     return lines
 
@@ -147,7 +148,7 @@ def auth_login(
     if result.env_path:
         click.echo(f"Env          : {result.env_path}")
     click.echo(f"Status       : {result.detail}")
-    click.echo("Verify       : opensre auth status")
+    click.echo(f"Verify       : opensre auth verify {result.provider}")
 
 
 @auth_command.command(name="status")
@@ -157,6 +158,24 @@ def auth_status(provider: str | None) -> None:
     profiles = (_resolve_or_raise(provider),) if provider else iter_auth_profiles()
     for line in _status_lines(profiles):
         click.echo(line)
+
+
+@auth_command.command(name="verify")
+@click.argument("provider")
+def auth_verify(provider: str) -> None:
+    """Intentionally verify one provider's request-time credentials."""
+    _resolve_or_raise(provider)
+    try:
+        status = verify_provider(provider)
+    except AuthSetupError as exc:
+        raise click.ClickException(str(exc)) from exc
+    state = "ok" if status.authenticated else "missing"
+    if status.stale:
+        state = "stale"
+    click.echo(f"Provider : {status.provider}")
+    click.echo(f"Status   : {state}")
+    click.echo(f"Source   : {status.source}")
+    click.echo(f"Detail   : {status.detail}")
 
 
 @auth_command.command(name="logout")

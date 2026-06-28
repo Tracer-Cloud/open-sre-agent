@@ -147,10 +147,10 @@ def test_parse_args_evaluate_flag() -> None:
     assert parse_args(["--input", "a.json", "--evaluate"]).evaluate is True
 
 
-def test_run_investigation_cli_fails_fast_for_invalid_llm_config(monkeypatch) -> None:
+def test_run_investigation_cli_fails_fast_for_missing_llm_auth(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr("config.config.resolve_llm_api_key", lambda _: "")
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
         "tools.investigation.capability.run_investigation_payload",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),

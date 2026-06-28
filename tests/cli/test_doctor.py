@@ -59,43 +59,40 @@ def test_check_env_file_missing(monkeypatch, tmp_path) -> None:
     assert detail == f"{env_file} not found"
 
 
-def test_check_llm_provider_not_set(monkeypatch) -> None:
+def test_check_llm_provider_not_set(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
-    monkeypatch.setattr(
-        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
-    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail
-    assert "not available" in detail
+    assert "auth missing" in detail
 
 
-def test_check_llm_provider_hosted_missing_key(monkeypatch) -> None:
+def test_check_llm_provider_hosted_missing_key(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    monkeypatch.setattr(
-        "config.config.get_llm_provider_api_key", lambda _provider: ("ANTHROPIC_API_KEY", "")
-    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     ok, detail = doctor._check_llm_provider()
     assert ok is False
     assert "ANTHROPIC_API_KEY" in detail
-    assert "env or keyring" in detail
+    assert "auth missing" in detail
 
 
 def test_check_llm_provider_hosted_keyring_key(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
-    monkeypatch.setattr(
-        "config.config.get_llm_provider_api_key",
-        lambda _provider: ("GEMINI_API_KEY", "keyring-backed-key"),
-    )
+    monkeypatch.setenv("GEMINI_API_KEY", "env-key")
 
     ok, detail = doctor._check_llm_provider()
 
     assert ok is True
-    assert detail == "provider=gemini"
+    assert "provider=gemini" in detail
+    assert "auth=env" in detail
 
 
 def test_check_llm_provider_non_secret_env_stays_env_only(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "bedrock")
+    monkeypatch.delenv("AWS_REGION", raising=False)
     monkeypatch.setenv("AWS_DEFAULT_REGION", "")
 
     ok, detail = doctor._check_llm_provider()
@@ -120,7 +117,7 @@ def test_check_llm_provider_claude_code_ready(monkeypatch) -> None:
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is True
-    assert "CLI ready" in detail
+    assert "auth=cli" in detail
 
 
 def test_check_llm_provider_claude_code_auth_unclear(monkeypatch) -> None:
@@ -138,26 +135,26 @@ def test_check_llm_provider_claude_code_auth_unclear(monkeypatch) -> None:
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is False
-    assert "auth status unclear" in detail
+    assert "auth missing" in detail
+    assert "unknown command" in detail
 
 
-def test_check_llm_provider_cli_branch_follows_registry_not_hardcoded_ids(monkeypatch) -> None:
-    """Any LLM_PROVIDER listed in CLI_PROVIDER_REGISTRY gets the CLI probe path."""
-    monkeypatch.setenv("LLM_PROVIDER", "hypothetical-cli")
+def test_check_llm_provider_cli_branch_follows_catalog_registry(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "grok-cli")
     reg = MagicMock()
     reg.adapter_factory.return_value.detect.return_value = MagicMock(
         installed=True,
-        bin_path="/usr/bin/hypothetical",
+        bin_path="/usr/bin/grok",
         logged_in=True,
         detail="CLI OK.",
     )
     monkeypatch.setattr(
         "integrations.llm_cli.registry.get_cli_provider_registration",
-        lambda provider: reg if provider == "hypothetical-cli" else None,
+        lambda provider: reg if provider == "grok-cli" else None,
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is True
-    assert "CLI ready" in detail
+    assert "auth=cli" in detail
 
 
 def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
@@ -175,7 +172,7 @@ def test_check_llm_provider_gemini_cli_ready(monkeypatch) -> None:
     )
     ok, detail = doctor._check_llm_provider()
     assert ok is True
-    assert "CLI ready" in detail
+    assert "auth=cli" in detail
 
 
 def test_check_integrations_store_missing(monkeypatch, tmp_path) -> None:
