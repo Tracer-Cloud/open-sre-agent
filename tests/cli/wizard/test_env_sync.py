@@ -443,6 +443,39 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
         env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
+@pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
+def test_write_env_raw_permission_error(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    env_path.write_text("FOO=bar\n", encoding="utf-8")
+    env_path.chmod(stat.S_IRUSR)
+    try:
+        with pytest.raises(PermissionError, match="permission denied"):
+            _write_env_raw(env_path, ["ANTHROPIC_API_KEY=secret\n"])
+    finally:
+        env_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+def test_persist_env_secret_with_env_fallback_writes_env_when_keyring_unavailable(
+    tmp_path, monkeypatch
+) -> None:
+    from cli.wizard.env_sync import persist_env_secret_with_env_fallback
+
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
+
+    storage, written_path = persist_env_secret_with_env_fallback(
+        "ANTHROPIC_API_KEY",
+        "secret-value",
+        env_path=env_path,
+    )
+
+    assert storage == "env"
+    assert written_path == env_path
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
+
+
 def test_sync_env_secret_falls_back_to_env_when_keyring_unavailable(
     tmp_path, monkeypatch
 ) -> None:
@@ -450,9 +483,9 @@ def test_sync_env_secret_falls_back_to_env_when_keyring_unavailable(
     monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
     monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
 
-    sync_env_secret("DD_API_KEY", "datadog-secret")
+    sync_env_secret("ANTHROPIC_API_KEY", "secret-value")
 
-    assert "DD_API_KEY=datadog-secret" in env_path.read_text(encoding="utf-8")
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
 
 
 def test_sync_env_secret_warns_when_keyring_fallback_writes_env(
@@ -467,18 +500,46 @@ def test_sync_env_secret_warns_when_keyring_fallback_writes_env(
         lambda key, path: warnings.append(f"{key}:{path}"),
     )
 
-    sync_env_secret("HONEYCOMB_API_KEY", "hc-secret")
+    sync_env_secret("ANTHROPIC_API_KEY", "secret-value")
 
-    assert warnings == [f"HONEYCOMB_API_KEY:{env_path}"]
-    assert "HONEYCOMB_API_KEY=hc-secret" in env_path.read_text(encoding="utf-8")
+    assert warnings == [f"ANTHROPIC_API_KEY:{env_path}"]
+    assert "ANTHROPIC_API_KEY=secret-value" in env_path.read_text(encoding="utf-8")
 
 
-def test_sync_env_values_clears_vercel_team_id_on_reconfigure(tmp_path) -> None:
+def test_sync_env_secret_fallback_preserves_prior_secrets(tmp_path, monkeypatch) -> None:
     env_path = tmp_path / ".env"
-    env_path.write_text("VERCEL_TEAM_ID=team_old\n", encoding="utf-8")
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("cli.wizard.env_sync._persist_env_secret", lambda *_a, **_k: False)
 
-    sync_env_values({"VERCEL_TEAM_ID": ""}, env_path=env_path)
+    sync_env_secret("DD_API_KEY", "datadog-api")
+    sync_env_secret("DD_APP_KEY", "datadog-app")
 
     content = env_path.read_text(encoding="utf-8")
-    assert "VERCEL_TEAM_ID=\n" in content
-    assert "team_old" not in content
+    assert "DD_API_KEY=datadog-api" in content
+    assert "DD_APP_KEY=datadog-app" in content
+
+
+def test_sync_env_values_preserves_fallback_secrets(tmp_path, monkeypatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "DD_API_KEY=datadog-api\nDD_APP_KEY=datadog-app\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+
+    sync_env_values({"DD_SITE": "datadoghq.com"}, env_path=env_path)
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "DD_API_KEY=datadog-api" in content
+    assert "DD_APP_KEY=datadog-app" in content
+    assert "DD_SITE=datadoghq.com" in content
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows permission model differs")
+def test_write_env_raw_creates_file_with_owner_only_permissions(tmp_path) -> None:
+    from cli.wizard.env_sync import _write_env_raw
+
+    env_path = tmp_path / ".env"
+    _write_env_raw(env_path, ["ANTHROPIC_API_KEY=secret\n"])
+
+    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
