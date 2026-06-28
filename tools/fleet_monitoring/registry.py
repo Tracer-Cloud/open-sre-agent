@@ -156,3 +156,47 @@ class AgentRegistry:
             tmp.replace(self._path)
         except OSError:
             logger.warning("Failed to rewrite agent registry at %s", self._path)
+
+
+class AgentResolveError(Exception):
+    """Raised when a ``/fleet`` PID or agent-name argument cannot be resolved."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(message)
+
+
+def resolve_agent_arg(arg: str, registry: AgentRegistry | None = None) -> int:
+    """Resolve a ``/fleet kill`` or ``/fleet trace`` argument to a PID.
+
+    Accepts a registered PID, a registered agent name, or an unregistered PID
+    so callers can still reach the existing ``no such process`` path.
+    """
+    reg = registry or AgentRegistry()
+    token = arg.strip()
+    if not token:
+        raise AgentResolveError("invalid pid or unknown agent name")
+
+    parsed_pid: int | None = None
+    try:
+        candidate = int(token)
+    except ValueError:
+        candidate = -1
+    if candidate > 0:
+        parsed_pid = candidate
+        if reg.get(candidate) is not None:
+            return candidate
+
+    name_matches = [record for record in reg.list() if record.name == token]
+    if len(name_matches) == 1:
+        return name_matches[0].pid
+    if len(name_matches) > 1:
+        pids = ", ".join(str(record.pid) for record in name_matches)
+        raise AgentResolveError(
+            f"ambiguous: {len(name_matches)} registered agents named {token} (pids: {pids})"
+        )
+
+    if parsed_pid is not None:
+        return parsed_pid
+
+    raise AgentResolveError(f"invalid pid or unknown agent name: {token}")

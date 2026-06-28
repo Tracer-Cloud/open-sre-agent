@@ -13,7 +13,7 @@ from interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
 from platform.analytics.events import Event
 from platform.analytics.provider import get_analytics
 from tools.fleet_monitoring.lifecycle import TerminateResult, terminate
-from tools.fleet_monitoring.registry import AgentRegistry
+from tools.fleet_monitoring.registry import AgentRegistry, AgentResolveError, resolve_agent_arg
 
 # Type alias for the optional confirmation callback (used for testing).
 _ConfirmFn = Callable[[str], str]
@@ -26,7 +26,7 @@ def _cmd_agents_kill(
     *,
     confirm_fn: _ConfirmFn | None = None,
 ) -> bool:
-    """Handle ``/fleet kill <pid> [--force]``.
+    """Handle ``/fleet kill <pid|name> [--force]``.
 
     Sends SIGTERM, waits up to 5 s, then escalates to SIGKILL.
     Asks for confirmation unless ``--force`` is present.
@@ -36,15 +36,16 @@ def _cmd_agents_kill(
     positional = [a for a in args if a != "--force"]
 
     if not positional:
-        console.print(f"[{ERROR}]usage:[/] /fleet kill <pid> [--force]")
+        console.print(f"[{ERROR}]usage:[/] /fleet kill <pid|name> [--force]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    raw_pid = positional[0]
+    raw_target = positional[0]
+    registry = AgentRegistry()
     try:
-        pid = int(raw_pid)
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(raw_pid)} is not an integer")
+        pid = resolve_agent_arg(raw_target, registry)
+    except AgentResolveError as exc:
+        console.print(f"[{ERROR}]{escape(exc.message)}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
@@ -54,7 +55,6 @@ def _cmd_agents_kill(
         return True
 
     # Look up agent name from registry for friendlier output.
-    registry = AgentRegistry()
     record = registry.get(pid)
     label = f"{record.name} (pid {pid})" if record else f"pid {pid}"
 

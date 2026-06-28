@@ -256,3 +256,38 @@ class TestAgentRegistry:
         rehydrated = reg2.get(7702)
         assert rehydrated is not None
         assert rehydrated.waits_on == ()
+
+
+class TestResolveAgentArg:
+    def test_resolves_registered_pid(self, registry: AgentRegistry, sample_record: AgentRecord) -> None:
+        registry.register(sample_record)
+        from tools.fleet_monitoring.registry import resolve_agent_arg
+
+        assert resolve_agent_arg("8421", registry) == 8421
+
+    def test_resolves_registered_name(self, registry: AgentRegistry, sample_record: AgentRecord) -> None:
+        registry.register(sample_record)
+        from tools.fleet_monitoring.registry import resolve_agent_arg
+
+        assert resolve_agent_arg("claude-code", registry) == 8421
+
+    def test_unregistered_pid_still_returns_for_caller_handling(
+        self, registry: AgentRegistry
+    ) -> None:
+        from tools.fleet_monitoring.registry import resolve_agent_arg
+
+        assert resolve_agent_arg("9999", registry) == 9999
+
+    def test_ambiguous_name_raises(self, registry: AgentRegistry) -> None:
+        from tools.fleet_monitoring.registry import AgentResolveError, resolve_agent_arg
+
+        registry.register(AgentRecord(name="worker", pid=100, command="a"))
+        registry.register(AgentRecord(name="worker", pid=200, command="b"))
+        with pytest.raises(AgentResolveError, match="ambiguous"):
+            resolve_agent_arg("worker", registry)
+
+    def test_unknown_name_raises(self, registry: AgentRegistry) -> None:
+        from tools.fleet_monitoring.registry import AgentResolveError, resolve_agent_arg
+
+        with pytest.raises(AgentResolveError, match="invalid pid or unknown agent name"):
+            resolve_agent_arg("missing-agent", registry)

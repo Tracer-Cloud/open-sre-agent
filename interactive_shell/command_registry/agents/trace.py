@@ -13,7 +13,7 @@ from rich.text import Text
 
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import BOLD_BRAND, DIM, ERROR
-from tools.fleet_monitoring.registry import AgentRegistry
+from tools.fleet_monitoring.registry import AgentRegistry, AgentResolveError, resolve_agent_arg
 from tools.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
 
 _TRACE_REFRESH_PER_SECOND = 10
@@ -132,17 +132,18 @@ def _cmd_agents_trace(session: ReplSession, console: Console, args: list[str]) -
     we never enter the ``Live`` block on a target we cannot tail.
     """
     if len(args) != 1:
-        console.print(f"[{ERROR}]usage:[/] /fleet trace <pid>")
+        console.print(f"[{ERROR}]usage:[/] /fleet trace <pid|name>")
         session.mark_latest(ok=False, kind="slash")
         return True
+    registry = AgentRegistry()
     try:
-        pid = int(args[0])
-    except ValueError:
-        console.print(f"[{ERROR}]invalid pid:[/] {escape(args[0])}")
+        pid = resolve_agent_arg(args[0], registry)
+    except AgentResolveError as exc:
+        console.print(f"[{ERROR}]{escape(exc.message)}[/]")
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    record = AgentRegistry().get(pid)
+    record = registry.get(pid)
     label = f"{record.name} (pid {pid})" if record else f"pid {pid}"
 
     try:
