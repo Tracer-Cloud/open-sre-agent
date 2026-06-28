@@ -130,4 +130,7 @@ def _validity_score_percent(score: Any) -> str | None:
         # "confidence 0%" misleads users when evidence was never gathered.
         return None
     v = min(1.0, v)
-    return f"{int(v * 100)}%"
+    pct = round(v * 100)
+    if pct == 0:
+        return None
+    return f"{pct}%"

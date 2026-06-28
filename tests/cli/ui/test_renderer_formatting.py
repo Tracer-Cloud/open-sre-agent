@@ -43,8 +43,11 @@ def test_format_prior_tools_clause_truncates_long_lists() -> None:
 def test_validity_score_percent_hides_unset_zero() -> None:
     assert _validity_score_percent(0.0) is None
     assert _validity_score_percent(0) is None
+    assert _validity_score_percent(-0.5) is None
+    assert _validity_score_percent(0.004) is None
 
 
 def test_validity_score_percent_formats_positive_scores() -> None:
     assert _validity_score_percent(0.87) == "87%"
     assert _validity_score_percent(0.5) == "50%"
+    assert _validity_score_percent(0.01) == "1%"
