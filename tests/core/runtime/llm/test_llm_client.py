@@ -4,7 +4,7 @@ import pytest
 from anthropic import AuthenticationError, NotFoundError, PermissionDeniedError
 from anthropic import BadRequestError as AnthropicBadRequestError
 
-from core.runtime.llm import llm_client
+from core.llm import llm_client
 
 
 class _FakeAnthropicMessages:

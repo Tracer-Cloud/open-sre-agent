@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from core import public_tool_input
 from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
     resolve_alert_source,
 )
-from core.runtime import public_tool_input
-from core.runtime.llm.agent_llm_client import ToolCall
+from core.llm.agent_llm_client import ToolCall
 from platform.observability.tool_trace import redact_sensitive
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
@@ -91,8 +91,8 @@ def build_seed_calls(
     if not seed_tools:
         return []
 
-    from core.runtime.llm.agent_llm_client import BedrockConverseAgentClient
-    from core.runtime.llm.bedrock_converse import new_tool_use_id
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.bedrock_converse import new_tool_use_id
 
     use_converse_ids = isinstance(llm, BedrockConverseAgentClient)
     calls: list[ToolCall] = []

@@ -13,7 +13,7 @@ from typing import Any, Protocol, Required, TypedDict
 
 from config.config import DEFAULT_MAX_TOKENS
 from config.llm_credentials import resolve_llm_api_key
-from core.runtime.llm.tool_schema_normalize import normalize_openai_tool_input_schema
+from core.llm.tool_schema_normalize import normalize_openai_tool_input_schema
 from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 
@@ -39,7 +39,7 @@ class BoundChatModel(Protocol):
         raise NotImplementedError
 
 
-# ── Retry / timeout policy (mirror core/runtime/llm/llm_client.py) ────────
+# ── Retry / timeout policy (mirror core/llm/llm_client.py) ────────
 
 _RETRY_INITIAL_BACKOFF_SEC = 1.0
 _RETRY_MAX_ATTEMPTS = 3

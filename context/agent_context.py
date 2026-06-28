@@ -25,7 +25,7 @@ RuntimeTool = Any
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice
     from context.session import ReplSession
-    from core.runtime.messages import RuntimeMessage
+    from core.messages import RuntimeMessage
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class AgentContext:
     """Immutable request object passed from surfaces into the agent runtime.
 
     Shell-specific fields are optional metadata. Runtime-required fields are
-    validated by ``core.runtime.Agent`` before a request is executed.
+    validated by ``core.Agent`` before a request is executed.
     """
 
     text: str
@@ -115,7 +115,7 @@ class AgentContext:
 
     def runtime_messages(self) -> list[RuntimeMessage]:
         """Return the user message list expected by the runtime loop."""
-        from core.runtime.messages import user_runtime_message
+        from core.messages import user_runtime_message
 
         return [user_runtime_message(self.text)]
 

@@ -16,7 +16,7 @@ only sees the wrapped text — matching by text is the common denominator
 without taking a hard import dependency on every provider's exception
 module.
 
-The agent LLM client (:mod:`core.runtime.llm.agent_llm_client`) uses
+The agent LLM client (:mod:`core.llm.agent_llm_client`) uses
 :func:`is_rate_limit_error` inside its own retry loop so the
 investigation survives a transient 429 the same way it survives a 500.
 Any code path that performs its own LLM call can wrap it with

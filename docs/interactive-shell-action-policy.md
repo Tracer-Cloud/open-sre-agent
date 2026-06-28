@@ -23,7 +23,7 @@ recurring source of precedence drift.
    in the tool catalog (`interactive_shell/tools/*`). Keep both precise — they
    are the only selection signal.
 3. The action path does not post-hoc rewrite the model's tool calls. Tool calls
-   execute as first-class `AgentTool`s through the shared `core.runtime`
+   execute as first-class `AgentTool`s through the shared `core`
    tool-calling loop; argument shape and availability are enforced by the
    AgentTool runtime contract and per-tool gates.
 4. When the action-agent prompt overflows the context window, the turn falls

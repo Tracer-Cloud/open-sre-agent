@@ -7,8 +7,8 @@ from datetime import datetime
 
 import pytest
 
-from core.runtime.llm.agent_llm_client import ToolCall
-from core.runtime.llm.bedrock_converse import (
+from core.llm.agent_llm_client import ToolCall
+from core.llm.bedrock_converse import (
     build_assistant_tool_use_message,
     build_converse_tool_specs,
     build_tool_result_message,

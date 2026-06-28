@@ -1,6 +1,6 @@
 """Action tool-calling turn driver (decoupled from any terminal surface).
 
-Runs one turn through the shared :class:`core.runtime.agent.Agent` tool-calling
+Runs one turn through the shared :class:`core.agent_runtime.Agent` tool-calling
 loop: it assembles the available agent tools (via a :class:`~core.agent.ports.ToolProvider`),
 drives the loop while a tool-event observer streams each tool call to the
 surface, and summarizes the executed tool calls into a facts-only
@@ -23,9 +23,9 @@ from core.agent.ports import ConfirmFn, ErrorReporter, OutputSink, SessionStore,
 from core.agent.prompts import build_action_system_prompt, build_action_user_message
 from core.agent.turn_context import TurnContext
 from core.agent.turn_results import ToolCallingTurnResult
-from core.runtime.agent import Agent
-from core.runtime.events import RuntimeEvent, legacy_callback_payload
-from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.agent_runtime import Agent
+from core.events import RuntimeEvent, legacy_callback_payload
+from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
 log = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ def _bang_shell_command(message: str) -> str | None:
 
 
 def _default_llm_factory() -> Any:
-    from core.runtime.llm import agent_llm_client
+    from core.llm import agent_llm_client
 
     return agent_llm_client.get_agent_llm()
 

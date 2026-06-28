@@ -73,7 +73,7 @@ def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:
     represents a non-recoverable billing condition that callers must halt
     on, not wrap into a degraded result.
     """
-    from core.runtime.llm.llm_retry import LLMCreditExhaustedError
+    from core.llm.llm_retry import LLMCreditExhaustedError
     from integrations.llm_cli.errors import (
         CLIAuthenticationRequired,
         CLIInterruptedError,

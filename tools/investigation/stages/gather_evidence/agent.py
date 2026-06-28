@@ -8,7 +8,7 @@ from typing import Any, cast
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from context.state import InvestigationState
 from context.state.evidence import EvidenceEntry
-from core.runtime import (
+from core import (
     LoopEventCallback,
     RuntimeEventCallback,
     build_assistant_message,
@@ -20,9 +20,9 @@ from core.runtime import (
     summarise,
     tool_source,
 )
-from core.runtime.agent import Agent
-from core.runtime.llm.agent_llm_client import ToolCall, get_agent_llm
-from core.runtime.llm_invoke_errors import classify_llm_invoke_failure
+from core.agent_runtime import Agent
+from core.llm.agent_llm_client import ToolCall, get_agent_llm
+from core.llm_invoke_errors import classify_llm_invoke_failure
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.tool_trace import redact_sensitive
@@ -72,7 +72,7 @@ def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[
 class ConnectedInvestigationAgent(Agent[RegisteredTool]):
     """ReAct loop scoped to the tools enabled by connected integrations.
 
-    Subclasses :class:`~core.runtime.agent.Agent` to inherit the shared hook
+    Subclasses :class:`~core.agent_runtime.Agent` to inherit the shared hook
     interface. The investigation loop is more specialised than the generic
     :meth:`Agent.run` (seed calls, evidence collection, duplicate detection,
     stagnation handling), so it overrides ``run()`` entirely.
@@ -363,7 +363,7 @@ def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
     Callers that need a fixed class (e.g. bench harness, integration tests) should
     pass an explicit ``agent_class`` to the pipeline rather than calling this.
     """
-    from core.runtime.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.agent_llm_client import CLIBackedAgentClient
 
     if isinstance(get_agent_llm(), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent

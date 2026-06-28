@@ -3,7 +3,7 @@
 The assistant is grounded text generation — it cannot reach integrations on its
 own. This module gives a free-form turn access to the **same registered tools
 the investigation pipeline uses**: it runs a bounded think -> call-tools ->
-observe loop (:class:`core.runtime.agent.Agent`) over the available
+observe loop (:class:`core.agent_runtime.Agent`) over the available
 ``"investigation"`` surface tools, then returns the collected tool outputs as an
 observation block the assistant can summarize.
 
@@ -142,9 +142,9 @@ def gather_tool_evidence(
     never break the conversational turn.
     """
     try:
-        from core.runtime.agent import Agent
-        from core.runtime.events import RuntimeEvent, legacy_callback_payload
-        from core.runtime.llm.agent_llm_client import get_agent_llm
+        from core.agent_runtime import Agent
+        from core.events import RuntimeEvent, legacy_callback_payload
+        from core.llm.agent_llm_client import get_agent_llm
         from tools.investigation.stages.gather_evidence.tools import get_available_tools
 
         resolved = _resolve_gather_integrations(session, message)

@@ -6,9 +6,9 @@ from collections.abc import Generator
 
 import pytest
 
-from core.runtime.llm.agent_llm_client import build_openai_tool_specs
-from core.runtime.llm.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
-from core.runtime.llm.tool_schema_normalize import normalize_openai_tool_input_schema
+from core.llm.agent_llm_client import build_openai_tool_specs
+from core.llm.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
+from core.llm.tool_schema_normalize import normalize_openai_tool_input_schema
 from tests.core.runtime.llm.investigation_tool_schema_contract import (
     assert_all_investigation_tools_satisfy_strict_adapter,
 )

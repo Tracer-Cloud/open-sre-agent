@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from core.runtime.llm.agent_llm_client import ToolCall
+from core.llm.agent_llm_client import ToolCall
 
 type MessageMetadata = dict[str, Any]
 type ProviderMessage = dict[str, Any]
@@ -225,7 +225,7 @@ def build_synthetic_assistant_tool_call_message(
     This lets us inject pre-seeded tool results into the conversation in a format
     the LLM client already understands, without adding special-case handling.
     """
-    from core.runtime.llm.agent_llm_client import (
+    from core.llm.agent_llm_client import (
         AnthropicAgentClient,
         BedrockConverseAgentClient,
         CLIBackedAgentClient,
@@ -233,7 +233,7 @@ def build_synthetic_assistant_tool_call_message(
     )
 
     if isinstance(llm, BedrockConverseAgentClient):
-        from core.runtime.llm.bedrock_converse import build_assistant_tool_use_message
+        from core.llm.bedrock_converse import build_assistant_tool_use_message
 
         return build_assistant_tool_use_message(tool_calls)
 
@@ -272,7 +272,7 @@ def build_synthetic_assistant_tool_call_message(
 
 
 def build_assistant_message(llm: Any, response: Any) -> ProviderMessage:
-    from core.runtime.llm.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
+    from core.llm.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
         return llm.build_assistant_message(response.raw_content)
@@ -289,7 +289,7 @@ def build_tool_result_messages(
     tool_calls: list[ToolCall],
     results: list[Any],
 ) -> list[ProviderMessage]:
-    from core.runtime.llm.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
+    from core.llm.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
 
     if isinstance(llm, AnthropicAgentClient):
         return [llm.build_tool_result_message(tool_calls, results)]

@@ -8,7 +8,7 @@ import pytest
 from rich.console import Console
 
 from context.session import ReplSession
-from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from interactive_shell.agent_shell.agent import handle_message_with_agent
 from interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,

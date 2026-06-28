@@ -6,7 +6,7 @@ terminal **and** be executed headlessly via a plain API call
 (:func:`core.agent.headless_agent.run_agent_turn`).
 
 Hard boundary: nothing under ``agent/`` may import from ``interactive_shell``.
-The dependency direction is one-way: ``interactive_shell -> agent -> core.runtime``.
+The dependency direction is one-way: ``interactive_shell -> agent -> core``.
 See ``agent/AGENTS.md``.
 """
 

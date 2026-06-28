@@ -11,13 +11,13 @@ from typing import Any, NotRequired, TypedDict, cast
 import pytest
 from rich.console import Console
 
+from core import Agent, AgentTool, AgentToolContext
 from core.agent.prompts import (
     build_action_system_prompt,
     build_action_user_message,
 )
-from core.runtime import Agent, AgentTool, AgentToolContext
-from core.runtime.llm.agent_llm_client import ToolCall
-from core.runtime.llm.llm_retry import LLMCreditExhaustedError
+from core.llm.agent_llm_client import ToolCall
+from core.llm.llm_retry import LLMCreditExhaustedError
 from interactive_shell.command_registry import SLASH_COMMANDS
 from interactive_shell.tools.tool_contracts import ToolContext
 from interactive_shell.tools.tool_registry import (
@@ -417,7 +417,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
 
     ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
     tools = REGISTRY.agent_tools_for_context(ctx)
-    from core.runtime.llm import agent_llm_client
+    from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()
     from core.agent.turn_context import TurnContext

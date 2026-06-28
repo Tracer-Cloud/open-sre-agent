@@ -134,7 +134,7 @@ class ShellReasoningClientProvider:
 
     def get(self) -> Any | None:
         try:
-            from core.runtime.llm.llm_client import get_llm_for_reasoning
+            from core.llm.llm_client import get_llm_for_reasoning
         except Exception as exc:
             report_exception(exc, context="interactive_shell.cli_agent.import")
             self._console.print(f"[{ERROR}]LLM client unavailable:[/] {escape(str(exc))}")

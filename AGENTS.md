@@ -60,8 +60,8 @@ Main packages one level deeper:
 - `integrations/llm_cli/` — Subprocess-backed LLM CLIs (e.g. Codex). Extension guide: `integrations/llm_cli/AGENTS.md`.
 - `platform/masking/` — Masking utilities for redacting or normalizing sensitive content.
 - `tools/investigation/` — Composite investigation capability, public entrypoints, semantic stages, and reporting.
-- `core/runtime/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
-- `core/runtime/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
+- `core/` — Shared LLM tool-calling loop (execute tools, message shaping, context budget).
+- `core/llm/` — Hosted LLM provider clients, retry/schema helpers, and investigation tool-calling adapters.
 - `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `context/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `tools/` — Tool registry, decorator, base classes, per-tool packages, shared utilities, and registry helpers.
@@ -108,7 +108,7 @@ Files to touch:
   that runs before agent/runtime consumption.
 - `core/domain/` for pure investigation rules (alert source mapping, tool planning,
   category alignment, correlation scoring).
-- `core/runtime/` for shared LLM runtime helpers (tool loop and LLM invoke error
+- `core/` for shared LLM runtime helpers (tool loop and LLM invoke error
   classification).
 - `context/state/*.py` when adding or renaming persisted investigation fields
   (update `AgentStateModel` and the matching slice).

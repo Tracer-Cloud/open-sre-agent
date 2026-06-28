@@ -318,7 +318,7 @@ to distinguish between two separate things:
 
 Add an AST check that specifically permits `monkeypatch.setattr` on
 `tool_gathering._resolve_session_integrations` and
-`core.runtime.agent.Agent.run` while continuing to prohibit `patch`,
+`core.agent_runtime.Agent.run` while continuing to prohibit `patch`,
 `MagicMock`, and LLM client stubs.
 
 ### 7.5 — Rename or reclassify misleading existing scenarios

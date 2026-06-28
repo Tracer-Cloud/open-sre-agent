@@ -16,7 +16,7 @@ from core.domain.alerts.extraction import (
     make_problem_md,
 )
 from core.domain.types.incident_window import resolve_incident_window
-from core.runtime.llm.llm_client import get_llm_for_reasoning
+from core.llm.llm_client import get_llm_for_reasoning
 from platform.observability import (
     debug_print,
     render_investigation_header,

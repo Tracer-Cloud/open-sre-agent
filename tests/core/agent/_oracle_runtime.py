@@ -381,7 +381,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     # gather_tool_evidence pass. Both gather_tool_evidence and the action agent
     # create Agent instances and call .run(), so patch Agent.run on the class
     # and ignore the interactive-shell action-agent tool surface.
-    import core.runtime.agent as _agent_mod
+    import core.agent_runtime as _agent_mod
 
     gathered_tool_calls: list[str] = []
     gathered_valid_data: set[str] = set()

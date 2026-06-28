@@ -6,20 +6,20 @@ from typing import Any, cast
 
 import pytest
 
-from core.runtime.agent import Agent, AgentRunResult
-from core.runtime.events import (
+from core.agent_runtime import Agent, AgentRunResult
+from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
     ToolExecutionUpdateEvent,
 )
-from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
-from core.runtime.messages import (
+from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.messages import (
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
     app_runtime_message,
     user_runtime_message,
 )
-from core.runtime.types import AgentTool, AgentToolContext
+from core.types import AgentTool, AgentToolContext
 from tools.registered_tool import RegisteredTool
 
 
@@ -254,7 +254,7 @@ def test_on_event_failure_is_logged_and_swallowed(caplog: pytest.LogCaptureFixtu
     def on_event(_kind: str, _data: dict[str, Any]) -> None:
         raise RuntimeError("broken renderer")
 
-    with caplog.at_level(logging.DEBUG, logger="core.runtime.agent"):
+    with caplog.at_level(logging.DEBUG, logger="core.agent"):
         result = _agent(llm, _tools(FakeTool("query_logs")), on_event=on_event).run(
             [{"role": "user", "content": "hello"}]
         )

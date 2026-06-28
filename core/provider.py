@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.runtime.messages import ProviderMessage, RuntimeMessage
+    from core.messages import ProviderMessage, RuntimeMessage
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class ProviderHooks:
         messages: Sequence[RuntimeMessage],
     ) -> list[ProviderMessage]:
         if self.convert_to_llm is None:
-            from core.runtime.messages import convert_to_llm_messages
+            from core.messages import convert_to_llm_messages
 
             return convert_to_llm_messages(llm, messages)
         return self.convert_to_llm(llm, messages)

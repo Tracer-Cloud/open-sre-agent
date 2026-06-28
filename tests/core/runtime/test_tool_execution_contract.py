@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from core.runtime.agent import Agent
-from core.runtime.execution import (
+from core.agent_runtime import Agent
+from core.execution import (
     BeforeToolCallResult,
     ToolExecutionHooks,
     ToolExecutionPatch,
@@ -13,9 +13,9 @@ from core.runtime.execution import (
     execute_tool_calls,
     execute_tools,
 )
-from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
-from core.runtime.provider import ProviderHooks, ProviderRequest
-from core.runtime.types import AgentTool, AgentToolContext
+from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.provider import ProviderHooks, ProviderRequest
+from core.types import AgentTool, AgentToolContext
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:

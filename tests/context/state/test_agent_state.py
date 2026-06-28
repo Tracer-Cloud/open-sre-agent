@@ -7,7 +7,7 @@ from context.state import (
     AgentStateError,
     MutableAgentState,
 )
-from core.runtime.types import AgentTool
+from core.types import AgentTool
 
 
 def _tool(name: str) -> AgentTool:

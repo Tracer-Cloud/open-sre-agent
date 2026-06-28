@@ -11,7 +11,7 @@ be invoked headlessly via `agent.headless_agent`.
 - **No `import interactive_shell` anywhere under `agent/`.** This is the whole
   point of the package and is checked by
   `tests/agent/test_import_boundary.py`. The dependency direction is strictly
-  one-way: `interactive_shell -> agent -> core.runtime`.
+  one-way: `interactive_shell -> agent -> core`.
 - `agent/` may depend on `core/`, `config/`, `platform/`, `integrations/`, and
   `tools/`. It must not depend on terminal/REPL concerns (Rich, prompt-toolkit,
   `ReplSession`, slash dispatch, the shell `REGISTRY`). Those are reached through
@@ -31,7 +31,7 @@ be invoked headlessly via `agent.headless_agent`.
   string assembly; grounding text is supplied via `PromptContextProvider`).
 - `turn_results.py` — neutral turn-result models.
 - `action_agent.py` — `run_agent_turn`: one action tool-calling turn over the ports,
-  wrapping `core.runtime.agent.Agent`.
+  wrapping `core.agent_runtime.Agent`.
 - `turn_orchestrator.py` — `run_turn`: the three-path routing (summarize-observation /
   handled / gather+answer) and the conversational answer.
 - `evidence_agent.py` — bounded evidence-gather loop over the `core` investigation tools.
@@ -40,5 +40,5 @@ be invoked headlessly via `agent.headless_agent`.
 
 ## Keep the loop primitive in core
 
-The ReAct loop primitive is `core.runtime.agent.Agent`. `agent/` orchestrates it;
+The ReAct loop primitive is `core.agent_runtime.Agent`. `agent/` orchestrates it;
 it does not re-implement it. Do not fork the loop here.

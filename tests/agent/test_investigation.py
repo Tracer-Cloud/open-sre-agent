@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.runtime import (
+from core import (
     build_synthetic_assistant_tool_call_message,
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -16,7 +16,7 @@ from core.runtime import (
     execute_tools,
     trim_lowest_value_tool_pair,
 )
-from core.runtime.llm.agent_llm_client import CLIBackedAgentClient, ToolCall
+from core.llm.agent_llm_client import CLIBackedAgentClient, ToolCall
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
     ConnectedInvestigationAgent,
@@ -382,7 +382,7 @@ def testexecute_tools_handles_interpreter_shutdown() -> None:
 
     shutdown_msg = "cannot schedule new futures after interpreter shutdown"
 
-    with patch("core.runtime.execution.ThreadPoolExecutor") as mock_executor_cls:
+    with patch("core.execution.ThreadPoolExecutor") as mock_executor_cls:
         mock_pool = MagicMock()
         mock_pool.__enter__ = lambda s: s
         mock_pool.__exit__ = MagicMock(return_value=False)
@@ -409,7 +409,7 @@ def test_build_synthetic_assistant_msg_for_bedrock_converse(
         ),
     )
 
-    from core.runtime.llm.agent_llm_client import BedrockConverseAgentClient
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
 
     llm = BedrockConverseAgentClient(model="mistral.mistral-large-3-675b-instruct")
     calls = [
@@ -1276,7 +1276,7 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
     """List content with several text slots is shrunk proportionally so the whole
     message lands near the budget instead of zeroing the first slot only."""
-    from core.runtime import truncate_content
+    from core import truncate_content
 
     content = [
         {"type": "text", "text": "a" * 100_000},

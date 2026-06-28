@@ -17,12 +17,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.runtime.llm.llm_retry import (
+from core.llm.llm_retry import (
     LLMCreditExhaustedError,
     extract_retry_after_seconds,
     is_credit_exhausted_error,
 )
-from core.runtime.llm.tool_schema_normalize import normalize_openai_tool_input_schema
+from core.llm.tool_schema_normalize import normalize_openai_tool_input_schema
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +156,7 @@ class AnthropicAgentClient:
         if client is None:
             from anthropic import Anthropic
 
-            from core.runtime.provider import resolve_llm_api_key
+            from core.provider import resolve_llm_api_key
 
             resolver = credential_resolver or resolve_llm_api_key
             api_key = resolver("ANTHROPIC_API_KEY")
@@ -379,7 +379,7 @@ class BedrockConverseAgentClient:
     def __init__(self, model: str, max_tokens: int = 4096) -> None:
         import boto3
 
-        from core.runtime.llm.bedrock_converse import require_aws_region
+        from core.llm.bedrock_converse import require_aws_region
 
         self._model = model
         self._max_tokens = max_tokens
@@ -387,7 +387,7 @@ class BedrockConverseAgentClient:
         self._boto3_client = boto3.client("bedrock-runtime", region_name=region)
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
-        from core.runtime.llm.bedrock_converse import build_converse_tool_specs
+        from core.llm.bedrock_converse import build_converse_tool_specs
 
         return build_converse_tool_specs(tools)
 
@@ -400,7 +400,7 @@ class BedrockConverseAgentClient:
     ) -> AgentLLMResponse:
         import botocore.exceptions
 
-        from core.runtime.llm.bedrock_converse import (
+        from core.llm.bedrock_converse import (
             is_non_retryable_bedrock_code,
             map_bedrock_client_error,
             parse_converse_output,
@@ -469,7 +469,7 @@ class BedrockConverseAgentClient:
 
     @staticmethod
     def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
-        from core.runtime.llm.bedrock_converse import build_tool_result_message as _build
+        from core.llm.bedrock_converse import build_tool_result_message as _build
 
         return _build(tool_calls, results)
 
@@ -516,7 +516,7 @@ class OpenAIAgentClient:
     ) -> None:
         from openai import OpenAI
 
-        from core.runtime.provider import resolve_llm_api_key
+        from core.provider import resolve_llm_api_key
 
         resolver = credential_resolver or resolve_llm_api_key
         api_key = resolver(api_key_env) or api_key_default
@@ -857,7 +857,7 @@ def get_agent_llm() -> _AgentClientType:
         _agent_client = _create_openai_compat_client(settings, provider)
     elif provider == "bedrock":
         from config.config import BEDROCK_LLM_CONFIG
-        from core.runtime.llm.llm_client import _is_anthropic_bedrock_model
+        from core.llm.llm_client import _is_anthropic_bedrock_model
 
         model = settings.bedrock_reasoning_model
         if _is_anthropic_bedrock_model(model):

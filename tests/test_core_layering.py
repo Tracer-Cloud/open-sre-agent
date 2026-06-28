@@ -24,7 +24,17 @@ _CORE_PACKAGES: tuple[Path, ...] = (
 )
 _CORE_ONLY_PACKAGES: tuple[Path, ...] = (
     Path("core/domain"),
-    Path("core/runtime"),
+)
+_CORE_RUNTIME_MODULES: tuple[Path, ...] = (
+    Path("core/__init__.py"),
+    Path("core/agent_runtime.py"),
+    Path("core/context_budget.py"),
+    Path("core/events.py"),
+    Path("core/execution.py"),
+    Path("core/llm_invoke_errors.py"),
+    Path("core/messages.py"),
+    Path("core/provider.py"),
+    Path("core/types.py"),
 )
 # Anything imported from a forbidden prefix by a core module is a
 # layering violation. Inverted dependency: core defines ports, CLI /
@@ -36,7 +46,7 @@ _CORE_ONLY_PACKAGES: tuple[Path, ...] = (
 #   observability port instead.
 # - ``integrations.tracer`` — closed by #36
 #   (``integrations.port`` ``fetch_remote_integrations``). Hosted LLM
-#   provider code lives in ``core.runtime.llm`` and remains core runtime
+#   provider code lives in ``core.llm`` and remains core runtime
 #   capability access rather than integration-coupled transport.
 _FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "cli",
@@ -56,6 +66,10 @@ def _python_modules_under(roots: tuple[Path, ...]) -> list[Path]:
     for root in roots:
         files.extend(p for p in root.glob("**/*.py") if "__pycache__" not in p.parts)
     return sorted(files)
+
+
+def _core_only_modules() -> list[Path]:
+    return sorted(_python_modules_under(_CORE_ONLY_PACKAGES) + list(_CORE_RUNTIME_MODULES))
 
 
 def _imported_modules(source: str) -> set[str]:
@@ -96,7 +110,7 @@ def test_core_module_does_not_import_forbidden_layers(module_path: Path) -> None
     )
 
 
-@pytest.mark.parametrize("module_path", _python_modules_under(_CORE_ONLY_PACKAGES), ids=str)
+@pytest.mark.parametrize("module_path", _core_only_modules(), ids=str)
 def test_core_does_not_import_investigation_tool(module_path: Path) -> None:
     """Core runtime and domain code must not depend on the product investigation tool."""
     source = module_path.read_text(encoding="utf-8")

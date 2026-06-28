@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import core.runtime.llm.llm_client as llm_client
+import core.llm.llm_client as llm_client
 
 _OPENAI_COMPATIBLE_PROVIDERS = llm_client._OPENAI_COMPATIBLE_PROVIDERS
 OpenAILLMClient = llm_client.OpenAILLMClient

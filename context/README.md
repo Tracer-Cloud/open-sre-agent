@@ -14,7 +14,7 @@ Use this package for code that gathers, normalizes, trims, and packages the inci
 ## Does not belong here
 
 - Agent orchestration or stage sequencing; keep that in `tools/investigation/`.
-- The LLM/tool-calling loop; keep that in `core/runtime/`.
+- The LLM/tool-calling loop; keep that in `core/`.
 - External clients, config, and verification; keep those in `integrations/`.
 - Agent-callable tool implementations; keep those in `tools/`.
 - Terminal UI, REPL session state, and slash commands; keep those in `interactive_shell/`.

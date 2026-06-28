@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from context.state.evidence import EvidenceEntry
-from core.runtime.llm.agent_llm_client import ToolCall
-from core.runtime.llm_invoke_errors import LLMInvokeFailure
+from core.llm.agent_llm_client import ToolCall
+from core.llm_invoke_errors import LLMInvokeFailure
 from platform.common.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000

@@ -9,8 +9,8 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from core.runtime.llm.agent_llm_client import ToolCall
-from core.runtime.types import AgentTool, AgentToolContext, RuntimeTool
+from core.llm.agent_llm_client import ToolCall
+from core.types import AgentTool, AgentToolContext, RuntimeTool
 from platform.observability.tool_trace import redact_sensitive
 from tools.utils.integration_sources import availability_view
 

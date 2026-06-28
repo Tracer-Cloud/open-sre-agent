@@ -23,7 +23,7 @@ def _write(root: Path, relpath: str, content: str) -> None:
 
 def _seed_agents_md(root: Path) -> None:
     _write(root, "AGENTS.md", "# Repo map\n\nTop-level guidance.\n")
-    _write(root, "core/runtime/llm/AGENTS.md", "# Hosted LLM Runtime\n\nLLM API clients.\n")
+    _write(root, "core/llm/AGENTS.md", "# Hosted LLM Runtime\n\nLLM API clients.\n")
     _write(root, "integrations/llm_cli/AGENTS.md", "# llm_cli\n\nSubprocess CLIs.\n")
     # Files that MUST be skipped — tests, vcs, caches, virtualenv, vendored deps.
     _write(root, "tests/AGENTS.md", "should be skipped")
@@ -43,7 +43,7 @@ class TestDiscoverAgentsMdFiles:
         files = AgentsMdReference().discover(tmp_path)
         relpaths = {f.relpath for f in files}
         assert "AGENTS.md" in relpaths
-        assert "core/runtime/llm/AGENTS.md" in relpaths
+        assert "core/llm/AGENTS.md" in relpaths
         assert "integrations/llm_cli/AGENTS.md" in relpaths
         # None of the skip-dir paths should leak into the index.
         for r in relpaths:
@@ -88,7 +88,7 @@ class TestBuildAgentsMdReferenceText:
         text = AgentsMdReference().build_text()
         # Root file must be disambiguated from per-package files.
         assert "=== AGENTS.md (root) ===" in text
-        assert "=== core/runtime/llm/AGENTS.md ===" in text
+        assert "=== core/llm/AGENTS.md ===" in text
         assert "=== integrations/llm_cli/AGENTS.md ===" in text
         # Bodies must appear in the concatenated block.
         assert "Top-level guidance." in text

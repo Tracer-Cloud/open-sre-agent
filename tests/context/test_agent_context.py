@@ -4,10 +4,10 @@ import pytest
 
 from context.agent_context import AgentContext
 from context.models import coerce_messages
-from core.runtime.agent import Agent
-from core.runtime.llm.agent_llm_client import AgentLLMResponse
-from core.runtime.messages import UserRuntimeMessage
-from core.runtime.types import AgentTool
+from core.agent_runtime import Agent
+from core.llm.agent_llm_client import AgentLLMResponse
+from core.messages import UserRuntimeMessage
+from core.types import AgentTool
 
 
 class _NoToolLLM:

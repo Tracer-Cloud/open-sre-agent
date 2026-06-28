@@ -25,7 +25,7 @@ from interactive_shell.agent_shell.adapters import (
 
 
 def _default_llm_factory() -> Any:
-    from core.runtime.llm import agent_llm_client
+    from core.llm import agent_llm_client
 
     return agent_llm_client.get_agent_llm()
 

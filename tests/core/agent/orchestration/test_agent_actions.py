@@ -21,7 +21,7 @@ import interactive_shell.tools.llm_provider_tool as llm_provider_tool
 import interactive_shell.tools.shell.execution as shell_execution
 import interactive_shell.tools.slash_tool as slash_tool
 from context.session import ReplSession
-from core.runtime.llm.agent_llm_client import AgentLLMResponse, ToolCall
+from core.llm.agent_llm_client import AgentLLMResponse, ToolCall
 from interactive_shell.agent_shell.agent import handle_message_with_agent
 from interactive_shell.tools.tool_registry import (
     TOOL_KIND_TO_NAME,

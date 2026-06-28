@@ -9,7 +9,7 @@ CLI-backed, Bedrock, and future clients)—not one vendor.
 The investigation agent does **not** call integration APIs through the LLM. The flow is:
 
 1. **Tools** — `get_registered_tools("investigation")`, filtered with `tool.is_available(...)`.
-2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `core/runtime/llm/agent_llm_client.py`.
+2. **Schemas** — `llm.tool_schemas(tools)` from `get_agent_llm()` in `core/llm/agent_llm_client.py`.
    Each client class shapes schemas for its API (function definitions, tool specs, CLI prompt JSON, etc.).
 3. **Invoke** — `llm.invoke(messages, system=..., tools=tool_schemas)`; the model returns tool calls.
 4. **Execute** — Tools run locally; results are appended as user/assistant turns the **same** client can read on the next invoke.
@@ -27,9 +27,9 @@ investigate/agent.py  →  get_agent_llm()  →  *AgentClient.tool_schemas / inv
 
 | Concern | Location |
 | -------- | -------- |
-| Provider routing | `core/runtime/llm/agent_llm_client.py` (`get_agent_llm`, client classes) |
-| Chat / non-agent LLM | `core/runtime/llm/llm_client.py` (separate path—changes here do not fix investigation) |
-| Investigation loop & message dispatch | `tools/investigation/stages/gather_evidence/` and `core/runtime/` |
+| Provider routing | `core/llm/agent_llm_client.py` (`get_agent_llm`, client classes) |
+| Chat / non-agent LLM | `core/llm/llm_client.py` (separate path—changes here do not fix investigation) |
+| Investigation loop & message dispatch | `tools/investigation/stages/gather_evidence/` and `core/` |
 | Provider-specific schema/message helpers | Next to the client implementing `tool_schemas()` (strict normalizers live beside that client) |
 | Tool definitions | `tools/` (`input_schema`, `public_input_schema`) |
 
@@ -69,13 +69,13 @@ Run tool unit tests under `tests/tools/`. After schema changes, run the registry
 contract (uses the strictest normalizer currently wired in the repo):
 
 ```bash
-uv run python -m pytest tests/core/runtime/llm/test_investigation_tool_schemas.py -q
+uv run python -m pytest tests/core/llm/test_investigation_tool_schemas.py -q
 ```
 
-Shared assertions live in `tests/core/runtime/llm/investigation_tool_schema_contract.py`. When you add a
+Shared assertions live in `tests/core/llm/investigation_tool_schema_contract.py`. When you add a
 stricter provider adapter, point `test_investigation_tool_schemas.py` at its normalizer and extend
 the contract module if the API rejects new patterns. Bedrock-specific unit tests stay in
-`tests/core/runtime/llm/test_bedrock_converse.py` (no duplicate registry test there).
+`tests/core/llm/test_bedrock_converse.py` (no duplicate registry test there).
 
 ## Provider adapters (`agent_llm_client.py`)
 
@@ -85,7 +85,7 @@ Each `*AgentClient` should own:
 | ---------------- | ----- |
 | `tool_schemas(tools)` | Map `RegisteredTool` / `public_input_schema` → API payload. Never pass raw schemas if the API is strict. |
 | `invoke(..., tools=...)` | Attach schemas the API expects; handle retries and map errors to `RuntimeError` with actionable text. |
-| Message compatibility | Investigation builds history via `build_synthetic_assistant_tool_call_message`, `build_assistant_message`, `build_tool_result_messages` in `core/runtime/`—each must match your invoke parser. |
+| Message compatibility | Investigation builds history via `build_synthetic_assistant_tool_call_message`, `build_assistant_message`, `build_tool_result_messages` in `core/`—each must match your invoke parser. |
 
 Checklist when adding or changing a client:
 
@@ -114,8 +114,8 @@ Extend `tests/agent/test_investigation.py` when you add a client branch for synt
 Minimum before merging schema or client changes:
 
 ```bash
-uv run python -m pytest tests/core/runtime/llm/test_investigation_tool_schemas.py -q
-uv run python -m pytest tests/core/runtime/llm/test_agent_llm_client.py tests/agent/test_investigation.py -q
+uv run python -m pytest tests/core/llm/test_investigation_tool_schemas.py -q
+uv run python -m pytest tests/core/llm/test_agent_llm_client.py tests/agent/test_investigation.py -q
 ```
 
 When touching a specific provider, also verify end-to-end with that provider configured:
@@ -131,6 +131,6 @@ adapter strictness gaps.
 
 ## Related docs
 
-- [core/runtime/llm/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/core/runtime/llm/AGENTS.md) — API provider wiring and env keys
+- [core/llm/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/core/llm/AGENTS.md) — API provider wiring and env keys
 - [integrations/llm_cli/AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/integrations/llm_cli/AGENTS.md) — subprocess CLI providers
 - [AGENTS.md](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) — repo map and PR checklist

@@ -127,7 +127,7 @@ def _format_label(relpath: str) -> str:
     """Header label used in the rendered block.
 
     The repo-root file is rendered as ``AGENTS.md (root)`` to disambiguate it
-    from the per-package files (e.g. ``core/runtime/llm/AGENTS.md``).
+    from the per-package files (e.g. ``core/llm/AGENTS.md``).
     """
     if relpath == _AGENTS_MD_FILENAME:
         return f"{_AGENTS_MD_FILENAME} (root)"
@@ -169,7 +169,7 @@ class AgentsMdReference(GroundingReference):
 
             === AGENTS.md (root) ===
             ...
-            === core/runtime/llm/AGENTS.md ===
+            === core/llm/AGENTS.md ===
             ...
 
         Returns ``""`` when no AGENTS.md files are available so callers can

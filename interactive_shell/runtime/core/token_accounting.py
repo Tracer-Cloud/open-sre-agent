@@ -10,7 +10,7 @@ from interactive_shell.utils.telemetry import LlmRunInfo
 
 if TYPE_CHECKING:
     from context.session import ReplSession
-    from core.runtime.llm.llm_client import LLMResponse
+    from core.llm.llm_client import LLMResponse
 
 
 def estimate_tokens(text: str) -> int:

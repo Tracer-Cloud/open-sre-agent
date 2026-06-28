@@ -9,7 +9,7 @@ from typing import Any
 from rich.console import Console
 
 from context.session import ReplSession
-from core.runtime.types import AgentTool, AgentToolContext
+from core.types import AgentTool, AgentToolContext
 
 ToolExecutor = Callable[[dict[str, Any], "ToolContext"], bool]
 ToolAvailability = Callable[[ReplSession], bool]

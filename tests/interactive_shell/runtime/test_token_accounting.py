@@ -108,7 +108,7 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from core.runtime.llm.llm_client import _coerce_usage_tokens
+    from core.llm.llm_client import _coerce_usage_tokens
 
     assert _coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
@@ -136,7 +136,7 @@ class _FakeLLMClient:
 
 def test_answer_cli_agent_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
-    monkeypatch.setattr("core.runtime.llm.llm_client.get_llm_for_reasoning", lambda: client)
+    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: client)
     session = ReplSession()
     console = Console(file=io.StringIO(), force_terminal=False)
     answer_cli_agent("hello", session, console)

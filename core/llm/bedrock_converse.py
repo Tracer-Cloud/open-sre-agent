@@ -1,7 +1,7 @@
 """Shared helpers for the Amazon Bedrock Converse API (tool schemas and messages).
 
-Used by the investigation agent's :class:`~core.runtime.llm.agent_llm_client.BedrockConverseAgentClient`
-and kept separate from :mod:`core.runtime.llm.llm_client` so tool-schema normalization stays in one place.
+Used by the investigation agent's :class:`~core.llm.agent_llm_client.BedrockConverseAgentClient`
+and kept separate from :mod:`core.llm.llm_client` so tool-schema normalization stays in one place.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import os
 import secrets
 from typing import Any
 
-from core.runtime.llm.tool_schema_normalize import (
+from core.llm.tool_schema_normalize import (
     BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
     normalize_object_tool_input_schema,
     sanitize_strict_tool_schema,
