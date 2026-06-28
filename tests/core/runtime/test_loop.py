@@ -14,9 +14,15 @@ from core.events import (
 )
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
+    BRANCH_SUMMARY_PREFIX,
+    BRANCH_SUMMARY_SUFFIX,
+    COMPACTION_SUMMARY_PREFIX,
+    COMPACTION_SUMMARY_SUFFIX,
     ToolResultRuntimeMessage,
     UserRuntimeMessage,
     app_runtime_message,
+    convert_to_llm_messages,
+    ensure_runtime_messages,
     user_runtime_message,
 )
 from core.types import AgentTool, AgentToolContext
@@ -182,6 +188,80 @@ def test_agent_transcript_can_keep_app_messages_out_of_provider_context() -> Non
         "visible context",
     ]
     assert len(result.messages) == 4
+
+
+def test_agent_converts_legacy_agent_message_roles_for_llm_context() -> None:
+    llm = FakeLLM(iter([_text_response("done")]))
+
+    result = _agent(llm, _tools(FakeTool("query_logs"))).run(
+        [
+            {
+                "role": "bashExecution",
+                "command": "pytest",
+                "exitCode": 1,
+                "stdout": "1 failed",
+            },
+            {
+                "role": "bashExecution",
+                "content": "render only",
+                "excludeFromContext": True,
+            },
+            {"role": "custom", "content": "custom note"},
+            {
+                "role": "custom",
+                "content": [{"type": "text", "text": "structured note"}],
+            },
+            {"role": "branchSummary", "summary": "branch state"},
+            {"role": "compactionSummary", "summary": "older turns"},
+            {"role": "unknown", "content": "skip"},
+            {"role": "user", "content": "hello"},
+        ]
+    )
+
+    assert result.final_text == "done"
+    assert llm.seen_messages[0] == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "$ pytest\n\nexit code: 1\n\nstdout:\n1 failed",
+                }
+            ],
+        },
+        {"role": "user", "content": [{"type": "text", "text": "custom note"}]},
+        {"role": "user", "content": [{"type": "text", "text": "structured note"}]},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"{BRANCH_SUMMARY_PREFIX}branch state{BRANCH_SUMMARY_SUFFIX}",
+                }
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"{COMPACTION_SUMMARY_PREFIX}older turns{COMPACTION_SUMMARY_SUFFIX}",
+                }
+            ],
+        },
+        {"role": "user", "content": "hello"},
+    ]
+
+
+def test_legacy_text_blocks_convert_to_bedrock_converse_content() -> None:
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
+
+    llm = BedrockConverseAgentClient.__new__(BedrockConverseAgentClient)
+    messages = ensure_runtime_messages([{"role": "custom", "content": "custom note"}])
+
+    assert convert_to_llm_messages(llm, messages) == [
+        {"role": "user", "content": [{"text": "custom note"}]}
+    ]
 
 
 def test_runtime_events_emit_typed_lifecycle_and_streaming_order() -> None:

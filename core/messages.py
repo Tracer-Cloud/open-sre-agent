@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from core.llm.types import ToolCall
 
@@ -72,6 +72,11 @@ type RuntimeMessage = (
     UserRuntimeMessage | AssistantRuntimeMessage | ToolResultRuntimeMessage | AppRuntimeMessage
 )
 type RuntimeMessageLike = RuntimeMessage | ProviderMessage
+
+BRANCH_SUMMARY_PREFIX = "<branch_summary>\n"
+BRANCH_SUMMARY_SUFFIX = "\n</branch_summary>"
+COMPACTION_SUMMARY_PREFIX = "<compaction_summary>\n"
+COMPACTION_SUMMARY_SUFFIX = "\n</compaction_summary>"
 
 
 def user_runtime_message(content: RuntimeContent, **metadata: Any) -> UserRuntimeMessage:
@@ -163,7 +168,7 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
             provider_payload=dict(message),
             metadata=_metadata_from_provider_message(message),
         )
-    if role in {"tool", "toolResult"}:
+    if role in {"tool", "toolResult", "tool_result"}:
         tool_name = str(message.get("name") or message.get("toolName") or "tool")
         tool_call_id = str(message.get("tool_call_id") or message.get("toolCallId") or tool_name)
         tool_call = ToolCall(id=tool_call_id, name=tool_name, input={})
@@ -171,6 +176,43 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
             tool_calls=(tool_call,),
             results=(message.get("content"),),
             provider_payloads=(dict(message),),
+            metadata=_metadata_from_provider_message(message),
+        )
+    if role == "bashExecution":
+        return AppRuntimeMessage(
+            app_type="bash_execution",
+            content=_text_content_blocks(_bash_execution_to_text(message)),
+            include_in_context=not _exclude_from_context(message),
+            details=dict(message),
+            metadata=_metadata_from_provider_message(message),
+        )
+    if role == "custom":
+        return AppRuntimeMessage(
+            app_type="custom",
+            content=_content_blocks_or_text(message.get("content")),
+            include_in_context=not _exclude_from_context(message),
+            details=dict(message),
+            metadata=_metadata_from_provider_message(message),
+        )
+    if role == "branchSummary":
+        return AppRuntimeMessage(
+            app_type="branch_summary",
+            content=_text_content_blocks(
+                f"{BRANCH_SUMMARY_PREFIX}{message.get('summary') or ''}{BRANCH_SUMMARY_SUFFIX}"
+            ),
+            include_in_context=not _exclude_from_context(message),
+            details=dict(message),
+            metadata=_metadata_from_provider_message(message),
+        )
+    if role == "compactionSummary":
+        return AppRuntimeMessage(
+            app_type="compaction_summary",
+            content=_text_content_blocks(
+                f"{COMPACTION_SUMMARY_PREFIX}{message.get('summary') or ''}"
+                f"{COMPACTION_SUMMARY_SUFFIX}"
+            ),
+            include_in_context=not _exclude_from_context(message),
+            details=dict(message),
             metadata=_metadata_from_provider_message(message),
         )
     return AppRuntimeMessage(
@@ -184,6 +226,78 @@ def _coerce_runtime_message(message: RuntimeMessageLike) -> RuntimeMessage:
 
 def _metadata_from_provider_message(message: ProviderMessage) -> MessageMetadata:
     return {key: value for key, value in message.items() if key.startswith("_opensre_")}
+
+
+def _exclude_from_context(message: ProviderMessage) -> bool:
+    return bool(message.get("excludeFromContext") or message.get("exclude_from_context"))
+
+
+def _text_content_blocks(text: str) -> list[dict[str, Any]]:
+    return [{"type": "text", "text": text}]
+
+
+def _content_blocks_or_text(content: Any) -> RuntimeContent:
+    if isinstance(content, str):
+        return _text_content_blocks(content)
+    if content is None:
+        return _text_content_blocks("")
+    if isinstance(content, list) and all(isinstance(item, dict) for item in content):
+        return [dict(item) for item in content]
+    return _text_content_blocks(json.dumps(content, default=str))
+
+
+def _bash_execution_to_text(message: ProviderMessage) -> str:
+    content = message.get("content")
+    if isinstance(content, str) and not _has_bash_execution_parts(message):
+        return content
+
+    lines: list[str] = []
+    command = message.get("command") or message.get("cmd")
+    cwd = message.get("cwd")
+    exit_code = message.get("exitCode", message.get("exit_code"))
+    stdout = message.get("stdout")
+    stderr = message.get("stderr")
+    output = message.get("output")
+
+    if command:
+        lines.append(f"$ {command}")
+    if cwd:
+        lines.append(f"cwd: {cwd}")
+    if exit_code is not None:
+        lines.append(f"exit code: {exit_code}")
+    if stdout:
+        lines.append(f"stdout:\n{stdout}")
+    if stderr:
+        lines.append(f"stderr:\n{stderr}")
+    if output and output != stdout:
+        lines.append(f"output:\n{output}")
+    if content and all(content != value for value in (stdout, stderr, output)):
+        lines.append(_stringify_content_section("content", content))
+
+    if lines:
+        return "\n\n".join(lines)
+
+    payload = {
+        key: value
+        for key, value in message.items()
+        if key not in {"role", "excludeFromContext", "exclude_from_context"}
+    }
+    return json.dumps(payload, default=str)
+
+
+def _has_bash_execution_parts(message: ProviderMessage) -> bool:
+    return any(
+        key in message
+        for key in ("command", "cmd", "cwd", "exitCode", "exit_code", "stdout", "stderr", "output")
+    )
+
+
+def _stringify_content_section(label: str, content: Any) -> str:
+    if isinstance(content, str):
+        text = content
+    else:
+        text = json.dumps(content, default=str)
+    return f"{label}:\n{text}"
 
 
 def convert_to_llm_messages(llm: Any, messages: Sequence[RuntimeMessage]) -> list[ProviderMessage]:
@@ -212,8 +326,29 @@ def _provider_messages_for_runtime_message(
     if isinstance(message, AppRuntimeMessage):
         if not message.include_in_context:
             return []
-        return [{"role": "user", "content": message.content}]
+        return [{"role": "user", "content": _provider_content_for_app_message(llm, message)}]
     return []
+
+
+def _provider_content_for_app_message(llm: Any, message: AppRuntimeMessage) -> RuntimeContent:
+    from core.llm.agent_llm_client import BedrockConverseAgentClient
+
+    if isinstance(llm, BedrockConverseAgentClient):
+        return _to_converse_text_blocks(message.content)
+    return message.content
+
+
+def _to_converse_text_blocks(content: RuntimeContent) -> RuntimeContent:
+    if not isinstance(content, list):
+        return content
+
+    converted: list[dict[str, Any]] = []
+    for block in content:
+        if block.get("type") == "text" and "text" in block:
+            converted.append({"text": str(block["text"])})
+        else:
+            converted.append(dict(block))
+    return converted
 
 
 def build_synthetic_assistant_tool_call_message(
@@ -235,7 +370,7 @@ def build_synthetic_assistant_tool_call_message(
     if isinstance(llm, BedrockConverseAgentClient):
         from core.llm.bedrock_converse import build_assistant_tool_use_message
 
-        return build_assistant_tool_use_message(tool_calls)
+        return cast("ProviderMessage", build_assistant_tool_use_message(tool_calls))
 
     if isinstance(llm, AnthropicAgentClient):
         content = [
@@ -264,7 +399,7 @@ def build_synthetic_assistant_tool_call_message(
         }
 
     if isinstance(llm, CLIBackedAgentClient):
-        return llm.build_assistant_message("", tool_calls)
+        return cast("ProviderMessage", llm.build_assistant_message("", tool_calls))
 
     # Fallback: plain text summary
     names = ", ".join(tc.name for tc in tool_calls)
@@ -275,7 +410,7 @@ def build_assistant_message(llm: Any, response: Any) -> ProviderMessage:
     from core.llm.agent_llm_client import AnthropicAgentClient, BedrockConverseAgentClient
 
     if isinstance(llm, (AnthropicAgentClient, BedrockConverseAgentClient)):
-        return llm.build_assistant_message(response.raw_content)
+        return cast("ProviderMessage", llm.build_assistant_message(response.raw_content))
     # Use raw_content when set — preserves provider-specific fields such as
     # Gemini's thought_signature that must be echoed back in the next request.
     if response.raw_content is not None:
@@ -292,7 +427,7 @@ def build_tool_result_messages(
     from core.llm.agent_llm_client import AnthropicAgentClient, OpenAIAgentClient
 
     if isinstance(llm, AnthropicAgentClient):
-        return [llm.build_tool_result_message(tool_calls, results)]
+        return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]
     if isinstance(llm, OpenAIAgentClient):
-        return llm.build_tool_result_messages(tool_calls, results)
-    return [llm.build_tool_result_message(tool_calls, results)]
+        return cast("list[ProviderMessage]", llm.build_tool_result_messages(tool_calls, results))
+    return [cast("ProviderMessage", llm.build_tool_result_message(tool_calls, results))]
