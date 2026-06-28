@@ -207,8 +207,9 @@ def extract_step_log(
     if selected is None and step_number is not None and 1 <= step_number <= group_count:
         group_counter = 0
         for i, section in enumerate(sections):
-            if section.get("name") != UNGROUPED_SECTION_NAME:
-                group_counter += 1
+            if section.get("name") == UNGROUPED_SECTION_NAME:
+                continue
+            group_counter += 1
             if group_counter == step_number:
                 selected = section
                 match_strategy = "step_number"

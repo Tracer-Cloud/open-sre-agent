@@ -369,3 +369,21 @@ final runner summary
     assert "annotation between groups" in result["log_text"]
     assert "line 2" in result["log_text"]
     assert "final runner summary" in result["log_text"]
+
+
+def test_extract_step_log_step_number_skips_ungrouped_sections() -> None:
+    result = extract_step_log(
+        """##[group]Checkout
+line 1
+##[endgroup]
+ungrouped noise between steps
+##[group]Deploy
+line 2
+##[endgroup]
+""",
+        step_number=2,
+    )
+    assert result["step_name"] == "Deploy"
+    assert result["match_strategy"] == "step_number"
+    assert "line 2" in result["log_text"]
+    assert "ungrouped noise between steps" not in result["log_text"]
