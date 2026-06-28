@@ -125,5 +125,9 @@ def _validity_score_percent(score: Any) -> str | None:
     v = float(score)
     if not math.isfinite(v):
         return None
-    v = max(0.0, min(1.0, v))
+    if v <= 0.0:
+        # 0.0 is the pipeline default before diagnosis completes; showing
+        # "confidence 0%" misleads users when evidence was never gathered.
+        return None
+    v = min(1.0, v)
     return f"{int(v * 100)}%"
