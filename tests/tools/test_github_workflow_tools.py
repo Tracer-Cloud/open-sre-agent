@@ -1,27 +1,27 @@
-"""Tests for GitHub-backed work/status/community/task tools."""
+"""Tests for semantic GitHub workflow tools."""
 
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import patch
 
+from core.execution import (
+    BeforeToolCallResult,
+    ToolExecutionHooks,
+    ToolExecutionRequest,
+    execute_tool_calls,
+)
+from core.llm.types import ToolCall
 from tests.tools.conftest import BaseToolContract
-from tools.community_followup_tool import summarize_community_followups
 from tools.github.work_status import (
+    execute_github_issue_mutation,
     list_github_security_alerts,
     list_github_work_items,
+    propose_github_issue_mutation_from_slack,
     summarize_github_pr_status,
 )
-from tools.github.workflow_skill import (
-    build_slack_task_payload,
-    build_work_status_report,
-    summarize_community_followups_from_comments,
-)
-from tools.slack_task_tool import (
-    close_github_task_from_slack,
-    create_github_task_from_slack,
-    update_github_task_from_slack,
-)
+from tools.github.workflow import GitHubApiError, GitHubRestClient, build_work_status_report
+from tools.registered_tool import RegisteredTool
 from tools.work_status_report_tool import generate_work_status_report
 
 
@@ -44,29 +44,14 @@ class TestListGitHubSecurityAlertsContract(BaseToolContract):
         return _registered_tool(list_github_security_alerts)
 
 
-class TestGenerateWorkStatusReportContract(BaseToolContract):
+class TestProposeGitHubIssueMutationFromSlackContract(BaseToolContract):
     def get_tool_under_test(self):
-        return _registered_tool(generate_work_status_report)
+        return _registered_tool(propose_github_issue_mutation_from_slack)
 
 
-class TestSummarizeCommunityFollowupsContract(BaseToolContract):
+class TestExecuteGitHubIssueMutationContract(BaseToolContract):
     def get_tool_under_test(self):
-        return _registered_tool(summarize_community_followups)
-
-
-class TestCreateGitHubTaskFromSlackContract(BaseToolContract):
-    def get_tool_under_test(self):
-        return _registered_tool(create_github_task_from_slack)
-
-
-class TestUpdateGitHubTaskFromSlackContract(BaseToolContract):
-    def get_tool_under_test(self):
-        return _registered_tool(update_github_task_from_slack)
-
-
-class TestCloseGitHubTaskFromSlackContract(BaseToolContract):
-    def get_tool_under_test(self):
-        return _registered_tool(close_github_task_from_slack)
+        return _registered_tool(execute_github_issue_mutation)
 
 
 def test_list_github_work_items_classifies_taken_and_up_for_grabs() -> None:
@@ -91,19 +76,9 @@ def test_list_github_work_items_classifies_taken_and_up_for_grabs() -> None:
             "labels": [{"name": "help wanted"}],
             "updated_at": "2026-06-28T11:00:00Z",
         },
-        {
-            "number": 3,
-            "title": "PR returned from issues endpoint",
-            "state": "open",
-            "html_url": "https://github.com/o/r/pull/3",
-            "user": {"login": "dan"},
-            "assignees": [],
-            "labels": [],
-            "pull_request": {},
-            "updated_at": "2026-06-28T12:00:00Z",
-        },
+        {"number": 3, "pull_request": {}, "title": "PR returned from issues endpoint"},
     ]
-    with patch("tools.github.work_status._github_api_request", return_value=issues):
+    with patch.object(GitHubRestClient, "paginate", return_value=issues):
         result = list_github_work_items(owner="o", repo="r", github_token="tok")
 
     assert result["available"] is True
@@ -111,251 +86,353 @@ def test_list_github_work_items_classifies_taken_and_up_for_grabs() -> None:
     assert [item["work_status"] for item in result["items"]] == ["taken", "up_for_grabs"]
 
 
-def test_summarize_github_pr_status_marks_blocked_by_failed_checks() -> None:
-    pulls = [
-        {
-            "number": 10,
-            "title": "Ready PR",
-            "draft": False,
-            "html_url": "https://github.com/o/r/pull/10",
-            "user": {"login": "alice"},
-            "head": {"sha": "abc", "ref": "feature"},
-            "mergeable": True,
-            "mergeable_state": "clean",
-            "updated_at": "2026-06-28T10:00:00Z",
-        },
-        {
-            "number": 11,
-            "title": "Failing PR",
-            "draft": False,
-            "html_url": "https://github.com/o/r/pull/11",
-            "user": {"login": "bob"},
-            "head": {"sha": "def", "ref": "bugfix"},
-            "mergeable": True,
-            "mergeable_state": "clean",
-            "updated_at": "2026-06-28T11:00:00Z",
-        },
-    ]
-    checks = {
-        "/repos/o/r/commits/abc/check-runs": {
-            "check_runs": [{"name": "test", "conclusion": "success", "status": "completed"}]
-        },
-        "/repos/o/r/commits/def/check-runs": {
-            "check_runs": [{"name": "test", "conclusion": "failure", "status": "completed"}]
-        },
+def test_summarize_github_pr_status_uses_detail_mergeability_not_list_nulls() -> None:
+    list_pr = {
+        "number": 10,
+        "title": "Ready PR",
+        "draft": False,
+        "html_url": "https://github.com/o/r/pull/10",
+        "user": {"login": "alice"},
+        "head": {"sha": "abc", "ref": "feature"},
+        "mergeable": None,
+        "mergeable_state": "unknown",
+        "updated_at": "2026-06-28T10:00:00Z",
     }
+    detail_pr = {**list_pr, "mergeable": True, "mergeable_state": "clean"}
 
-    def fake_request(_method: str, path: str, **_kwargs: Any) -> Any:
-        if path == "/repos/o/r/pulls":
-            return pulls
-        return checks[path]
+    def fake_request(self: GitHubRestClient, method: str, path: str, **_kwargs: Any) -> Any:
+        if path == "/repos/o/r/pulls/10":
+            return detail_pr
+        if path == "/repos/o/r/commits/abc/check-runs":
+            return {
+                "check_runs": [{"name": "test", "conclusion": "success", "status": "completed"}]
+            }
+        raise AssertionError((method, path))
 
-    with patch("tools.github.work_status._github_api_request", side_effect=fake_request):
+    with (
+        patch.object(GitHubRestClient, "paginate", return_value=[list_pr]),
+        patch.object(GitHubRestClient, "request", fake_request),
+    ):
         result = summarize_github_pr_status(owner="o", repo="r", github_token="tok")
 
     assert result["counts"]["mergeable"] == 1
-    assert result["counts"]["blocked"] == 1
-    assert result["pull_requests"][1]["status"] == "blocked"
-    assert result["pull_requests"][1]["blocking_reasons"] == ["failed checks: test"]
+    assert result["pull_requests"][0]["mergeability"] == "mergeable"
 
 
-def test_list_github_security_alerts_merges_requested_alert_types() -> None:
-    def fake_request(_method: str, path: str, **_kwargs: Any) -> Any:
-        if path.endswith("/dependabot/alerts"):
-            return [{"number": 1, "state": "open", "security_advisory": {"summary": "dep"}}]
-        if path.endswith("/secret-scanning/alerts"):
-            return [{"number": 2, "state": "open", "secret_type": "token"}]
-        if path.endswith("/code-scanning/alerts"):
-            return [{"number": 3, "state": "open", "rule": {"description": "code"}}]
-        raise AssertionError(path)
-
-    with patch("tools.github.work_status._github_api_request", side_effect=fake_request):
-        result = list_github_security_alerts(
-            owner="o", repo="r", alert_type="all", github_token="tok"
-        )
-
-    assert result["counts"] == {
-        "dependabot": 1,
-        "secret_scanning": 1,
-        "code_scanning": 1,
-        "total": 3,
-    }
-    assert {alert["type"] for alert in result["alerts"]} == {
-        "dependabot",
-        "secret_scanning",
-        "code_scanning",
+def test_summarize_github_pr_status_reports_unknown_mergeability() -> None:
+    pr = {
+        "number": 11,
+        "title": "Unknown PR",
+        "draft": False,
+        "html_url": "https://github.com/o/r/pull/11",
+        "user": {"login": "bob"},
+        "head": {"sha": "def", "ref": "bugfix"},
+        "mergeable": None,
+        "mergeable_state": "unknown",
+        "updated_at": "2026-06-28T11:00:00Z",
     }
 
+    def fake_request(self: GitHubRestClient, method: str, path: str, **_kwargs: Any) -> Any:
+        if path == "/repos/o/r/pulls/11":
+            return pr
+        if path == "/repos/o/r/commits/def/check-runs":
+            return {"check_runs": []}
+        raise AssertionError((method, path))
 
-def test_generate_work_status_report_is_read_only_summary() -> None:
-    result = generate_work_status_report(
-        work_items=[
-            {"number": 1, "title": "Assigned bug", "work_status": "taken", "assignees": ["bob"]},
-            {"number": 2, "title": "Starter task", "work_status": "up_for_grabs", "assignees": []},
-        ],
-        pull_requests=[
-            {
-                "number": 10,
-                "title": "Failing PR",
-                "status": "blocked",
-                "blocking_reasons": ["failed checks: test"],
-            },
-            {"number": 11, "title": "Ready PR", "status": "mergeable", "blocking_reasons": []},
-        ],
+    with (
+        patch.object(GitHubRestClient, "paginate", return_value=[pr]),
+        patch.object(GitHubRestClient, "request", fake_request),
+    ):
+        result = summarize_github_pr_status(owner="o", repo="r", github_token="tok")
+
+    assert result["counts"]["unknown"] == 1
+    assert result["pull_requests"][0]["status"] == "unknown"
+    assert "mergeability unknown" in result["pull_requests"][0]["blocking_reasons"]
+
+
+def test_generate_work_status_report_surfaces_fetch_errors() -> None:
+    with (
+        patch(
+            "tools.work_status_report_tool.list_github_work_items",
+            return_value={"available": False, "error": "boom", "items": []},
+        ),
+        patch(
+            "tools.work_status_report_tool.summarize_github_pr_status",
+            return_value={"available": True, "pull_requests": []},
+        ),
+    ):
+        result = generate_work_status_report(owner="o", repo="r", github_token="tok")
+
+    assert result["available"] is False
+    assert result["incomplete"] is True
+    assert result["errors"] == ["work_items: boom"]
+
+
+def test_build_work_status_report_does_not_hide_read_errors() -> None:
+    report = build_work_status_report(
+        work_items=[],
+        pull_requests=[],
+        context="today",
+        errors=["pull_requests: failed"],
     )
 
-    assert result["side_effects"] == []
-    assert result["counts"]["open_work"] == 2
-    assert result["counts"]["blocked_prs"] == 1
-    assert "Starter task" in result["slack_markdown"]
-    assert "Failing PR" in result["slack_markdown"]
+    assert report.available is False
+    assert report.incomplete is True
+    assert "Incomplete report" in report.slack_markdown
 
 
-def test_workflow_skill_builds_same_report_without_tool_io() -> None:
-    result = build_work_status_report(
-        work_items=[
-            {"number": 2, "title": "Starter task", "work_status": "up_for_grabs", "assignees": []}
-        ],
-        pull_requests=[
+def test_summarize_community_followups_uses_repository_comments_endpoint() -> None:
+    with patch.object(
+        GitHubRestClient,
+        "paginate",
+        return_value=[
             {
-                "number": 10,
-                "title": "Failing PR",
-                "status": "blocked",
-                "blocking_reasons": ["failed checks: test"],
-            }
-        ],
-        context="morning",
-    )
-
-    assert result["counts"] == {
-        "open_work": 1,
-        "taken": 0,
-        "up_for_grabs": 1,
-        "unassigned": 0,
-        "blocked_prs": 1,
-        "mergeable_prs": 0,
-    }
-    assert result["side_effects"] == []
-    assert "*Engineering status — morning*" in result["slack_markdown"]
-
-
-def test_summarize_community_followups_finds_unanswered_questions() -> None:
-    comments = [
-        {
-            "issue_number": 7,
-            "issue_title": "Meeting",
-            "author": "contributor",
-            "body": "When is the community meeting?",
-            "created_at": "2026-06-28T10:00:00Z",
-            "url": "u1",
-        },
-        {
-            "issue_number": 8,
-            "issue_title": "Agenda",
-            "author": "maintainer",
-            "body": "Agenda item: release demo",
-            "created_at": "2026-06-28T10:05:00Z",
-            "url": "u2",
-        },
-    ]
-
-    result = summarize_community_followups(comments=comments, maintainer_logins=["maintainer"])
-
-    assert result["unanswered_questions"][0]["issue_number"] == 7
-    assert result["agenda_items"][0]["body"] == "Agenda item: release demo"
-    assert "When is the community meeting?" in result["suggested_replies"][0]["context"]
-
-
-def test_workflow_skill_summarizes_followups_without_tool_io() -> None:
-    result = summarize_community_followups_from_comments(
-        comments=[
-            {
-                "issue_number": 7,
-                "issue_title": "Meeting",
-                "author": "contributor",
-                "body": "Could someone share the agenda?",
+                "issue_url": "https://api.github.com/repos/o/r/issues/7",
+                "body": "When is the meeting?",
+                "user": {"login": "contributor"},
                 "created_at": "2026-06-28T10:00:00Z",
-                "url": "u1",
+                "html_url": "u",
             }
         ],
-        maintainer_logins=["maintainer"],
-    )
+    ) as paginate:
+        result = __import__(
+            "tools.community_followup_tool", fromlist=["summarize_community_followups"]
+        ).summarize_community_followups(owner="o", repo="r", github_token="tok")
 
+    paginate.assert_called_once()
+    assert paginate.call_args.args[0] == "/repos/o/r/issues/comments"
     assert result["counts"]["unanswered_questions"] == 1
-    assert result["suggested_replies"][0]["issue_number"] == 7
-    assert result["side_effects"] == []
 
 
-def test_slack_task_create_requires_confirmation_before_mutation() -> None:
-    with patch("tools.slack_task_tool._github_api_request") as request:
-        result = create_github_task_from_slack(
-            owner="o",
-            repo="r",
-            slack_text="add this to the hackathon list",
-            slack_url="https://slack.example/archives/C/p1",
-            github_token="tok",
-        )
-
-    request.assert_not_called()
-    assert result["executed"] is False
-    assert result["side_effect"] == "would_create_github_issue"
-    assert "slack.example" in result["issue"]["body"]
-
-
-def test_workflow_skill_builds_slack_task_payload_without_side_effects() -> None:
-    payload = build_slack_task_payload(
+def test_proposal_id_is_stable_and_payload_has_idempotency_marker() -> None:
+    first = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="create",
+        slack_text="add this to the hackathon list",
+        slack_url="https://slack.example/archives/C/p1",
+        labels=["hackathon"],
+    )
+    second = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
         operation="create",
         slack_text="add this to the hackathon list",
         slack_url="https://slack.example/archives/C/p1",
         labels=["hackathon"],
     )
 
-    assert payload["title"] == "add this to the hackathon list"
-    assert payload["labels"] == ["hackathon"]
-    assert "https://slack.example/archives/C/p1" in payload["body"]
+    assert first["proposal"]["proposal_id"] == second["proposal"]["proposal_id"]
+    assert first["proposal"]["operation"] == "create"
+    assert "opensre-slack-proposal:" in first["proposal"]["payload"]["body"]
+    assert first["side_effects"] == []
 
 
-def test_slack_task_create_executes_with_confirmation() -> None:
-    created = {
-        "number": 99,
-        "html_url": "https://github.com/o/r/issues/99",
-        "title": "Hackathon task",
-    }
-    with patch("tools.slack_task_tool._github_api_request", return_value=created) as request:
-        result = create_github_task_from_slack(
-            owner="o",
-            repo="r",
-            slack_text="add this to the hackathon list",
-            slack_url="https://slack.example/archives/C/p1",
-            title="Hackathon task",
-            github_token="tok",
-            confirm=True,
+def test_execute_tool_schema_has_no_confirm_and_requires_approval_metadata() -> None:
+    tool = _registered_tool(execute_github_issue_mutation)
+    assert "confirm" not in tool.input_schema["properties"]
+    assert tool.requires_approval is True
+    assert tool.approval_scope == "one_shot"
+    assert "GitHub issue" in tool.approval_reason
+
+
+def test_execute_create_searches_idempotency_marker_before_create() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="create",
+        slack_text="ship this",
+        slack_url="https://slack.example/archives/C/p1",
+    )["proposal"]
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs))
+        if path == "/search/issues":
+            return {"total_count": 0, "items": []}
+        if path == "/repos/o/r/issues":
+            return {"number": 99, "html_url": "https://github.com/o/r/issues/99"}
+        raise AssertionError((method, path))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
         )
 
-    request.assert_called_once()
     assert result["executed"] is True
-    assert result["issue"]["number"] == 99
+    assert result["side_effect"] == "created_github_issue"
+    assert [call[1] for call in calls] == ["/search/issues", "/repos/o/r/issues"]
 
 
-def test_slack_task_update_and_close_are_confirmation_gated() -> None:
-    with patch("tools.slack_task_tool._github_api_request") as request:
-        update_result = update_github_task_from_slack(
-            owner="o",
-            repo="r",
-            issue_number=51,
-            slack_text="PR shipped",
-            slack_url="https://slack.example/archives/C/p2",
-            github_token="tok",
+def test_execute_create_returns_existing_issue_for_idempotency_marker() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="create",
+        slack_text="ship this",
+        slack_url="https://slack.example/archives/C/p1",
+    )["proposal"]
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **_kwargs: Any) -> Any:
+        if path == "/search/issues":
+            return {"total_count": 1, "items": [{"number": 12, "html_url": "existing"}]}
+        raise AssertionError((method, path))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
         )
-        close_result = close_github_task_from_slack(
-            owner="o",
-            repo="r",
-            issue_number=51,
-            slack_text="done",
-            slack_url="https://slack.example/archives/C/p3",
-            github_token="tok",
+
+    assert result["executed"] is False
+    assert result["side_effect"] == "existing_github_issue"
+
+
+def test_execute_update_adds_comment_and_preserves_body() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="update",
+        issue_number=51,
+        slack_text="PR shipped",
+        slack_url="https://slack.example/archives/C/p2",
+        labels=["done"],
+    )["proposal"]
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs))
+        if path == "/repos/o/r/issues/51" and method == "GET":
+            return {"number": 51, "body": "original"}
+        if path == "/repos/o/r/issues/51/comments":
+            assert "PR shipped" in kwargs["body"]["body"]
+            return {"id": 1}
+        if path == "/repos/o/r/issues/51" and method == "PATCH":
+            assert "body" not in kwargs["body"]
+            assert kwargs["body"] == {"labels": ["done"]}
+            return {"number": 51}
+        raise AssertionError((method, path, kwargs))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
         )
 
-    request.assert_not_called()
-    assert update_result["side_effect"] == "would_update_github_issue"
-    assert close_result["side_effect"] == "would_close_github_issue"
+    assert result["executed"] is True
+    assert [call[1] for call in calls] == [
+        "/repos/o/r/issues/51",
+        "/repos/o/r/issues/51/comments",
+        "/repos/o/r/issues/51",
+    ]
+
+
+def test_execute_close_comments_before_closing_and_preserves_body() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="close",
+        issue_number=51,
+        slack_text="done",
+        slack_url="https://slack.example/archives/C/p3",
+    )["proposal"]
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def fake_request(self: GitHubRestClient, method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs))
+        if path == "/repos/o/r/issues/51" and method == "GET":
+            return {"number": 51, "body": "original"}
+        if path == "/repos/o/r/issues/51/comments":
+            return {"id": 1}
+        if path == "/repos/o/r/issues/51" and method == "PATCH":
+            assert kwargs["body"] == {"state": "closed", "state_reason": "completed"}
+            return {"number": 51, "state": "closed"}
+        raise AssertionError((method, path, kwargs))
+
+    with patch.object(GitHubRestClient, "request", fake_request):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    assert result["executed"] is True
+    assert [call[1] for call in calls] == [
+        "/repos/o/r/issues/51",
+        "/repos/o/r/issues/51/comments",
+        "/repos/o/r/issues/51",
+    ]
+
+
+def test_execute_mutation_returns_api_errors() -> None:
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="close",
+        issue_number=51,
+        slack_text="done",
+    )["proposal"]
+
+    with patch.object(
+        GitHubRestClient, "request", side_effect=GitHubApiError("nope", status_code=403)
+    ):
+        result = execute_github_issue_mutation(
+            owner="o", repo="r", proposal=proposal, github_token="tok"
+        )
+
+    assert result["available"] is False
+    assert result["executed"] is False
+    assert "nope" in result["error"]
+
+
+def test_requires_approval_blocks_without_hook() -> None:
+    tool: RegisteredTool = _registered_tool(execute_github_issue_mutation)
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="close",
+        issue_number=51,
+        slack_text="done",
+    )["proposal"]
+
+    result = execute_tool_calls(
+        [
+            ToolCall(
+                id="c1",
+                name="execute_github_issue_mutation",
+                input={"owner": "o", "repo": "r", "proposal": proposal},
+            )
+        ],
+        [tool],
+        {},
+    )[0]
+
+    assert result.is_error is True
+    assert result.details["approval_required"] is True
+
+
+def test_requires_approval_allows_runtime_approval_hook() -> None:
+    tool: RegisteredTool = _registered_tool(execute_github_issue_mutation)
+    proposal = propose_github_issue_mutation_from_slack(
+        owner="o",
+        repo="r",
+        operation="close",
+        issue_number=51,
+        slack_text="done",
+    )["proposal"]
+
+    def approve(request: ToolExecutionRequest) -> BeforeToolCallResult:
+        assert request.tool.requires_approval is True
+        return BeforeToolCallResult(approved=True)
+
+    with patch.object(GitHubRestClient, "request", return_value={"number": 51}):
+        result = execute_tool_calls(
+            [
+                ToolCall(
+                    id="c1",
+                    name="execute_github_issue_mutation",
+                    input={"owner": "o", "repo": "r", "proposal": proposal},
+                )
+            ],
+            [tool],
+            {},
+            hooks=ToolExecutionHooks(before_tool_call=approve),
+        )[0]
+
+    assert result.is_error is False

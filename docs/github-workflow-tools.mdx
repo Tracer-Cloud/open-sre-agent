@@ -1,115 +1,100 @@
 ---
-title: "GitHub workflow skill"
-description: "A read-first workflow for turning GitHub issues, PRs, community follow-ups, and explicit Slack task requests into engineering coordination"
+title: "GitHub workflow tools"
+description: "Use GitHub-backed tools for read snapshots, status reports, follow-up summaries, and approved issue mutations"
 ---
 
-OpenSRE's GitHub workflow feature is deliberately split into two layers:
+OpenSRE provides GitHub workflow tools for engineering coordination. The public workflow is:
 
-1. **Tools** — small, deterministic primitives that fetch or mutate one kind of state.
-2. **Workflow skill** — the policy for composing those primitives into a useful engineering-status loop.
+1. Read a GitHub snapshot.
+2. Generate a report or community follow-up summary.
+3. Render a mutation proposal for explicit Slack-sourced task requests.
+4. Execute the proposal only through the runtime approval path.
 
-This keeps tool schemas simple while giving the agent a repeatable operating pattern for "what is left to do?", "which PRs are blocked?", "what community follow-ups are unanswered?", and "turn this Slack request into a GitHub-backed task."
+The implementation deliberately separates read-only tools from mutating execution. Headless or non-approved runs can produce proposals, but they cannot mutate GitHub.
 
-## The primitive tools
+## Tools
 
 | Tool | Role | Side effects |
 | --- | --- | --- |
 | `list_github_work_items` | Reads issues and classifies work as `taken`, `up_for_grabs`, or `unassigned`. | None |
-| `summarize_github_pr_status` | Reads PR mergeability, check runs, and blocking reasons. | None |
+| `summarize_github_pr_status` | Reads PR detail endpoints, authoritative mergeability, check runs, and blocking reasons. | None |
 | `list_github_security_alerts` | Reads Dependabot, secret-scanning, and code-scanning alerts when token scope allows. | None |
-| `generate_work_status_report` | Produces a Slack-ready report from work items and PR status. | None |
-| `summarize_community_followups` | Finds unanswered GitHub issue-comment questions, agenda items, and suggested replies. | None |
-| `create_github_task_from_slack` | Creates a GitHub issue from an explicit Slack task request. | Mutating; requires `confirm=true` |
-| `update_github_task_from_slack` | Updates a GitHub issue from an explicit Slack follow-up. | Mutating; requires `confirm=true` |
-| `close_github_task_from_slack` | Closes a GitHub issue from an explicit Slack completion request. | Mutating; requires `confirm=true` |
+| `generate_work_status_report` | Produces a Slack-ready status report from work items and PR status. | None |
+| `summarize_community_followups` | Reads repository issue comments, then summarizes unanswered questions, agenda items, and suggested replies. | None |
+| `propose_github_issue_mutation_from_slack` | Builds a deterministic proposal for creating, updating, or closing a GitHub issue from an explicit Slack request. | None |
+| `execute_github_issue_mutation` | Executes an approved proposal. | Mutating; requires runtime approval |
 
-## Workflow skill: read before write
+## Workflow
 
-Use this sequence whenever the user asks for engineering coordination, work status, or Slack task hygiene.
+### 1. Read snapshot
 
-### 1. Establish current state
+Use read tools first:
 
-Call the read tools first:
+- `list_github_work_items`
+- `summarize_github_pr_status`
+- `list_github_security_alerts` when security status is relevant
 
-1. `list_github_work_items`
-2. `summarize_github_pr_status`
-3. `list_github_security_alerts` only when security status matters or the user asks for it
+`summarize_github_pr_status` does not trust list-endpoint mergeability. It fetches each PR detail endpoint so `mergeable` and `mergeable_state` are authoritative. Unknown mergeability is reported as `unknown`, not as ready to merge.
 
-Do not create or update tasks during this phase. The output should be a grounded picture of the repo's current work state.
+### 2. Report or summarize
 
-### 2. Produce the status artifact
+Use `generate_work_status_report` for morning check-ins, Slack updates, blockers, owners, and next actions.
 
-Call `generate_work_status_report` with the work-item and PR outputs when the user asks for:
+If the report tool performs its own GitHub reads and a required read fails, it returns:
 
-- a morning check-in
-- "what is left today?"
-- blockers / owners / next actions
-- a Slack-ready engineering update
+- `available: false`
+- `incomplete: true`
+- an `errors` list
 
-The report should contain open work, taken/up-for-grabs/unassigned work, blocked PRs, mergeable PRs, and recommended next actions.
+It must not produce a false "no blockers" report from partial data.
 
-### 3. Add community follow-up context when needed
+Use `summarize_community_followups` for contributor questions, community meeting agenda items, and suggested replies. It reads repository issue comments directly with pagination instead of performing one request per issue.
 
-Call `summarize_community_followups` when the request mentions:
+### 3. Propose mutation
 
-- community meeting agenda
-- contributor follow-ups
-- unanswered questions
-- GitHub issue comments
+Only when the user explicitly asks to turn a Slack request into a GitHub task, call `propose_github_issue_mutation_from_slack`.
 
-The tool drafts suggested replies but does not post them.
+Good proposal triggers:
 
-### 4. Mutate only on explicit task intent
+- "Add this Slack request to the project task list."
+- "Create a GitHub task from this thread."
+- "Update issue 42 with this Slack context."
+- "Close task 51; PR #2973 shipped."
 
-Only use the Slack task mutation tools when the user explicitly asks to create, update, or close a task from a Slack message.
+The proposal includes:
+
+- operation: `create`, `update`, or `close`
+- target issue, when applicable
+- rendered GitHub payload
+- source Slack link
+- deterministic `proposal_id`
+- idempotency marker for create operations
+
+### 4. Execute only after runtime approval
+
+`execute_github_issue_mutation` is the only mutating tool. It has no `confirm` argument. It is marked `requires_approval`, and the shared runtime blocks it unless an approval hook explicitly approves the call.
+
+Mutation behavior:
+
+- **create**: searches for the idempotency marker first; creates only if no existing issue is found.
+- **update**: fetches the issue, adds the Slack follow-up as a comment, and patches title/labels/assignees only when those fields are explicitly present. It never replaces the issue body.
+- **close**: fetches the issue, adds a closing comment, then patches `state=closed` and `state_reason=completed`. It never replaces the issue body.
 
 <Warning>
-Without `confirm=true`, the Slack task tools return a dry-run payload and do not call the GitHub API. This is intentional. The agent should show the payload or ask for confirmation before committing a mutation.
+Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but mutation requires runtime approval.
 </Warning>
-
-Good mutation triggers:
-
-- "Add this Slack request to the hackathon list."
-- "Create a GitHub task from this thread."
-- "Close task 51; PR #2973 shipped."
-- "Update issue 42 with this Slack context."
-
-Bad mutation triggers:
-
-- Casual discussion with no explicit task request.
-- General status reporting.
-- Ambiguous "we should do something about this" messages.
-
-## Implementation boundary
-
-The pure composition policy lives in `tools/github/workflow_skill.py`. Tool wrappers handle transport, credentials, registry metadata, and GitHub API calls; the workflow-skill module handles report assembly, community-follow-up classification, and Slack task payload construction.
-
-That separation is intentional:
-
-- Tests can validate the skill logic with no GitHub token.
-- Mutating tools share one dry-run / success / failure contract.
-- Future Slack or Discord sources can reuse the skill layer without reimplementing report policy.
 
 ## Required GitHub access
 
 Set a GitHub token through the configured GitHub integration, `GITHUB_TOKEN`, or `GH_TOKEN`.
 
-Security alert endpoints require token scopes that GitHub enforces separately. If the token cannot read one alert class, the tool returns that error per alert type while still returning any alert classes it can read.
+Security alert endpoints require token scopes that GitHub enforces separately. If the token cannot read one alert class, the tool returns an error for that alert type while still returning any alert classes it can read.
 
 ## Example prompts
 
-- "Which PRs are mergeable or blocked in `Tracer-Cloud/opensre`?"
+- "Which PRs are mergeable, blocked, or unknown in `Tracer-Cloud/opensre`?"
 - "What issues are taken vs up for grabs?"
 - "Generate a Slack-ready morning check-in from current GitHub work."
 - "List unanswered community questions from recent issue comments."
-- "Create a GitHub issue from this Slack request and keep the source link."
-
-## Future extensions
-
-Good next extensions are sources, not new broad tools:
-
-- Slack/Discord comment ingestion feeding `summarize_community_followups`.
-- GitHub Projects field enrichment feeding `list_github_work_items`.
-- Team-specific report templates feeding `generate_work_status_report`.
-
-Avoid turning this into one mega-tool. Keep new capabilities as small primitives and extend the workflow skill only when composition policy changes.
+- "Propose a GitHub issue from this Slack request and keep the source link."
+- "Execute this approved GitHub issue proposal."

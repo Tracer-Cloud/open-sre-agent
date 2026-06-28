@@ -21,6 +21,8 @@ def run_version_probe(binary_path: str, *, timeout_sec: float) -> tuple[str | No
             timeout=timeout_sec,
             check=False,
         )
+    except FileNotFoundError as exc:
+        return None, f"CLI binary not found: `{binary_path}` ({exc})"
     except (OSError, subprocess.TimeoutExpired) as exc:
         return None, f"Could not run `{binary_path} --version`: {exc}"
 

@@ -205,6 +205,10 @@ args
 arg
 Streamable
 toolsets
+Dependabot
+idempotency
+mergeability
+mergeable
 # Interactive shell command docs terms
 lookups
 openai

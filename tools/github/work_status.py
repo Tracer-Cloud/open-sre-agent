@@ -1,16 +1,19 @@
-"""GitHub work, PR, and security status tools."""
+"""GitHub work, PR, security, and issue-mutation workflow tools."""
 
 from __future__ import annotations
 
-import json
-import os
-from typing import Any, cast
-from urllib import error, parse, request
+from typing import Any, Literal
 
+from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
+from tools.github.workflow import (
+    GitHubIssueMutationProposal,
+    PullRequestStatus,
+    SecurityAlert,
+    WorkItem,
+    build_issue_mutation_proposal,
+)
 from tools.tool_decorator import tool
 from tools.utils.github_helpers import github_creds, github_source_available
-
-GitHubPayload = dict[str, Any] | list[Any]
 
 _HELP_WANTED_LABELS = {"help wanted", "good first issue", "up for grabs", "agent-ready"}
 _BLOCKING_MERGEABLE_STATES = {"blocked", "dirty", "behind", "unstable"}
@@ -21,12 +24,13 @@ _FAILED_CHECK_CONCLUSIONS = {
     "action_required",
     "startup_failure",
 }
+_TERMINAL_CHECK_CONCLUSIONS = _FAILED_CHECK_CONCLUSIONS | {"success", "skipped", "neutral"}
 
 
 def _github_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
     return bool(
-        (github_source_available(sources) or _github_token_from_env())
+        (github_source_available(sources) or resolve_github_token(None))
         and gh.get("owner")
         and gh.get("repo")
     )
@@ -37,60 +41,6 @@ def _github_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     if not gh:
         return {}
     return {"owner": gh.get("owner"), "repo": gh.get("repo"), **github_creds(gh)}
-
-
-def _github_token_from_env() -> str:
-    return (os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or "").strip()
-
-
-def _github_api_request(
-    method: str,
-    path: str,
-    *,
-    github_token: str | None = None,
-    params: dict[str, Any] | None = None,
-    body: dict[str, Any] | None = None,
-) -> GitHubPayload:
-    """Call the GitHub REST API and return parsed JSON.
-
-    Kept intentionally small and stdlib-only so the higher-level tools are easy
-    to unit-test by patching this single function.
-    """
-
-    token = (github_token or _github_token_from_env()).strip()
-    if not token:
-        raise RuntimeError(
-            "GitHub token is required. Configure github_token, GITHUB_TOKEN, or GH_TOKEN."
-        )
-
-    query = f"?{parse.urlencode(params, doseq=True)}" if params else ""
-    url = f"https://api.github.com{path}{query}"
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = request.Request(
-        url,
-        data=data,
-        method=method.upper(),
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json; charset=utf-8",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    try:
-        with request.urlopen(req, timeout=20) as response:  # nosemgrep
-            raw = response.read().decode("utf-8")
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"GitHub API {method.upper()} {path} failed with HTTP {exc.code}: {detail}"
-        ) from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"GitHub API {method.upper()} {path} failed: {exc.reason}") from exc
-    if not raw.strip():
-        return {}
-    parsed = json.loads(raw)
-    return cast("GitHubPayload", parsed)
 
 
 def _labels(item: dict[str, Any]) -> list[str]:
@@ -111,27 +61,27 @@ def _logins(items: Any) -> list[str]:
     ]
 
 
-def _normalize_issue(item: dict[str, Any]) -> dict[str, Any]:
+def _normalize_issue(item: dict[str, Any]) -> WorkItem:
     labels = _labels(item)
     assignees = _logins(item.get("assignees"))
     label_set = {label.lower() for label in labels}
     if assignees:
-        work_status = "taken"
+        work_status: Literal["taken", "up_for_grabs", "unassigned"] = "taken"
     elif label_set & _HELP_WANTED_LABELS:
         work_status = "up_for_grabs"
     else:
         work_status = "unassigned"
-    return {
-        "number": item.get("number"),
-        "title": str(item.get("title", "")),
-        "state": str(item.get("state", "")),
-        "url": str(item.get("html_url", "")),
-        "author": str((item.get("user") or {}).get("login", "")),
-        "labels": labels,
-        "assignees": assignees,
-        "updated_at": str(item.get("updated_at", "")),
-        "work_status": work_status,
-    }
+    return WorkItem(
+        number=item.get("number") if isinstance(item.get("number"), int) else None,
+        title=str(item.get("title", "")),
+        state=str(item.get("state", "")),
+        url=str(item.get("html_url", "")),
+        author=str((item.get("user") or {}).get("login", "")),
+        labels=labels,
+        assignees=assignees,
+        updated_at=str(item.get("updated_at", "")),
+        work_status=work_status,
+    )
 
 
 def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
@@ -186,33 +136,30 @@ def list_github_work_items(
     if labels.strip():
         params["labels"] = labels.strip()
     try:
-        payload = _github_api_request(
-            "GET",
-            f"/repos/{owner}/{repo}/issues",
-            github_token=github_token,
-            params=params,
+        raw_items = GitHubRestClient(github_token).paginate(
+            f"/repos/{owner}/{repo}/issues", params=params
         )
-    except RuntimeError as exc:
+    except GitHubApiError as exc:
         return {
             "source": "github",
             "available": False,
             "error": str(exc),
             "items": [],
             "counts": _count_work_items([]),
+            "side_effects": [],
         }
-    raw_items = payload if isinstance(payload, list) else []
-    issues = [
-        _normalize_issue(item)
+    items = [
+        _normalize_issue(item).to_dict()
         for item in raw_items
-        if isinstance(item, dict) and (include_prs or "pull_request" not in item)
+        if include_prs or "pull_request" not in item
     ]
     return {
         "source": "github",
         "available": True,
         "owner": owner,
         "repo": repo,
-        "items": issues,
-        "counts": _count_work_items(issues),
+        "items": items,
+        "counts": _count_work_items(items),
         "side_effects": [],
     }
 
@@ -227,6 +174,7 @@ def _check_summary(check_runs: list[dict[str, Any]]) -> tuple[str, list[str]]:
         str(run.get("name", "check"))
         for run in check_runs
         if str(run.get("status") or "").lower() != "completed"
+        or str(run.get("conclusion") or "").lower() not in _TERMINAL_CHECK_CONCLUSIONS
     ]
     if failed:
         return "failed", failed
@@ -235,10 +183,14 @@ def _check_summary(check_runs: list[dict[str, Any]]) -> tuple[str, list[str]]:
     return "passing", []
 
 
-def _normalize_pull_request(pr: dict[str, Any], check_runs: list[dict[str, Any]]) -> dict[str, Any]:
+def _normalize_pull_request(
+    pr: dict[str, Any], check_runs: list[dict[str, Any]]
+) -> PullRequestStatus:
     check_status, check_names = _check_summary(check_runs)
-    mergeable_state = str(pr.get("mergeable_state") or "").lower()
+    mergeable = pr.get("mergeable") if isinstance(pr.get("mergeable"), bool) else None
+    mergeable_state = str(pr.get("mergeable_state") or "unknown").lower()
     reasons: list[str] = []
+    status: Literal["mergeable", "blocked", "unknown"]
     if pr.get("draft"):
         reasons.append("draft")
     if mergeable_state in _BLOCKING_MERGEABLE_STATES:
@@ -247,23 +199,33 @@ def _normalize_pull_request(pr: dict[str, Any], check_runs: list[dict[str, Any]]
         reasons.append(f"failed checks: {', '.join(check_names)}")
     elif check_status == "pending":
         reasons.append(f"pending checks: {', '.join(check_names)}")
-
-    status = "blocked" if reasons else "mergeable"
-    return {
-        "number": pr.get("number"),
-        "title": str(pr.get("title", "")),
-        "url": str(pr.get("html_url", "")),
-        "author": str((pr.get("user") or {}).get("login", "")),
-        "head_ref": str((pr.get("head") or {}).get("ref", "")),
-        "head_sha": str((pr.get("head") or {}).get("sha", "")),
-        "draft": bool(pr.get("draft")),
-        "mergeable": pr.get("mergeable"),
-        "mergeable_state": mergeable_state,
-        "check_status": check_status,
-        "status": status,
-        "blocking_reasons": reasons,
-        "updated_at": str(pr.get("updated_at", "")),
-    }
+    if mergeable is None or mergeable_state == "unknown":
+        reasons.append("mergeability unknown")
+        status = "unknown"
+    elif reasons or mergeable is False:
+        status = "blocked"
+        if mergeable is False and not any(
+            reason.startswith("mergeable_state=") for reason in reasons
+        ):
+            reasons.append("mergeable=false")
+    else:
+        status = "mergeable"
+    return PullRequestStatus(
+        number=pr.get("number") if isinstance(pr.get("number"), int) else None,
+        title=str(pr.get("title", "")),
+        url=str(pr.get("html_url", "")),
+        author=str((pr.get("user") or {}).get("login", "")),
+        head_ref=str((pr.get("head") or {}).get("ref", "")),
+        head_sha=str((pr.get("head") or {}).get("sha", "")),
+        draft=bool(pr.get("draft")),
+        mergeable=mergeable,
+        mergeable_state=mergeable_state,
+        check_status=check_status,
+        status=status,
+        mergeability=status,
+        blocking_reasons=reasons,
+        updated_at=str(pr.get("updated_at", "")),
+    )
 
 
 def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
@@ -271,6 +233,7 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
         "total": len(prs),
         "mergeable": sum(1 for pr in prs if pr.get("status") == "mergeable"),
         "blocked": sum(1 for pr in prs if pr.get("status") == "blocked"),
+        "unknown": sum(1 for pr in prs if pr.get("status") == "unknown"),
         "draft": sum(1 for pr in prs if pr.get("draft")),
     }
 
@@ -278,9 +241,9 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
 @tool(
     name="summarize_github_pr_status",
     source="github",
-    description="Summarize open GitHub pull requests, mergeability, checks, and blocking reasons.",
+    description="Summarize open GitHub pull requests, authoritative mergeability, checks, and blocking reasons.",
     use_cases=[
-        "Answering which PRs are mergeable or blocked",
+        "Answering which PRs are mergeable, blocked, or unknown",
         "Finding failing or pending CI checks for active work",
         "Preparing engineering status updates without changing GitHub state",
     ],
@@ -311,25 +274,26 @@ def summarize_github_pr_status(
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
+    client = GitHubRestClient(github_token)
     try:
-        payload = _github_api_request(
-            "GET",
+        raw_prs = client.paginate(
             f"/repos/{owner}/{repo}/pulls",
-            github_token=github_token,
             params={"state": state, "per_page": max(1, min(per_page, 100))},
         )
-        raw_prs = payload if isinstance(payload, list) else []
         prs: list[dict[str, Any]] = []
-        for pr in raw_prs:
-            if not isinstance(pr, dict):
+        for list_pr in raw_prs:
+            number = list_pr.get("number")
+            if not isinstance(number, int):
                 continue
+            detail_pr = client.request("GET", f"/repos/{owner}/{repo}/pulls/{number}")
+            if not isinstance(detail_pr, dict):
+                detail_pr = list_pr
+            sha = str((detail_pr.get("head") or {}).get("sha", ""))
             check_runs: list[dict[str, Any]] = []
-            sha = str((pr.get("head") or {}).get("sha", ""))
             if include_checks and sha:
-                check_payload = _github_api_request(
+                check_payload = client.request(
                     "GET",
                     f"/repos/{owner}/{repo}/commits/{sha}/check-runs",
-                    github_token=github_token,
                     params={"per_page": 100},
                 )
                 if isinstance(check_payload, dict) and isinstance(
@@ -338,16 +302,16 @@ def summarize_github_pr_status(
                     check_runs = [
                         run for run in check_payload["check_runs"] if isinstance(run, dict)
                     ]
-            prs.append(_normalize_pull_request(pr, check_runs))
-    except RuntimeError as exc:
+            prs.append(_normalize_pull_request(detail_pr, check_runs).to_dict())
+    except GitHubApiError as exc:
         return {
             "source": "github",
             "available": False,
             "error": str(exc),
             "pull_requests": [],
             "counts": _count_prs([]),
+            "side_effects": [],
         }
-
     return {
         "source": "github",
         "available": True,
@@ -359,7 +323,7 @@ def summarize_github_pr_status(
     }
 
 
-def _normalize_security_alert(alert_type: str, item: dict[str, Any]) -> dict[str, Any]:
+def _normalize_security_alert(alert_type: str, item: dict[str, Any]) -> SecurityAlert:
     summary = ""
     if alert_type == "dependabot":
         summary = str((item.get("security_advisory") or {}).get("summary", ""))
@@ -367,13 +331,13 @@ def _normalize_security_alert(alert_type: str, item: dict[str, Any]) -> dict[str
         summary = str(item.get("secret_type", ""))
     elif alert_type == "code_scanning":
         summary = str((item.get("rule") or {}).get("description", ""))
-    return {
-        "type": alert_type,
-        "number": item.get("number"),
-        "state": str(item.get("state", "")),
-        "summary": summary,
-        "url": str(item.get("html_url", "")),
-    }
+    return SecurityAlert(
+        type=alert_type,
+        number=item.get("number"),
+        state=str(item.get("state", "")),
+        summary=summary,
+        url=str(item.get("html_url", "")),
+    )
 
 
 _ALERT_ENDPOINTS = {
@@ -420,6 +384,7 @@ def list_github_security_alerts(
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
+    client = GitHubRestClient(github_token)
     selected = list(_ALERT_ENDPOINTS) if alert_type == "all" else [alert_type]
     alerts: list[dict[str, Any]] = []
     errors: dict[str, str] = {}
@@ -429,19 +394,13 @@ def list_github_security_alerts(
             errors[kind] = f"Unsupported alert_type: {kind}"
             continue
         try:
-            payload = _github_api_request(
-                "GET",
-                f"/repos/{owner}/{repo}/{endpoint}",
-                github_token=github_token,
-                params={"state": state, "per_page": 100},
+            payload = client.paginate(
+                f"/repos/{owner}/{repo}/{endpoint}", params={"state": state, "per_page": 100}
             )
-        except RuntimeError as exc:
+        except GitHubApiError as exc:
             errors[kind] = str(exc)
             continue
-        if isinstance(payload, list):
-            alerts.extend(
-                _normalize_security_alert(kind, item) for item in payload if isinstance(item, dict)
-            )
+        alerts.extend(_normalize_security_alert(kind, item).to_dict() for item in payload)
     counts = {
         kind: sum(1 for alert in alerts if alert.get("type") == kind) for kind in _ALERT_ENDPOINTS
     }
@@ -456,3 +415,222 @@ def list_github_security_alerts(
         "errors": errors,
         "side_effects": [],
     }
+
+
+@tool(
+    name="propose_github_issue_mutation_from_slack",
+    source="github",
+    description="Build a read-only proposal for creating, updating, or closing a GitHub issue from an explicit Slack request.",
+    use_cases=[
+        "Preparing a Slack-sourced GitHub issue change for human approval",
+        "Rendering deterministic issue mutation payloads without mutating GitHub",
+    ],
+    anti_examples=["Directly mutating GitHub", "Inferring tasks from ambiguous Slack discussion"],
+    surfaces=("chat",),
+    side_effect_level="read_only",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "owner": {"type": "string"},
+            "repo": {"type": "string"},
+            "operation": {"type": "string", "enum": ["create", "update", "close"]},
+            "issue_number": {"type": "integer"},
+            "slack_text": {"type": "string"},
+            "slack_url": {"type": "string"},
+            "title": {"type": "string"},
+            "labels": {"type": "array", "items": {"type": "string"}},
+            "assignees": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["owner", "repo", "operation", "slack_text"],
+    },
+    is_available=_github_available,
+    extract_params=_github_extract_params,
+)
+def propose_github_issue_mutation_from_slack(
+    owner: str,
+    repo: str,
+    operation: Literal["create", "update", "close"],
+    slack_text: str,
+    slack_url: str = "",
+    issue_number: int | None = None,
+    title: str = "",
+    labels: list[str] | None = None,
+    assignees: list[str] | None = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    if operation in {"update", "close"} and issue_number is None:
+        return {
+            "source": "github",
+            "available": False,
+            "error": f"issue_number is required for {operation}",
+            "side_effects": [],
+        }
+    proposal = build_issue_mutation_proposal(
+        owner=owner,
+        repo=repo,
+        operation=operation,
+        issue_number=issue_number,
+        slack_text=slack_text,
+        slack_url=slack_url,
+        title=title,
+        labels=labels,
+        assignees=assignees,
+    )
+    return {
+        "source": "github",
+        "available": True,
+        "proposal": proposal.to_dict(),
+        "side_effects": [],
+    }
+
+
+def _proposal_from_payload(payload: dict[str, Any]) -> GitHubIssueMutationProposal:
+    return GitHubIssueMutationProposal(
+        proposal_id=str(payload["proposal_id"]),
+        operation=payload["operation"],
+        owner=str(payload["owner"]),
+        repo=str(payload["repo"]),
+        target=dict(payload.get("target") or {}),
+        payload=dict(payload.get("payload") or {}),
+        slack_url=str(payload.get("slack_url", "")),
+        idempotency_marker=str(payload.get("idempotency_marker", "")),
+    )
+
+
+@tool(
+    name="execute_github_issue_mutation",
+    source="github",
+    description="Execute an approved GitHub issue mutation proposal. Requires runtime approval and is not exposed to investigation.",
+    use_cases=[
+        "Executing a previously rendered GitHub issue mutation proposal after runtime approval"
+    ],
+    anti_examples=[
+        "Creating proposals",
+        "Running during investigations",
+        "Executing without approval",
+    ],
+    surfaces=("chat",),
+    side_effect_level="mutating",
+    requires_approval=True,
+    approval_reason="This tool mutates GitHub issue state.",
+    approval_scope="one_shot",
+    approval_expiry_seconds=300,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "owner": {"type": "string"},
+            "repo": {"type": "string"},
+            "proposal": {"type": "object"},
+            "github_token": {"type": "string"},
+        },
+        "required": ["owner", "repo", "proposal"],
+    },
+    is_available=_github_available,
+    extract_params=_github_extract_params,
+)
+def execute_github_issue_mutation(
+    owner: str,
+    repo: str,
+    proposal: dict[str, Any],
+    github_token: str | None = None,
+    **_kwargs: Any,
+) -> dict[str, Any]:
+    client = GitHubRestClient(github_token)
+    parsed = _proposal_from_payload(proposal)
+    if parsed.owner != owner or parsed.repo != repo:
+        return {
+            "source": "github",
+            "available": False,
+            "executed": False,
+            "error": "proposal owner/repo does not match request",
+            "side_effect": "github_issue_mutation_rejected",
+        }
+    if parsed.operation not in {"create", "update", "close"}:
+        return {
+            "source": "github",
+            "available": False,
+            "executed": False,
+            "error": f"unsupported proposal operation: {parsed.operation}",
+            "side_effect": "github_issue_mutation_rejected",
+        }
+    try:
+        if parsed.operation == "create":
+            existing = client.request(
+                "GET",
+                "/search/issues",
+                params={"q": f"repo:{owner}/{repo} {parsed.idempotency_marker}"},
+            )
+            if isinstance(existing, dict) and int(existing.get("total_count") or 0) > 0:
+                items = existing.get("items") if isinstance(existing.get("items"), list) else []
+                return {
+                    "source": "github",
+                    "available": True,
+                    "executed": False,
+                    "side_effect": "existing_github_issue",
+                    "issue": items[0] if items else None,
+                }
+            issue = client.request("POST", f"/repos/{owner}/{repo}/issues", body=parsed.payload)
+            return {
+                "source": "github",
+                "available": True,
+                "executed": True,
+                "side_effect": "created_github_issue",
+                "issue": issue,
+            }
+        issue_number = parsed.target.get("issue_number")
+        if not isinstance(issue_number, int):
+            return {
+                "source": "github",
+                "available": False,
+                "executed": False,
+                "error": "proposal target.issue_number is required",
+                "side_effect": "github_issue_mutation_rejected",
+            }
+        client.request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
+        comment_body = str(parsed.payload.get("comment_body", ""))
+        if comment_body:
+            client.request(
+                "POST",
+                f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+                body={"body": comment_body},
+            )
+        if parsed.operation == "update":
+            patch_body = {
+                key: parsed.payload[key]
+                for key in ("title", "labels", "assignees")
+                if key in parsed.payload
+            }
+            issue = (
+                client.request(
+                    "PATCH", f"/repos/{owner}/{repo}/issues/{issue_number}", body=patch_body
+                )
+                if patch_body
+                else {"number": issue_number}
+            )
+            return {
+                "source": "github",
+                "available": True,
+                "executed": True,
+                "side_effect": "updated_github_issue",
+                "issue": issue,
+            }
+        issue = client.request(
+            "PATCH",
+            f"/repos/{owner}/{repo}/issues/{issue_number}",
+            body={"state": "closed", "state_reason": "completed"},
+        )
+        return {
+            "source": "github",
+            "available": True,
+            "executed": True,
+            "side_effect": "closed_github_issue",
+            "issue": issue,
+        }
+    except GitHubApiError as exc:
+        return {
+            "source": "github",
+            "available": False,
+            "executed": False,
+            "error": str(exc),
+            "side_effect": f"{parsed.operation}_github_issue_failed",
+        }

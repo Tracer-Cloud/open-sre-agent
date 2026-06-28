@@ -67,6 +67,7 @@ class ToolExecutionPatch:
 class BeforeToolCallResult:
     """Decision object returned by ``before_tool_call`` hooks."""
 
+    approved: bool = False
     blocked: bool = False
     reason: str = ""
     details: Any = None
@@ -124,6 +125,9 @@ def execute_tool_calls(
                 resolved_integrations=resolved_integrations,
             )
             before = _run_before_hook(hooks, request)
+            approval_block = _approval_block_if_required(hooks, request, before)
+            if approval_block is not None:
+                return approval_block
             if before is not None and before.blocked:
                 return ToolExecutionResult(
                     content=before.reason or f"{tc.name} blocked by before_tool_call hook.",
@@ -208,6 +212,33 @@ def execute_tools(
             hooks=hooks,
         )
     ]
+
+
+def _approval_block_if_required(
+    hooks: ToolExecutionHooks,
+    request: ToolExecutionRequest,
+    before: BeforeToolCallResult | None,
+) -> ToolExecutionResult | None:
+    if getattr(request.tool, "requires_approval", False) is not True:
+        return None
+    if before is not None and before.blocked:
+        return None
+    if hooks.before_tool_call is not None and before is not None and before.approved:
+        return None
+    details = {
+        "approval_required": True,
+        "tool_name": request.tool_call.name,
+        "approval_reason": str(getattr(request.tool, "approval_reason", "")),
+        "approval_scope": str(getattr(request.tool, "approval_scope", "one_shot")),
+        "approval_expiry_seconds": int(getattr(request.tool, "approval_expiry_seconds", 300)),
+    }
+    reason = str(details["approval_reason"])
+    return ToolExecutionResult(
+        content=reason or f"{request.tool_call.name} requires runtime approval before execution.",
+        details=details,
+        is_error=True,
+        metadata={"tool_name": request.tool_call.name, "approval_required": True},
+    )
 
 
 def _requires_sequential_execution(

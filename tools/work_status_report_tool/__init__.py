@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.github.client import resolve_github_token
 from tools.github.work_status import list_github_work_items, summarize_github_pr_status
-from tools.github.workflow_skill import build_work_status_report
+from tools.github.workflow import build_work_status_report
 from tools.tool_decorator import tool
 from tools.utils.github_helpers import github_creds, github_source_available
 
 
 def _report_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
+    return bool(
+        (github_source_available(sources) or resolve_github_token(None))
+        and gh.get("owner")
+        and gh.get("repo")
+    )
 
 
 def _report_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -58,15 +63,21 @@ def generate_work_status_report(
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
+    errors: list[str] = []
     if work_items is None and owner and repo:
         work_result = list_github_work_items(owner=owner, repo=repo, github_token=github_token)
+        if not work_result.get("available", False):
+            errors.append(f"work_items: {work_result.get('error', 'unavailable')}")
         work_items = list(work_result.get("items", []))
     if pull_requests is None and owner and repo:
         pr_result = summarize_github_pr_status(owner=owner, repo=repo, github_token=github_token)
+        if not pr_result.get("available", False):
+            errors.append(f"pull_requests: {pr_result.get('error', 'unavailable')}")
         pull_requests = list(pr_result.get("pull_requests", []))
     report = build_work_status_report(
         work_items=work_items or [],
         pull_requests=pull_requests or [],
         context=context,
+        errors=errors,
     )
-    return {"source": "github", "available": True, **report}
+    return {"source": "github", **report.to_dict()}

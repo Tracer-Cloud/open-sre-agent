@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.github.work_status import _github_api_request
-from tools.github.workflow_skill import (
-    normalize_community_comment,
-    summarize_community_followups_from_comments,
-)
+from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
+from tools.github.workflow import summarize_community_followups_from_comments
 from tools.tool_decorator import tool
 from tools.utils.github_helpers import github_creds, github_source_available
 
 
 def _community_available(sources: dict[str, dict]) -> bool:
     gh = sources.get("github", {})
-    return bool(github_source_available(sources) and gh.get("owner") and gh.get("repo"))
+    return bool(
+        (github_source_available(sources) or resolve_github_token(None))
+        and gh.get("owner")
+        and gh.get("repo")
+    )
 
 
 def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -23,44 +24,6 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     if not gh:
         return {}
     return {"owner": gh.get("owner"), "repo": gh.get("repo"), **github_creds(gh)}
-
-
-def _fetch_issue_comments(
-    owner: str,
-    repo: str,
-    *,
-    max_issues: int,
-    github_token: str | None,
-) -> list[dict[str, Any]]:
-    issue_payload = _github_api_request(
-        "GET",
-        f"/repos/{owner}/{repo}/issues",
-        github_token=github_token,
-        params={"state": "open", "per_page": max(1, min(max_issues, 100))},
-    )
-    issues = (
-        [item for item in issue_payload if isinstance(item, dict) and "pull_request" not in item]
-        if isinstance(issue_payload, list)
-        else []
-    )
-    comments: list[dict[str, Any]] = []
-    for issue in issues:
-        number = issue.get("number")
-        if not isinstance(number, int):
-            continue
-        comment_payload = _github_api_request(
-            "GET",
-            f"/repos/{owner}/{repo}/issues/{number}/comments",
-            github_token=github_token,
-            params={"per_page": 100},
-        )
-        if isinstance(comment_payload, list):
-            comments.extend(
-                normalize_community_comment(comment, issue)
-                for comment in comment_payload
-                if isinstance(comment, dict)
-            )
-    return comments
 
 
 @tool(
@@ -82,7 +45,7 @@ def _fetch_issue_comments(
             "repo": {"type": "string"},
             "comments": {"type": "array"},
             "maintainer_logins": {"type": "array", "items": {"type": "string"}},
-            "max_issues": {"type": "integer"},
+            "per_page": {"type": "integer"},
             "github_token": {"type": "string"},
         },
         "required": [],
@@ -95,19 +58,20 @@ def summarize_community_followups(
     repo: str = "",
     comments: list[dict[str, Any]] | None = None,
     maintainer_logins: list[str] | None = None,
-    max_issues: int = 25,
+    per_page: int = 100,
     github_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     try:
         normalized_comments = (
-            [normalize_community_comment(comment) for comment in comments]
+            comments
             if comments is not None
-            else _fetch_issue_comments(
-                owner, repo, max_issues=max_issues, github_token=github_token
+            else GitHubRestClient(github_token).paginate(
+                f"/repos/{owner}/{repo}/issues/comments",
+                params={"per_page": max(1, min(per_page, 100))},
             )
         )
-    except RuntimeError as exc:
+    except GitHubApiError as exc:
         return {
             "source": "github",
             "available": False,
