@@ -333,6 +333,7 @@ def test_resolve_llm_settings_verbose_attempts_only_configured_provider(monkeypa
 
 def test_describe_llm_resolution_reports_no_fallback(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     report = describe_llm_resolution()
 
@@ -344,6 +345,7 @@ def test_describe_llm_resolution_reports_no_fallback(monkeypatch) -> None:
 
 def test_describe_llm_resolution_reports_missing_configured_credentials(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     report = describe_llm_resolution()
 
