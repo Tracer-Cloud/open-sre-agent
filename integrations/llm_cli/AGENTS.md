@@ -18,7 +18,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `binary_resolver.py` | Shared executable resolution helpers (`env -> PATH -> fallback paths`).                     |
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |
-| `codex.py`           | Reference adapter: binary resolution, `codex exec`, probe via `--version` + `login status`. |
+| `codex.py`           | Reference adapter: binary resolution, `codex exec`, `--version`, and opt-in-only `login status` probing. |
 | `opencode.py`        | Multi-provider CLI: `--version`, then `opencode auth list` (see `_parse_opencode_auth_list_output`). |
 | `kimi.py`            | `kimi --print` path: `--version`, `kimi login status`, then env/config.toml fallback (`KIMI_API_KEY`). |
 | `copilot.py`         | `copilot -p` path: `--version`, then env tokens, then `gh auth status` (and `--hostname` when `COPILOT_GH_HOST` / `GH_HOST` targets a non-default host); otherwise `logged_in=None`. Plaintext `$COPILOT_HOME/config.json` is not inspected. No OS keychain probes. |
@@ -82,7 +82,7 @@ Document both vars in the adapter module docstring or a one-line comment near `b
 | `False` | Binary found but definitely **not** authenticated. | Prompts user to run the login command (`auth_hint`). |
 | `None` | Binary found but auth **status is unclear** (network error, unexpected output, etc.). | Asks user to retry or repick provider. |
 
-Recommended probe sequence (mirrors Codex):
+Recommended probe sequence for CLIs with safe non-interactive auth-status commands:
 
 1. Run `<binary> --version` — if it fails, return `installed=False` immediately.
 2. Run `<binary> <auth-status-command>` — parse stdout/stderr to classify `logged_in`.
@@ -93,6 +93,12 @@ Recommended probe sequence (mirrors Codex):
    connection and shouldn't be forced to re-authenticate.
 
 See `_classify_codex_auth` in `codex.py` for a complete reference implementation.
+
+**Codex exception:** do not run `codex login status` by default. Some Codex CLI
+versions can open browser OAuth while checking a session, so the Codex adapter
+only runs that command when `OPENSRE_CODEX_AUTH_STATUS_PROBE=1` is explicitly
+set. The normal prompt-safe status path reports `logged_in=None` and lets
+`codex exec` surface request-time auth failures.
 
 **OpenCode** is multi-provider: users may rely on `auth.json`, environment API keys, or both.
 Run `opencode auth list` after `--version` and parse the reported credential/environment

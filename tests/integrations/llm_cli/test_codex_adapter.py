@@ -108,12 +108,11 @@ def test_detect_not_logged_in(
 
 @patch("integrations.llm_cli.codex.subprocess.run")
 @patch("integrations.llm_cli.binary_resolver.shutil.which")
-def test_detect_skips_login_status_probe_under_automation(
+def test_detect_skips_login_status_probe_by_default(
     mock_which: MagicMock, mock_run: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv(_AUTH_STATUS_PROBE_ENV, raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_codex_adapter.py::case (call)")
     mock_which.return_value = "/usr/bin/codex"
 
     def side_effect(args: list[str], **kwargs: object) -> MagicMock:
@@ -126,6 +125,7 @@ def test_detect_skips_login_status_probe_under_automation(
     assert probe.installed is True
     assert probe.logged_in is None
     assert "login status was not checked" in probe.detail
+    assert _AUTH_STATUS_PROBE_ENV in probe.detail
     assert mock_run.call_count == 1
 
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
 from integrations.llm_cli.binary_resolver import (
@@ -32,14 +31,6 @@ from integrations.llm_cli.semver_utils import parse_semver_three_part, semver_to
 _PROBE_TIMEOUT_SEC = 3.0
 _READ_ONLY_SANDBOX = "read-only"
 _AUTH_STATUS_PROBE_ENV = "OPENSRE_CODEX_AUTH_STATUS_PROBE"
-_AUTOMATION_ENV_KEYS = (
-    "CI",
-    "GITHUB_ACTIONS",
-    "PYTEST_CURRENT_TEST",
-    "PYTEST_VERSION",
-    "TOX_ENV_NAME",
-    "NOX_CURRENT_SESSION",
-)
 _TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
@@ -95,17 +86,8 @@ def _has_openai_api_key() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY", "").strip())
 
 
-def _env_truthy(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in _TRUTHY_ENV_VALUES
-
-
 def _should_probe_codex_login_status() -> bool:
-    override = os.environ.get(_AUTH_STATUS_PROBE_ENV)
-    if override is not None:
-        return override.strip().lower() in _TRUTHY_ENV_VALUES
-    if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        return False
-    return not any(_env_truthy(name) for name in _AUTOMATION_ENV_KEYS)
+    return os.environ.get(_AUTH_STATUS_PROBE_ENV, "").strip().lower() in _TRUTHY_ENV_VALUES
 
 
 class CodexAdapter:
@@ -156,9 +138,9 @@ class CodexAdapter:
         if not _should_probe_codex_login_status():
             logged_in = None
             auth_detail = (
-                "Codex CLI installed; login status was not checked in automated or "
-                "non-interactive mode to avoid launching browser OAuth. Run `codex login` "
-                "in an interactive terminal if needed."
+                "Codex CLI installed; login status was not checked to avoid launching "
+                "browser OAuth. Run `codex login` in an interactive terminal if needed, "
+                f"or set {_AUTH_STATUS_PROBE_ENV}=1 to opt in to `codex login status`."
             )
         else:
             try:
