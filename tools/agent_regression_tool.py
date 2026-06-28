@@ -250,7 +250,7 @@ def _extract_cli_command(line: str) -> str | None:
 )
 def create_agent_regression_scenario(
     transcript: str,
-    id: str,
+    scenario_id: str,
     title: str,
     behavior_class: str = "local_execution",
     output_path: str = "",
