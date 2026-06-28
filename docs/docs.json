@@ -151,6 +151,7 @@
               "cloudtrail_events",
               "bitbucket",
               "github",
+              "github-workflow-tools",
               "integrations/github-actions",
               "gitlab",
               "google-docs",

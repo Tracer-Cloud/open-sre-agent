@@ -9,6 +9,7 @@ TOOL_MODULES = (
     "issues",
     "repository_tree",
     "search_code",
+    "work_status",
 )
 
 __all__ = ["TOOL_MODULES"]
