@@ -416,15 +416,22 @@ class ReplSession:
         *,
         ok: bool = True,
         response_text: str | None = None,
+        slash_outcome: str | None = None,
     ) -> None:
         """Append an entry to the session history.
 
         Supports kinds: "shell", "slash", "alert", "chat", "incoming_alert", etc.
         For "incoming_alert", use record_incoming_alert() instead to preserve metadata.
+
+        ``slash_outcome`` tags typo-style slash failures (for example
+        ``unknown_command`` or ``invalid_subcommand``) so analytics can
+        distinguish them from handler failures.
         """
         entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
         if response_text:
             entry["response_text"] = response_text
+        if slash_outcome:
+            entry["slash_outcome"] = slash_outcome
 
         self.history.append(entry)
 
@@ -472,6 +479,7 @@ class ReplSession:
         *,
         response_text: str | None = None,
         ok: bool | None = None,
+        slash_outcome: str | None = None,
     ) -> None:
         """Update the newest history row of ``kind`` with analytics outcome text."""
         for latest in reversed(self.history):
@@ -479,6 +487,8 @@ class ReplSession:
                 continue
             if ok is not None:
                 latest["ok"] = ok
+            if slash_outcome:
+                latest["slash_outcome"] = slash_outcome
             if response_text and response_text.strip():
                 latest["response_text"] = response_text.strip()
             return

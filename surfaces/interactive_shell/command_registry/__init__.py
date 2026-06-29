@@ -6,9 +6,9 @@ import os
 import shlex
 from collections.abc import Callable
 from itertools import chain
+from typing import Any
 
 from rich.console import Console
-from rich.markup import escape
 
 from surfaces.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
 from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
@@ -44,7 +44,10 @@ from surfaces.interactive_shell.command_registry.session_cmds import COMMANDS as
 from surfaces.interactive_shell.command_registry.settings_cmds import (
     COMMANDS as SETTINGS_COMMANDS,
 )
-from surfaces.interactive_shell.command_registry.suggestions import closest_choice
+from surfaces.interactive_shell.command_registry.suggestions import (
+    format_unknown_slash_message,
+    resolve_literal_slash_typo,
+)
 from surfaces.interactive_shell.command_registry.system import COMMANDS as SYSTEM_COMMANDS
 from surfaces.interactive_shell.command_registry.tasks_cmds import COMMANDS as TASK_COMMANDS
 from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_COMMANDS
@@ -52,7 +55,6 @@ from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as T
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
 from surfaces.interactive_shell.runtime import ReplSession
-from surfaces.interactive_shell.ui import ERROR
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
@@ -96,22 +98,34 @@ def _latest_record_ok(session: ReplSession, kind: str, *, default: bool = True) 
     return default
 
 
+def _latest_slash_record(session: ReplSession) -> dict[str, Any] | None:
+    for entry in reversed(session.history):
+        if entry.get("type") == "slash":
+            return entry
+    return None
+
+
 def _attach_slash_analytics(
     session: ReplSession,
     command_line: str,
     *,
     captured_output: str,
 ) -> None:
+    latest = _latest_slash_record(session)
     ok = _latest_record_ok(session, "slash")
-    session.complete_latest_record(
-        "slash",
-        response_text=format_terminal_turn_outcome(
+    if latest is not None and latest.get("slash_outcome"):
+        response_text = str(latest.get("response_text") or "").strip()
+    else:
+        response_text = format_terminal_turn_outcome(
             command_line,
             kind="slash",
             ok=ok,
             captured_output=captured_output,
             outcome_hint=session.pop_turn_outcome_hint(),
-        ),
+        )
+    session.complete_latest_record(
+        "slash",
+        response_text=response_text,
     )
 
 
@@ -138,9 +152,20 @@ def dispatch_slash(
     stripped = command_line.strip()
     slash_recorded = False
 
-    def record_slash(*, ok: bool = True) -> None:
+    def record_slash(
+        *,
+        ok: bool = True,
+        response_text: str | None = None,
+        slash_outcome: str | None = None,
+    ) -> None:
         nonlocal slash_recorded
-        session.record("slash", stripped, ok=ok)
+        session.record(
+            "slash",
+            stripped,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
         slash_recorded = True
 
     try:
@@ -184,26 +209,33 @@ def dispatch_slash(
                     args = parts[1:]
                 cmd = SLASH_COMMANDS.get(name)
                 if cmd is None:
-                    suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
-                    record_slash(ok=False)
+                    typo_message = format_unknown_slash_message(
+                        stripped,
+                        command_names=tuple(SLASH_COMMANDS),
+                    )
+                    record_slash(
+                        ok=False,
+                        response_text=typo_message,
+                        slash_outcome="unknown_command",
+                    )
                     console.print()
-                    if suggestion is None:
-                        console.print(
-                            f"[{ERROR}]unknown command:[/] {escape(name)}  "
-                            "(type [bold]/help[/bold])"
-                        )
-                    else:
-                        console.print(
-                            f"[{ERROR}]unknown command:[/] {escape(name)}  "
-                            f"Did you mean [bold]{escape(suggestion)}[/bold]? "
-                            "(type [bold]/help[/bold])"
-                        )
+                    console.print(typo_message)
+                    return True
+                typo = resolve_literal_slash_typo(stripped, SLASH_COMMANDS)
+                if typo is not None:
+                    record_slash(
+                        ok=False,
+                        response_text=typo.message,
+                        slash_outcome=typo.outcome,
+                    )
+                    console.print()
+                    console.print(typo.message)
                     return True
                 if cmd.validate_args is not None:
                     validation_error = cmd.validate_args(args)
                     if validation_error is not None:
-                        console.print(validation_error)
                         record_slash(ok=False)
+                        console.print(validation_error)
                         return True
                 if policy_precleared:
                     if name not in _DEFER_SLASH_RECORDING:

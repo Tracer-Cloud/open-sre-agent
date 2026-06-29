@@ -249,14 +249,14 @@ class TestDispatchSlash:
         session = ReplSession()
         console, buf = _capture()
         assert dispatch_slash("/made-up", session, console) is True
-        assert "unknown command" in buf.getvalue()
+        assert "Unknown command" in buf.getvalue()
 
     def test_unknown_command_suggests_close_match(self) -> None:
         session = ReplSession()
         console, buf = _capture()
         assert dispatch_slash("/modle", session, console) is True
         output = buf.getvalue()
-        assert "unknown command" in output
+        assert "Unknown command" in output
         assert "Did you mean" in output
         assert "/model" in output
 

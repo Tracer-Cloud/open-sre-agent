@@ -51,7 +51,7 @@ def test_dispatch_unknown_command_stays_in_repl() -> None:
     session = ReplSession()
     console, buf = _capture()
     assert dispatch_slash("/not-a-real-slash", session, console) is True
-    assert "unknown command" in buf.getvalue()
+    assert "Unknown command" in buf.getvalue()
 
 
 def test_registry_first_arg_completion_hints_co_located_with_handlers() -> None:

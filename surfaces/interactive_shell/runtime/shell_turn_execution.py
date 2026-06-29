@@ -15,6 +15,8 @@ from core.agent_harness.turn_orchestrator import answer_cli_agent as run_core_an
 from core.agent_harness.turn_orchestrator import run_turn
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.command_registry.suggestions import resolve_literal_slash_typo
 from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
     ShellOutputSink,
@@ -47,6 +49,34 @@ def _resolve_output_sink(console: Console, output: OutputSink | None) -> OutputS
     return ShellOutputSink(console)
 
 
+def _complete_literal_slash_typo_turn(
+    message: str,
+    session: ReplSession,
+    output: OutputSink,
+) -> ToolCallingTurnResult | None:
+    """Handle unknown slash roots and invalid subcommands before tool validation."""
+    typo = resolve_literal_slash_typo(message, SLASH_COMMANDS)
+    if typo is None:
+        return None
+    output.print()
+    output.print(typo.message)
+    session.record(
+        "slash",
+        message.strip(),
+        ok=False,
+        response_text=typo.message,
+        slash_outcome=typo.outcome,
+    )
+    return ToolCallingTurnResult(
+        0,
+        1,
+        0,
+        False,
+        True,
+        response_text=typo.message,
+    )
+
+
 def run_action_tool_turn(
     message: str,
     session: ReplSession,
@@ -61,6 +91,10 @@ def run_action_tool_turn(
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> ToolCallingTurnResult:
     """Run one action-selection turn through core with shell adapters bound."""
+    resolved_output = _resolve_output_sink(console, output)
+    typo_result = _complete_literal_slash_typo_turn(message, session, resolved_output)
+    if typo_result is not None:
+        return typo_result
     effective_deps = (
         deps
         if deps is not None and deps.llm_factory is not None
@@ -69,7 +103,7 @@ def run_action_tool_turn(
     return run_agent_turn(
         message,
         session,
-        output=_resolve_output_sink(console, output),
+        output=resolved_output,
         tools=ShellToolProvider(session, console, request_exit=request_exit),
         confirm_fn=confirm_fn,
         is_tty=is_tty,

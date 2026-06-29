@@ -11,6 +11,7 @@ from typing import Any
 
 from config.version import get_version
 from core.agent_harness.session.prompt_history.policy import redact_text
+from platform.analytics.provider import JsonValue
 from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
 from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
@@ -43,6 +44,19 @@ class LlmRunInfo:
     input_tokens: int | None = None
     output_tokens: int | None = None
     response_text: str | None = None
+
+
+def _latest_slash_outcome(session: Any) -> str | None:
+    history = getattr(session, "history", None)
+    if not isinstance(history, list):
+        return None
+    for entry in reversed(history):
+        if not isinstance(entry, dict) or entry.get("type") != "slash":
+            continue
+        outcome = entry.get("slash_outcome")
+        if isinstance(outcome, str) and outcome:
+            return outcome
+    return None
 
 
 class PromptRecorder:
@@ -181,33 +195,35 @@ class PromptRecorder:
         if self._config.posthog_enabled:
             with contextlib.suppress(Exception):
                 integration_snapshot = build_turn_integration_snapshot(self._session)
-                capture_ai_generation(
-                    {
-                        "$ai_trace_id": self._turn_id,
-                        "$ai_session_id": self._session_id,
-                        "$ai_span_id": self._turn_id,
-                        "$ai_span_name": f"surfaces.interactive_shell.{self._turn_kind}",
-                        "$ai_model": self._model or NO_CONVERSATIONAL_AGENT,
-                        "$ai_provider": self._provider or NO_CONVERSATIONAL_AGENT,
-                        "$ai_input": [{"role": "user", "content": self._prompt}],
-                        "$ai_output_choices": [
-                            {
-                                "role": "assistant",
-                                "content": self._response,
-                            }
-                        ],
-                        "$ai_latency": (
-                            round((self._latency_ms or 0) / 1000.0, 3) if self._latency_ms else 0.0
-                        ),
-                        "$ai_input_tokens": self._input_tokens or 0,
-                        "$ai_output_tokens": self._output_tokens or 0,
-                        "cli_turn_kind": self._turn_kind,
-                        "cli_session_id": self._session_id,
-                        "cli_turn_id": self._turn_id,
-                        "opensre_version": get_version(),
-                        **integration_snapshot,
-                    }
-                )
+                posthog_properties: dict[str, JsonValue] = {
+                    "$ai_trace_id": self._turn_id,
+                    "$ai_session_id": self._session_id,
+                    "$ai_span_id": self._turn_id,
+                    "$ai_span_name": f"surfaces.interactive_shell.{self._turn_kind}",
+                    "$ai_model": self._model or NO_CONVERSATIONAL_AGENT,
+                    "$ai_provider": self._provider or NO_CONVERSATIONAL_AGENT,
+                    "$ai_input": [{"role": "user", "content": self._prompt}],
+                    "$ai_output_choices": [
+                        {
+                            "role": "assistant",
+                            "content": self._response,
+                        }
+                    ],
+                    "$ai_latency": (
+                        round((self._latency_ms or 0) / 1000.0, 3) if self._latency_ms else 0.0
+                    ),
+                    "$ai_input_tokens": self._input_tokens or 0,
+                    "$ai_output_tokens": self._output_tokens or 0,
+                    "cli_turn_kind": self._turn_kind,
+                    "cli_session_id": self._session_id,
+                    "cli_turn_id": self._turn_id,
+                    "opensre_version": get_version(),
+                    **integration_snapshot,
+                }
+                slash_outcome = _latest_slash_outcome(self._session)
+                if slash_outcome:
+                    posthog_properties["slash_outcome"] = slash_outcome
+                capture_ai_generation(posthog_properties)
 
 
 def _sanitize_text(text: str, *, config: PromptLogConfig) -> str:
