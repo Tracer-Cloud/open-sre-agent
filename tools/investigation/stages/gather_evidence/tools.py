@@ -7,6 +7,9 @@ from typing import Any
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
     ALERT_SOURCE_TO_SEED_TOOL_SOURCES,
+    SECONDARY_TOOL_SOURCES,
+    primary_sources_for_alert,
+    relevant_sources_for_alert,
     resolve_alert_source,
 )
 from core.llm.types import ToolCall
@@ -18,6 +21,12 @@ from tools.utils.integration_sources import availability_view
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
 MAX_STAGNANT_ITERATIONS = 2
+
+# Upper bound on how many tool schemas we hand the model on a single turn. The
+# whole registry (100+ tools across every connected integration) serialized into
+# the request is the dominant pre-tool-call context cost. We never ship more than
+# this; when more tools are available we keep the most alert-relevant ones first.
+MAX_AGENT_TOOL_SCHEMAS = 32
 
 # Injected as a user turn once the agent starts repeating itself.
 STAGNATION_NUDGE = (
@@ -33,6 +42,90 @@ STAGNATION_NUDGE = (
 def get_available_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
     available_sources = availability_view(resolved_integrations)
     return [t for t in get_registered_tools("investigation") if t.is_available(available_sources)]
+
+
+def planned_action_names(state: dict[str, Any]) -> list[str]:
+    """Tool names selected by the planning stage, normalized and de-blanked."""
+    planned_raw = state.get("planned_actions")
+    if not isinstance(planned_raw, list):
+        return []
+    return [str(name).strip() for name in planned_raw if str(name).strip()]
+
+
+def select_investigation_tools(
+    tools: list[RegisteredTool],
+    state: dict[str, Any],
+    *,
+    max_tools: int = MAX_AGENT_TOOL_SCHEMAS,
+) -> list[RegisteredTool]:
+    """Narrow the available tools to the relevant set handed to the model.
+
+    This is the single source of truth shared by the agent (which serializes the
+    result into tool schemas) and the prompt builder (which lists the same tools
+    for orientation). Order of preference:
+
+    1. An explicit ``planned_actions`` set from the planning stage — those tools
+       were already scored for relevance, so use exactly them.
+    2. Otherwise rank every available tool by how relevant its integration source
+       is to the alert and keep the top ``max_tools``. Knowledge/secondary
+       reasoning tools are always retained as a fallback.
+
+    When the available set already fits under ``max_tools`` the input is returned
+    unchanged (ordering preserved), so the common single/few-integration case is
+    unaffected; the cap only bites when many integrations are connected at once.
+    """
+    planned = _planned_subset(tools, state)
+    if planned is not None:
+        return planned
+    if len(tools) <= max_tools:
+        return tools
+
+    ranked = _relevance_ranked(tools, state)
+    kept = ranked[:max_tools]
+    # Always retain the cheap reasoning fallbacks even if the cap cut them, so the
+    # agent never loses its "reason about the alert" path on a busy environment.
+    kept_names = {tool.name for tool in kept}
+    kept.extend(
+        tool
+        for tool in ranked[max_tools:]
+        if str(tool.source) in SECONDARY_TOOL_SOURCES and tool.name not in kept_names
+    )
+    return kept
+
+
+def _planned_subset(
+    tools: list[RegisteredTool], state: dict[str, Any]
+) -> list[RegisteredTool] | None:
+    names = planned_action_names(state)
+    if not names:
+        return None
+    by_name = {tool.name: tool for tool in tools}
+    chosen = [by_name[name] for name in names if name in by_name]
+    # If none of the planned names resolve (stale/hallucinated plan), fall through
+    # to relevance ranking rather than silently shipping the whole registry.
+    return chosen or None
+
+
+def _relevance_ranked(tools: list[RegisteredTool], state: dict[str, Any]) -> list[RegisteredTool]:
+    sources_present = {str(tool.source) for tool in tools}
+    primary = set(primary_sources_for_alert(state))
+    content_relevant = set(relevant_sources_for_alert(state, sources_present))
+
+    def rank(tool: RegisteredTool) -> tuple[int, str, str]:
+        source = str(tool.source)
+        if source in SECONDARY_TOOL_SOURCES:
+            # Cheap reasoning fallbacks (knowledge, etc.): keep but never crowd
+            # out incident-specific tools.
+            tier = 3
+        elif source in primary:
+            tier = 0
+        elif source in content_relevant:
+            tier = 1
+        else:
+            tier = 2
+        return (tier, source, tool.name)
+
+    return sorted(tools, key=rank)
 
 
 def build_connected_tool_context(

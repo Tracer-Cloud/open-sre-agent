@@ -178,7 +178,7 @@ def test_relevant_sources_honors_explicit_context_sources() -> None:
     assert _relevant_sources(state, tools_by_source) == ["vercel"]
 
 
-def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:
+def test_alert_context_points_to_primary_source_without_duplicating_tool_metadata() -> None:
     context = format_alert_context(
         {
             "alert_name": "RDS latency spike",
@@ -192,8 +192,15 @@ def test_alert_context_surfaces_v2_contract_hints_for_tool_selection() -> None:
         }
     )
 
+    # The alert context still orients the agent toward the primary integration
+    # and names the relevant tool.
     assert "Call these tools first (from: rds" in context
     assert "`describe_rds_instance`" in context
-    assert "source_id=aws_rds" in context
-    assert "evidence=deployment_metadata" in context
-    assert "avoid=Use this tool to inspect SQL query text or Postgres locks." in context
+
+    # But it no longer re-lists every tool's full description and metadata: those
+    # now live only in the structured tool schemas handed to the model, so the
+    # prompt does not duplicate them.
+    assert "## Available tools (by integration)" not in context
+    assert "source_id=aws_rds" not in context
+    assert "evidence=deployment_metadata" not in context
+    assert "avoid=" not in context
