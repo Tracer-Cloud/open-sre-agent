@@ -21,6 +21,16 @@ _SOURCE_SCOPED_INVESTIGATION_RULE = (
     "but lead by engaging the named sources rather than deflecting."
 )
 
+_PRIOR_INVESTIGATION_FOLLOW_UP_RULE = (
+    "Prior investigation follow-up: when the session includes a prior "
+    "investigation (shown in the '--- Prior investigation in this session ---' "
+    "section below) and the user asks a retrospective question — such as "
+    "'what happened?', 'what was the root cause?', 'summarize what you found', "
+    "or similar — answer directly from that prior investigation data. Do NOT "
+    "ask for more alert context or redirect to `opensre investigate` when prior "
+    "investigation results are already available."
+)
+
 _SETUP_GUIDANCE_RULE = (
     "Configuring or connecting an integration: when the user asks to configure, "
     "connect, set up, add, or enable a specific integration they already named, "
@@ -128,6 +138,7 @@ def _build_system_prompt(
         "For vague operational questions (for example why a database is slow) "
         "with no pasted alert, restate the user's question in your reply and "
         "ask for the target system, service, or alert context.\n\n"
+        f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
         f"{_SETUP_GUIDANCE_RULE}\n\n"
         f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
         f"{_TERMINOLOGY_RULE}\n{_MARKDOWN_RULE}\n\n"
