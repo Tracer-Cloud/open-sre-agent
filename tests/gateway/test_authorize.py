@@ -44,12 +44,15 @@ def test_pair_attempt_persists_policy(mock_integration_store: pytest.MonkeyPatch
         inbound_enabled=True,
         pairing_secret_hash="abc",
     )
-    with patch(
-        "gateway.security.authorize._load_policy",
-        return_value=(None, policy),
-    ), patch(
-        "gateway.security.authorize.complete_pairing",
-        return_value=(True, "Pairing successful!"),
+    with (
+        patch(
+            "gateway.security.authorize._load_policy",
+            return_value=(None, policy),
+        ),
+        patch(
+            "gateway.security.authorize.complete_pairing",
+            return_value=(True, "Pairing successful!"),
+        ),
     ):
         decision = evaluate_inbound(
             user_id="42",

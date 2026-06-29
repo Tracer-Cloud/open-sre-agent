@@ -30,9 +30,9 @@ class TelegramBotClient:
             return False, {}, response.text or f"HTTP {response.status_code}"
         if not response.data.get("ok"):
             description = str(response.data.get("description", "unknown"))
-            return False, response.data, description
+            return False, dict(response.data), description
         result = response.data.get("result")
-        return True, result if isinstance(result, dict) else {}, ""
+        return True, dict(result) if isinstance(result, Mapping) else {}, ""
 
     def send_message(
         self,

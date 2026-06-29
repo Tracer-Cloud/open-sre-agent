@@ -27,7 +27,7 @@ from core.agent_harness.session.background import (
     BackgroundNotificationPreferences,
 )
 from core.agent_harness.session.integrations_cache import (
-    has_resolved_integrations,
+    has_only_runtime_metadata,
     merge_resolved_integrations,
 )
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
@@ -487,7 +487,8 @@ class ReplSession:
         resolution raced store/env hydration. Failures leave the cache unset for
         the same reason.
         """
-        if has_resolved_integrations(self.resolved_integrations_cache):
+        cached = self.resolved_integrations_cache
+        if cached is not None and not has_only_runtime_metadata(cached):
             return
         if generation is None:
             with self._integration_warm_lock:
@@ -509,7 +510,9 @@ class ReplSession:
         with self._integration_warm_lock:
             if generation != self._integration_warm_generation:
                 return
-            if has_resolved_integrations(self.resolved_integrations_cache):
+            if self.resolved_integrations_cache is not None and not has_only_runtime_metadata(
+                self.resolved_integrations_cache
+            ):
                 return
             self.resolved_integrations_cache = merge_resolved_integrations(
                 self.resolved_integrations_cache,

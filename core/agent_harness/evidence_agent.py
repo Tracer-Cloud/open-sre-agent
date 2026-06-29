@@ -25,6 +25,7 @@ from core.agent_harness.conversation_memory import (
 )
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
 from core.agent_harness.session.integrations_cache import (
+    has_only_runtime_metadata,
     has_resolved_integrations,
     merge_resolved_integrations,
 )
@@ -52,7 +53,9 @@ PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
     """Resolve integration configs once per session and cache the result."""
     cached = session.resolved_integrations_cache
-    if cached is not None and has_resolved_integrations(cached):
+    if cached is not None and (
+        has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+    ):
         return cached
 
     from tools.investigation.stages.resolve_integrations import resolve_integrations

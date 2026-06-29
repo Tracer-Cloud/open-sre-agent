@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from core.agent_harness.session.integrations_cache import (
+    has_only_runtime_metadata,
     has_resolved_integrations,
     merge_resolved_integrations,
 )
@@ -14,6 +15,12 @@ from gateway.turn_executor import execute_gateway_turn
 def test_has_resolved_integrations_ignores_gateway_metadata() -> None:
     assert has_resolved_integrations({"_gateway_chat_id": "1"}) is False
     assert has_resolved_integrations({"github": {"token": "x"}}) is True
+
+
+def test_has_only_runtime_metadata_distinguishes_empty_cache() -> None:
+    assert has_only_runtime_metadata({"_gateway_chat_id": "1"}) is True
+    assert has_only_runtime_metadata({}) is False
+    assert has_only_runtime_metadata({"github": {"token": "x"}}) is False
 
 
 def test_merge_resolved_integrations_preserves_gateway_metadata() -> None:

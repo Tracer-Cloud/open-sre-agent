@@ -12,6 +12,13 @@ def has_resolved_integrations(cache: dict[str, Any] | None) -> bool:
     return any(not str(key).startswith("_") for key in cache)
 
 
+def has_only_runtime_metadata(cache: dict[str, Any] | None) -> bool:
+    """Return True when the cache holds only runtime metadata keys."""
+    if not cache:
+        return False
+    return all(str(key).startswith("_") for key in cache)
+
+
 def merge_resolved_integrations(
     base: dict[str, Any] | None,
     updates: dict[str, Any],
@@ -22,4 +29,8 @@ def merge_resolved_integrations(
     return merged
 
 
-__all__ = ["has_resolved_integrations", "merge_resolved_integrations"]
+__all__ = [
+    "has_only_runtime_metadata",
+    "has_resolved_integrations",
+    "merge_resolved_integrations",
+]
