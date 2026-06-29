@@ -63,8 +63,6 @@ def slash_command_is_summary_only(command_line: str) -> bool:
     root = parts[0].lower()
     if root in _SUMMARY_ONLY_SLASH_ROOTS:
         return True
-    if root in {"/help", "/?"}:
-        return True
     return slash_command_is_interactive_wizard(command_line)
 
 
@@ -137,14 +135,3 @@ def format_terminal_turn_outcome(
     if captured_output:
         return truncate_analytics_text(f"{prefix}\n{captured_output}")
     return prefix
-
-
-def format_history_fallback(entry: dict[str, object]) -> str:
-    """Minimal outcome when a history row has no ``response_text`` yet."""
-    kind = str(entry.get("type", "action"))
-    text = str(entry.get("text", "")).strip()
-    ok = bool(entry.get("ok", True))
-    status = "succeeded" if ok else "failed"
-    if text:
-        return f"{kind} {text} ({status})"
-    return f"{kind} ({status})"

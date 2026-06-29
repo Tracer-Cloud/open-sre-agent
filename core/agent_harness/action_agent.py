@@ -142,6 +142,14 @@ def _history_entry_fallback(item: dict[str, Any]) -> str:
     return f"{kind} ({status})"
 
 
+def _pop_turn_outcome_hint(session: SessionStore) -> str:
+    pop_hint = getattr(session, "pop_turn_outcome_hint", None)
+    if not callable(pop_hint):
+        return ""
+    hint = pop_hint()
+    return hint.strip() if isinstance(hint, str) else ""
+
+
 def _content_to_text(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -364,6 +372,7 @@ def run_agent_turn(
         for chunk in (
             _response_text_from_history_entries(executed_entries),
             _response_text_from_generic_results(result),
+            _pop_turn_outcome_hint(session),
         )
         if chunk
     ]
