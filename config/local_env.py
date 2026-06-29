@@ -16,7 +16,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INSTALLED_ENV_PATH = OPENSRE_HOME_DIR / ".env"
 WIZARD_STORE_PATH = OPENSRE_HOME_DIR / "opensre.json"
 
-_BOOTSTRAPPED = False
+
+class _BootstrapState:
+    """Mutable holder for the one-shot env bootstrap guard.
+
+    Wrapped in a class so the flag is read/written via attribute access on
+    a stable container, avoiding the ``global`` keyword (which CodeQL's
+    ``py/unused-global-variable`` rule misreports despite the in-function
+    reads).
+    """
+
+    bootstrapped: bool = False
 
 
 def _skip_env_file() -> bool:
@@ -116,11 +126,10 @@ def bootstrap_opensre_env(*, override: bool = False) -> Path:
 
 def bootstrap_opensre_env_once(*, override: bool = False) -> Path:
     """Idempotently load local OpenSRE environment defaults for the process."""
-    global _BOOTSTRAPPED
     path = get_project_env_path()
-    if not _BOOTSTRAPPED:
+    if not _BootstrapState.bootstrapped:
         path = bootstrap_opensre_env(override=override)
-        _BOOTSTRAPPED = True
+        _BootstrapState.bootstrapped = True
     return path
 
 
