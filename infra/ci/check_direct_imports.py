@@ -24,9 +24,14 @@ from check_import_cycles import _build_graph, discover_first_party_roots  # noqa
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ``source_prefix -> forbidden destination roots`` for direct imports only.
-# Enforce the edges fixed in this PR first; expand to core/config once the
-# registry port lands (see opensre-architecture-guide § tool placement).
+# Enforces the layering contract documented in ``surfaces/__init__.py``:
+# "Nothing first-party may import from surfaces/". Adds an explicit bound
+# on ``platform``, ``infra``, ``core``, ``config`` so the surfaces ban
+# is CI-enforced, not just doc-described.
 _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
+    "platform": frozenset({"surfaces"}),
+    "infra": frozenset({"surfaces"}),
+    "core": frozenset({"surfaces"}),
     "integrations": frozenset({"tools", "surfaces"}),
     "tools": frozenset({"surfaces"}),
 }
