@@ -70,6 +70,25 @@ def test_interactive_picker_command_is_deferred_to_exclusive_stdin(
     assert "Launching" in buf.getvalue()
 
 
+def test_interactive_picker_runs_inline_when_exclusive_stdin_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the REPL has already reserved exclusive stdin for this turn, picker
+    commands must dispatch inline instead of re-queueing (which would loop)."""
+    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    dispatched = _record_dispatch(monkeypatch)
+
+    ctx, buf, session = _ctx()
+    session.exclusive_stdin_active = True
+    handled = slash_tool.execute_slash_tool({"command": "/integrations", "args": []}, ctx)
+
+    assert handled is True
+    assert dispatched == ["/integrations"]
+    assert session.pending_prompt_default is None
+    assert session.pending_prompt_autosubmit is False
+    assert "Launching" not in buf.getvalue()
+
+
 def test_interactive_picker_runs_inline_when_not_a_tty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -83,6 +102,27 @@ def test_interactive_picker_runs_inline_when_not_a_tty(
     assert dispatched == ["/integrations remove github"]
     assert session.pending_prompt_default is None
     assert session.pending_prompt_autosubmit is False
+
+
+def test_duplicate_slash_invoke_in_same_turn_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second slash_invoke for the same command in one turn must not re-run it."""
+    monkeypatch.setattr(slash_tool, "repl_tty_interactive", lambda: True)
+    dispatch_calls: list[str] = []
+
+    def _fake_dispatch(command: str, *_args: object, **_kwargs: object) -> bool:
+        dispatch_calls.append(command)
+        return True
+
+    monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
+
+    ctx, _buf, session = _ctx()
+    args = {"command": "/integrations", "args": ["list"]}
+    assert slash_tool.execute_slash_tool(args, ctx) is True
+    assert slash_tool.execute_slash_tool(args, ctx) is True
+
+    assert dispatch_calls == ["/integrations list"]
 
 
 @pytest.mark.parametrize(

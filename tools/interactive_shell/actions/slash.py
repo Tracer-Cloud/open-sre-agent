@@ -93,7 +93,13 @@ def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
             ctx,
         )
 
-    if _slash_drives_interactive_picker(name, slash_args):
+    if stripped in ctx.session.agent_turn_executed_slashes:
+        return True
+
+    if (
+        _slash_drives_interactive_picker(name, slash_args)
+        and not ctx.session.exclusive_stdin_active
+    ):
         # Hand the picker back to the REPL loop instead of running it against the
         # live prompt: queue_auto_command re-submits it as a deterministic turn
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
@@ -115,11 +121,13 @@ def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
         return True
 
     ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
-    return _dispatch_and_translate_exit(
+    _dispatch_and_translate_exit(
         stripped,
         ctx,
         policy_precleared=True,
     )
+    ctx.session.agent_turn_executed_slashes.add(stripped)
+    return True
 
 
 def run_slash(*, command: str, args: list[str] | None = None, context: Any) -> dict[str, Any]:
