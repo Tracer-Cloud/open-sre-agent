@@ -22,7 +22,9 @@ def test_telegram_gateway_auto_start_can_be_disabled(monkeypatch: object) -> Non
     assert telegram_gateway_auto_start_enabled() is False
 
 
-def test_co_located_gateway_logging_does_not_propagate_to_root(caplog: pytest.LogCaptureFixture) -> None:
+def test_co_located_gateway_logging_does_not_propagate_to_root(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     caplog.set_level(logging.WARNING)
     _configure_co_located_gateway_logging()
     logging.getLogger("gateway.platforms.telegram.poller").warning(
