@@ -318,6 +318,31 @@ def _google_docs_case() -> ToolFailureCase:
     )
 
 
+def _github_repository_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from integrations.github.client import GitHubApiError
+
+        mp.setattr(
+            "tools.github.repository.GitHubRestClient.request",
+            MagicMock(
+                side_effect=GitHubApiError("not found", status_code=404, path="/repos/o/r"),
+            ),
+        )
+
+    def invoke() -> dict[str, Any]:
+        from tools.github.repository import get_github_repository
+
+        return get_github_repository(owner="o", repo="r", github_token="tok")
+
+    return ToolFailureCase(
+        "github_repository",
+        patch,
+        invoke,
+        "get_github_repository",
+        "github",
+    )
+
+
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
         import tools.eks_tools as mod
@@ -732,6 +757,7 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _cloudwatch_logs_case(),
     _cloudwatch_batch_case(),
     _google_docs_case(),
+    _github_repository_case(),
     _eks_list_clusters_case(),
     _eks_describe_cluster_case(),
     _eks_nodegroup_case(),
@@ -921,6 +947,7 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_cloudwatch_logs",
         "get_cloudwatch_batch_metrics",
         "create_google_docs_incident_report",
+        "get_github_repository",
         # EKS — enumerated in #1463
         "list_eks_clusters",
         "describe_eks_cluster",
