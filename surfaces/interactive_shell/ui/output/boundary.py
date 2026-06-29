@@ -27,18 +27,18 @@ def install_product_adapters() -> None:
     from integrations.tracer.integrations_adapter import (
         fetch_tracer_remote_integrations,
     )
-    from surfaces.interactive_shell.ui.output.environment import debug_print
-    from surfaces.interactive_shell.ui.output.renderers import (
-        render_completed_investigation_footer,
-        render_investigation_header,
-    )
-    from surfaces.interactive_shell.ui.output.tracker import get_tracker
     from platform.observability.debug import set_debug_printer
     from platform.observability.display import (
         set_investigation_footer_renderer,
         set_investigation_header_renderer,
     )
     from platform.observability.progress import set_progress_tracker_factory
+    from surfaces.interactive_shell.ui.output.environment import debug_print
+    from surfaces.interactive_shell.ui.output.renderers import (
+        render_completed_investigation_footer,
+        render_investigation_header,
+    )
+    from surfaces.interactive_shell.ui.output.tracker import get_tracker
 
     set_debug_printer(debug_print)
     set_investigation_header_renderer(render_investigation_header)

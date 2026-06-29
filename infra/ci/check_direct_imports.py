@@ -51,6 +51,20 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
         "gateway.session.resolver -> surfaces.interactive_shell.runtime.context",
         "gateway.turn_executor -> surfaces.interactive_shell.runtime.shell_turn_execution",
+        # Per-vendor integration tool packages still depend on the ``@tool``
+        # decorator that lives at ``tools.tool_decorator``. Burn down by
+        # moving the decorator primitive to a lower layer (likely
+        # ``core/`` or ``platform/``) so vendor tools can import it
+        # without crossing into ``tools``.
+        "integrations.datadog.tools -> tools.tool_decorator",
+        # Datadog tools also reuse shared payload helpers that still live
+        # under ``tools.utils``. Burn down alongside the decorator move —
+        # ``tools.utils.compaction`` (log/result compaction) and
+        # ``tools.utils.availability`` (backend resolution) belong at the
+        # same layer the decorator does.
+        "integrations.datadog.tools -> tools.utils.availability",
+        "integrations.datadog.tools -> tools.utils.compaction",
+        "integrations.grafana.tools -> tools.tool_decorator",
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
         # Integration setup UX still reaches into the CLI wizard.

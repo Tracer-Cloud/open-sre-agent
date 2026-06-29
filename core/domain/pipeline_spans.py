@@ -9,7 +9,7 @@ Owns two pieces of OpenSRE domain knowledge:
   ``{span_name, execution_run_id, record_count}`` shape every
   downstream investigation node consumes.
 
-Both ``tools.GrafanaTracesTool`` (live Grafana / Tempo queries) and
+Both ``integrations.grafana.tools`` (live Grafana / Tempo queries) and
 ``integrations.opensre.seed_evidence`` (offline OpenRCA / HuggingFace
 fixtures) need this projection. Lives in ``core.domain`` so neither
 side has to import the other, and so the OpenSRE-specific span-name

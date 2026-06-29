@@ -4,9 +4,9 @@ import contextlib
 import os
 import sys
 
-from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_requested
 from platform.observability.output_format import get_output_format
 from platform.terminal.theme import SECONDARY
+from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_requested
 
 
 def _is_silent_output() -> bool:

@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from rich.text import Text
 
+from platform.terminal.theme import (
+    BRAND,
+    DIM,
+    ERROR,
+    HIGHLIGHT,
+    SECONDARY,
+    TEXT,
+    WARNING,
+)
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms
 from surfaces.interactive_shell.ui.output.console_state import (
     _get_console,
@@ -13,15 +22,6 @@ from surfaces.interactive_shell.ui.output.environment import (
     get_output_format,
 )
 from surfaces.interactive_shell.ui.output.labels import BADGE_STYLES
-from platform.terminal.theme import (
-    BRAND,
-    DIM,
-    ERROR,
-    HIGHLIGHT,
-    SECONDARY,
-    TEXT,
-    WARNING,
-)
 
 
 def render_divider(width: int = 80) -> None:

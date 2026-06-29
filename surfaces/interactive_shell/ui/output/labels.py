@@ -4,7 +4,6 @@ import re
 
 from rich.text import Text
 
-from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from platform.terminal.theme import (
     BRAND,
     DIM,
@@ -14,6 +13,7 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
+from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
 from tools.registry import resolve_tool_display_name
 
 # (padded_label, text_color) -- all labels are 6 chars wide.

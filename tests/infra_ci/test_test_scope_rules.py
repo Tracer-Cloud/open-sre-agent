@@ -33,6 +33,15 @@ def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
     assert targets == ["tests/hermes/"]
 
 
+def test_grafana_rule_includes_integration_and_tool_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["integrations/grafana/tools/__init__.py"])
+    assert not escalate
+    assert "tests/integrations/grafana/" in targets
+    assert "tests/tools/test_grafana_logs_tool.py" in targets
+    assert len(targets) == 7
+
+
 def test_interactive_shell_routes_to_its_own_tests() -> None:
     rules = _rules_module()
     escalate, targets, _ = rules.classify(["surfaces/interactive_shell/runtime/session.py"])

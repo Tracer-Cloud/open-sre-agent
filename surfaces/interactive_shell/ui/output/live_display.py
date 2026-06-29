@@ -7,15 +7,6 @@ from typing import Any
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.text import Text
 
-from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
-from surfaces.interactive_shell.ui.output.events import ProgressEvent
-from surfaces.interactive_shell.ui.output.labels import (
-    BADGE_STYLES,
-    _humanise_message,
-    _node_event_type,
-    _node_label,
-    _node_phase_label,
-)
 from platform.observability.tool_trace import format_json_preview
 from platform.terminal.theme import (
     BRAND,
@@ -25,6 +16,15 @@ from platform.terminal.theme import (
     SECONDARY,
     TEXT,
     WARNING,
+)
+from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms, _fmt_timing
+from surfaces.interactive_shell.ui.output.events import ProgressEvent
+from surfaces.interactive_shell.ui.output.labels import (
+    BADGE_STYLES,
+    _humanise_message,
+    _node_event_type,
+    _node_label,
+    _node_phase_label,
 )
 
 _SPINNER_FRAMES = ("·  ", "·· ", "···", "·· ")

@@ -17,6 +17,19 @@ from tools.base import BaseTool
 from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
 from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
 
+# Per-vendor tool packages — when a vendor consolidates its tool code under
+# ``integrations/<vendor>/tools/``, list the dotted package path here so the
+# registry walks it alongside the canonical ``tools/`` package. New vendors get
+# one entry each as they migrate.
+#
+# The external extension point (:func:`register_external_tool_package`) is
+# separate; it's for plugin-style callers that ship tool packages outside of
+# opensre's own codebase.
+_INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
+    "integrations.datadog.tools",
+    "integrations.grafana.tools",
+)
+
 logger = logging.getLogger(__name__)
 
 _SKIP_MODULE_NAMES = {
@@ -268,12 +281,34 @@ def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
 def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     tools_by_name: dict[str, RegisteredTool] = {}
 
-    # Walk the canonical tools package, then any externally-registered packages
-    # in registration order.
+    # Walk the canonical tools package, then any per-vendor integration tool
+    # packages, then any externally-registered packages in registration order.
     # First definition of a given tool name wins; duplicates are logged and skipped.
-    packages: list[ModuleType] = [tools_package, *_external_tool_packages]
+    integration_packages: list[ModuleType] = []
+    for dotted in _INTEGRATION_TOOL_PACKAGES:
+        try:
+            integration_packages.append(importlib.import_module(dotted))
+        except ImportError as exc:
+            logger.warning(
+                "[tools] Integration tool package %r failed to import: %s",
+                dotted,
+                exc,
+            )
+    packages: list[ModuleType] = [
+        tools_package,
+        *integration_packages,
+        *_external_tool_packages,
+    ]
+    # Integration packages put their tools directly in ``__init__.py`` (one
+    # file per vendor), so their own module is a tool source alongside any
+    # submodules they may also expose.
+    integration_module_ids = {id(pkg) for pkg in integration_packages}
     for package in packages:
-        for module in _iter_discovered_tool_modules(package):
+        modules_to_scan: list[ModuleType] = []
+        if id(package) in integration_module_ids:
+            modules_to_scan.append(package)
+        modules_to_scan.extend(_iter_discovered_tool_modules(package))
+        for module in modules_to_scan:
             for tool in _collect_registered_tools_from_module(module):
                 if tool.name in tools_by_name:
                     logger.warning(

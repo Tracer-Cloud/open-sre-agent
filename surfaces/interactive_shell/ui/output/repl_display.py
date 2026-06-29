@@ -11,13 +11,13 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
+from platform.terminal.theme import BRAND, DIM, SECONDARY
 from surfaces.interactive_shell.ui.components.time_format import _elapsed_hms
 from surfaces.interactive_shell.ui.output.events import ProgressEvent
 from surfaces.interactive_shell.ui.output.labels import (
     _node_phase_label,
     build_progress_step_text,
 )
-from platform.terminal.theme import BRAND, DIM, SECONDARY
 
 _REPL_ANIM_FRAMES = ("·", "··", "···", "··")
 _REPL_ANIM_INTERVAL = 0.35

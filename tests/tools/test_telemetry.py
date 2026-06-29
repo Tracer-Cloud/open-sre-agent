@@ -1208,16 +1208,18 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     """
     from tools.registry import get_registered_tool_map
 
-    # Limit the audit to PRODUCTION tools (those defined in ``tools.*``).
-    # External packages registered via
-    # ``register_external_tool_package`` (e.g. bench-only tools that live
-    # under ``tests/benchmarks/``) have their own classification expectations
-    # and aren't part of this production-telemetry contract. Filtering by
-    # ``origin_module`` keeps this test stable regardless of test order.
+    # Limit the audit to PRODUCTION tools (those defined in ``tools.*`` or in
+    # the per-vendor consolidation under ``integrations.<vendor>.tools``).
+    # External packages registered via ``register_external_tool_package``
+    # (e.g. bench-only tools that live under ``tests/benchmarks/``) have
+    # their own classification expectations and aren't part of this
+    # production-telemetry contract. Filtering by ``origin_module`` keeps
+    # this test stable regardless of test order.
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", "integrations.")
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
-        if tool.origin_module.startswith("tools.")
+        if tool.origin_module.startswith(_PRODUCTION_TOOL_PREFIXES)
     }
     classified = _MIGRATED_TOOL_NAMES | _TOOLS_WITHOUT_DELIBERATE_CATCH
 

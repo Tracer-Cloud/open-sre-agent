@@ -57,6 +57,8 @@ ignore = [
 # tools/<vendor>_tools/__init__.py files are concatenations of multiple tool modules.
 # Imports appear in each section rather than all at the top (E402).
 "tools/*_tools/__init__.py" = ["E402", "F811"]
+# Same layout after vendor tools migrate to integrations/<vendor>/tools/.
+"integrations/*/tools/__init__.py" = ["E402", "F811"]
 
 [lint.isort]
 known-first-party = [

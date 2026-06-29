@@ -133,7 +133,8 @@ Files to touch:
 - `integrations/<name>/verifier.py` when the integration needs local verification logic.
 - `integrations/catalog.py` when the new integration must be resolved into the shared runtime config.
 - `integrations/verify.py` when the integration needs a local verification path.
-- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer.
+- `tools/<Name>Tool/` or `tools/<tool_file>.py` for the user-facing tool layer, or
+  `integrations/<name>/tools/` when consolidating a vendor's tools under its integration package.
 - `docs/<name>.mdx` for user-facing setup, usage, and verification docs.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
 - `tests/integrations/test_<name>.py` for config, verification, and store coverage.
@@ -144,8 +145,8 @@ Treat `integrations/` as the canonical user/config and external-client boundary,
 Examples from the repo:
 
 - Datadog: `integrations/datadog/client.py`, `integrations/datadog/verifier.py`, `integrations/catalog.py`, `tools/datadog_tools/`, and Datadog-related tests under `tests/integrations/` and `tests/tools/`.
-- Grafana: `integrations/grafana/`, `integrations/catalog.py`, `tools/grafana_tools/`, `cli/wizard/local_grafana_stack/`, and the Grafana-related tests under `tests/integrations/`.
-- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
+- Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
+- Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 
 Basic steps:
 
