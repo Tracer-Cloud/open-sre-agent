@@ -109,7 +109,6 @@ jobs:
             pytest_paths: >-
               tests/tools
               tests/core/runtime/llm
-              tests/core/agent
               tests/platform/observability
               tests/utils
               tests/masking
@@ -122,11 +121,17 @@ jobs:
             # matching interactive-shell-live.yml. The
             # default anthropic tool-call model (haiku) cannot reliably perform
             # compound action planning, so pin this shard to openai.
+            # ``tests/core/agent`` runs here because it contains the live
+            # action-planning oracles (``test_live_action_planning`` and
+            # ``test_live_turn_execution_oracle``) that need the openai pin —
+            # plus the static ``test_import_boundaries`` guard the surfaces
+            # restructure (#3299) added.
             llm_provider: openai
             pytest_paths: >-
               tests/cli
               tests/remote
               tests/agent
+              tests/core/agent
               tests/fleet_monitoring
               tests/analytics
               tests/tools/investigation
