@@ -7,6 +7,7 @@ TOOL_MODULES = (
     "commits",
     "file_contents",
     "issues",
+    "repository",
     "repository_tree",
     "search_code",
     "work_status",

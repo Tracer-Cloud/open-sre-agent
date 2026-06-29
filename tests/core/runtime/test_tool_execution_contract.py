@@ -174,6 +174,74 @@ def test_registered_tool_without_context_opt_in_keeps_plain_run_contract() -> No
     assert result.details == {"value": "abc"}
 
 
+def test_injected_github_credentials_are_not_overridden_by_llm_args() -> None:
+    seen: dict[str, Any] = {}
+
+    def run(
+        owner: str,
+        repo: str,
+        github_token: str | None = None,
+        github_mode: str | None = None,
+    ) -> dict[str, Any]:
+        seen["github_token"] = github_token
+        seen["github_mode"] = github_mode
+        return {"ok": True}
+
+    registered = RegisteredTool(
+        name="github_probe",
+        description="test github credential injection",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "repo": {"type": "string"},
+                "github_token": {"type": "string"},
+                "github_mode": {"type": "string"},
+            },
+            "required": ["owner", "repo"],
+        },
+        source="github",
+        run=run,
+        extract_params=lambda sources: {
+            "owner": sources["github"]["owner"],
+            "repo": sources["github"]["repo"],
+            "github_token": sources["github"]["auth_token"],
+            "github_mode": sources["github"]["mode"],
+        },
+    )
+
+    result = execute_tool_calls(
+        [
+            ToolCall(
+                id="github-1",
+                name="github_probe",
+                input={
+                    "owner": "wrong",
+                    "repo": "wrong",
+                    "github_token": "llm-token",
+                    "github_mode": "metadata",
+                },
+            )
+        ],
+        [registered],
+        {
+            "github": {
+                "connection_verified": True,
+                "owner": "Tracer-Cloud",
+                "repo": "opensre",
+                "auth_token": "injected-token",
+                "mode": "streamable-http",
+            }
+        },
+    )[0]
+
+    assert result.is_error is False
+    assert seen == {
+        "github_token": "injected-token",
+        "github_mode": "streamable-http",
+    }
+
+
 def test_parallel_batch_preserves_provider_order() -> None:
     tools = [
         _tool("first", execute=lambda _args, _ctx: {"order": 1}),
