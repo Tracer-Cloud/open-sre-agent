@@ -14,9 +14,7 @@ def test_quoted_heredoc_body_is_collapsed() -> None:
 import json
 print(1)
 PY"""
-    assert (
-        format_shell_command_for_display(command) == "python3 - <<'PY' … (2 lines)"
-    )
+    assert format_shell_command_for_display(command) == "python3 - <<'PY' … (2 lines)"
 
 
 def test_unquoted_heredoc_body_is_collapsed() -> None:
