@@ -44,7 +44,9 @@ async def repl_main(
 
     try:
         if resume_session_id:
-            from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+            from interactive_shell.command_registry.session_cmds.resume import (
+                resume_session_by_prefix,
+            )
 
             slash_command = f"/resume {resume_session_id.strip()}"
             if not resume_session_by_prefix(
