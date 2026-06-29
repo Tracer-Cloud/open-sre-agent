@@ -12,8 +12,8 @@ from interactive_shell.controller import InteractiveShellController
 from interactive_shell.runtime.context import create_repl_runtime_context
 from interactive_shell.runtime.startup.first_launch_github import require_startup_github_login
 from interactive_shell.runtime.startup.initial_input import run_initial_input
+from interactive_shell.ui import DIM, render_banner
 from interactive_shell.ui import input_prompt as _input_prompt
-from interactive_shell.ui import render_banner
 from tools.fleet_monitoring.sweep import run_startup_sweep
 
 _console = Console(
@@ -58,15 +58,26 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
 
     run_startup_sweep()
 
-    if not initial_input:
-        render_banner(_console)
-        if not require_startup_github_login(_console):
-            return 0
+    telegram_gateway = None
+    if initial_input is None:
+        from gateway.background import try_start_telegram_gateway_background
+
+        telegram_gateway = try_start_telegram_gateway_background()
+        if telegram_gateway is not None:
+            _console.print(f"[{DIM}]Telegram gateway listening (poll mode)[/]")
 
     try:
+        if not initial_input:
+            render_banner(_console)
+            if not require_startup_github_login(_console):
+                return 0
+
         return asyncio.run(repl_main(initial_input=initial_input, _config=cfg))
     except (EOFError, KeyboardInterrupt):
         return 0
+    finally:
+        if telegram_gateway is not None:
+            telegram_gateway.stop()
 
 
 __all__ = ["repl_main", "run_repl"]

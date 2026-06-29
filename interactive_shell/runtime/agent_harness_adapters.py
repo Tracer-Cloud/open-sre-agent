@@ -19,6 +19,10 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 )
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
+from core.agent_harness.session.integrations_cache import (
+    has_only_runtime_metadata,
+    has_resolved_integrations,
+)
 from interactive_shell.command_registry.repl_data import load_llm_settings
 from interactive_shell.runtime import ReplSession
 from interactive_shell.runtime.core.token_accounting import build_llm_run_info
@@ -101,7 +105,9 @@ class ShellToolProvider:
 
     def _resolved_integrations(self) -> dict[str, Any]:
         cached = getattr(self._session, "resolved_integrations_cache", None)
-        if cached is not None:
+        if cached is not None and (
+            has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+        ):
             return dict(cached)
         warmer = getattr(self._session, "warm_resolved_integrations", None)
         if callable(warmer):

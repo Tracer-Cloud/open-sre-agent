@@ -14,6 +14,7 @@ _INSTALL_SCRIPT = "https://install.opensre.com"
 _INSTALL_SCRIPT_PS1 = "https://install.opensre.com"
 _MAIN_BUILD_RELEASE_URL = "https://github.com/Tracer-Cloud/opensre/releases/tag/main-build"
 _VERSION_FROM_RELEASE_BODY = re.compile(r"Version:\s*`([^`\n]+)`", re.IGNORECASE)
+_MAIN_BUILD_SHA_SUFFIX = re.compile(r"\+main\.([0-9a-f]+)$", re.IGNORECASE)
 
 
 def _main_build_release_api_url() -> str:
@@ -25,6 +26,13 @@ def _extract_main_build_version(release_body: str) -> str:
     if not match:
         return ""
     return match.group(1).strip()
+
+
+def _extract_main_build_sha(version: str) -> str | None:
+    match = _MAIN_BUILD_SHA_SUFFIX.search(version.strip())
+    if not match:
+        return None
+    return match.group(1).lower()
 
 
 def _fetch_latest_version() -> str:
@@ -49,6 +57,13 @@ def _fetch_latest_version() -> str:
 
 
 def _is_update_available(current: str, latest: str) -> bool:
+    current_main_sha = _extract_main_build_sha(current)
+    latest_main_sha = _extract_main_build_sha(latest)
+    if current_main_sha is not None and latest_main_sha is not None:
+        # Same-day main rebuilds share a calendar prefix; compare commit SHAs
+        # instead of PEP 440 local segments (hex SHAs are not ordered chronologically).
+        return current_main_sha != latest_main_sha
+
     try:
         from packaging.version import InvalidVersion, Version
     except ImportError:

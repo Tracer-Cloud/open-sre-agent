@@ -1,4 +1,4 @@
-"""Local HTTP gateway command."""
+"""Local HTTP gateway commands."""
 
 from __future__ import annotations
 
@@ -10,7 +10,35 @@ _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 2024
 
 
-@click.command(name="gateway")
+def _run_remote_gateway(
+    host: str,
+    port: int,
+    api_key: str | None,
+    investigations_dir: str | None,
+    reload: bool,
+    log_level: str,
+) -> None:
+    if api_key:
+        os.environ["OPENSRE_API_KEY"] = api_key
+    if investigations_dir:
+        os.environ["INVESTIGATIONS_DIR"] = investigations_dir
+
+    click.echo(f"Starting OpenSRE gateway on http://{host}:{port}")
+    if reload:
+        click.echo("Auto-reload enabled (development mode)")
+
+    import uvicorn
+
+    uvicorn.run(
+        "infra.deployment.remote.server:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level=log_level.lower(),
+    )
+
+
+@click.group(name="gateway", invoke_without_command=True)
 @click.option(
     "--host",
     default=_DEFAULT_HOST,
@@ -52,7 +80,9 @@ _DEFAULT_PORT = 2024
     type=click.Choice(["debug", "info", "warning", "error", "critical"], case_sensitive=False),
     help="Uvicorn log level.",
 )
+@click.pass_context
 def gateway_command(
+    ctx: click.Context,
     host: str,
     port: int,
     api_key: str | None,
@@ -60,24 +90,41 @@ def gateway_command(
     reload: bool,
     log_level: str,
 ) -> None:
-    """Run the local OpenSRE HTTP gateway server."""
-    # infra.deployment.remote.server reads OPENSRE_API_KEY and INVESTIGATIONS_DIR at import
-    # time — keep that module lazy-loaded via the uvicorn app string below.
-    if api_key:
-        os.environ["OPENSRE_API_KEY"] = api_key
-    if investigations_dir:
-        os.environ["INVESTIGATIONS_DIR"] = investigations_dir
+    """Run OpenSRE gateway servers (remote API or Telegram chat)."""
+    if ctx.invoked_subcommand is None:
+        _run_remote_gateway(host, port, api_key, investigations_dir, reload, log_level)
 
-    click.echo(f"Starting OpenSRE gateway on http://{host}:{port}")
-    if reload:
-        click.echo("Auto-reload enabled (development mode)")
 
-    import uvicorn
+@gateway_command.command("telegram")
+@click.option(
+    "--poll",
+    is_flag=True,
+    default=False,
+    help="Use long polling instead of webhook mode (local development).",
+)
+@click.option(
+    "--host",
+    default=None,
+    envvar="TELEGRAM_GATEWAY_HOST",
+    help="Webhook bind host (ignored in poll mode).",
+)
+@click.option(
+    "--port",
+    default=None,
+    type=click.IntRange(min=1, max=65535),
+    envvar="TELEGRAM_WEBHOOK_PORT",
+    help="Webhook bind port (ignored in poll mode).",
+)
+def gateway_telegram_command(poll: bool, host: str | None, port: int | None) -> None:
+    """Run the Telegram two-way messaging gateway."""
+    if host:
+        os.environ["TELEGRAM_GATEWAY_HOST"] = host
+    if port is not None:
+        os.environ["TELEGRAM_WEBHOOK_PORT"] = str(port)
+    if poll:
+        click.echo("Starting Telegram gateway in long-poll mode")
+    else:
+        click.echo("Starting Telegram gateway (webhook when TELEGRAM_WEBHOOK_URL is set)")
+    from gateway.run import start_gateway
 
-    uvicorn.run(
-        "infra.deployment.remote.server:app",
-        host=host,
-        port=port,
-        reload=reload,
-        log_level=log_level.lower(),
-    )
+    start_gateway(poll=poll)

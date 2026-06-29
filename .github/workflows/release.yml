@@ -271,6 +271,9 @@ jobs:
           --noconfirm
           --collect-data cli
           --collect-data config
+          --collect-submodules integrations
+          --collect-submodules interactive_shell
+          --collect-submodules tools
           --add-data "platform:platform"
           --add-data ".stdlib_vendor:_opensre_stdlib_platform"
 

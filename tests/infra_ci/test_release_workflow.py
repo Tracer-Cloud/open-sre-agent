@@ -47,3 +47,11 @@ def test_binary_build_syncs_and_smokes_expected_version() -> None:
     assert 'sync_release_version.py --tag "$TAG_NAME"' in source
     assert "Binary version mismatch: expected %s but saw %s" in source
     assert "$VERSION_NAME" in source
+
+
+def test_binary_build_bundles_registry_discovered_tool_modules() -> None:
+    source = _RELEASE_WORKFLOW.read_text()
+
+    assert "--collect-submodules tools" in source
+    assert "--collect-submodules interactive_shell" in source
+    assert "--collect-submodules integrations" in source

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from cli.lifecycle.update import (
+    _extract_main_build_sha,
     _extract_main_build_version,
     _fetch_latest_version,
     _is_update_available,
@@ -272,6 +273,23 @@ def test_is_update_available_when_behind() -> None:
 
 def test_is_update_available_when_equal() -> None:
     assert not _is_update_available("1.0.0", "1.0.0")
+
+
+def test_is_update_available_same_day_main_rebuild() -> None:
+    current = "0.1.2026.6.29+main.be706ff"
+    latest = "0.1.2026.6.29+main.0c306ad"
+    assert _is_update_available(current, latest)
+
+
+def test_is_update_available_same_day_main_rebuild_up_to_date() -> None:
+    version = "0.1.2026.6.29+main.0c306ad"
+    assert not _is_update_available(version, version)
+
+
+def test_extract_main_build_sha() -> None:
+    assert _extract_main_build_sha("0.1.2026.6.29+main.0c306ad") == "0c306ad"
+    assert _extract_main_build_sha("1.0.0") is None
+    assert _extract_main_build_sha("1.0.0+local") is None
 
 
 def test_development_install_doctor_detail_none_for_release_like_install(

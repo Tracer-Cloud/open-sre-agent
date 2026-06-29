@@ -24,6 +24,11 @@ from core.agent_harness.conversation_memory import (
     format_recent_conversation,
 )
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
+from core.agent_harness.session.integrations_cache import (
+    has_only_runtime_metadata,
+    has_resolved_integrations,
+    merge_resolved_integrations,
+)
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
 from tools.utils.github_repo_scope import (
     apply_github_repo_scope,
@@ -47,16 +52,22 @@ PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
 def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
     """Resolve integration configs once per session and cache the result."""
-    if session.resolved_integrations_cache is not None:
-        return session.resolved_integrations_cache
+    cached = session.resolved_integrations_cache
+    if cached is not None and (
+        has_resolved_integrations(cached) or not has_only_runtime_metadata(cached)
+    ):
+        return cached
 
     from tools.investigation.stages.resolve_integrations import resolve_integrations
 
     updates = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
     resolved = dict(updates.get("resolved_integrations") or {})
     if resolved:
-        session.resolved_integrations_cache = resolved
-    return resolved
+        session.resolved_integrations_cache = merge_resolved_integrations(
+            cached,
+            resolved,
+        )
+    return session.resolved_integrations_cache or {}
 
 
 def _truncate(text: str, limit: int) -> str:
