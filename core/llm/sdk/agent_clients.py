@@ -21,8 +21,6 @@ from core.llm.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     AGENT_CLIENT_TIMEOUT_SEC,
-    agent_response_from_completion,
-    prepend_system_message,
 )
 from core.llm.openai_chat_completions import (
     build_assistant_message as build_openai_compat_assistant_message,
