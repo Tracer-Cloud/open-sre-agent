@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from gateway.platforms.telegram.webhook import parse_update
 
 
@@ -50,3 +52,24 @@ def test_ignores_group_messages() -> None:
         }
     )
     assert event is None
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="bug: int(update_id) is outside any guard, so a non-integer update_id "
+    "raises ValueError out of parse_update instead of being handled",
+)
+def test_parse_tolerates_non_integer_update_id() -> None:
+    event = parse_update(
+        {
+            "update_id": "not-an-int",
+            "message": {
+                "message_id": 10,
+                "from": {"id": 42},
+                "chat": {"id": 42, "type": "private"},
+                "text": "hello",
+            },
+        }
+    )
+    assert event is not None
+    assert event.text == "hello"

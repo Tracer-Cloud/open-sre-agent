@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
 
 from gateway.platforms.telegram.poller import TelegramPoller, _decode_telegram_response
 
@@ -91,3 +92,34 @@ def test_poll_once_parses_inbound_message(mock_get: MagicMock, mock_sleep: Magic
     assert events[0].text == "hello"
     assert events[0].chat_id == "99"
     mock_sleep.assert_not_called()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="bug: int(update_id) in poll_once is outside the request try/except, so a "
+    "malformed update_id in the result list crashes the whole poll batch",
+)
+@patch("gateway.platforms.telegram.poller.time.sleep")
+@patch("gateway.platforms.telegram.poller.httpx.get")
+def test_poll_once_tolerates_non_integer_update_id(
+    mock_get: MagicMock, mock_sleep: MagicMock
+) -> None:
+    mock_get.return_value = httpx.Response(
+        200,
+        json={
+            "ok": True,
+            "result": [
+                {
+                    "update_id": "bad",
+                    "message": {
+                        "message_id": 1,
+                        "from": {"id": 42},
+                        "chat": {"id": 42, "type": "private"},
+                        "text": "hi",
+                    },
+                }
+            ],
+        },
+    )
+    events = TelegramPoller("tok").poll_once()
+    assert isinstance(events, list)

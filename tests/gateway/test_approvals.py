@@ -48,3 +48,28 @@ def test_callback_approves_waiter(approval_service: TelegramApprovalService) -> 
     )
     thread.join(timeout=2)
     assert result == ["yes"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="bug: handle_callback calls store.resolve() (UPDATE+commit) before verifying "
+    "the caller owns the approval, so a non-owner can flip another chat's pending status",
+)
+def test_callback_from_non_owner_leaves_approval_pending(
+    approval_service: TelegramApprovalService,
+) -> None:
+    approval_id = approval_service._store.create(
+        chat_id="42",
+        message_id="pending",
+        tool_name="dangerous_tool",
+        payload_hash="hash",
+        expires_at=time.time() + 60,
+    )
+    approval_service.handle_callback(
+        user_id="99",  # not the owner ("42")
+        callback_data=f"approve:{approval_id}",
+        callback_query_id="cq",
+    )
+    row = approval_service._store.get(approval_id)
+    assert row is not None
+    assert row["status"] == "pending"
