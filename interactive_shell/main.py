@@ -42,19 +42,19 @@ async def repl_main(
     # Open the session file now that we know this is an interactive REPL run.
     session.storage.open_session(session)
 
-    if resume_session_id:
-        from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
-
-        slash_command = f"/resume {resume_session_id.strip()}"
-        if not resume_session_by_prefix(
-            resume_session_id.strip(),
-            session,
-            _console,
-            slash_command=slash_command,
-        ):
-            return 1
-
     try:
+        if resume_session_id:
+            from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+
+            slash_command = f"/resume {resume_session_id.strip()}"
+            if not resume_session_by_prefix(
+                resume_session_id.strip(),
+                session,
+                _console,
+                slash_command=slash_command,
+            ):
+                return 1
+
         await InteractiveShellController(
             runtime_context,
             config=cfg,

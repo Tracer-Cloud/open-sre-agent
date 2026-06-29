@@ -332,7 +332,7 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     "resume_session_id",
     default=None,
     metavar="SESSION-ID",
-    help="Resume a previous interactive shell session by ID or prefix.",
+    help="Resume a previous interactive shell session by ID, prefix, or name substring.",
 )
 @click.option(
     "--layout",
