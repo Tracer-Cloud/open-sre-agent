@@ -42,7 +42,7 @@ def _current_opensre_entrypoint() -> str | None:
     argv0 = sys.argv[0].strip() if sys.argv else ""
     if not argv0:
         return None
-    if Path(argv0).name.lower() != "opensre":
+    if Path(argv0).name.lower() not in ("opensre", "opensre.exe"):
         return None
     return argv0
 
@@ -53,14 +53,14 @@ def build_opensre_cli_argv(args: list[str]) -> list[str]:
     When the interactive shell itself was launched through an ``opensre`` entrypoint,
     reuse that entrypoint. Some packaged/script launchers have Python-looking
     executables but still forward ``-m`` to Click, which fails before slash-command
-    delegates like ``/onboard`` can run. Direct ``python -m cli`` development runs
+    Direct ``python -m surfaces.cli`` development runs
     keep using the module path so child processes run against this checkout.
     """
     if entrypoint := _current_opensre_entrypoint():
         return [entrypoint, *args]
     if getattr(sys, "frozen", False) or not _sys_executable_is_python():
         return [sys.executable, *args]
-    return [sys.executable, "-m", "cli", *args]
+    return [sys.executable, "-m", "surfaces.cli", *args]
 
 
 # Command paths (one or two whitespace-joined tokens) that drive a

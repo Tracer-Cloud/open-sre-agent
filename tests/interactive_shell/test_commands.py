@@ -2203,7 +2203,7 @@ class TestRunCliCommand:
             del check, timeout, text, encoding, errors
             assert capture_output is True
             assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
-            assert cmd[:3] == [sys.executable, "-m", "cli"]
+            assert cmd[:3] == [sys.executable, "-m", "surfaces.cli"]
             assert cmd[3:] == ["update"]
             return subprocess.CompletedProcess(
                 cmd,
@@ -2237,7 +2237,7 @@ class TestRunCliCommand:
             del check, timeout, text, encoding, errors
             assert capture_output is True
             assert env["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
-            assert cmd[:3] == [sys.executable, "-m", "cli"]
+            assert cmd[:3] == [sys.executable, "-m", "surfaces.cli"]
             assert cmd[3:] == ["config", "show"]
             return subprocess.CompletedProcess(
                 cmd,
@@ -2567,7 +2567,7 @@ class TestCliDelegatedCommands:
                 [
                     sys.executable,
                     "-m",
-                    "cli",
+                    "surfaces.cli",
                     "tests",
                     "synthetic",
                     "--scenario",
