@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import inspect
 from typing import Any
 
@@ -56,8 +57,7 @@ def test_extract_params_returns_no_credentials(telegram_source: dict[str, Any]) 
 
 
 def test_init_is_only_registry_entrypoint() -> None:
-    import tools.telegram_send_message_tool as package
-
+    package = importlib.import_module("tools.telegram_send_message_tool")
     source = inspect.getsource(package)
     assert "from tools.telegram_send_message_tool.tool import" in source
     assert "class TelegramSendMessageTool" not in source

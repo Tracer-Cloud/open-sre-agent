@@ -6,4 +6,4 @@ from tools.telegram_send_message_tool.tool import TelegramSendMessageTool, teleg
 
 TOOL_MODULES = ("tool",)
 
-__all__ = ["TelegramSendMessageTool", "telegram_send_message"]
+__all__ = ["TOOL_MODULES", "TelegramSendMessageTool", "telegram_send_message"]
