@@ -144,7 +144,7 @@ Treat `integrations/` as the canonical user/config and external-client boundary,
 
 Examples from the repo:
 
-- Datadog: `integrations/datadog/client.py`, `integrations/datadog/verifier.py`, `integrations/catalog.py`, `tools/datadog_tools/`, and Datadog-related tests under `tests/integrations/` and `tests/tools/`.
+- Datadog: `integrations/datadog/` (including `integrations/datadog/tools/` for query tools), `integrations/catalog.py`, and Datadog-related tests under `tests/integrations/datadog/` and `tests/tools/test_datadog_*.py`.
 - Grafana: `integrations/grafana/` (including `integrations/grafana/tools/` for query tools), `integrations/catalog.py`, `surfaces/cli/wizard/local_grafana_stack/`, and Grafana-related tests under `tests/integrations/grafana/` and `tests/tools/test_grafana_*.py`.
 - Hermes: `integrations/hermes/`, `tools/HermesLogsTool/`, `tools/HermesSessionEvidenceTool/`, `surfaces/cli/commands/hermes.py`, `tests/hermes/`, and `tests/synthetic/hermes/`.
 

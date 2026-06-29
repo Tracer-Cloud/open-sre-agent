@@ -42,6 +42,15 @@ def test_grafana_rule_includes_integration_and_tool_tests() -> None:
     assert len(targets) == 7
 
 
+def test_datadog_rule_includes_integration_and_tool_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["integrations/datadog/tools/__init__.py"])
+    assert not escalate
+    assert "tests/integrations/datadog/" in targets
+    assert "tests/tools/test_datadog_logs_tool.py" in targets
+    assert len(targets) == 7
+
+
 def test_interactive_shell_routes_to_its_own_tests() -> None:
     rules = _rules_module()
     escalate, targets, _ = rules.classify(["surfaces/interactive_shell/runtime/session.py"])
