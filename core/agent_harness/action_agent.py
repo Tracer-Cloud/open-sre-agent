@@ -31,6 +31,7 @@ from core.agent_harness.prompts import build_action_system_prompt, build_action_
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_results import ToolCallingTurnResult
 from core.events import RuntimeEvent, legacy_callback_payload
+from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMResponse, ToolCall
 from integrations.llm_cli.failure_explain import is_context_length_overflow
 
@@ -252,6 +253,7 @@ def run_agent_turn(
     deps: ToolCallingDeps | None = None,
     turn_ctx: TurnContext | None = None,
     error_reporter: ErrorReporter | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> ToolCallingTurnResult:
     """Run one action tool-calling turn through the shared agent harness.
 
@@ -316,6 +318,7 @@ def run_agent_turn(
             max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
             on_runtime_event=on_runtime_event,
             tool_resources=tool_resources,
+            tool_hooks=tool_hooks,
         ).run([{"role": "user", "content": user_message}])
     except Exception as exc:
         if is_context_length_overflow(str(exc)):

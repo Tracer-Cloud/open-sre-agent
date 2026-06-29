@@ -8,11 +8,13 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
+from core.agent_harness.ports import OutputSink
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_context import TurnContext
 from core.agent_harness.turn_orchestrator import answer_cli_agent as run_core_answer_cli_agent
 from core.agent_harness.turn_orchestrator import run_turn
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.execution import ToolExecutionHooks
 from interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
     ShellOutputSink,
@@ -37,6 +39,12 @@ def _default_llm_factory() -> Any:
     return agent_llm_client.get_agent_llm()
 
 
+def _resolve_output_sink(console: Console, output: OutputSink | None) -> OutputSink:
+    if output is not None:
+        return output
+    return ShellOutputSink(console)
+
+
 def run_action_tool_turn(
     message: str,
     session: ReplSession,
@@ -47,6 +55,8 @@ def run_action_tool_turn(
     request_exit: Callable[[], None] | None = None,
     deps: ToolCallingDeps | None = None,
     turn_ctx: TurnContext | None = None,
+    output: OutputSink | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> ToolCallingTurnResult:
     """Run one action-selection turn through core with shell adapters bound."""
     effective_deps = (
@@ -57,13 +67,14 @@ def run_action_tool_turn(
     return run_agent_turn(
         message,
         session,
-        output=ShellOutputSink(console),
+        output=_resolve_output_sink(console, output),
         tools=ShellToolProvider(session, console, request_exit=request_exit),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         deps=effective_deps,
         turn_ctx=turn_ctx,
         error_reporter=ShellErrorReporter(),
+        tool_hooks=tool_hooks,
     )
 
 
@@ -77,6 +88,7 @@ def answer_shell_question(
     tool_observation: str | None = None,
     tool_observation_on_screen: bool = True,
     turn_ctx: TurnContext | None = None,
+    output: OutputSink | None = None,
 ) -> LlmRunInfo | None:
     """Answer one shell question through the grounded conversational assistant.
 
@@ -86,7 +98,7 @@ def answer_shell_question(
     return run_core_answer_cli_agent(
         message,
         session,
-        ShellOutputSink(console),
+        _resolve_output_sink(console, output),
         prompts=ShellPromptContextProvider(session),
         reasoning=ShellReasoningClientProvider(console),
         run_factory=ShellRunRecordFactory(session),
@@ -111,6 +123,8 @@ def execute_shell_turn(
     execute_actions: RunActionToolTurn | None = None,
     gather_evidence: GatherEvidence | None = None,
     answer_agent: AnswerShellQuestion | None = None,
+    output: OutputSink | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
 ) -> ShellTurnResult:
     """Execute one submitted interactive-shell turn.
 
@@ -126,6 +140,7 @@ def execute_shell_turn(
     _gather = gather_evidence or gather_integration_tool_evidence
     _answer = answer_agent or answer_shell_question
     accounting = ShellTurnAccounting(session=session, text=text, recorder=recorder)
+    resolved_output = _resolve_output_sink(console, output)
 
     def execute_bound(
         t: str,
@@ -142,13 +157,21 @@ def execute_shell_turn(
             is_tty=is_tty,
             request_exit=request_exit,
             turn_ctx=turn_ctx,
+            output=resolved_output,
+            tool_hooks=tool_hooks,
         )
 
     def answer_bound(t: str, **kwargs: Any) -> LlmRunInfo | None:
         # Pure passthrough so the engine controls the exact call shape: when it
         # omits ``tool_observation_on_screen`` (no evidence gathered) the bound
         # call omits it too, matching the plain conversational path.
-        return _answer(t, session, console, **kwargs)
+        return _answer(
+            t,
+            session,
+            console,
+            output=resolved_output,
+            **kwargs,
+        )
 
     def gather_bound(t: str, *, is_tty: bool | None = None) -> str | None:
         return _gather(t, session, console, is_tty=is_tty)

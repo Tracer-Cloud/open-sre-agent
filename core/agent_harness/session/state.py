@@ -26,6 +26,10 @@ from core.agent_harness.session.background import (
     BackgroundInvestigationRecord,
     BackgroundNotificationPreferences,
 )
+from core.agent_harness.session.integrations_cache import (
+    has_resolved_integrations,
+    merge_resolved_integrations,
+)
 from core.agent_harness.session.storage.jsonl import JsonlSessionStorage
 from core.agent_harness.session.tasks import TaskRegistry
 from core.agent_harness.session.types import SessionStorage
@@ -483,7 +487,7 @@ class ReplSession:
         resolution raced store/env hydration. Failures leave the cache unset for
         the same reason.
         """
-        if self.resolved_integrations_cache is not None:
+        if has_resolved_integrations(self.resolved_integrations_cache):
             return
         if generation is None:
             with self._integration_warm_lock:
@@ -505,9 +509,12 @@ class ReplSession:
         with self._integration_warm_lock:
             if generation != self._integration_warm_generation:
                 return
-            if self.resolved_integrations_cache is not None:
+            if has_resolved_integrations(self.resolved_integrations_cache):
                 return
-            self.resolved_integrations_cache = dict(resolved)
+            self.resolved_integrations_cache = merge_resolved_integrations(
+                self.resolved_integrations_cache,
+                resolved,
+            )
 
     def schedule_warm_resolved_integrations(self) -> None:
         """Warm integration configs off the interactive prompt critical path."""

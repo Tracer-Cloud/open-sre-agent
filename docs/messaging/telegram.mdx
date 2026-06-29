@@ -181,6 +181,59 @@ delivery failures.
 
 ---
 
+## Two-way chat gateway (DM text)
+
+OpenSRE can also run a **Telegram messaging gateway** so you can chat with the agent from your phone in a private DM. v1 supports **text-only direct messages** (no groups, voice, or attachments).
+
+### Allow your Telegram user
+
+Find your numeric user id with [@userinfobot](https://t.me/userinfobot), then either:
+
+```bash
+opensre messaging allow -p telegram -u 123456789
+```
+
+or set `TELEGRAM_ALLOWED_USERS=123456789` in `.env`.
+
+Optional DM pairing (same policy as other messaging platforms):
+
+```bash
+opensre messaging pair -p telegram
+# Send `/pair <code>` to your bot in Telegram
+```
+
+### Local development (long polling)
+
+No public HTTPS URL required. When `TELEGRAM_BOT_TOKEN` is set, **`opensre` auto-starts the gateway in poll mode** alongside the interactive shell (disable with `TELEGRAM_GATEWAY_AUTO_START=false`).
+
+You can also run it as a dedicated process:
+
+```bash
+export TELEGRAM_BOT_TOKEN=<your-bot-token>
+uv run opensre gateway telegram --poll
+```
+
+Send a DM to your bot. Use `/new` to start a fresh session; `/help` for built-in commands.
+
+### Production (webhook)
+
+```bash
+export TELEGRAM_BOT_TOKEN=<your-bot-token>
+export TELEGRAM_WEBHOOK_URL=https://your-host/telegram/webhook
+export TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)
+export TELEGRAM_ALLOWED_USERS=123456789
+
+uv run opensre gateway telegram
+```
+
+The gateway listens on `TELEGRAM_GATEWAY_HOST` (default `127.0.0.1`) and `TELEGRAM_WEBHOOK_PORT` (default `8443`). Put TLS termination on your reverse proxy and forward to that port.
+
+External or mutating tool calls (for example `telegram_send_message`) prompt for **Approve / Deny** inline buttons in Telegram before running.
+
+Investigation delivery, watchdog alerts, and cron still use the outbound-only paths documented above — they do not require the gateway process.
+
+---
+
 ## Troubleshooting
 
 `opensre integrations verify telegram` only calls Telegram's `getMe` endpoint, so it surfaces token-validity errors but cannot detect chat-routing problems. Delivery-time errors only show up when an investigation actually posts.
