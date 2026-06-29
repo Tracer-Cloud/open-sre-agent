@@ -321,6 +321,10 @@ def sync_provider_env(
     classification_env = _classification_model_env(resolved_model_provider)
     if classification_env:
         active_non_secret.add(classification_env)
+    # A "host" credential (e.g. OLLAMA_HOST) lives in api_key_env but is non-secret
+    # config read from the environment at runtime — keep it, don't strip it as a key.
+    if provider.credential_kind == "host" and provider.api_key_env:
+        active_non_secret.add(provider.api_key_env)
     keys_to_remove -= active_non_secret
 
     lines = _remove_keys(existing, keys_to_remove)

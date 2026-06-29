@@ -224,6 +224,23 @@ def _credential_prompt_label(provider: ProviderOption) -> str:
     return provider.label
 
 
+def _persist_provider_credential(provider: ProviderOption, value: str) -> bool:
+    """Persist a collected provider credential to the right place.
+
+    A "host" credential (e.g. Ollama's ``OLLAMA_HOST``) is non-secret config that the
+    runtime reads from the environment, so it goes to ``.env``/``os.environ`` — not the
+    system keyring, where it would be silently dropped at runtime and trapped (the
+    wizard would see the keyring entry and never re-prompt). API keys still go to the
+    keyring via :func:`_persist_llm_api_key`.
+    """
+    if provider.credential_kind == "host":
+        host = value.strip()
+        sync_env_values({provider.api_key_env: host})
+        os.environ[provider.api_key_env] = host
+        return True
+    return _persist_llm_api_key(provider.api_key_env, value)
+
+
 def _subscription_login_command(
     provider: ProviderOption, binary_path: str | None
 ) -> list[str] | None:
@@ -743,7 +760,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 except KeyboardInterrupt:
                     _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                     return 1
-                if not _persist_llm_api_key(provider.api_key_env, api_key):
+                if not _persist_provider_credential(provider, api_key):
                     return 1
         else:
             assert saved_provider is not None
@@ -758,7 +775,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
                 if not has_api_key and legacy_api_key:
-                    if not _persist_llm_api_key(provider.api_key_env, legacy_api_key):
+                    if not _persist_provider_credential(provider, legacy_api_key):
                         return 1
                     has_api_key = True
                 if not has_api_key:
@@ -776,7 +793,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     except KeyboardInterrupt:
                         _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
                         return 1
-                    if not _persist_llm_api_key(provider.api_key_env, api_key):
+                    if not _persist_provider_credential(provider, api_key):
                         return 1
 
         if change_provider:

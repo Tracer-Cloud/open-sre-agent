@@ -103,6 +103,29 @@ def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch)
     assert "OPENAI_MODEL=gpt-5-mini\n" in content
 
 
+def test_sync_provider_env_preserves_ollama_host(tmp_path, monkeypatch) -> None:
+    """The Ollama host URL is non-secret config (read from the env at runtime), so it
+    must survive a provider sync rather than being stripped like an API key."""
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=anthropic\nOLLAMA_HOST=http://gpu-box.lan:11434\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["ollama"],
+        model="llama3.1",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "OLLAMA_HOST=http://gpu-box.lan:11434\n" in content
+    assert os.environ.get("OLLAMA_HOST") == "http://gpu-box.lan:11434"
+
+
 def test_sync_provider_env_strips_integration_fallback_secrets(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_REASONING_MODEL", raising=False)

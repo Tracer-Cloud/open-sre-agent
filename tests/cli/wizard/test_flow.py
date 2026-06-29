@@ -2369,3 +2369,47 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
     assert validation_call_count == 2
     assert saved_integrations[0][0] == "telegram"
     assert saved_integrations[0][1]["credentials"]["bot_token"] == "123:GOOD"
+
+
+def test_persist_provider_credential_routes_host_to_env_not_keyring(monkeypatch) -> None:
+    """An Ollama host URL is non-secret config: it must go to .env/os.environ, never
+    the keyring (where the runtime can't read it and the wizard won't re-prompt)."""
+    from cli.wizard.config import PROVIDER_BY_VALUE
+
+    synced: dict[str, str] = {}
+    keyring_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(flow, "sync_env_values", lambda values, **_kw: synced.update(values))
+    monkeypatch.setattr(
+        flow,
+        "_persist_llm_api_key",
+        lambda env, val: keyring_calls.append((env, val)) or True,
+    )
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+
+    ok = flow._persist_provider_credential(
+        PROVIDER_BY_VALUE["ollama"], "  http://gpu-box.lan:11434  "
+    )
+
+    assert ok is True
+    assert synced == {"OLLAMA_HOST": "http://gpu-box.lan:11434"}
+    assert os.environ.get("OLLAMA_HOST") == "http://gpu-box.lan:11434"
+    assert keyring_calls == []
+
+
+def test_persist_provider_credential_routes_api_key_to_keyring(monkeypatch) -> None:
+    from cli.wizard.config import PROVIDER_BY_VALUE
+
+    synced: dict[str, str] = {}
+    keyring_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(flow, "sync_env_values", lambda values, **_kw: synced.update(values))
+    monkeypatch.setattr(
+        flow,
+        "_persist_llm_api_key",
+        lambda env, val: keyring_calls.append((env, val)) or True,
+    )
+
+    ok = flow._persist_provider_credential(PROVIDER_BY_VALUE["openai"], "sk-secret")
+
+    assert ok is True
+    assert keyring_calls == [("OPENAI_API_KEY", "sk-secret")]
+    assert synced == {}
