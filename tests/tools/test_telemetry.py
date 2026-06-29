@@ -1217,7 +1217,7 @@ def test_every_registered_tool_is_migrated_or_allowlisted() -> None:
     # to the registry's own integration list (instead of a broad
     # ``"integrations."``) keeps the audit from sweeping in any future
     # caller that ships tools under an ``integrations.*`` namespace.
-    _PRODUCTION_TOOL_PREFIXES = ("tools.", *(f"{pkg}." for pkg in _INTEGRATION_TOOL_PACKAGES))
+    _PRODUCTION_TOOL_PREFIXES = ("tools.", *_INTEGRATION_TOOL_PACKAGES)
     registered = {
         name
         for name, tool in get_registered_tool_map().items()
