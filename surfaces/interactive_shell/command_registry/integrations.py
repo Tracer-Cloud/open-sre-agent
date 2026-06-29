@@ -417,12 +417,14 @@ def _interactive_mcp_menu(session: ReplSession, console: Console) -> bool:
 
 _INTEGRATIONS_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("list", "list all configured integrations"),
+    ("ls", "alias for list"),
     ("verify", "run health checks on all integrations"),
     ("show", "show details for a single integration"),
 )
 
 _MCP_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("list", "list connected MCP servers"),
+    ("ls", "alias for list"),
     ("connect", "add an MCP server via opensre integrations setup"),
     ("disconnect", "remove an MCP server"),
 )

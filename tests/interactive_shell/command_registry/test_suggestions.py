@@ -47,24 +47,34 @@ def test_resolve_literal_slash_typo_unknown_root() -> None:
     assert "Did you mean /investigate?" in typo.message
 
 
-def test_resolve_literal_slash_typo_invalid_subcommand() -> None:
-    typo = resolve_literal_slash_typo("/integrations bogus", SLASH_COMMANDS)
-    assert typo is not None
-    assert typo.outcome == "invalid_subcommand"
-    assert "Invalid subcommand: bogus" in typo.message
-    assert "/integrations list" in typo.message
-
-
 @pytest.mark.parametrize(
     "command_line",
     [
         "/resume redis",
         "/help model",
         "/help /model",
+        "/integrations ls",
+        "/tools ls",
+        "/tools tool",
+        "/mcp ls",
     ],
 )
 def test_resolve_literal_slash_typo_allows_free_form_first_args(command_line: str) -> None:
     assert resolve_literal_slash_typo(command_line, SLASH_COMMANDS) is None
+
+
+def test_dispatch_invalid_subcommand_is_handled_by_command_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.integrations.repl_data.load_verified_integrations",
+        lambda: [],
+    )
+    session = ReplSession()
+    console, buf = _capture()
+    assert dispatch_slash("/integrations bogus", session, console) is True
+    assert "unknown subcommand" in buf.getvalue().lower()
+    assert resolve_literal_slash_typo("/integrations bogus", SLASH_COMMANDS) is None
 
 
 def test_subcommand_hints_ignores_usage_placeholders() -> None:

@@ -11,7 +11,6 @@ from surfaces.interactive_shell.command_registry.types import SlashCommand
 
 SlashOutcome = Literal["unknown_command", "invalid_subcommand"]
 
-_PATH_LIKE_ARG_RE = re.compile(r"[/\\]|\.(?:json|md|txt|yml|yaml)\b", re.IGNORECASE)
 _RICH_TAG_RE = re.compile(r"\[[^\]]+\]")
 
 
@@ -40,13 +39,6 @@ def subcommand_hints(cmd: SlashCommand) -> tuple[str, ...]:
     treated as literal subcommands.
     """
     return tuple(sorted({keyword.lower() for keyword, _label in cmd.first_arg_completions}))
-
-
-def _looks_like_path_or_template_arg(value: str) -> bool:
-    stripped = value.strip()
-    if not stripped:
-        return False
-    return bool(_PATH_LIKE_ARG_RE.search(stripped))
 
 
 def format_unknown_slash_message(
@@ -111,15 +103,6 @@ def resolve_literal_slash_typo(
     if cmd.validate_args is not None:
         validation_error = cmd.validate_args(args)
         if validation_error is not None and args:
-            return LiteralSlashTypo(
-                message=format_invalid_subcommand_message(cmd, args),
-                outcome="invalid_subcommand",
-            )
-
-    hints = subcommand_hints(cmd)
-    if args and hints and not _looks_like_path_or_template_arg(args[0]):
-        first_arg = args[0].lower()
-        if first_arg not in hints:
             return LiteralSlashTypo(
                 message=format_invalid_subcommand_message(cmd, args),
                 outcome="invalid_subcommand",
