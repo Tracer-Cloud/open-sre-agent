@@ -19,6 +19,14 @@ from tools.interactive_shell.shared.investigation_launch import launch_investiga
 from tools.registered_tool import RegisteredTool
 
 
+def normalize_investigation_alert_text(raw: str) -> str:
+    """Strip outer quotes models often echo from user-quoted investigation payloads."""
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
 def run_text_investigation(
     alert_text: str,
     session: ReplSession,
@@ -68,7 +76,7 @@ def run_text_investigation(
 
 
 def execute_investigation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
-    alert_text = str(args.get("alert_text", "")).strip()
+    alert_text = normalize_investigation_alert_text(str(args.get("alert_text", "")))
     if not alert_text:
         return False
     run_text_investigation(
@@ -121,4 +129,9 @@ investigation_start_tool = RegisteredTool(
 )
 
 
-__all__ = ["execute_investigation_tool", "investigation_start_tool", "run_text_investigation"]
+__all__ = [
+    "execute_investigation_tool",
+    "investigation_start_tool",
+    "normalize_investigation_alert_text",
+    "run_text_investigation",
+]

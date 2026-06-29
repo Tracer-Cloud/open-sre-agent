@@ -87,21 +87,22 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
         text=text,
         turn_kind=_AGENT_TURN_KIND,
     )
-    progress_scope = (
-        contextlib.nullcontext()
-        if turn_needs_exclusive_stdin(text, runtime.session)
-        else repl_safe_progress_scope()
-    )
-    with progress_scope:
-        await _run_agent_turn_loop(
-            runtime=runtime,
-            text=text,
-            output=console,
-            recorder=recorder,
-            confirm=lambda prompt: request_confirmation_via_prompt(runtime.state, prompt),
-            emit=emit,
-            dispatch_cancel=dispatch_cancel,
-        )
+    exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
+    progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
+    runtime.session.exclusive_stdin_active = exclusive_stdin
+    try:
+        with progress_scope:
+            await _run_agent_turn_loop(
+                runtime=runtime,
+                text=text,
+                output=console,
+                recorder=recorder,
+                confirm=lambda prompt: request_confirmation_via_prompt(runtime.state, prompt),
+                emit=emit,
+                dispatch_cancel=dispatch_cancel,
+            )
+    finally:
+        runtime.session.exclusive_stdin_active = False
 
 
 async def _run_agent_turn_loop(

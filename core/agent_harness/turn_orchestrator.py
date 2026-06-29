@@ -163,9 +163,19 @@ class TurnRoute:
     intent: Literal["summarize_observation", "handled_without_llm", "gather_and_answer"]
 
 
-def _route_turn(routing: TurnRoutingInput) -> TurnRoute:
+def _is_literal_slash_command(text: str) -> bool:
+    """True when the user submitted an explicit ``/slash`` command line."""
+    return text.strip().startswith("/")
+
+
+def _route_turn(routing: TurnRoutingInput, *, user_text: str = "") -> TurnRoute:
     """Decide the turn path from routing facts (pure)."""
-    if routing.action_handled and routing.has_observation and routing.executed_success_count > 0:
+    if (
+        routing.action_handled
+        and routing.has_observation
+        and routing.executed_success_count > 0
+        and not _is_literal_slash_command(user_text)
+    ):
         return TurnRoute(intent="summarize_observation")
     if routing.action_handled:
         return TurnRoute(intent="handled_without_llm")
@@ -238,6 +248,9 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
+    executed_slashes = getattr(session, "agent_turn_executed_slashes", None)
+    if executed_slashes is not None:
+        executed_slashes.clear()
 
     action_result = execute_actions(
         text,
@@ -248,7 +261,7 @@ def run_turn(
     accounting.record_action_result(action_result)
 
     observation = session.last_command_observation
-    route = _route_turn(_routing_input_from_result(action_result, observation))
+    route = _route_turn(_routing_input_from_result(action_result, observation), user_text=text)
 
     if route.intent == "summarize_observation":
         with apply_reasoning_effort(turn_ctx.reasoning_effort):

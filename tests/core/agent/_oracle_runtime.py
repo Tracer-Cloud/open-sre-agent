@@ -308,7 +308,9 @@ def patch_execution_boundary(
             content = template
             history_type = "alert"
         elif kind == "investigation":
-            content = str(action_data.get("alert_text", "")).strip()
+            content = investigation_tool.normalize_investigation_alert_text(
+                str(action_data.get("alert_text", ""))
+            )
             action["content"] = content
             history_type = "alert"
         elif kind == "shell":

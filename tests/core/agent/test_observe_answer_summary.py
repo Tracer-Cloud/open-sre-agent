@@ -104,6 +104,43 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
     assert session.last_assistant_intent == "cli_agent_handled"
 
 
+def test_literal_slash_command_skips_observation_summary() -> None:
+    """Explicit slash commands already show output; do not summarize or re-run."""
+    answer_calls: list[str] = []
+
+    def fake_execute(
+        text: str,
+        session: ReplSession,
+        console: Console,
+        **kwargs: object,
+    ) -> ToolCallingTurnResult:
+        session.last_command_observation = _OBSERVATION
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+        )
+
+    def fake_answer(text: str, *args: object, **kwargs: object) -> None:
+        answer_calls.append(text)
+        return None
+
+    session = ReplSession()
+    execute_shell_turn(
+        "/integrations list",
+        session,
+        _console(),
+        recorder=None,
+        execute_actions=fake_execute,
+        answer_agent=fake_answer,
+    )
+
+    assert answer_calls == []
+    assert session.last_assistant_intent == "cli_agent_handled"
+
+
 def test_failed_discovery_is_not_summarized() -> None:
     """If the discovery command failed, skip the summary (output already shown)."""
     answer_calls: list[str] = []
