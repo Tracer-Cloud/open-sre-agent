@@ -63,13 +63,25 @@ def run_poll_loop(settings: GatewaySettings, stop_event: threading.Event) -> Non
         # against itself. The set keeps task references alive (create_task alone
         # lets them be garbage-collected mid-flight).
         pending: set[asyncio.Task[None]] = set()
-        while not stop_event.is_set():
-            events = await asyncio.to_thread(poller.poll_once)
-            for event in events:
-                task = asyncio.create_task(runner.handle_inbound(event))
-                pending.add(task)
-                task.add_done_callback(pending.discard)
-            await asyncio.sleep(0)
+        try:
+            while not stop_event.is_set():
+                events = await asyncio.to_thread(poller.poll_once)
+                for event in events:
+                    task = asyncio.create_task(runner.handle_inbound(event))
+                    pending.add(task)
+                    task.add_done_callback(pending.discard)
+                await asyncio.sleep(0)
+        finally:
+            # Drain in-flight turns before the loop stops. Once
+            # run_until_complete returns, the loop is no longer running and any
+            # task still awaiting an executor future can never resume — the
+            # following runner.shutdown()/loop.close() would then tear down
+            # resources mid-flight ("Task was destroyed but it is pending!").
+            # Cancelling lets each task unwind on this still-running loop.
+            for task in list(pending):
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
 
     try:
         loop.run_until_complete(_loop_body())

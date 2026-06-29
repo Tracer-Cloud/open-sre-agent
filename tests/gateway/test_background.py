@@ -96,7 +96,11 @@ class _FakeRunner:
     async def handle_inbound(self, event: str) -> None:
         if event == "message":
             self.order.append("message_start")
-            await self._event().wait()
+            try:
+                await self._event().wait()
+            except asyncio.CancelledError:
+                self.order.append("message_cancelled")
+                raise
             self.order.append("message_end")
         else:
             self.order.append("callback")
@@ -116,6 +120,26 @@ class _FakePoller:
             return ["callback"]
         if self._calls >= 4:
             self._stop_event.set()
+        return []
+
+
+class _BlockingPoller:
+    """Emits one approval-gated turn, then stops the loop while it is in flight.
+
+    The message turn awaits a callback that never arrives, so when ``stop_event``
+    is set the task is still pending. Mirrors a real shutdown landing mid-turn.
+    """
+
+    def __init__(self, _token: str, stop_event: threading.Event) -> None:
+        self._stop_event = stop_event
+        self._calls = 0
+
+    def poll_once(self) -> list[str]:
+        self._calls += 1
+        if self._calls == 1:
+            return ["message"]
+        # The message turn is now awaiting its (never-arriving) callback.
+        self._stop_event.set()
         return []
 
 
@@ -139,3 +163,25 @@ def test_poll_loop_dispatches_events_concurrently() -> None:
     assert not thread.is_alive(), "poll loop deadlocked on an approval-gated turn"
     assert "callback" in runner.order
     assert "message_end" in runner.order
+
+
+def test_poll_loop_drains_in_flight_task_on_shutdown() -> None:
+    """Stopping the loop mid-turn must cancel/drain the task, not abandon it."""
+    settings = GatewaySettings(bot_token="tok")
+    stop_event = threading.Event()
+    runner = _FakeRunner()
+
+    with (
+        patch("gateway.background.GatewayRunner", return_value=runner),
+        patch(
+            "gateway.background.TelegramPoller",
+            side_effect=lambda token: _BlockingPoller(token, stop_event),
+        ),
+    ):
+        thread = threading.Thread(target=run_poll_loop, args=(settings, stop_event), daemon=True)
+        thread.start()
+        thread.join(timeout=5.0)
+
+    assert not thread.is_alive(), "poll loop did not shut down with an in-flight turn"
+    assert "message_start" in runner.order
+    assert "message_cancelled" in runner.order, "in-flight task was abandoned, not drained"
