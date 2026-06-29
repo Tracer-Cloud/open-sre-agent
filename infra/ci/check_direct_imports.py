@@ -26,12 +26,18 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 # ``source_prefix -> forbidden destination roots`` for direct imports only.
 # Enforces the layering contract documented in ``surfaces/__init__.py``:
 # "Nothing first-party may import from surfaces/". Adds an explicit bound
-# on ``platform``, ``infra``, ``core``, ``config`` so the surfaces ban
+# on ``platform``, ``infra``, ``core``, ``gateway`` so the surfaces ban
 # is CI-enforced, not just doc-described.
+#
+# Note: ``infra`` is excluded from the import-graph's first-party roots
+# (see ``check_import_cycles._SKIP_ROOT_DIRS``), so its rule here is
+# defensive — it activates the moment ``infra/`` is brought into the
+# graph. Keep it documented so the intent is not lost.
 _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
     "platform": frozenset({"surfaces"}),
     "infra": frozenset({"surfaces"}),
     "core": frozenset({"surfaces"}),
+    "gateway": frozenset({"surfaces"}),
     "integrations": frozenset({"tools", "surfaces"}),
     "tools": frozenset({"surfaces"}),
 }
@@ -40,6 +46,11 @@ _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
 # Format: ``"source.module -> dest.module"`` (exact modules from the graph).
 _BASELINE_IGNORES: frozenset[str] = frozenset(
     {
+        # Gateway hosts the interactive_shell runtime — pre-existing reuse
+        # to be burned down by extracting shared runtime primitives out of
+        # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
+        "gateway.session.resolver -> surfaces.interactive_shell.runtime.context",
+        "gateway.turn_executor -> surfaces.interactive_shell.runtime.shell_turn_execution",
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
         # Integration setup UX still reaches into the CLI wizard.

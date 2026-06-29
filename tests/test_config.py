@@ -208,6 +208,7 @@ def test_llm_settings_copilot_provider_accepted() -> None:
 
 
 def test_has_credentials_for_active_llm_provider_missing_key(monkeypatch) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
@@ -339,6 +340,7 @@ def test_resolve_llm_settings_verbose_attempts_only_configured_provider(monkeypa
 def test_describe_llm_resolution_reports_no_fallback(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
@@ -354,6 +356,7 @@ def test_describe_llm_resolution_reports_no_fallback(
 def test_describe_llm_resolution_reports_missing_configured_credentials(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setenv("GRAFANA_CONFIG_SKIP_ENV_FILE", "1")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))

@@ -109,11 +109,13 @@ jobs:
             pytest_paths: >-
               tests/tools
               tests/core/runtime/llm
+              tests/core/agent
               tests/platform/observability
               tests/utils
               tests/masking
               tests/core/domain/types
               tests/watch_dog
+              tests/test_core_layering.py
           - os: ubuntu-latest
             shard: cli-runtime
             # Live shell action-agent contracts are validated on openai,
