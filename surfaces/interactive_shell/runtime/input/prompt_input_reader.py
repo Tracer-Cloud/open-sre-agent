@@ -6,6 +6,7 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from platform.terminal.prompt_support import (
+    print_session_resume_hint,
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,
 )
@@ -17,23 +18,11 @@ from surfaces.interactive_shell.runtime.input.events import (
     InputEvent,
     InputSubmitted,
 )
-<<<<<<< HEAD:surfaces/interactive_shell/runtime/input/prompt_input_reader.py
+from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.ui.components.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,
 )
-=======
-from interactive_shell.ui import DIM
-from interactive_shell.ui.components.cpr_stdin import (
-    contains_cpr_sequence,
-    strip_cpr_sequences,
-)
-from platform.terminal.prompt_support import (
-    print_session_resume_hint,
-    repl_prompt_note_ctrl_c,
-    repl_reset_ctrl_c_gate,
-)
->>>>>>> origin/main:interactive_shell/runtime/input/prompt_input_reader.py
 
 
 class PromptInputReader:

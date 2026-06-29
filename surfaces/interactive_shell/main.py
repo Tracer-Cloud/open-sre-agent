@@ -46,7 +46,7 @@ async def repl_main(
 
     try:
         if resume_session_id:
-            from interactive_shell.command_registry.session_cmds.resume import (
+            from surfaces.interactive_shell.command_registry.session_cmds.resume import (
                 resume_session_by_prefix,
             )
 

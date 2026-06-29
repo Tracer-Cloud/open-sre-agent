@@ -22,10 +22,10 @@ from typing import Final
 import httpx
 
 import platform
+from config.constants import get_store_path
 from config.constants.posthog import POSTHOG_CAPTURE_API_KEY, POSTHOG_HOST
 from config.version import get_version
 from platform.analytics.events import Event
-from surfaces.cli.wizard.store import get_store_path
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"

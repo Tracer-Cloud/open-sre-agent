@@ -268,7 +268,9 @@ class TestResumeScenarioMatrix:
         self,
         isolated_sessions: Path,
     ) -> None:
-        from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+        from surfaces.interactive_shell.command_registry.session_cmds.resume import (
+            resume_session_by_prefix,
+        )
 
         target_id = "eeee5555-6666-7777-8888-999900001111"
         _write_finalized_session(isolated_sessions, target_id, chat_text="investigate OOM killer")

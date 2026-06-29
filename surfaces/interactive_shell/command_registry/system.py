@@ -5,6 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 import platform
+from platform.terminal.prompt_support import print_session_resume_hint
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import ReplSession
 from surfaces.interactive_shell.ui import (
@@ -16,7 +17,6 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from platform.terminal.prompt_support import print_session_resume_hint
 
 
 def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:

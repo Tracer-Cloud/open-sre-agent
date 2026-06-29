@@ -599,11 +599,11 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
 
 def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
-    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
 
     load_calls: list[dict] = []
     orig_load = ReplConfig.load
@@ -621,7 +621,7 @@ def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
         run_repl_calls.append(kwargs)
         return 0
 
-    with patch("interactive_shell.run_repl", side_effect=_capture_run_repl):
+    with patch("surfaces.interactive_shell.run_repl", side_effect=_capture_run_repl):
         exit_code = main(["--resume", "8988e743"])
 
     assert exit_code == 0

@@ -97,13 +97,13 @@ check-docker:
 	@docker info >/dev/null 2>&1 || { echo "Docker is installed, but the Docker daemon is not running. Start Docker Desktop, OrbStack, or Colima, then rerun this target."; exit 1; }
 
 grafana-local-up: check-docker
-	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml up -d
+	docker compose -f surfaces/cli/wizard/local_grafana_stack/docker-compose.yml up -d
 
 grafana-local-down: check-docker
-	docker compose -f cli/wizard/local_grafana_stack/docker-compose.yml down
+	docker compose -f surfaces/cli/wizard/local_grafana_stack/docker-compose.yml down
 
 grafana-local-seed:
-	$(PYTHON) -m cli.wizard.grafana_seed
+	$(PYTHON) -m surfaces.cli.wizard.grafana_seed
 
 # Run CloudWatch demo
 cloudwatch-demo:

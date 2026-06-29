@@ -32,13 +32,8 @@ def test_check_only_returns_1_when_update_available(
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_version", lambda: "1.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr(
-<<<<<<< HEAD
         "surfaces.cli.lifecycle.update._upgrade_via_install_script",
-        lambda: pytest.fail(),
-=======
-        "cli.lifecycle.update._upgrade_via_install_script",
         pytest.fail,
->>>>>>> origin/main
     )
 
     rc = run_update(check_only=True)

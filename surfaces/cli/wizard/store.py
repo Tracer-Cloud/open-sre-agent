@@ -8,15 +8,23 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from config.constants import OPENSRE_HOME_DIR
+from config.constants import get_store_path as _get_store_path_from_config
 
 _VERSION = 1
 _EMPTY_CONFIG = {"version": _VERSION, "wizard": {}, "targets": {}, "probes": {}}
 
 
 def get_store_path() -> Path:
-    """Return the default wizard config path."""
-    return OPENSRE_HOME_DIR / "opensre.json"
+    """Default path to the wizard config file.
+
+    Re-exports ``config.constants.get_store_path`` so layers below
+    ``surfaces/`` can import the path without crossing the surfaces
+    boundary. The function lives in ``config/`` because that's where
+    ``OPENSRE_HOME_DIR`` is defined; this module preserves the legacy
+    ``from surfaces.cli.wizard.store import get_store_path`` import
+    path that callers already use.
+    """
+    return _get_store_path_from_config()
 
 
 def _load_raw(path: Path | None = None) -> dict[str, Any]:
