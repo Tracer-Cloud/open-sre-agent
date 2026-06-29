@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness.session import DEFAULT_SESSION_STORAGE, ReplSession
-from gateway.session.bindings import SessionBindingStore
+from gateway.storage.session.bindings import SessionBindingStore
 from surfaces.interactive_shell.runtime.context import ReplSessionBootstrapSpec
 
 logger = logging.getLogger(__name__)

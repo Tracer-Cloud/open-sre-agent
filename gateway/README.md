@@ -33,9 +33,10 @@ The process binds `TELEGRAM_GATEWAY_HOST` (default `127.0.0.1`) and `TELEGRAM_WE
 
 ## Architecture
 
-- `gateway/runner.py` — routes inbound updates, per-user session locks
-- `gateway/session/` — SQLite binding from Telegram user id → `ReplSession` JSONL file
-- `gateway/turn_executor.py` — runs `execute_shell_turn` with Telegram output sink
+- `gateway/core/runner.py` — routes inbound updates, per-user session locks
+- `gateway/storage/` — SQLite state (`db.py`) and session bindings (`session/`) from Telegram user id → `ReplSession` JSONL file
+- `gateway/core/turn_executor.py` — runs `execute_shell_turn` with Telegram output sink
+- `gateway/core/telegram_gateway_background.py` — co-located poll-mode auto-start for the REPL
 - `gateway/approvals/` — inline Approve/Deny for external/mutating tools
 - `gateway/sinks/telegram_sink.py` — typing + throttled `editMessageText` streaming
 

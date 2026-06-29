@@ -85,7 +85,7 @@ def run_repl(
 
     telegram_gateway = None
     if initial_input is None:
-        from gateway.background import try_start_telegram_gateway_background
+        from gateway.core.telegram_gateway_background import try_start_telegram_gateway_background
 
         telegram_gateway = try_start_telegram_gateway_background()
         if telegram_gateway is not None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from gateway.config import TelegramInboundMessage
+from gateway.config.get_gateway_settings import TelegramInboundMessage
 
 
 def parse_update(update: dict[str, Any]) -> TelegramInboundMessage | None:

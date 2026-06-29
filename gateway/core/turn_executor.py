@@ -12,7 +12,7 @@ from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_results import ShellTurnResult
 from core.execution import ToolExecutionHooks
 from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_chat_context
-from gateway.config import GatewaySettings
+from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.platforms.telegram.client import TelegramBotClient
 from gateway.sinks.telegram_sink import TelegramOutputSink
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
@@ -58,6 +58,8 @@ def execute_gateway_turn(
         def effective_confirm(prompt: str) -> str:
             return approval_service.wait_for_confirmation(chat_id=chat_id, prompt=prompt)
 
+    # THIS CODE SHOULD BE PLUGGED INTO THE CORE AGENT RATHER THAN THE INTERACTIVE SHELL!!!!!
+    # This is a major problem because it creates a dependency on the interactive shell that is not necessary.
     result = execute_shell_turn(
         text,
         session,

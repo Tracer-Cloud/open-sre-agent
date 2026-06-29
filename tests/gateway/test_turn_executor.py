@@ -8,8 +8,8 @@ from core.agent_harness.session.integrations_cache import (
     merge_resolved_integrations,
 )
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
-from gateway.config import GatewaySettings
-from gateway.turn_executor import execute_gateway_turn
+from gateway.config.get_gateway_settings import GatewaySettings
+from gateway.core.turn_executor import execute_gateway_turn
 
 
 def test_has_resolved_integrations_ignores_gateway_metadata() -> None:
@@ -32,7 +32,7 @@ def test_merge_resolved_integrations_preserves_gateway_metadata() -> None:
     assert merged["github"]["token"] == "x"
 
 
-@patch("gateway.turn_executor.execute_shell_turn")
+@patch("gateway.core.turn_executor.execute_shell_turn")
 def test_execute_gateway_turn_passes_sink_and_hooks(mock_turn: MagicMock) -> None:
     mock_turn.return_value = ShellTurnResult(
         final_intent="gather_and_answer",
@@ -65,7 +65,7 @@ def test_execute_gateway_turn_passes_sink_and_hooks(mock_turn: MagicMock) -> Non
     assert kwargs["tool_hooks"] is approval.hooks.return_value
 
 
-@patch("gateway.turn_executor.execute_shell_turn")
+@patch("gateway.core.turn_executor.execute_shell_turn")
 def test_execute_gateway_turn_warms_before_gateway_context(mock_turn: MagicMock) -> None:
     mock_turn.return_value = ShellTurnResult(
         final_intent="gather_and_answer",
@@ -99,7 +99,7 @@ def test_execute_gateway_turn_warms_before_gateway_context(mock_turn: MagicMock)
     assert session.resolved_integrations_cache["_gateway_chat_id"] == "99"
 
 
-@patch("gateway.turn_executor.execute_shell_turn")
+@patch("gateway.core.turn_executor.execute_shell_turn")
 def test_execute_gateway_turn_finalizes_captured_console_output(mock_turn: MagicMock) -> None:
     def _run_turn(
         _text: str,

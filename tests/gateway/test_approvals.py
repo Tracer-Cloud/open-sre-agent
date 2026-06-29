@@ -7,8 +7,8 @@ import pytest
 
 from gateway.approvals.store import ApprovalStore
 from gateway.approvals.telegram import TelegramApprovalService
-from gateway.config import GatewaySettings
-from gateway.db import connect_gateway_db
+from gateway.config.get_gateway_settings import GatewaySettings
+from gateway.storage import connect_gateway_db
 
 
 class _FakeClient:

@@ -5,12 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gateway.background import (
+from gateway.config.get_gateway_settings import GatewaySettings
+from gateway.core.telegram_gateway_background import (
     _configure_co_located_gateway_logging,
     telegram_gateway_auto_start_enabled,
     try_start_telegram_gateway_background,
 )
-from gateway.config import GatewaySettings
 
 
 def test_telegram_gateway_auto_start_enabled_defaults_true() -> None:
@@ -33,16 +33,16 @@ def test_co_located_gateway_logging_does_not_propagate_to_root(
     assert not any("getUpdates not ok" in record.message for record in caplog.records)
 
 
-@patch("gateway.background.run_poll_loop")
-@patch("gateway.background.load_gateway_settings")
+@patch("gateway.core.telegram_gateway_background.run_telegram_gateway_until_stopped")
+@patch("gateway.core.telegram_gateway_background.load_gateway_settings")
 def test_try_start_requires_bot_token(mock_settings: MagicMock, mock_poll: MagicMock) -> None:
     mock_settings.return_value = GatewaySettings(bot_token="")
     assert try_start_telegram_gateway_background() is None
     mock_poll.assert_not_called()
 
 
-@patch("gateway.background.run_poll_loop")
-@patch("gateway.background.load_gateway_settings")
+@patch("gateway.core.telegram_gateway_background.run_telegram_gateway_until_stopped")
+@patch("gateway.core.telegram_gateway_background.load_gateway_settings")
 def test_try_start_skips_webhook_mode(mock_settings: MagicMock, mock_poll: MagicMock) -> None:
     mock_settings.return_value = GatewaySettings(
         bot_token="tok",
@@ -53,8 +53,8 @@ def test_try_start_skips_webhook_mode(mock_settings: MagicMock, mock_poll: Magic
     mock_poll.assert_not_called()
 
 
-@patch("gateway.background.run_poll_loop")
-@patch("gateway.background.load_gateway_settings")
+@patch("gateway.core.telegram_gateway_background.run_telegram_gateway_until_stopped")
+@patch("gateway.core.telegram_gateway_background.load_gateway_settings")
 def test_try_start_starts_poll_thread(mock_settings: MagicMock, mock_poll: MagicMock) -> None:
     mock_settings.return_value = GatewaySettings(bot_token="tok")
     handle = try_start_telegram_gateway_background()

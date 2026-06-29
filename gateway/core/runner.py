@@ -9,13 +9,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 from gateway.approvals.store import ApprovalStore
 from gateway.approvals.telegram import TelegramApprovalService
-from gateway.config import GatewaySettings, TelegramInboundMessage, load_gateway_settings
-from gateway.db import connect_gateway_db
+from gateway.config.get_gateway_settings import (
+    GatewaySettings,
+    TelegramInboundMessage,
+    load_gateway_settings,
+)
+from gateway.core.turn_executor import execute_gateway_turn
 from gateway.platforms.telegram.client import TelegramBotClient
 from gateway.security.authorize import evaluate_inbound, persist_policy_if_needed
-from gateway.session.bindings import SessionBindingStore
-from gateway.session.resolver import SessionResolver
-from gateway.turn_executor import execute_gateway_turn
+from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 logger = logging.getLogger(__name__)
 

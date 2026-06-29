@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gateway.app import app
-from gateway.config import GatewaySettings
+from gateway.config.get_gateway_settings import GatewaySettings
 
 
 @pytest.fixture
@@ -18,6 +18,7 @@ def client() -> TestClient:
     with (
         patch("gateway.app.GatewayRunner", return_value=runner),
         patch("gateway.app.load_gateway_settings", return_value=settings),
+        patch("gateway.routers.telegram.load_gateway_settings", return_value=settings),
         patch("gateway.app.set_runner"),
         TestClient(app) as test_client,
     ):

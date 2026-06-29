@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from gateway.db import connect_gateway_db
-from gateway.session.bindings import SessionBindingStore
+from gateway.storage import SessionBindingStore, connect_gateway_db
 
 
 @pytest.fixture

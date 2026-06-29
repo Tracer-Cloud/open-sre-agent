@@ -9,11 +9,9 @@ import threading
 
 from dotenv import load_dotenv
 
-from gateway.config import GatewaySettings, load_gateway_settings
+from gateway.config.get_gateway_settings import GatewaySettings, load_gateway_settings
+from gateway.core.runner import GatewayRunner
 from gateway.platforms.telegram.poller import TelegramPoller
-from gateway.runner import GatewayRunner
-
-logger = logging.getLogger(__name__)
 
 
 def telegram_gateway_auto_start_enabled() -> bool:
@@ -38,16 +36,22 @@ class TelegramGatewayBackground:
         self._thread.join(timeout=timeout)
 
 
-def _configure_co_located_gateway_logging() -> None:
-    """Keep co-located gateway diagnostics off the interactive REPL terminal."""
+def _configure_co_located_gateway_logging() -> logging.Logger:
+    """Keep co-located gateway diagnostics off the interactive REPL terminal.
+
+    Returns the shared ``gateway`` logger so callers reuse it instead of
+    creating their own.
+    """
     gateway_logger = logging.getLogger("gateway")
-    if gateway_logger.handlers:
-        return
-    gateway_logger.addHandler(logging.NullHandler())
-    gateway_logger.propagate = False
+    if not gateway_logger.handlers:
+        gateway_logger.addHandler(logging.NullHandler())
+        gateway_logger.propagate = False
+    return gateway_logger
 
 
-def run_poll_loop(settings: GatewaySettings, stop_event: threading.Event) -> None:
+def run_telegram_gateway_until_stopped(
+    settings: GatewaySettings, stop_event: threading.Event
+) -> None:
     """Run the Telegram long-poll loop until ``stop_event`` is set."""
     runner = GatewayRunner(settings)
     loop = asyncio.new_event_loop()
@@ -77,6 +81,7 @@ def try_start_telegram_gateway_background() -> TelegramGatewayBackground | None:
     run ``opensre gateway telegram`` as a dedicated process.
     """
     load_dotenv(override=False)
+    logger = _configure_co_located_gateway_logging()
     if not telegram_gateway_auto_start_enabled():
         return None
     try:
@@ -96,8 +101,7 @@ def try_start_telegram_gateway_background() -> TelegramGatewayBackground | None:
     stop_event = threading.Event()
 
     def _target() -> None:
-        _configure_co_located_gateway_logging()
-        run_poll_loop(settings, stop_event)
+        run_telegram_gateway_until_stopped(settings, stop_event)
 
     thread = threading.Thread(
         target=_target,
@@ -111,7 +115,7 @@ def try_start_telegram_gateway_background() -> TelegramGatewayBackground | None:
 
 __all__ = [
     "TelegramGatewayBackground",
-    "run_poll_loop",
+    "run_telegram_gateway_until_stopped",
     "telegram_gateway_auto_start_enabled",
     "try_start_telegram_gateway_background",
 ]

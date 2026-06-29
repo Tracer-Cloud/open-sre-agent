@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from gateway.config import TelegramInboundMessage
+from gateway.config.get_gateway_settings import TelegramInboundMessage
 from gateway.platforms.telegram.webhook import parse_update
 
 logger = logging.getLogger(__name__)
