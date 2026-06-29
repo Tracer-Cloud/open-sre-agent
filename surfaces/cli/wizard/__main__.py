@@ -11,7 +11,7 @@ from platform.observability.sentry_sdk import init_sentry
 from platform.terminal.prompt_support import install_questionary_escape_cancel
 from surfaces.cli.wizard.flow import run_wizard
 
-_ENTRYPOINT = "python -m cli.wizard"
+_ENTRYPOINT = "python -m surfaces.cli.wizard"
 
 
 def main() -> int:

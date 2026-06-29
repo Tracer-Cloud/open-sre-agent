@@ -35,16 +35,23 @@ def test_hermes_rule_routes_to_tests_hermes_not_integrations() -> None:
 
 def test_interactive_shell_routes_to_its_own_tests() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["interactive_shell/runtime/session.py"])
+    escalate, targets, _ = rules.classify(["surfaces/interactive_shell/runtime/session.py"])
     assert not escalate
     assert targets == ["tests/interactive_shell/"]
+
+
+def test_surfaces_cli_routes_to_cli_tests() -> None:
+    rules = _rules_module()
+    escalate, targets, _ = rules.classify(["surfaces/cli/wizard/flow.py"])
+    assert not escalate
+    assert targets == ["tests/cli/"]
 
 
 def test_three_areas_escalates() -> None:
     rules = _rules_module()
     changed = [
         "tools/a.py",
-        "cli/b.py",
+        "surfaces/cli/b.py",
         "integrations/hermes/c.py",
     ]
     escalate, _, areas = rules.classify(changed)
