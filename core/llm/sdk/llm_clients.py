@@ -37,12 +37,11 @@ from core.llm.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     LLM_CLIENT_TIMEOUT_SEC,
-    llm_response_from_completion,
     normalize_messages_openai,
 )
 from core.llm.structured_output import StructuredOutputClient
 from core.llm.types import LLMResponse
-from core.llm.usage import emit_usage, llm_response_with_usage
+from core.llm.usage import llm_response_with_usage
 
 logger = logging.getLogger(__name__)
 
