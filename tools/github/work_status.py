@@ -608,9 +608,7 @@ def _marker_exists_on_issue(
     name="execute_github_issue_mutation",
     source="github",
     description="Execute a GitHub issue mutation proposal. Not exposed to investigation.",
-    use_cases=[
-        "Executing a previously rendered GitHub issue mutation proposal"
-    ],
+    use_cases=["Executing a previously rendered GitHub issue mutation proposal"],
     anti_examples=[
         "Creating proposals",
         "Running during investigations",
