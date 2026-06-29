@@ -88,16 +88,23 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {cmd.name: cmd for cmd in _MERGED_SEQU
 _DEFER_SLASH_RECORDING: frozenset[str] = frozenset({"/resume"})
 
 
+def _latest_record_ok(session: ReplSession, kind: str, *, default: bool = True) -> bool:
+    """Return ``ok`` from the newest history row of ``kind`` after the handler runs."""
+    for entry in reversed(session.history):
+        if entry.get("type") == kind:
+            return bool(entry.get("ok", default))
+    return default
+
+
 def _attach_slash_analytics(
     session: ReplSession,
     command_line: str,
     *,
-    ok: bool,
     captured_output: str,
 ) -> None:
+    ok = _latest_record_ok(session, "slash")
     session.complete_latest_record(
         "slash",
-        ok=ok,
         response_text=format_terminal_turn_outcome(
             command_line,
             kind="slash",
@@ -130,13 +137,11 @@ def dispatch_slash(
 
     stripped = command_line.strip()
     slash_recorded = False
-    slash_ok = True
 
     def record_slash(*, ok: bool = True) -> None:
-        nonlocal slash_recorded, slash_ok
+        nonlocal slash_recorded
         session.record("slash", stripped, ok=ok)
         slash_recorded = True
-        slash_ok = ok
 
     try:
         with capture_console_segment(console) as get_captured:
@@ -223,7 +228,6 @@ def dispatch_slash(
                     _attach_slash_analytics(
                         session,
                         stripped,
-                        ok=slash_ok,
                         captured_output=get_captured(),
                     )
     finally:

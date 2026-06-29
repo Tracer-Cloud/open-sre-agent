@@ -1224,11 +1224,23 @@ class TestInvestigateFileCommand:
 
     def test_missing_file_prints_error(self) -> None:
         session = ReplSession()
-        session.record("slash", "/investigate /nonexistent/path.json")
         console, buf = _capture()
         dispatch_slash("/investigate /nonexistent/path.json", session, console)
         assert "file not found" in buf.getvalue()
-        assert session.history[-1]["ok"] is False
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["ok"] is False
+        assert latest["response_text"] == "slash /investigate /nonexistent/path.json (failed)"
+
+    def test_missing_arg_analytics_reports_failure(self) -> None:
+        session = ReplSession()
+        console, buf = _capture()
+        dispatch_slash("/investigate", session, console)
+        assert "usage" in buf.getvalue()
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["ok"] is False
+        assert latest["response_text"] == "slash /investigate (failed)"
 
     def test_valid_file_runs_investigation(self, tmp_path: object, monkeypatch: object) -> None:
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
