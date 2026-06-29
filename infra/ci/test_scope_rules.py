@@ -35,6 +35,18 @@ RULES: tuple[PathRule, ...] = (
     PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
     PathRule("integrations/hermes/", ("tests/hermes/",)),
     PathRule(
+        "integrations/datadog/",
+        (
+            "tests/integrations/datadog/",
+            "tests/tools/test_datadog_context_tool.py",
+            "tests/tools/test_datadog_events_tool.py",
+            "tests/tools/test_datadog_logs_tool.py",
+            "tests/tools/test_datadog_metrics_tool.py",
+            "tests/tools/test_datadog_monitors_tool.py",
+            "tests/tools/test_datadog_node_pods_tool.py",
+        ),
+    ),
+    PathRule(
         "integrations/grafana/",
         (
             "tests/integrations/grafana/",
