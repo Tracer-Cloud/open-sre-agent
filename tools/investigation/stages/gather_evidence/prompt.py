@@ -12,9 +12,7 @@ from core.domain.alerts.alert_source import (
 )
 from core.domain.diagnosis import root_cause_category_instruction_for_source
 from tools.investigation.stages.gather_evidence.tools import (
-    planned_action_names as _planned_action_names,
-)
-from tools.investigation.stages.gather_evidence.tools import (
+    planned_action_names,
     select_investigation_tools,
 )
 
@@ -86,7 +84,18 @@ def build_system_prompt(state: dict[str, Any]) -> str:
     )
 
 
-def format_alert_context(state: dict[str, Any]) -> str:
+def format_alert_context(
+    state: dict[str, Any],
+    available_tools: list[Any] | None = None,
+) -> str:
+    """Build the first user turn for the investigation.
+
+    ``available_tools`` is the exact tool set the agent will serialize into the
+    request schemas (already past ``_filter_tools`` + ``select_investigation_tools``).
+    Passing it keeps the in-prompt orientation ("Connected integrations", "Where
+    to start") consistent with the tools the model can actually call. When omitted
+    (e.g. unit tests) the same selection is recomputed from the registry.
+    """
     from tools.registry import get_registered_tools
 
     alert_name = state.get("alert_name", "Unknown alert")
@@ -98,8 +107,11 @@ def format_alert_context(state: dict[str, Any]) -> str:
     extra = ("\n" + "\n".join(extra_parts) + "\n") if extra_parts else ""
 
     resolved = state.get("resolved_integrations") or {}
-    available_tools = [t for t in get_registered_tools("investigation") if t.is_available(resolved)]
-    available_tools = select_investigation_tools(available_tools, state)
+    if available_tools is None:
+        registry_tools = [
+            t for t in get_registered_tools("investigation") if t.is_available(resolved)
+        ]
+        available_tools = select_investigation_tools(registry_tools, state)
 
     tools_by_source = _group_tools_by_source(available_tools)
     connected_integrations = _format_connected_integrations(
@@ -170,7 +182,7 @@ def _build_start_guidance(
     alert_name: str,
     tools_by_source: dict[str, list[Any]],
 ) -> str:
-    planned_actions = _planned_action_names(state)
+    planned_actions = planned_action_names(state)
     if planned_actions:
         rationale = str(state.get("plan_rationale") or "").strip()
         planned_list = ", ".join(f"`{name}`" for name in planned_actions)

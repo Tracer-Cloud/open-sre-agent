@@ -28,6 +28,11 @@ MAX_STAGNANT_ITERATIONS = 2
 # this; when more tools are available we keep the most alert-relevant ones first.
 MAX_AGENT_TOOL_SCHEMAS = 32
 
+# Slots reserved within ``MAX_AGENT_TOOL_SCHEMAS`` for cheap secondary/knowledge
+# reasoning tools so they survive the cap on a busy environment. Kept small so
+# incident-specific tools still dominate the budget.
+MAX_SECONDARY_FALLBACK_TOOLS = 3
+
 # Injected as a user turn once the agent starts repeating itself.
 STAGNATION_NUDGE = (
     "You are repeating tool calls you already made, so they return no new "
@@ -67,10 +72,11 @@ def select_investigation_tools(
     1. An explicit ``planned_actions`` set from the planning stage — those tools
        were already scored for relevance, so use exactly them.
     2. Otherwise rank every available tool by how relevant its integration source
-       is to the alert and keep the top ``max_tools``. Knowledge/secondary
-       reasoning tools are always retained as a fallback.
+       is to the alert and keep the top ``max_tools``. A few slots are reserved
+       for cheap knowledge/secondary reasoning tools so they survive the cap.
 
-    When the available set already fits under ``max_tools`` the input is returned
+    The result never exceeds ``max_tools`` (a hard ceiling — the whole point of
+    the budget). When the available set already fits the input is returned
     unchanged (ordering preserved), so the common single/few-integration case is
     unaffected; the cap only bites when many integrations are connected at once.
     """
@@ -81,15 +87,26 @@ def select_investigation_tools(
         return tools
 
     ranked = _relevance_ranked(tools, state)
-    kept = ranked[:max_tools]
-    # Always retain the cheap reasoning fallbacks even if the cap cut them, so the
-    # agent never loses its "reason about the alert" path on a busy environment.
-    kept_names = {tool.name for tool in kept}
-    kept.extend(
-        tool
-        for tool in ranked[max_tools:]
-        if str(tool.source) in SECONDARY_TOOL_SOURCES and tool.name not in kept_names
-    )
+    secondary = [tool for tool in ranked if str(tool.source) in SECONDARY_TOOL_SOURCES]
+    # Reserve a few slots *inside* the cap for cheap reasoning fallbacks so the
+    # agent never loses its "reason about the alert" path on a busy environment,
+    # without ever pushing the total past the hard ceiling.
+    reserve = min(len(secondary), MAX_SECONDARY_FALLBACK_TOOLS)
+    primary_budget = max(max_tools - reserve, 0)
+
+    kept: list[RegisteredTool] = []
+    kept_names: set[str] = set()
+    for tool in ranked:
+        if str(tool.source) in SECONDARY_TOOL_SOURCES or len(kept) >= primary_budget:
+            continue
+        kept.append(tool)
+        kept_names.add(tool.name)
+    for tool in secondary:
+        if len(kept) >= max_tools:
+            break
+        if tool.name not in kept_names:
+            kept.append(tool)
+            kept_names.add(tool.name)
     return kept
 
 

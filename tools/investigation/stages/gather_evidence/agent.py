@@ -123,10 +123,12 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
-        # Merge tool_context into a local view so the system prompt can read
-        # available_sources / available_action_names without mutating the caller's state.
-        system = self._build_system_prompt({**state_dict, **tool_context})
-        alert_text = format_alert_context(state_dict)
+        # Merge tool_context into a local view so the system prompt and the alert
+        # context read the SAME narrowed tool set the model receives as schemas —
+        # never naming tools that aren't actually callable this turn.
+        prompt_state = {**state_dict, **tool_context}
+        system = self._build_system_prompt(prompt_state)
+        alert_text = format_alert_context(prompt_state, tools)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
 
         prompt_tokens = estimate_message_tokens(messages, system=system, tools=tool_schemas)

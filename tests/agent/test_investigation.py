@@ -103,11 +103,29 @@ def test_select_tools_caps_and_prioritizes_relevant_sources_without_plan() -> No
     selected = select_investigation_tools(available, {"alert_source": "datadog"})
 
     selected_names = {tool.name for tool in selected}
-    assert len(selected) <= MAX_AGENT_TOOL_SCHEMAS + 1  # +1 for retained knowledge fallback
+    # The cap is a HARD ceiling: secondary fallbacks are reserved slots inside it,
+    # never appended on top, so the total can never exceed MAX_AGENT_TOOL_SCHEMAS.
+    assert len(selected) <= MAX_AGENT_TOOL_SCHEMAS
     # Every datadog tool (the primary source for this alert) is retained.
     assert {tool.name for tool in datadog_tools} <= selected_names
     # The cheap reasoning fallback is always kept even when the cap bites.
     assert "get_sre_guidance" in selected_names
+
+
+def test_select_tools_hard_cap_holds_even_with_many_secondary_tools() -> None:
+    # Regression: secondary-source tools must be reserved *inside* the cap, never
+    # appended on top. A registry where the knowledge source grows large must not
+    # let the model-facing tool set blow past MAX_AGENT_TOOL_SCHEMAS.
+    primary_tools = [_registered_tool(f"datadog_{i}", "datadog") for i in range(40)]
+    secondary_tools = [_registered_tool(f"knowledge_{i}", "knowledge") for i in range(40)]
+    available = [*primary_tools, *secondary_tools]
+
+    selected = select_investigation_tools(available, {"alert_source": "datadog"})
+
+    assert len(selected) == MAX_AGENT_TOOL_SCHEMAS
+    # Reserved slots still admit some secondary fallbacks alongside primary tools.
+    sources = {str(tool.source) for tool in selected}
+    assert {"datadog", "knowledge"} <= sources
 
 
 def test_availability_view_marks_configured_integrations_without_mutating_state() -> None:
