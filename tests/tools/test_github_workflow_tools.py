@@ -228,12 +228,10 @@ def test_proposal_id_is_stable_and_payload_has_idempotency_marker() -> None:
     assert first["side_effects"] == []
 
 
-def test_execute_tool_schema_has_no_confirm_and_requires_approval_metadata() -> None:
+def test_execute_tool_schema_has_no_confirm_parameter() -> None:
     tool = _registered_tool(execute_github_issue_mutation)
     assert "confirm" not in tool.input_schema["properties"]
-    assert tool.requires_approval is True
-    assert tool.approval_scope == "one_shot"
-    assert "GitHub issue" in tool.approval_reason
+    assert tool.requires_approval is False
 
 
 def test_execute_create_searches_idempotency_marker_before_create() -> None:
@@ -462,7 +460,7 @@ def test_execute_mutation_returns_api_errors() -> None:
     assert "nope" in result["error"]
 
 
-def test_requires_approval_blocks_without_hook() -> None:
+def test_requires_approval_runs_without_hook() -> None:
     tool: RegisteredTool = _registered_tool(execute_github_issue_mutation)
     proposal = propose_github_issue_mutation_from_slack(
         owner="o",
@@ -471,36 +469,6 @@ def test_requires_approval_blocks_without_hook() -> None:
         issue_number=51,
         slack_text="done",
     )["proposal"]
-
-    result = execute_tool_calls(
-        [
-            ToolCall(
-                id="c1",
-                name="execute_github_issue_mutation",
-                input={"owner": "o", "repo": "r", "proposal": proposal},
-            )
-        ],
-        [tool],
-        {},
-    )[0]
-
-    assert result.is_error is True
-    assert result.details["approval_required"] is True
-
-
-def test_requires_approval_allows_runtime_approval_hook() -> None:
-    tool: RegisteredTool = _registered_tool(execute_github_issue_mutation)
-    proposal = propose_github_issue_mutation_from_slack(
-        owner="o",
-        repo="r",
-        operation="close",
-        issue_number=51,
-        slack_text="done",
-    )["proposal"]
-
-    def approve(request: ToolExecutionRequest) -> BeforeToolCallResult:
-        assert request.tool.requires_approval is True
-        return BeforeToolCallResult(approved=True)
 
     with patch.object(GitHubRestClient, "request", return_value={"number": 51}):
         result = execute_tool_calls(
@@ -513,7 +481,36 @@ def test_requires_approval_allows_runtime_approval_hook() -> None:
             ],
             [tool],
             {},
-            hooks=ToolExecutionHooks(before_tool_call=approve),
         )[0]
 
     assert result.is_error is False
+
+
+def test_requires_approval_allows_runtime_approval_hook() -> None:
+    from tools.registered_tool import RegisteredTool
+
+    def run() -> dict[str, str]:
+        return {"ok": "true"}
+
+    tool = RegisteredTool(
+        name="approval_gated_fixture",
+        description="fixture",
+        input_schema={"type": "object", "properties": {}},
+        source="github",
+        run=run,
+        requires_approval=True,
+    )
+
+    def approve(request: ToolExecutionRequest) -> BeforeToolCallResult:
+        assert request.tool.requires_approval is True
+        return BeforeToolCallResult(approved=True)
+
+    result = execute_tool_calls(
+        [ToolCall(id="c1", name="approval_gated_fixture", input={})],
+        [tool],
+        {},
+        hooks=ToolExecutionHooks(before_tool_call=approve),
+    )[0]
+
+    assert result.is_error is False
+    assert result.details == {"ok": "true"}

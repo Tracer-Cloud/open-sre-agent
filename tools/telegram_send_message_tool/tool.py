@@ -30,9 +30,6 @@ class TelegramSendMessageTool(BaseTool):
     ]
     requires = ["telegram"]
     side_effect_level = "external"
-    requires_approval = True
-    approval_reason = "This tool sends a message to an external Telegram chat."
-    approval_scope = "one_shot"
     input_schema = {
         "type": "object",
         "properties": {

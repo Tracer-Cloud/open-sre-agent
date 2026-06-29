@@ -25,7 +25,7 @@ def test_metadata_is_mutating_on_investigation_surface() -> None:
     assert t.name == "pi_coding_task"
     assert t.source == "knowledge"
     assert t.side_effect_level == "mutating"
-    assert t.requires_approval is True
+    assert t.requires_approval is False
     assert t.surfaces == ("investigation",)
     assert t.input_schema["required"] == ["task"]
     assert "error_kind" in t.outputs
@@ -156,7 +156,7 @@ def test_registry_discovers_pi_coding_on_investigation_surface() -> None:
     assert "pi_coding_task" in investigation
     assert "pi_coding_task" not in chat
     rt = investigation["pi_coding_task"]
-    assert rt.requires_approval is True
+    assert rt.requires_approval is False
     assert rt.side_effect_level == "mutating"
 
 

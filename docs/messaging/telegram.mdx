@@ -174,8 +174,7 @@ If `chat_id` is omitted, it sends through the configured `default_chat_id`, so a
 user can ask OpenSRE to send a message through the configured Telegram bot
 without knowing or exposing the bot token.
 
-Delivery is an external side effect, so the tool is approval-gated in runtime
-surfaces that enforce tool approvals. Its result includes a stable `status`,
+Delivery is an external side effect. Its result includes a stable `status`,
 `sent`, `error_type`, `chat_id`, `reply_to_message_id`, and `message_length`
 shape so follow-up tool calls can tell configuration failures from Telegram
 delivery failures.

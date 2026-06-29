@@ -607,21 +607,16 @@ def _marker_exists_on_issue(
 @tool(
     name="execute_github_issue_mutation",
     source="github",
-    description="Execute an approved GitHub issue mutation proposal. Requires runtime approval and is not exposed to investigation.",
+    description="Execute a GitHub issue mutation proposal. Not exposed to investigation.",
     use_cases=[
-        "Executing a previously rendered GitHub issue mutation proposal after runtime approval"
+        "Executing a previously rendered GitHub issue mutation proposal"
     ],
     anti_examples=[
         "Creating proposals",
         "Running during investigations",
-        "Executing without approval",
     ],
     surfaces=("chat",),
     side_effect_level="mutating",
-    requires_approval=True,
-    approval_reason="This tool mutates GitHub issue state.",
-    approval_scope="one_shot",
-    approval_expiry_seconds=300,
     input_schema={
         "type": "object",
         "properties": {

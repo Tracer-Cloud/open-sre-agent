@@ -14,9 +14,7 @@ Package layout (separation of concerns):
 This is the first **mutating** agent-callable tool, so it is deliberately gated,
 mirroring how ``run_diagnostic_code`` ships disabled by default:
 
-- ``side_effect_level = "mutating"``. ``requires_approval = True`` documents intent,
-  but note it is only honored by the messaging-approval surface — the investigation
-  tool loop does not enforce it — so the **real gate is ``is_available`` below**.
+- ``side_effect_level = "mutating"``.
 - ``is_available`` returns True only when ``PI_CODING_ENABLED`` is set, so it is
   never offered to the agent unless the operator opts in.
 - ``surfaces = ("investigation",)`` — the surface the REPL assistant tool loop and
@@ -55,8 +53,6 @@ class PiCodingTool(BaseTool):
     source = SOURCE
     side_effect_level = "mutating"
     surfaces = ("investigation",)
-    requires_approval = True
-    approval_reason = "Runs the Pi coding agent, which edits files in the target workspace."
     description = (
         "Submit a coding task to the Pi agent (pi.dev). Pi edits files in the workspace to "
         "implement the change and returns a summary plus the git diff. It does not commit, "

@@ -70,9 +70,9 @@ The proposal includes:
 - deterministic `proposal_id`
 - idempotency marker for retry detection
 
-### 4. Execute only after runtime approval
+### 4. Execute mutations
 
-`execute_github_issue_mutation` is the only mutating tool. It has no `confirm` argument. It is marked `requires_approval`, and the shared runtime blocks it unless an approval hook explicitly approves the call.
+`execute_github_issue_mutation` is the only mutating tool. It has no `confirm` argument.
 
 Mutation behavior:
 
@@ -81,7 +81,7 @@ Mutation behavior:
 - **close**: fetches the issue, adds a closing comment unless the proposal marker is already present, then patches `state=closed` and `state_reason=completed`. It never replaces the issue body.
 
 <Warning>
-Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but mutation requires runtime approval.
+Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but should not execute mutations directly.
 </Warning>
 
 ## Required GitHub access
