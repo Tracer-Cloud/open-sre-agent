@@ -588,6 +588,39 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     assert landing_calls == [], "REPL should run, not landing page"
 
 
+def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
+    monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("cli.__main__.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("cli.__main__.sys.stdout.isatty", lambda: True)
+
+    load_calls: list[dict] = []
+    orig_load = ReplConfig.load
+
+    @classmethod  # type: ignore[misc]
+    def spy_load(cls, **kw):  # type: ignore[no-untyped-def]
+        load_calls.append(kw)
+        return orig_load(**kw)
+
+    monkeypatch.setattr("config.repl_config.ReplConfig.load", spy_load)
+
+    run_repl_calls: list[dict[str, object]] = []
+
+    def _capture_run_repl(**kwargs: object) -> int:
+        run_repl_calls.append(kwargs)
+        return 0
+
+    with patch("interactive_shell.run_repl", side_effect=_capture_run_repl):
+        exit_code = main(["--resume", "8988e743"])
+
+    assert exit_code == 0
+    assert load_calls[-1]["cli_enabled"] is True
+    assert len(run_repl_calls) == 1
+    assert run_repl_calls[0]["resume_session_id"] == "8988e743"
+    assert run_repl_calls[0]["config"].enabled is True
+
+
 def test_invalid_theme_flag_returns_usage_error(monkeypatch, capsys) -> None:
     monkeypatch.setattr("cli.__main__.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("cli.__main__.shutdown_analytics", lambda **_kw: None)

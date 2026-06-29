@@ -105,6 +105,7 @@ async def test_prompt_input_reader_eof_without_dispatch_renders_resume_hint() ->
     assert event == InputClosed()
     assert "Resume this session with:" in output.getvalue()
     assert "/resume session-123" in output.getvalue()
+    assert "--resume session-123" in output.getvalue()
     assert "Goodbye!" in output.getvalue()
 
 

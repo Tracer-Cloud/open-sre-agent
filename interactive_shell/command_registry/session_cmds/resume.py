@@ -244,6 +244,17 @@ def _do_resume(
     return _apply_resume_data(data, session, console, slash_command=slash_command)
 
 
+def resume_session_by_prefix(
+    prefix: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    slash_command: str | None = None,
+) -> bool:
+    """Load session by ID prefix and restore context into the running session."""
+    return _do_resume(prefix, session, console, slash_command=slash_command)
+
+
 def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
     if not args and repl_tty_interactive():
         return _interactive_resume_menu(session, console)

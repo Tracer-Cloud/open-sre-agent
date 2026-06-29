@@ -12,7 +12,24 @@ from platform.terminal.prompt_support import (
     handle_ctrl_c_press,
     install_questionary_ctrl_c_double_exit,
     install_questionary_escape_cancel,
+    print_session_resume_hint,
 )
+
+
+def test_print_session_resume_hint_includes_repl_and_cli_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from io import StringIO
+
+    from rich.console import Console
+
+    monkeypatch.setattr("platform.terminal.prompt_support.sys.argv", ["o"])
+    console = Console(file=StringIO(), force_terminal=False, color_system=None)
+    print_session_resume_hint(console, "8988e743-87ae-4c4c-a37b-0351e62a4855")
+    output = console.file.getvalue()
+    assert "Resume this session with:" in output
+    assert "/resume 8988e743-87ae-4c4c-a37b-0351e62a4855" in output
+    assert "o --resume 8988e743-87ae-4c4c-a37b-0351e62a4855" in output
 
 
 def test_install_questionary_escape_cancel_is_idempotent() -> None:

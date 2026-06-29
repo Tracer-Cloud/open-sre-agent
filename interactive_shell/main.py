@@ -21,7 +21,11 @@ _console = Console(
 )
 
 
-async def repl_main(initial_input: str | None = None, _config: ReplConfig | None = None) -> int:
+async def repl_main(
+    initial_input: str | None = None,
+    _config: ReplConfig | None = None,
+    resume_session_id: str | None = None,
+) -> int:
     from platform.analytics.cli import identify_saved_github_username
 
     identify_saved_github_username()
@@ -38,6 +42,18 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
     # Open the session file now that we know this is an interactive REPL run.
     session.storage.open_session(session)
 
+    if resume_session_id:
+        from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+
+        slash_command = f"/resume {resume_session_id.strip()}"
+        if not resume_session_by_prefix(
+            resume_session_id.strip(),
+            session,
+            _console,
+            slash_command=slash_command,
+        ):
+            return 1
+
     try:
         await InteractiveShellController(
             runtime_context,
@@ -49,9 +65,14 @@ async def repl_main(initial_input: str | None = None, _config: ReplConfig | None
         session.storage.flush(session)
 
 
-def run_repl(initial_input: str | None = None, config: ReplConfig | None = None) -> int:
+def run_repl(
+    initial_input: str | None = None,
+    config: ReplConfig | None = None,
+    *,
+    resume_session_id: str | None = None,
+) -> int:
     cfg = config or ReplConfig.load()
-    if not cfg.enabled:
+    if not cfg.enabled and not resume_session_id:
         return 0
     if not sys.stdin.isatty() and initial_input is None:
         return 0
@@ -72,7 +93,13 @@ def run_repl(initial_input: str | None = None, config: ReplConfig | None = None)
             if not require_startup_github_login(_console):
                 return 0
 
-        return asyncio.run(repl_main(initial_input=initial_input, _config=cfg))
+        return asyncio.run(
+            repl_main(
+                initial_input=initial_input,
+                _config=cfg,
+                resume_session_id=resume_session_id,
+            )
+        )
     except (EOFError, KeyboardInterrupt):
         return 0
     finally:

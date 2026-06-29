@@ -16,13 +16,13 @@ from interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
+from platform.terminal.prompt_support import print_session_resume_hint
 
 
 def _cmd_exit(session: ReplSession, console: Console, _args: list[str]) -> bool:
     if session.session_id:
         console.print()
-        console.print(f"[{DIM}]Resume this session with:[/]")
-        console.print(f"[{DIM}]/resume {session.session_id} [/]")
+        print_session_resume_hint(console, session.session_id)
     console.print(f"[{DIM}]goodbye.[/]")
     return False
 

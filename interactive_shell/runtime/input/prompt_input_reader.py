@@ -13,11 +13,13 @@ from interactive_shell.runtime.input.events import (
     InputEvent,
     InputSubmitted,
 )
+from interactive_shell.ui import DIM
 from interactive_shell.ui.components.cpr_stdin import (
     contains_cpr_sequence,
     strip_cpr_sequences,
 )
 from platform.terminal.prompt_support import (
+    print_session_resume_hint,
     repl_prompt_note_ctrl_c,
     repl_reset_ctrl_c_gate,
 )
@@ -65,9 +67,8 @@ class PromptInputReader:
         if not self.session.session_id:
             return
         self.console.print()
-        self.console.print("Resume this session with:")
-        self.console.print(f"/resume {self.session.session_id}")
-        self.console.print("Goodbye!")
+        print_session_resume_hint(self.console, self.session.session_id)
+        self.console.print(f"[{DIM}]Goodbye![/]")
 
 
 __all__ = ["PromptInputReader"]
