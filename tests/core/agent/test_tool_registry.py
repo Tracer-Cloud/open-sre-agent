@@ -9,13 +9,39 @@ from rich.console import Console
 from cli.wizard.config import PROVIDER_BY_VALUE
 from core.agent_harness.session import ReplSession
 from interactive_shell.command_registry import SLASH_COMMANDS
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
+from tools.interactive_shell.action_tools import (
+    action_tools_for_context,
+    get_action_tool,
+)
 from tools.interactive_shell.contracts import (
     ToolContext,
 )
-from tools.interactive_shell.registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-)
+
+
+def _action_tools(
+    session: ReplSession,
+    *,
+    resolved_integrations: dict[str, dict[str, str]] | None = None,
+) -> list[object]:
+    ctx = ToolContext(session=session, console=Console(force_terminal=False))
+    return action_tools_for_context(ctx, resolved_integrations=resolved_integrations)
+
+
+def _tool_specs(
+    session: ReplSession,
+    *,
+    resolved_integrations: dict[str, dict[str, str]] | None = None,
+) -> list[dict[str, object]]:
+    return [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.public_input_schema,
+        }
+        for tool in _action_tools(session, resolved_integrations=resolved_integrations)
+    ]
+
 
 # OpenAI's Chat Completions API rejects any tool name that does not match
 # this pattern with HTTP 400. Every OpenAI-compatible provider (OpenRouter,
@@ -27,11 +53,11 @@ _OPENAI_TOOL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 def test_action_kind_mapping_targets_registered_tools() -> None:
     for tool_name in TOOL_KIND_TO_NAME.values():
-        assert REGISTRY.get(tool_name) is not None
+        assert get_action_tool(tool_name) is not None
 
 
 def test_tool_specs_include_required_fields() -> None:
-    specs = REGISTRY.tool_specs_for_llm(ReplSession())
+    specs = _tool_specs(ReplSession())
     assert specs
     for spec in specs:
         assert spec["name"]
@@ -53,7 +79,7 @@ def test_action_kind_to_tool_names_are_openai_compatible() -> None:
 def test_registered_tool_specs_are_openai_compatible() -> None:
     """Same guarantee, but exercised through the spec builder the LLM
     planner actually feeds to the provider."""
-    specs = REGISTRY.tool_specs_for_llm(ReplSession())
+    specs = _tool_specs(ReplSession())
     assert specs
     for spec in specs:
         name = spec["name"]
@@ -64,7 +90,7 @@ def test_registered_tool_specs_are_openai_compatible() -> None:
 
 
 def test_tool_schemas_are_closed_objects() -> None:
-    specs = REGISTRY.tool_specs_for_llm(ReplSession())
+    specs = _tool_specs(ReplSession())
     assert specs
     for spec in specs:
         schema = spec["input_schema"]
@@ -73,7 +99,7 @@ def test_tool_schemas_are_closed_objects() -> None:
 
 
 def test_required_properties_have_descriptions() -> None:
-    specs = REGISTRY.tool_specs_for_llm(ReplSession())
+    specs = _tool_specs(ReplSession())
     assert specs
     for spec in specs:
         schema = spec["input_schema"]
@@ -90,11 +116,7 @@ def test_required_properties_have_descriptions() -> None:
 
 
 def test_llm_set_provider_schema_enum_matches_runtime_providers() -> None:
-    spec = next(
-        tool
-        for tool in REGISTRY.tool_specs_for_llm(ReplSession())
-        if tool["name"] == "llm_set_provider"
-    )
+    spec = next(tool for tool in _tool_specs(ReplSession()) if tool["name"] == "llm_set_provider")
     target = spec["input_schema"]["properties"]["target"]
     target_variants = target.get("oneOf", [])
     enum_variant = next(
@@ -104,11 +126,7 @@ def test_llm_set_provider_schema_enum_matches_runtime_providers() -> None:
 
 
 def test_slash_invoke_schema_enum_matches_registered_commands() -> None:
-    spec = next(
-        tool
-        for tool in REGISTRY.tool_specs_for_llm(ReplSession())
-        if tool["name"] == "slash_invoke"
-    )
+    spec = next(tool for tool in _tool_specs(ReplSession()) if tool["name"] == "slash_invoke")
     command = spec["input_schema"]["properties"]["command"]
     assert set(command["enum"]) == set(SLASH_COMMANDS.keys())
 
@@ -124,7 +142,7 @@ def test_tools_hidden_when_capabilities_are_explicitly_empty() -> None:
             "llm_provider": (),
         }
     )
-    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(session)}
+    names = {spec["name"] for spec in _tool_specs(session)}
     assert "slash_invoke" not in names
     assert "cli_exec" not in names
     assert "synthetic_run" not in names
@@ -138,38 +156,44 @@ def test_telegram_send_message_offered_when_telegram_is_configured() -> None:
         configured_integrations=("telegram",),
         configured_integrations_known=True,
     )
-    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(session)}
+    names = {
+        spec["name"]
+        for spec in _tool_specs(
+            session,
+            resolved_integrations={"telegram": {"bot_token": "token"}},
+        )
+    }
     assert "telegram_send_message" in names
 
 
 def test_telegram_send_message_hidden_when_telegram_is_not_configured() -> None:
-    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(ReplSession())}
     assert "telegram_send_message" not in names
 
 
 def test_llm_set_provider_offered_by_default() -> None:
     """With no capability constraints (the production default), the planner is
     still offered the provider-switch tool."""
-    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(ReplSession())}
     assert "llm_set_provider" in names
 
 
 def test_registry_agent_tools_exclude_unavailable_tool() -> None:
     session = ReplSession(available_capabilities={"slash_commands": ()})
     ctx = ToolContext(session=session, console=Console(force_terminal=False))
-    names = {tool.name for tool in REGISTRY.agent_tools_for_context(ctx)}
+    names = {tool.name for tool in action_tools_for_context(ctx)}
     assert "slash_invoke" not in names
 
 
 def test_investigation_offered_to_planner() -> None:
     """``investigation_start`` is always offered to the planner so diagnostic
     prompts can trigger the RCA pipeline from the REPL."""
-    names = {spec["name"] for spec in REGISTRY.tool_specs_for_llm(ReplSession())}
+    names = {spec["name"] for spec in _tool_specs(ReplSession())}
     assert "investigation_start" in names
 
 
 def test_investigation_tool_description_preserves_compound_slash_guidance() -> None:
-    entry = REGISTRY.get("investigation_start")
+    entry = get_action_tool("investigation_start")
     assert entry is not None
     description = entry.description.lower()
     assert "run /remote and then investigate" in description
@@ -179,7 +203,7 @@ def test_investigation_tool_description_preserves_compound_slash_guidance() -> N
 
 
 def test_assistant_handoff_description_preserves_bare_alert_guidance() -> None:
-    entry = REGISTRY.get("assistant_handoff")
+    entry = get_action_tool("assistant_handoff")
     assert entry is not None
     description = entry.description.lower()
     assert "bare pasted alert json/yaml/key-value blob" in description
@@ -187,7 +211,7 @@ def test_assistant_handoff_description_preserves_bare_alert_guidance() -> None:
 
 
 def test_slash_tool_description_preserves_compound_followup_guidance() -> None:
-    entry = REGISTRY.get("slash_invoke")
+    entry = get_action_tool("slash_invoke")
     assert entry is not None
     description = entry.description.lower()
     assert "only the slash-command clause" in description
@@ -196,7 +220,7 @@ def test_slash_tool_description_preserves_compound_followup_guidance() -> None:
 
 
 def test_synthetic_tool_description_preserves_numeric_id_guidance() -> None:
-    entry = REGISTRY.get("synthetic_run")
+    entry = get_action_tool("synthetic_run")
     assert entry is not None
     description = entry.description.lower()
     assert '"005" -> "005-failover"' in description

@@ -11,11 +11,12 @@ from interactive_shell.runtime import ReplSession
 from platform.common.task_types import TaskRecord
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
+from tools.registered_tool import RegisteredTool
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
@@ -83,7 +84,15 @@ def execute_sample_alert_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_sample_alert_action(*, template: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"template": template},
+        context,
+        execute_sample_alert_tool,
+    )
+
+
+alert_sample_tool = RegisteredTool(
     name="alert_sample",
     description=(
         "Run the built-in synthetic sample alert end-to-end (read alert → "
@@ -104,8 +113,12 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("template",),
     ),
-    execute=execute_sample_alert_tool,
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_sample_alert_action,
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_sample_alert_tool", "run_sample_alert"]
+__all__ = ["alert_sample_tool", "execute_sample_alert_tool", "run_sample_alert"]

@@ -68,6 +68,7 @@ class AgentRuntimeRequest(Protocol):
     system_prompt: Any
     active_tools: Sequence[RuntimeTool]
     resolved_integrations: dict[str, Any]
+    tool_resources: dict[str, Any]
     max_iterations: int
 
     def runtime_messages(self) -> list[RuntimeMessage]:
@@ -146,6 +147,9 @@ class TurnContext:
     resolved_integrations: dict[str, Any] = field(default_factory=dict)
     """Resolved integration configuration passed to tool execution."""
 
+    tool_resources: dict[str, Any] = field(default_factory=dict)
+    """Non-serializable runtime resources made available to opted-in tools."""
+
     max_iterations: int = 1
     """Maximum runtime loop iterations for this request."""
 
@@ -188,6 +192,7 @@ class TurnContext:
             available_tools=tuple(getattr(runtime_input, "available_tools", ())),
             active_tools=tuple(getattr(runtime_input, "active_tools", ())),
             resolved_integrations=dict(getattr(runtime_input, "resolved_integrations", {}) or {}),
+            tool_resources=dict(getattr(runtime_input, "tool_resources", {}) or {}),
             max_iterations=int(getattr(runtime_input, "max_iterations", 1)),
             model=getattr(runtime_input, "model", None),
             last_observation=getattr(runtime_input, "last_observation", None),

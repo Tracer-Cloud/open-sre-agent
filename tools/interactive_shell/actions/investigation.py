@@ -11,11 +11,12 @@ from interactive_shell.runtime import ReplSession
 from platform.common.task_types import TaskRecord
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
+from tools.registered_tool import RegisteredTool
 
 
 def run_text_investigation(
@@ -81,7 +82,15 @@ def execute_investigation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_investigation(*, alert_text: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"alert_text": alert_text},
+        context,
+        execute_investigation_tool,
+    )
+
+
+investigation_start_tool = RegisteredTool(
     name="investigation_start",
     description=(
         "Start an investigation with the provided alert text or quoted payload. "
@@ -104,8 +113,12 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("alert_text",),
     ),
-    execute=execute_investigation_tool,
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_investigation,
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_investigation_tool", "run_text_investigation"]
+__all__ = ["execute_investigation_tool", "investigation_start_tool", "run_text_investigation"]

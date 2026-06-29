@@ -95,6 +95,7 @@ def execute_tool_calls(
     resolved_integrations: dict[str, Any],
     *,
     hooks: ToolExecutionHooks | None = None,
+    tool_resources: dict[str, Any] | None = None,
 ) -> list[ToolExecutionResult]:
     """Execute provider-requested tools and return structured results.
 
@@ -106,6 +107,7 @@ def execute_tool_calls(
     hooks = hooks or ToolExecutionHooks()
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
+    runtime_resources = dict(tool_resources or {})
 
     def _call(tc: ToolCall) -> ToolExecutionResult:
         tool = tool_map.get(tc.name)
@@ -137,13 +139,22 @@ def execute_tool_calls(
             if isinstance(tool, AgentTool):
                 context = AgentToolContext(
                     resolved_integrations=resolved_integrations,
+                    resources=runtime_resources,
                     _emit_update=lambda update: _run_update_hook(hooks, request, update),
                 )
                 raw = tool.execute(tc.input, context)
             else:
                 injected = tool.extract_params(tool_sources)
                 kwargs = {**injected, **tc.input}
-                raw = tool.run(**kwargs)
+                if getattr(tool, "accepts_runtime_context", False):
+                    context = AgentToolContext(
+                        resolved_integrations=resolved_integrations,
+                        resources=runtime_resources,
+                        _emit_update=lambda update: _run_update_hook(hooks, request, update),
+                    )
+                    raw = tool.run(**kwargs, context=context)
+                else:
+                    raw = tool.run(**kwargs)
             result = _normalize_result(raw, tool_name=tc.name)
             patch = _run_after_hook(hooks, request, result)
             if patch is not None:
@@ -207,6 +218,7 @@ def execute_tools(
             tools,
             resolved_integrations,
             hooks=hooks,
+            tool_resources=None,
         )
     ]
 
@@ -218,6 +230,12 @@ def _requires_sequential_execution(
     for tc in tool_calls:
         tool = tool_map.get(tc.name)
         if isinstance(tool, AgentTool) and tool.effective_execution_mode == "sequential":
+            return True
+        if (
+            not isinstance(tool, AgentTool)
+            and tool is not None
+            and not getattr(tool, "parallel_safe", True)
+        ):
             return True
     return False
 

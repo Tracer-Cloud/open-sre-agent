@@ -44,6 +44,8 @@ def tool(
     approval_reason: str | None = None,
     approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> BaseTool:
     pass
 
@@ -79,6 +81,8 @@ def tool[F: Callable[..., Any]](
     approval_reason: str | None = None,
     approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> F:
     pass
 
@@ -114,6 +118,8 @@ def tool[F: Callable[..., Any]](
     approval_reason: str | None = None,
     approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> Callable[[F], F]:
     pass
 
@@ -148,6 +154,8 @@ def tool[F: Callable[..., Any]](
     approval_reason: str | None = None,
     approval_scope: str | None = None,
     approval_expiry_seconds: int | None = None,
+    parallel_safe: bool | None = None,
+    accepts_runtime_context: bool | None = None,
 ) -> Any:
     """Register a lightweight function tool or annotate an existing BaseTool.
 
@@ -185,6 +193,8 @@ def tool[F: Callable[..., Any]](
                 approval_reason is not None,
                 approval_scope is not None,
                 approval_expiry_seconds is not None,
+                parallel_safe is not None,
+                accepts_runtime_context is not None,
             ]
         )
 
@@ -199,6 +209,8 @@ def tool[F: Callable[..., Any]](
                 or approval_reason is not None
                 or approval_scope is not None
                 or approval_expiry_seconds is not None
+                or parallel_safe is not None
+                or accepts_runtime_context is not None
             ):
                 setattr(
                     target,
@@ -213,6 +225,8 @@ def tool[F: Callable[..., Any]](
                         approval_reason=approval_reason,
                         approval_scope=approval_scope,
                         approval_expiry_seconds=approval_expiry_seconds,
+                        parallel_safe=parallel_safe,
+                        accepts_runtime_context=accepts_runtime_context,
                     ),
                 )
             return target
@@ -250,6 +264,8 @@ def tool[F: Callable[..., Any]](
                     approval_reason=approval_reason,
                     approval_scope=approval_scope,
                     approval_expiry_seconds=approval_expiry_seconds,
+                    parallel_safe=parallel_safe,
+                    accepts_runtime_context=accepts_runtime_context,
                 ),
             )
         return target

@@ -30,9 +30,9 @@ def test_metadata_declares_telegram_source() -> None:
     assert telegram_send_message.requires_approval is False
 
 
-def test_registered_tool_is_available_on_chat_and_investigation_surfaces() -> None:
+def test_registered_tool_is_available_on_chat_investigation_and_action_surfaces() -> None:
     registered = telegram_send_message.__opensre_registered_tool__
-    assert registered.surfaces == ("investigation", "chat")
+    assert registered.surfaces == ("investigation", "chat", "action")
     assert registered.requires_approval is False
 
 

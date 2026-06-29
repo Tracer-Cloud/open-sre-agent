@@ -90,6 +90,9 @@ class ToolProvider(Protocol):
     def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
         """Return the agent tools available for this turn."""
 
+    def tool_resources(self) -> dict[str, Any]:
+        """Return non-serializable resources for tools that opt into runtime context."""
+
     def observer(self, *, message: str) -> ToolEventObserver:
         """Return a tool-event observer for this turn (e.g. terminal renderer)."""
 

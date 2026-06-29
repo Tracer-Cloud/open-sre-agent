@@ -217,6 +217,8 @@ class RegisteredTool:
     approval_reason: str = ""
     approval_expiry_seconds: int = 300
     approval_scope: str = "one_shot"
+    parallel_safe: bool = True
+    accepts_runtime_context: bool = False
     origin_module: str = ""
     origin_name: str = ""
     skill_guidance: str = ""
@@ -355,6 +357,8 @@ class RegisteredTool:
         approval_reason: str | None = None,
         approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
+        parallel_safe: bool | None = None,
+        accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
         metadata = tool.metadata()
         input_model = cast(type[BaseModel] | None, getattr(tool, "input_model", None))
@@ -423,6 +427,16 @@ class RegisteredTool:
                 if approval_scope is not None
                 else getattr(tool.__class__, "approval_scope", "one_shot")
             ),
+            parallel_safe=bool(
+                parallel_safe
+                if parallel_safe is not None
+                else getattr(tool.__class__, "parallel_safe", True)
+            ),
+            accepts_runtime_context=bool(
+                accepts_runtime_context
+                if accepts_runtime_context is not None
+                else getattr(tool.__class__, "accepts_runtime_context", False)
+            ),
             origin_module=tool.__class__.__module__,
             origin_name=tool.__class__.__name__,
         )
@@ -459,6 +473,8 @@ class RegisteredTool:
         approval_reason: str | None = None,
         approval_scope: str | None = None,
         approval_expiry_seconds: int | None = None,
+        parallel_safe: bool | None = None,
+        accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
         if source is None:
             raise ValueError("Function tools must declare a source.")
@@ -499,6 +515,8 @@ class RegisteredTool:
             approval_reason=approval_reason or "",
             approval_scope=approval_scope or "one_shot",
             approval_expiry_seconds=approval_expiry_seconds or 300,
+            parallel_safe=True if parallel_safe is None else bool(parallel_safe),
+            accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,
             origin_name=func.__name__,
         )

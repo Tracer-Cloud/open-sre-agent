@@ -265,6 +265,33 @@ def test_auto_discovery_populates_investigation_and_chat_surfaces(
     ) == {"incident_id": "inc-1"}
 
 
+def test_action_surface_is_filtered_separately(monkeypatch: pytest.MonkeyPatch) -> None:
+    module: Any = ModuleType("tools.fake_action_tool")
+
+    @tool(
+        name="perform_action",
+        description="Perform a test action.",
+        source="knowledge",
+        surfaces=("action",),
+    )
+    def perform_action(value: str) -> dict[str, str]:
+        return {"value": value}
+
+    perform_action.__module__ = module.__name__
+    module.perform_action = perform_action
+
+    monkeypatch.setattr(
+        registry_module, "_iter_tool_module_names", lambda _pkg: ["fake_action_tool"]
+    )
+    monkeypatch.setattr(registry_module, "_import_tool_module", lambda _pkg, _name: module)
+
+    assert [tool_def.name for tool_def in registry_module.get_registered_tools("action")] == [
+        "perform_action"
+    ]
+    assert registry_module.get_registered_tools("investigation") == []
+    assert registry_module.get_registered_tools("chat") == []
+
+
 def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_tools() -> None:
     marker = "Use this workflow when the user asks about GitHub engineering status"
     shared_guided_tool_names = {

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from rich.console import Console
 
 import tools.interactive_shell.actions.slash as slash_tool
-from core.agent_harness.action_agent import ToolCallingDeps
+from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
 from core.agent_harness.session import ReplSession
 from interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
@@ -14,6 +16,44 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     no_tool_response,
     tool_response,
 )
+from tools.registered_tool import RegisteredTool
+
+
+class _GenericActionToolProvider:
+    def __init__(self, tool: RegisteredTool) -> None:
+        self._tool = tool
+
+    def action_tools(self, **_kwargs: object) -> list[RegisteredTool]:
+        return [self._tool]
+
+    def observer(self, **_kwargs: object):
+        return lambda _kind, _data: None
+
+
+class _OutputSink:
+    def __init__(self, console: Console) -> None:
+        self._console = console
+
+    def print(self, message: str = "") -> None:
+        self._console.print(message)
+
+    def render_response_header(self, label: str) -> None:
+        self._console.print(label)
+
+    def render_error(self, message: str) -> None:
+        self._console.print(message)
+
+    def stream(
+        self,
+        *,
+        label: str,
+        chunks: Iterable[str],
+        suppress_if_starts_with: str | None = None,
+    ) -> str:
+        _ = (label, suppress_if_starts_with)
+        text = "".join(chunks)
+        self._console.print(text)
+        return text
 
 
 def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
@@ -48,6 +88,41 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
     assert result.executed_count == 1
     assert dispatched == ["/health"]
     assert "slash_invoke" in harness.llm.tool_schema_names
+
+
+def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
+    tool = RegisteredTool(
+        name="fake_send_message",
+        description="Send a fake message.",
+        input_schema={
+            "type": "object",
+            "properties": {"message": {"type": "string"}},
+            "required": ["message"],
+            "additionalProperties": False,
+        },
+        source="knowledge",
+        surfaces=("action",),
+        run=lambda message: {"status": "sent", "message": message},
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM([tool_response("fake_send_message", {"message": "hello"})])
+    )
+
+    result = run_agent_turn(
+        "send a fake message",
+        ReplSession(),
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert result.planned_count == 1
+    assert result.executed_count == 1
+    assert result.executed_success_count == 1
+    assert '"status": "sent"' in result.response_text
+    assert "fake_send_message" in harness.llm.tool_schema_names
 
 
 def test_literal_slash_command_dispatches_deterministically_without_llm(

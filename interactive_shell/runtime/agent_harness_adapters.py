@@ -30,8 +30,8 @@ from interactive_shell.ui.action_rendering import ActionRenderObserver
 from interactive_shell.ui.streaming import render_response_header
 from interactive_shell.ui.tables.provider import resolve_provider_models
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
-from tools.interactive_shell.contracts import ToolContext
-from tools.interactive_shell.registry import REGISTRY
+from tools.interactive_shell.action_tools import action_tools_for_context
+from tools.interactive_shell.contracts import REPL_RESOURCE_KEY, ToolContext
 
 
 class ShellOutputSink:
@@ -77,10 +77,12 @@ class ShellToolProvider:
         self._session = session
         self._console = console
         self._request_exit = request_exit
+        self._tool_context: ToolContext | None = None
 
     def action_tools(
         self, *, confirm_fn: Callable[[str], str] | None, is_tty: bool | None
     ) -> list[Any]:
+        resolved_integrations = self._resolved_integrations()
         ctx = ToolContext(
             session=self._session,
             console=self._console,
@@ -89,7 +91,23 @@ class ShellToolProvider:
             request_exit=self._request_exit,
             action_already_listed=True,
         )
-        return REGISTRY.agent_tools_for_context(ctx)
+        self._tool_context = ctx
+        return action_tools_for_context(ctx, resolved_integrations=resolved_integrations)
+
+    def tool_resources(self) -> dict[str, Any]:
+        if self._tool_context is None:
+            return {}
+        return {REPL_RESOURCE_KEY: self._tool_context}
+
+    def _resolved_integrations(self) -> dict[str, Any]:
+        cached = getattr(self._session, "resolved_integrations_cache", None)
+        if cached is not None:
+            return dict(cached)
+        warmer = getattr(self._session, "warm_resolved_integrations", None)
+        if callable(warmer):
+            warmer()
+        cached = getattr(self._session, "resolved_integrations_cache", None)
+        return dict(cached or {})
 
     def observer(self, *, message: str) -> Callable[[str, dict[str, Any]], None]:
         return ActionRenderObserver(session=self._session, console=self._console, message=message)

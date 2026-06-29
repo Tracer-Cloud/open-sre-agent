@@ -42,12 +42,9 @@ from tests.core.agent.scenario_loader import (
     select_cases,
     select_representative,
 )
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
+from tools.interactive_shell.action_tools import action_tools_for_context
 from tools.interactive_shell.contracts import ToolContext
-from tools.interactive_shell.registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-    ToolKind,
-)
 
 
 class ExpectedAction(TypedDict):
@@ -416,7 +413,7 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     answer = case.answer
 
     ctx = ToolContext(session=session, console=Console(file=io.StringIO(), force_terminal=False))
-    tools = REGISTRY.agent_tools_for_context(ctx)
+    tools = action_tools_for_context(ctx, resolved_integrations=resolved_override)
     from core.llm import agent_llm_client
 
     llm = agent_llm_client.get_agent_llm()

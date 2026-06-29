@@ -10,11 +10,12 @@ from interactive_shell.command_registry import switch_llm_provider, switch_reaso
 from interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
     object_schema,
 )
 from tools.interactive_shell.shared import allow_tool
+from tools.registered_tool import RegisteredTool
 
 
 def _provider_values() -> tuple[str, ...]:
@@ -69,16 +70,24 @@ def execute_llm_provider_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_llm_provider(*, target: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context({"target": target}, context, execute_llm_provider_tool)
+
+
+llm_set_provider_tool = RegisteredTool(
     name="llm_set_provider",
     description="Switch the active LLM provider or reasoning model.",
     input_schema=object_schema(
         properties={"target": _target_property_schema()},
         required=("target",),
     ),
-    execute=execute_llm_provider_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "llm_provider"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_llm_provider,
+    is_available=lambda sources: capability_available_from_sources(sources, "llm_provider"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_llm_provider_tool"]
+__all__ = ["execute_llm_provider_tool", "llm_set_provider_tool"]

@@ -103,6 +103,9 @@ class NullToolProvider:
         _ = (confirm_fn, is_tty)
         return []
 
+    def tool_resources(self) -> dict[str, Any]:
+        return {}
+
     def observer(self, *, message: str) -> ToolEventObserver:
         _ = message
 

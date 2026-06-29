@@ -15,10 +15,11 @@ from interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
 from interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
 )
 from tools.interactive_shell.shared import plan_foreground_tool
+from tools.registered_tool import RegisteredTool
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
 # repl_choose_one). When the action agent resolves free text (e.g. "remove
@@ -121,13 +122,25 @@ def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     )
 
 
-TOOL_ENTRY = ToolEntry(
+def run_slash(*, command: str, args: list[str] | None = None, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context(
+        {"command": command, "args": args or []},
+        context,
+        execute_slash_tool,
+    )
+
+
+slash_invoke_tool = RegisteredTool(
     name="slash_invoke",
     description=slash_invoke_tool_description(),
     input_schema=slash_invoke_input_schema(),
-    execute=execute_slash_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "slash_commands"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_slash,
+    is_available=lambda sources: capability_available_from_sources(sources, "slash_commands"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_slash_tool"]
+__all__ = ["execute_slash_tool", "slash_invoke_tool"]

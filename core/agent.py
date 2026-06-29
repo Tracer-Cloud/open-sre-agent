@@ -100,6 +100,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         on_event: LoopEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
+        tool_resources: dict[str, Any] | None = None,
         provider_hooks: ProviderHooks | None = None,
     ) -> None:
         self._llm = llm
@@ -110,6 +111,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         self._on_legacy_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
+        self._tool_resources = dict(tool_resources or {})
         self._provider_hooks = provider_hooks or ProviderHooks()
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
@@ -141,12 +143,14 @@ class Agent[RuntimeToolT: RuntimeTool]:
                 system = str(agent_context.system_prompt)
             tools = list(agent_context.active_tools)
             resolved = agent_context.resolved_integrations
+            tool_resources = dict(getattr(agent_context, "tool_resources", {}) or {})
             max_iterations = agent_context.max_iterations
         elif initial_messages is not None:
             messages = ensure_runtime_messages(initial_messages)
             system = self._system
             tools = list(self._tools)
             resolved = self._resolved
+            tool_resources = dict(self._tool_resources)
             max_iterations = self._max_iterations
         else:
             raise ValueError("Agent.run requires initial_messages or agent_context.")
@@ -283,7 +287,13 @@ class Agent[RuntimeToolT: RuntimeTool]:
                 after_tool_call=self._tool_hooks.after_tool_call,
                 on_tool_update=on_tool_update,
             )
-            results = execute_tool_calls(response.tool_calls, runtime_tools, resolved, hooks=hooks)
+            results = execute_tool_calls(
+                response.tool_calls,
+                runtime_tools,
+                resolved,
+                hooks=hooks,
+                tool_resources=tool_resources,
+            )
             provider_results = [result.provider_content() for result in results]
             tool_result_message = runtime_tool_result_message(
                 self._llm, response.tool_calls, provider_results

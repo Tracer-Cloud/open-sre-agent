@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
 from rich.console import Console
 
+import tools.interactive_shell.actions.assistant_handoff as assistant_handoff_tool
+import tools.interactive_shell.actions.cli_command as cli_command_tool
+import tools.interactive_shell.actions.implementation as implementation_tool
+import tools.interactive_shell.actions.investigation as investigation_tool
+import tools.interactive_shell.actions.llm_provider as llm_provider_tool
+import tools.interactive_shell.actions.sample_alert as sample_alert_tool
+import tools.interactive_shell.actions.shell as shell_tool
+import tools.interactive_shell.actions.slash as slash_tool
+import tools.interactive_shell.actions.synthetic as synthetic_tool
+import tools.interactive_shell.actions.task_cancel as task_cancel_tool
 from core.agent_harness.session import ReplSession
 from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from interactive_shell.utils.telemetry import PromptRecorder
@@ -23,11 +33,7 @@ from tests.core.agent.scenario_loader import (
     ScenarioCapabilities,
     ScenarioCase,
 )
-from tools.interactive_shell.contracts import ToolExecutor
-from tools.interactive_shell.registry import (
-    REGISTRY,
-    TOOL_KIND_TO_NAME,
-)
+from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
 
 # Sentinel a fixture's ``resolved_integrations`` uses to request the REAL,
 # live-resolved config for a service instead of a pinned fake one. The oracle
@@ -325,7 +331,7 @@ def patch_execution_boundary(
 
     tool_to_kind = {tool: kind for kind, tool in TOOL_KIND_TO_NAME.items()}
 
-    def _make_fake_execute(tool_name: str) -> ToolExecutor:
+    def _make_fake_execute(tool_name: str):
         def _fake_execute(args: dict[str, Any], ctx: Any) -> bool:
             kind = tool_to_kind.get(tool_name)
             if kind is None:
@@ -338,20 +344,23 @@ def patch_execution_boundary(
 
         return _fake_execute
 
-    # The live oracle must patch the same first-class ToolEntry execution
-    # boundary that production turns use. Do not resurrect a registry-level
-    # dispatch method here; that would bypass the shared AgentTool harness this
-    # PR is meant to validate.
-    registry_tools = REGISTRY._tools  # noqa: SLF001
-    for tool_name in REGISTRY.names():
-        entry = REGISTRY.get(tool_name)
-        if entry is None:
-            continue
-        monkeypatch.setitem(
-            registry_tools,
-            tool_name,
-            replace(entry, execute=_make_fake_execute(tool_name)),
-        )
+    # Patch the same execution functions that the registered action tools call.
+    # This keeps the oracle on the canonical registry/runtime path without
+    # mutating registry internals.
+    patches = {
+        "alert_sample": (sample_alert_tool, "execute_sample_alert_tool"),
+        "assistant_handoff": (assistant_handoff_tool, "execute_assistant_handoff_tool"),
+        "cli_exec": (cli_command_tool, "execute_cli_command_tool"),
+        "code_implement": (implementation_tool, "execute_implementation_tool"),
+        "investigation_start": (investigation_tool, "execute_investigation_tool"),
+        "llm_set_provider": (llm_provider_tool, "execute_llm_provider_tool"),
+        "shell_run": (shell_tool, "execute_shell_tool"),
+        "slash_invoke": (slash_tool, "execute_slash_tool"),
+        "synthetic_run": (synthetic_tool, "execute_synthetic_tool"),
+        "task_cancel": (task_cancel_tool, "execute_task_cancel_tool"),
+    }
+    for tool_name, (module, attribute) in patches.items():
+        monkeypatch.setattr(module, attribute, _make_fake_execute(tool_name))
 
 
 def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> OracleRunResult:

@@ -962,11 +962,15 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         # there as an external registry package and are only loaded when the
         # bench is actively imported, so they don't appear in the production
         # registry that this test enumerates.
+        "alert_sample",
         "alertmanager_alerts",
         "alertmanager_silences",
+        "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",
         "check_s3_marker",
+        "cli_exec",
+        "code_implement",
         "describe_rds_events",
         "describe_rds_instance",
         "ec2_instances_by_tag",
@@ -1078,6 +1082,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "incident_io_incidents",
         "inspect_lambda_function",
         "inspect_s3_object",
+        "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
         "jira_issue_detail",
@@ -1102,6 +1107,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_jenkins_running_builds",
         "list_s3_objects",
         "list_sentry_issue_events",
+        "llm_set_provider",
         "lookup_cloudtrail_events",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
@@ -1143,8 +1149,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_code",
         "search_github_issues",
         "search_sentry_issues",
+        "shell_run",
+        "slash_invoke",
         "summarize_community_followups",
         "summarize_github_pr_status",
+        "synthetic_run",
+        "task_cancel",
         # Temporal tools use try/finally only (to close the client); the client
         # returns structured error dicts for handled HTTP failures, and any
         # unexpected exception escapes to the #1476 global wrapper.

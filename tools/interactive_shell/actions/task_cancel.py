@@ -12,10 +12,11 @@ from interactive_shell.runtime import TaskKind, TaskStatus
 from interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
+    execute_with_repl_context,
     object_schema,
 )
 from tools.interactive_shell.shared import plan_foreground_tool
+from tools.registered_tool import RegisteredTool
 
 
 def _running_task_matches(ctx: ToolContext, target: str) -> Sequence[object]:
@@ -97,7 +98,11 @@ def execute_task_cancel_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_task_cancel(*, target: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context({"target": target}, context, execute_task_cancel_tool)
+
+
+task_cancel_tool = RegisteredTool(
     name="task_cancel",
     description="Cancel a running task by id or kind.",
     input_schema=object_schema(
@@ -116,8 +121,12 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("target",),
     ),
-    execute=execute_task_cancel_tool,
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_task_cancel,
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_task_cancel_tool"]
+__all__ = ["execute_task_cancel_tool", "task_cancel_tool"]

@@ -161,6 +161,8 @@ def _iter_discovered_tool_modules(package: ModuleType) -> list[ModuleType]:
 
 
 def _candidate_belongs_to_module(candidate: object, module_name: str) -> bool:
+    if isinstance(candidate, RegisteredTool):
+        return (candidate.origin_module or getattr(candidate.run, "__module__", "")) == module_name
     if isinstance(candidate, BaseTool):
         return candidate.__class__.__module__ == module_name
     return getattr(candidate, "__module__", None) == module_name
@@ -171,6 +173,15 @@ def _default_surfaces_for_tool(_tool_name: str) -> tuple[ToolSurface, ...]:
 
 
 def _registered_tool_from_candidate(candidate: object) -> RegisteredTool | None:
+    if isinstance(candidate, RegisteredTool):
+        if not candidate.origin_module or not candidate.origin_name:
+            return replace(
+                candidate,
+                origin_module=candidate.origin_module or getattr(candidate.run, "__module__", ""),
+                origin_name=candidate.origin_name or getattr(candidate.run, "__name__", ""),
+            )
+        return candidate
+
     registered = getattr(candidate, REGISTERED_TOOL_ATTR, None)
     if isinstance(registered, RegisteredTool):
         return registered

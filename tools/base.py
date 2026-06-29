@@ -107,6 +107,7 @@ class BaseTool(ABC):
     approval_scope: ClassVar[str] = (
         "one_shot"  # "one_shot" (single call) or "session" (until disconnect)
     )
+    accepts_runtime_context: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

@@ -10,9 +10,7 @@ from interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from tools.interactive_shell.registry import (
-    REGISTRY,
-)
+from tools.interactive_shell.action_tools import get_action_tool
 
 _MIN_LLM_DESCRIPTION_LEN = 20
 
@@ -63,7 +61,7 @@ def test_slash_invoke_schema_enum_matches_slash_commands() -> None:
 
 
 def test_registered_slash_invoke_uses_catalog() -> None:
-    entry = REGISTRY.get("slash_invoke")
+    entry = get_action_tool("slash_invoke")
     assert entry is not None
     assert len(entry.description) > 200
     assert set(entry.input_schema["properties"]["command"]["enum"]) == set(SLASH_COMMANDS.keys())

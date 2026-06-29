@@ -9,11 +9,12 @@ from interactive_shell.runtime.subprocess_runner import (
 )
 from tools.interactive_shell.contracts import (
     ToolContext,
-    ToolEntry,
-    capability_not_explicitly_disabled,
+    capability_available_from_sources,
+    execute_with_repl_context,
     object_schema,
     string_property,
 )
+from tools.registered_tool import RegisteredTool
 
 
 def execute_cli_command_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
@@ -30,7 +31,11 @@ def execute_cli_command_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
     return True
 
 
-TOOL_ENTRY = ToolEntry(
+def run_cli_command(*, payload: str, context: Any) -> dict[str, Any]:
+    return execute_with_repl_context({"payload": payload}, context, execute_cli_command_tool)
+
+
+cli_exec_tool = RegisteredTool(
     name="cli_exec",
     description=(
         "Run an `opensre` CLI subcommand payload (without the leading `opensre ` prefix). "
@@ -50,9 +55,13 @@ TOOL_ENTRY = ToolEntry(
         },
         required=("payload",),
     ),
-    execute=execute_cli_command_tool,
-    is_available=lambda session: capability_not_explicitly_disabled(session, "cli_commands"),
+    source="interactive_shell",
+    surfaces=("action",),
+    parallel_safe=False,
+    accepts_runtime_context=True,
+    run=run_cli_command,
+    is_available=lambda sources: capability_available_from_sources(sources, "cli_commands"),
 )
 
 
-__all__ = ["TOOL_ENTRY", "execute_cli_command_tool"]
+__all__ = ["cli_exec_tool", "execute_cli_command_tool"]

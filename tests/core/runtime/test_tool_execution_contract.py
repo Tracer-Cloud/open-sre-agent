@@ -16,6 +16,7 @@ from core.execution import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
 from core.types import AgentTool, AgentToolContext
+from tools.registered_tool import RegisteredTool
 
 
 def _schema(required: list[str] | None = None) -> dict[str, Any]:
@@ -121,6 +122,56 @@ def test_partial_tool_update_events_are_forwarded() -> None:
     )
 
     assert updates == [("echo", {"seen": "abc"})]
+
+
+def test_registered_tool_receives_runtime_context_only_when_opted_in() -> None:
+    seen: dict[str, Any] = {}
+
+    def run(value: str, context: AgentToolContext) -> dict[str, Any]:
+        seen["value"] = value
+        seen["resource"] = context.resources["marker"]
+        return {"ok": True}
+
+    registered = RegisteredTool(
+        name="contextual_echo",
+        description="test registered tool",
+        input_schema=_schema(["value"]),
+        source="knowledge",
+        run=run,
+        accepts_runtime_context=True,
+    )
+
+    result = execute_tool_calls(
+        [_call("contextual_echo", "abc")],
+        [registered],
+        {},
+        tool_resources={"marker": "runtime"},
+    )[0]
+
+    assert result.is_error is False
+    assert seen == {"value": "abc", "resource": "runtime"}
+
+
+def test_registered_tool_without_context_opt_in_keeps_plain_run_contract() -> None:
+    def run(value: str) -> dict[str, Any]:
+        return {"value": value}
+
+    registered = RegisteredTool(
+        name="plain_registered_echo",
+        description="test registered tool",
+        input_schema=_schema(["value"]),
+        source="knowledge",
+        run=run,
+    )
+
+    result = execute_tool_calls(
+        [_call("plain_registered_echo", "abc")],
+        [registered],
+        {},
+        tool_resources={"marker": "runtime"},
+    )[0]
+
+    assert result.details == {"value": "abc"}
 
 
 def test_parallel_batch_preserves_provider_order() -> None:

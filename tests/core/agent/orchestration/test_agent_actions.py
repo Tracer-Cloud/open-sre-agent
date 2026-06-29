@@ -30,7 +30,7 @@ from tests.core.agent._planned_action import (
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
 )
-from tools.interactive_shell.registry import (
+from tools.interactive_shell.action_names import (
     TOOL_KIND_TO_NAME,
     ToolKind,
 )
