@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from config.constants import get_store_path as _get_store_path_from_config
+from config.remote_store import (
+    load_named_remotes as _load_named_remotes_from_config,
+)
+from config.remote_store import (
+    load_remote_ops_config as _load_remote_ops_config_from_config,
+)
 
 _VERSION = 1
 _EMPTY_CONFIG = {"version": _VERSION, "wizard": {}, "targets": {}, "probes": {}}
@@ -130,11 +136,11 @@ def save_remote_url(url: str, path: Path | None = None) -> None:
     store_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def load_named_remotes(path: Path | None = None) -> dict[str, str]:
-    """Return all named remotes as ``{name: url}``."""
-    data = _load_raw(path)
-    remotes: dict[str, Any] = data.get("remote", {}).get("remotes", {})
-    return {k: str(v.get("url", "")) for k, v in remotes.items() if v.get("url")}
+# Re-exported from ``config.remote_store`` so layers below ``surfaces/`` (e.g.
+# ``infra/deployment/remote/runtime_alert``) can read this without crossing the
+# surfaces boundary. Existing callers + test mocks that target
+# ``surfaces.cli.wizard.store.load_named_remotes`` keep working unchanged.
+load_named_remotes = _load_named_remotes_from_config
 
 
 def save_named_remote(
@@ -203,17 +209,9 @@ def load_active_remote_name(path: Path | None = None) -> str | None:
     return name
 
 
-def load_remote_ops_config(path: Path | None = None) -> dict[str, str | None]:
-    """Return persisted remote ops config values."""
-    data = _load_raw(path)
-    remote_data = data.get("remote", {})
-    if not isinstance(remote_data, dict):
-        return {"provider": None, "project": None, "service": None}
-    return {
-        "provider": str(remote_data.get("provider") or "") or None,
-        "project": str(remote_data.get("project") or "") or None,
-        "service": str(remote_data.get("service") or "") or None,
-    }
+# Re-exported from ``config.remote_store`` — see the comment above
+# ``load_named_remotes`` for why this name resolves through ``config/``.
+load_remote_ops_config = _load_remote_ops_config_from_config
 
 
 def save_remote_ops_config(
