@@ -27,8 +27,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 # Enforce the edges fixed in this PR first; expand to core/config once the
 # registry port lands (see opensre-architecture-guide § tool placement).
 _FORBIDDEN_DIRECT: dict[str, frozenset[str]] = {
-    "integrations": frozenset({"tools", "cli"}),
-    "tools": frozenset({"cli"}),
+    "integrations": frozenset({"tools", "surfaces"}),
+    "tools": frozenset({"surfaces"}),
 }
 
 # Known direct violations being burned down — remove entries as fixes land.
@@ -38,7 +38,39 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
         # Integration setup UX still reaches into the CLI wizard.
-        "integrations.cli -> cli.wizard.integration_health",
+        "integrations.cli -> surfaces.cli.wizard.integration_health",
+        # tools/interactive_shell — pre-existing cross-layer reuse migrated from interactive_shell -> surfaces.interactive_shell (T-1 #3299). Burn down by extracting the shared subprocess-runner + execution-confirm primitives into surfaces/shared/.
+        "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
+        "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.actions.sample_alert -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.command_registry.slash_catalog",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.actions.slash -> surfaces.interactive_shell.utils.telemetry.turn_outcome",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.command_registry",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.actions.task_cancel -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.implementation.claude_code_executor -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.shared.investigation_launch -> surfaces.interactive_shell.ui.foreground_investigation",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.shell.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.runtime.subprocess_runner.task_streaming",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.ui.execution_confirm",
+        "tools.interactive_shell.synthetic.runner -> surfaces.interactive_shell.utils.error_handling.exception_reporting",
     }
 )
 

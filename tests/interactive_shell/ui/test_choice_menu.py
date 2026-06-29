@@ -7,7 +7,7 @@ import re
 import sys
 from types import SimpleNamespace
 
-from interactive_shell.ui.components import choice_menu
+from surfaces.interactive_shell.ui.components import choice_menu
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;:]*[A-Za-z]")
 
@@ -95,7 +95,7 @@ def test_repl_choose_one_starts_at_initial_value(monkeypatch) -> None:
     actions = iter(["enter"])
     monkeypatch.setattr(choice_menu, "repl_tty_interactive", lambda: True)
     monkeypatch.setattr(
-        "interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
+        "surfaces.interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
         lambda: None,
     )
     monkeypatch.setattr(sys, "stdout", out)

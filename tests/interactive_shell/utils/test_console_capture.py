@@ -6,7 +6,7 @@ import io
 
 from rich.console import Console
 
-from interactive_shell.utils.telemetry.console_capture import capture_console_segment
+from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
 
 
 def test_capture_console_segment_clears_recording_buffer_between_uses() -> None:

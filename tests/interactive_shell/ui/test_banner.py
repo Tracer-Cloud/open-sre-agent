@@ -6,9 +6,9 @@ import io
 
 from rich.console import Console
 
-from interactive_shell.ui.banner import banner as banner_module
-from interactive_shell.ui.banner import banner_state as banner_state_module
-from interactive_shell.ui.components import rendering as rendering_module
+from surfaces.interactive_shell.ui.banner import banner as banner_module
+from surfaces.interactive_shell.ui.banner import banner_state as banner_state_module
+from surfaces.interactive_shell.ui.components import rendering as rendering_module
 
 
 def test_banner_shows_ollama_model(monkeypatch: object) -> None:
@@ -45,7 +45,7 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
     render_calls: list[dict[str, object | None]] = []
 
     monkeypatch.setattr(
-        "interactive_shell.ui.components.rendering.repl_clear_screen",
+        "surfaces.interactive_shell.ui.components.rendering.repl_clear_screen",
         lambda: None,
     )
 
@@ -58,7 +58,7 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
         render_calls.append({"session": session, "theme_notice": theme_notice})
 
     monkeypatch.setattr(
-        "interactive_shell.ui.components.rendering.repl_render_launch_poster",
+        "surfaces.interactive_shell.ui.components.rendering.repl_render_launch_poster",
         _fake_render,
     )
 

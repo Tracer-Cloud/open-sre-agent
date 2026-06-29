@@ -7,9 +7,9 @@ from typing import Any
 
 from rich.markup import escape
 
-from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.runtime import TaskKind, TaskStatus
-from interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.runtime import TaskKind, TaskStatus
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
     execute_with_repl_context,

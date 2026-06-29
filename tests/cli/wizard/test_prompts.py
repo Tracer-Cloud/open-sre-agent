@@ -5,7 +5,7 @@ from prompt_toolkit.keys import Keys  # type: ignore[import-not-found]
 from prompt_toolkit.output import DummyOutput  # type: ignore[import-not-found]
 from questionary import Choice
 
-from cli.wizard.prompts import checkbox, select
+from surfaces.cli.wizard.prompts import checkbox, select
 
 
 def _build_select_question(message: str, choices, *, pipe_input):

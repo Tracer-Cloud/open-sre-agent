@@ -9,7 +9,7 @@ from rich.console import Console
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.action_agent import ToolCallingDeps, run_agent_turn
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
+from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 from tests.core.agent.orchestration.action_execution_test_harness import (
     ActionExecutionHarness,
     FakeActionLLM,

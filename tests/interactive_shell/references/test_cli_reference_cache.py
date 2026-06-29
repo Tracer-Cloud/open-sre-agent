@@ -19,7 +19,7 @@ def test_second_build_is_cache_hit() -> None:
 
 
 def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
-    from cli.__main__ import cli
+    from surfaces.cli.__main__ import cli
 
     text = CliReference().build_text()
     captured = capsys.readouterr()

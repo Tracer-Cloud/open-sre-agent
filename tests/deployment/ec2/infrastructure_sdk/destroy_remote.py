@@ -7,8 +7,8 @@ import time
 
 from botocore.exceptions import ClientError
 
-from cli.wizard.store import delete_named_remote
 from infra.deployment.operations.ec2_config import delete_remote_outputs, load_remote_outputs
+from surfaces.cli.wizard.store import delete_named_remote
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     delete_instance_profile,
     terminate_instance,

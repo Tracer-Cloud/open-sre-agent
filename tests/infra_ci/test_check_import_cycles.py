@@ -18,7 +18,7 @@ def test_discover_first_party_roots_includes_known_packages() -> None:
     # be the tests/ directory, which happens to contain similarly-named
     # subdirectories and would silently produce a passing assertion.
     roots = discover_first_party_roots(_REPO_ROOT)
-    assert "cli" in roots
+    assert "surfaces" in roots
     assert "core" in roots
     assert "integrations" in roots
     assert "tools" in roots

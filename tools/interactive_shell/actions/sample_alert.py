@@ -7,8 +7,8 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.runtime import ReplSession
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.contracts import (
     ToolContext,
     execute_with_repl_context,
@@ -31,7 +31,7 @@ def run_sample_alert(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from cli.investigation import run_sample_alert_for_session
+        from surfaces.cli.investigation import run_sample_alert_for_session
 
         return run_sample_alert_for_session(
             template_name=template_name,
@@ -40,7 +40,7 @@ def run_sample_alert(
         )
 
     def _start_background() -> None:
-        from interactive_shell.runtime.background.runner import (
+        from surfaces.interactive_shell.runtime.background.runner import (
             start_background_template_investigation,
         )
 
@@ -60,7 +60,7 @@ def run_sample_alert(
         announce_value=template_name,
         record_value=f"sample:{template_name}",
         foreground_task_command=f"sample alert:{template_name}",
-        exception_context="interactive_shell.sample_alert",
+        exception_context="surfaces.interactive_shell.sample_alert",
         run=_run,
         start_background=_start_background,
         confirm_fn=confirm_fn,

@@ -12,14 +12,14 @@ from rich.markup import escape
 from rich.text import Text
 
 import config.constants.platform as _platform
-from interactive_shell.runtime import ReplSession
-from interactive_shell.runtime.subprocess_runner.task_streaming import (
+from surfaces.interactive_shell.runtime import ReplSession
+from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
     SHELL_COMMAND_TIMEOUT_SECONDS,
 )
-from interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -67,7 +67,7 @@ def run_shell_command(
 
     use_shell = parsed.use_shell
     if parsed.passthrough:
-        from interactive_shell.ui import DIM
+        from surfaces.interactive_shell.ui import DIM
 
         console.print(f"[{DIM}]explicit shell passthrough enabled[/]")
 
@@ -84,7 +84,7 @@ def run_shell_command(
             max_output_chars=_MAX_COMMAND_OUTPUT_CHARS,
         )
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.shell_command.start")
+        report_exception(exc, context="surfaces.interactive_shell.shell_command.start")
 
         response_text = f"command failed to start: {str(exc)}"
 
@@ -152,7 +152,7 @@ def run_cd_command(command: str, session: ReplSession, console: Console) -> None
     try:
         os.chdir(target)
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.shell_cd")
+        report_exception(exc, context="surfaces.interactive_shell.shell_cd")
 
         response_text = f"cd failed: {str(exc)}"
 

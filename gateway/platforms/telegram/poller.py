@@ -83,9 +83,7 @@ class TelegramPoller:
     ) -> None:
         error_code = data.get("error_code")
         description = str(
-            data.get("description")
-            or response.text.strip()
-            or f"HTTP {response.status_code}"
+            data.get("description") or response.text.strip() or f"HTTP {response.status_code}"
         )
         if error_code == _CONFLICT_ERROR_CODE:
             logger.debug(

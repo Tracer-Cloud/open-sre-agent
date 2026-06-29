@@ -11,12 +11,12 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.command_registry.watch_cmds import (
+from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
-from platform.common.task_types import TaskKind, TaskStatus
 from tools.watch_dog.alarms import AlarmCredentials
 
 
@@ -56,11 +56,11 @@ def test_dispatch_watch_creates_watchdog_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
+        "surfaces.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
         lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.pid_exists",
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
         lambda _pid: True,
     )
 
@@ -68,7 +68,7 @@ def test_dispatch_watch_creates_watchdog_task(
         return None
 
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        "surfaces.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
         _fake_start,
     )
 
@@ -91,11 +91,11 @@ def test_dispatch_watch_creates_watchdog_task(
 
 def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
+        "surfaces.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
         lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.pid_exists",
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
         lambda _pid: True,
     )
 
@@ -109,7 +109,7 @@ def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         task.mark_cancelled()
 
     monkeypatch.setattr(
-        "interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        "surfaces.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
         lambda **kw: threading.Thread(target=_slow_watchdog, kwargs=kw, daemon=True).start(),
     )
 

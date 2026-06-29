@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interactive_shell.utils.telemetry.turn_outcome import (
+from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_outcome,
     format_terminal_turn_outcome,
     format_wizard_cli_outcome,

@@ -47,10 +47,14 @@ class TelegramApprovalService:
         approved = action == "approve"
         row = self._store.resolve(approval_id, status="approved" if approved else "denied")
         if row is None:
-            self._client.answer_callback_query(callback_query_id, text="Approval expired or unknown.")
+            self._client.answer_callback_query(
+                callback_query_id, text="Approval expired or unknown."
+            )
             return
         if str(row["chat_id"]) != user_id:
-            self._client.answer_callback_query(callback_query_id, text="Not authorized for this approval.")
+            self._client.answer_callback_query(
+                callback_query_id, text="Not authorized for this approval."
+            )
             return
         with self._lock:
             waiter = self._waiters.get(approval_id)
@@ -111,7 +115,9 @@ class TelegramApprovalService:
 
         chat_id = str(request.resolved_integrations.get("_gateway_chat_id") or "")
         if not chat_id:
-            return BeforeToolCallResult(blocked=True, reason="Missing gateway chat context for approval.")
+            return BeforeToolCallResult(
+                blocked=True, reason="Missing gateway chat context for approval."
+            )
 
         approved = self._prompt_and_wait(
             chat_id=chat_id,

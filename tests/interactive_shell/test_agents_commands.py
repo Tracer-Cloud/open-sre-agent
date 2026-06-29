@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.table import Table
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.command_registry.agents import core as agents_core
-from interactive_shell.command_registry.agents import trace as agents_trace
-from interactive_shell.command_registry.agents.conflicts_view import render_conflicts
-from interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.command_registry.agents import core as agents_core
+from surfaces.interactive_shell.command_registry.agents import trace as agents_trace
+from surfaces.interactive_shell.command_registry.agents.conflicts_view import render_conflicts
+from surfaces.interactive_shell.command_registry.agents.trace import _slice_to_utf8_boundary
 from tools.fleet_monitoring import config as config_mod
 from tools.fleet_monitoring.conflicts import DEFAULT_WINDOW_SECONDS, FileWriteConflict
 from tools.fleet_monitoring.registry import AgentRecord, AgentRegistry

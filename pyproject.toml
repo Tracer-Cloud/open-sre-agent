@@ -83,7 +83,7 @@ Issues = "https://github.com/Tracer-Cloud/opensre/issues"
 Changelog = "https://github.com/Tracer-Cloud/opensre/releases"
 
 [project.scripts]
-opensre = "cli.__main__:main"
+opensre = "surfaces.cli.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -137,20 +137,19 @@ azure_sql = [
 
 [tool.setuptools.packages.find]
 include = [
-  "cli*",
   "config*",
   "core*",
   "gateway*",
   "infra*",
   "integrations*",
-  "interactive_shell*",
   "platform*",
+  "surfaces*",
   "tests*",
   "tools*",
 ]
 
 [tool.setuptools.package-data]
-"cli" = ["investigation/sample_alerts/*.json"]
+"surfaces.cli" = ["investigation/sample_alerts/*.json"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under
 # .pytest_cache/ (already gitignored) instead of .coverage.<hostname>.* at repo root.
@@ -159,14 +158,13 @@ data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
 paths = [
-  "cli",
   "config",
   "core",
   "gateway",
   "infra/deployment",
   "integrations",
-  "interactive_shell",
   "platform",
+  "surfaces",
   "tools",
 ]
 exclude = [

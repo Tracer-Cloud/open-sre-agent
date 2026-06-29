@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.tests.catalog import TestCatalogItem, TestRequirement
-from cli.tests.runner import format_command, run_catalog_item, run_catalog_items
+from surfaces.cli.__main__ import cli
+from surfaces.cli.tests.catalog import TestCatalogItem, TestRequirement
+from surfaces.cli.tests.runner import format_command, run_catalog_item, run_catalog_items
 
 
 def test_tests_list_filters_ci_safe_inventory() -> None:
@@ -171,7 +171,7 @@ def test_tests_no_subcommand_missing_tui_deps_gives_opensre_error() -> None:
     runner = CliRunner()
 
     with unittest.mock.patch(
-        "cli.tests.interactive._questionary",
+        "surfaces.cli.tests.interactive._questionary",
         None,
     ):
         result = runner.invoke(cli, ["tests"])
@@ -274,7 +274,7 @@ def test_run_catalog_item_prints_openclaw_preflight_before_execution(
     )
 
     monkeypatch.setattr(
-        "cli.tests.runner.get_preflight_messages",
+        "surfaces.cli.tests.runner.get_preflight_messages",
         lambda _item: ("OpenClaw preflight: unavailable.",),
     )
 
@@ -306,7 +306,7 @@ def test_tests_synthetic_clean_error_when_data_dir_missing(tmp_path: Path) -> No
     # Point SYNTHETIC_SCENARIOS_DIR at a path that doesn't exist so the
     # pre-check in ``run_synthetic_suite`` short-circuits to OpenSREError.
     missing = tmp_path / "missing-rds-postgres"
-    with unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", missing):
+    with unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", missing):
         result = runner.invoke(cli, ["tests", "synthetic", "--scenario", "001-replication-lag"])
 
     output = result.output or ""
@@ -339,7 +339,7 @@ def test_tests_synthetic_clean_error_when_module_not_bundled(tmp_path: Path) -> 
     (scenarios_dir / "001-replication-lag").mkdir(parents=True)
 
     with (
-        unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch("builtins.__import__", side_effect=_fail_synthetic_import),
     ):
         result = runner.invoke(cli, ["tests", "synthetic", "--scenario", "001-replication-lag"])
@@ -370,7 +370,7 @@ def test_tests_synthetic_unrelated_module_not_found_propagates(tmp_path: Path) -
     (scenarios_dir / "001-replication-lag").mkdir(parents=True)
 
     with (
-        unittest.mock.patch("cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
+        unittest.mock.patch("surfaces.cli.tests.discover.SYNTHETIC_SCENARIOS_DIR", scenarios_dir),
         unittest.mock.patch("builtins.__import__", side_effect=_fail_unrelated_import),
     ):
         result = runner.invoke(cli, ["tests", "synthetic", "--scenario", "001-replication-lag"])

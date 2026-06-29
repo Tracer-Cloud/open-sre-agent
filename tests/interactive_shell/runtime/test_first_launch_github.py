@@ -9,9 +9,9 @@ from integrations import github_login as github_login_mod
 from integrations.github_login import GitHubLoginResult
 from integrations.github_mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
 from integrations.github_mcp_oauth import GitHubDeviceCode
-from interactive_shell.runtime.startup import first_launch_github as flg
 from platform.analytics import source as analytics_source
 from platform.terminal.theme import DEVICE_CODE_ANSI
+from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 
 def _console() -> Console:

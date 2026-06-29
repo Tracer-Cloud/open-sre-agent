@@ -7,7 +7,7 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.ui.action_rendering import ActionRenderObserver
+from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 
 
 def test_action_observer_records_without_printing_internal_plan() -> None:

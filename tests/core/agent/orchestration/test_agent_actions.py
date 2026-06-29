@@ -14,8 +14,8 @@ import pytest
 from rich.console import Console
 
 import config.constants.platform as platform_module
-import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
-import interactive_shell.runtime.subprocess_runner as subprocess_runner
+import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.actions.implementation as implementation_tool
 import tools.interactive_shell.actions.llm_provider as llm_provider_tool
 import tools.interactive_shell.actions.slash as slash_tool
@@ -35,7 +35,9 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = (
+    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+)
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
@@ -653,7 +655,7 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         return {"root_cause": "hello world handled"}
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -726,7 +728,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
             "is_noise": False,
         }
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(
         investigation_module,
@@ -764,7 +766,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
     def _raise(
         *,
@@ -774,7 +776,7 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     ) -> dict[str, object]:
         raise OpenSREError("sample pipeline blocked")
 
-    import cli.investigation as investigation_module
+    import surfaces.cli.investigation as investigation_module
 
     monkeypatch.setattr(investigation_module, "run_sample_alert_for_session", _raise)
 

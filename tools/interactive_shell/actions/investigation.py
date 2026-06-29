@@ -7,8 +7,8 @@ from typing import Any
 
 from rich.console import Console
 
-from interactive_shell.runtime import ReplSession
 from platform.common.task_types import TaskRecord
+from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.contracts import (
     ToolContext,
     execute_with_repl_context,
@@ -37,7 +37,7 @@ def run_text_investigation(
     action_already_listed: bool = False,
 ) -> None:
     def _run(task: TaskRecord) -> dict[str, object]:
-        from cli.investigation import run_investigation_for_session
+        from surfaces.cli.investigation import run_investigation_for_session
 
         return run_investigation_for_session(
             alert_text=alert_text,
@@ -46,7 +46,7 @@ def run_text_investigation(
         )
 
     def _start_background() -> None:
-        from interactive_shell.runtime.background.runner import (
+        from surfaces.interactive_shell.runtime.background.runner import (
             start_background_text_investigation,
         )
 
@@ -66,7 +66,7 @@ def run_text_investigation(
         announce_value=alert_text,
         record_value=alert_text,
         foreground_task_command=f"investigate:{alert_text}",
-        exception_context="interactive_shell.text_investigation",
+        exception_context="surfaces.interactive_shell.text_investigation",
         run=_run,
         start_background=_start_background,
         confirm_fn=confirm_fn,

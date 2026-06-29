@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-import cli.wizard.env_sync as env_sync
-import cli.wizard.store as wizard_store
-from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
+import surfaces.cli.wizard.env_sync as env_sync
+import surfaces.cli.wizard.store as wizard_store
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.command_registry import repl_data as repl_data_module
+from surfaces.cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
+from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 
 
 def _capture() -> tuple[Console, io.StringIO]:

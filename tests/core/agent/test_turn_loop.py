@@ -8,13 +8,13 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.state import ReplState, SpinnerState
-from interactive_shell.runtime.core.turn_accounting import (
+from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState
+from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
-from interactive_shell.runtime.turn_host import AgentTurnRunner
-from interactive_shell.utils.telemetry.recorder import LlmRunInfo
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.runtime.turn_host import AgentTurnRunner
+from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo
 
 
 class _Recorder:

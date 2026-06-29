@@ -373,7 +373,7 @@ class ReplSession:
             self.last_synthetic_observation_path = None
             return
         try:
-            from cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
+            from surfaces.cli.tests.discover import SYNTHETIC_SCENARIOS_DIR
         except Exception:
             self.last_synthetic_observation_path = None
             return

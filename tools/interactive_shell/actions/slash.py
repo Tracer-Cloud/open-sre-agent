@@ -6,14 +6,14 @@ from typing import Any
 
 from rich.markup import escape
 
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.command_registry.slash_catalog import (
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
     slash_invoke_tool_description,
 )
-from interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
+from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
 from tools.interactive_shell.contracts import (
     ToolContext,
     capability_available_from_sources,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, SUPPORTED_PROVIDERS
-from cli.wizard.flow import _onboarding_provider_options
+from surfaces.cli.wizard.config import PROJECT_ENV_PATH, PROJECT_ROOT, SUPPORTED_PROVIDERS
+from surfaces.cli.wizard.flow import _onboarding_provider_options
 
 
 def test_project_env_path_defaults_to_repo_root() -> None:

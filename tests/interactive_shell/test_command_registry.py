@@ -7,21 +7,21 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.command_registry.integrations import (
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.command_registry.integrations import (
     _INTEGRATIONS_FIRST_ARGS,
     _MCP_FIRST_ARGS,
 )
-from interactive_shell.command_registry.investigation import (
+from surfaces.interactive_shell.command_registry.investigation import (
     _INVESTIGATE_FIRST_ARGS,
     _TEMPLATE_FIRST_ARGS,
 )
-from interactive_shell.command_registry.model.command import _MODEL_FIRST_ARGS
-from interactive_shell.command_registry.settings_cmds import (
+from surfaces.interactive_shell.command_registry.model.command import _MODEL_FIRST_ARGS
+from surfaces.interactive_shell.command_registry.settings_cmds import (
     _TRUST_FIRST_ARGS,
     _VERBOSE_FIRST_ARGS,
 )
-from interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS
+from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS
 
 
 def _capture() -> tuple[Console, io.StringIO]:

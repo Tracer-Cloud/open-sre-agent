@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.investigation.payload import (
+from surfaces.cli.investigation.payload import (
     bundled_demo_alert_path,
     load_file,
     resolve_alert_path,

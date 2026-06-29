@@ -14,7 +14,8 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
-from interactive_shell.runtime.subprocess_runner import (
+from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
     _is_interactive_wizard,
@@ -26,7 +27,6 @@ from interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
     terminate_child_process,
 )
-from platform.common.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
@@ -133,7 +133,7 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
         directories.append(target)
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.chdir",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.chdir",
         _chdir,
     )
 
@@ -153,11 +153,11 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         raise OSError("permission denied")
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.chdir",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.chdir",
         _chdir,
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -402,7 +402,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         _raise,
     )
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -437,7 +437,7 @@ def test_run_opensre_agents_scan_prints_clean_foreground_output(
         )
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.run",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.run",
         _fake_run,
     )
 
@@ -468,7 +468,7 @@ def test_run_opensre_agents_scan_register_explains_confirmation(
         )
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.run",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.run",
         _fake_run,
     )
 
@@ -515,7 +515,7 @@ def test_run_opensre_agents_watch_runs_in_foreground(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
 
@@ -579,24 +579,24 @@ def test_start_background_cli_task_uses_pty_for_live_terminal_output(
         raise OSError(errno.EIO, "pty closed")
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.openpty",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.openpty",
         lambda: (10, 11),
         raising=False,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.read",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.read",
         _fake_read,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.close",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.close",
         lambda fd: closed_fds.append(fd),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -645,15 +645,15 @@ def test_start_background_cli_task_falls_back_to_pipes_when_pty_unavailable(
         return _FakeProcess()
 
     monkeypatch.delattr(
-        "interactive_shell.runtime.subprocess_runner.os.openpty",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.openpty",
         raising=False,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -690,7 +690,7 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda properties: captured.append(properties),
     )
 
@@ -703,11 +703,11 @@ def test_start_background_cli_task_logs_failure_outcome_to_posthog(
             return 1
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         lambda _command, **_kwargs: _FakeProcess(),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -748,7 +748,7 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_REDACT", "0")
     monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
     monkeypatch.setattr(
-        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
         lambda properties: captured.append(properties),
     )
 
@@ -761,11 +761,11 @@ def test_start_background_cli_task_logs_success_outcome_to_posthog(
             return 0
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         lambda _command, **_kwargs: _FakeProcess(),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -802,7 +802,7 @@ def test_task_output_stream_reports_unexpected_failure(
             raise RuntimeError("stream broke")
 
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -833,15 +833,15 @@ def test_task_pty_stream_reports_unexpected_failure(
         raise RuntimeError("pty broke")
 
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.read",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.read",
         _raise_read,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.os.close",
+        "surfaces.interactive_shell.runtime.subprocess_runner.os.close",
         lambda fd: closed_fds.append(fd),
     )
 
@@ -865,11 +865,11 @@ def test_start_background_cli_task_reports_spawn_failure(
         raise RuntimeError("spawn broke")
 
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
 
@@ -909,19 +909,19 @@ def test_start_background_cli_task_reports_watcher_failure(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.read_diag",
+        "surfaces.interactive_shell.runtime.subprocess_runner.read_diag",
         lambda _buf: (_ for _ in ()).throw(RuntimeError("diag broke")),
     )
 
@@ -980,11 +980,11 @@ def test_start_background_cli_task_skips_follow_up_after_session_reset(
 
     _DeferredThread.pending.clear()
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _DeferredThread,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
 
@@ -1020,11 +1020,11 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
             raise RuntimeError("poll broke")
 
     monkeypatch.setattr(
-        "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1082,11 +1082,11 @@ def test_run_synthetic_test_streams_subprocess_output(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1133,11 +1133,11 @@ def test_run_synthetic_test_honours_explicit_scenario(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1175,11 +1175,11 @@ def test_run_synthetic_test_all_launches_suite_alias(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
 
@@ -1231,11 +1231,11 @@ def _capture_popen_kwargs(
         return _CapturedPopen()
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.threading.Thread",
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
         _ImmediateThread,
     )
     return captured
@@ -1393,11 +1393,11 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
         raise AssertionError("subprocess.run must not be called for interactive subcommand")
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         _fake_popen,
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.run",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.run",
         _fake_run,
     )
 
@@ -1442,11 +1442,11 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
     run_calls: list[list[str]] = []
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.Popen",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.Popen",
         lambda cmd, **_kw: popen_calls.append(cmd),
     )
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.subprocess.run",
+        "surfaces.interactive_shell.runtime.subprocess_runner.subprocess.run",
         lambda cmd, **_kw: run_calls.append(cmd),
     )
 
@@ -1495,7 +1495,7 @@ def test_run_opensre_cli_command_skips_confirmation_for_investigate(
         start_calls.append(argv_list)
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.start_background_cli_task",
+        "surfaces.interactive_shell.runtime.subprocess_runner.start_background_cli_task",
         _fake_start_background_cli_task,
     )
 
@@ -1537,7 +1537,7 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
         start_calls.append(argv_list)
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.subprocess_runner.start_background_cli_task",
+        "surfaces.interactive_shell.runtime.subprocess_runner.start_background_cli_task",
         _fake_start_background_cli_task,
     )
 

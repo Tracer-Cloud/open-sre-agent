@@ -28,16 +28,16 @@ from rich.markup import escape
 
 from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
-from interactive_shell.runtime import ReplSession, TaskKind
-from interactive_shell.runtime.subprocess_runner.task_streaming import (
+from surfaces.interactive_shell.runtime import ReplSession, TaskKind
+from surfaces.interactive_shell.runtime.subprocess_runner.task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
     _SYNTHETIC_DIAG_CHARS,
     CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
     terminate_child_process,
 )
-from interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
-from interactive_shell.ui.execution_confirm import execution_allowed
-from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shared import allow_tool
 
 _IMPLEMENT_PERMISSION_MODE_ENV = "CLAUDE_CODE_IMPLEMENT_PERMISSION_MODE"
@@ -184,7 +184,7 @@ def run_claude_code_implementation(
             workspace=str(Path.cwd()),
         )
     except Exception as exc:
-        report_exception(exc, context="interactive_shell.claude_code.build")
+        report_exception(exc, context="surfaces.interactive_shell.claude_code.build")
         console.print(f"[{ERROR}]Claude Code failed to prepare:[/] {escape(str(exc))}")
         session.record("implementation", request, ok=False)
         return
@@ -201,7 +201,7 @@ def run_claude_code_implementation(
         proc = _spawn_claude_code(invocation)
     except Exception as exc:
         task.mark_failed(str(exc))
-        report_exception(exc, context="interactive_shell.claude_code.start")
+        report_exception(exc, context="surfaces.interactive_shell.claude_code.start")
         console.print(f"[{ERROR}]Claude Code failed to start:[/] {escape(str(exc))}")
         session.record("implementation", request, ok=False)
         return
@@ -259,7 +259,7 @@ def run_claude_code_implementation(
             print_command_output(console, err, style=ERROR)
         except Exception as exc:  # noqa: BLE001
             task.mark_failed(str(exc))
-            report_exception(exc, context="interactive_shell.claude_code.watch")
+            report_exception(exc, context="surfaces.interactive_shell.claude_code.watch")
             if session.history_generation == history_gen_when_started:
                 session.mark_latest(ok=False, kind="implementation")
             console.print(f"[{ERROR}]Claude Code watcher failed:[/] {escape(str(exc))}")

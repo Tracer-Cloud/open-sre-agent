@@ -15,7 +15,7 @@ from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_c
 from gateway.config import GatewaySettings
 from gateway.platforms.telegram.client import TelegramBotClient
 from gateway.sinks.telegram_sink import TelegramOutputSink
-from interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
 logger = logging.getLogger(__name__)
 

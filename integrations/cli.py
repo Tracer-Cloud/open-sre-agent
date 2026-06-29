@@ -736,7 +736,7 @@ def _setup_discord() -> None:
 
 
 def _setup_telegram() -> None:
-    from cli.wizard.integration_health import validate_telegram_bot
+    from surfaces.cli.wizard.integration_health import validate_telegram_bot
 
     bot_token = _p("Telegram bot token", secret=True)
     if not bot_token:

@@ -6,8 +6,8 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.lifecycle.uninstall import _remove_path, run_uninstall
+from surfaces.cli.__main__ import cli
+from surfaces.cli.lifecycle.uninstall import _remove_path, run_uninstall
 
 
 def test_remove_path_removes_file(tmp_path: Path) -> None:
@@ -53,8 +53,8 @@ def test_remove_path_returns_error_on_permission_denied(
 def test_run_uninstall_cancelled_by_user(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
 
     import questionary as _q
 
@@ -73,8 +73,8 @@ def test_run_uninstall_cancelled_by_user(
 def test_run_uninstall_aborted_by_keyboard_interrupt(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
 
     import questionary as _q
 
@@ -93,9 +93,9 @@ def test_run_uninstall_skips_missing_dirs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     missing = tmp_path / "does_not_exist"
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [missing])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [missing])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
 
     rc = run_uninstall(yes=True)
 
@@ -110,9 +110,9 @@ def test_run_uninstall_removes_existing_dir(
 ) -> None:
     d = tmp_path / "tracer_home"
     d.mkdir()
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [d])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [d])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
 
     rc = run_uninstall(yes=True)
 
@@ -124,9 +124,9 @@ def test_run_uninstall_removes_existing_dir(
 def test_run_uninstall_pip_success(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
 
     rc = run_uninstall(yes=True)
 
@@ -137,10 +137,10 @@ def test_run_uninstall_pip_success(
 def test_run_uninstall_pip_failure_shows_hint(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 1)
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_windows", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 1)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_windows", lambda: False)
 
     rc = run_uninstall(yes=True)
 
@@ -153,10 +153,10 @@ def test_run_uninstall_pip_failure_shows_hint(
 def test_run_uninstall_pip_failure_windows_hint(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 1)
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_windows", lambda: True)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 1)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_windows", lambda: True)
 
     rc = run_uninstall(yes=True)
 
@@ -169,9 +169,9 @@ def test_run_uninstall_binary_removes_executable(
 ) -> None:
     fake_exe = tmp_path / "opensre"
     fake_exe.write_bytes(b"\x7fELF")
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: True)
-    monkeypatch.setattr("cli.lifecycle.uninstall.sys.executable", str(fake_exe))
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: True)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall.sys.executable", str(fake_exe))
 
     rc = run_uninstall(yes=True)
 
@@ -185,9 +185,9 @@ def test_run_uninstall_dir_removal_error_sets_exit_1(
 ) -> None:
     d = tmp_path / "locked_dir"
     d.mkdir()
-    monkeypatch.setattr("cli.lifecycle.uninstall._data_dirs", lambda: [d])
-    monkeypatch.setattr("cli.lifecycle.uninstall._is_binary_install", lambda: False)
-    monkeypatch.setattr("cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._data_dirs", lambda: [d])
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._is_binary_install", lambda: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.uninstall._pip_uninstall", lambda: 0)
 
     def _fail(path: str) -> None:
         raise OSError("Permission denied")
@@ -211,9 +211,9 @@ def test_uninstall_command_yes_flag_skips_prompt() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.lifecycle.uninstall._data_dirs", return_value=[]),
-        patch("cli.lifecycle.uninstall._is_binary_install", return_value=False),
-        patch("cli.lifecycle.uninstall._pip_uninstall", return_value=0),
+        patch("surfaces.cli.lifecycle.uninstall._data_dirs", return_value=[]),
+        patch("surfaces.cli.lifecycle.uninstall._is_binary_install", return_value=False),
+        patch("surfaces.cli.lifecycle.uninstall._pip_uninstall", return_value=0),
     ):
         result = runner.invoke(cli, ["uninstall", "--yes"])
 
@@ -225,9 +225,9 @@ def test_uninstall_command_short_yes_flag() -> None:
     runner = CliRunner()
 
     with (
-        patch("cli.lifecycle.uninstall._data_dirs", return_value=[]),
-        patch("cli.lifecycle.uninstall._is_binary_install", return_value=False),
-        patch("cli.lifecycle.uninstall._pip_uninstall", return_value=0),
+        patch("surfaces.cli.lifecycle.uninstall._data_dirs", return_value=[]),
+        patch("surfaces.cli.lifecycle.uninstall._is_binary_install", return_value=False),
+        patch("surfaces.cli.lifecycle.uninstall._pip_uninstall", return_value=0),
     ):
         result = runner.invoke(cli, ["uninstall", "-y"])
 
@@ -235,7 +235,7 @@ def test_uninstall_command_short_yes_flag() -> None:
 
 
 def test_data_dirs_includes_legacy_config_opensre_path() -> None:
-    from cli.lifecycle.uninstall import _data_dirs
+    from surfaces.cli.lifecycle.uninstall import _data_dirs
 
     paths = _data_dirs()
     path_strs = [str(p) for p in paths]

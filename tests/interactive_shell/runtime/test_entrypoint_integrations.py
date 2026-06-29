@@ -12,9 +12,9 @@ from typing import Any
 
 from rich.console import Console
 
-import interactive_shell.main as main_entrypoint
+import surfaces.interactive_shell.main as main_entrypoint
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.startup import first_launch_github as flg
+from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 
 def _console() -> Console:

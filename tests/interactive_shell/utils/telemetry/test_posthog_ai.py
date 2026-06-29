@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from interactive_shell.utils.telemetry.sinks import posthog_ai
 from platform.analytics.events import Event
+from surfaces.interactive_shell.utils.telemetry.sinks import posthog_ai
 
 
 def test_capture_ai_generation_uses_analytics_capture(monkeypatch) -> None:

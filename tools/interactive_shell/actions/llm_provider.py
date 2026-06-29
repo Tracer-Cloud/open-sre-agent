@@ -6,8 +6,8 @@ from typing import Any
 
 from rich.markup import escape
 
-from interactive_shell.command_registry import switch_llm_provider, switch_reasoning_model
-from interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.command_registry import switch_llm_provider, switch_reasoning_model
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
     capability_available_from_sources,
@@ -19,7 +19,7 @@ from tools.registered_tool import RegisteredTool
 
 
 def _provider_values() -> tuple[str, ...]:
-    from cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     return tuple(sorted(PROVIDER_BY_VALUE.keys()))
 
@@ -41,7 +41,7 @@ def _target_property_schema() -> dict[str, Any]:
 
 
 def _apply_model_set_target(target: str, ctx: ToolContext) -> bool:
-    from cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
     candidate = target.strip()
     if candidate.lower() in PROVIDER_BY_VALUE:

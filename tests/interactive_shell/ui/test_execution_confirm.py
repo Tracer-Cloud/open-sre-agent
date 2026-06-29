@@ -12,7 +12,7 @@ import io
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.ui.execution_confirm import execution_allowed
+from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
     allow_tool,

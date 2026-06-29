@@ -16,8 +16,8 @@ import pytest
 from rich.console import Console
 from rich.table import Table
 
-from interactive_shell.ui.agents import agents_view as agents_view_mod
-from interactive_shell.ui.agents.agents_view import _build_agents_table
+from surfaces.interactive_shell.ui.agents import agents_view as agents_view_mod
+from surfaces.interactive_shell.ui.agents.agents_view import _build_agents_table
 from tools.fleet_monitoring import config as config_mod
 from tools.fleet_monitoring.probe import ProcessSnapshot
 from tools.fleet_monitoring.registry import AgentRecord

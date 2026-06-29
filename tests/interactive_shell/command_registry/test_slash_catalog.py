@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from interactive_shell.command_registry import SLASH_COMMANDS
-from interactive_shell.command_registry.slash_catalog import (
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.command_registry.slash_catalog import (
     _MCP_BY_COMMAND,
     build_slash_command_specs,
     format_slash_catalog_text,

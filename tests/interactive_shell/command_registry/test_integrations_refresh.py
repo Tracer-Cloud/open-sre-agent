@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import integrations as _integrations
+from surfaces.interactive_shell.command_registry import integrations as _integrations
 
 
 def _console() -> Console:

@@ -14,15 +14,15 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from core.agent_harness.session.background import BackgroundInvestigationRecord
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.command_registry import repl_data as repl_data_module
-from interactive_shell.command_registry.investigation import (
+from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
+from surfaces.interactive_shell.command_registry.investigation import (
     _validate_investigate_args,
     _validate_save_args,
 )
-from interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
-from interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
-from platform.common.task_types import TaskKind, TaskStatus
+from surfaces.interactive_shell.command_registry.tasks_cmds import _validate_cancel_args
+from surfaces.interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -83,7 +83,7 @@ class TestDispatchSlash:
     def test_tty_help_dispatch_uses_interactive_picker(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from interactive_shell.command_registry import help as help_cmd
+        from surfaces.interactive_shell.command_registry import help as help_cmd
 
         session = ReplSession()
         console, buf = _capture()
@@ -267,7 +267,7 @@ class TestDispatchSlash:
     def test_hermes_slash_command_delegates_to_bare_cli(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from interactive_shell.command_registry import cli_parity
+        from surfaces.interactive_shell.command_registry import cli_parity
 
         calls: list[list[str]] = []
 
@@ -324,7 +324,7 @@ class TestDispatchSlash:
             lambda _self, **_kwargs: (_ for _ in ()).throw(RuntimeError("read broke")),
         )
         monkeypatch.setattr(
-            "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+            "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -346,7 +346,7 @@ class TestDispatchSlash:
             lambda _self, *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write broke")),
         )
         monkeypatch.setattr(
-            "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+            "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
 
@@ -447,7 +447,7 @@ class TestSpecificListCommands:
         assert "opensre onboard" in buf.getvalue()
 
     def test_tools_list_prints_registered_tools(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import tools_cmds as tools_cmd_module
+        from surfaces.interactive_shell.command_registry import tools_cmds as tools_cmd_module
 
         monkeypatch.setattr(
             tools_cmd_module,
@@ -624,7 +624,7 @@ class TestIntegrationsCommand:
         assert "unknown subcommand" in buf.getvalue()
 
     def test_setup_delegates_to_cli(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import integrations as m
+        from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
@@ -634,7 +634,7 @@ class TestIntegrationsCommand:
     def test_remove_uses_native_store_removal(self, monkeypatch: object) -> None:
         import integrations.store as store
         import platform.analytics.cli as analytics_cli
-        from interactive_shell.command_registry import integrations as m
+        from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -646,7 +646,7 @@ class TestIntegrationsCommand:
 
     def test_remove_cancelled_does_not_touch_store(self, monkeypatch: object) -> None:
         import integrations.store as store
-        from interactive_shell.command_registry import integrations as m
+        from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -682,7 +682,7 @@ class TestMcpCommand:
         assert "github" in buf.getvalue()
 
     def test_connect_delegates_to_cli(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import integrations as m
+        from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
         monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
@@ -692,7 +692,7 @@ class TestMcpCommand:
     def test_disconnect_uses_native_store_removal(self, monkeypatch: object) -> None:
         import integrations.store as store
         import platform.analytics.cli as analytics_cli
-        from interactive_shell.command_registry import integrations as m
+        from surfaces.interactive_shell.command_registry import integrations as m
 
         removed: list[str] = []
         monkeypatch.setattr(m, "repl_tty_interactive", lambda: True)
@@ -723,7 +723,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> Path:
-        import cli.wizard.store as wizard_store
+        import surfaces.cli.wizard.store as wizard_store
 
         store_path = tmp_path / "opensre.json"
         monkeypatch.setattr(wizard_store, "get_store_path", lambda: store_path)
@@ -747,8 +747,8 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
-        from interactive_shell.command_registry.model import command as model_cmd
+        import surfaces.cli.wizard.env_sync as env_sync
+        from surfaces.interactive_shell.command_registry.model import command as model_cmd
 
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -773,7 +773,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from interactive_shell.command_registry.model import command as model_cmd
+        from surfaces.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         picks = iter(["show", "done"])
@@ -787,7 +787,7 @@ class TestModelCommand:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         self._patch_llm(monkeypatch)
-        from interactive_shell.command_registry.model import command as model_cmd
+        from surfaces.interactive_shell.command_registry.model import command as model_cmd
 
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(
@@ -813,7 +813,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
         from core.llm import llm_client
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
@@ -847,7 +847,7 @@ class TestModelCommand:
         """If prompt-safe status has no credential path, /model set must not
         touch .env or os.environ."""
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -887,7 +887,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -911,7 +911,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -934,7 +934,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -961,7 +961,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -985,8 +985,8 @@ class TestModelCommand:
         persisted verbatim and then silently fail availability checks. It must be
         normalized to ``gpt-5.5`` instead."""
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
-        from interactive_shell.command_registry import switch_reasoning_model
+        import surfaces.cli.wizard.env_sync as env_sync
+        from surfaces.interactive_shell.command_registry import switch_reasoning_model
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1009,7 +1009,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1035,7 +1035,7 @@ class TestModelCommand:
     ) -> None:
         """`/model set <provider> [model] --toolcall-model <m>` must persist both."""
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1061,7 +1061,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1086,7 +1086,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1105,7 +1105,7 @@ class TestModelCommand:
         """Reviewer ask: a missing flag value must say *which* flag, not just
         echo the generic usage line."""
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1124,7 +1124,7 @@ class TestModelCommand:
     ) -> None:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
         from core.llm import llm_client
 
         env_path = tmp_path / ".env"
@@ -1158,7 +1158,7 @@ class TestModelCommand:
     ) -> None:
         """Providers without a separate toolcall model (codex/claude-code/gemini-cli/ollama)
         must not silently accept toolcall overrides."""
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("LLM_PROVIDER", "codex")
@@ -1172,7 +1172,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import cli.wizard.env_sync as env_sync
+        import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1256,8 +1256,8 @@ class TestInvestigateFileCommand:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
 
-        # Patch package re-export: slash handler does `from cli.investigation import ...`.
-        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
+        # Patch package re-export: slash handler does `from surfaces.cli.investigation import ...`.
+        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1277,7 +1277,7 @@ class TestInvestigateFileCommand:
             captured.append(template_name)
             return {"root_cause": "sample cause"}
 
-        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1303,7 +1303,7 @@ class TestInvestigateFileCommand:
             return "bg123"
 
         monkeypatch.setattr(
-            "interactive_shell.command_registry.investigation.start_background_template_investigation",
+            "surfaces.interactive_shell.command_registry.investigation.start_background_template_investigation",
             _fake_start_background_template_investigation,
         )
 
@@ -1335,7 +1335,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "cli.investigation.run_sample_alert_for_session",
+            "surfaces.cli.investigation.run_sample_alert_for_session",
             lambda **_kwargs: {"root_cause": "sample cause"},
         )
 
@@ -1362,7 +1362,7 @@ class TestInvestigateFileCommand:
             calls.append(template_name)
             return {"root_cause": "template-wins"}
 
-        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1374,7 +1374,7 @@ class TestInvestigateFileCommand:
     def test_missing_arg_in_tty_opens_interactive_menu(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from interactive_shell.command_registry import investigation as investigation_cmd
+        from surfaces.interactive_shell.command_registry import investigation as investigation_cmd
 
         picks = iter(["generic"])
         captured: list[str] = []
@@ -1391,7 +1391,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr(investigation_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(investigation_cmd, "repl_choose_one", lambda **_: next(picks))
-        monkeypatch.setattr("cli.investigation.run_sample_alert_for_session", _fake_sample)
+        monkeypatch.setattr("surfaces.cli.investigation.run_sample_alert_for_session", _fake_sample)
 
         session = ReplSession()
         console, buf = _capture()
@@ -1411,7 +1411,7 @@ class TestInvestigateFileCommand:
     def test_tty_investigate_menu_browse_path_runs_custom_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from interactive_shell.command_registry import investigation as investigation_cmd
+        from surfaces.interactive_shell.command_registry import investigation as investigation_cmd
 
         alert_file = tmp_path / "custom_alert.json"
         alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")
@@ -1435,7 +1435,7 @@ class TestInvestigateFileCommand:
             "_prompt_investigate_path",
             lambda _console: str(alert_file),
         )
-        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1474,7 +1474,7 @@ class TestInvestigateFileCommand:
 
         monkeypatch.setattr("platform.analytics.cli.track_investigation", _fake_track)
         monkeypatch.setattr(
-            "cli.investigation.run_investigation_for_session",
+            "surfaces.cli.investigation.run_investigation_for_session",
             lambda **_kwargs: {"root_cause": "test cause"},
         )
         session = ReplSession()
@@ -1507,7 +1507,7 @@ class TestInvestigateFileCommand:
                 "region": "us-east-1",
             }
 
-        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _fake)
+        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _fake)
 
         session = ReplSession()
         console, _ = _capture()
@@ -1539,7 +1539,7 @@ class TestInvestigateFileCommand:
             return "bg123"
 
         monkeypatch.setattr(
-            "interactive_shell.command_registry.investigation.start_background_text_investigation",
+            "surfaces.interactive_shell.command_registry.investigation.start_background_text_investigation",
             _fake_start_background_text_investigation,
         )
 
@@ -1556,7 +1556,7 @@ class TestInvestigateFileCommand:
     def test_investigate_opensre_error_marks_task_failed(
         self, tmp_path: object, monkeypatch: object
     ) -> None:
-        from interactive_shell.utils.error_handling.errors import OpenSREError
+        from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
 
         alert_file = tmp_path / "alert.json"  # type: ignore[operator]
         alert_file.write_text('{"alert_name": "test"}', encoding="utf-8")  # type: ignore[union-attr]
@@ -1568,7 +1568,7 @@ class TestInvestigateFileCommand:
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
-        monkeypatch.setattr("cli.investigation.run_investigation_for_session", _raise)
+        monkeypatch.setattr("surfaces.cli.investigation.run_investigation_for_session", _raise)
         session = ReplSession()
         console, _ = _capture()
         dispatch_slash(f"/investigate {alert_file}", session, console)
@@ -1595,7 +1595,7 @@ class TestResumeCommand:
             JsonlSessionStorage,
             default_session_repo,
         )
-        from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         SessionStore = JsonlSessionStorage()
         session = ReplSession()
@@ -1728,7 +1728,7 @@ class TestResumeCommand:
     def test_apply_resume_noop_when_no_messages_or_context(self) -> None:
         """When the session has no conversation, _apply_resume_data must return
         early without rotating the session."""
-        from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         session = ReplSession()
         old_id = session.session_id
@@ -1753,7 +1753,7 @@ class TestResumeCommand:
         from unittest.mock import patch
 
         from core.agent_harness.session import JsonlSessionStorage
-        from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         SessionStore = JsonlSessionStorage()
         data = {
@@ -1794,7 +1794,7 @@ class TestResumeCommand:
         self,
     ) -> None:
         """No-history rendering should not emit orphaned assistant blocks."""
-        from interactive_shell.command_registry.session_cmds import _apply_resume_data
+        from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
         data = {
             "session_id": "display-no-history-abc123",
@@ -1825,7 +1825,7 @@ class TestResumeCommand:
         """Action-agent LLM failures must be stored so /resume can show them."""
         from unittest.mock import patch
 
-        from interactive_shell.runtime.shell_turn_execution import (
+        from surfaces.interactive_shell.runtime.shell_turn_execution import (
             run_action_tool_turn,
         )
 
@@ -1836,7 +1836,7 @@ class TestResumeCommand:
             raise RuntimeError("codex: quota or rate limit exceeded (exit 1)")
 
         with patch(
-            "interactive_shell.runtime.shell_turn_execution._default_llm_factory",
+            "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory",
             side_effect=_raise,
         ):
             result = run_action_tool_turn("check cpu usage", session, console)
@@ -2179,7 +2179,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2213,7 +2213,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2251,7 +2251,7 @@ class TestRunCliCommand:
         when no timeout is set, so non-interactive slash commands like ``/tests
         list`` do not lose their output to the parent stdout FD.
         """
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
             cmd: list[str],
@@ -2285,7 +2285,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         replayed: list[tuple[str, str | None]] = []
 
@@ -2324,8 +2324,8 @@ class TestRunCliCommand:
         Passing ``-m cli`` to that executable sends ``-m`` to Click and fails
         before slash commands like ``/onboard`` can run.
         """
-        from interactive_shell.command_registry import cli_parity as m
-        from interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
 
         captured: list[list[str]] = []
 
@@ -2359,8 +2359,8 @@ class TestRunCliCommand:
         pass ``-m`` through to Click. Reusing the current ``opensre`` entrypoint
         avoids turning ``/onboard`` into ``opensre -m cli onboard``.
         """
-        from interactive_shell.command_registry import cli_parity as m
-        from interactive_shell.runtime.subprocess_runner import opensre_cli_runner
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.runtime.subprocess_runner import opensre_cli_runner
 
         captured: list[list[str]] = []
 
@@ -2389,7 +2389,7 @@ class TestRunCliCommand:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured_envs: list[dict[str, str]] = []
 
@@ -2427,7 +2427,7 @@ class TestCliDelegatedCommands:
     def test_command_delegation(
         self, monkeypatch: object, command: str, expected_args: list[str]
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2446,7 +2446,7 @@ class TestCliDelegatedCommands:
         the wizard's prompt_toolkit Application no longer conflicts with the
         shell's active one.
         """
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2473,7 +2473,7 @@ class TestCliDelegatedCommands:
         output is replayed through the REPL console instead of vanishing onto
         the parent process's stdout FD.
         """
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured_kwargs: list[dict[str, object]] = []
 
@@ -2499,7 +2499,7 @@ class TestCliDelegatedCommands:
         the no-subcommand case) and subcommand output bypass ``console.print``
         and never reach the REPL buffer — see issue #2388.
         """
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured_kwargs: list[dict[str, object]] = []
 
@@ -2514,7 +2514,7 @@ class TestCliDelegatedCommands:
 
     def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
         """Args passed to ``/onboard`` must be forwarded to the subprocess."""
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         captured: list[list[str]] = []
 
@@ -2532,7 +2532,7 @@ class TestCliDelegatedCommands:
         assert captured == [["onboard", "local_llm"]]
 
     def test_tests_run_subcommand_starts_background_task(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         started: list[tuple[str, list[str], TaskKind, bool]] = []
 
@@ -2575,7 +2575,7 @@ class TestCliDelegatedCommands:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         selection_path = tmp_path / "selection.json"
 
@@ -2621,7 +2621,7 @@ class TestCliDelegatedCommands:
         assert not selection_path.exists()
 
     def test_tests_flag_first_invocation_delegates_to_cli(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         delegated: list[list[str]] = []
         monkeypatch.setattr(
@@ -2635,7 +2635,7 @@ class TestCliDelegatedCommands:
         assert delegated == [["tests", "--help"]]
 
     def test_tests_subcommand_typo_suggests_synthetic(self, monkeypatch: object) -> None:
-        from interactive_shell.command_registry import cli_parity as m
+        from surfaces.interactive_shell.command_registry import cli_parity as m
 
         delegated: list[list[str]] = []
         started: list[list[str]] = []

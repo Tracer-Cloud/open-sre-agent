@@ -11,7 +11,7 @@ from typing import Any, cast
 
 import yaml
 
-from interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.core.agent._planned_action import (
     default_target_surface,
 )

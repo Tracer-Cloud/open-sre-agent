@@ -185,7 +185,7 @@ def test_gitlab_investigation_e2e():
     """
     access_token, base_url, project_id = _require_env()
 
-    from cli.investigation import run_investigation_cli
+    from surfaces.cli.investigation import run_investigation_cli
 
     # Load the shared fixture and patch in the real project URL so the
     # The repo_url hint lets the agent correlate the alert with this project.

@@ -18,7 +18,7 @@ from core.agent_harness.prompts import (
 )
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
-from interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tests.core.agent._ci_gates import (
     skip_or_fail,
 )

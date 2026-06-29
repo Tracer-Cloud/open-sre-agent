@@ -6,16 +6,16 @@ import stat
 import keyring
 import pytest
 
-from cli.wizard.config import PROVIDER_BY_VALUE
-from cli.wizard.env_sync import (
+from config.llm_credentials import resolve_env_credential
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.cli.wizard.env_sync import (
     _is_sensitive_env_key,
     sync_env_secret,
     sync_env_values,
     sync_provider_env,
     sync_reasoning_model_env,
 )
-from cli.wizard.store import load_local_config
-from config.llm_credentials import resolve_env_credential
+from surfaces.cli.wizard.store import load_local_config
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
@@ -25,7 +25,7 @@ _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
     """Keep sync_provider_env store updates off the developer's ~/.opensre."""
     monkeypatch.setattr(
-        "cli.wizard.store.get_store_path",
+        "surfaces.cli.wizard.store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
 
@@ -495,7 +495,7 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
 
 
 def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None:
-    from cli.wizard.env_sync import _strip_keyring_backed_secret_lines
+    from surfaces.cli.wizard.env_sync import _strip_keyring_backed_secret_lines
 
     lines = [
         "TELEGRAM_BOT_TOKEN=fallback\n",

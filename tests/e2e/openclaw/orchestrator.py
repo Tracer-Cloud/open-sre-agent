@@ -15,8 +15,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from cli.investigation import run_investigation_cli
 from platform.observability.tracing import traceable
+from surfaces.cli.investigation import run_investigation_cli
 from tests.e2e.openclaw.infrastructure_sdk.local import OpenClawHandle
 from tests.utils.alert_factory import create_alert
 

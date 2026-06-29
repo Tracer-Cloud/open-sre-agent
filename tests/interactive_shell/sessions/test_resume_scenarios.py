@@ -19,7 +19,7 @@ from config.config import (
 )
 from config.llm_auth.credentials import status as credential_status
 from core.agent_harness.session import JsonlSessionStorage, ReplSession
-from interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry import dispatch_slash
 
 SessionStore = JsonlSessionStorage()
 

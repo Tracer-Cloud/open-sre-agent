@@ -83,9 +83,7 @@ def load_gateway_settings() -> GatewaySettings:
         host=host,
         allowed_user_ids=allowed,
         max_concurrent_turns=int(os.environ.get("TELEGRAM_GATEWAY_MAX_CONCURRENT", "4")),
-        approval_timeout_seconds=int(
-            os.environ.get("TELEGRAM_GATEWAY_APPROVAL_TIMEOUT", "600")
-        ),
+        approval_timeout_seconds=int(os.environ.get("TELEGRAM_GATEWAY_APPROVAL_TIMEOUT", "600")),
         gate_side_effects=os.environ.get("TELEGRAM_GATEWAY_GATE_SIDE_EFFECTS", "true").lower()
         not in {"0", "false", "no"},
     )

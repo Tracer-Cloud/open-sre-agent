@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from interactive_shell.runtime.subprocess_runner import (
+from surfaces.interactive_shell.runtime.subprocess_runner import (
     run_opensre_cli_command,
 )
 from tools.interactive_shell.contracts import (

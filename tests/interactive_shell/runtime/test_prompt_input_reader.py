@@ -12,14 +12,14 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime.core.state import ReplState
-from interactive_shell.runtime.input import (
+from surfaces.interactive_shell.runtime.core.state import ReplState
+from surfaces.interactive_shell.runtime.input import (
     InputCancelled,
     InputClosed,
     InputSubmitted,
     PromptInputReader,
 )
-from interactive_shell.runtime.input import prompt_input_reader as reader_module
+from surfaces.interactive_shell.runtime.input import prompt_input_reader as reader_module
 
 
 class FakePrompt:

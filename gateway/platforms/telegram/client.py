@@ -76,7 +76,11 @@ class TelegramBotClient:
     def set_webhook(self, url: str, secret_token: str) -> tuple[bool, str]:
         ok, _, error = self._call(
             "setWebhook",
-            {"url": url, "secret_token": secret_token, "allowed_updates": ["message", "callback_query"]},
+            {
+                "url": url,
+                "secret_token": secret_token,
+                "allowed_updates": ["message", "callback_query"],
+            },
         )
         return ok, error
 

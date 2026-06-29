@@ -12,8 +12,8 @@ from __future__ import annotations
 import os
 import time
 
-from cli.wizard.store import save_named_remote
 from infra.deployment.operations.ec2_config import save_remote_outputs
+from surfaces.cli.wizard.store import save_named_remote
 from tests.deployment.ec2.infrastructure_sdk.instance import (
     create_instance_profile,
     launch_instance,

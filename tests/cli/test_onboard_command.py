@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-onboard_module = importlib.import_module("cli.commands.onboard")
+onboard_module = importlib.import_module("surfaces.cli.commands.onboard")
 
 
 @pytest.fixture(autouse=True)

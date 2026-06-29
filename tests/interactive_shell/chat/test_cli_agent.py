@@ -26,9 +26,9 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
     build_environment_block,
 )
 from core.agent_harness.session import ReplSession
-from interactive_shell.runtime import agent_harness_adapters as shell_adapters
-from interactive_shell.runtime import shell_turn_execution as cli_agent
-from interactive_shell.runtime.shell_turn_execution import answer_shell_question
+from surfaces.interactive_shell.runtime import agent_harness_adapters as shell_adapters
+from surfaces.interactive_shell.runtime import shell_turn_execution as cli_agent
+from surfaces.interactive_shell.runtime.shell_turn_execution import answer_shell_question
 
 
 def _build_environment_block(session: ReplSession) -> str:
@@ -405,7 +405,7 @@ class TestAssistantOutputRendering:
 
         monkeypatch.setattr(llm_module, "get_llm_for_reasoning", lambda: _Boom())
         monkeypatch.setattr(
-            "interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+            "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
             lambda exc, **_kwargs: captured_errors.append(exc),
         )
         session = ReplSession()

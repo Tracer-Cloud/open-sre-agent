@@ -6,9 +6,9 @@ import re
 
 from rich.console import Console
 
-from cli.wizard.config import PROVIDER_BY_VALUE
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import SLASH_COMMANDS
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
 from tools.interactive_shell.action_tools import (
     action_tools_for_context,

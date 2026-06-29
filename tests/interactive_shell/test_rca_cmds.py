@@ -10,7 +10,7 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import JsonlSessionStorage, ReplSession
-from interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.command_registry import dispatch_slash
 
 SessionStore = JsonlSessionStorage()
 
@@ -75,7 +75,7 @@ def test_tty_rca_menu_latest_shows_report(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from interactive_shell.command_registry import rca_cmds
+    from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     session = ReplSession()
@@ -101,7 +101,7 @@ def test_tty_rca_history_menu_picks_report_directly(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from interactive_shell.command_registry import rca_cmds
+    from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     session = ReplSession()
@@ -132,7 +132,7 @@ def test_tty_rca_root_menu_history_picks_report(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from interactive_shell.command_registry import rca_cmds
+    from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     session = ReplSession()
@@ -294,7 +294,7 @@ def test_rca_save_unknown_id_reports_not_found(
 
 
 def test_normalize_rca_save_path_strips_quotes() -> None:
-    from interactive_shell.command_registry import rca_cmds
+    from surfaces.interactive_shell.command_registry import rca_cmds
 
     dest = rca_cmds._normalize_rca_save_path("'/tmp/report.md'", investigation_id="abcd1234")
     assert dest == Path("/tmp/report.md")
@@ -304,7 +304,7 @@ def test_tty_rca_save_menu_picks_latest_and_prompts_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from interactive_shell.command_registry import rca_cmds
+    from surfaces.interactive_shell.command_registry import rca_cmds
 
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     session = ReplSession()

@@ -23,35 +23,35 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
-from interactive_shell.runtime.core import confirmation as controller_runtime
-from interactive_shell.runtime.core import state as loop_state
-from interactive_shell.runtime.core import turn_detection as loop_turn_detection
-from interactive_shell.runtime.startup import initial_input as startup_initial_input
-from interactive_shell.ui import input_prompt
-from interactive_shell.ui.components.cpr_stdin import (
-    strip_cpr_escape_sequences,
-    strip_cpr_sequences,
-)
-from interactive_shell.ui.input_prompt import completion as prompt_completion
-from interactive_shell.ui.input_prompt.completion import ShellCompleter
-from interactive_shell.ui.input_prompt.key_bindings import (
-    _SHIFT_ENTER_SEQUENCE,
-    _build_prompt_key_bindings,
-    _tab_expand_or_menu,
-    build_cancel_key_bindings,
-)
-from interactive_shell.ui.input_prompt.lexer import ReplInputLexer
-from interactive_shell.ui.input_prompt.rendering import _prompt_message
-from interactive_shell.ui.input_prompt.style import _build_prompt_style
-from interactive_shell.ui.streaming import _CHARS_PER_TOKEN
-from interactive_shell.ui.streaming.console import StreamingConsole
 from platform.terminal.theme import (
     ANSI_RESET,
     PROMPT_ACCENT_ANSI,
     get_active_theme_name,
     set_active_theme,
 )
+from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
+from surfaces.interactive_shell.runtime.core import confirmation as controller_runtime
+from surfaces.interactive_shell.runtime.core import state as loop_state
+from surfaces.interactive_shell.runtime.core import turn_detection as loop_turn_detection
+from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
+from surfaces.interactive_shell.ui import input_prompt
+from surfaces.interactive_shell.ui.components.cpr_stdin import (
+    strip_cpr_escape_sequences,
+    strip_cpr_sequences,
+)
+from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
+from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
+from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
+    _SHIFT_ENTER_SEQUENCE,
+    _build_prompt_key_bindings,
+    _tab_expand_or_menu,
+    build_cancel_key_bindings,
+)
+from surfaces.interactive_shell.ui.input_prompt.lexer import ReplInputLexer
+from surfaces.interactive_shell.ui.input_prompt.rendering import _prompt_message
+from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
+from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 
 
 def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
@@ -61,8 +61,8 @@ def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
             "-c",
             (
                 "import sys; "
-                "import interactive_shell.runtime.agent_presentation; "
-                "print('interactive_shell.runtime.shell_turn_execution' in sys.modules)"
+                "import surfaces.interactive_shell.runtime.agent_presentation; "
+                "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
             ),
         ],
         check=True,
@@ -473,7 +473,7 @@ def test_run_text_investigation_uses_background_launcher_when_mode_enabled(
         return "bg123"
 
     monkeypatch.setattr(
-        "interactive_shell.runtime.background.runner.start_background_text_investigation",
+        "surfaces.interactive_shell.runtime.background.runner.start_background_text_investigation",
         _fake_start_background_text_investigation,
     )
 
@@ -943,11 +943,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+            "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+            "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1522,7 +1522,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
     ) -> None:
         from rich.console import Console
 
-        from interactive_shell.ui.execution_confirm import execution_allowed
+        from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
         from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
         )
@@ -1564,7 +1564,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         """
         from rich.console import Console
 
-        from interactive_shell.ui.execution_confirm import execution_allowed
+        from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
         from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
         )
@@ -1607,15 +1607,15 @@ class TestThemeCommand:
         assert "/theme" in SLASH_COMMANDS
 
     def test_theme_command_updates_active_theme_and_persists(self, monkeypatch) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         saved_payloads: list[dict[str, object]] = []
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
         monkeypatch.setattr(
-            "cli.commands.config._save_config",
+            "surfaces.cli.commands.config._save_config",
             lambda data: saved_payloads.append(dict(data)),
         )
 
@@ -1631,7 +1631,7 @@ class TestThemeCommand:
         assert interactive.get("theme") == "blue"
 
     def test_theme_picker_uses_session_theme_as_current(self, monkeypatch) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         captured: dict[str, object] = {}
@@ -1655,12 +1655,12 @@ class TestThemeCommand:
         assert any("pink (current)" in label for _value, label in choices)
 
     def test_theme_command_direct_arg_sets_theme(self, monkeypatch) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
 
         set_active_theme("green")
         session = ReplSession()
@@ -1670,13 +1670,13 @@ class TestThemeCommand:
         assert get_active_theme_name() == "amber"
 
     def test_theme_change_refreshes_welcome_poster(self, monkeypatch) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
 
         refreshed: list[dict[str, object | None]] = []
 
@@ -1689,7 +1689,7 @@ class TestThemeCommand:
             refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
 
         monkeypatch.setattr(
-            "interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
             _refresh,
         )
 
@@ -1702,8 +1702,8 @@ class TestThemeCommand:
         assert refreshed[0]["theme_notice"] == "blue"
 
     def test_theme_picker_lists_all_registered_themes(self, monkeypatch) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
         from platform.terminal.theme import list_theme_names
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         captured: dict[str, object] = {}
@@ -1725,7 +1725,7 @@ class TestThemeCommand:
     def test_theme_persist_drains_cpr_around_poster_and_defers_prompt_refresh(
         self, monkeypatch
     ) -> None:
-        from interactive_shell.command_registry import theme as theme_cmd
+        from surfaces.interactive_shell.command_registry import theme as theme_cmd
 
         drains: list[str] = []
         monkeypatch.setattr(
@@ -1734,11 +1734,11 @@ class TestThemeCommand:
             lambda: drains.append("drain"),
         )
         monkeypatch.setattr(
-            "interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
-        monkeypatch.setattr("cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
 
         session = ReplSession()
         console, _buf = self._capture()
@@ -1749,7 +1749,7 @@ class TestThemeCommand:
 
 
 def test_refresh_prompt_theme_skips_invalidate_when_app_not_running() -> None:
-    from interactive_shell.ui.input_prompt.style import refresh_prompt_theme
+    from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 
     invalidated: list[bool] = []
 

@@ -22,17 +22,19 @@ import pytest
 from rich.console import Console
 
 import core.llm.llm_client as llm_module
-import interactive_shell.runtime.shell_turn_execution as shell_turn_execution
+import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import tools.interactive_shell.actions.slash as slash_tool
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry import dispatch_slash
-from interactive_shell.runtime import agent_harness_adapters as shell_adapters
+from surfaces.interactive_shell.command_registry import dispatch_slash
+from surfaces.interactive_shell.runtime import agent_harness_adapters as shell_adapters
 from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
     tool_response,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = (
+    "surfaces.interactive_shell.runtime.shell_turn_execution._default_llm_factory"
+)
 _PROMPT = "which model is being used now?"
 
 

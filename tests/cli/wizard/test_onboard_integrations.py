@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import questionary
 
-from cli.wizard._ui import Choice, _group_header_label, _grouped_questionary_choices
-from cli.wizard.onboard_integrations import (
+from surfaces.cli.wizard._ui import Choice, _group_header_label, _grouped_questionary_choices
+from surfaces.cli.wizard.onboard_integrations import (
     ONBOARD_INTEGRATION_CHOICES,
     ONBOARD_INTEGRATION_GROUP_ORDER,
     ONBOARD_SKIP_CHOICE,
 )
-from cli.wizard.prompts import _SelectControl
+from surfaces.cli.wizard.prompts import _SelectControl
 
 
 def test_group_header_label_formats_category_title() -> None:

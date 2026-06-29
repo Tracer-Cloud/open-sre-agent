@@ -42,12 +42,12 @@ ignore = [
 # F401 is enforced so unused imports surface in lint (and CI) like in app/.
 "tests/**/*.py" = ["ARG001", "E402"]
 # CLI entry points
-"cli/__main__.py" = ["ARG001"]
+"surfaces/cli/__main__.py" = ["ARG001"]
 
 # stderr/stdout buffers outlive the function — closed in a watcher thread's `finally`,
 # so a `with` block at the call site would close them before the subprocess runs.
 "tools/interactive_shell/synthetic/runner.py" = ["SIM115"]
-"interactive_shell/runtime/subprocess_runner/background_task_executor.py" = ["SIM115"]
+"surfaces/interactive_shell/runtime/subprocess_runner/background_task_executor.py" = ["SIM115"]
 
 # self._fd is opened in __init__ and must remain open for the lifetime of the
 # background reader thread (_reader_loop). A with-block would close the fd when
@@ -60,13 +60,12 @@ ignore = [
 
 [lint.isort]
 known-first-party = [
-    "cli",
     "config",
     "core",
     "infra",
     "integrations",
-    "interactive_shell",
     "platform",
+    "surfaces",
     "tests",
     "tools",
 ]

@@ -7,7 +7,7 @@ the actual ``/integrations`` output instead of leaving the user with a raw table
 from __future__ import annotations
 
 from core.agent_harness.session import ReplSession
-from interactive_shell.command_registry.integrations import (
+from surfaces.interactive_shell.command_registry.integrations import (
     _MAX_OBSERVATION_DETAIL_CHARS,
     _record_integration_show_observation,
     _record_integrations_observation,

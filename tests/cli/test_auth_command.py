@@ -5,9 +5,9 @@ from pathlib import Path
 import keyring
 from click.testing import CliRunner
 
-from cli.__main__ import cli
-from cli.llm_auth.service import AuthSetupResult
 from config.llm_credentials import resolve_llm_api_key
+from surfaces.cli.__main__ import cli
+from surfaces.cli.llm_auth.service import AuthSetupResult
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -16,8 +16,10 @@ def _patch_auth_env(monkeypatch, tmp_path: Path) -> Path:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr("cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
-    monkeypatch.setattr("cli.wizard.store.get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr("surfaces.cli.wizard.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr(
+        "surfaces.cli.wizard.store.get_store_path", lambda: tmp_path / "opensre.json"
+    )
     return env_path
 
 
@@ -123,7 +125,9 @@ def test_auth_login_chatgpt_delegates_to_subscription_provider(monkeypatch, tmp_
             env_path=tmp_path / ".env",
         )
 
-    monkeypatch.setattr("cli.commands.auth.configure_cli_subscription_provider", _fake_configure)
+    monkeypatch.setattr(
+        "surfaces.cli.commands.auth.configure_cli_subscription_provider", _fake_configure
+    )
 
     result = CliRunner().invoke(
         cli,
