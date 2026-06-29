@@ -19,7 +19,6 @@ from core.agent_harness.prompts import (
 from core.llm.llm_retry import LLMCreditExhaustedError
 from core.llm.types import ToolCall
 from interactive_shell.command_registry import SLASH_COMMANDS
-from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
 from tests.core.agent._ci_gates import (
     skip_or_fail,
 )
@@ -45,6 +44,7 @@ from tests.core.agent.scenario_loader import (
 )
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME, ToolKind
 from tools.interactive_shell.action_tools import action_tools_for_context
+from tools.interactive_shell.actions.investigation import normalize_investigation_alert_text
 from tools.interactive_shell.contracts import ToolContext
 
 
