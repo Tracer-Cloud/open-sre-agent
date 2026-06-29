@@ -118,11 +118,22 @@ class _FakePopen:
 
 def _git_run_side_effect(diff: str = "diff --git a/foo.py b/foo.py\n+changed\n") -> object:
     def side_effect(cmd: list[str], **_: object) -> MagicMock:
-        sub = cmd[1]  # only git calls reach subprocess.run now
+        # locate the git subcommand, skipping global options like `-c key=val`
+        sub = ""
+        args = iter(cmd[1:])  # only git calls reach subprocess.run now
+        for tok in args:
+            if tok in ("-c", "-C"):
+                next(args, None)
+                continue
+            if tok.startswith("-"):
+                continue
+            sub = tok
+            break
         if sub == "rev-parse":
             return MagicMock(returncode=0, stdout="true\n", stderr="")
         if sub == "status":
-            return MagicMock(returncode=0, stdout=" M foo.py\n?? bar.py\n", stderr="")
+            # porcelain -z: NUL-terminated entries, paths emitted literally
+            return MagicMock(returncode=0, stdout=" M foo.py\0?? bar.py\0", stderr="")
         if sub == "diff":
             return MagicMock(returncode=0, stdout=diff, stderr="")
         return MagicMock(returncode=0, stdout="", stderr="")
@@ -250,6 +261,43 @@ def test_capture_changes_includes_new_untracked_files(tmp_path: Path) -> None:
     assert "added.py" in changed
     assert "added.py" in diff
     assert "brand new file" in diff  # the new file's content is in the diff
+
+
+def test_capture_changes_includes_untracked_files_with_special_names(tmp_path: Path) -> None:
+    """Untracked files whose names contain spaces or non-ASCII must still be diffed.
+
+    git C-quotes such paths in porcelain output (``?? "new file.txt"``); passing the
+    quoted form to ``git diff --no-index`` finds no such file and silently drops the
+    content from the reviewable diff.
+    """
+    from integrations.pi.client import _capture_changes
+
+    _git_init_repo(tmp_path)
+    (tmp_path / "new file.txt").write_text("spaced new content\n", encoding="utf-8")
+    (tmp_path / "naïve.py").write_text("unicode_marker = 1\n", encoding="utf-8")
+
+    changed, diff, _ = _capture_changes(str(tmp_path))
+    assert "new file.txt" in changed
+    assert "naïve.py" in changed
+    assert "spaced new content" in diff
+    assert "unicode_marker = 1" in diff
+
+
+def test_changed_files_reports_renamed_path_not_arrow_string(tmp_path: Path) -> None:
+    """A renamed file is reported by its new path, not git's ``old -> new`` string."""
+    from integrations.pi.client import _changed_files
+
+    _git_init_repo(tmp_path)  # commits hello.txt
+    subprocess.run(
+        ["git", "mv", "hello.txt", "renamed.txt"],
+        cwd=tmp_path,
+        check=True,
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+
+    changed = _changed_files(str(tmp_path))
+    assert "renamed.txt" in changed
+    assert not any("->" in path for path in changed)
 
 
 def test_build_task_prompt_neutralizes_prompt_injection() -> None:

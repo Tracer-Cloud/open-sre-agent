@@ -257,18 +257,39 @@ def _is_git_repo(cwd: str) -> bool:
     return rc == 0 and out.strip() == "true"
 
 
+def _porcelain_status(cwd: str, *, all_untracked: bool) -> list[tuple[str, str]]:
+    """Return ``(status, path)`` for each working-tree entry.
+
+    Uses ``-z`` with ``core.quotepath=false`` so paths are emitted literally. The
+    default porcelain output C-quotes any path containing a space or non-ASCII byte
+    (e.g. ``?? "new file.txt"``); that quoted form would then be handed verbatim to
+    ``git diff --no-index`` as a filename, which finds nothing and drops the diff.
+    """
+    args = ["-c", "core.quotepath=false", "status", "--porcelain", "-z"]
+    if all_untracked:
+        args.append("-uall")
+    rc, out = _git(args, cwd)
+    if rc != 0 or not out:
+        return []
+    tokens = out.split("\0")
+    entries: list[tuple[str, str]] = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if len(token) < 4:  # "XY <path>" needs at least one path char
+            i += 1
+            continue
+        status, path = token[:2], token[3:]
+        # Rename/copy entries are followed by the original path in the next token.
+        i += 2 if status[0] in ("R", "C") else 1
+        if path:
+            entries.append((status, path))
+    return entries
+
+
 def _changed_files(cwd: str) -> list[str]:
     """Working-tree changes (modified, added, deleted, untracked) via porcelain."""
-    rc, out = _git(["status", "--porcelain"], cwd)
-    if rc != 0:
-        return []
-    files: list[str] = []
-    for line in out.splitlines():
-        # porcelain format: "XY <path>" (path starts at column 3)
-        path = line[3:].strip() if len(line) > 3 else line.strip()
-        if path:
-            files.append(path)
-    return files
+    return [path for _, path in _porcelain_status(cwd, all_untracked=False)]
 
 
 def _untracked_diff(cwd: str) -> str:
@@ -279,14 +300,11 @@ def _untracked_diff(cwd: str) -> str:
     directories into individual files) and render each as an added-content diff via
     ``git diff --no-index``, which never touches the index.
     """
-    rc, out = _git(["status", "--porcelain", "-uall"], cwd)
-    if rc != 0:
-        return ""
-    untracked = [line[3:].strip() for line in out.splitlines() if line.startswith("??")]
+    untracked = [
+        path for status, path in _porcelain_status(cwd, all_untracked=True) if status == "??"
+    ]
     chunks: list[str] = []
     for path in untracked[:_MAX_UNTRACKED_FILES]:
-        if not path:
-            continue
         # `git diff --no-index` exits non-zero when the files differ — expected here;
         # we use whatever it wrote to stdout (the added-content diff).
         _, chunk = _git(["diff", "--no-index", "--no-color", "--", os.devnull, path], cwd)
