@@ -127,7 +127,19 @@ def _response_text_from_history_entries(entries: list[dict[str, Any]]) -> str:
         response_text = item.get("response_text")
         if isinstance(response_text, str) and response_text.strip():
             chunks.append(response_text.strip())
+            continue
+        chunks.append(_history_entry_fallback(item))
     return "\n".join(chunks)
+
+
+def _history_entry_fallback(item: dict[str, Any]) -> str:
+    kind = str(item.get("type", "action"))
+    text = str(item.get("text", "")).strip()
+    ok = bool(item.get("ok", True))
+    status = "succeeded" if ok else "failed"
+    if text:
+        return f"{kind} {text} ({status})"
+    return f"{kind} ({status})"
 
 
 def _content_to_text(content: Any) -> str:

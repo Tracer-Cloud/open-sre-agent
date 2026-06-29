@@ -13,6 +13,7 @@ from interactive_shell.command_registry.slash_catalog import (
 )
 from interactive_shell.ui import BOLD_BRAND, DIM, repl_tty_interactive
 from interactive_shell.ui.execution_confirm import execution_allowed
+from interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
 from tools.interactive_shell.contracts import (
     ToolContext,
     capability_available_from_sources,
@@ -99,6 +100,17 @@ def execute_slash_tool(args: dict[str, Any], ctx: ToolContext) -> bool:
         # the loop dispatches with exclusive stdin, so no CPR replies leak in.
         ctx.console.print(f"[{DIM}]Launching[/] [{BOLD_BRAND}]{escape(stripped)}[/]…")
         ctx.session.queue_auto_command(stripped)
+        ctx.session.record(
+            "slash",
+            stripped,
+            ok=True,
+            response_text=format_terminal_turn_outcome(
+                stripped,
+                kind="slash",
+                ok=True,
+                outcome_hint=f"queued {stripped} for exclusive stdin dispatch",
+            ),
+        )
         return True
 
     plan = plan_foreground_tool("slash", "slash")

@@ -124,6 +124,14 @@ def print_interactive_wizard_handoff(console: Console, command_str: str) -> None
     )
 
 
+def interactive_wizard_handoff_response_text(command_str: str) -> str:
+    """Plain-text outcome for analytics when a wizard is redirected to a slash command."""
+    return (
+        f"`opensre {command_str}` is an interactive wizard that needs a full terminal. "
+        f"Type /{command_str} directly in this shell to launch it."
+    )
+
+
 _READ_ONLY_OPENSRE_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "health",
@@ -378,7 +386,12 @@ def run_opensre_cli_command_result(
     if _is_interactive_wizard(tokens):
         command_str = " ".join(tokens)
         print_interactive_wizard_handoff(console, command_str)
-        session.record("cli_command", f"opensre {command_str}", ok=False)
+        session.record(
+            "cli_command",
+            f"opensre {command_str}",
+            ok=False,
+            response_text=interactive_wizard_handoff_response_text(command_str),
+        )
         return OpensreRunResult(
             outcome=OpensreRunOutcome.HANDED_OFF,
             attempted=True,

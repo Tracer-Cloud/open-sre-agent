@@ -223,3 +223,39 @@ def test_prompt_recorder_still_captures_when_tool_resolution_fails(
     assert captured[0]["$ai_model"] == "gpt-test"
     assert captured[0]["configured_integrations"] == ["datadog"]
     assert captured[0]["connected_integrations"] == []
+
+
+def test_prompt_recorder_uses_no_conversational_agent_without_llm_run(
+    monkeypatch, tmp_path: Path
+) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = ReplSession()
+    recorder = PromptRecorder.start(
+        session=session,
+        text="/help",
+        turn_kind="agent",
+    )
+    assert recorder is not None
+    recorder.set_response("slash /help (succeeded)")
+    recorder.flush()
+    assert captured[0]["$ai_model"] == "no_conversational_agent"
+    assert captured[0]["$ai_provider"] == "no_conversational_agent"

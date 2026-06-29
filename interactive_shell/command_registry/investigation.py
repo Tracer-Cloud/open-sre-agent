@@ -28,6 +28,7 @@ from interactive_shell.ui.components.choice_menu import (
 )
 from interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
+from interactive_shell.utils.telemetry.turn_outcome import format_investigation_outcome
 from platform.common.task_types import TaskRecord
 
 
@@ -182,7 +183,14 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
                 console=console,
                 display_command=f"/investigate {template_name}",
             )
-            session.record("alert", f"/investigate {template_name}")
+            session.record(
+                "alert",
+                f"/investigate {template_name}",
+                response_text=format_investigation_outcome(
+                    template_name,
+                    background=True,
+                ),
+            )
             return True
 
         def _run_template(task: TaskRecord) -> dict[str, object]:
@@ -212,11 +220,20 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             exception_context="interactive_shell.investigate_template",
         )
         if final_state is None:
-            session.record("alert", f"/investigate {template_name}", ok=False)
+            session.record(
+                "alert",
+                f"/investigate {template_name}",
+                ok=False,
+                response_text=format_investigation_outcome(template_name),
+            )
             session.mark_latest(ok=False, kind="slash")
             return True
 
-        session.record("alert", f"/investigate {template_name}")
+        session.record(
+            "alert",
+            f"/investigate {template_name}",
+            response_text=format_investigation_outcome(template_name, final_state=final_state),
+        )
         return True
 
     path = resolve_alert_path(raw_target)
@@ -240,7 +257,11 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
             console=console,
             display_command=f"/investigate {path}",
         )
-        session.record("alert", args[0])
+        session.record(
+            "alert",
+            args[0],
+            response_text=format_investigation_outcome(str(path), background=True),
+        )
         return True
 
     def _run_file(task: TaskRecord) -> dict[str, object]:
@@ -270,11 +291,20 @@ def _cmd_investigate_file(session: ReplSession, console: Console, args: list[str
         exception_context="interactive_shell.investigate_file",
     )
     if final_state is None:
-        session.record("alert", args[0], ok=False)
+        session.record(
+            "alert",
+            args[0],
+            ok=False,
+            response_text=format_investigation_outcome(raw_target),
+        )
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    session.record("alert", f"/investigate {raw_target}")
+    session.record(
+        "alert",
+        f"/investigate {raw_target}",
+        response_text=format_investigation_outcome(raw_target, final_state=final_state),
+    )
     return True
 
 

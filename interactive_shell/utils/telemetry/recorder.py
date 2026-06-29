@@ -20,6 +20,10 @@ from interactive_shell.utils.telemetry.sinks.posthog_ai import capture_ai_genera
 
 _SUPPORTED_TURN_KINDS = frozenset({"agent", "follow_up", "new_alert", "background_task"})
 
+# Sentinel for turns handled by terminal tools/slash commands without the
+# conversational assistant LLM (PostHog ``$ai_model`` / ``$ai_provider``).
+NO_CONVERSATIONAL_AGENT = "no_conversational_agent"
+
 # Maps PromptRecorder turn_kind to session turn kind stored in turn_detail records.
 _TURN_TO_SESSION_KIND: dict[str, str] = {
     "agent": "chat",
@@ -183,8 +187,8 @@ class PromptRecorder:
                         "$ai_session_id": self._session_id,
                         "$ai_span_id": self._turn_id,
                         "$ai_span_name": f"interactive_shell.{self._turn_kind}",
-                        "$ai_model": self._model or "unknown",
-                        "$ai_provider": self._provider or "unknown",
+                        "$ai_model": self._model or NO_CONVERSATIONAL_AGENT,
+                        "$ai_provider": self._provider or NO_CONVERSATIONAL_AGENT,
                         "$ai_input": [{"role": "user", "content": self._prompt}],
                         "$ai_output_choices": [
                             {

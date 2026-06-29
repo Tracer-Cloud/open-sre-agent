@@ -54,6 +54,8 @@ from interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMM
 from interactive_shell.runtime import ReplSession
 from interactive_shell.ui import ERROR
 from interactive_shell.ui.execution_confirm import execution_allowed
+from interactive_shell.utils.telemetry.console_capture import capture_console_segment
+from interactive_shell.utils.telemetry.turn_outcome import format_terminal_turn_outcome
 from tools.interactive_shell.shared import allow_tool
 
 _MERGED_SEQUENCE = tuple(
@@ -86,6 +88,26 @@ SLASH_COMMANDS: dict[str, SlashCommand] = {cmd.name: cmd for cmd in _MERGED_SEQU
 _DEFER_SLASH_RECORDING: frozenset[str] = frozenset({"/resume"})
 
 
+def _attach_slash_analytics(
+    session: ReplSession,
+    command_line: str,
+    *,
+    ok: bool,
+    captured_output: str,
+) -> None:
+    session.complete_latest_record(
+        "slash",
+        ok=ok,
+        response_text=format_terminal_turn_outcome(
+            command_line,
+            kind="slash",
+            ok=ok,
+            captured_output=captured_output,
+            outcome_hint=session.pop_turn_outcome_hint(),
+        ),
+    )
+
+
 def dispatch_slash(
     command_line: str,
     session: ReplSession,
@@ -106,84 +128,104 @@ def dispatch_slash(
     if is_tty is False:
         os.environ["OPENSRE_INTERACTIVE"] = "0"
 
+    stripped = command_line.strip()
+    slash_recorded = False
+    slash_ok = True
+
+    def record_slash(*, ok: bool = True) -> None:
+        nonlocal slash_recorded, slash_ok
+        session.record("slash", stripped, ok=ok)
+        slash_recorded = True
+        slash_ok = ok
+
     try:
-        stripped = command_line.strip()
-        if stripped == "/":
-            from interactive_shell.command_registry.help import _cmd_help
-
-            if policy_precleared:
-                session.record("slash", stripped, ok=True)
-                return _cmd_help(session, console, [])
-
-            gate = allow_tool("slash")
-            if not execution_allowed(
-                gate,
-                session=session,
-                console=console,
-                action_summary=stripped,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-            ):
-                session.record("slash", stripped, ok=False)
-                return True
-            session.record("slash", stripped, ok=True)
-            return _cmd_help(session, console, [])
-
-        parts = stripped.split()
-        if not parts:
-            return True
-        name = parts[0].lower()
-        if name in ("/watch", "/unwatch"):
-            head = parts[0]
-            body = stripped[len(head) :].strip()
+        with capture_console_segment(console) as get_captured:
             try:
-                # Use POSIX mode on all platforms so quoted values are unwrapped
-                # consistently (e.g., --max-cpu "80" -> 80).
-                args = shlex.split(body, posix=True)
-            except ValueError:
-                args = body.split()
-        else:
-            args = parts[1:]
-        cmd = SLASH_COMMANDS.get(name)
-        if cmd is None:
-            suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
-            session.record("slash", stripped, ok=False)
-            console.print()
-            if suggestion is None:
-                console.print(
-                    f"[{ERROR}]unknown command:[/] {escape(name)}  (type [bold]/help[/bold])"
-                )
-            else:
-                console.print(
-                    f"[{ERROR}]unknown command:[/] {escape(name)}  "
-                    f"Did you mean [bold]{escape(suggestion)}[/bold]? "
-                    "(type [bold]/help[/bold])"
-                )
-            return True
-        if cmd.validate_args is not None:
-            validation_error = cmd.validate_args(args)
-            if validation_error is not None:
-                console.print(validation_error)
-                session.record("slash", stripped, ok=False)
-                return True
-        if policy_precleared:
-            if name not in _DEFER_SLASH_RECORDING:
-                session.record("slash", stripped, ok=True)
-            return cmd.handler(session, console, args)
-        policy = allow_tool("slash")
-        if not execution_allowed(
-            policy,
-            session=session,
-            console=console,
-            action_summary=stripped,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-        ):
-            session.record("slash", stripped, ok=False)
-            return True
-        if name not in _DEFER_SLASH_RECORDING:
-            session.record("slash", stripped, ok=True)
-        return cmd.handler(session, console, args)
+                if stripped == "/":
+                    from interactive_shell.command_registry.help import _cmd_help
+
+                    if policy_precleared:
+                        record_slash(ok=True)
+                        return _cmd_help(session, console, [])
+
+                    gate = allow_tool("slash")
+                    if not execution_allowed(
+                        gate,
+                        session=session,
+                        console=console,
+                        action_summary=stripped,
+                        confirm_fn=confirm_fn,
+                        is_tty=is_tty,
+                    ):
+                        record_slash(ok=False)
+                        return True
+                    record_slash(ok=True)
+                    return _cmd_help(session, console, [])
+
+                parts = stripped.split()
+                if not parts:
+                    return True
+                name = parts[0].lower()
+                if name in ("/watch", "/unwatch"):
+                    head = parts[0]
+                    body = stripped[len(head) :].strip()
+                    try:
+                        # Use POSIX mode on all platforms so quoted values are unwrapped
+                        # consistently (e.g., --max-cpu "80" -> 80).
+                        args = shlex.split(body, posix=True)
+                    except ValueError:
+                        args = body.split()
+                else:
+                    args = parts[1:]
+                cmd = SLASH_COMMANDS.get(name)
+                if cmd is None:
+                    suggestion = closest_choice(name, tuple(SLASH_COMMANDS))
+                    record_slash(ok=False)
+                    console.print()
+                    if suggestion is None:
+                        console.print(
+                            f"[{ERROR}]unknown command:[/] {escape(name)}  "
+                            "(type [bold]/help[/bold])"
+                        )
+                    else:
+                        console.print(
+                            f"[{ERROR}]unknown command:[/] {escape(name)}  "
+                            f"Did you mean [bold]{escape(suggestion)}[/bold]? "
+                            "(type [bold]/help[/bold])"
+                        )
+                    return True
+                if cmd.validate_args is not None:
+                    validation_error = cmd.validate_args(args)
+                    if validation_error is not None:
+                        console.print(validation_error)
+                        record_slash(ok=False)
+                        return True
+                if policy_precleared:
+                    if name not in _DEFER_SLASH_RECORDING:
+                        record_slash(ok=True)
+                    return cmd.handler(session, console, args)
+                policy = allow_tool("slash")
+                if not execution_allowed(
+                    policy,
+                    session=session,
+                    console=console,
+                    action_summary=stripped,
+                    confirm_fn=confirm_fn,
+                    is_tty=is_tty,
+                ):
+                    record_slash(ok=False)
+                    return True
+                if name not in _DEFER_SLASH_RECORDING:
+                    record_slash(ok=True)
+                return cmd.handler(session, console, args)
+            finally:
+                if slash_recorded:
+                    _attach_slash_analytics(
+                        session,
+                        stripped,
+                        ok=slash_ok,
+                        captured_output=get_captured(),
+                    )
     finally:
         if is_tty is False:
             if env_backup is None:

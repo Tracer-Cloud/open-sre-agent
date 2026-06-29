@@ -1425,11 +1425,11 @@ def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
     assert "/onboard" in out
     assert popen_calls == []
     assert run_calls == []
-    assert session.history[-1] == {
-        "type": "cli_command",
-        "text": "opensre onboard",
-        "ok": False,
-    }
+    assert session.history[-1]["type"] == "cli_command"
+    assert session.history[-1]["text"] == "opensre onboard"
+    assert session.history[-1]["ok"] is False
+    assert "full terminal" in str(session.history[-1].get("response_text", ""))
+    assert "/onboard" in str(session.history[-1].get("response_text", ""))
 
 
 def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message(
@@ -1474,11 +1474,10 @@ def test_run_opensre_cli_command_refuses_integrations_setup_with_helpful_message
     assert "/integrations setup" in out
     assert popen_calls == []
     assert run_calls == []
-    assert session.history[-1] == {
-        "type": "cli_command",
-        "text": "opensre integrations setup",
-        "ok": False,
-    }
+    assert session.history[-1]["type"] == "cli_command"
+    assert session.history[-1]["text"] == "opensre integrations setup"
+    assert session.history[-1]["ok"] is False
+    assert "full terminal" in str(session.history[-1].get("response_text", ""))
 
 
 def test_run_opensre_cli_command_skips_confirmation_for_investigate(

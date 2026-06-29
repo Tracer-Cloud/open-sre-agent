@@ -46,6 +46,11 @@ class TestDispatchSlash:
             assert name in output
         assert "Use /help <command> for usage." in output
         assert "/model set <provider>" not in output
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["text"] == "/help"
+        assert latest.get("response_text") == "slash /help (succeeded)"
+        assert "/model set" not in latest.get("response_text", "")
 
     def test_question_mark_shortcut_runs_help(self) -> None:
         """`/?` is the canonical shortcut for `/help` (vim / less convention)."""

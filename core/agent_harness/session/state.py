@@ -151,6 +151,9 @@ class ReplSession:
     available_capabilities: dict[str, tuple[str, ...]] = field(default_factory=dict)
     """Optional planning-time capability constraints (slash/cli/synthetic)."""
 
+    _turn_outcome_hint: str | None = field(default=None, repr=False, compare=False)
+    """Optional structured outcome set by a terminal handler for analytics."""
+
     accumulated_context: dict[str, Any] = field(default_factory=dict)
     """Reusable infra context — service names, clusters, regions — learned from
     earlier investigations that should seed future ones."""
@@ -439,6 +442,33 @@ class ReplSession:
             if kind is not None and latest.get("type") != kind:
                 continue
             latest["ok"] = ok
+            return
+
+    def set_turn_outcome_hint(self, hint: str | None) -> None:
+        """Attach a structured outcome for the current terminal handler."""
+        self._turn_outcome_hint = hint.strip() if isinstance(hint, str) and hint.strip() else None
+
+    def pop_turn_outcome_hint(self) -> str | None:
+        """Return and clear any structured outcome hint for this turn."""
+        hint = self._turn_outcome_hint
+        self._turn_outcome_hint = None
+        return hint
+
+    def complete_latest_record(
+        self,
+        kind: str,
+        *,
+        response_text: str | None = None,
+        ok: bool | None = None,
+    ) -> None:
+        """Update the newest history row of ``kind`` with analytics outcome text."""
+        for latest in reversed(self.history):
+            if latest.get("type") != kind:
+                continue
+            if ok is not None:
+                latest["ok"] = ok
+            if response_text and response_text.strip():
+                latest["response_text"] = response_text.strip()
             return
 
     def accumulate_from_state(self, state: dict[str, Any] | None) -> None:

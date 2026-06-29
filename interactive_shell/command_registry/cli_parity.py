@@ -22,6 +22,7 @@ from interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
 )
 from interactive_shell.ui import DIM, ERROR, print_command_output
+from interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
@@ -42,6 +43,7 @@ def run_cli_command(
     console: Console,
     args: list[str],
     *,
+    session: ReplSession | None = None,
     subprocess_timeout: float | None = None,
     capture_output: bool = False,
 ) -> bool:
@@ -69,6 +71,7 @@ def run_cli_command(
     should_capture = capture_output or subprocess_timeout is not None
     child_env = os.environ.copy()
     child_env[_PARENT_INTERACTIVE_SHELL_ENV] = "1"
+    exit_code: int | None = 0
     try:
         if should_capture:
             captured_result = subprocess.run(
@@ -81,6 +84,7 @@ def run_cli_command(
                 errors="replace",
                 env=child_env,
             )
+            exit_code = captured_result.returncode
             print_command_output(console, captured_result.stdout or "")
             print_command_output(console, captured_result.stderr or "", style=ERROR)
             if captured_result.returncode != 0:
@@ -89,19 +93,25 @@ def run_cli_command(
                 )
         else:
             interactive_result = subprocess.run(cmd, check=False, env=child_env)
+            exit_code = interactive_result.returncode
             if interactive_result.returncode != 0:
                 console.print(
                     f"[{ERROR}]CLI command exited with non-zero code {interactive_result.returncode}[/]"
                 )
     except subprocess.TimeoutExpired as exc:
+        exit_code = None
         print_command_output(console, _decode_subprocess_stream(exc.stdout))
         print_command_output(console, _decode_subprocess_stream(exc.stderr), style=ERROR)
         console.print(f"[{ERROR}]error:[/] CLI command timed out")
     except KeyboardInterrupt:
+        exit_code = None
         console.print(f"[{DIM}]CLI command cancelled (Ctrl+C).[/]")
     except Exception as exc:
+        exit_code = None
         console.print(f"[{ERROR}]error running CLI command:[/] {exc}")
     console.print()
+    if session is not None and not should_capture:
+        session.set_turn_outcome_hint(format_wizard_cli_outcome(args, exit_code=exit_code))
     return True
 
 
@@ -111,16 +121,16 @@ def _cmd_onboard(session: ReplSession, console: Console, args: list[str]) -> boo
     # this handler runs — the wizard subprocess therefore gets exclusive
     # stdin and can drive its own interactive prompts without conflicting
     # with the shell's UI.
-    return run_cli_command(console, ["onboard", *args])
+    return run_cli_command(console, ["onboard", *args], session=session)
 
 
 def _cmd_auth(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     capture_output = not args or args[0].lower() in {"status", "logout"}
-    return run_cli_command(console, ["auth", *args], capture_output=capture_output)
+    return run_cli_command(console, ["auth", *args], capture_output=capture_output, session=session)
 
 
 def _cmd_login(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["auth", "login", *args])
+    return run_cli_command(console, ["auth", "login", *args], session=session)
 
 
 def _cmd_remote(session: ReplSession, console: Console, args: list[str]) -> bool:  # noqa: ARG001
