@@ -38,12 +38,22 @@ class TelegramGatewayBackground:
         self._thread.join(timeout=timeout)
 
 
+def _configure_co_located_gateway_logging() -> None:
+    """Keep co-located gateway diagnostics off the interactive REPL terminal."""
+    gateway_logger = logging.getLogger("gateway")
+    if gateway_logger.handlers:
+        return
+    gateway_logger.addHandler(logging.NullHandler())
+    gateway_logger.propagate = False
+
+
 def run_poll_loop(settings: GatewaySettings, stop_event: threading.Event) -> None:
     """Run the Telegram long-poll loop until ``stop_event`` is set."""
     runner = GatewayRunner(settings)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     runner.bind_loop(loop)
+    runner.clear_webhook()
     poller = TelegramPoller(settings.bot_token)
 
     async def _loop_body() -> None:
@@ -86,6 +96,7 @@ def try_start_telegram_gateway_background() -> TelegramGatewayBackground | None:
     stop_event = threading.Event()
 
     def _target() -> None:
+        _configure_co_located_gateway_logging()
         run_poll_loop(settings, stop_event)
 
     thread = threading.Thread(
@@ -94,7 +105,7 @@ def try_start_telegram_gateway_background() -> TelegramGatewayBackground | None:
         daemon=True,
     )
     thread.start()
-    logger.info("[telegram-gateway] auto-start poll mode active")
+    logger.debug("[telegram-gateway] auto-start poll mode active")
     return TelegramGatewayBackground(thread=thread, stop_event=stop_event)
 
 

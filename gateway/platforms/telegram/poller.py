@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any
@@ -14,6 +15,19 @@ from gateway.platforms.telegram.webhook import parse_update
 logger = logging.getLogger(__name__)
 
 _API = "https://api.telegram.org/bot{token}/getUpdates"
+_CONFLICT_ERROR_CODE = 409
+_DEFAULT_RETRY_SECONDS = 2.0
+_MAX_CONFLICT_BACKOFF_SECONDS = 30.0
+_WARNING_COOLDOWN_SECONDS = 60.0
+
+
+def _decode_telegram_response(response: httpx.Response) -> dict[str, Any]:
+    """Parse a Telegram Bot API JSON body regardless of HTTP status."""
+    try:
+        data = response.json()
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 class TelegramPoller:
@@ -23,6 +37,8 @@ class TelegramPoller:
         self._token = bot_token
         self._timeout = timeout
         self._offset = 0
+        self._conflict_backoff_seconds = _DEFAULT_RETRY_SECONDS
+        self._last_warning_monotonic = 0.0
 
     def poll_once(self) -> list[TelegramInboundMessage]:
         url = _API.format(token=self._token)
@@ -33,15 +49,17 @@ class TelegramPoller:
         }
         try:
             response = httpx.get(url, params=params, timeout=float(self._timeout + 5))
-            data = response.json() if response.status_code == 200 else {}
         except Exception as exc:
-            logger.warning("[telegram-gateway] getUpdates failed: %s", exc)
-            time.sleep(2)
+            self._log_transient("[telegram-gateway] getUpdates failed: %s", exc)
+            time.sleep(_DEFAULT_RETRY_SECONDS)
             return []
-        if not isinstance(data, dict) or not data.get("ok"):
-            logger.warning("[telegram-gateway] getUpdates not ok: %s", data)
-            time.sleep(2)
+
+        data = _decode_telegram_response(response)
+        if not data.get("ok"):
+            self._handle_poll_error(data=data, response=response)
             return []
+
+        self._conflict_backoff_seconds = _DEFAULT_RETRY_SECONDS
         result = data.get("result")
         if not isinstance(result, list):
             return []
@@ -56,6 +74,47 @@ class TelegramPoller:
             if parsed is not None:
                 events.append(parsed)
         return events
+
+    def _handle_poll_error(
+        self,
+        *,
+        data: dict[str, Any],
+        response: httpx.Response,
+    ) -> None:
+        error_code = data.get("error_code")
+        description = str(
+            data.get("description")
+            or response.text.strip()
+            or f"HTTP {response.status_code}"
+        )
+        if error_code == _CONFLICT_ERROR_CODE:
+            logger.debug(
+                "[telegram-gateway] getUpdates conflict (retry in %.0fs): %s",
+                self._conflict_backoff_seconds,
+                description,
+            )
+            time.sleep(self._conflict_backoff_seconds)
+            self._conflict_backoff_seconds = min(
+                self._conflict_backoff_seconds * 2,
+                _MAX_CONFLICT_BACKOFF_SECONDS,
+            )
+            return
+
+        self._log_transient(
+            "[telegram-gateway] getUpdates not ok (HTTP %s, error_code=%s): %s",
+            response.status_code,
+            error_code,
+            description,
+        )
+        time.sleep(_DEFAULT_RETRY_SECONDS)
+
+    def _log_transient(self, message: str, *args: object) -> None:
+        now = time.monotonic()
+        if now - self._last_warning_monotonic < _WARNING_COOLDOWN_SECONDS:
+            logger.debug(message, *args)
+            return
+        self._last_warning_monotonic = now
+        logger.warning(message, *args)
 
     def run_forever(self, handler: Any) -> None:
         logger.info("[telegram-gateway] starting long-poll loop")
