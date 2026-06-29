@@ -56,6 +56,7 @@ def _latest_slash_outcome(session: Any) -> str | None:
         outcome = entry.get("slash_outcome")
         if isinstance(outcome, str) and outcome:
             return outcome
+        return None
     return None
 
 

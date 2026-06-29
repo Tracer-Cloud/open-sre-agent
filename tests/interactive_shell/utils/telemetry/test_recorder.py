@@ -259,3 +259,45 @@ def test_prompt_recorder_uses_no_conversational_agent_without_llm_run(
     recorder.flush()
     assert captured[0]["$ai_model"] == "no_conversational_agent"
     assert captured[0]["$ai_provider"] == "no_conversational_agent"
+
+
+def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: Path) -> None:
+    captured: list[dict[str, object]] = []
+    cfg = PromptLogConfig(
+        enabled=True,
+        local_enabled=False,
+        posthog_enabled=True,
+        redact=False,
+        max_chars=1000,
+        log_path=tmp_path / "prompt_log.jsonl",
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.PromptLogConfig.load", lambda: cfg
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.build_turn_integration_snapshot",
+        lambda _session: {},
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.utils.telemetry.recorder.capture_ai_generation",
+        lambda payload: captured.append(payload),
+    )
+    session = ReplSession()
+    session.record(
+        "slash",
+        "/modle",
+        ok=False,
+        response_text="Unknown command: /modle.",
+        slash_outcome="unknown_command",
+    )
+    session.record("slash", "/help", ok=True, response_text="slash /help (succeeded)")
+    recorder = PromptRecorder.start(
+        session=session,
+        text="what integrations are configured?",
+        turn_kind="agent",
+    )
+    assert recorder is not None
+    recorder.set_response("github and datadog")
+    recorder.flush()
+    assert "slash_outcome" not in captured[0]
+

@@ -33,13 +33,13 @@ def closest_choice(value: str, choices: list[str] | tuple[str, ...]) -> str | No
 
 
 def subcommand_hints(cmd: SlashCommand) -> tuple[str, ...]:
-    """Return known first-argument subcommands for ``cmd`` when enumerable."""
-    hints: set[str] = {keyword.lower() for keyword, _label in cmd.first_arg_completions}
-    for line in cmd.usage:
-        parts = line.strip().split()
-        if len(parts) >= 2 and parts[0].lower() == cmd.name.lower():
-            hints.add(parts[1].lower())
-    return tuple(sorted(hints))
+    """Return enumerable first-argument keywords for ``cmd``.
+
+    Only ``first_arg_completions`` are used — usage strings often contain
+    free-form placeholders like ``<session-id-prefix>`` that must not be
+    treated as literal subcommands.
+    """
+    return tuple(sorted({keyword.lower() for keyword, _label in cmd.first_arg_completions}))
 
 
 def _looks_like_path_or_template_arg(value: str) -> bool:

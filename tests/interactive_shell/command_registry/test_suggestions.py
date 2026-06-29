@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 
+import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
@@ -12,6 +13,7 @@ from surfaces.interactive_shell.command_registry.suggestions import (
     format_invalid_subcommand_message,
     format_unknown_slash_message,
     resolve_literal_slash_typo,
+    subcommand_hints,
 )
 from surfaces.interactive_shell.runtime.shell_turn_execution import run_action_tool_turn
 
@@ -51,6 +53,25 @@ def test_resolve_literal_slash_typo_invalid_subcommand() -> None:
     assert typo.outcome == "invalid_subcommand"
     assert "Invalid subcommand: bogus" in typo.message
     assert "/integrations list" in typo.message
+
+
+@pytest.mark.parametrize(
+    "command_line",
+    [
+        "/resume redis",
+        "/help model",
+        "/help /model",
+    ],
+)
+def test_resolve_literal_slash_typo_allows_free_form_first_args(command_line: str) -> None:
+    assert resolve_literal_slash_typo(command_line, SLASH_COMMANDS) is None
+
+
+def test_subcommand_hints_ignores_usage_placeholders() -> None:
+    resume = SLASH_COMMANDS["/resume"]
+    assert subcommand_hints(resume) == ()
+    help_cmd = SLASH_COMMANDS["/help"]
+    assert subcommand_hints(help_cmd) == ()
 
 
 def test_format_invalid_subcommand_message_lists_known_subcommands() -> None:
