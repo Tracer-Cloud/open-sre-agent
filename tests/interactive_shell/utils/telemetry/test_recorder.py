@@ -300,4 +300,3 @@ def test_prompt_recorder_uses_only_latest_slash_outcome(monkeypatch, tmp_path: P
     recorder.set_response("github and datadog")
     recorder.flush()
     assert "slash_outcome" not in captured[0]
-

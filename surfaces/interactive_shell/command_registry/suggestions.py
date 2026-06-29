@@ -81,10 +81,7 @@ def format_invalid_subcommand_message(
             f"Try one of: {choices_text}. "
             f"Type /help for the full command list."
         )
-    return (
-        f"Invalid subcommand: {subcommand}. "
-        f"Type /help for the full command list."
-    )
+    return f"Invalid subcommand: {subcommand}. Type /help for the full command list."
 
 
 def resolve_literal_slash_typo(
