@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import types
+from collections.abc import Iterator
 from typing import Any
+
+import pytest
 
 from core.llm.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 
@@ -96,3 +99,67 @@ def test_litellm_llm_client_emits_usage_callback() -> None:
     assert response.input_tokens == 11
     assert response.output_tokens == 7
     assert usage == [("openai/groq-model", 11, 7)]
+
+
+class NotFoundError(Exception):
+    """Simulates LiteLLM/OpenAI NotFoundError by class name."""
+
+    pass
+
+
+def test_litellm_llm_client_invoke_stream_not_found_raises_without_retry(monkeypatch) -> None:
+    """NotFoundError with no model fallback must fail fast, not burn retry slots."""
+    attempts: list[bool] = []
+    sleeps: list[float] = []
+
+    def completion(**_kwargs: Any) -> Any:
+        attempts.append(True)
+        raise NotFoundError("model not found")
+
+    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda s: sleeps.append(s))
+
+    client = LiteLLMLLMClient(
+        litellm_model="openai/missing-model",
+        api_key_env="OPENAI_API_KEY",
+        credential_resolver=lambda _env: "key",
+        completion_func=completion,
+    )
+
+    with pytest.raises(RuntimeError, match="model 'openai/missing-model' was not found"):
+        list(client.invoke_stream("hi"))
+
+    assert len(attempts) == 1
+    assert sleeps == []
+
+
+def test_litellm_llm_client_invoke_stream_retries_before_emit(monkeypatch) -> None:
+    """Transient failure before any chunk is yielded should retry."""
+    attempts: list[bool] = []
+
+    def completion(**kwargs: Any) -> Any:
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise RuntimeError("transient")
+        stream = kwargs.get("stream")
+
+        def _chunks() -> Iterator[Any]:
+            chunk = types.SimpleNamespace(
+                choices=[types.SimpleNamespace(delta=types.SimpleNamespace(content="ok"))]
+            )
+            yield chunk
+
+        return _chunks() if stream else _fake_response(content="ok")
+
+    monkeypatch.setattr("core.llm.openai_chat_completions.time.sleep", lambda _s: None)
+
+    client = LiteLLMLLMClient(
+        litellm_model="openai/groq-model",
+        api_key_env="GROQ_API_KEY",
+        credential_resolver=lambda _env: "groq-key",
+        completion_func=completion,
+    )
+
+    chunks = list(client.invoke_stream("hi"))
+
+    assert chunks == ["ok"]
+    assert len(attempts) == 2

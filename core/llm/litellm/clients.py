@@ -243,5 +243,6 @@ class LiteLLMLLMClient:
             self._build_request_kwargs(prompt_or_messages),
             provider_label=self._provider_label,
             api_key_env=self._api_key_env or "",
+            model=self._litellm_model,
             on_model_fallback=lambda: self._rebuild_after_model_fallback(prompt_or_messages),
         )

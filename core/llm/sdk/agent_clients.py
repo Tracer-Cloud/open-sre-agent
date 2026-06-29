@@ -41,6 +41,8 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
         "description": tool.description,
         "input_schema": tool.public_input_schema,
     }
+
+
 class AnthropicAgentClient:
     """Anthropic client with native tool-calling for the agent loop."""
 
@@ -381,6 +383,8 @@ class BedrockConverseAgentClient:
         if not isinstance(raw_content, dict):
             return {"role": "assistant", "content": []}
         return raw_content
+
+
 _OPENAI_O_SERIES_RE = re.compile(r"(?:^|[^A-Za-z0-9])o\d", re.IGNORECASE)
 _OPENAI_GPT5_RE = re.compile(r"(?:^|[^A-Za-z0-9])gpt-5", re.IGNORECASE)
 
@@ -648,6 +652,8 @@ class CLIBackedAgentClient:
                 return {"role": "assistant", "content": f"{content.strip()}\n\n{tool_json}"}
             return {"role": "assistant", "content": tool_json}
         return {"role": "assistant", "content": content}
+
+
 def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:
     """Return parsed JSON dict if *text* contains a tool_calls JSON object.
 

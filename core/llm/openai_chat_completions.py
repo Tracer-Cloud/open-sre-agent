@@ -115,7 +115,9 @@ def build_tool_result_messages(
 
 def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
     if len(tool_calls) != 1:
-        raise NotImplementedError("OpenAI-compatible tool results must be appended as separate messages")
+        raise NotImplementedError(
+            "OpenAI-compatible tool results must be appended as separate messages"
+        )
     return build_tool_result_messages(tool_calls, results)[0]
 
 
@@ -232,7 +234,10 @@ def invoke_with_litellm_agent_retries(
                 raise RuntimeError(
                     f"{provider_name} request rejected (HTTP 400): {message}"
                 ) from err
-            if is_exception_named(err, "RateLimitError") or getattr(err, "status_code", None) == 429:
+            if (
+                is_exception_named(err, "RateLimitError")
+                or getattr(err, "status_code", None) == 429
+            ):
                 maybe_raise_credit_exhausted(provider_name, err)
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
@@ -293,7 +298,10 @@ def invoke_with_litellm_llm_retries(
                 raise RuntimeError(
                     f"{provider_label} request rejected (HTTP 400): {message}"
                 ) from err
-            if is_exception_named(err, "RateLimitError") or getattr(err, "status_code", None) == 429:
+            if (
+                is_exception_named(err, "RateLimitError")
+                or getattr(err, "status_code", None) == 429
+            ):
                 last_err = err
                 if attempt == _RETRY_MAX_ATTEMPTS - 1:
                     raise RuntimeError(
@@ -321,6 +329,7 @@ def stream_with_litellm_retries(
     *,
     provider_label: str,
     api_key_env: str,
+    model: str,
     on_model_fallback: Callable[[], dict[str, Any] | None],
 ) -> Iterator[str]:
     from platform.guardrails.engine import GuardrailBlockedError
@@ -350,6 +359,34 @@ def stream_with_litellm_retries(
                 if rebuilt is not None:
                     kwargs = rebuilt
                     continue
+                raise RuntimeError(
+                    f"{provider_label} model '{model}' was not found. "
+                    "Check your configured model name or endpoint."
+                ) from err
+            if is_exception_named(err, "BadRequestError"):
+                message = str(getattr(err, "message", err))
+                if "model identifier" in message.lower():
+                    rebuilt = on_model_fallback()
+                    if rebuilt is not None:
+                        kwargs = rebuilt
+                        continue
+                raise RuntimeError(
+                    f"{provider_label} request rejected (HTTP 400): {message}"
+                ) from err
+            if (
+                is_exception_named(err, "RateLimitError")
+                or getattr(err, "status_code", None) == 429
+            ):
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise RuntimeError(
+                        f"{provider_label} rate limit exceeded (HTTP 429) after multiple retries. "
+                        "Check your quota and billing details."
+                    ) from err
+                suggested = extract_retry_after_seconds(err) or 0.0
+                wait = max(suggested, backoff_seconds)
+                time.sleep(wait)
+                backoff_seconds = wait * 2
+                continue
             if attempt == _RETRY_MAX_ATTEMPTS - 1:
                 raise RuntimeError(
                     "LLM API request failed after multiple retries. Try again in a few seconds."

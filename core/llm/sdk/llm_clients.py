@@ -129,6 +129,7 @@ _OPENAI_INVALID_MODEL_IDENTIFIER_PHRASES = (
     "invalid model name",  # OpenRouter
 )
 
+
 def _is_openai_invalid_model_identifier(err: OpenAIBadRequestError) -> bool:
     """True if the OpenAIBadRequestError message indicates an unknown model id."""
     msg = (err.message or "").lower()
@@ -176,9 +177,11 @@ def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | N
 
     return get_active_reasoning_effort()
 
+
 def _is_anthropic_bedrock_model(model_id: str) -> bool:
     """Backward-compatible alias for :func:`is_anthropic_bedrock_model`."""
     return is_anthropic_bedrock_model(model_id)
+
 
 class LLMClient:
     def __init__(
@@ -953,5 +956,3 @@ class OpenAILLMClient:
                     ) from err
                 time.sleep(backoff_seconds)
                 backoff_seconds *= 2
-
-

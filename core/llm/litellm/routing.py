@@ -93,7 +93,8 @@ def build_litellm_llm_client(
         model = str(getattr(settings, attr))
         return LiteLLMLLMClient(
             litellm_model=f"anthropic/{model}",
-            model_fallback=(_fallback("anthropic") and f"anthropic/{_fallback('anthropic')}") or None,
+            model_fallback=(_fallback("anthropic") and f"anthropic/{_fallback('anthropic')}")
+            or None,
             max_tokens=ANTHROPIC_LLM_CONFIG.max_tokens,
             api_key_env="ANTHROPIC_API_KEY",
             usage_callback=usage_callback,
