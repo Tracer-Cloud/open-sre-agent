@@ -168,7 +168,7 @@ Basic steps:
 - If adding or materially changing a tool/integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) in the same PR.
 - If an integration changes -> update `tests/integrations/` and verify with `make verify-integrations`.
 - If adding a new integration -> follow [TOOL_INTEGRATION_CHECKLIST.md](TOOL_INTEGRATION_CHECKLIST.md) before opening the PR for review.
-- If adding new tests -> always place them in `tests/`, never inside the source packages (no inline tests).
+- If adding new tests -> place them in `tests/`, never inside the source packages (no inline tests), except gateway tests which intentionally live in `gateway/tests/` per `gateway/AGENTS.md`.
 - If CI-only tests are added -> mark them with the right pytest marker or place them in the appropriate e2e/synthetic/chaos folder so they do not run in the default local suite.
 - If investigation branching or loop behavior changes -> update `tools/investigation/lifecycle.py` and the tests for that path.
 - If adding or changing interactive REPL behavior (slash commands, session management, display output) -> use `ReplDriver` from `tests/utils/repl_driver.py` for live verification alongside unit tests; see [TESTING.md](TESTING.md).

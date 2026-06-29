@@ -73,17 +73,6 @@ class TelegramBotClient:
             payload["text"] = text
         self._call("answerCallbackQuery", payload)
 
-    def set_webhook(self, url: str, secret_token: str) -> tuple[bool, str]:
-        ok, _, error = self._call(
-            "setWebhook",
-            {
-                "url": url,
-                "secret_token": secret_token,
-                "allowed_updates": ["message", "callback_query"],
-            },
-        )
-        return ok, error
-
     def delete_webhook(self) -> None:
         self._call("deleteWebhook", {})
 

@@ -96,35 +96,9 @@ def gateway_command(
 
 
 @gateway_command.command("telegram")
-@click.option(
-    "--poll",
-    is_flag=True,
-    default=False,
-    help="Use long polling instead of webhook mode (local development).",
-)
-@click.option(
-    "--host",
-    default=None,
-    envvar="TELEGRAM_GATEWAY_HOST",
-    help="Webhook bind host (ignored in poll mode).",
-)
-@click.option(
-    "--port",
-    default=None,
-    type=click.IntRange(min=1, max=65535),
-    envvar="TELEGRAM_WEBHOOK_PORT",
-    help="Webhook bind port (ignored in poll mode).",
-)
-def gateway_telegram_command(poll: bool, host: str | None, port: int | None) -> None:
+def gateway_telegram_command() -> None:
     """Run the Telegram two-way messaging gateway."""
-    if host:
-        os.environ["TELEGRAM_GATEWAY_HOST"] = host
-    if port is not None:
-        os.environ["TELEGRAM_WEBHOOK_PORT"] = str(port)
-    if poll:
-        click.echo("Starting Telegram gateway in long-poll mode")
-    else:
-        click.echo("Starting Telegram gateway (webhook when TELEGRAM_WEBHOOK_URL is set)")
-    from gateway.run import start_gateway
+    click.echo("Starting Telegram gateway (long-poll mode)")
+    from gateway.start_gateway import start_gateway
 
-    start_gateway(poll=poll)
+    start_gateway()

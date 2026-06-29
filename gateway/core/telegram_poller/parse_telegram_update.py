@@ -1,4 +1,4 @@
-"""Parse Telegram webhook updates into gateway message events."""
+"""Parse Telegram Bot API update payloads into gateway message events."""
 
 from __future__ import annotations
 

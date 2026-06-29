@@ -50,7 +50,6 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # to be burned down by extracting shared runtime primitives out of
         # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
         "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
-        "gateway.core.turn_executor -> surfaces.interactive_shell.runtime.shell_turn_execution",
         # Per-vendor integration tool packages still depend on the ``@tool``
         # decorator that lives at ``tools.tool_decorator``. Burn down by
         # moving the decorator primitive to a lower layer (likely

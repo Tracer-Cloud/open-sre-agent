@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.strict_config import StrictConfigModel
@@ -25,21 +25,12 @@ class GatewaySettings(StrictConfigModel):
     """Runtime settings for the Telegram gateway process."""
 
     bot_token: str
-    webhook_url: str = ""
-    webhook_secret: str = ""
-    webhook_port: int = Field(default=8443, ge=1, le=65535)
-    host: str = "127.0.0.1"
     allowed_user_ids: list[str] = Field(default_factory=list)
     max_concurrent_turns: int = Field(default=4, ge=1)
     approval_timeout_seconds: int = Field(default=600, ge=1)
     gate_side_effects: bool = True
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
-
-    @model_validator(mode="after")
-    def validate_webhook(self) -> GatewaySettings:
-        if self.webhook_url and not self.webhook_secret:
-            raise ValueError("TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_WEBHOOK_URL is set")
-        return self
+    auto_start_enabled: bool = True
 
 
 class GatewayEnv(BaseSettings):
@@ -51,14 +42,11 @@ class GatewayEnv(BaseSettings):
     # NoDecode keeps pydantic-settings from JSON-decoding the env value so the
     # CSV validator below can parse "42,99" instead of raising a SettingsError.
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
-    webhook_url: str = ""
-    webhook_secret: str = ""
-    webhook_port: int = Field(default=8443, ge=1, le=65535)
-    gateway_host: str = "127.0.0.1"
     gateway_max_concurrent: int = Field(default=4, ge=1)
     gateway_approval_timeout: int = Field(default=600, ge=1)
     gateway_gate_side_effects: bool = True
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
+    gateway_auto_start: bool = True
 
     @field_validator("allowed_users", mode="before")
     @classmethod
@@ -67,10 +55,14 @@ class GatewayEnv(BaseSettings):
             return [part.strip() for part in value.split(",") if part.strip()]
         return value
 
-    @field_validator("gateway_host", mode="before")
+    @field_validator("gateway_auto_start", mode="before")
     @classmethod
-    def default_host(cls, value: Any) -> str:
-        return str(value or "").strip() or "127.0.0.1"
+    def parse_auto_start(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() not in {"0", "false", "no", "off"}
+        return bool(value)
 
 
 @dataclass(frozen=True)
@@ -156,15 +148,35 @@ def load_gateway_settings() -> GatewaySettings:
 
         return GatewaySettings(
             bot_token=choose_bot_token(env, credentials),
-            webhook_url=env.webhook_url,
-            webhook_secret=env.webhook_secret,
-            webhook_port=env.webhook_port,
-            host=env.gateway_host,
             allowed_user_ids=choose_authorized_users(env, credentials),
             max_concurrent_turns=env.gateway_max_concurrent,
             approval_timeout_seconds=env.gateway_approval_timeout,
             gate_side_effects=env.gateway_gate_side_effects,
             stream_edit_interval_seconds=env.gateway_stream_edit_interval_seconds,
+            auto_start_enabled=env.gateway_auto_start,
         )
     except ValidationError as exc:
         raise GatewayConfigurationError("Invalid Telegram gateway configuration") from exc
+
+
+def try_load_gateway_settings_for_startup(
+    *,
+    logger: logging.Logger,
+    respect_auto_start: bool = True,
+) -> GatewaySettings | None:
+    """Load gateway settings for optional background startup; return None when skipped."""
+    try:
+        settings = load_gateway_settings()
+    except GatewayConfigurationError as exc:
+        logger.debug("[telegram-gateway] startup skipped: %s", exc)
+        return None
+
+    if respect_auto_start and not settings.auto_start_enabled:
+        logger.debug("[telegram-gateway] auto-start disabled in config")
+        return None
+
+    if not settings.bot_token:
+        logger.warning("[telegram-gateway] no bot token configured")
+        return None
+
+    return settings

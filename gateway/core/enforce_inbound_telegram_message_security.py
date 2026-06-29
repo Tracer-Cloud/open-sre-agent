@@ -61,7 +61,7 @@ def _message_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
-def evaluate_inbound(
+def enforce_inbound_telegram_message_security(
     *,
     user_id: str,
     chat_id: str,

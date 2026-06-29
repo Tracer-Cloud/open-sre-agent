@@ -4,21 +4,27 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.security.authorize import evaluate_inbound, persist_policy_if_needed
+from gateway.core.enforce_inbound_telegram_message_security import (
+    enforce_inbound_telegram_message_security,
+    persist_policy_if_needed,
+)
 from integrations.messaging_security import MessagingIdentityPolicy
+
+_SECURITY = "gateway.core.enforce_inbound_telegram_message_security"
 
 
 @pytest.fixture
 def mock_integration_store():
     with (
-        patch("gateway.security.authorize.get_integration", return_value=None),
-        patch("gateway.security.authorize.upsert_instance") as upsert,
+        patch(f"{_SECURITY}.get_integration", return_value=None),
+        patch(f"{_SECURITY}.upsert_instance") as upsert,
     ):
         yield upsert
 
 
-def test_help_is_not_agent_turn(mock_integration_store: pytest.MonkeyPatch) -> None:
-    decision = evaluate_inbound(
+@pytest.mark.usefixtures("mock_integration_store")
+def test_help_is_not_agent_turn() -> None:
+    decision = enforce_inbound_telegram_message_security(
         user_id="42",
         chat_id="42",
         text="/help",
@@ -28,8 +34,9 @@ def test_help_is_not_agent_turn(mock_integration_store: pytest.MonkeyPatch) -> N
     assert "OpenSRE Telegram gateway" in decision.reply_text
 
 
-def test_unauthorized_user_gets_reason(mock_integration_store: pytest.MonkeyPatch) -> None:
-    decision = evaluate_inbound(
+@pytest.mark.usefixtures("mock_integration_store")
+def test_unauthorized_user_gets_reason() -> None:
+    decision = enforce_inbound_telegram_message_security(
         user_id="99",
         chat_id="99",
         text="hello",
@@ -46,15 +53,15 @@ def test_pair_attempt_persists_policy(mock_integration_store: pytest.MonkeyPatch
     )
     with (
         patch(
-            "gateway.security.authorize._load_policy",
+            f"{_SECURITY}._load_policy",
             return_value=(None, policy),
         ),
         patch(
-            "gateway.security.authorize.complete_pairing",
+            f"{_SECURITY}.complete_pairing",
             return_value=(True, "Pairing successful!"),
         ),
     ):
-        decision = evaluate_inbound(
+        decision = enforce_inbound_telegram_message_security(
             user_id="42",
             chat_id="42",
             text="/pair CODE",

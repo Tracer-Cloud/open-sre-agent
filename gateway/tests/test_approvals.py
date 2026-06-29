@@ -24,7 +24,11 @@ class _FakeClient:
 def approval_service(tmp_path) -> TelegramApprovalService:
     conn = connect_gateway_db(tmp_path / "state.db")
     store = ApprovalStore(conn)
-    settings = GatewaySettings(approval_timeout_seconds=2, gate_side_effects=True)
+    settings = GatewaySettings(
+        bot_token="tok",
+        approval_timeout_seconds=2,
+        gate_side_effects=True,
+    )
     service = TelegramApprovalService(client=_FakeClient(), store=store, settings=settings)
     yield service
     conn.close()

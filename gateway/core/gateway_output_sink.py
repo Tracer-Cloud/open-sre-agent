@@ -1,8 +1,7 @@
-"""Telegram OutputSink with typing indicator and throttled editMessageText streaming."""
+"""Gateway output sink with typing indicator and throttled message streaming."""
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 from collections.abc import Iterable
@@ -10,13 +9,11 @@ from collections.abc import Iterable
 from gateway.platforms.telegram.client import TelegramBotClient
 from platform.common.truncation import truncate
 
-logger = logging.getLogger(__name__)
-
 _MESSAGE_LIMIT = 4096
 
 
-class TelegramOutputSink:
-    """Stream assistant output to a single Telegram message."""
+class GatewayOutputSink:
+    """Stream assistant output back through the active messaging transport."""
 
     def __init__(
         self,

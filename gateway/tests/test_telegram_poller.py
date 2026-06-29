@@ -50,7 +50,7 @@ def test_poll_once_conflict_is_debug_not_warning(
 @patch("gateway.platforms.telegram.poller.time.sleep")
 @patch("gateway.platforms.telegram.poller.httpx.get")
 def test_poll_once_success_resets_conflict_backoff(
-    mock_get: MagicMock, mock_sleep: MagicMock
+    mock_get: MagicMock, _mock_sleep: MagicMock
 ) -> None:
     mock_get.side_effect = [
         httpx.Response(
