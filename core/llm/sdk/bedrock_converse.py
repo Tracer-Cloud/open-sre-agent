@@ -1,8 +1,4 @@
-"""Shared helpers for the Amazon Bedrock Converse API (tool schemas and messages).
-
-Used by the investigation agent's :class:`~core.llm.agent_llm_client.BedrockConverseAgentClient`
-and kept separate from :mod:`core.llm.llm_client` so tool-schema normalization stays in one place.
-"""
+"""Shared helpers for the Amazon Bedrock Converse API (tool schemas and messages)."""
 
 from __future__ import annotations
 
@@ -40,11 +36,7 @@ def sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_tool_input_schema(schema: dict[str, Any] | None) -> dict[str, Any]:
-    """Normalize a tool's public input schema for ``toolSpec.inputSchema.json``.
-
-    Converse tool inputs must be JSON objects at the top level. Non-object roots are
-    replaced with an empty object schema so validation stays strict but safe.
-    """
+    """Normalize a tool's public input schema for ``toolSpec.inputSchema.json``."""
     return normalize_object_tool_input_schema(
         schema,
         unsupported_keys=BEDROCK_UNSUPPORTED_SCHEMA_KEYS,

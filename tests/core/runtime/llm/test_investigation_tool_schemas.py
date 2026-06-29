@@ -6,9 +6,11 @@ from collections.abc import Generator
 
 import pytest
 
-from core.llm.agent_llm_client import build_openai_tool_specs
-from core.llm.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
-from core.llm.tool_schema_normalize import normalize_openai_tool_input_schema
+from core.llm.sdk.bedrock_converse import build_converse_tool_specs, normalize_tool_input_schema
+from core.llm.tool_schema_normalize import (
+    build_openai_tool_specs,
+    normalize_openai_tool_input_schema,
+)
 from tests.core.runtime.llm.investigation_tool_schema_contract import (
     assert_all_investigation_tools_satisfy_strict_adapter,
 )
@@ -37,6 +39,14 @@ def test_all_investigation_tool_schemas_satisfy_strict_adapter_invariants() -> N
 
 def test_all_investigation_tool_schemas_satisfy_openai_compat_adapter() -> None:
     """OpenAI-compatible providers (DeepSeek native API, etc.) require explicit ``type`` on every schema node."""
+    assert_all_investigation_tools_satisfy_strict_adapter(
+        normalize_schema=normalize_openai_tool_input_schema,
+        build_tool_specs=build_openai_tool_specs,
+    )
+
+
+def test_all_investigation_tool_schemas_satisfy_litellm_compat_adapter() -> None:
+    """LiteLLM receives the same OpenAI-compatible tool payload under the feature flag."""
     assert_all_investigation_tools_satisfy_strict_adapter(
         normalize_schema=normalize_openai_tool_input_schema,
         build_tool_specs=build_openai_tool_specs,

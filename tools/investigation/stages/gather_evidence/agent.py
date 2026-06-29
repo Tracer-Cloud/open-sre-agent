@@ -364,7 +364,7 @@ def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
     Callers that need a fixed class (e.g. bench harness, integration tests) should
     pass an explicit ``agent_class`` to the pipeline rather than calling this.
     """
-    from core.llm.agent_llm_client import CLIBackedAgentClient
+    from core.llm.sdk.agent_clients import CLIBackedAgentClient
 
     if isinstance(get_agent_llm(), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent
