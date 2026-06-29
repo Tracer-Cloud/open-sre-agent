@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tests.tools.conftest import BaseToolContract, mock_agent_state
 from integrations.datadog.tools import fetch_datadog_context
+from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
 class TestDataDogContextToolContract(BaseToolContract):
