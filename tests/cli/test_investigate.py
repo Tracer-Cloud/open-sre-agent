@@ -148,15 +148,28 @@ def test_parse_args_evaluate_flag() -> None:
 
 
 def test_run_investigation_cli_fails_fast_for_missing_llm_auth(monkeypatch, tmp_path) -> None:
+    from config.llm_auth.credentials import CredentialStatus
+
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    monkeypatch.setattr(
+        "config.llm_auth.credentials.status",
+        lambda provider: CredentialStatus(
+            provider=provider,
+            configured=False,
+            source="none",
+            verified=False,
+            stale=False,
+            detail="OPENAI_API_KEY is not set",
+        ),
+    )
     monkeypatch.setattr(
         "tools.investigation.capability.run_investigation_payload",
         lambda *_args, **_kwargs: pytest.fail("investigation should not start"),
     )
 
-    with pytest.raises(OpenSREError, match="OPENAI_API_KEY"):
+    with pytest.raises(OpenSREError, match="credentials are missing"):
         run_investigation_cli(raw_alert={"alert_name": "PayloadAlert"})
 
 

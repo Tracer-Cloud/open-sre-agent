@@ -2098,7 +2098,15 @@ class TestPrePolicyValidation:
 
         assert expected_usage_fragment in buf.getvalue()
         assert confirm_calls == [], f"confirm_fn must not be called for {command} with no args"
-        assert session.history[-1] == {"type": "slash", "text": command, "ok": False}
+        latest = session.history[-1]
+        assert latest["type"] == "slash"
+        assert latest["text"] == command
+        assert latest["ok"] is False
+        assert latest["response_text"].startswith(f"slash {command} (failed)")
+        if command == "/investigate":
+            assert latest["response_text"] == f"slash {command} (failed)"
+        else:
+            assert expected_usage_fragment in latest["response_text"]
 
     def test_validate_args_fires_in_trust_mode(self) -> None:
         """Trust mode bypasses the policy prompt but must not bypass arg validation."""

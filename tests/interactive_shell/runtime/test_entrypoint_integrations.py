@@ -261,7 +261,7 @@ def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_p
         lambda: None,
     )
     monkeypatch.setattr(
-        "interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        "surfaces.interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
         lambda *_args, **_kwargs: False,
     )
 
