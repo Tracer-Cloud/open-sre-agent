@@ -916,14 +916,21 @@ def test_execute_cli_actions_cancels_single_running_synthetic_task() -> None:
     assert handled.handled is True
     assert task.cancel_requested.is_set()
     proc.terminate.assert_called_once()
-    assert session.history == [
-        {
-            "type": "cli_agent",
-            "text": "kill the syntehtic_test because it is runnign way too long",
-            "ok": True,
-        },
-        {"type": "slash", "text": f"/cancel {task.task_id}", "ok": True},
-    ]
+    assert session.history[0] == {
+        "type": "cli_agent",
+        "text": "kill the syntehtic_test because it is runnign way too long",
+        "ok": True,
+    }
+    slash_entry = session.history[1]
+    assert slash_entry == {
+        "type": "slash",
+        "text": f"/cancel {task.task_id}",
+        "ok": True,
+        "response_text": (
+            f"slash /cancel {task.task_id} (succeeded)\n"
+            f"stop requested for synthetic_test {task.task_id}. use /tasks to confirm status."
+        ),
+    }
     output = buf.getvalue()
     assert "Requested actions" not in output
     assert f"$ /cancel {task.task_id}" in output
