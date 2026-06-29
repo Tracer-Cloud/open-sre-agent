@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from gateway.background import (
     _configure_co_located_gateway_logging,
+    run_poll_loop,
     telegram_gateway_auto_start_enabled,
     try_start_telegram_gateway_background,
 )
@@ -61,3 +64,78 @@ def test_try_start_starts_poll_thread(mock_settings: MagicMock, mock_poll: Magic
     assert handle is not None
     handle.stop(timeout=1.0)
     mock_poll.assert_called_once()
+
+
+class _FakeRunner:
+    """Runner whose message turn only completes once a later callback is dispatched.
+
+    Mirrors the real deadlock shape: an approval-gated turn blocks until the
+    inbound callback that approves it is processed. If the poll loop dispatches
+    events sequentially with ``await``, the callback is never fetched and the
+    message turn hangs forever.
+    """
+
+    def __init__(self, _settings: object = None) -> None:
+        self.order: list[str] = []
+        self._released: asyncio.Event | None = None
+
+    def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        pass
+
+    def clear_webhook(self) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+    def _event(self) -> asyncio.Event:
+        if self._released is None:
+            self._released = asyncio.Event()
+        return self._released
+
+    async def handle_inbound(self, event: str) -> None:
+        if event == "message":
+            self.order.append("message_start")
+            await self._event().wait()
+            self.order.append("message_end")
+        else:
+            self.order.append("callback")
+            self._event().set()
+
+
+class _FakePoller:
+    def __init__(self, _token: str, stop_event: threading.Event) -> None:
+        self._stop_event = stop_event
+        self._calls = 0
+
+    def poll_once(self) -> list[str]:
+        self._calls += 1
+        if self._calls == 1:
+            return ["message"]
+        if self._calls == 2:
+            return ["callback"]
+        if self._calls >= 4:
+            self._stop_event.set()
+        return []
+
+
+def test_poll_loop_dispatches_events_concurrently() -> None:
+    """An approval-gated turn must not block fetching the callback that approves it."""
+    settings = GatewaySettings(bot_token="tok")
+    stop_event = threading.Event()
+    runner = _FakeRunner()
+
+    with (
+        patch("gateway.background.GatewayRunner", return_value=runner),
+        patch(
+            "gateway.background.TelegramPoller",
+            side_effect=lambda token: _FakePoller(token, stop_event),
+        ),
+    ):
+        thread = threading.Thread(target=run_poll_loop, args=(settings, stop_event), daemon=True)
+        thread.start()
+        thread.join(timeout=5.0)
+
+    assert not thread.is_alive(), "poll loop deadlocked on an approval-gated turn"
+    assert "callback" in runner.order
+    assert "message_end" in runner.order

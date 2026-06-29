@@ -57,10 +57,18 @@ def run_poll_loop(settings: GatewaySettings, stop_event: threading.Event) -> Non
     poller = TelegramPoller(settings.bot_token)
 
     async def _loop_body() -> None:
+        # Dispatch concurrently (matching the webhook path in gateway/app.py): an
+        # approval-gated turn blocks until the inbound callback that approves it is
+        # processed, so awaiting each event in turn would deadlock the poll loop
+        # against itself. The set keeps task references alive (create_task alone
+        # lets them be garbage-collected mid-flight).
+        pending: set[asyncio.Task[None]] = set()
         while not stop_event.is_set():
             events = await asyncio.to_thread(poller.poll_once)
             for event in events:
-                await runner.handle_inbound(event)
+                task = asyncio.create_task(runner.handle_inbound(event))
+                pending.add(task)
+                task.add_done_callback(pending.discard)
             await asyncio.sleep(0)
 
     try:
