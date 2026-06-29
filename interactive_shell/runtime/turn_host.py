@@ -88,9 +88,7 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
         turn_kind=_AGENT_TURN_KIND,
     )
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
-    progress_scope = (
-        contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
-    )
+    progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
     runtime.session.exclusive_stdin_active = exclusive_stdin
     try:
         with progress_scope:
