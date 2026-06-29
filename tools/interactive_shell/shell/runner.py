@@ -21,6 +21,7 @@ from interactive_shell.ui import ERROR, HIGHLIGHT, print_command_output
 from interactive_shell.ui.execution_confirm import execution_allowed
 from interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shell import execution as shell_execution
+from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
     argv_for_repl_builtin_detection,
     parse_shell_command,
@@ -40,11 +41,12 @@ def run_shell_command(
 ) -> None:
     parsed = parse_shell_command(command, is_windows=_platform.IS_WINDOWS)
     plan = plan_shell_execution(parsed)
+    display_command = format_shell_command_for_display(command)
     if not execution_allowed(
         plan.policy,
         session=session,
         console=console,
-        action_summary=f"$ {command}",
+        action_summary=f"$ {display_command}",
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         action_already_listed=action_already_listed,
@@ -52,7 +54,7 @@ def run_shell_command(
         session.record("shell", command, ok=False)
         return
 
-    console.print(f"[bold]$ {escape(command)}[/bold]")
+    console.print(f"[bold]$ {escape(display_command)}[/bold]")
 
     argv_builtin = argv_for_repl_builtin_detection(parsed=parsed, is_windows=_platform.IS_WINDOWS)
 

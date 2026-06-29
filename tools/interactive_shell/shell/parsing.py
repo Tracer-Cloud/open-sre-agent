@@ -12,7 +12,7 @@ This module's only job is to turn command text into a shape the runner can
 execute:
 
 * explicit ``!`` passthrough → run the remainder through a shell,
-* commands using shell operators / substitution → run through a shell,
+* commands using shell operators / substitution / heredocs → run through a shell,
 * anything that fails to tokenize → hand the raw string to a shell,
 * everything else → split into ``argv`` and run without a shell (which also lets
   the runner detect the ``cd`` / ``pwd`` REPL builtins so the working directory
@@ -31,6 +31,12 @@ from dataclasses import dataclass
 _EXPLICIT_SHELL_PREFIX = "!"
 _SHELL_OPERATOR_RE = re.compile(r"(^|\s)(\|\||&&|[|;<>]|>>|<<|2>)(\s|$)")
 _INLINE_SUBSHELL_RE = re.compile(r"`|\$\(")
+# Heredoc starts such as ``<<'PY'`` or ``<<EOF`` — ``<<`` alone is already covered
+# by ``_SHELL_OPERATOR_RE`` only when followed by whitespace; quoted/unquoted
+# delimiters need an explicit match so ``python3 - <<'PY'`` is not tokenized.
+_HEREDOC_START_RE = re.compile(
+    r"(^|\s)<<-?\s*(?:'[^'\n]+'|\"[^\"\n]+\"|[^\s\\|;|&<>]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -84,6 +90,7 @@ def parse_shell_command(command: str, *, is_windows: bool) -> ParsedShellCommand
     if (
         _SHELL_OPERATOR_RE.search(stripped) is not None
         or _INLINE_SUBSHELL_RE.search(stripped) is not None
+        or _HEREDOC_START_RE.search(stripped) is not None
     ):
         # Operators / substitution need a real shell; alpha mode runs them.
         return ParsedShellCommand(

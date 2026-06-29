@@ -58,6 +58,28 @@ def test_command_substitution_runs_through_shell() -> None:
     assert parsed.parse_error is None
 
 
+def test_quoted_heredoc_runs_through_shell() -> None:
+    command = """python3 - <<'PY'
+print("hello-heredoc")
+PY"""
+    parsed = parse_shell_command(command, is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+    assert parsed.command == command.strip()
+    assert parsed.parse_error is None
+
+
+def test_unquoted_heredoc_runs_through_shell() -> None:
+    command = """cat <<EOF
+line one
+EOF"""
+    parsed = parse_shell_command(command, is_windows=False)
+
+    assert parsed.use_shell is True
+    assert parsed.argv is None
+
+
 def test_unbalanced_quotes_fall_back_to_shell() -> None:
     parsed = parse_shell_command('echo "unterminated', is_windows=False)
 
