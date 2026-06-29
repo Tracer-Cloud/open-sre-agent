@@ -119,10 +119,15 @@ Temporary Items
 # Project specific
 .antigravitycli/
 output/
-# CLI terminal output package (must stay tracked; ``output/`` above ignores new files here)
+# CLI terminal output package (must stay tracked; ``output/`` above ignores new files here).
+# Both the pre-restructure path and the post-restructure path under ``surfaces/`` are
+# negated so the package keeps being tracked across the T-1 move (#3299).
 !interactive_shell/ui/output/
 !interactive_shell/ui/output/**
 interactive_shell/ui/output/**/__pycache__/
+!surfaces/interactive_shell/ui/output/
+!surfaces/interactive_shell/ui/output/**
+surfaces/interactive_shell/ui/output/**/__pycache__/
 .cloudopsbench-results/
 .bench-results/
 tests/benchmarks/cloudopsbench/benchmark/
