@@ -42,9 +42,12 @@ already branches on (or extend those branches). Do not assume one vendor’s JSO
   (`"type": ["object", "null"]`, `anyOf`, `nullable`, implicit objects, bare `items: {}`). A given
   LLM API may require a **single string** `type`, explicit `items`, and a closed set of keys. Unit
   tests that only check “has properties” miss union `type` arrays.
-- **All tools in one request** — Investigation sends **every available** tool schema in a single invoke.
-  One invalid schema fails the whole call (HTTP 400, “invalid tools”, etc.) even when the alert never
-  uses that tool.
+- **Many tools in one request** — Investigation sends a **relevance-selected** set of tool schemas in a
+  single invoke (`select_investigation_tools` in `tools/investigation/stages/gather_evidence/tools.py`:
+  the planner's `planned_actions` when present, otherwise alert-relevant sources first, capped at
+  `MAX_AGENT_TOOL_SCHEMAS`). It is still many schemas at once, so one invalid schema can fail the whole
+  call (HTTP 400, “invalid tools”, etc.) even when the alert never uses that tool. Tool descriptions and
+  parameters live **only** in these schemas — the alert-context user message no longer re-lists them.
 - **Multiple code paths** — Fixes in `llm_client.py`, chat, or routing do not apply to
   `agent_llm_client.py` unless wired there. Provider-specific normalizers must run in `tool_schemas()`
   (or shared helpers the client calls).

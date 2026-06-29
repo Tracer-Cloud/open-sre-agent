@@ -11,6 +11,10 @@ from core.domain.alerts.alert_source import (
     resolve_alert_source,
 )
 from core.domain.diagnosis import root_cause_category_instruction_for_source
+from tools.investigation.stages.gather_evidence.tools import (
+    planned_action_names,
+    select_investigation_tools,
+)
 
 _INVESTIGATION_SYSTEM = """You are Tracer, an AI SRE performing a live production incident investigation.
 
@@ -18,7 +22,7 @@ Your task: investigate the alert below and produce a clear, evidence-backed root
 
 ## How to work
 
-1. **Start with the primary integration tools listed under "Where to start".** Those tools directly match the alert source — call them first, in parallel where possible.
+1. **Start with the primary integration tools listed under "Where to start".** Those tools directly match the alert source — call them first, in parallel where possible. Each tool's full description and parameters are provided to you directly in your tool list.
 2. After each round of results, reason about what you found and decide what to investigate next.
 3. Exhaust the primary integration before branching to secondary ones.
 4. When you have enough evidence (or all relevant tools are exhausted), write your final diagnosis.
@@ -30,7 +34,7 @@ Your task: investigate the alert below and produce a clear, evidence-backed root
 - If a tool returns an error or empty result, try another tool from the same integration before giving up.
 - If all evidence points to healthy service, say so clearly (root_cause_category = healthy).
 - Be specific: include error messages, timestamps, service names, namespaces, run IDs.
-- **Only call tools listed under "Available tools".** Do not fabricate tool calls for integrations not listed.
+- **Only call tools that are provided to you this turn** (the integrations and tools shown under "Connected integrations"). Do not fabricate tool calls for integrations not listed.
 - **Never call the same tool with the same arguments twice.** You already have that result — re-running it returns nothing new and wastes the investigation. Re-running is only useful with *different* arguments (e.g. a different service, time window, or query).
 - **Discovery or listing tools (those that just enumerate other tools or resources) are useful at most once.** Call such a tool a single time, then act on what it returned — do not keep re-listing.
 - **Prefer tools relevant to the alert.** Do not fan out to integrations unrelated to the alert's service or symptoms just because they are available.
@@ -63,10 +67,6 @@ Severity: {severity}
 ## Where to start
 
 {start_guidance}
-
-## Available tools (by integration)
-
-{tools_by_source}
 """
 
 _ALERT_SOURCE_TO_TOOL_SOURCES = {
@@ -84,7 +84,18 @@ def build_system_prompt(state: dict[str, Any]) -> str:
     )
 
 
-def format_alert_context(state: dict[str, Any]) -> str:
+def format_alert_context(
+    state: dict[str, Any],
+    available_tools: list[Any] | None = None,
+) -> str:
+    """Build the first user turn for the investigation.
+
+    ``available_tools`` is the exact tool set the agent will serialize into the
+    request schemas (already past ``_filter_tools`` + ``select_investigation_tools``).
+    Passing it keeps the in-prompt orientation ("Connected integrations", "Where
+    to start") consistent with the tools the model can actually call. When omitted
+    (e.g. unit tests) the same selection is recomputed from the registry.
+    """
     from tools.registry import get_registered_tools
 
     alert_name = state.get("alert_name", "Unknown alert")
@@ -96,8 +107,11 @@ def format_alert_context(state: dict[str, Any]) -> str:
     extra = ("\n" + "\n".join(extra_parts) + "\n") if extra_parts else ""
 
     resolved = state.get("resolved_integrations") or {}
-    available_tools = [t for t in get_registered_tools("investigation") if t.is_available(resolved)]
-    available_tools = _tools_for_plan(available_tools, state)
+    if available_tools is None:
+        registry_tools = [
+            t for t in get_registered_tools("investigation") if t.is_available(resolved)
+        ]
+        available_tools = select_investigation_tools(registry_tools, state)
 
     tools_by_source = _group_tools_by_source(available_tools)
     connected_integrations = _format_connected_integrations(
@@ -106,7 +120,6 @@ def format_alert_context(state: dict[str, Any]) -> str:
         tools_by_source,
     )
     start_guidance = _build_start_guidance(state, alert_source, alert_name, tools_by_source)
-    tools_section = _format_tools_by_source(tools_by_source)
 
     return _ALERT_CONTEXT_TEMPLATE.format(
         alert_name=alert_name,
@@ -116,7 +129,6 @@ def format_alert_context(state: dict[str, Any]) -> str:
         extra=extra,
         connected_integrations=connected_integrations,
         start_guidance=start_guidance,
-        tools_by_source=tools_section,
     )
 
 
@@ -170,7 +182,7 @@ def _build_start_guidance(
     alert_name: str,
     tools_by_source: dict[str, list[Any]],
 ) -> str:
-    planned_actions = _planned_action_names(state)
+    planned_actions = planned_action_names(state)
     if planned_actions:
         rationale = str(state.get("plan_rationale") or "").strip()
         planned_list = ", ".join(f"`{name}`" for name in planned_actions)
@@ -235,22 +247,6 @@ def _format_call_first(
     return "\n".join(lines)
 
 
-def _tools_for_plan(tools: list[Any], state: dict[str, Any]) -> list[Any]:
-    planned_actions = _planned_action_names(state)
-    if not planned_actions:
-        return tools
-    by_name = {str(tool.name): tool for tool in tools}
-    planned_tools = [by_name[name] for name in planned_actions if name in by_name]
-    return planned_tools or tools
-
-
-def _planned_action_names(state: dict[str, Any]) -> list[str]:
-    planned_raw = state.get("planned_actions")
-    if not isinstance(planned_raw, list):
-        return []
-    return [str(name).strip() for name in planned_raw if str(name).strip()]
-
-
 def _relevant_sources(
     state: dict[str, Any],
     tools_by_source: dict[str, list[Any]],
@@ -263,47 +259,6 @@ def _relevant_sources(
     choice to the LLM rather than calling every integration).
     """
     return relevant_sources_for_alert(state, tools_by_source.keys())
-
-
-def _format_tools_by_source(tools_by_source: dict[str, list[Any]]) -> str:
-    if not tools_by_source:
-        return "No tools available."
-
-    sections: list[str] = []
-    # Primary/non-secondary first, then secondary
-    ordered_sources = sorted(
-        tools_by_source.keys(),
-        key=lambda s: (s in _SECONDARY_SOURCES, s),
-    )
-    for source in ordered_sources:
-        tools = tools_by_source[source]
-        tool_lines = []
-        for tool in tools:
-            details: list[str] = []
-            if getattr(tool, "source_id", None):
-                details.append(f"source_id={tool.source_id}")
-            if getattr(tool, "evidence_type", None):
-                details.append(f"evidence={tool.evidence_type}")
-            if getattr(tool, "side_effect_level", None):
-                details.append(f"side_effect={tool.side_effect_level}")
-            examples = getattr(tool, "examples", None) or []
-            anti_examples = getattr(tool, "anti_examples", None) or []
-            output_schema = getattr(tool, "output_schema", None)
-            if isinstance(output_schema, dict):
-                output_props = output_schema.get("properties")
-                if isinstance(output_props, dict) and output_props:
-                    output_keys = ", ".join(sorted(str(key) for key in output_props)[:6])
-                    details.append(f"outputs={output_keys}")
-            if examples:
-                details.append(f"example={examples[0]}")
-            if anti_examples:
-                details.append(f"avoid={anti_examples[0]}")
-
-            suffix = f" ({'; '.join(details)})" if details else ""
-            tool_lines.append(f"  - `{tool.name}`: {tool.description}{suffix}")
-        sections.append(f"**{source}**:\n" + "\n".join(tool_lines))
-
-    return "\n\n".join(sections)
 
 
 def _format_connected_integrations(

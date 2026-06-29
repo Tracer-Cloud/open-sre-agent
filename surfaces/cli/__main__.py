@@ -328,6 +328,13 @@ def _capture_accepted_cli_invocation(ctx: click.Context) -> None:
     help="Disable the interactive shell and print the landing page instead.",
 )
 @click.option(
+    "--resume",
+    "resume_session_id",
+    default=None,
+    metavar="SESSION-ID",
+    help="Resume a previous interactive shell session by ID, prefix, or name substring.",
+)
+@click.option(
     "--layout",
     type=click.Choice(["classic", "pinned"]),
     default=None,
@@ -349,6 +356,7 @@ def cli(
     debug: bool,
     yes: bool,
     interactive: bool,
+    resume_session_id: str | None,
     layout: str | None,
     theme: str | None,
 ) -> None:
@@ -376,12 +384,17 @@ def cli(
             from surfaces.interactive_shell import run_repl
 
             config = ReplConfig.load(
-                cli_enabled=interactive,
+                cli_enabled=interactive or resume_session_id is not None,
                 cli_layout=layout,
                 cli_theme=theme,
             )
-            if config.enabled:
-                raise SystemExit(run_repl(config=config))
+            if config.enabled or resume_session_id:
+                raise SystemExit(
+                    run_repl(
+                        config=config,
+                        resume_session_id=resume_session_id,
+                    )
+                )
         click.echo("🚧 OpenSRE is in Public Beta — features may change.", err=True)
         render_landing(cli)
         raise SystemExit(0)

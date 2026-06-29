@@ -7,6 +7,7 @@ guards stay dead because ``configured_integrations_known`` never flips to True.
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -247,6 +248,52 @@ def test_repl_main_identifies_saved_github_username(monkeypatch: Any) -> None:
     asyncio.run(main_entrypoint.repl_main(initial_input="hello"))
 
     assert identified == ["called"]
+
+
+def test_repl_main_failed_resume_flushes_starter_session(monkeypatch: Any, tmp_path: Path) -> None:
+    import asyncio
+
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir()
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(
+        "platform.analytics.cli.identify_saved_github_username",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        lambda *_args, **_kwargs: False,
+    )
+
+    session = ReplSession()
+    flushed: list[str] = []
+    original_flush = session.storage.flush
+
+    def _track_flush(current_session: ReplSession) -> None:
+        flushed.append(current_session.session_id)
+        original_flush(current_session)
+
+    monkeypatch.setattr(session.storage, "flush", _track_flush)
+
+    class _PromptSession:
+        history = None
+
+    monkeypatch.setattr(
+        main_entrypoint._input_prompt,
+        "_build_prompt_session",
+        lambda: _PromptSession(),
+    )
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=session, inbox=None),
+    )
+
+    exit_code = asyncio.run(main_entrypoint.repl_main(resume_session_id="missing-session"))
+
+    assert exit_code == 1
+    assert flushed == [session.session_id]
+    assert not (sessions_dir / f"{session.session_id}.jsonl").exists()
 
 
 def test_explicit_bypass_detects_skip_env(monkeypatch: Any) -> None:

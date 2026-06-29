@@ -22,14 +22,17 @@ from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
     ConnectedInvestigationAgent,
 )
-from tools.investigation.stages.gather_evidence.agent import _tools_for_plan
 from tools.investigation.stages.gather_evidence.loop import (
     CachedToolResult,
     InvestigationToolCallCache,
     duplicate_call_result,
     tool_call_signature,
 )
-from tools.investigation.stages.gather_evidence.tools import availability_view
+from tools.investigation.stages.gather_evidence.tools import (
+    MAX_AGENT_TOOL_SCHEMAS,
+    availability_view,
+    select_investigation_tools,
+)
 from tools.registered_tool import RegisteredTool
 
 
@@ -46,14 +49,14 @@ def _registered_tool(name: str, source: str) -> RegisteredTool:
     )
 
 
-def test_tools_for_plan_preserves_plan_order_and_filters_unknown_tools() -> None:
+def test_select_tools_preserves_plan_order_and_filters_unknown_tools() -> None:
     tools = [
         _registered_tool("query_logs", "datadog"),
         _registered_tool("query_metrics", "datadog"),
         _registered_tool("query_commits", "github"),
     ]
 
-    selected = _tools_for_plan(
+    selected = select_investigation_tools(
         tools,
         {
             "planned_actions": [
@@ -67,10 +70,62 @@ def test_tools_for_plan_preserves_plan_order_and_filters_unknown_tools() -> None
     assert [tool.name for tool in selected] == ["query_metrics", "query_logs"]
 
 
-def test_tools_for_plan_falls_back_when_no_plan_matches() -> None:
+def test_select_tools_falls_back_when_no_plan_matches() -> None:
     tools = [_registered_tool("query_logs", "datadog")]
 
-    assert _tools_for_plan(tools, {"planned_actions": ["missing_tool"]}) == tools
+    # A plan whose names don't resolve falls through to relevance ranking; with a
+    # single tool that fits under the cap the input is returned unchanged.
+    assert select_investigation_tools(tools, {"planned_actions": ["missing_tool"]}) == tools
+
+
+def test_select_tools_returns_all_when_under_cap_and_no_plan() -> None:
+    tools = [
+        _registered_tool("query_logs", "datadog"),
+        _registered_tool("query_metrics", "grafana"),
+    ]
+
+    # No plan and a small available set: nothing is filtered out.
+    assert select_investigation_tools(tools, {"alert_source": "generic"}) == tools
+
+
+def test_select_tools_caps_and_prioritizes_relevant_sources_without_plan() -> None:
+    # Far more tools than the cap, spread across many integrations. The alert is a
+    # datadog alert, so datadog tools must survive while unrelated ones are dropped.
+    datadog_tools = [_registered_tool(f"datadog_{i}", "datadog") for i in range(5)]
+    other_tools = [
+        _registered_tool(f"other_{i}", source)
+        for i, source in enumerate(["grafana", "eks", "sentry", "vercel"] * 10)
+    ]
+    knowledge_tool = _registered_tool("get_sre_guidance", "knowledge")
+    available = [*other_tools, *datadog_tools, knowledge_tool]
+    assert len(available) > MAX_AGENT_TOOL_SCHEMAS
+
+    selected = select_investigation_tools(available, {"alert_source": "datadog"})
+
+    selected_names = {tool.name for tool in selected}
+    # The cap is a HARD ceiling: secondary fallbacks are reserved slots inside it,
+    # never appended on top, so the total can never exceed MAX_AGENT_TOOL_SCHEMAS.
+    assert len(selected) <= MAX_AGENT_TOOL_SCHEMAS
+    # Every datadog tool (the primary source for this alert) is retained.
+    assert {tool.name for tool in datadog_tools} <= selected_names
+    # The cheap reasoning fallback is always kept even when the cap bites.
+    assert "get_sre_guidance" in selected_names
+
+
+def test_select_tools_hard_cap_holds_even_with_many_secondary_tools() -> None:
+    # Regression: secondary-source tools must be reserved *inside* the cap, never
+    # appended on top. A registry where the knowledge source grows large must not
+    # let the model-facing tool set blow past MAX_AGENT_TOOL_SCHEMAS.
+    primary_tools = [_registered_tool(f"datadog_{i}", "datadog") for i in range(40)]
+    secondary_tools = [_registered_tool(f"knowledge_{i}", "knowledge") for i in range(40)]
+    available = [*primary_tools, *secondary_tools]
+
+    selected = select_investigation_tools(available, {"alert_source": "datadog"})
+
+    assert len(selected) == MAX_AGENT_TOOL_SCHEMAS
+    # Reserved slots still admit some secondary fallbacks alongside primary tools.
+    sources = {str(tool.source) for tool in selected}
+    assert {"datadog", "knowledge"} <= sources
 
 
 def test_availability_view_marks_configured_integrations_without_mutating_state() -> None:

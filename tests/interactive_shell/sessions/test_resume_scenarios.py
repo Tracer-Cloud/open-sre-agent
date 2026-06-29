@@ -264,6 +264,23 @@ class TestResumeScenarioMatrix:
         target_turns = _read_turns(isolated_sessions / f"{target_id}.jsonl")
         assert any(t.get("text") == "/resume OOM" for t in target_turns)
 
+    def test_resume_session_by_prefix_matches_name_substring(
+        self,
+        isolated_sessions: Path,
+    ) -> None:
+        from interactive_shell.command_registry.session_cmds.resume import resume_session_by_prefix
+
+        target_id = "eeee5555-6666-7777-8888-999900001111"
+        _write_finalized_session(isolated_sessions, target_id, chat_text="investigate OOM killer")
+
+        session = ReplSession()
+        _open_current(session)
+        console, buf = _capture()
+
+        assert resume_session_by_prefix("OOM", session, console)
+        assert session.session_id == target_id
+        assert "resumed session" in buf.getvalue()
+
     def test_scenario_resume_not_found_records_on_current(
         self,
         isolated_sessions: Path,

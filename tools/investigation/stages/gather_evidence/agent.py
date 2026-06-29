@@ -14,6 +14,7 @@ from core import (
     build_tool_result_messages,
     context_budget_ceiling_for_model,
     enforce_context_budget,
+    estimate_message_tokens,
     execute_tools,
     summarise,
     tool_source,
@@ -44,6 +45,7 @@ from tools.investigation.stages.gather_evidence.tools import (
     build_seed_calls,
     get_available_tools,
     merge_tool_evidence,
+    select_investigation_tools,
     tool_event_payload,
 )
 from tools.registered_tool import RegisteredTool
@@ -54,20 +56,6 @@ logger = logging.getLogger(__name__)
 def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
     for msg in messages:
         msg[key] = True
-
-
-def _tools_for_plan(tools: list[RegisteredTool], state: dict[str, Any]) -> list[RegisteredTool]:
-    planned_raw = state.get("planned_actions")
-    if not isinstance(planned_raw, list) or not planned_raw:
-        return tools
-
-    planned_names = [str(name) for name in planned_raw if str(name).strip()]
-    if not planned_names:
-        return tools
-
-    by_name = {tool.name: tool for tool in tools}
-    planned = [by_name[name] for name in planned_names if name in by_name]
-    return planned or tools
 
 
 class ConnectedInvestigationAgent(Agent[RegisteredTool]):
@@ -125,7 +113,8 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
 
         state_dict = cast(dict[str, Any], state)
         resolved = state.get("resolved_integrations") or {}
-        tools = _tools_for_plan(self._filter_tools(get_available_tools(resolved)), state_dict)
+        available_tools = self._filter_tools(get_available_tools(resolved))
+        tools = select_investigation_tools(available_tools, state_dict)
         tool_context = build_connected_tool_context(resolved, tools)
 
         if not tools:
@@ -134,11 +123,21 @@ class ConnectedInvestigationAgent(Agent[RegisteredTool]):
         llm = get_agent_llm()
         tool_schemas = llm.tool_schemas(tools)
 
-        # Merge tool_context into a local view so the system prompt can read
-        # available_sources / available_action_names without mutating the caller's state.
-        system = self._build_system_prompt({**state_dict, **tool_context})
-        alert_text = format_alert_context(state_dict)
+        # Merge tool_context into a local view so the system prompt and the alert
+        # context read the SAME narrowed tool set the model receives as schemas —
+        # never naming tools that aren't actually callable this turn.
+        prompt_state = {**state_dict, **tool_context}
+        system = self._build_system_prompt(prompt_state)
+        alert_text = format_alert_context(prompt_state, tools)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
+
+        prompt_tokens = estimate_message_tokens(messages, system=system, tools=tool_schemas)
+        logger.debug(
+            "[agent] first-turn prompt budget: ~%d tokens (%d tool schemas from %d available)",
+            prompt_tokens,
+            len(tool_schemas),
+            len(available_tools),
+        )
 
         evidence: dict[str, Any] = {}
         evidence_entries: list[EvidenceEntry] = []

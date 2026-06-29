@@ -1,17 +1,17 @@
 ---
-title: 'Session History'
-description: 'Pick up any past conversation exactly where you left off — browse recent sessions, restore context, and start fresh.'
+title: "Session History"
+description: "Pick up any past conversation exactly where you left off — browse recent sessions, restore context, and start fresh."
 ---
 
 ## Commands at a glance
 
-| Command | What it does |
-| --- | --- |
-| `/sessions` | List your recent REPL sessions with name, duration, and turn counts |
-| `/resume <id>` | Restore a past session's conversation so you can keep asking questions |
-| `/resume <id>:<entry>` | Restore a specific branch point by entry ID prefix |
-| `/compact` | Summarize older context into a replayable compaction entry |
-| `/new` | Start a fresh session while carrying forward the current conversation context |
+| Command                | What it does                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `/sessions`            | List your recent REPL sessions with name, duration, and turn counts           |
+| `/resume <id>`         | Restore a past session's conversation so you can keep asking questions        |
+| `/resume <id>:<entry>` | Restore a specific branch point by entry ID prefix                            |
+| `/compact`             | Summarize older context into a replayable compaction entry                    |
+| `/new`                 | Start a fresh session while carrying forward the current conversation context |
 
 ---
 
@@ -45,6 +45,12 @@ When you want to continue a past investigation or conversation, use `/resume` wi
 /resume 9b2e4f7a
 ```
 
+From outside the REPL, pass the same ID or name substring to the CLI launcher (for example `opensre --resume 9b2e4f7a` or `o --resume OOM` when `o` is your shell alias):
+
+```bash
+opensre --resume <uuid>
+```
+
 In a TTY, bare `/resume` opens an interactive picker of recent sessions. New turns after a resume append to that same session file — `/resume` does not create a duplicate entry in `/sessions`.
 
 To resume a specific branch point, append an entry ID prefix after the session ID:
@@ -68,11 +74,11 @@ The root cause is a connection pool leak in the orders service...
 
 **What gets restored:**
 
-| | Restored by `/resume` |
-| --- | --- |
-| Full conversation context (what you asked, what the assistant said) | ✅ Yes |
-| Infra context (service name, cluster, region learned mid-session) | ✅ Yes |
-| Trust mode, reasoning effort | ❌ No — these are per-session preferences |
+|                                                                     | Restored by `/resume`                     |
+| ------------------------------------------------------------------- | ----------------------------------------- |
+| Full conversation context (what you asked, what the assistant said) | ✅ Yes                                    |
+| Infra context (service name, cluster, region learned mid-session)   | ✅ Yes                                    |
+| Trust mode, reasoning effort                                        | ❌ No — these are per-session preferences |
 
 You can also search by name instead of ID:
 
@@ -89,21 +95,22 @@ If the prefix is ambiguous (matches more than one session), OpenSRE will ask you
 
 When you leave the REPL, OpenSRE prints your session ID so you can resume later:
 
-| Exit path | Behavior |
-| --- | --- |
-| `/exit` or `/quit` | Prints `Resume this session with:` and `/resume <session-id>`, then goodbye |
-| **Ctrl+C** twice within 2 seconds | Same resume hint, then exits |
-| **Ctrl+D** (EOF) | Same resume hint when no dispatch is running |
+| Exit path                         | Behavior                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `/exit` or `/quit`                | Prints `Resume this session with:`, `/resume <session-id>`, and `opensre --resume <session-id>`, then goodbye |
+| **Ctrl+C** twice within 2 seconds | Same resume hint, then exits                                                                                  |
+| **Ctrl+D** (EOF)                  | Same resume hint when no dispatch is running                                                                  |
 
 Example:
 
 ```
 Resume this session with:
 /resume 3f8a1c2d-…
+opensre --resume 3f8a1c2d-…
 Goodbye!
 ```
 
-Copy the `/resume …` line from the terminal, or find the session later with `/sessions`.
+Copy the `/resume …` or `opensre --resume …` line from the terminal, or find the session later with `/sessions`.
 
 ---
 
@@ -136,10 +143,10 @@ OpenSRE also compacts automatically before a shell turn when the replayed branch
 
 **`/new` vs `/clear`:**
 
-| Command | What it does |
-| --- | --- |
+| Command  | What it does                                                    |
+| -------- | --------------------------------------------------------------- |
 | `/clear` | Clears the terminal screen only — session and context unchanged |
-| `/new` | Opens a new session file; conversation context carried forward |
+| `/new`   | Opens a new session file; conversation context carried forward  |
 
 ---
 

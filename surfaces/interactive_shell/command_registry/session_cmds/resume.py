@@ -222,6 +222,46 @@ def _apply_resume_data(
     return True
 
 
+def _lookup_resume_session_data(
+    prefix: str,
+    session: ReplSession,
+    console: Console,
+) -> dict | None:
+    """Resolve a session to resume by ID prefix or name substring."""
+    from core.agent_harness.session import default_session_repo
+
+    repo = default_session_repo()
+    data = repo.load_session(prefix)
+    if data is None and len(prefix) >= 3:
+        candidates = [
+            e
+            for e in repo.load_recent(20)
+            if prefix.lower() in (e.get("name") or "").lower()
+            and e["session_id"] != session.session_id
+        ]
+        if len(candidates) == 1:
+            data = repo.load_session(candidates[0]["session_id"])
+        elif len(candidates) > 1:
+            console.print(
+                f"[{WARNING}]'{escape(prefix)}' matches {len(candidates)} sessions by name — "
+                "use a session ID prefix or be more specific.[/]"
+            )
+            return None
+
+    if data is not None:
+        return data
+
+    n = repo.count_prefix_matches(prefix)
+    if n > 1:
+        console.print(
+            f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
+            "use more characters.[/]"
+        )
+    else:
+        console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
+    return None
+
+
 def _do_resume(
     prefix: str,
     session: ReplSession,
@@ -230,21 +270,21 @@ def _do_resume(
     slash_command: str | None = None,
 ) -> bool:
     """Load session by ID prefix and restore context into the running session."""
-    from core.agent_harness.session import default_session_repo
-
-    repo = default_session_repo()
-    data = repo.load_session(prefix)
+    data = _lookup_resume_session_data(prefix, session, console)
     if data is None:
-        n = repo.count_prefix_matches(prefix)
-        if n > 1:
-            console.print(
-                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
-                "use more characters.[/]"
-            )
-        else:
-            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
         return False
     return _apply_resume_data(data, session, console, slash_command=slash_command)
+
+
+def resume_session_by_prefix(
+    prefix: str,
+    session: ReplSession,
+    console: Console,
+    *,
+    slash_command: str | None = None,
+) -> bool:
+    """Load session by ID prefix and restore context into the running session."""
+    return _do_resume(prefix, session, console, slash_command=slash_command)
 
 
 def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool:
@@ -268,36 +308,8 @@ def _cmd_resume(session: ReplSession, console: Console, args: list[str]) -> bool
         _record_resume_slash(session, args)
         return True
 
-    from core.agent_harness.session import default_session_repo
-
-    repo = default_session_repo()
-    data = repo.load_session(prefix)
-    if data is None and len(prefix) >= 3:
-        candidates = [
-            e
-            for e in repo.load_recent(20)
-            if prefix.lower() in (e.get("name") or "").lower()
-            and e["session_id"] != session.session_id
-        ]
-        if len(candidates) == 1:
-            data = repo.load_session(candidates[0]["session_id"])
-        elif len(candidates) > 1:
-            console.print(
-                f"[{WARNING}]'{escape(prefix)}' matches {len(candidates)} sessions by name — "
-                "use a session ID prefix or be more specific.[/]"
-            )
-            _record_resume_slash(session, args, ok=False)
-            return True
-
+    data = _lookup_resume_session_data(prefix, session, console)
     if data is None:
-        n = repo.count_prefix_matches(prefix)
-        if n > 1:
-            console.print(
-                f"[{WARNING}]ambiguous prefix '{escape(prefix)}' matches {n} sessions — "
-                "use more characters.[/]"
-            )
-        else:
-            console.print(f"[{ERROR}]session '{escape(prefix)}' not found.[/]")
         _record_resume_slash(session, args, ok=False)
         return True
 

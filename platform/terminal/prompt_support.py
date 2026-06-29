@@ -6,6 +6,7 @@ import asyncio
 import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import questionary.question
@@ -161,12 +162,29 @@ def repl_reset_ctrl_c_gate() -> None:
     _last_ctrl_c[0] = None
 
 
+def cli_invocation_name() -> str:
+    """Return the basename of the current CLI launcher (for example ``opensre`` or ``o``)."""
+    argv0 = sys.argv[0].strip() if sys.argv else ""
+    if not argv0:
+        return "opensre"
+    name = Path(argv0).name
+    return name or "opensre"
+
+
+def print_session_resume_hint(console: Console, session_id: str) -> None:
+    """Print REPL and CLI commands that restore ``session_id``."""
+    cli_name = cli_invocation_name()
+    console.print(f"[{DIM}]Resume this session with:[/]")
+    console.print(f"[{DIM}]/resume {session_id}[/]")
+    console.print(f"[{DIM}]{cli_name} --resume {session_id}[/]")
+
+
 def repl_prompt_note_ctrl_c(console: Console, session_id: str | None = None) -> bool:
     now = time.monotonic()
     if _last_ctrl_c[0] is not None and now - _last_ctrl_c[0] <= _CTRL_C_EXIT_WINDOW:
         console.print()
-        console.print(f"[{DIM}]Resume this session with:[/]")
-        console.print(f"[{DIM}]/resume {session_id}[/]")
+        if session_id:
+            print_session_resume_hint(console, session_id)
         console.print(f"[{DIM}]Goodbye![/]")
         _last_ctrl_c[0] = None
         return True

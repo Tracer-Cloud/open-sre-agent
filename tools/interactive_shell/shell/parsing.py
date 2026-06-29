@@ -34,7 +34,7 @@ _INLINE_SUBSHELL_RE = re.compile(r"`|\$\(")
 # Heredoc starts such as ``<<'PY'`` or ``<<EOF`` — ``<<`` alone is already covered
 # by ``_SHELL_OPERATOR_RE`` only when followed by whitespace; quoted/unquoted
 # delimiters need an explicit match so ``python3 - <<'PY'`` is not tokenized.
-_HEREDOC_START_RE = re.compile(r"(^|\s)<<-?\s*(?:'[^'\n]+'|\"[^\"\n]+\"|[^\s\\|;|&<>]+)")
+_HEREDOC_START_RE = re.compile(r"(^|\s)<<-?\s*(?:'[^'\n]+'|\"[^\"\n]+\"|[^\s\\|;&<>]+)")
 
 
 @dataclass(frozen=True)

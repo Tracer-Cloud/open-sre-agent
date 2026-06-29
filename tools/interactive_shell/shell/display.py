@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-_HEREDOC_DELIMITER_RE = re.compile(r"<<(-)?\s*(?:'([^'\n]+)'|\"([^\"\n]+)\"|([^\s\\|;|&<>]+))")
+_HEREDOC_DELIMITER_RE = re.compile(r"<<(-)?\s*(?:'([^'\n]+)'|\"([^\"\n]+)\"|([^\s\\|;&<>]+))")
 
 
 def _delimiter_from_match(match: re.Match[str]) -> tuple[str, bool]:
