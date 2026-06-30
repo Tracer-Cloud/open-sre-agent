@@ -202,9 +202,7 @@ shell_run_tool = RegisteredTool(
     surfaces=("action",),
     parallel_safe=False,
     accepts_runtime_context=True,
-    requires_approval=False,
     side_effect_level="mutating",
-    approval_reason="run shell command",
     run=run_shell,
 )
 
@@ -228,9 +226,7 @@ investigation_start_tool = RegisteredTool(
     surfaces=("action",),
     parallel_safe=False,
     accepts_runtime_context=True,
-    requires_approval=False,
     side_effect_level="external",
-    approval_reason="start investigation",
     run=run_investigation,
 )
 

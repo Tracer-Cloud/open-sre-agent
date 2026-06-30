@@ -47,8 +47,6 @@ def test_gateway_env_defaults() -> None:
     assert env.bot_token == ""
     assert env.allowed_users == []
     assert env.gateway_max_concurrent == 4
-    assert env.gateway_approval_timeout == 600
-    assert env.gateway_gate_side_effects is False
     assert env.gateway_auto_start is True
 
 

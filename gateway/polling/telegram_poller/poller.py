@@ -45,7 +45,7 @@ class TelegramPoller:
         params: dict[str, str | int | list[str]] = {
             "timeout": self._timeout,
             "offset": self._offset + 1,
-            "allowed_updates": ["message", "callback_query"],
+            "allowed_updates": ["message"],
         }
         try:
             response = httpx.get(url, params=params, timeout=float(self._timeout + 5))

@@ -1,4 +1,4 @@
-"""SQLite persistence for gateway session bindings and approval state."""
+"""SQLite persistence for gateway session bindings."""
 
 from __future__ import annotations
 
@@ -17,17 +17,6 @@ CREATE TABLE IF NOT EXISTS gateway_session_bindings (
     session_id TEXT NOT NULL,
     updated_at REAL NOT NULL,
     PRIMARY KEY (platform, chat_id)
-);
-
-CREATE TABLE IF NOT EXISTS gateway_approval_requests (
-    approval_id TEXT PRIMARY KEY,
-    chat_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    tool_name TEXT NOT NULL,
-    payload_hash TEXT NOT NULL,
-    status TEXT NOT NULL,
-    expires_at REAL NOT NULL,
-    created_at REAL NOT NULL
 );
 """
 

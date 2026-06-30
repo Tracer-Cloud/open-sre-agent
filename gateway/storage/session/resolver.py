@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness.session import DEFAULT_SESSION_STORAGE, ReplSession
-from gateway.approvals.telegram import inject_gateway_chat_context
+from gateway.session.gateway_chat_context import inject_gateway_chat_context
 from gateway.storage.session.bindings import SessionBindingStore
 from surfaces.interactive_shell.runtime.context import ReplSessionBootstrapSpec
 

@@ -34,17 +34,8 @@ class TelegramBotClient:
         result = response.data.get("result")
         return True, dict(result) if isinstance(result, Mapping) else {}, ""
 
-    def send_message(
-        self,
-        chat_id: str,
-        text: str,
-        *,
-        reply_markup: dict[str, Any] | None = None,
-    ) -> tuple[bool, str, str]:
-        payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
-        if reply_markup:
-            payload["reply_markup"] = reply_markup
-        ok, result, error = self._call("sendMessage", payload)
+    def send_message(self, chat_id: str, text: str) -> tuple[bool, str, str]:
+        ok, result, error = self._call("sendMessage", {"chat_id": chat_id, "text": text})
         if not ok:
             logger.warning("[telegram-gateway] sendMessage failed: %s", error)
             return False, error, ""
@@ -67,22 +58,5 @@ class TelegramBotClient:
     def send_chat_action(self, chat_id: str, action: str = "typing") -> None:
         self._call("sendChatAction", {"chat_id": chat_id, "action": action})
 
-    def answer_callback_query(self, callback_query_id: str, text: str = "") -> None:
-        payload: dict[str, Any] = {"callback_query_id": callback_query_id}
-        if text:
-            payload["text"] = text
-        self._call("answerCallbackQuery", payload)
-
     def delete_webhook(self) -> None:
         self._call("deleteWebhook", {})
-
-    @staticmethod
-    def approval_keyboard(approval_id: str) -> dict[str, Any]:
-        return {
-            "inline_keyboard": [
-                [
-                    {"text": "Approve", "callback_data": f"approve:{approval_id}"},
-                    {"text": "Deny", "callback_data": f"deny:{approval_id}"},
-                ]
-            ]
-        }

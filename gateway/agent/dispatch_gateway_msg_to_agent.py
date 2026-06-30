@@ -9,7 +9,6 @@ from core.agent_harness.headless import StaticReasoningClientProvider
 from core.agent_harness.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_results import ShellTurnResult
-from core.execution import ToolExecutionHooks
 from gateway.agent.error_handling import (
     EMPTY_RESPONSE_MESSAGE,
     USER_ERROR_MESSAGE,
@@ -24,7 +23,7 @@ from gateway.agent.gateway_agent_adapters import (
     GatewayToolProvider,
 )
 from gateway.agent.gateway_output_sink import GatewayOutputSink
-from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_chat_context
+from gateway.session.gateway_chat_context import inject_gateway_chat_context
 
 
 def _gateway_reasoning_provider(logger: logging.Logger) -> StaticReasoningClientProvider:
@@ -45,12 +44,10 @@ def dispatch_gateway_msg_to_agent(
     session: ReplSession,
     chat_id: str,
     sink: GatewayOutputSink,
-    approval_service: TelegramApprovalService,
     logger: logging.Logger,
 ) -> ShellTurnResult:
     """Run a full gateway turn and stream the answer through the provided sink."""
 
-    hooks: ToolExecutionHooks = approval_service.hooks()
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,
@@ -60,7 +57,6 @@ def dispatch_gateway_msg_to_agent(
         result: ShellTurnResult = dispatch_message_to_headless_agent(
             text,
             session=session,
-            confirm_fn=lambda p: approval_service.wait_for_confirmation(chat_id=chat_id, prompt=p),
             is_tty=False,
             output=sink,
             prompts=GatewayPromptContextProvider(session),
@@ -74,7 +70,6 @@ def dispatch_gateway_msg_to_agent(
             run_factory=GatewayRunRecordFactory(session),
             error_reporter=GatewayErrorReporter(logger),
             gather_enabled=True,
-            tool_hooks=hooks,
         )
     except Exception as exc:
         report_turn_failure(

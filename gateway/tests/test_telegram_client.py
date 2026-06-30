@@ -33,8 +33,3 @@ def test_send_message_success_with_mapping_proxy_data(mock_post: MagicMock) -> N
     assert ok is True
     assert error == ""
     assert message_id == "42"
-
-
-def test_approval_keyboard_shape() -> None:
-    keyboard = TelegramBotClient.approval_keyboard("abc123")
-    assert keyboard["inline_keyboard"][0][0]["callback_data"] == "approve:abc123"

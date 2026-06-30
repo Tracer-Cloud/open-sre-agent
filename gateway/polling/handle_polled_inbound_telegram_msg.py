@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
 from gateway.agent.gateway_output_sink import GatewayOutputSink
-from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.session.enforce_inbound_telegram_message_security import (
@@ -25,22 +24,13 @@ async def handle_polled_inbound_telegram_message(
     *,
     client: TelegramBotClient,
     session_resolver: SessionResolver,
-    approval_service: TelegramApprovalService,
     settings: GatewaySettings,
     executor: ThreadPoolExecutor,
     chat_locks: dict[str, asyncio.Lock],
     turn_semaphore: asyncio.Semaphore,
     loop: asyncio.AbstractEventLoop | None = None,
 ) -> None:
-    """Process one long-polled inbound Telegram update (callback or message)."""
-    if event.callback_query_id:
-        approval_service.handle_callback(
-            user_id=event.user_id,
-            callback_data=event.callback_data,
-            callback_query_id=event.callback_query_id,
-        )
-        return
-
+    """Process one long-polled inbound Telegram update."""
     user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())
     decision = enforce_inbound_telegram_message_security(
         user_id=event.user_id,
@@ -83,7 +73,6 @@ async def handle_polled_inbound_telegram_message(
                 session=session,
                 chat_id=event.chat_id,
                 sink=sink,
-                approval_service=approval_service,
                 logger=logger,
             ),
         )

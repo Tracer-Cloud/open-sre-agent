@@ -20,7 +20,7 @@ def test_parse_private_text_message() -> None:
     assert event.text == "hello"
 
 
-def test_parse_callback_query() -> None:
+def test_parse_callback_query_is_ignored() -> None:
     event = parse_update(
         {
             "update_id": 2,
@@ -32,9 +32,7 @@ def test_parse_callback_query() -> None:
             },
         }
     )
-    assert event is not None
-    assert event.callback_query_id == "cq1"
-    assert event.callback_data == "approve:abc"
+    assert event is None
 
 
 def test_ignores_group_messages() -> None:

@@ -9,8 +9,6 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from gateway.approvals.store import ApprovalStore
-from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
@@ -25,7 +23,6 @@ class TelegramPollingRuntime:
     client: TelegramBotClient
     db: sqlite3.Connection
     session_resolver: SessionResolver
-    approval_service: TelegramApprovalService
     chat_locks: dict[str, asyncio.Lock]
     executor: ThreadPoolExecutor
 
@@ -46,11 +43,6 @@ def initialize_telegram_polling_runtime(settings: GatewaySettings) -> TelegramPo
         client=client,
         db=db,
         session_resolver=SessionResolver(SessionBindingStore(db)),
-        approval_service=TelegramApprovalService(
-            client=client,
-            store=ApprovalStore(db),
-            settings=settings,
-        ),
         chat_locks={},
         executor=ThreadPoolExecutor(
             max_workers=settings.max_concurrent_turns,

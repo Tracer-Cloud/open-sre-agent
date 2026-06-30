@@ -119,7 +119,6 @@ async def _poll_telegram_until_stopped(
                     event,
                     client=resources.client,
                     session_resolver=resources.session_resolver,
-                    approval_service=resources.approval_service,
                     settings=settings,
                     executor=resources.executor,
                     chat_locks=resources.chat_locks,

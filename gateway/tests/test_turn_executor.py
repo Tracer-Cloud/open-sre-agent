@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
-from gateway.approvals.telegram import TelegramApprovalService
 
 
 @patch("gateway.agent.error_handling.report_exception")
@@ -18,7 +17,6 @@ def test_dispatch_gateway_msg_to_agent_reports_exception_and_renders_error(
     session = MagicMock()
     session.session_id = "session-1"
     sink = MagicMock()
-    approval = MagicMock(spec=TelegramApprovalService)
     test_logger = logging.getLogger("gateway.tests")
 
     result = dispatch_gateway_msg_to_agent(
@@ -26,7 +24,6 @@ def test_dispatch_gateway_msg_to_agent_reports_exception_and_renders_error(
         session=session,
         chat_id="42",
         sink=sink,
-        approval_service=approval,
         logger=test_logger,
     )
 
@@ -49,7 +46,6 @@ def test_dispatch_gateway_msg_to_agent_reports_empty_response(
     session = MagicMock()
     session.session_id = "session-1"
     sink = MagicMock()
-    approval = MagicMock(spec=TelegramApprovalService)
     test_logger = logging.getLogger("gateway.tests")
 
     result = dispatch_gateway_msg_to_agent(
@@ -57,7 +53,6 @@ def test_dispatch_gateway_msg_to_agent_reports_empty_response(
         session=session,
         chat_id="42",
         sink=sink,
-        approval_service=approval,
         logger=test_logger,
     )
 
@@ -82,9 +77,6 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
     session = MagicMock()
     session.resolved_integrations_cache = {"github": {"token": "x"}}
     sink = MagicMock()
-    approval = MagicMock(spec=TelegramApprovalService)
-    approval.hooks.return_value = MagicMock()
-    approval.wait_for_confirmation.return_value = "yes"
     mock_reasoning.return_value = MagicMock()
 
     dispatch_gateway_msg_to_agent(
@@ -92,7 +84,6 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
         session=session,
         chat_id="42",
         sink=sink,
-        approval_service=approval,
         logger=logging.getLogger("gateway.tests"),
     )
 
@@ -106,7 +97,7 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
     assert kwargs["output"] is sink
     assert kwargs["reasoning"] is mock_reasoning.return_value
     assert kwargs["gather_enabled"] is True
-    assert kwargs["tool_hooks"] is approval.hooks.return_value
+    assert kwargs.get("tool_hooks") is None
     assert kwargs["prompts"] is not None
     assert kwargs["tools"] is not None
     assert kwargs["run_factory"] is not None
@@ -131,15 +122,12 @@ def test_dispatch_gateway_msg_to_agent_finalizes_unanswered_action_response(
     )
     session = MagicMock()
     sink = MagicMock()
-    approval = MagicMock(spec=TelegramApprovalService)
-    approval.hooks.return_value = MagicMock()
 
     dispatch_gateway_msg_to_agent(
         text="/health",
         session=session,
         chat_id="42",
         sink=sink,
-        approval_service=approval,
         logger=logging.getLogger("gateway.tests"),
     )
 

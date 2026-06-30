@@ -27,8 +27,6 @@ class GatewaySettings(StrictConfigModel):
     bot_token: str
     allowed_user_ids: list[str] = Field(default_factory=list)
     max_concurrent_turns: int = Field(default=4, ge=1)
-    approval_timeout_seconds: int = Field(default=600, ge=1)
-    gate_side_effects: bool = False
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     auto_start_enabled: bool = True
 
@@ -43,8 +41,6 @@ class GatewayEnv(BaseSettings):
     # CSV validator below can parse "42,99" instead of raising a SettingsError.
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
     gateway_max_concurrent: int = Field(default=4, ge=1)
-    gateway_approval_timeout: int = Field(default=600, ge=1)
-    gateway_gate_side_effects: bool = False
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     gateway_auto_start: bool = True
 
@@ -74,8 +70,6 @@ class TelegramInboundMessage:
     chat_id: str
     message_id: str
     text: str
-    callback_query_id: str = ""
-    callback_data: str = ""
 
 
 def load_telegram_credentials() -> Mapping[str, Any]:
@@ -150,8 +144,6 @@ def load_gateway_settings() -> GatewaySettings:
             bot_token=choose_bot_token(env, credentials),
             allowed_user_ids=choose_authorized_users(env, credentials),
             max_concurrent_turns=env.gateway_max_concurrent,
-            approval_timeout_seconds=env.gateway_approval_timeout,
-            gate_side_effects=env.gateway_gate_side_effects,
             stream_edit_interval_seconds=env.gateway_stream_edit_interval_seconds,
             auto_start_enabled=env.gateway_auto_start,
         )
