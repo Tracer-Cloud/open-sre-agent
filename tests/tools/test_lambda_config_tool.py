@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.aws_lambda.tools.lambda_config_tool import get_lambda_configuration
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.lambda_config_tool import get_lambda_configuration
 
 
 class TestLambdaConfigToolContract(BaseToolContract):
@@ -44,7 +44,7 @@ def test_run_happy_path() -> None:
         "environment": {"KEY": "VALUE"},
     }
     with patch(
-        "tools.lambda_config_tool.get_function_configuration",
+        "integrations.aws_lambda.tools.lambda_config_tool.get_function_configuration",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_configuration(function_name="my-fn")
@@ -56,7 +56,7 @@ def test_run_happy_path() -> None:
 
 def test_run_api_error() -> None:
     with patch(
-        "tools.lambda_config_tool.get_function_configuration",
+        "integrations.aws_lambda.tools.lambda_config_tool.get_function_configuration",
         return_value={"success": False, "error": "Function not found"},
     ):
         result = get_lambda_configuration(function_name="missing-fn")

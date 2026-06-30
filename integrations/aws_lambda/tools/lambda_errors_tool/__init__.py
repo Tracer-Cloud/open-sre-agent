@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.lambda_invocation_logs_tool import (
+from integrations.aws_lambda.tools.lambda_invocation_logs_tool import (
     _lambda_available,
     _lambda_name,
     get_lambda_invocation_logs,

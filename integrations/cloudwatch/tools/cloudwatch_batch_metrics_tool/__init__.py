@@ -89,7 +89,7 @@ def get_cloudwatch_batch_metrics(
             e,
             tool_name="get_cloudwatch_batch_metrics",
             source="cloudwatch",
-            component="tools.cloudwatch_batch_metrics_tool",
+            component="integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool",
             method="get_metric_statistics",
             extras={"job_queue": job_queue, "metric_type": metric_type},
         )

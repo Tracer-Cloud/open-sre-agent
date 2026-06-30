@@ -133,7 +133,7 @@ def get_cloudwatch_logs(
             e,
             tool_name="get_cloudwatch_logs",
             source="cloudwatch",
-            component="tools.cloudwatch_logs_tool",
+            component="integrations.cloudwatch.tools.cloudwatch_logs_tool",
             method="boto3.client('logs')",
             extras={
                 "log_group": log_group,

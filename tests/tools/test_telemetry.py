@@ -249,7 +249,7 @@ def _snowflake_case() -> ToolFailureCase:
 
 def _cloudwatch_logs_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import cloudwatch_logs_tool as mod
+        from integrations.cloudwatch.tools import cloudwatch_logs_tool as mod
 
         mp.setattr(
             mod,
@@ -258,7 +258,7 @@ def _cloudwatch_logs_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.cloudwatch_logs_tool import get_cloudwatch_logs
+        from integrations.cloudwatch.tools.cloudwatch_logs_tool import get_cloudwatch_logs
 
         return get_cloudwatch_logs(log_group="/aws/lambda/test")
 
@@ -267,7 +267,7 @@ def _cloudwatch_logs_case() -> ToolFailureCase:
 
 def _cloudwatch_batch_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import cloudwatch_batch_metrics_tool as mod
+        from integrations.cloudwatch.tools import cloudwatch_batch_metrics_tool as mod
 
         mp.setattr(
             mod,
@@ -276,7 +276,9 @@ def _cloudwatch_batch_case() -> ToolFailureCase:
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.cloudwatch_batch_metrics_tool import get_cloudwatch_batch_metrics
+        from integrations.cloudwatch.tools.cloudwatch_batch_metrics_tool import (
+            get_cloudwatch_batch_metrics,
+        )
 
         return get_cloudwatch_batch_metrics(job_queue="q", metric_type="cpu")
 

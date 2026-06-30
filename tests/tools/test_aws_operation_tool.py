@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.aws.tools.aws_operation_tool import execute_aws_operation
 from tests.tools.conftest import BaseToolContract
-from tools.aws_operation_tool import execute_aws_operation
 
 
 class TestAWSOperationToolContract(BaseToolContract):
@@ -38,7 +38,9 @@ def test_run_happy_path() -> None:
         "data": {"Reservations": [{"Instances": [{"InstanceId": "i-1234"}]}]},
         "metadata": {"service": "ec2"},
     }
-    with patch("tools.aws_operation_tool.execute_aws_sdk_call", return_value=fake_result):
+    with patch(
+        "integrations.aws.tools.aws_operation_tool.execute_aws_sdk_call", return_value=fake_result
+    ):
         result = execute_aws_operation(
             service="ec2",
             operation="describe_instances",
@@ -55,7 +57,9 @@ def test_run_api_error() -> None:
         "error": "NoCredentialsError",
         "metadata": {},
     }
-    with patch("tools.aws_operation_tool.execute_aws_sdk_call", return_value=fake_result):
+    with patch(
+        "integrations.aws.tools.aws_operation_tool.execute_aws_sdk_call", return_value=fake_result
+    ):
         result = execute_aws_operation(service="ec2", operation="describe_instances")
     assert result["found"] is False
     assert "error" in result

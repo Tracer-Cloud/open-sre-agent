@@ -354,6 +354,57 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/aws/tools/",
+        ("tests/tools/test_aws_operation_tool.py",),
+    ),
+    PathRule(
+        "integrations/aws_lambda/",
+        (
+            "tests/integrations/aws/test_lambda_client.py",
+            "tests/tools/test_lambda_config_tool.py",
+            "tests/tools/test_lambda_errors_tool.py",
+            "tests/tools/test_lambda_inspect_tool.py",
+            "tests/tools/test_lambda_invocation_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/cloudtrail/",
+        ("tests/tools/test_cloudtrail_events.py",),
+    ),
+    PathRule(
+        "integrations/cloudwatch/",
+        (
+            "tests/integrations/aws/test_cloudwatch_client.py",
+            "tests/tools/test_cloudwatch_batch_metrics_tool.py",
+            "tests/tools/test_cloudwatch_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/ec2/",
+        ("tests/tools/test_ec2_instances_by_tag_tool.py",),
+    ),
+    PathRule(
+        "integrations/elb/",
+        ("tests/tools/test_elb_target_health_tool.py",),
+    ),
+    PathRule(
+        "integrations/rds/",
+        (
+            "tests/integrations/test_rds.py",
+            "tests/tools/test_rds_tools.py",
+        ),
+    ),
+    PathRule(
+        "integrations/s3/",
+        (
+            "tests/integrations/aws/test_s3_client.py",
+            "tests/tools/test_s3_get_object_tool.py",
+            "tests/tools/test_s3_inspect_tool.py",
+            "tests/tools/test_s3_list_tool.py",
+            "tests/tools/test_s3_marker_tool.py",
+        ),
+    ),
+    PathRule(
         "integrations/opsgenie/",
         (
             "tests/integrations/opsgenie/",
