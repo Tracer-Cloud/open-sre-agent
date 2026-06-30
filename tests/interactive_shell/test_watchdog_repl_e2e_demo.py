@@ -25,9 +25,9 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
+from platform.notifications.telegram_credentials import TelegramCredentials
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from tools.fleet_monitoring.probe import ProcessSnapshot
-from tools.watch_dog.alarms import AlarmCredentials
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -39,7 +39,7 @@ def test_repl_watchdog_end_to_end_demo_script(monkeypatch: pytest.MonkeyPatch) -
     """Drive the full REPL slash pipeline for watchdogs (deterministic probe stub)."""
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
-        lambda *_a, **_kw: AlarmCredentials(bot_token="demo-token", chat_id="1"),
+        lambda *_a, **_kw: TelegramCredentials(bot_token="demo-token", chat_id="1"),
     )
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",

@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 from platform.common.errors import OpenSREError
-from tools.watch_dog.alarms import (
-    AlarmCredentials,
-    AlarmDispatcher,
+from platform.notifications.telegram_alarms import AlarmDispatcher
+from platform.notifications.telegram_credentials import (
+    TelegramCredentials,
     load_credentials_from_env,
 )
 
@@ -40,7 +40,7 @@ def _stub_telegram(
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
-        "tools.watch_dog.alarms.post_telegram_message",
+        "platform.notifications.telegram_alarms.post_telegram_message",
         _fake_post,
     )
     return calls
@@ -83,7 +83,7 @@ def _patch_store(monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]) -> Non
 def test_alarm_credentials_repr_does_not_leak_bot_token() -> None:
     # Auto-generated dataclass __repr__ surfaces in pytest assertion output,
     # tracebacks, and structured log capture. The token must stay out of it.
-    creds = AlarmCredentials(bot_token="super-secret-token", chat_id="chat-1")
+    creds = TelegramCredentials(bot_token="super-secret-token", chat_id="chat-1")
 
     rendered = repr(creds)
 
@@ -97,7 +97,7 @@ def test_load_credentials_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
     creds = load_credentials_from_env()
 
-    assert creds == AlarmCredentials(bot_token="tok-123", chat_id="chat-1")
+    assert creds == TelegramCredentials(bot_token="tok-123", chat_id="chat-1")
 
 
 def test_load_credentials_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,7 +185,7 @@ def test_load_credentials_from_store_only(monkeypatch: pytest.MonkeyPatch) -> No
 
     creds = load_credentials_from_env()
 
-    assert creds == AlarmCredentials(bot_token="store-tok", chat_id="store-chat")
+    assert creds == TelegramCredentials(bot_token="store-tok", chat_id="store-chat")
 
 
 def test_load_credentials_chat_id_from_store(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -261,7 +261,7 @@ def test_load_credentials_store_failure_falls_back_to_env(
 
     creds = load_credentials_from_env()
 
-    assert creds == AlarmCredentials(bot_token="env-tok", chat_id="env-chat")
+    assert creds == TelegramCredentials(bot_token="env-tok", chat_id="env-chat")
 
 
 def test_first_dispatch_calls_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -269,7 +269,7 @@ def test_first_dispatch_calls_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_clock(monkeypatch, [100.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
     )
 
     assert dispatcher.dispatch("max_cpu", "CPU pegged at 95%") is True
@@ -287,7 +287,7 @@ def test_dispatch_can_use_html_parse_mode(monkeypatch: pytest.MonkeyPatch) -> No
     _patch_clock(monkeypatch, [100.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         parse_mode="HTML",
     )
 
@@ -303,7 +303,7 @@ def test_second_dispatch_within_cooldown_is_suppressed(
     _patch_clock(monkeypatch, [100.0, 200.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         cooldown_seconds=300.0,
     )
 
@@ -321,7 +321,7 @@ def test_second_dispatch_after_cooldown_calls_telegram_again(
     _patch_clock(monkeypatch, [100.0, 450.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         cooldown_seconds=300.0,
     )
 
@@ -336,7 +336,7 @@ def test_cooldown_is_per_threshold_name(monkeypatch: pytest.MonkeyPatch) -> None
     _patch_clock(monkeypatch, [100.0, 110.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         cooldown_seconds=300.0,
     )
 
@@ -355,7 +355,7 @@ def test_dispatch_returns_false_on_transport_failure(
     _patch_clock(monkeypatch, [100.0, 105.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         cooldown_seconds=300.0,
     )
 
@@ -373,7 +373,7 @@ def test_failed_dispatch_retries_after_cooldown(
     _patch_clock(monkeypatch, [100.0, 105.0, 450.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
         cooldown_seconds=300.0,
     )
 
@@ -390,7 +390,7 @@ def test_dispatch_uses_credentials_from_constructor(
     _patch_clock(monkeypatch, [100.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="bot-XYZ", chat_id="my-chat"),
+        TelegramCredentials(bot_token="bot-XYZ", chat_id="my-chat"),
     )
     dispatcher.dispatch("max_runtime", "process exceeded 5m")
 
@@ -407,7 +407,7 @@ def test_dispatch_truncates_messages_over_telegram_limit(
     _patch_clock(monkeypatch, [100.0])
 
     dispatcher = AlarmDispatcher(
-        AlarmCredentials(bot_token="tok", chat_id="chat-1"),
+        TelegramCredentials(bot_token="tok", chat_id="chat-1"),
     )
     oversized = "X" * 5000
     assert dispatcher.dispatch("max_cpu", oversized) is True

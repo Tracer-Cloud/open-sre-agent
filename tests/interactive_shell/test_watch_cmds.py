@@ -12,12 +12,12 @@ from rich.console import Console
 
 from core.agent_harness.session import ReplSession
 from platform.common.task_types import TaskKind, TaskStatus
+from platform.notifications.telegram_credentials import TelegramCredentials
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.watch_cmds import (
     WatchdogStartSpec,
     parse_watch_argv,
 )
-from tools.watch_dog.alarms import AlarmCredentials
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -57,7 +57,7 @@ def test_dispatch_watch_creates_watchdog_task(
 ) -> None:
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
-        lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
+        lambda *_a, **_kw: TelegramCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
@@ -92,7 +92,7 @@ def test_dispatch_watch_creates_watchdog_task(
 def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.load_credentials_from_env",
-        lambda *_a, **_kw: AlarmCredentials(bot_token="x", chat_id="1"),
+        lambda *_a, **_kw: TelegramCredentials(bot_token="x", chat_id="1"),
     )
     monkeypatch.setattr(
         "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",

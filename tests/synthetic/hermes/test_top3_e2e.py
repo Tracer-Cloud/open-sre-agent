@@ -29,12 +29,13 @@ from integrations.hermes.agent import HermesAgent
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident
 from integrations.hermes.sinks import TelegramSink
+from platform.notifications.telegram_alarms import AlarmDispatcher
+from platform.notifications.telegram_credentials import TelegramCredentials
 from tests.synthetic.hermes.scenario_loader import (
     SUITE_DIR,
     HermesScenarioFixture,
     load_scenario,
 )
-from tools.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
 
 pytestmark = [pytest.mark.synthetic, pytest.mark.e2e]
 
@@ -58,7 +59,7 @@ def _patch_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
         return True, "", "1"
 
-    monkeypatch.setattr("tools.watch_dog.alarms.post_telegram_message", _fake_post)
+    monkeypatch.setattr("platform.notifications.telegram_alarms.post_telegram_message", _fake_post)
     return calls
 
 
@@ -109,7 +110,7 @@ def _drive_log(
     log_path.touch()
 
     telegram_calls = _patch_telegram(monkeypatch)
-    creds = AlarmCredentials(bot_token="tok-e2e", chat_id="chat-e2e")
+    creds = TelegramCredentials(bot_token="tok-e2e", chat_id="chat-e2e")
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
     sink = TelegramSink(dispatcher)
 

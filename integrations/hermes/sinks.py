@@ -55,7 +55,7 @@ from typing import Final
 from integrations.hermes.agent import IncidentSink
 from integrations.hermes.errors import InvestigationOutcome
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogRecord
-from tools.watch_dog.alarms import AlarmDispatcher
+from platform.notifications.telegram_alarms import AlarmDispatcher
 
 logger = logging.getLogger(__name__)
 

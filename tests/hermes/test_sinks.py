@@ -12,7 +12,8 @@ import pytest
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogLevel, LogRecord
 from integrations.hermes.investigation import run_incident_investigation
 from integrations.hermes.sinks import TelegramSink, TelegramSinkConfig, make_telegram_sink
-from tools.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
+from platform.notifications.telegram_alarms import AlarmDispatcher
+from platform.notifications.telegram_credentials import TelegramCredentials
 
 _TS = datetime(2026, 5, 12, 0, 0, 0)
 
@@ -75,13 +76,13 @@ def _capture_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         )
         return True, "", "1"
 
-    monkeypatch.setattr("tools.watch_dog.alarms.post_telegram_message", _fake_post)
+    monkeypatch.setattr("platform.notifications.telegram_alarms.post_telegram_message", _fake_post)
     return calls
 
 
 def _dispatcher(monkeypatch: pytest.MonkeyPatch) -> tuple[AlarmDispatcher, list[dict[str, Any]]]:
     calls = _capture_telegram(monkeypatch)
-    creds = AlarmCredentials(bot_token="tok", chat_id="chat-1")
+    creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
     return AlarmDispatcher(creds, cooldown_seconds=300.0), calls
 
 

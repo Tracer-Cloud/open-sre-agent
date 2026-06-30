@@ -1,28 +1,32 @@
-"""Telegram alarm dispatcher for the watchdog."""
+"""Telegram credential resolution shared by every caller that posts to Telegram.
+
+Resolution rule:
+
+* **bot token** — integration store -> ``TELEGRAM_BOT_TOKEN`` env -> system keyring
+* **chat id** — explicit override -> integration store ``default_chat_id`` ->
+  ``TELEGRAM_DEFAULT_CHAT_ID`` env
+
+The store, env, and keyring fallbacks match the resolution order the scheduler
+and onboarding wizard use, so credentials saved via ``opensre onboard`` or
+``opensre integrations setup telegram`` work uniformly across the watchdog,
+Hermes incident sinks, the Telegram send-message tool, and any other caller.
+"""
 
 from __future__ import annotations
 
 import logging
 import os
-import threading
-import time
 from dataclasses import dataclass, field
 
 from platform.common.errors import OpenSREError
-from platform.common.truncation import truncate
-from platform.notifications.telegram_delivery import (
-    post_telegram_message,
-    truncate_for_telegram_html,
-)
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_COOLDOWN_SECONDS = 300.0
-_TELEGRAM_MESSAGE_LIMIT = 4096
-
 
 @dataclass(frozen=True)
-class AlarmCredentials:
+class TelegramCredentials:
+    """Resolved Telegram bot token + target chat id."""
+
     # repr=False so the auto-generated __repr__ does not leak the token into
     # pytest assertion output, tracebacks, or structured log capture.
     bot_token: str = field(repr=False)
@@ -36,7 +40,7 @@ def _telegram_store_config() -> dict[str, object]:
     (investigation pipeline, scheduler). Returns an empty mapping when the store
     is unavailable or has no Telegram integration so callers fall back to the
     environment / keyring. Resolution is wrapped defensively: a malformed or
-    locked store must never crash the watchdog at startup.
+    locked store must never crash the caller at startup.
     """
     try:
         from integrations.catalog import resolve_effective_integrations
@@ -62,7 +66,7 @@ def _resolve_bot_token(store_config: dict[str, object]) -> str:
 
 
 def _resolve_chat_id(store_config: dict[str, object], chat_id_override: str | None) -> str:
-    """Resolve the chat id: ``--chat-id`` override, then store, then env."""
+    """Resolve the chat id: explicit override, then store, then env."""
     # Strip first so a whitespace-only override falls back consistently with an
     # empty-string override, instead of raising a misleading "pass --chat-id"
     # error after the caller already passed one.
@@ -78,19 +82,11 @@ def _resolve_chat_id(store_config: dict[str, object], chat_id_override: str | No
 def load_credentials_from_env(
     *,
     chat_id_override: str | None = None,
-) -> AlarmCredentials:
+) -> TelegramCredentials:
     """Resolve Telegram credentials from the integration store, env, or keyring.
 
-    Resolution order (matching the scheduler):
-
-    * **bot token** — integration store → ``TELEGRAM_BOT_TOKEN`` env → system keyring
-    * **chat id** — ``--chat-id`` override → store ``default_chat_id`` →
-      ``TELEGRAM_DEFAULT_CHAT_ID`` env
-
-    The name is retained for backward compatibility; resolution is no longer
-    env-only, so credentials saved by ``opensre onboard`` /
-    ``opensre integrations setup telegram`` work for the watchdog and Hermes
-    instead of raising ``TELEGRAM_BOT_TOKEN is not set``.
+    Raises :class:`OpenSREError` with a setup-friendly suggestion when either
+    half is missing.
     """
     store_config = _telegram_store_config()
 
@@ -115,66 +111,4 @@ def load_credentials_from_env(
             ),
         )
 
-    return AlarmCredentials(bot_token=bot_token, chat_id=chat_id)
-
-
-class AlarmDispatcher:
-    """Dispatch watchdog alarms to Telegram with per-threshold cooldown."""
-
-    def __init__(
-        self,
-        creds: AlarmCredentials,
-        *,
-        cooldown_seconds: float = _DEFAULT_COOLDOWN_SECONDS,
-        parse_mode: str = "",
-    ) -> None:
-        self._creds = creds
-        self._cooldown_seconds = cooldown_seconds
-        self._parse_mode = parse_mode
-        self._last_dispatched: dict[str, float] = {}
-        self._lock = threading.Lock()
-
-    def dispatch(self, threshold_name: str, message: str) -> bool:
-        """Send to Telegram unless this threshold is in cooldown."""
-        now = self._now()
-
-        # Reserve the cooldown slot under the lock BEFORE the network call so
-        # a concurrent dispatch on the same threshold sees the reservation and
-        # is suppressed. Without this, two threads could both pass the check
-        # (state of last_dispatched at "check" time != "use" time, classic
-        # TOCTOU) and both send.
-        with self._lock:
-            last = self._last_dispatched.get(threshold_name)
-            if last is not None and (now - last) < self._cooldown_seconds:
-                logger.debug(
-                    "[watchdog] alarm suppressed by cooldown: name=%s remaining=%.1fs",
-                    threshold_name,
-                    self._cooldown_seconds - (now - last),
-                )
-                return False
-            self._last_dispatched[threshold_name] = now
-
-        if self._parse_mode.upper() == "HTML":
-            text = truncate_for_telegram_html(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
-        else:
-            text = truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
-
-        ok, error, _ = post_telegram_message(
-            chat_id=self._creds.chat_id,
-            text=text,
-            bot_token=self._creds.bot_token,
-            parse_mode=self._parse_mode,
-        )
-        if ok:
-            return True
-
-        logger.warning(
-            "[watchdog] alarm delivery failed and cooldown remains armed: name=%s error=%s",
-            threshold_name,
-            error,
-        )
-        return False
-
-    @staticmethod
-    def _now() -> float:
-        return time.monotonic()
+    return TelegramCredentials(bot_token=bot_token, chat_id=chat_id)
