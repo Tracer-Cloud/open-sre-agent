@@ -34,7 +34,10 @@ RULES: tuple[PathRule, ...] = (
     PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
     PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
     PathRule("integrations/hermes/", ("tests/hermes/",)),
-    PathRule("integrations/alertmanager/", ("tests/integrations/alertmanager/",)),
+    PathRule(
+        "integrations/alertmanager/",
+        ("tests/integrations/alertmanager/", "tests/e2e/alertmanager/"),
+    ),
     PathRule(
         "integrations/dagster/",
         ("tests/integrations/dagster/", "tests/synthetic/test_dagster_scenario.py"),
@@ -161,7 +164,11 @@ RULES: tuple[PathRule, ...] = (
     ),
     PathRule(
         "integrations/victoria_logs/",
-        ("tests/integrations/victoria_logs/", "tests/tools/test_victoria_logs_tool.py"),
+        (
+            "tests/integrations/victoria_logs/",
+            "tests/tools/test_victoria_logs_tool.py",
+            "tests/e2e/victoria_logs/",
+        ),
     ),
     PathRule(
         "integrations/argocd/",
@@ -184,7 +191,10 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_honeycomb_traces_tool.py",
         ),
     ),
-    PathRule("integrations/jenkins/", ("tests/integrations/test_jenkins.py",)),
+    PathRule(
+        "integrations/jenkins/",
+        ("tests/integrations/test_jenkins.py", "tests/synthetic/test_jenkins_scenario.py"),
+    ),
     PathRule(
         "integrations/datadog/",
         (
@@ -207,6 +217,7 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_grafana_metrics_tool.py",
             "tests/tools/test_grafana_service_names_tool.py",
             "tests/tools/test_grafana_traces_tool.py",
+            "tests/e2e/grafana_validation/",
         ),
     ),
     PathRule("integrations/", ("tests/integrations/",)),

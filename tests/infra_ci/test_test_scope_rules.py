@@ -39,7 +39,8 @@ def test_grafana_rule_includes_integration_and_tool_tests() -> None:
     assert not escalate
     assert "tests/integrations/grafana/" in targets
     assert "tests/tools/test_grafana_logs_tool.py" in targets
-    assert len(targets) == 7
+    assert "tests/e2e/grafana_validation/" in targets
+    assert len(targets) == 8
 
 
 def test_datadog_rule_includes_integration_and_tool_tests() -> None:
