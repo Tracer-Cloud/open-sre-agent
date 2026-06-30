@@ -52,7 +52,9 @@ def test_run_happy_path() -> None:
     }
     with (
         patch("integrations.coralogix.tools.CoralogixClient", return_value=mock_client),
-        patch("integrations.coralogix.tools.build_coralogix_logs_query", return_value="source logs"),
+        patch(
+            "integrations.coralogix.tools.build_coralogix_logs_query", return_value="source logs"
+        ),
     ):
         result = tool.run(
             query="source logs | limit 50",
@@ -70,7 +72,9 @@ def test_run_api_error() -> None:
     mock_client.query_logs.return_value = {"success": False, "error": "Rate limited"}
     with (
         patch("integrations.coralogix.tools.CoralogixClient", return_value=mock_client),
-        patch("integrations.coralogix.tools.build_coralogix_logs_query", return_value="source logs"),
+        patch(
+            "integrations.coralogix.tools.build_coralogix_logs_query", return_value="source logs"
+        ),
     ):
         result = tool.run(query="source logs", coralogix_api_key="cx_key")
     assert result["available"] is False
