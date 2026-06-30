@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from tools.base import BaseTool
@@ -65,7 +66,9 @@ class SlackSendMessageTool(BaseTool):
 
     def is_available(self, sources: dict[str, Any]) -> bool:
         slack = sources.get("slack") or {}
-        return bool(str(slack.get("webhook_url") or "").strip())
+        configured_webhook = str(slack.get("webhook_url") or "").strip()
+        env_webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        return bool(configured_webhook or env_webhook)
 
     # extract_params intentionally stays empty. It is serialized into tool-call
     # traces, so Slack webhook URLs must be resolved inside run() only.

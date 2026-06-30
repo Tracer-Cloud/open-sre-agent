@@ -48,8 +48,8 @@ def test_hydrate_marks_known_even_when_none_configured(monkeypatch: Any) -> None
 def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
     resolved = {"datadog": {"site": "datadoghq.com"}, "grafana": {"url": "http://localhost"}}
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: resolved,
+        "platform.integrations.resolution.resolve_integrations",
+        lambda: resolved,
     )
     session = ReplSession()
     session.warm_resolved_integrations()
@@ -59,12 +59,12 @@ def test_warm_resolved_integrations_populates_cache(monkeypatch: Any) -> None:
 def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
     calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         calls.append("resolve")
         return {"github": {}}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "platform.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()
@@ -76,12 +76,12 @@ def test_warm_resolved_integrations_is_idempotent(monkeypatch: Any) -> None:
 def test_warm_resolved_integrations_skips_empty_cache(monkeypatch: Any) -> None:
     calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         calls.append("resolve")
         return {}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "platform.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()
@@ -100,8 +100,8 @@ def test_warm_resolved_integrations_uses_quiet_resolve(monkeypatch: Any) -> None
         lambda _state: progress_calls.append("progress") or {"resolved_integrations": {}},
     )
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
-        lambda _state: quiet_calls.append("quiet") or {"datadog": {}},
+        "platform.integrations.resolution.resolve_integrations",
+        lambda: quiet_calls.append("quiet") or {"datadog": {}},
     )
 
     session = ReplSession()
@@ -130,12 +130,12 @@ def test_hydrate_entrypoint_does_not_warm_before_prompt(monkeypatch: Any) -> Non
     )
     resolve_calls: list[str] = []
 
-    def _resolve(_state: dict[str, Any]) -> dict[str, Any]:
+    def _resolve() -> dict[str, Any]:
         resolve_calls.append("resolve")
         return {"datadog": {"site": "datadoghq.com"}}
 
     monkeypatch.setattr(
-        "tools.investigation.stages.resolve_integrations.resolve_integrations_quiet",
+        "platform.integrations.resolution.resolve_integrations",
         _resolve,
     )
     session = ReplSession()

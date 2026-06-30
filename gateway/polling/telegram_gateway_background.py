@@ -79,6 +79,7 @@ def _run_telegram_gateway_thread(
     shutdown_runtime: ShutdownTelegramPollingRuntime,
 ) -> None:
     """Own Telegram polling resources for the lifetime of the thread."""
+    # Consideration: We could initialize a broader set of resources here that could be used by the gateway (i.e. the agent itself)
     resources = initialize_runtime(settings)
 
     try:

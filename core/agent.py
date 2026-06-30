@@ -12,6 +12,7 @@ from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
 )
+from core.llm import agent_llm_client
 from core.events import (
     AgentEndEvent,
     AgentStartEvent,
@@ -54,7 +55,19 @@ from platform.observability.tool_trace import redact_sensitive
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from core.agent_harness.ports import (
+        ConfirmFn,
+        ErrorReporter,
+        OutputSink,
+        PromptContextProvider,
+        ReasoningClientProvider,
+        RunRecordFactory,
+        SessionStore,
+        ToolProvider,
+        TurnAccounting,
+    )
     from core.agent_harness.turn_context import AgentRuntimeRequest
+    from core.agent_harness.turn_results import ShellTurnResult
 
 # Backward-compatible callback type: called with ``(event_kind, data_dict)``.
 LoopEventCallback = LegacyLoopEventCallback
@@ -80,7 +93,6 @@ class AgentRunResult:
 # Backward-compat alias — callers that still reference ToolLoopResult compile unchanged.
 ToolLoopResult = AgentRunResult
 
-
 class Agent[RuntimeToolT: RuntimeTool]:
     """Stateful, configurable ReAct agent.
 
@@ -89,10 +101,48 @@ class Agent[RuntimeToolT: RuntimeTool]:
     re-implementing the loop.
     """
 
+    @staticmethod
+    def dispatch_message_to_headless_agent(
+        message: str,
+        *,
+        session: SessionStore | None = None,
+        output: OutputSink | None = None,
+        tools: ToolProvider | None = None,
+        prompts: PromptContextProvider | None = None,
+        reasoning: ReasoningClientProvider | None = None,
+        run_factory: RunRecordFactory | None = None,
+        accounting: TurnAccounting | None = None,
+        error_reporter: ErrorReporter | None = None,
+        gather_enabled: bool = False,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+    ) -> ShellTurnResult:
+        """Run a full headless turn through the shared agent harness."""
+        from core.agent_harness.headless_agent import (
+            dispatch_message_to_headless_agent,
+        )
+
+        return dispatch_message_to_headless_agent(
+            message,
+            session=session,
+            output=output,
+            tools=tools,
+            prompts=prompts,
+            reasoning=reasoning,
+            run_factory=run_factory,
+            accounting=accounting,
+            error_reporter=error_reporter,
+            gather_enabled=gather_enabled,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            tool_hooks=tool_hooks,
+        )
+
     def __init__(
         self,
         *,
-        llm: Any,
+        llm: Any | None = None,
         system: str,
         tools: Sequence[RuntimeToolT],
         resolved_integrations: dict[str, Any],
@@ -103,7 +153,7 @@ class Agent[RuntimeToolT: RuntimeTool]:
         tool_resources: dict[str, Any] | None = None,
         provider_hooks: ProviderHooks | None = None,
     ) -> None:
-        self._llm = llm
+        self._llm = llm if llm is not None else agent_llm_client.get_agent_llm()
         self._system = system
         self._tools = list(tools)
         self._resolved = resolved_integrations

@@ -1,3 +1,13 @@
+
+## Architecture Notes By Vincent (June 30th 2026)
+- Target initial support for Telegram and Slack.
+- Issues: Headless agent lacks full integration initialization; current target path may not be optimal.
+- Treat the messaging gateway as a distinct surface area.
+- Goal: Fully decouple the gateway from other packages --> if this is true then it means that the gateway is configurable through dependency injection to call other agents.
+
+**Key Problem Right Now**
+- The critical problem however, right now is that we need to be able to spin up an agent and load integrations from it.
+
 # OpenSRE Messaging Gateway
 
 Standalone inbound messaging gateway for chat platforms. v1 ships Telegram DM text chat via long polling.
@@ -14,18 +24,6 @@ uv run opensre gateway telegram
 
 DM your bot from Telegram.
 
-## Architecture
-
-- `gateway/polling/handle_polled_inbound_telegram_msg.py` — auth, session, and agent dispatch for polled updates
-- `gateway/storage/` — SQLite state (`db.py`) and session bindings from Telegram user id → `ReplSession` JSONL file
-- `gateway/agent/dispatch_gateway_msg_to_agent.py` — runs the headless agent with gateway harness adapters (prompt grounding, action tools, reasoning)
-- `gateway/agent/gateway_agent_adapters.py` — Telegram-specific harness port implementations
-- `gateway/agent/gateway_action_tools.py` — gateway-local `shell_run` and `investigation_start` action tools
-- `gateway/polling/telegram_gateway_background.py` — long-poll daemon thread for the dedicated gateway process
-- `gateway/agent/gateway_output_sink.py` — typing + throttled outbound message streaming
-- `gateway/tests/` — package-local gateway regression tests
-
-State lives in `~/.opensre/gateway/state.db`. Conversation transcripts use the normal `~/.opensre/sessions/*.jsonl` store.
 
 ## Environment variables
 

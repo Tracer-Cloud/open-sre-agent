@@ -58,10 +58,9 @@ def _resolve_session_integrations(session: SessionStore) -> dict[str, Any]:
     ):
         return cached
 
-    from tools.investigation.stages.resolve_integrations import resolve_integrations
+    from platform.integrations.resolution import resolve_integrations
 
-    updates = resolve_integrations({})  # type: ignore[arg-type]  # env/store resolution path
-    resolved = dict(updates.get("resolved_integrations") or {})
+    resolved = resolve_integrations()
     if resolved:
         session.resolved_integrations_cache = merge_resolved_integrations(
             cached,

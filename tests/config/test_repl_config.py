@@ -18,13 +18,13 @@ class TestReplConfigDefaults:
         cfg = ReplConfig.load()
         assert cfg.layout == "classic"
 
-    def test_default_theme_is_green(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_theme_is_blue(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OPENSRE_THEME", raising=False)
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
         cfg = ReplConfig.load()
-        assert cfg.theme == "green"
+        assert cfg.theme == "blue"
 
 
 class TestEnvVarResolution:
@@ -62,7 +62,7 @@ class TestEnvVarResolution:
 
     def test_invalid_theme_falls_back_to_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENSRE_THEME", "nope")
-        assert ReplConfig.load().theme == "green"
+        assert ReplConfig.load().theme == "blue"
 
     def test_invalid_theme_logs_warning(self, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
         monkeypatch.setenv("OPENSRE_THEME", "chartreuse")
@@ -70,7 +70,7 @@ class TestEnvVarResolution:
         with caplog.at_level("WARNING"):
             cfg = ReplConfig.load()
 
-        assert cfg.theme == "green"
+        assert cfg.theme == "blue"
         assert "OPENSRE_THEME='chartreuse' is not a valid theme" in caplog.text
 
 
@@ -191,7 +191,7 @@ class TestFileResolution:
         with caplog.at_level("WARNING"):
             cfg = ReplConfig.load()
 
-        assert cfg.theme == "green"
+        assert cfg.theme == "blue"
         assert "interactive.theme='chartreuse' is not a valid theme" in caplog.text
 
     def test_env_overrides_file(
