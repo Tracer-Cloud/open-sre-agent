@@ -61,6 +61,7 @@ EvidenceSource = Literal[
     "cloudtrail",
     "ec2",
     "hermes",
+    "slack",
     "twilio",
     "telegram",
     "redis",

@@ -186,7 +186,7 @@ class GatewayToolProvider:
             action_already_listed=True,
         )
         self._tool_context = ctx
-        return gateway_action_tools()
+        return gateway_action_tools(self._session.resolved_integrations_cache)
 
     def tool_resources(self) -> dict[str, Any]:
         if self._tool_context is None:

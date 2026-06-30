@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import config.constants.platform as _platform
@@ -17,6 +17,8 @@ from tools.interactive_shell.shell.execution import ShellExecutionResult, execut
 from tools.interactive_shell.shell.parsing import parse_shell_command
 from tools.interactive_shell.shell.policy import plan_shell_execution
 from tools.registered_tool import RegisteredTool
+from tools.registry import get_registered_tools
+from tools.utils.integration_sources import availability_view
 
 GATEWAY_RESOURCE_KEY = "gateway"
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120
@@ -106,10 +108,17 @@ def _summarize_investigation_state(state: InvestigationState) -> str:
     return "Investigation completed."
 
 
-def execute_shell_tool(args: dict[str, Any], ctx: GatewayToolContext) -> bool:
+def execute_shell_tool(args: dict[str, Any], ctx: GatewayToolContext) -> tuple[bool, str]:
+    """Run a shell command and return ``(ok, output_text)``.
+
+    The ``output_text`` is the command's captured stdout/stderr (or the failure
+    reason). It is returned so the caller can feed the real output back to the
+    model — a later tool in the same turn (e.g. ``slack_send_message``) can then
+    act on what this command produced instead of only knowing it succeeded.
+    """
     command = str(args.get("command", "")).strip()
     if not command:
-        return False
+        return False, ""
 
     parsed = parse_shell_command(command, is_windows=_platform.IS_WINDOWS)
     plan = plan_shell_execution(parsed)
@@ -117,7 +126,7 @@ def execute_shell_tool(args: dict[str, Any], ctx: GatewayToolContext) -> bool:
         reason = plan.policy.reason or "Shell command rejected."
         ctx.sink.set_tool_status(reason)
         ctx.session.record("shell", command, ok=False, response_text=reason)
-        return False
+        return False, reason
 
     display_command = format_shell_command_for_display(command)
     ctx.sink.set_tool_status(f"Running: {display_command}")
@@ -134,12 +143,12 @@ def execute_shell_tool(args: dict[str, Any], ctx: GatewayToolContext) -> bool:
         response_text = f"command failed to start: {exc}"
         ctx.sink.set_tool_status(response_text)
         ctx.session.record("shell", command, ok=False, response_text=response_text)
-        return False
+        return False, response_text
 
     response_text = _format_shell_result(result)
     ok = not result.timed_out and result.exit_code == 0
     ctx.session.record("shell", command, ok=ok, response_text=response_text)
-    return ok
+    return ok, response_text
 
 
 def execute_investigation_tool(args: dict[str, Any], ctx: GatewayToolContext) -> bool:
@@ -167,7 +176,15 @@ def execute_investigation_tool(args: dict[str, Any], ctx: GatewayToolContext) ->
 
 
 def run_shell(*, command: str, context: Any) -> dict[str, Any]:
-    return execute_with_gateway_context({"command": command}, context, execute_shell_tool)
+    gateway_context = gateway_context_from_agent_context(context)
+    ok, output = execute_shell_tool({"command": command}, gateway_context)
+    result: dict[str, Any] = {"ok": ok}
+    # Return the command output to the model so a later tool in the same turn can
+    # consume it (e.g. send the looked-up value to Slack). Without this the model
+    # only ever sees ``{"ok": true}`` and cannot pass the result onward.
+    if output:
+        result["output"] = output
+    return result
 
 
 def run_investigation(*, alert_text: str, context: Any) -> dict[str, Any]:
@@ -231,9 +248,47 @@ investigation_start_tool = RegisteredTool(
 )
 
 
-def gateway_action_tools() -> list[RegisteredTool]:
-    """Return the gateway-local action tool set for one Telegram turn."""
-    return [shell_run_tool, investigation_start_tool]
+# Gateway-local, context-bound tools. The registry also defines tools with these
+# names that bind to interactive-shell (REPL) runtime context the gateway does not
+# provide, so the gateway-local versions below take precedence for these names.
+_GATEWAY_LOCAL_TOOLS: tuple[RegisteredTool, ...] = (shell_run_tool, investigation_start_tool)
+
+
+def _without_approval(tool: RegisteredTool) -> RegisteredTool:
+    """Gateway turns are headless; no tool may block on interactive approval."""
+    if not tool.requires_approval:
+        return tool
+    return replace(tool, requires_approval=False, approval_reason="")
+
+
+def gateway_action_tools(
+    resolved_integrations: dict[str, Any] | None = None,
+) -> list[RegisteredTool]:
+    """Return the full action tool set for one gateway (Telegram) turn.
+
+    Exposes every registered tool the gateway can actually drive:
+
+    * the gateway-local, context-bound tools (``shell_run`` /
+      ``investigation_start``), which need a :class:`GatewayToolContext`; and
+    * every other registry tool whose configured integrations make it available.
+
+    Registry tools that bind to interactive-shell runtime context
+    (``accepts_runtime_context``) are skipped — the gateway cannot supply that
+    context and provides its own ``shell_run`` / ``investigation_start`` instead.
+    No gateway tool requires interactive approval, so any approval flag is
+    stripped before the tool reaches the headless turn.
+    """
+    available = availability_view(resolved_integrations or {})
+    local_names = {tool.name for tool in _GATEWAY_LOCAL_TOOLS}
+
+    registry_tools = [
+        _without_approval(tool)
+        for tool in get_registered_tools()
+        if tool.name not in local_names
+        and not tool.accepts_runtime_context
+        and tool.is_available(available)
+    ]
+    return [*_GATEWAY_LOCAL_TOOLS, *registry_tools]
 
 
 __all__ = [
