@@ -13,9 +13,9 @@ from typing import Protocol
 
 import click
 
+from integrations.telegram.alarms import AlarmDispatcher
+from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.exit_codes import ERROR, SUCCESS
-from platform.notifications.telegram_alarms import AlarmDispatcher
-from platform.notifications.telegram_credentials import load_credentials_from_env
 from tools.watch_dog.config import WatchdogConfig
 from tools.watch_dog.process_monitor import ProcessMonitor, ProcessSample, Sampler
 

@@ -21,8 +21,8 @@ import pytest
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident
 from integrations.hermes.sinks import TelegramSink, TelegramSinkConfig
-from platform.notifications.telegram_alarms import AlarmDispatcher
-from platform.notifications.telegram_credentials import TelegramCredentials
+from integrations.telegram.alarms import AlarmDispatcher
+from integrations.telegram.credentials import TelegramCredentials
 from tests.synthetic.hermes.scenario_loader import (
     SUITE_DIR,
     HermesScenarioFixture,
@@ -47,7 +47,7 @@ def _patch_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
         return True, "", "1"
 
-    monkeypatch.setattr("platform.notifications.telegram_alarms.post_telegram_message", _fake_post)
+    monkeypatch.setattr("integrations.telegram.alarms.post_telegram_message", _fake_post)
     return calls
 
 

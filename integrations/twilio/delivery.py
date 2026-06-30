@@ -1,7 +1,7 @@
 """Twilio SMS delivery helper — posts investigation findings via Twilio SMS.
 
 This module is independent of the WhatsApp integration: WhatsApp delivery
-lives in :mod:`platform.notifications.whatsapp_delivery` and the two share no code.
+lives in :mod:`integrations.whatsapp.delivery` and the two share no code.
 """
 
 from __future__ import annotations

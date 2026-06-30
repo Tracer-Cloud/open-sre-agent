@@ -6,8 +6,8 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from integrations.telegram.alarms import AlarmDispatcher
 from platform.common.task_types import TaskRecord, TaskStatus
-from platform.notifications.telegram_alarms import AlarmDispatcher
 from tools.fleet_monitoring.probe import probe
 
 

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from platform.notifications import discord_delivery
-from platform.notifications.discord_delivery import (
+from integrations.discord import delivery as discord_delivery
+from integrations.discord.delivery import (
     create_discord_thread,
     post_discord_message,
     send_discord_report,
@@ -241,7 +241,7 @@ class TestDelegatesToSharedTransport:
     caught immediately."""
 
     def test_module_does_not_import_httpx(self) -> None:
-        # Reuse the module-level ``from platform.notifications import discord_delivery``
+        # Reuse the module-level ``from integrations.discord_delivery import delivery as discord_delivery`` (renamed for cleanliness)
         # to avoid importing the same module via both ``import`` and
         # ``from import`` styles (CodeQL py/import-and-import-from).
         assert not hasattr(discord_delivery, "httpx"), (
@@ -258,7 +258,7 @@ class TestDelegatesToSharedTransport:
             calls.append({"url": url, "payload": payload, **kw})
             return DeliveryResponse(ok=True, status_code=200, data={"id": "m-via-helper"})
 
-        monkeypatch.setattr("platform.notifications.discord_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("integrations.discord.delivery.post_json", _stub_post_json)
         ok, _err, mid = post_discord_message("c1", [], "tok", content="hi")
         assert ok is True
         assert mid == "m-via-helper"
@@ -275,7 +275,7 @@ class TestDelegatesToSharedTransport:
             captured["payload"] = payload
             return DeliveryResponse(ok=True, status_code=201, data={"id": "thread-9"})
 
-        monkeypatch.setattr("platform.notifications.discord_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("integrations.discord.delivery.post_json", _stub_post_json)
         ok, _err, tid = create_discord_thread("c1", "m1", "Investigation", "tok")
         assert ok is True
         assert tid == "thread-9"
@@ -332,7 +332,7 @@ class TestDiscordNonJsonBody:
         from platform.notifications.delivery_transport import DeliveryResponse
 
         monkeypatch.setattr(
-            "platform.notifications.discord_delivery.post_json",
+            "integrations.discord.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(
                 ok=True,
                 status_code=502,
@@ -353,7 +353,7 @@ class TestDiscordNonJsonBody:
         from platform.notifications.delivery_transport import DeliveryResponse
 
         monkeypatch.setattr(
-            "platform.notifications.discord_delivery.post_json",
+            "integrations.discord.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(
                 ok=True,
                 status_code=502,
@@ -377,7 +377,7 @@ class TestDiscordExceptionRedaction:
         leak_msg = f"connect failed with {token}"
 
         monkeypatch.setattr(
-            "platform.notifications.discord_delivery.post_json",
+            "integrations.discord.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
         ok, error, message_id = discord_delivery.post_discord_message(
@@ -397,7 +397,7 @@ class TestDiscordExceptionRedaction:
         leak_msg = f"connect failed with {token}"
 
         monkeypatch.setattr(
-            "platform.notifications.discord_delivery.post_json",
+            "integrations.discord.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
         ok, error = discord_delivery.send_discord_report(
@@ -418,10 +418,10 @@ class TestDiscordExceptionLogRedaction:
         leak_msg = f"connect failed with {token}"
 
         monkeypatch.setattr(
-            "platform.notifications.discord_delivery.post_json",
+            "integrations.discord.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
-        with caplog.at_level(logging.WARNING, logger="platform.notifications.discord_delivery"):
+        with caplog.at_level(logging.WARNING, logger="integrations.discord.delivery"):
             discord_delivery.post_discord_message("chan-1", [{"title": "Alert"}], token)
 
         joined = " ".join(rec.getMessage() for rec in caplog.records)

@@ -6,8 +6,8 @@ a string key (e.g. a threshold name or incident fingerprint) and suppresses
 repeat deliveries for the same key within the cooldown window.
 
 Credential resolution lives in
-:mod:`platform.notifications.telegram_credentials`; raw transport in
-:mod:`platform.notifications.telegram_delivery`. This module owns only the
+:mod:`integrations.telegram.credentials`; raw transport in
+:mod:`integrations.telegram.delivery`. This module owns only the
 throttling + dispatch policy.
 """
 
@@ -17,12 +17,12 @@ import logging
 import threading
 import time
 
-from platform.common.truncation import truncate
-from platform.notifications.telegram_credentials import TelegramCredentials
-from platform.notifications.telegram_delivery import (
+from integrations.telegram.credentials import TelegramCredentials
+from integrations.telegram.delivery import (
     post_telegram_message,
     truncate_for_telegram_html,
 )
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 
