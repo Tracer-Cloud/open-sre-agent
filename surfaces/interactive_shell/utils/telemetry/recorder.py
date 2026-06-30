@@ -16,7 +16,9 @@ from surfaces.interactive_shell.utils.telemetry.config import PromptLogConfig
 from surfaces.interactive_shell.utils.telemetry.integration_snapshot import (
     build_turn_integration_snapshot,
 )
-from surfaces.interactive_shell.utils.telemetry.sinks.local_jsonl import append_prompt_log_record
+from surfaces.interactive_shell.utils.telemetry.sinks.local_jsonl import (
+    append_prompt_log_record,
+)
 from surfaces.interactive_shell.utils.telemetry.sinks.posthog_ai import capture_ai_generation
 
 _SUPPORTED_TURN_KINDS = frozenset({"agent", "follow_up", "new_alert", "background_task"})

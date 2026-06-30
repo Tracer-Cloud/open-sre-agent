@@ -50,14 +50,11 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # to be burned down by extracting shared runtime primitives out of
         # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
         "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
-        # Telegram delivery reuses the watch-dog alarm dispatch primitive
-        # (same lineage as the Hermes Telegram sink below).
-        "integrations.telegram.tools.telegram_send_message_tool.delivery -> tools.watch_dog.alarms",
-        # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
-        "integrations.hermes.sinks -> tools.watch_dog.alarms",
-        # Integration setup UX still reaches into the CLI wizard.
-        "integrations.cli -> surfaces.cli.wizard.integration_health",
-        # tools/interactive_shell — pre-existing cross-layer reuse migrated from interactive_shell -> surfaces.interactive_shell (T-1 #3299). Burn down by extracting the shared subprocess-runner + execution-confirm primitives into surfaces/shared/.
+        # tools/interactive_shell action tools reach UP into surfaces/interactive_shell
+        # for runtime / command_registry / UI primitives. Clears when the action
+        # tools themselves are refactored to be UI-agnostic (e.g. return
+        # "approval-required" sentinels instead of calling execution_confirm
+        # directly) so the surface owns its own confirmation UX.
         "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
         "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime",
         "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",

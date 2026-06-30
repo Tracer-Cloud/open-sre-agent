@@ -11,6 +11,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from platform.common.errors import OpenSREError
+from platform.notifications.telegram_alarms import AlarmDispatcher
+from platform.notifications.telegram_credentials import load_credentials_from_env
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )
@@ -26,7 +28,6 @@ from surfaces.interactive_shell.ui import (
 )
 from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
 from tools.fleet_monitoring.probe import pid_exists
-from tools.watch_dog.alarms import AlarmDispatcher, load_credentials_from_env
 from tools.watch_dog.monitor import start_watchdog_daemon_thread
 
 _PID_IN_COMMAND_RE = re.compile(r"pid=(\d+)")

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.tool_framework.utils.github_repo_scope import (
+from integrations.github.repo_scope import (
     apply_github_repo_scope,
     detect_git_remote_repo_scope,
     infer_github_repo_scope,
@@ -90,14 +90,14 @@ def test_infer_github_repo_scope_uses_github_repository_env() -> None:
 
 
 def test_detect_git_remote_repo_scope_parses_https_remote() -> None:
-    with patch("core.tool_framework.utils.github_repo_scope.subprocess.run") as run:
+    with patch("integrations.github.repo_scope.subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout="https://github.com/org/repo.git\n")
         assert detect_git_remote_repo_scope("/tmp/repo") == ("org", "repo")
     run.assert_called_once()
 
 
 def test_detect_git_remote_repo_scope_parses_ssh_remote() -> None:
-    with patch("core.tool_framework.utils.github_repo_scope.subprocess.run") as run:
+    with patch("integrations.github.repo_scope.subprocess.run") as run:
         run.return_value = MagicMock(returncode=0, stdout="git@github.com:org/repo.git\n")
         assert detect_git_remote_repo_scope() == ("org", "repo")
 

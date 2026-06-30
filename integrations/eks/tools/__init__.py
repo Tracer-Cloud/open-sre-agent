@@ -333,7 +333,7 @@ def describe_eks_cluster(
 from typing import cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import eks_available_or_backend
+from integrations.eks.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 
@@ -453,7 +453,7 @@ def get_eks_events(
 
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.eks_workload_helper import extract_cluster_params
+from integrations.eks.workload_helper import extract_cluster_params
 
 logger = logging.getLogger(__name__)
 
@@ -545,7 +545,7 @@ def list_eks_clusters(
 
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.eks_workload_helper import extract_workload_params
+from integrations.eks.workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
 
@@ -748,8 +748,8 @@ def list_eks_namespaces(
 from pydantic import BaseModel, Field
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import eks_available_or_backend
-from core.tool_framework.utils.eks_workload_helper import extract_workload_params
+from integrations.eks.availability import eks_available_or_backend
+from integrations.eks.workload_helper import extract_workload_params
 
 logger = logging.getLogger(__name__)
 
@@ -917,7 +917,7 @@ def list_eks_pods(
 
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import eks_available_or_backend
+from integrations.eks.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 
@@ -1161,7 +1161,7 @@ def get_eks_nodegroup_health(
 
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import eks_available_or_backend
+from integrations.eks.availability import eks_available_or_backend
 
 logger = logging.getLogger(__name__)
 

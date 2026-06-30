@@ -6,8 +6,8 @@ from typing import Any
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.github_helpers import github_creds, github_source_available
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
+from integrations.github.helpers import github_creds, github_source_available
 
 
 def _github_repository_available(sources: dict[str, dict]) -> bool:

@@ -7,8 +7,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from platform.common.task_types import TaskRecord, TaskStatus
+from platform.notifications.telegram_alarms import AlarmDispatcher
 from tools.fleet_monitoring.probe import probe
-from tools.watch_dog.alarms import AlarmDispatcher
 
 
 def run_watchdog(

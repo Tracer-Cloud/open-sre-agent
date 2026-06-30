@@ -21,7 +21,8 @@ from integrations.hermes.agent import HermesAgent
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident
 from integrations.hermes.sinks import TelegramSink
-from tools.watch_dog.alarms import AlarmCredentials, AlarmDispatcher
+from platform.notifications.telegram_alarms import AlarmDispatcher
+from platform.notifications.telegram_credentials import TelegramCredentials
 
 pytestmark = pytest.mark.synthetic
 
@@ -64,7 +65,7 @@ def _patch_telegram(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append({"chat_id": chat_id, "text": text, "bot_token": bot_token})
         return True, "", "1"
 
-    monkeypatch.setattr("tools.watch_dog.alarms.post_telegram_message", _fake_post)
+    monkeypatch.setattr("platform.notifications.telegram_alarms.post_telegram_message", _fake_post)
     return calls
 
 
@@ -79,7 +80,7 @@ def test_polling_conflict_dispatches_warning_burst_to_telegram(
     when a single subsystem floods.
     """
     calls = _patch_telegram(monkeypatch)
-    creds = AlarmCredentials(bot_token="tok", chat_id="chat-1")
+    creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
     sink = TelegramSink(dispatcher)
 
@@ -116,7 +117,7 @@ def test_polling_conflict_dispatches_warning_burst_to_telegram(
 def test_distinct_fingerprints_all_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Different incident fingerprints bypass cooldown, so each gets sent."""
     calls = _patch_telegram(monkeypatch)
-    creds = AlarmCredentials(bot_token="tok", chat_id="chat-1")
+    creds = TelegramCredentials(bot_token="tok", chat_id="chat-1")
     dispatcher = AlarmDispatcher(creds, cooldown_seconds=300.0)
     sink = TelegramSink(dispatcher)
 

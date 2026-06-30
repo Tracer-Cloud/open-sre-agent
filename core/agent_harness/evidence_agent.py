@@ -30,7 +30,7 @@ from core.agent_harness.session.integrations_cache import (
     merge_resolved_integrations,
 )
 from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
-from core.tool_framework.utils.github_repo_scope import (
+from integrations.github.repo_scope import (
     apply_github_repo_scope,
     infer_github_repo_scope,
 )

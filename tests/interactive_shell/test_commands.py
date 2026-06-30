@@ -1374,7 +1374,9 @@ class TestInvestigateFileCommand:
     def test_missing_arg_in_tty_opens_interactive_menu(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from surfaces.interactive_shell.command_registry import investigation as investigation_cmd
+        from surfaces.interactive_shell.command_registry import (
+            investigation as investigation_cmd,
+        )
 
         picks = iter(["generic"])
         captured: list[str] = []
@@ -1411,7 +1413,9 @@ class TestInvestigateFileCommand:
     def test_tty_investigate_menu_browse_path_runs_custom_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from surfaces.interactive_shell.command_registry import investigation as investigation_cmd
+        from surfaces.interactive_shell.command_registry import (
+            investigation as investigation_cmd,
+        )
 
         alert_file = tmp_path / "custom_alert.json"
         alert_file.write_text('{"alert_name": "custom"}', encoding="utf-8")

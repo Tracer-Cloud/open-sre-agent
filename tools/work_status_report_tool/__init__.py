@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.github_helpers import github_creds, github_source_available
 from integrations.github.client import resolve_github_token
+from integrations.github.helpers import github_creds, github_source_available
 from integrations.github.tools.work_status import list_github_work_items, summarize_github_pr_status
 from integrations.github.tools.workflow import build_work_status_report
 

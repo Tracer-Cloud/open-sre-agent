@@ -12,12 +12,12 @@ import logging
 from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import ec2_available_or_backend
-from core.tool_framework.utils.aws_topology_helper import (
+from integrations.aws.aws_sdk_client import execute_aws_sdk_call
+from integrations.aws.topology_helper import (
     build_elb_summary,
     extract_target_health_params,
 )
-from integrations.aws.aws_sdk_client import execute_aws_sdk_call
+from integrations.ec2.availability import ec2_available_or_backend
 
 logger = logging.getLogger(__name__)
 
