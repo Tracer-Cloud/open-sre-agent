@@ -58,6 +58,17 @@ async def handle_polled_inbound_telegram_message(
         if session is None:
             return
 
+        preview = event.text.replace("\n", " ").strip()
+        if len(preview) > 80:
+            preview = f"{preview[:77]}..."
+        logger.info(
+            "inbound user=%s chat=%s session=%s text=%r",
+            event.user_id,
+            event.chat_id,
+            session.session_id[:8],
+            preview,
+        )
+
         sink = GatewayOutputSink(
             client=client,
             chat_id=event.chat_id,

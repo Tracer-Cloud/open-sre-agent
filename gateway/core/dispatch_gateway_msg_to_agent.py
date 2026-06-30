@@ -102,6 +102,9 @@ def dispatch_gateway_msg_to_agent(
             return failed_turn_result()
 
     logger.info(
-        "[gateway] turn complete answered=%s intent=%s", result.answered, result.final_intent
+        "turn complete chat=%s answered=%s intent=%s",
+        chat_id,
+        result.answered,
+        result.final_intent,
     )
     return result
