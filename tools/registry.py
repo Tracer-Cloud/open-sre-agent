@@ -38,6 +38,8 @@ _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.datadog.tools",
     "integrations.eks.tools",
     "integrations.elasticsearch.tools",
+    "integrations.github.tools",
+    "integrations.gitlab.tools",
     "integrations.google_docs.tools",
     "integrations.grafana.tools",
     "integrations.groundcover.tools",
@@ -91,7 +93,14 @@ _SKIP_MODULE_NAMES = {
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
-_SKILL_GUIDANCE_FILES = (Path(__file__).resolve().parent / "github" / "workflow" / "SKILL.md",)
+_SKILL_GUIDANCE_FILES = (
+    Path(__file__).resolve().parent.parent
+    / "integrations"
+    / "github"
+    / "tools"
+    / "workflow"
+    / "SKILL.md",
+)
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.

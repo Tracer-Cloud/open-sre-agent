@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.github.tools.search_code import search_github_code
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.github.search_code import search_github_code
 
 
 class TestGitHubSearchCodeToolContract(BaseToolContract):
@@ -57,7 +57,9 @@ def test_run_happy_path() -> None:
     with (
         patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
         patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("tools.github.search_code.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.search_code.call_github_mcp_tool", return_value=fake_result
+        ),
     ):
         result = search_github_code(
             owner="org",
@@ -84,7 +86,9 @@ def test_run_tool_error() -> None:
     with (
         patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
         patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("tools.github.search_code.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.search_code.call_github_mcp_tool", return_value=fake_result
+        ),
     ):
         result = search_github_code(
             owner="org",

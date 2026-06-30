@@ -98,7 +98,7 @@ def get_github_repository(
             exc,
             tool_name="get_github_repository",
             source="github",
-            component="tools.github.repository",
+            component="integrations.github.tools.repository",
             method="GitHubRestClient.request",
             extras={"owner": owner, "repo": repo},
         )

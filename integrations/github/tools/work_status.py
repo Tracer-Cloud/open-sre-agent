@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
-from tools.github.workflow import (
+from integrations.github.tools.workflow import (
     GitHubIssueMutationProposal,
     PullRequestStatus,
     SecurityAlert,

@@ -8,7 +8,11 @@ from typing import Any
 from integrations.gitlab import (
     get_gitlab_file,
 )
-from tools.gitlab_commits_tool import _gitlab_available, _gl_creds, _resolve_config
+from integrations.gitlab.tools.gitlab_commits_tool import (
+    _gitlab_available,
+    _gl_creds,
+    _resolve_config,
+)
 from tools.tool_decorator import tool
 from tools.utils.code_host_unavailable import code_host_unavailable_payload
 

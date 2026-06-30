@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from tools.github.workflow.models import CommunityFollowup
+from integrations.github.tools.workflow.models import CommunityFollowup
 
 _ISSUE_NUMBER_RE = re.compile(r"/issues/(?P<number>\d+)(?:$|[#?])")
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from integrations.github.client import GitHubApiError
+from integrations.github.tools.repository import get_github_repository
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.github.repository import get_github_repository
 
 
 class TestGetGitHubRepositoryToolContract(BaseToolContract):
@@ -63,7 +63,7 @@ def test_run_happy_path() -> None:
         "disabled": False,
     }
     with patch(
-        "tools.github.repository.GitHubRestClient.request",
+        "integrations.github.tools.repository.GitHubRestClient.request",
         return_value=payload,
     ):
         result = get_github_repository(owner="Tracer-Cloud", repo="opensre", github_token="tok")
@@ -75,7 +75,7 @@ def test_run_happy_path() -> None:
 
 def test_run_api_error() -> None:
     with patch(
-        "tools.github.repository.GitHubRestClient.request",
+        "integrations.github.tools.repository.GitHubRestClient.request",
         side_effect=GitHubApiError("not found", status_code=404, path="/repos/o/r"),
     ):
         result = get_github_repository(owner="o", repo="r", github_token="tok")

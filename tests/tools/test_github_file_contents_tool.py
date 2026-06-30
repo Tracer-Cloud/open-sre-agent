@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from integrations.github.tools.file_contents import get_github_file_contents
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.github.file_contents import get_github_file_contents
 
 
 class TestGitHubFileContentsToolContract(BaseToolContract):
@@ -66,7 +66,9 @@ def test_run_happy_path() -> None:
     with (
         patch("tools.utils.github_helpers.github_mcp_config_from_env", return_value=None),
         patch("tools.utils.github_helpers.build_github_mcp_config", return_value=mock_config),
-        patch("tools.github.file_contents.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.file_contents.call_github_mcp_tool", return_value=fake_result
+        ),
     ):
         result = get_github_file_contents(
             owner="org",

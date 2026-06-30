@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from tools.github.workflow.models import PullRequestStatus, WorkItem, WorkStatusReport
+from integrations.github.tools.workflow.models import PullRequestStatus, WorkItem, WorkStatusReport
 
 
 def _as_dict(item: WorkItem | PullRequestStatus | dict[str, Any]) -> dict[str, Any]:

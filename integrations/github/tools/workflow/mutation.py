@@ -6,7 +6,10 @@ import hashlib
 import json
 from typing import Any
 
-from tools.github.workflow.models import GitHubIssueMutationProposal, IssueMutationOperation
+from integrations.github.tools.workflow.models import (
+    GitHubIssueMutationProposal,
+    IssueMutationOperation,
+)
 
 
 def _proposal_digest(data: dict[str, Any]) -> str:

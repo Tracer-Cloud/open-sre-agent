@@ -9,6 +9,7 @@ from integrations.mysql import (
     resolve_mysql_config,
 )
 from tools.tool_decorator import tool
+from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(
@@ -31,13 +32,10 @@ def get_mysql_table_stats(
     port: int = 3306,
 ) -> dict[str, Any]:
     """Fetch table statistics for all base tables in the target database."""
-    _db_defaulted = database is None
-    if database is None:
-        database = "mysql"
-    config = resolve_mysql_config(host=host, database=database, port=port)
-    result = get_table_stats(config)
-    if _db_defaulted:
-        result["default_db_warning"] = (
-            "WARNING: No database was specified; defaulted to 'mysql'. Results may not reflect application data."
-        )
-    return result
+    return call_db_tool_with_default_db_warning(
+        database=database,
+        default_db_name="mysql",
+        config_resolver=resolve_mysql_config,
+        resolver_kwargs={"host": host, "port": port},
+        db_caller=get_table_stats,
+    )

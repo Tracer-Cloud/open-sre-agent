@@ -9,6 +9,7 @@ from integrations.mariadb import (
     mariadb_is_available,
 )
 from tools.tool_decorator import tool
+from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(
@@ -29,20 +30,21 @@ def get_mariadb_innodb_status(
     ssl: bool = True,
 ) -> dict[str, Any]:
     """Fetch InnoDB engine status."""
-    _db_defaulted = database is None
-    if database is None:
-        database = "mysql"
-    config = MariaDBConfig(
-        host=host,
-        port=port,
-        database=database,
-        username=username,
-        password=password,
-        ssl=ssl,
-    )
-    result = get_innodb_status(config)
-    if _db_defaulted:
-        result["default_db_warning"] = (
-            "WARNING: No database was specified; defaulted to 'mysql'. Results may not reflect application data."
+
+    def mariadb_config_builder(database: str) -> MariaDBConfig:
+        return MariaDBConfig(
+            host=host,
+            port=port,
+            database=database,
+            username=username,
+            password=password,
+            ssl=ssl,
         )
-    return result
+
+    return call_db_tool_with_default_db_warning(
+        database=database,
+        default_db_name="mysql",
+        config_resolver=mariadb_config_builder,
+        resolver_kwargs={},
+        db_caller=get_innodb_status,
+    )

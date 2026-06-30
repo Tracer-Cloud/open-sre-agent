@@ -328,6 +328,32 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/github/tools/",
+        (
+            "tests/tools/test_github_actions_tool.py",
+            "tests/tools/test_github_commits_tool.py",
+            "tests/tools/test_github_file_contents_tool.py",
+            "tests/tools/test_github_helpers.py",
+            "tests/tools/test_github_issues_tool.py",
+            "tests/tools/test_github_repo_scope.py",
+            "tests/tools/test_github_repository_tool.py",
+            "tests/tools/test_github_repository_tree_tool.py",
+            "tests/tools/test_github_search_code_tool.py",
+            "tests/tools/test_github_workflow_tools.py",
+        ),
+    ),
+    PathRule(
+        "integrations/gitlab/",
+        (
+            "tests/integrations/test_gitlab.py",
+            "tests/tools/test_gitlab_commits_tool.py",
+            "tests/tools/test_gitlab_file_tool.py",
+            "tests/tools/test_gitlab_mrs_tool.py",
+            "tests/tools/test_gitlab_pipelines_tool.py",
+            "tests/e2e/gitlab/",
+        ),
+    ),
+    PathRule(
         "integrations/opsgenie/",
         (
             "tests/integrations/opsgenie/",

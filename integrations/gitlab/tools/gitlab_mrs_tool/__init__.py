@@ -5,37 +5,40 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.gitlab import (
-    get_gitlab_pipelines,
+    get_gitlab_mrs,
 )
-from tools.gitlab_commits_tool import _gitlab_available, _gl_creds, _resolve_config
+from integrations.gitlab.tools.gitlab_commits_tool import (
+    _gitlab_available,
+    _gl_creds,
+    _resolve_config,
+)
 from tools.tool_decorator import tool
 
 
-def _list_gitlab_pipelines_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+def _list_gitlab_mrs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     gl = sources["gitlab"]
     return {
         "project_id": gl["project_id"],
         "updated_after": gl.get("updated_after", ""),
-        "ref": gl.get("ref_name", "main"),
-        "status": "failed",
+        "target_branch": gl.get("target_branch", "main"),
         "per_page": 10,
         **_gl_creds(gl),
     }
 
 
-def _list_gitlab_pipelines_available(sources: dict[str, dict]) -> bool:
+def _list_gitlab_mrs_available(sources: dict[str, dict]) -> bool:
     gl = sources.get("gitlab", {})
     return bool(_gitlab_available(sources) and gl.get("project_id"))
 
 
 @tool(
-    name="list_gitlab_pipelines",
+    name="list_gitlab_mrs",
     source="gitlab",
-    description="List recent CI/CD pipelines for a GitLab project.",
+    description="List recent merge requests for a GitLab project.",
     use_cases=[
-        "Checking whether a failed pipeline caused or coincided with the incident",
-        "Correlating a deployment window with a pipeline that ran around the alert time",
-        "Identifying which CI job failed and on which branch",
+        "Checking whether a recently merged MR introduced a failure",
+        "Correlating an incident window with recent code merges to the target branch",
+        "Identifying open MRs that may have deployed breaking changes",
     ],
     requires=["project_id"],
     surfaces=("investigation", "chat"),
@@ -43,44 +46,41 @@ def _list_gitlab_pipelines_available(sources: dict[str, dict]) -> bool:
         "type": "object",
         "properties": {
             "project_id": {"type": "string"},
-            "ref": {"type": "string", "default": "main"},
+            "target_branch": {"type": "string", "default": "main"},
             "updated_after": {"type": "string"},
-            "status": {"type": "string", "default": "failed"},
             "per_page": {"type": "integer", "default": 10},
             "gitlab_url": {"type": "string"},
             "gitlab_token": {"type": "string"},
         },
         "required": ["project_id"],
     },
-    is_available=_list_gitlab_pipelines_available,
-    extract_params=_list_gitlab_pipelines_extract_params,
+    is_available=_list_gitlab_mrs_available,
+    extract_params=_list_gitlab_mrs_extract_params,
 )
-def list_gitlab_pipelines(
+def list_gitlab_mrs(
     project_id: str,
-    ref: str = "main",
+    target_branch: str = "main",
     updated_after: str = "",
-    status: str = "failed",
     per_page: int = 10,
     gitlab_url: str | None = None,
     gitlab_token: str | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """List recent CI/CD pipelines for a GitLab project."""
+    """List recent merge requests for a GitLab project."""
     config = _resolve_config(gitlab_url, gitlab_token)
     if config is None:
         return {
             "source": "gitlab",
             "available": False,
             "error": "gitlab integration is not configured.",
-            "pipelines": [],
+            "mrs": [],
         }
 
-    result = get_gitlab_pipelines(
+    result = get_gitlab_mrs(
         config=config,
         project_id=project_id,
-        ref=ref,
-        status=status,
+        target_branch=target_branch,
         updated_after=updated_after,
         per_page=per_page,
     )
-    return {"source": "gitlab", "available": True, "pipelines": result}
+    return {"source": "gitlab", "available": True, "mrs": result}

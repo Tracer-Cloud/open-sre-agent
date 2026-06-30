@@ -325,14 +325,14 @@ def _github_repository_case() -> ToolFailureCase:
         from integrations.github.client import GitHubApiError
 
         mp.setattr(
-            "tools.github.repository.GitHubRestClient.request",
+            "integrations.github.tools.repository.GitHubRestClient.request",
             MagicMock(
                 side_effect=GitHubApiError("not found", status_code=404, path="/repos/o/r"),
             ),
         )
 
     def invoke() -> dict[str, Any]:
-        from tools.github.repository import get_github_repository
+        from integrations.github.tools.repository import get_github_repository
 
         return get_github_repository(owner="o", repo="r", github_token="tok")
 

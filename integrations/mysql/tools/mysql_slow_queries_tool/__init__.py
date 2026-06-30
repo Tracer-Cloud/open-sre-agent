@@ -9,6 +9,7 @@ from integrations.mysql import (
     resolve_mysql_config,
 )
 from tools.tool_decorator import tool
+from tools.utils.sql_wrapper import call_db_tool_with_default_db_warning
 
 
 @tool(
@@ -32,13 +33,10 @@ def get_mysql_slow_queries(
     port: int = 3306,
 ) -> dict[str, Any]:
     """Fetch slow query statistics above threshold_ms mean execution time (default 1000ms)."""
-    _db_defaulted = database is None
-    if database is None:
-        database = "mysql"
-    config = resolve_mysql_config(host=host, database=database, port=port)
-    result = get_slow_queries(config, threshold_ms=threshold_ms)
-    if _db_defaulted:
-        result["default_db_warning"] = (
-            "WARNING: No database was specified; defaulted to 'mysql'. Results may not reflect application data."
-        )
-    return result
+    return call_db_tool_with_default_db_warning(
+        database=database,
+        default_db_name="mysql",
+        config_resolver=resolve_mysql_config,
+        resolver_kwargs={"host": host, "port": port},
+        db_caller=lambda config: get_slow_queries(config, threshold_ms=threshold_ms),
+    )

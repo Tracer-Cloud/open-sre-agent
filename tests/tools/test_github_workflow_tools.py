@@ -12,15 +12,19 @@ from core.execution import (
     execute_tool_calls,
 )
 from core.llm.types import ToolCall
-from tests.tools.conftest import BaseToolContract
-from tools.github.work_status import (
+from integrations.github.tools.work_status import (
     execute_github_issue_mutation,
     list_github_security_alerts,
     list_github_work_items,
     propose_github_issue_mutation_from_slack,
     summarize_github_pr_status,
 )
-from tools.github.workflow import GitHubApiError, GitHubRestClient, build_work_status_report
+from integrations.github.tools.workflow import (
+    GitHubApiError,
+    GitHubRestClient,
+    build_work_status_report,
+)
+from tests.tools.conftest import BaseToolContract
 from tools.registered_tool import RegisteredTool
 from tools.work_status_report_tool import generate_work_status_report
 
