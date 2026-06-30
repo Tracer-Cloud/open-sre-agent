@@ -1,4 +1,4 @@
-"""Tests for tools/watch_dog/alarms.py."""
+"""Tests for platform/notifications/telegram_credentials and telegram_alarms."""
 
 from __future__ import annotations
 
