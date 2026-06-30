@@ -76,9 +76,9 @@ def format_prior_action_facts(
         if not text:
             continue
         lower = text.lower()
-        if not any(marker in lower for marker in _ACTION_FACT_MARKERS) and not _VALUE_LINE_RE.search(
-            text
-        ):
+        if not any(
+            marker in lower for marker in _ACTION_FACT_MARKERS
+        ) and not _VALUE_LINE_RE.search(text):
             continue
         facts.append(text)
 

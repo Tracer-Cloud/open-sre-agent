@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from platform.notifications.slack_delivery import send_slack_webhook_message
+from integrations.slack.delivery import send_slack_webhook_message
 from tools.slack_send_message_tool.models import SlackDeliveryTarget
 
 
