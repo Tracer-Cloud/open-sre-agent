@@ -23,9 +23,9 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import DummyOutput
 
 from core.agent_harness.session import ReplSession
+from platform.terminal import theme as ui_theme
 from platform.terminal.theme import (
     ANSI_RESET,
-    PROMPT_ACCENT_ANSI,
     get_active_theme_name,
     set_active_theme,
 )
@@ -194,9 +194,10 @@ def test_repl_session_prompt_history_backend_matches_prompt_toolkit_history(
 
 
 def test_prompt_message_uses_accent_glyph() -> None:
+    set_active_theme("blue")
     rendered = _prompt_message(ReplSession()).value
 
-    assert PROMPT_ACCENT_ANSI in rendered
+    assert ui_theme.PROMPT_ACCENT_ANSI in rendered
     assert "❯" in rendered
     assert ANSI_RESET in rendered
 

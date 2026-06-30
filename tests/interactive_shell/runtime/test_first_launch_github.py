@@ -10,7 +10,7 @@ from integrations.github_login import GitHubLoginResult
 from integrations.github_mcp import DEFAULT_GITHUB_MCP_TOOLSETS, DEFAULT_GITHUB_MCP_URL
 from integrations.github_mcp_oauth import GitHubDeviceCode
 from platform.analytics import source as analytics_source
-from platform.terminal.theme import DEVICE_CODE_ANSI
+from platform.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime.startup import first_launch_github as flg
 
 
@@ -123,6 +123,7 @@ def test_gate_required_when_stale_github_store_record_has_no_token(
 def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
+    ui_theme.set_active_theme("blue")
     output = io.StringIO()
     code = GitHubDeviceCode(
         device_code="dev-123",
@@ -135,7 +136,7 @@ def test_device_code_prompt_highlights_user_code(monkeypatch: pytest.MonkeyPatch
     flg._show_device_code(_terminal_console(output), code)
 
     rendered = output.getvalue()
-    assert f"{DEVICE_CODE_ANSI}WXYZ-1234" in rendered
+    assert f"{ui_theme.DEVICE_CODE_ANSI}WXYZ-1234" in rendered
 
 
 def test_orchestrator_success_proceeds_and_propagates(monkeypatch: pytest.MonkeyPatch) -> None:

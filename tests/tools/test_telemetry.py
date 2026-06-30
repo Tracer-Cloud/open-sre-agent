@@ -1182,6 +1182,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_issues",
         "search_sentry_issues",
         "shell_run",
+        "slack_send_message",
         "slash_invoke",
         "summarize_community_followups",
         "summarize_github_pr_status",

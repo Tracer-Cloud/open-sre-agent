@@ -13,7 +13,7 @@ from core.events import (
     RuntimeEvent,
     ToolExecutionUpdateEvent,
 )
-from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ToolCall
 from core.messages import (
     BRANCH_SUMMARY_PREFIX,
     BRANCH_SUMMARY_SUFFIX,
@@ -152,28 +152,21 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
     assert result.assistant_response_text == "hello from headless"
 
 
-def test_agent_defaults_to_reasoning_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    class ReasoningLLM:
-        def invoke(self, prompt_or_messages: object) -> LLMResponse:
-            assert isinstance(prompt_or_messages, list)
-            return LLMResponse("reasoned answer")
-
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: ReasoningLLM())
+def test_agent_defaults_to_agent_llm_without_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("reasoned answer")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
 
     agent = Agent(system="sys", tools=[], resolved_integrations={}, max_iterations=1)
     result = agent.run([{"role": "user", "content": "hello"}])
 
     assert result.final_text == "reasoned answer"
     assert result.executed == []
+    assert llm.schema_tool_names == [[]]
 
 
-def test_agent_default_reasoning_llm_rejects_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    class ReasoningLLM:
-        def invoke(self, prompt_or_messages: object) -> LLMResponse:
-            _ = prompt_or_messages
-            return LLMResponse("unused")
-
-    monkeypatch.setattr("core.llm.llm_client.get_llm_for_reasoning", lambda: ReasoningLLM())
+def test_agent_default_agent_llm_receives_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    llm = FakeLLM(iter([_text_response("unused")]))
+    monkeypatch.setattr("core.llm.agent_llm_client.get_agent_llm", lambda: llm)
 
     agent = Agent(
         system="sys",
@@ -182,8 +175,10 @@ def test_agent_default_reasoning_llm_rejects_tools(monkeypatch: pytest.MonkeyPat
         max_iterations=1,
     )
 
-    with pytest.raises(ValueError, match="Pass an explicit tool-calling LLM"):
-        agent.run([{"role": "user", "content": "hello"}])
+    result = agent.run([{"role": "user", "content": "hello"}])
+
+    assert result.final_text == "unused"
+    assert llm.schema_tool_names == [["query_logs"]]
 
 
 def test_immediate_final_answer_executes_no_tools() -> None:
