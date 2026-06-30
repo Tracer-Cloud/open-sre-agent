@@ -248,7 +248,10 @@ def test_try_load_skips_on_configuration_error(mock_load: MagicMock) -> None:
 def test_try_load_skips_when_bot_token_empty(mock_load: MagicMock) -> None:
     mock_load.return_value = GatewaySettings(bot_token="")
     logger = logging.getLogger("gateway.test")
-    assert try_load_gateway_settings_for_startup(
-        logger=logger,
-        respect_auto_start=False,
-    ) is None
+    assert (
+        try_load_gateway_settings_for_startup(
+            logger=logger,
+            respect_auto_start=False,
+        )
+        is None
+    )

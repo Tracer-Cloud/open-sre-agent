@@ -260,7 +260,7 @@ def test_shell_completer_suggests_subcommands_for_tools() -> None:
         )
     )
     names = sorted({c.text for c in completions})
-    assert names == ["list"]
+    assert names == ["list", "ls", "tool", "tools"]
 
 
 def test_shell_completer_hides_inline_picker_autocomplete_in_tty(

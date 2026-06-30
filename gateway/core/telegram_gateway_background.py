@@ -5,90 +5,143 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Protocol
 
+from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings
-from gateway.core.gateway_runner import GatewayRunner
-from gateway.platforms.telegram.poller import TelegramPoller
+from gateway.core.handle_polled_inbound_telegram_msg import (
+    handle_polled_inbound_telegram_message,
+)
+from gateway.core.telegram_poller.client import TelegramBotClient
+from gateway.core.telegram_poller.poller import TelegramPoller
+from gateway.storage import SessionResolver
+
+
+class TelegramPollingRuntime(Protocol):
+    """Runtime resources required by the background polling loop."""
+
+    client: TelegramBotClient
+    session_resolver: SessionResolver
+    approval_service: TelegramApprovalService
+    chat_locks: dict[str, asyncio.Lock]
+    executor: ThreadPoolExecutor
+
+
+InitializeTelegramPollingRuntime = Callable[[GatewaySettings], TelegramPollingRuntime]
+ShutdownTelegramPollingRuntime = Callable[[TelegramPollingRuntime], None]
 
 
 class TelegramGatewayBackground:
-    """Control handle for the background gateway thread."""
+    """Control handle for the background Telegram gateway thread."""
 
-    def __init__(self, *, thread: threading.Thread, stop_event: threading.Event) -> None:
+    def __init__(
+        self,
+        *,
+        thread: threading.Thread,
+        stop_event: threading.Event,
+    ) -> None:
         self._thread = thread
         self._stop_event = stop_event
 
     def stop(self, *, timeout: float = 8.0) -> bool:
-        """Request shutdown and wait for thread termination."""
+        """Request shutdown and return whether the thread stopped."""
         self._stop_event.set()
         self._thread.join(timeout=timeout)
         return not self._thread.is_alive()
 
-    def wait(self, *, timeout: float | None = None) -> None:
+    def wait(self, *, timeout: float | None = None) -> bool:
+        """Wait for the thread and return whether it has stopped."""
         self._thread.join(timeout=timeout)
-
-
-def run_telegram_polling_loop(
-    settings: GatewaySettings,
-    stop_event: threading.Event,
-    logger: logging.Logger,
-) -> None:
-    """Main polling loop – must be extremely resilient."""
-    runner = GatewayRunner(settings)
-
-    # Initialize the daemonized event loop for the Telegram polling
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    try:
-        runner.bind_loop(loop)
-        runner.clear_webhook()
-
-        initialized_telegram_poller = TelegramPoller(settings.bot_token)
-
-        async def process_inbound_telegram_events() -> None:
-            while not stop_event.is_set():
-                try:
-                    inbound_telegram_events = await asyncio.to_thread(
-                        initialized_telegram_poller.poll_once
-                    )
-                    for event in inbound_telegram_events:
-                        await runner.handle_inbound(event)
-                    await asyncio.sleep(0)
-                except Exception:
-                    logger.error("Error in Telegram polling loop", exc_info=True)
-                    await asyncio.sleep(2)
-
-        loop.run_until_complete(process_inbound_telegram_events())
-
-    except Exception:
-        logger.critical("Fatal error in gateway thread", exc_info=True)
-    finally:
-        try:
-            runner.shutdown()
-        except Exception:
-            logger.error("Error during runner shutdown", exc_info=True)
-        try:
-            loop.close()
-        except Exception:
-            pass
+        return not self._thread.is_alive()
 
 
 def start_telegram_gateway_background(
     *,
     settings: GatewaySettings,
     logger: logging.Logger,
+    initialize_runtime: InitializeTelegramPollingRuntime,
+    shutdown_runtime: ShutdownTelegramPollingRuntime,
 ) -> TelegramGatewayBackground:
-    """Start the Telegram gateway polling loop in a background thread."""
+    """Start Telegram polling in a background thread."""
     stop_event = threading.Event()
 
     thread = threading.Thread(
-        target=run_telegram_polling_loop,
-        args=(settings, stop_event, logger),
-        name="TelegramGateway-PollingLoop-v1",
+        target=_run_telegram_gateway_thread,
+        kwargs={
+            "settings": settings,
+            "stop_event": stop_event,
+            "logger": logger,
+            "initialize_runtime": initialize_runtime,
+            "shutdown_runtime": shutdown_runtime,
+        },
+        name="TelegramGatewayThread",
         daemon=True,
     )
     thread.start()
 
-    logger.info("[telegram-gateway] poll mode started successfully")
+    logger.info("[telegram-gateway] polling started")
     return TelegramGatewayBackground(thread=thread, stop_event=stop_event)
+
+
+def _run_telegram_gateway_thread(
+    *,
+    settings: GatewaySettings,
+    stop_event: threading.Event,
+    logger: logging.Logger,
+    initialize_runtime: InitializeTelegramPollingRuntime,
+    shutdown_runtime: ShutdownTelegramPollingRuntime,
+) -> None:
+    """Own Telegram polling resources for the lifetime of the thread."""
+    resources = initialize_runtime(settings)
+
+    try:
+        asyncio.run(
+            _poll_telegram_until_stopped(
+                settings=settings,
+                stop_event=stop_event,
+                logger=logger,
+                resources=resources,
+            )
+        )
+    except Exception:
+        logger.critical("Fatal error in Telegram gateway thread", exc_info=True)
+    finally:
+        shutdown_runtime(resources)
+
+
+async def _poll_telegram_until_stopped(
+    *,
+    settings: GatewaySettings,
+    stop_event: threading.Event,
+    logger: logging.Logger,
+    resources: TelegramPollingRuntime,
+) -> None:
+    """Poll Telegram updates and dispatch them until shutdown is requested."""
+    poller = TelegramPoller(settings.bot_token)
+    turn_semaphore = asyncio.Semaphore(settings.max_concurrent_turns)
+
+    resources.client.delete_webhook()
+
+    while not stop_event.is_set():
+        try:
+            events = await asyncio.to_thread(poller.poll_once)
+            loop = asyncio.get_running_loop()
+
+            for event in events:
+                await handle_polled_inbound_telegram_message(
+                    event,
+                    client=resources.client,
+                    session_resolver=resources.session_resolver,
+                    approval_service=resources.approval_service,
+                    settings=settings,
+                    executor=resources.executor,
+                    chat_locks=resources.chat_locks,
+                    turn_semaphore=turn_semaphore,
+                    loop=loop,
+                )
+
+        except Exception:
+            logger.error("Error while polling Telegram updates", exc_info=True)
+            await asyncio.to_thread(stop_event.wait, 2)

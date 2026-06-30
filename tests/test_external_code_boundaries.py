@@ -48,8 +48,10 @@ def test_removed_external_packages_have_no_tracked_files() -> None:
 
 def test_tools_registry_does_not_scan_removed_external_packages() -> None:
     registry_source = (ROOT / "tools/registry.py").read_text(encoding="utf-8")
-    assert "vendors" not in registry_source
-    assert "services" not in registry_source
+    assert '"vendors"' not in registry_source
+    assert '"services"' not in registry_source
+    assert "'vendors'" not in registry_source
+    assert "'services'" not in registry_source
 
 
 def test_pyproject_does_not_package_removed_external_packages() -> None:

@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 
 from gateway.config.get_gateway_settings import TelegramInboundMessage
-from gateway.platforms.telegram.parse_telegram_update import parse_update
+from gateway.core.telegram_poller.parse_telegram_update import parse_update
 
 logger = logging.getLogger(__name__)
 
@@ -118,4 +118,4 @@ class TelegramPoller:
         logger.info("[telegram-gateway] starting long-poll loop")
         while True:
             for event in self.poll_once():
-                handler(event) 
+                handler(event)

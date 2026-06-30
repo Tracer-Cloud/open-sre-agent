@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
+from core.agent_harness.headless import StaticReasoningClientProvider
 from core.agent_harness.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_results import ShellTurnResult
@@ -17,6 +19,18 @@ from gateway.core.error_handling import (
     report_turn_failure,
 )
 from gateway.core.gateway_output_sink import GatewayOutputSink
+
+
+def _gateway_reasoning_provider(logger: logging.Logger) -> StaticReasoningClientProvider:
+    """Resolve the configured reasoning client for non-interactive gateway turns."""
+    try:
+        from core.llm.llm_client import get_llm_for_reasoning
+    except Exception as exc:
+        logger.exception("[gateway] reasoning client unavailable: %s", exc)
+        return StaticReasoningClientProvider()
+
+    client: Any | None = get_llm_for_reasoning()
+    return StaticReasoningClientProvider(client=client)
 
 
 def dispatch_gateway_msg_to_agent(
@@ -39,6 +53,7 @@ def dispatch_gateway_msg_to_agent(
             confirm_fn=lambda p: approval_service.wait_for_confirmation(chat_id=chat_id, prompt=p),
             is_tty=False,
             output=sink,
+            reasoning=_gateway_reasoning_provider(logger),
             gather_enabled=True,
             tool_hooks=hooks,
         )
@@ -87,7 +102,6 @@ def dispatch_gateway_msg_to_agent(
             return failed_turn_result()
 
     logger.info(
-        "[gateway] turn complete answered=%s intent=%s",
-        result.answered, result.final_intent
+        "[gateway] turn complete answered=%s intent=%s", result.answered, result.final_intent
     )
     return result

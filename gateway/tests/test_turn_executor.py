@@ -93,7 +93,11 @@ def test_dispatch_gateway_msg_to_agent_reports_empty_response(
 
 
 @patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
-def test_dispatch_gateway_msg_to_agent_passes_sink_and_hooks(mock_turn: MagicMock) -> None:
+@patch("gateway.core.dispatch_gateway_msg_to_agent._gateway_reasoning_provider")
+def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
+    mock_reasoning: MagicMock,
+    mock_turn: MagicMock,
+) -> None:
     mock_turn.return_value = ShellTurnResult(
         final_intent="gather_and_answer",
         action_result=ToolCallingTurnResult(0, 0, 0, False, False),
@@ -105,6 +109,7 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_and_hooks(mock_turn: MagicMoc
     approval = MagicMock(spec=TelegramApprovalService)
     approval.hooks.return_value = MagicMock()
     approval.wait_for_confirmation.return_value = "yes"
+    mock_reasoning.return_value = MagicMock()
 
     dispatch_gateway_msg_to_agent(
         text="hi",
@@ -121,12 +126,16 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_and_hooks(mock_turn: MagicMoc
     assert kwargs["session"] is session
     assert kwargs["is_tty"] is False
     assert kwargs["output"] is sink
+    assert kwargs["reasoning"] is mock_reasoning.return_value
     assert kwargs["gather_enabled"] is True
     assert kwargs["tool_hooks"] is approval.hooks.return_value
+    mock_reasoning.assert_called_once()
 
 
 @patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
-def test_dispatch_gateway_msg_to_agent_finalizes_unanswered_action_response(mock_turn: MagicMock) -> None:
+def test_dispatch_gateway_msg_to_agent_finalizes_unanswered_action_response(
+    mock_turn: MagicMock,
+) -> None:
     mock_turn.return_value = ShellTurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(

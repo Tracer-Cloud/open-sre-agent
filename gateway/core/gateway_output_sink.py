@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.platforms.telegram.client import TelegramBotClient
+from gateway.core.telegram_poller.client import TelegramBotClient
 from platform.common.truncation import truncate
 
 _MESSAGE_LIMIT = 4096

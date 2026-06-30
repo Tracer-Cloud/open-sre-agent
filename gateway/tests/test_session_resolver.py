@@ -31,7 +31,10 @@ def test_resolve_warms_and_injects_gateway_chat_context(
     session.warm_resolved_integrations.side_effect = _warm
     mock_bootstrap_spec.return_value.session = session
 
-    with patch.object(resolver._storage, "open_session"), patch.object(resolver._storage, "reopen_session"):
+    with (
+        patch.object(resolver._storage, "open_session"),
+        patch.object(resolver._storage, "reopen_session"),
+    ):
         resolved = resolver.resolve(user_id="42", chat_id="99")
 
     session.warm_resolved_integrations.assert_called_once()
