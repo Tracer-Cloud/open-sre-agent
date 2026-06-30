@@ -100,6 +100,18 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/mysql/",
+        (
+            "tests/integrations/mysql/",
+            "tests/tools/test_mysql_current_processes_tool.py",
+            "tests/tools/test_mysql_replication_status_tool.py",
+            "tests/tools/test_mysql_server_status_tool.py",
+            "tests/tools/test_mysql_slow_queries_tool.py",
+            "tests/tools/test_mysql_table_stats_tool.py",
+            "tests/e2e/mysql/",
+        ),
+    ),
+    PathRule(
         "integrations/opsgenie/",
         (
             "tests/integrations/opsgenie/",

@@ -41,6 +41,7 @@ _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.incident_io.tools",
     "integrations.jenkins.tools",
     "integrations.jira.tools",
+    "integrations.mysql.tools",
     "integrations.opsgenie.tools",
     "integrations.pagerduty.tools",
     "integrations.prefect.tools",
