@@ -57,6 +57,8 @@ RULES: tuple[PathRule, ...] = (
             "tests/tools/test_eks_node_health_tool.py",
             "tests/tools/test_eks_nodegroup_health_tool.py",
             "tests/tools/test_eks_pod_logs_tool.py",
+            "tests/tools/test_telemetry.py",
+            "tests/benchmarks/cloudopsbench/tests/test_bench_agent.py",
         ),
     ),
     PathRule(
@@ -72,6 +74,7 @@ RULES: tuple[PathRule, ...] = (
             "tests/integrations/google_docs/",
             "tests/test_google_docs.py",
             "tests/tools/test_google_docs_create_report_tool.py",
+            "tests/tools/test_telemetry.py",
         ),
     ),
     PathRule(
