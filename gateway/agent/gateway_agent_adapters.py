@@ -11,15 +11,8 @@ from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
 from core.agent_harness.headless import SimpleRunRecord, SimpleRunRecordFactory
-from core.agent_harness.ports import ConfirmFn, ToolEventObserver
 from core.agent_harness.prompts import build_environment_block
 from core.agent_harness.session import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST, ReplSession
-from gateway.agent.gateway_action_tools import (
-    GATEWAY_RESOURCE_KEY,
-    GatewayToolContext,
-    gateway_action_tools,
-)
-from gateway.agent.gateway_output_sink import GatewayOutputSink
 
 _CHARS_PER_TOKEN = 4
 
@@ -159,60 +152,8 @@ class GatewayErrorReporter:
         self._logger.exception("[%s] %s", context, exc)
 
 
-class GatewayToolProvider:
-    """:class:`core.agent_harness.ports.ToolProvider` for gateway-local action tools."""
-
-    def __init__(
-        self,
-        *,
-        session: ReplSession,
-        sink: GatewayOutputSink,
-        chat_id: str,
-        logger: logging.Logger,
-    ) -> None:
-        self._session = session
-        self._sink = sink
-        self._chat_id = chat_id
-        self._logger = logger
-        self._tool_context: GatewayToolContext | None = None
-
-    def action_tools(self, *, confirm_fn: ConfirmFn | None, is_tty: bool | None) -> list[Any]:
-        ctx = GatewayToolContext(
-            session=self._session,
-            sink=self._sink,
-            chat_id=self._chat_id,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            action_already_listed=True,
-        )
-        self._tool_context = ctx
-        return gateway_action_tools(self._session.resolved_integrations_cache)
-
-    def tool_resources(self) -> dict[str, Any]:
-        if self._tool_context is None:
-            return {}
-        return {GATEWAY_RESOURCE_KEY: self._tool_context}
-
-    def observer(self, *, message: str) -> ToolEventObserver:
-        _ = message
-
-        def _observer(kind: str, data: dict[str, Any]) -> None:
-            if kind != "tool_start":
-                return
-            tool_name = str(data.get("name") or "tool").strip()
-            if not tool_name or tool_name == "assistant_handoff":
-                return
-            try:
-                self._sink.set_tool_status(f"Running {tool_name}…")
-            except Exception:
-                self._logger.debug("[gateway] failed to update tool status", exc_info=True)
-
-        return _observer
-
-
 __all__ = [
     "GatewayErrorReporter",
     "GatewayPromptContextProvider",
     "GatewayRunRecordFactory",
-    "GatewayToolProvider",
 ]

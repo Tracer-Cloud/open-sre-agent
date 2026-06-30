@@ -65,7 +65,12 @@ class ShellOutputSink:
 
 
 class ShellToolProvider:
-    """:class:`core.agent_harness.ports.ToolProvider` backed by the shell tool registry."""
+    """:class:`core.agent_harness.ports.ToolProvider` backed by the shell tool registry.
+
+    ``precomputed_action_tools`` lets non-interactive surfaces reuse an action
+    list they already built for their owning agent while still getting the
+    shell runtime ``ToolContext`` resources each turn.
+    """
 
     def __init__(
         self,
@@ -73,10 +78,12 @@ class ShellToolProvider:
         console: Console,
         *,
         request_exit: Callable[[], None] | None = None,
+        precomputed_action_tools: list[Any] | None = None,
     ) -> None:
         self._session = session
         self._console = console
         self._request_exit = request_exit
+        self._precomputed_action_tools = precomputed_action_tools
         self._tool_context: ToolContext | None = None
 
     def action_tools(
@@ -92,6 +99,8 @@ class ShellToolProvider:
             action_already_listed=True,
         )
         self._tool_context = ctx
+        if self._precomputed_action_tools is not None:
+            return list(self._precomputed_action_tools)
         return get_action_tools_from_integrations_context(ctx, resolved_integrations=resolved_integrations)
 
     def tool_resources(self) -> dict[str, Any]:
