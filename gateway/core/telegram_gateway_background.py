@@ -5,32 +5,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from typing import Protocol
 
-from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings
 from gateway.core.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
-from gateway.core.telegram_poller.client import TelegramBotClient
 from gateway.core.telegram_poller.poller import TelegramPoller
-from gateway.storage import SessionResolver
-
-
-class TelegramPollingRuntime(Protocol):
-    """Runtime resources required by the background polling loop."""
-
-    client: TelegramBotClient
-    session_resolver: SessionResolver
-    approval_service: TelegramApprovalService
-    chat_locks: dict[str, asyncio.Lock]
-    executor: ThreadPoolExecutor
-
-
-InitializeTelegramPollingRuntime = Callable[[GatewaySettings], TelegramPollingRuntime]
-ShutdownTelegramPollingRuntime = Callable[[TelegramPollingRuntime], None]
+from gateway.core.telegram_polling_runtime import (
+    InitializeTelegramPollingRuntime,
+    ShutdownTelegramPollingRuntime,
+    TelegramPollingRuntime,
+)
 
 
 class TelegramGatewayBackground:
