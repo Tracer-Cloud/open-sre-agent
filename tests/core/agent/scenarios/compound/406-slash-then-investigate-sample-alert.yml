@@ -40,8 +40,6 @@ response_contract:
   - investigation
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: slash
     ok: true
   - type: alert

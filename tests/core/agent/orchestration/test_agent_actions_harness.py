@@ -145,10 +145,11 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
 
     monkeypatch.setattr(slash_tool, "dispatch_slash", _fake_dispatch)
     harness = ActionExecutionHarness(llm=FakeActionLLM([no_tool_response()]))
+    session = ReplSession()
 
     result = run_action_tool_turn(
         "/sessions",
-        ReplSession(),
+        session,
         harness.console,
         deps=harness.deps,
     )
@@ -156,6 +157,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
     assert result.handled is True
     assert result.planned_count == 1
     assert dispatched == ["/sessions"]
+    assert session.history == [{"type": "slash", "text": "/sessions", "ok": True}]
     # The deterministic path must not consult the action-agent LLM.
     assert harness.llm.invocations == 0
 

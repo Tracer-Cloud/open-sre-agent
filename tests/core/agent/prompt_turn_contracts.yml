@@ -113,9 +113,6 @@
   expected_terminal_response_contains:
     - "sample alert generic"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "run a sample alert"
-      ok: true
     - type: "alert"
       text: "sample:generic"
       ok: true
@@ -132,9 +129,6 @@
   expected_terminal_response_contains:
     - "sample alert generic"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "try a sample alert"
-      ok: true
     - type: "alert"
       text: "sample:generic"
       ok: true
@@ -151,9 +145,6 @@
   expected_terminal_response_contains:
     - "synthetic test rds_postgres:002-connection-exhaustion"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "run synthetic test 002-connection-exhaustion"
-      ok: true
     - type: "synthetic_test"
       text: "rds_postgres:002-connection-exhaustion"
       ok: true
@@ -170,9 +161,6 @@
   expected_terminal_response_contains:
     - "synthetic test rds_postgres:003-storage-full"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "run synthetic test 003-storage-full"
-      ok: true
     - type: "synthetic_test"
       text: "rds_postgres:003-storage-full"
       ok: true
@@ -189,9 +177,6 @@
   expected_terminal_response_contains:
     - "synthetic test rds_postgres:005-failover"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "run synthetic test 005 now"
-      ok: true
     - type: "synthetic_test"
       text: "rds_postgres:005-failover"
       ok: true
@@ -208,9 +193,6 @@
   expected_terminal_response_contains:
     - "synthetic test rds_postgres:004-cpu-saturation-bad-query"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "launch synthetic test 004-cpu-saturation-bad-query"
-      ok: true
     - type: "synthetic_test"
       text: "rds_postgres:004-cpu-saturation-bad-query"
       ok: true
@@ -227,9 +209,6 @@
   expected_terminal_response_contains:
     - "ran /integrations list"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "show me connected services"
-      ok: true
     - type: "slash"
       text: "/integrations list"
       ok: true
@@ -251,9 +230,6 @@
     - "ran /health"
     - "ran /integrations list"
   expected_session_history_delta:
-    - type: "cli_agent"
-      text: "check the health of my opensre and then show me all connected services"
-      ok: true
     - type: "slash"
       text: "/health"
       ok: true

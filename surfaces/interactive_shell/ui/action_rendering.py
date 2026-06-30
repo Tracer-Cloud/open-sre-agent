@@ -34,6 +34,22 @@ _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     "shell_run": ("shell", "command"),
 }
 
+# Action tools that write their own ``session.history`` row on execution. The
+# observer must not also record a duplicate ``cli_agent`` turn for these.
+_SELF_RECORDING_ACTION_TOOLS: frozenset[str] = frozenset(
+    {
+        "alert_sample",
+        "cli_exec",
+        "code_implement",
+        "investigation_start",
+        "llm_set_provider",
+        "shell_run",
+        "slash_invoke",
+        "synthetic_run",
+        "task_cancel",
+    }
+)
+
 
 def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
     """Return a ``(label, content)`` pair describing a planned tool call."""
@@ -54,7 +70,12 @@ def tool_call_display(tool_name: str, args: dict[str, Any]) -> tuple[str, str]:
 
 
 class ActionRenderObserver:
-    """Agent event observer that records internal planner actions."""
+    """Agent event observer that records planner turns not owned by action tools.
+
+    Self-recording tools (``slash_invoke``, ``shell_run``, etc.) append their own
+    history row; chat turns are recorded later by turn accounting when the
+    assistant runs.
+    """
 
     def __init__(self, *, session: ReplSession, console: Console, message: str) -> None:
         self.session = session
@@ -78,7 +99,7 @@ class ActionRenderObserver:
         name = str(data.get("name", "")).strip()
         if not name or name == "assistant_handoff":
             return
-        if self.planned_count == 0:
+        if self.planned_count == 0 and name not in _SELF_RECORDING_ACTION_TOOLS:
             self.session.record("cli_agent", self.message)
             self._recorded_cli_agent = True
         self.planned_count += 1

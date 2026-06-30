@@ -24,8 +24,6 @@ response_contract:
   must_not_contain: []
 history:
   expected:
-  - type: cli_agent
-    ok: true
   - type: alert
     ok: true
 runs: 1
