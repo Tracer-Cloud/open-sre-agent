@@ -53,8 +53,9 @@ def build_opensre_cli_argv(args: list[str]) -> list[str]:
     When the interactive shell itself was launched through an ``opensre`` entrypoint,
     reuse that entrypoint. Some packaged/script launchers have Python-looking
     executables but still forward ``-m`` to Click, which fails before slash-command
-    Direct ``python -m surfaces.cli`` development runs
-    keep using the module path so child processes run against this checkout.
+    delegates like ``/integrations setup`` can run. Direct ``python -m surfaces.cli``
+    development runs keep using the module path so child processes run against this
+    checkout.
     """
     if entrypoint := _current_opensre_entrypoint():
         return [entrypoint, *args]
