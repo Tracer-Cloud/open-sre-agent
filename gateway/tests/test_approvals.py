@@ -52,3 +52,15 @@ def test_callback_approves_waiter(approval_service: TelegramApprovalService) -> 
     )
     thread.join(timeout=2)
     assert result == ["yes"]
+
+
+def test_wait_for_confirmation_auto_approves_when_gating_disabled(tmp_path) -> None:
+    conn = connect_gateway_db(tmp_path / "state.db")
+    store = ApprovalStore(conn)
+    settings = GatewaySettings(bot_token="tok", gate_side_effects=False)
+    service = TelegramApprovalService(client=_FakeClient(), store=store, settings=settings)
+    try:
+        assert service.wait_for_confirmation(chat_id="42", prompt="Proceed?") == "yes"
+        assert service._waiters == {}
+    finally:
+        conn.close()

@@ -67,6 +67,8 @@ class TelegramApprovalService:
         )
 
     def wait_for_confirmation(self, *, chat_id: str, prompt: str) -> str:
+        if not self._settings.gate_side_effects:
+            return "yes"
         approved = self._prompt_and_wait(
             chat_id=chat_id,
             tool_name="action_confirm",
@@ -105,6 +107,9 @@ class TelegramApprovalService:
                 self._waiters.pop(approval_id, None)
 
     def before_tool_call(self, request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        if not self._settings.gate_side_effects:
+            return BeforeToolCallResult(approved=True)
+
         tool = request.tool
         requires = bool(getattr(tool, "requires_approval", False))
         side_effect = str(getattr(tool, "side_effect_level", "read_only"))

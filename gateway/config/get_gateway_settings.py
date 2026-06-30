@@ -28,7 +28,7 @@ class GatewaySettings(StrictConfigModel):
     allowed_user_ids: list[str] = Field(default_factory=list)
     max_concurrent_turns: int = Field(default=4, ge=1)
     approval_timeout_seconds: int = Field(default=600, ge=1)
-    gate_side_effects: bool = True
+    gate_side_effects: bool = False
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     auto_start_enabled: bool = True
 
@@ -44,7 +44,7 @@ class GatewayEnv(BaseSettings):
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
     gateway_max_concurrent: int = Field(default=4, ge=1)
     gateway_approval_timeout: int = Field(default=600, ge=1)
-    gateway_gate_side_effects: bool = True
+    gateway_gate_side_effects: bool = False
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     gateway_auto_start: bool = True
 

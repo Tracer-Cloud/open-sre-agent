@@ -40,5 +40,6 @@ State lives in `~/.opensre/gateway/state.db`. Conversation transcripts use the n
 | `TELEGRAM_ALLOWED_USERS` | Comma-separated Telegram user ids |
 | `TELEGRAM_GATEWAY_MAX_CONCURRENT` | Parallel turns across chats (default 4) |
 | `TELEGRAM_GATEWAY_AUTO_START` | When `true` (default), `opensre` starts long-poll gateway if `TELEGRAM_BOT_TOKEN` is set |
+| `TELEGRAM_GATEWAY_GATE_SIDE_EFFECTS` | When `true`, shell/investigation and other mutating tools require inline Approve/Deny (default `false` during alpha) |
 
 Pairing via `opensre messaging pair` uses the same integration-store policy as the gateway.
