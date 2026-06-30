@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.opsgenie_tools import OpsGenieAlertDetailTool
+from integrations.opsgenie.tools import OpsGenieAlertDetailTool
 
 
 def _tool() -> OpsGenieAlertDetailTool:
@@ -29,7 +29,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["region"] == "eu"
 
 
-@patch("tools.opsgenie_tools.make_opsgenie_client")
+@patch("integrations.opsgenie.tools.make_opsgenie_client")
 def test_run_returns_alert_and_activity_log(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_alert.return_value = {
@@ -50,7 +50,7 @@ def test_run_returns_alert_and_activity_log(mock_make: MagicMock) -> None:
     assert result["total_log_entries"] == 1
 
 
-@patch("tools.opsgenie_tools.make_opsgenie_client")
+@patch("integrations.opsgenie.tools.make_opsgenie_client")
 def test_run_skips_activity_log_when_disabled(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_alert.return_value = {
@@ -65,7 +65,7 @@ def test_run_skips_activity_log_when_disabled(mock_make: MagicMock) -> None:
     mock_client.get_alert_logs.assert_not_called()
 
 
-@patch("tools.opsgenie_tools.make_opsgenie_client")
+@patch("integrations.opsgenie.tools.make_opsgenie_client")
 def test_run_handles_alert_fetch_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_alert.return_value = {"success": False, "error": "HTTP 404"}
@@ -76,7 +76,7 @@ def test_run_handles_alert_fetch_failure(mock_make: MagicMock) -> None:
     assert "404" in result["error"]
 
 
-@patch("tools.opsgenie_tools.make_opsgenie_client")
+@patch("integrations.opsgenie.tools.make_opsgenie_client")
 def test_run_handles_logs_fetch_failure_gracefully(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_alert.return_value = {
@@ -91,7 +91,7 @@ def test_run_handles_logs_fetch_failure_gracefully(mock_make: MagicMock) -> None
     assert result["activity_log"] == []
 
 
-@patch("tools.opsgenie_tools.make_opsgenie_client")
+@patch("integrations.opsgenie.tools.make_opsgenie_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="", alert_id="a1")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tools.pagerduty_tools import PagerDutyIncidentDetailTool
+from integrations.pagerduty.tools import PagerDutyIncidentDetailTool
 
 
 def _tool() -> PagerDutyIncidentDetailTool:
@@ -30,7 +30,7 @@ def test_extract_params_maps_source_fields() -> None:
     assert params["incident_id"] == "P123ABC"
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_returns_incident_and_log_entries(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_incident.return_value = {
@@ -53,7 +53,7 @@ def test_run_returns_incident_and_log_entries(mock_make: MagicMock) -> None:
     assert result["total_log_entries"] == 1
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_skips_log_entries_when_disabled(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_incident.return_value = {
@@ -68,7 +68,7 @@ def test_run_skips_log_entries_when_disabled(mock_make: MagicMock) -> None:
     mock_client.list_incident_log_entries.assert_not_called()
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_handles_incident_fetch_failure(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_incident.return_value = {"success": False, "error": "HTTP 404: Not Found"}
@@ -79,7 +79,7 @@ def test_run_handles_incident_fetch_failure(mock_make: MagicMock) -> None:
     assert "404" in result["error"]
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_handles_log_entries_failure_gracefully(mock_make: MagicMock) -> None:
     mock_client = MagicMock()
     mock_client.get_incident.return_value = {
@@ -97,7 +97,7 @@ def test_run_handles_log_entries_failure_gracefully(mock_make: MagicMock) -> Non
     assert result["log_entries"] == []
 
 
-@patch("tools.pagerduty_tools.make_pagerduty_client")
+@patch("integrations.pagerduty.tools.make_pagerduty_client")
 def test_run_returns_unavailable_without_key(mock_make: MagicMock) -> None:
     mock_make.return_value = None
     result = _tool().run(api_key="", incident_id="P1")

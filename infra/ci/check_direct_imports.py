@@ -76,8 +76,14 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         "integrations.groundcover.tools -> tools.tool_decorator",
         "integrations.groundcover.tools -> tools.utils.availability",
         "integrations.groundcover.tools -> tools.utils.groundcover",
+        "integrations.helm.tools -> tools.base",
+        "integrations.helm.tools -> tools.utils.helm_tools",
         "integrations.honeycomb.tools -> tools.base",
+        "integrations.incident_io.tools -> tools.base",
         "integrations.jenkins.tools -> tools.tool_decorator",
+        "integrations.jira.tools -> tools.base",
+        "integrations.opsgenie.tools -> tools.base",
+        "integrations.pagerduty.tools -> tools.base",
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
         # Integration setup UX still reaches into the CLI wizard.

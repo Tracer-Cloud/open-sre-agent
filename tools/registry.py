@@ -36,8 +36,13 @@ _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.google_docs.tools",
     "integrations.grafana.tools",
     "integrations.groundcover.tools",
+    "integrations.helm.tools",
     "integrations.honeycomb.tools",
+    "integrations.incident_io.tools",
     "integrations.jenkins.tools",
+    "integrations.jira.tools",
+    "integrations.opsgenie.tools",
+    "integrations.pagerduty.tools",
 )
 
 logger = logging.getLogger(__name__)

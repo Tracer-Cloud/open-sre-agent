@@ -76,6 +76,42 @@ RULES: tuple[PathRule, ...] = (
         ("tests/integrations/groundcover/", "tests/tools/test_groundcover_tools.py"),
     ),
     PathRule(
+        "integrations/helm/",
+        ("tests/integrations/helm/", "tests/tools/test_helm_tools.py"),
+    ),
+    PathRule(
+        "integrations/incident_io/",
+        ("tests/integrations/incident_io/", "tests/tools/test_incident_io_tool.py"),
+    ),
+    PathRule(
+        "integrations/jira/",
+        (
+            "tests/integrations/jira/",
+            "tests/tools/test_jira_add_comment_tool.py",
+            "tests/tools/test_jira_create_issue_tool.py",
+            "tests/tools/test_jira_issue_detail_tool.py",
+            "tests/tools/test_jira_search_issues_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/opsgenie/",
+        (
+            "tests/integrations/opsgenie/",
+            "tests/tools/test_opsgenie_alert_detail_tool.py",
+            "tests/tools/test_opsgenie_alerts_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/pagerduty/",
+        (
+            "tests/integrations/pagerduty/",
+            "tests/tools/test_pagerduty_incident_detail_tool.py",
+            "tests/tools/test_pagerduty_incidents_tool.py",
+            "tests/tools/test_pagerduty_oncall_tool.py",
+            "tests/tools/test_pagerduty_services_tool.py",
+        ),
+    ),
+    PathRule(
         "integrations/argocd/",
         (
             "tests/integrations/argocd/",
