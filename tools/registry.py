@@ -103,11 +103,10 @@ _REPO_ROOT = _TOOLS_PACKAGE_DIR.parent
 def _skill_guidance_files() -> tuple[Path, ...]:
     """Return explicit and package-local SKILL.md files attached at registry load."""
 
-    explicit = (
-        _REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",
-    )
+    explicit = (_REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
     discovered = sorted(_TOOLS_PACKAGE_DIR.glob("python_execution_tool/skills/*/SKILL.md"))
     return (*explicit, *discovered)
+
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.

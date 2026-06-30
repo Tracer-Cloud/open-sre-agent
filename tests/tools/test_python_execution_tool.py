@@ -121,10 +121,7 @@ class TestPythonExecutionToolCredentials:
     def test_github_token_from_env_is_available_and_redacted(self, monkeypatch) -> None:
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_secret_token")
         result = execute_python_code.run(
-            code=(
-                "import os\n"
-                "print('token=' + str(os.environ.get('GITHUB_TOKEN')))\n"
-            )
+            code=("import os\nprint('token=' + str(os.environ.get('GITHUB_TOKEN')))\n")
         )
         assert result["success"] is True
         assert result["credentials_available"] == ["github"]
