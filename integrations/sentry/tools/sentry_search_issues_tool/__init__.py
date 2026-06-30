@@ -123,7 +123,7 @@ def search_sentry_issues(
             err,
             tool_name="search_sentry_issues",
             source="sentry",
-            component="tools.sentry_search_issues_tool",
+            component="integrations.sentry.tools.sentry_search_issues_tool",
             method="list_sentry_issues",
             severity="warning",
             extras={
@@ -149,7 +149,7 @@ def search_sentry_issues(
             err,
             tool_name="search_sentry_issues",
             source="sentry",
-            component="tools.sentry_search_issues_tool",
+            component="integrations.sentry.tools.sentry_search_issues_tool",
             method="list_sentry_issues",
             extras={"query": query, "organization_slug": config.organization_slug},
         )

@@ -174,7 +174,7 @@ def query_openobserve_logs(
             err,
             tool_name="query_openobserve_logs",
             source="openobserve",
-            component="tools.openobserve_logs_tool",
+            component="integrations.openobserve.tools.openobserve_logs_tool",
             method="httpx.post",
             extras={"endpoint": endpoint, "integration_id": integration_id},
         )

@@ -119,7 +119,7 @@ def query_azure_monitor_logs(
             err,
             tool_name="query_azure_monitor_logs",
             source="azure",
-            component="tools.azure_monitor_logs_tool",
+            component="integrations.azure.tools.azure_monitor_logs_tool",
             method="httpx.post",
             extras={"workspace_id": workspace, "integration_id": integration_id},
         )

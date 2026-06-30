@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.azure_sql.tools.azure_sql_server_status_tool import get_azure_sql_server_status
 from tests.tools.conftest import BaseToolContract
-from tools.azure_sql_server_status_tool import get_azure_sql_server_status
 
 
 class TestAzureSQLServerStatusToolContract(BaseToolContract):
@@ -42,7 +42,7 @@ def test_run_happy_path() -> None:
         "database_size_mb": 512.0,
     }
     with patch(
-        "tools.azure_sql_server_status_tool.get_server_status",
+        "integrations.azure_sql.tools.azure_sql_server_status_tool.get_server_status",
         return_value=fake_result,
     ):
         result = get_azure_sql_server_status(
@@ -55,7 +55,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.azure_sql_server_status_tool.get_server_status",
+        "integrations.azure_sql.tools.azure_sql_server_status_tool.get_server_status",
         return_value={"source": "azure_sql", "available": False, "error": "connection timeout"},
     ):
         result = get_azure_sql_server_status(server="invalid", database="testdb")

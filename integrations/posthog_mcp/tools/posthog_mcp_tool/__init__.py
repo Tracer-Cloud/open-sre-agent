@@ -30,7 +30,7 @@ from tools.utils.mcp_tool_listing import build_mcp_tool_listing
 PostHogMCPParams = dict[str, object]
 PostHogMCPResponse = dict[str, object]
 
-_COMPONENT = "tools.posthog_mcp_tool"
+_COMPONENT = "integrations.posthog_mcp.tools.posthog_mcp_tool"
 
 
 def _string_list(value: object) -> list[str]:

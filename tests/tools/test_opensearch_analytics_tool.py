@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from integrations.elasticsearch.client import ElasticsearchConfig
+from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
 from tests.tools.conftest import BaseToolContract
-from tools.opensearch_analytics_tool import query_opensearch_analytics
 
 # ---------------------------------------------------------------------------
 # Test helpers — keep ElasticsearchClient stubbing consistent
@@ -39,11 +39,11 @@ def _install_es_stubs(
         self.config = config
 
     monkeypatch.setattr(
-        "tools.opensearch_analytics_tool.ElasticsearchClient.__init__",
+        "integrations.opensearch.tools.opensearch_analytics_tool.ElasticsearchClient.__init__",
         _fake_init,
     )
     monkeypatch.setattr(
-        "tools.opensearch_analytics_tool.ElasticsearchClient.search_logs",
+        "integrations.opensearch.tools.opensearch_analytics_tool.ElasticsearchClient.search_logs",
         search_impl,
     )
     return captured

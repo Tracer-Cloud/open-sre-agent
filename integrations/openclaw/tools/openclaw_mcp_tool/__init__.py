@@ -188,7 +188,7 @@ def _normalize_named_bridge_call(
             err,
             tool_name=surface_tool_name,
             source="openclaw",
-            component="tools.openclaw_mcp_tool",
+            component="integrations.openclaw.tools.openclaw_mcp_tool",
             method=f"invoke_openclaw_mcp_tool('{tool_name}')",
             extras={"mcp_tool": tool_name, "transport": config.mode},
         )
@@ -289,7 +289,7 @@ def list_openclaw_bridge_tools(
             err,
             tool_name="list_openclaw_tools",
             source="openclaw",
-            component="tools.openclaw_mcp_tool",
+            component="integrations.openclaw.tools.openclaw_mcp_tool",
             method="list_openclaw_mcp_tools",
             extras={"transport": config.mode},
         )
@@ -381,7 +381,7 @@ def search_openclaw_conversations(
             err,
             tool_name="search_openclaw_conversations",
             source="openclaw",
-            component="tools.openclaw_mcp_tool",
+            component="integrations.openclaw.tools.openclaw_mcp_tool",
             method="invoke_openclaw_mcp_tool('conversations_list')",
             extras={"transport": config.mode},
         )
@@ -595,7 +595,7 @@ def call_openclaw_bridge_tool(
             err,
             tool_name="call_openclaw_tool",
             source="openclaw",
-            component="tools.openclaw_mcp_tool",
+            component="integrations.openclaw.tools.openclaw_mcp_tool",
             method="invoke_openclaw_mcp_tool",
             extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
         )

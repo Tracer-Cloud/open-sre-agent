@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.sentry.tools.sentry_issue_events_tool import list_sentry_issue_events
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.sentry_issue_events_tool import list_sentry_issue_events
 
 
 class TestSentryIssueEventsToolContract(BaseToolContract):
@@ -37,8 +37,14 @@ def test_run_returns_unavailable_when_no_config() -> None:
 def test_run_happy_path() -> None:
     fake_events = [{"eventID": "e1", "dateCreated": "2024-01-01"}]
     with (
-        patch("tools.sentry_issue_events_tool.sentry_list_issue_events", return_value=fake_events),
-        patch("tools.sentry_search_issues_tool.sentry_config_from_env", return_value=None),
+        patch(
+            "integrations.sentry.tools.sentry_issue_events_tool.sentry_list_issue_events",
+            return_value=fake_events,
+        ),
+        patch(
+            "integrations.sentry.tools.sentry_search_issues_tool.sentry_config_from_env",
+            return_value=None,
+        ),
     ):
         result = list_sentry_issue_events(
             organization_slug="my-org", sentry_token="tok_test", issue_id="123"

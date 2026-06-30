@@ -113,7 +113,7 @@ def test_report_run_error_captures_with_expected_tags(
             boom,
             tool_name="query_azure_monitor_logs",
             source="azure",
-            component="tools.azure_monitor_logs_tool",
+            component="integrations.azure.tools.azure_monitor_logs_tool",
             method="httpx.post",
             extras={"workspace_id": "w"},
         )
@@ -124,7 +124,7 @@ def test_report_run_error_captures_with_expected_tags(
     assert event.extras["tag.surface"] == "tool"
     assert event.extras["tag.tool_name"] == "query_azure_monitor_logs"
     assert event.extras["tag.source"] == "azure"
-    assert event.extras["tag.component"] == "tools.azure_monitor_logs_tool"
+    assert event.extras["tag.component"] == "integrations.azure.tools.azure_monitor_logs_tool"
     assert event.extras["tag.method"] == "httpx.post"
     assert event.extras["workspace_id"] == "w"
     assert "Tool query_azure_monitor_logs failed" in caplog.text
@@ -191,12 +191,12 @@ class ToolFailureCase:
 
 def _azure_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import azure_monitor_logs_tool as mod
+        from integrations.azure.tools import azure_monitor_logs_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.azure_monitor_logs_tool import query_azure_monitor_logs
+        from integrations.azure.tools.azure_monitor_logs_tool import query_azure_monitor_logs
 
         return query_azure_monitor_logs(workspace_id="w", access_token="t")
 
@@ -205,12 +205,12 @@ def _azure_case() -> ToolFailureCase:
 
 def _openobserve_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import openobserve_logs_tool as mod
+        from integrations.openobserve.tools import openobserve_logs_tool as mod
 
         mp.setattr(mod, "httpx", SimpleNamespace(post=MagicMock(side_effect=RuntimeError("net"))))
 
     def invoke() -> dict[str, Any]:
-        from tools.openobserve_logs_tool import query_openobserve_logs
+        from integrations.openobserve.tools.openobserve_logs_tool import query_openobserve_logs
 
         return query_openobserve_logs(
             base_url="https://oo.example",
@@ -520,7 +520,7 @@ def _patch_openclaw_runtime(mp: pytest.MonkeyPatch) -> None:
 
     Each test still patches the specific failure point afterwards.
     """
-    from tools import openclaw_mcp_tool as mod
+    from integrations.openclaw.tools import openclaw_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -533,13 +533,13 @@ def _patch_openclaw_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _openclaw_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import openclaw_mcp_tool as mod
+        from integrations.openclaw.tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "list_openclaw_mcp_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.openclaw_mcp_tool import list_openclaw_bridge_tools
+        from integrations.openclaw.tools.openclaw_mcp_tool import list_openclaw_bridge_tools
 
         return list_openclaw_bridge_tools()
 
@@ -548,13 +548,13 @@ def _openclaw_list_case() -> ToolFailureCase:
 
 def _openclaw_search_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import openclaw_mcp_tool as mod
+        from integrations.openclaw.tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.openclaw_mcp_tool import search_openclaw_conversations
+        from integrations.openclaw.tools.openclaw_mcp_tool import search_openclaw_conversations
 
         return search_openclaw_conversations(search="db error")
 
@@ -576,13 +576,13 @@ def _openclaw_get_conversation_case() -> ToolFailureCase:
     """
 
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import openclaw_mcp_tool as mod
+        from integrations.openclaw.tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.openclaw_mcp_tool import get_openclaw_conversation
+        from integrations.openclaw.tools.openclaw_mcp_tool import get_openclaw_conversation
 
         return get_openclaw_conversation(conversation_id="conv-1")
 
@@ -597,13 +597,13 @@ def _openclaw_get_conversation_case() -> ToolFailureCase:
 
 def _openclaw_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import openclaw_mcp_tool as mod
+        from integrations.openclaw.tools import openclaw_mcp_tool as mod
 
         _patch_openclaw_runtime(mp)
         mp.setattr(mod, "invoke_openclaw_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.openclaw_mcp_tool import call_openclaw_bridge_tool
+        from integrations.openclaw.tools.openclaw_mcp_tool import call_openclaw_bridge_tool
 
         return call_openclaw_bridge_tool(tool_name="permissions_grant", arguments={})
 
@@ -618,7 +618,7 @@ def _openclaw_call_tool_case() -> ToolFailureCase:
 
 def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
     """Shared patches for PostHog MCP cases — bypass the config/runtime guards."""
-    from tools import posthog_mcp_tool as mod
+    from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -644,13 +644,13 @@ def _patch_posthog_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _posthog_mcp_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import posthog_mcp_tool as mod
+        from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
         mp.setattr(mod, "list_posthog_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.posthog_mcp_tool import list_posthog_tools
+        from integrations.posthog_mcp.tools.posthog_mcp_tool import list_posthog_tools
 
         return list_posthog_tools()
 
@@ -665,13 +665,13 @@ def _posthog_mcp_list_case() -> ToolFailureCase:
 
 def _posthog_mcp_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import posthog_mcp_tool as mod
+        from integrations.posthog_mcp.tools import posthog_mcp_tool as mod
 
         _patch_posthog_mcp_runtime(mp)
         mp.setattr(mod, "invoke_posthog_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.posthog_mcp_tool import call_posthog_tool
+        from integrations.posthog_mcp.tools.posthog_mcp_tool import call_posthog_tool
 
         return call_posthog_tool(tool_name="query-run", arguments={})
 
@@ -686,7 +686,7 @@ def _posthog_mcp_call_tool_case() -> ToolFailureCase:
 
 def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
     """Shared patches for Sentry MCP cases — bypass the config/runtime guards."""
-    from tools import sentry_mcp_tool as mod
+    from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
     mp.setattr(
         mod,
@@ -712,13 +712,13 @@ def _patch_sentry_mcp_runtime(mp: pytest.MonkeyPatch) -> None:
 
 def _sentry_mcp_list_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import sentry_mcp_tool as mod
+        from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
         mp.setattr(mod, "list_sentry_mcp_server_tools", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.sentry_mcp_tool import list_sentry_tools
+        from integrations.sentry_mcp.tools.sentry_mcp_tool import list_sentry_tools
 
         return list_sentry_tools()
 
@@ -733,13 +733,13 @@ def _sentry_mcp_list_case() -> ToolFailureCase:
 
 def _sentry_mcp_call_tool_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        from tools import sentry_mcp_tool as mod
+        from integrations.sentry_mcp.tools import sentry_mcp_tool as mod
 
         _patch_sentry_mcp_runtime(mp)
         mp.setattr(mod, "invoke_sentry_mcp_tool", MagicMock(side_effect=RuntimeError("mcp")))
 
     def invoke() -> dict[str, Any]:
-        from tools.sentry_mcp_tool import call_sentry_tool
+        from integrations.sentry_mcp.tools.sentry_mcp_tool import call_sentry_tool
 
         return call_sentry_tool(tool_name="get_issue_details", arguments={})
 

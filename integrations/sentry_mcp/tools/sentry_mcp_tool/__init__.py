@@ -30,7 +30,7 @@ from tools.utils.mcp_tool_listing import build_mcp_tool_listing
 SentryMCPParams = dict[str, object]
 SentryMCPResponse = dict[str, object]
 
-_COMPONENT = "tools.sentry_mcp_tool"
+_COMPONENT = "integrations.sentry_mcp.tools.sentry_mcp_tool"
 
 
 def _string_list(value: object) -> list[str]:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.sentry import list_sentry_issue_events as sentry_list_issue_events
-from tools.sentry_search_issues_tool import (
+from integrations.sentry import get_sentry_issue
+from integrations.sentry.tools.sentry_search_issues_tool import (
     _resolve_config,
     _sentry_available,
     _sentry_creds,
@@ -13,27 +13,26 @@ from tools.sentry_search_issues_tool import (
 from tools.tool_decorator import tool
 
 
-def _issue_events_available(sources: dict[str, dict]) -> bool:
+def _issue_details_available(sources: dict[str, dict]) -> bool:
     return bool(_sentry_available(sources) and sources.get("sentry", {}).get("issue_id"))
 
 
-def _issue_events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+def _issue_details_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     sentry = sources["sentry"]
     return {
         **_sentry_creds(sentry),
         "issue_id": sentry["issue_id"],
-        "limit": 10,
     }
 
 
 @tool(
-    name="list_sentry_issue_events",
+    name="get_sentry_issue_details",
     source="sentry",
-    description="List recent events for a Sentry issue.",
+    description="Fetch full details for a Sentry issue.",
     use_cases=[
-        "Reviewing the latest stack traces attached to an issue",
-        "Checking whether new events appeared during an incident window",
-        "Comparing repeated failures grouped under the same issue",
+        "Inspecting the main error group linked to an alert",
+        "Reviewing culprit, level, and regression details",
+        "Understanding whether an incident matches an existing issue",
     ],
     requires=["organization_slug", "sentry_token", "issue_id"],
     input_schema={
@@ -44,32 +43,30 @@ def _issue_events_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
             "issue_id": {"type": "string"},
             "sentry_url": {"type": "string", "default": ""},
             "project_slug": {"type": "string", "default": ""},
-            "limit": {"type": "integer", "default": 10},
         },
         "required": ["organization_slug", "sentry_token", "issue_id"],
     },
     injected_params=("organization_slug", "sentry_token", "sentry_url"),
-    is_available=_issue_events_available,
-    extract_params=_issue_events_extract_params,
+    is_available=_issue_details_available,
+    extract_params=_issue_details_extract_params,
     surfaces=("investigation", "chat"),
 )
-def list_sentry_issue_events(
+def get_sentry_issue_details(
     organization_slug: str,
     sentry_token: str,
     issue_id: str,
     sentry_url: str = "",
     project_slug: str = "",
-    limit: int = 10,
 ) -> dict[str, Any]:
-    """List recent events for a Sentry issue."""
+    """Fetch full details for a Sentry issue."""
     config = _resolve_config(sentry_url, organization_slug, sentry_token, project_slug)
     if config is None:
         return {
             "source": "sentry",
             "available": False,
             "error": "Sentry integration is not configured.",
-            "events": [],
+            "issue": {},
         }
 
-    events = sentry_list_issue_events(config=config, issue_id=issue_id, limit=limit)
-    return {"source": "sentry", "available": True, "events": events}
+    issue = get_sentry_issue(config=config, issue_id=issue_id)
+    return {"source": "sentry", "available": True, "issue": issue}
