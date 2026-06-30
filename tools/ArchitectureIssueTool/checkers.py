@@ -61,8 +61,23 @@ def analyze_misplaced(file_path: Path, repo_root: Path, content: str) -> tuple[b
     has_basetool_subclass = False
     try:
         tree = ast.parse(content)
+
+        # Only flag @tool if it's the project's own decorator, not a third-party
+        # decorator that happens to share the name (e.g. LangChain's @tool).
+        tool_imported_from_project = False
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module == "tools.tool_decorator" or module.endswith(".tool_decorator"):
+                    for alias in node.names:
+                        if alias.name == "tool":
+                            tool_imported_from_project = True
+                            break
+
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if tool_imported_from_project and isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
                 for dec in node.decorator_list:
                     if (isinstance(dec, ast.Name) and dec.id == "tool") or (
                         isinstance(dec, ast.Call)

@@ -92,3 +92,77 @@ def test_find_architecture_violations_default_detection() -> None:
     assert "proposed_refactor_tasks" in result
     assert isinstance(result["violations"], list)
     assert isinstance(result["proposed_refactor_tasks"], list)
+
+
+def test_misplaced_checker_ignores_third_party_tool_decorator(tmp_path: Path) -> None:
+    """A @tool decorator from a non-project module must NOT flag the file as misplaced."""
+    core_dir = tmp_path / "core"
+    core_dir.mkdir()
+    integrations_dir = tmp_path / "integrations"
+    integrations_dir.mkdir()
+
+    # File that uses LangChain's @tool — should NOT be flagged as misplaced
+    langchain_tool_file = core_dir / "langchain_usage.py"
+    langchain_tool_file.write_text(
+        "from langchain.tools import tool\n"
+        "@tool\n"
+        "def my_langchain_tool(x: str) -> str:\n"
+        "    return x\n",
+        encoding="utf-8",
+    )
+
+    # Vanilla file with a local function called `tool` — also NOT misplaced
+    local_tool_file = core_dir / "local_usage.py"
+    local_tool_file.write_text(
+        "def tool(x):\n    return x\n@tool\ndef wrapped():\n    pass\n",
+        encoding="utf-8",
+    )
+
+    result = find_architecture_violations(repo_root=str(tmp_path), max_file_lines=10000)
+    misplaced = [v for v in result["violations"] if v["type"] == "misplaced_module"]
+    paths = [v["file_path"] for v in misplaced]
+
+    assert "core/langchain_usage.py" not in paths, (
+        "Third-party @tool decorators must not flag a file as a misplaced tool definition"
+    )
+    assert "core/local_usage.py" not in paths, (
+        "A locally-defined function named 'tool' must not flag the file as misplaced"
+    )
+
+
+def test_e2e_architecture_violations_real_repo() -> None:
+    """E2E: run against the live repo and verify that structured, actionable output is produced."""
+    result = find_architecture_violations()
+
+    violations = result["violations"]
+    proposed_tasks = result["proposed_refactor_tasks"]
+
+    # Tool must return both keys with list values
+    assert isinstance(violations, list), "violations must be a list"
+    assert isinstance(proposed_tasks, list), "proposed_refactor_tasks must be a list"
+
+    # Every violation must carry the required keys and a known type
+    known_types = {
+        "dependency_direction",
+        "oversized_file",
+        "compatibility_shim",
+        "misplaced_module",
+    }
+    for v in violations:
+        assert "type" in v, f"violation missing 'type': {v}"
+        assert "file_path" in v, f"violation missing 'file_path': {v}"
+        assert "description" in v, f"violation missing 'description': {v}"
+        assert v["type"] in known_types, f"unexpected violation type: {v['type']}"
+
+    # Every proposed task must carry the required fields
+    for t in proposed_tasks:
+        assert "title" in t, f"task missing 'title': {t}"
+        assert "description" in t, f"task missing 'description': {t}"
+        assert "target_file" in t, f"task missing 'target_file': {t}"
+        assert t["priority"] in {"high", "medium", "low"}, f"unexpected priority: {t['priority']}"
+
+    # The live repo is large enough that at least one violation should be found
+    assert len(violations) > 0, (
+        "Expected at least one architecture violation in the real codebase; "
+        "if the codebase is genuinely clean this assertion can be relaxed."
+    )
