@@ -50,20 +50,22 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # to be burned down by extracting shared runtime primitives out of
         # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
         "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
-        # Per-vendor integration tool packages still depend on the ``@tool``
-        # decorator that lives at ``tools.tool_decorator``. Burn down by
-        # moving the decorator primitive to a lower layer (likely
-        # ``core/`` or ``platform/``) so vendor tools can import it
+        # Per-vendor integration tool packages still depend on shared tool
+        # primitives that live under ``tools/``: ``tools.base.BaseTool``
+        # (class-based vendors), ``tools.tool_decorator.tool`` (decorator-
+        # based vendors), and the payload helpers under ``tools.utils.*``.
+        # Burn down by moving these primitives to a lower layer (likely
+        # ``core/`` or ``platform/``) so vendor tools can import them
         # without crossing into ``tools``.
+        "integrations.alertmanager.tools -> tools.base",
+        "integrations.argocd.tools -> tools.base",
+        "integrations.coralogix.tools -> tools.base",
         "integrations.datadog.tools -> tools.tool_decorator",
-        # Datadog tools also reuse shared payload helpers that still live
-        # under ``tools.utils``. Burn down alongside the decorator move —
-        # ``tools.utils.compaction`` (log/result compaction) and
-        # ``tools.utils.availability`` (backend resolution) belong at the
-        # same layer the decorator does.
         "integrations.datadog.tools -> tools.utils.availability",
         "integrations.datadog.tools -> tools.utils.compaction",
         "integrations.grafana.tools -> tools.tool_decorator",
+        "integrations.honeycomb.tools -> tools.base",
+        "integrations.jenkins.tools -> tools.tool_decorator",
         # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
         "integrations.hermes.sinks -> tools.watch_dog.alarms",
         # Integration setup UX still reaches into the CLI wizard.

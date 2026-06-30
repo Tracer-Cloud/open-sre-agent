@@ -34,6 +34,29 @@ RULES: tuple[PathRule, ...] = (
     PathRule("integrations/llm_cli/", ("tests/integrations/llm_cli/",)),
     PathRule("integrations/opensre/", ("tests/integrations/opensre/",)),
     PathRule("integrations/hermes/", ("tests/hermes/",)),
+    PathRule("integrations/alertmanager/", ("tests/integrations/alertmanager/",)),
+    PathRule(
+        "integrations/argocd/",
+        (
+            "tests/integrations/argocd/",
+            "tests/tools/test_argocd_tools.py",
+        ),
+    ),
+    PathRule(
+        "integrations/coralogix/",
+        (
+            "tests/integrations/coralogix/",
+            "tests/tools/test_coralogix_logs_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/honeycomb/",
+        (
+            "tests/integrations/honeycomb/",
+            "tests/tools/test_honeycomb_traces_tool.py",
+        ),
+    ),
+    PathRule("integrations/jenkins/", ("tests/integrations/test_jenkins.py",)),
     PathRule(
         "integrations/datadog/",
         (

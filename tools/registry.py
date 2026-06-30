@@ -26,8 +26,13 @@ from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_gui
 # separate; it's for plugin-style callers that ship tool packages outside of
 # opensre's own codebase.
 _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
+    "integrations.alertmanager.tools",
+    "integrations.argocd.tools",
+    "integrations.coralogix.tools",
     "integrations.datadog.tools",
     "integrations.grafana.tools",
+    "integrations.honeycomb.tools",
+    "integrations.jenkins.tools",
 )
 
 logger = logging.getLogger(__name__)
