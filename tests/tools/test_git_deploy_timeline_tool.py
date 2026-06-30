@@ -41,9 +41,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_when_no_config() -> None:
-    with patch(
-        "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-    ):
+    with patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None):
         result = get_git_deploy_timeline(owner="org", repo="repo")
     assert result["available"] is False
     assert result["commits"] == []
@@ -79,11 +77,9 @@ def test_run_happy_path_summarizes_commits() -> None:
     }
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
@@ -123,11 +119,9 @@ def test_run_passes_time_window_and_branch_to_mcp() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
@@ -163,11 +157,9 @@ def test_run_empty_result_returns_zero_commits() -> None:
     }
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
@@ -200,11 +192,9 @@ def test_run_defensive_against_non_list_structured_content() -> None:
     }
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
@@ -229,11 +219,9 @@ def test_run_passes_per_page_to_mcp() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
@@ -263,11 +251,9 @@ def test_run_clamps_per_page_to_api_maximum() -> None:
         return {"is_error": False, "text": "", "structured_content": [], "content": []}
 
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
@@ -309,11 +295,9 @@ def test_run_flags_window_truncated_when_page_is_full() -> None:
     }
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
@@ -350,11 +334,9 @@ def test_run_flags_window_not_truncated_when_fewer_than_page() -> None:
     }
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
@@ -404,11 +386,9 @@ def _run_with_shared_window(
 
     mock_config = MagicMock()
     with (
+        patch("integrations.github.helpers.github_mcp_config_from_env", return_value=None),
         patch(
-            "core.tool_framework.utils.github_helpers.github_mcp_config_from_env", return_value=None
-        ),
-        patch(
-            "core.tool_framework.utils.github_helpers.build_github_mcp_config",
+            "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
         patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),

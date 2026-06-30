@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import tempo_available_or_backend
 from integrations.tempo import TempoConfig, tempo_extract_params
+from integrations.tempo.availability import tempo_available_or_backend
 from integrations.tempo.client import TempoClient
 
 _VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")

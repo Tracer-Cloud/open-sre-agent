@@ -366,7 +366,7 @@ def query_datadog_events(
 from typing import cast
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import datadog_available_or_backend
+from integrations.datadog.availability import datadog_available_or_backend
 
 _ERROR_KEYWORDS = (
     "error",

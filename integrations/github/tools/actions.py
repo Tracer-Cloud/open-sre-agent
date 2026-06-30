@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
-from core.tool_framework.utils.github_helpers import (
+from integrations.github.helpers import (
     github_creds,
     github_source_available,
     normalize_github_tool_result,

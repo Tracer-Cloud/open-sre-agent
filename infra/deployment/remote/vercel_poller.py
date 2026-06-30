@@ -138,7 +138,7 @@ def _int_env(name: str, default: int, *, minimum: int) -> int:
 
 
 def _split_repo_full_name(value: str) -> tuple[str, str]:
-    from core.tool_framework.utils.github_repo_scope import split_repo_full_name
+    from integrations.github.repo_scope import split_repo_full_name
 
     return split_repo_full_name(value)
 

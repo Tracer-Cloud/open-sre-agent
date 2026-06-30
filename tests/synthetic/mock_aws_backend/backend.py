@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.tool_framework.utils.aws_topology_helper import build_ec2_summary, build_elb_summary
+from integrations.aws.topology_helper import build_ec2_summary, build_elb_summary
 
 if TYPE_CHECKING:
     from tests.synthetic.rds_postgres.scenario_loader import ScenarioFixture

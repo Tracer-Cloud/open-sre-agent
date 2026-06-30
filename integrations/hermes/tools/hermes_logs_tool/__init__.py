@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.availability import hermes_available_or_backend
+from integrations.hermes.availability import hermes_available_or_backend
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident, LogLevel, LogRecord
 from integrations.hermes.poller import HermesLogCursor, HermesLogPoll, poll_hermes_logs
