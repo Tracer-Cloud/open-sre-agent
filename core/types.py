@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
-from tools.registered_tool import RegisteredTool
+from core.tool_framework.registered_tool import RegisteredTool
 
 
 def _json_type_matches(value: Any, schema_type: str) -> bool:

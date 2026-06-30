@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.integration_sources import availability_view
 from platform.observability.tool_trace import redact_sensitive
-from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tool_map, get_registered_tools
-from tools.utils.integration_sources import availability_view
 
 from .contracts import ToolContext
 

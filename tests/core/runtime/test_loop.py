@@ -26,8 +26,8 @@ from core.messages import (
     ensure_runtime_messages,
     user_runtime_message,
 )
+from core.tool_framework.registered_tool import RegisteredTool
 from core.types import AgentTool, AgentToolContext
-from tools.registered_tool import RegisteredTool
 
 
 class FakeLLM:

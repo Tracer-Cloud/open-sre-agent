@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.telemetry import report_run_error
+from core.tool_framework.tool_decorator import tool
 from integrations.google_docs.client import GoogleDocsClient
 from integrations.models import GoogleDocsIntegrationConfig
-from tools._telemetry import report_run_error
-from tools.tool_decorator import tool
 
 
 def _is_available(sources: dict[str, dict]) -> bool:

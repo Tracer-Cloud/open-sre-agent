@@ -13,8 +13,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError, EventStreamError, ReadTimeoutError
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tests.shared.infrastructure_sdk.deployer import get_boto3_client, wait_for_condition
-from tools.registered_tool import RegisteredTool
 from tools.registry import get_registered_tools
 
 logger = logging.getLogger(__name__)

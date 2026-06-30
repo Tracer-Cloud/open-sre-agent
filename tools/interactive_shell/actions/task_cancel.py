@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.runtime import TaskKind, TaskStatus
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
@@ -16,7 +17,6 @@ from tools.interactive_shell.contracts import (
     object_schema,
 )
 from tools.interactive_shell.shared import plan_foreground_tool
-from tools.registered_tool import RegisteredTool
 
 
 def _running_task_matches(ctx: ToolContext, target: str) -> Sequence[object]:

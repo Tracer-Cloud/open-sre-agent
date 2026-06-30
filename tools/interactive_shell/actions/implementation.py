@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.contracts import (
     ToolContext,
     capability_available_from_sources,
@@ -14,7 +15,6 @@ from tools.interactive_shell.contracts import (
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def execute_implementation_tool(args: dict[str, Any], ctx: ToolContext) -> bool:

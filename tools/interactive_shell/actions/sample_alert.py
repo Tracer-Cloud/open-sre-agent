@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.runtime import ReplSession
 from tools.interactive_shell.contracts import (
@@ -16,7 +17,6 @@ from tools.interactive_shell.contracts import (
     string_property,
 )
 from tools.interactive_shell.shared.investigation_launch import launch_investigation
-from tools.registered_tool import RegisteredTool
 
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 

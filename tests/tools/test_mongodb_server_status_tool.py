@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.mongodb.tools.mongodb_server_status_tool import get_mongodb_server_status
 from tests.tools.conftest import BaseToolContract
-from tools.mongodb_server_status_tool import get_mongodb_server_status
 
 
 class TestMongoDBServerStatusToolContract(BaseToolContract):
@@ -25,7 +25,10 @@ def test_run_happy_path() -> None:
         "connections": {"current": 10, "available": 990},
         "mem": {"resident": 512, "virtual": 2048},
     }
-    with patch("tools.mongodb_server_status_tool.get_server_status", return_value=fake_result):
+    with patch(
+        "integrations.mongodb.tools.mongodb_server_status_tool.get_server_status",
+        return_value=fake_result,
+    ):
         result = get_mongodb_server_status(connection_string="mongodb://localhost:27017")
     assert result["version"] == "6.0.10"
     assert "connections" in result
@@ -33,7 +36,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.mongodb_server_status_tool.get_server_status",
+        "integrations.mongodb.tools.mongodb_server_status_tool.get_server_status",
         return_value={"error": "connection timeout"},
     ):
         result = get_mongodb_server_status(connection_string="mongodb://invalid")

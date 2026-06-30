@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.contracts import (
     ToolContext,
     execute_with_repl_context,
     object_schema,
     string_property,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ToolContext) -> bool:

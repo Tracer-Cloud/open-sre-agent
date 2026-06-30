@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from tools.sre_guidance_tool.knowledge_base import (
     get_sre_guidance as _get_sre_guidance,
 )
 from tools.sre_guidance_tool.knowledge_base import (
     get_topics_for_keywords,
 )
-from tools.tool_decorator import tool
 
 
 def _extract_guidance_params(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:

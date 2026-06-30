@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.aws_lambda.tools.lambda_invocation_logs_tool import get_lambda_invocation_logs
 from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.lambda_invocation_logs_tool import get_lambda_invocation_logs
 
 
 class TestLambdaInvocationLogsToolContract(BaseToolContract):
@@ -39,7 +39,7 @@ def test_run_by_request_id_happy_path() -> None:
         "logs": ["START", "END"],
     }
     with patch(
-        "tools.lambda_invocation_logs_tool.get_invocation_logs_by_request_id",
+        "integrations.aws_lambda.tools.lambda_invocation_logs_tool.get_invocation_logs_by_request_id",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn", request_id="req-123")
@@ -50,7 +50,7 @@ def test_run_by_request_id_happy_path() -> None:
 
 def test_run_by_request_id_error() -> None:
     with patch(
-        "tools.lambda_invocation_logs_tool.get_invocation_logs_by_request_id",
+        "integrations.aws_lambda.tools.lambda_invocation_logs_tool.get_invocation_logs_by_request_id",
         return_value={"success": False, "error": "Not found"},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn", request_id="req-999")
@@ -67,7 +67,7 @@ def test_run_recent_invocations_happy_path() -> None:
         ],
     }
     with patch(
-        "tools.lambda_invocation_logs_tool.get_recent_invocations",
+        "integrations.aws_lambda.tools.lambda_invocation_logs_tool.get_recent_invocations",
         return_value={"success": True, "data": fake_data},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn")
@@ -78,7 +78,7 @@ def test_run_recent_invocations_happy_path() -> None:
 
 def test_run_recent_invocations_error() -> None:
     with patch(
-        "tools.lambda_invocation_logs_tool.get_recent_invocations",
+        "integrations.aws_lambda.tools.lambda_invocation_logs_tool.get_recent_invocations",
         return_value={"success": False, "error": "Permission denied"},
     ):
         result = get_lambda_invocation_logs(function_name="my-fn")

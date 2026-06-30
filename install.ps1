@@ -1035,6 +1035,19 @@ function Start-OpenSreOnboardingAfterInstall {
         return
     }
 
+    # If stdin is redirected (e.g. the installer is piped), the full-screen
+    # onboarding prompt cannot take control of the terminal and exits with a
+    # terminal I/O error mid-render (issue #3273). Skip the auto-launch; the
+    # "Next steps" output already tells the user to run onboarding themselves.
+    try {
+        if ([System.Console]::IsInputRedirected) {
+            return
+        }
+    }
+    catch {
+        return
+    }
+
     if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
         Write-Warning "Could not auto-launch onboarding; $BinaryPath was not found."
         return

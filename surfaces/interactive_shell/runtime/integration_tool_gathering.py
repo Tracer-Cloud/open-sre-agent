@@ -19,7 +19,10 @@ from rich.markup import escape
 from core.agent_harness import evidence_agent
 from core.agent_harness.session import ReplSession
 from surfaces.interactive_shell.ui import DIM
-from surfaces.interactive_shell.ui.output.tool_details import tool_short_label, tool_source_label
+from surfaces.interactive_shell.ui.output.tool_details import (
+    tool_short_label,
+    tool_source_label,
+)
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 # Cap so a chatty tool result can't blow up persistence writes.

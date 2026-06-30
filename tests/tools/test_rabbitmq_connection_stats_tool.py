@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.rabbitmq.tools.rabbitmq_connection_stats_tool import get_rabbitmq_connection_stats
 from tests.tools.conftest import BaseToolContract
-from tools.rabbitmq_connection_stats_tool import get_rabbitmq_connection_stats
 
 
 class TestRabbitMQConnectionStatsToolContract(BaseToolContract):
@@ -31,7 +31,7 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "tools.rabbitmq_connection_stats_tool.get_connection_stats",
+        "integrations.rabbitmq.tools.rabbitmq_connection_stats_tool.get_connection_stats",
         return_value=fake_result,
     ):
         result = get_rabbitmq_connection_stats(host="rmq", username="admin")

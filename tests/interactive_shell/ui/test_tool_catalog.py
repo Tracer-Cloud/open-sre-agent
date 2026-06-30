@@ -13,6 +13,7 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
+from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
 from surfaces.interactive_shell.ui.tables import tool_catalog
@@ -22,7 +23,6 @@ from surfaces.interactive_shell.ui.tables.tool_catalog import (
     build_tool_catalog,
     format_tool_catalog_text,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def _make_tool(

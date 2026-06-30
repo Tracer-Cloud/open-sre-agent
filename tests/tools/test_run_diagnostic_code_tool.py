@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from platform.sandbox.runner import SandboxResult
 from tests.tools.conftest import BaseToolContract
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from tools.run_diagnostic_code import run_diagnostic_code
 
 

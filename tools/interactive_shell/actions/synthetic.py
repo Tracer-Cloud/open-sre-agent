@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.contracts import (
     ToolContext,
     capability_available_from_sources,
@@ -16,7 +17,6 @@ from tools.interactive_shell.contracts import (
 from tools.interactive_shell.synthetic.runner import (
     run_synthetic_test,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def _repo_root() -> Path:

@@ -19,11 +19,11 @@ Before any push or PR creation follow **[CI.md](CI.md)** — lint, format, typec
 
 | Path                  | What it does                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `core/`               | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). |
+| `core/`               | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
 | `cli/`                | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support.               |
 | `interactive_shell/`  | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI. |
-| `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, and the Hermes log pipeline. |
-| `tools/`              | Tool registry, decorator, base classes, per-tool packages, and shared tool utilities.              |
+| `integrations/`       | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`. |
+| `tools/`              | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/fleet_monitoring/`, `tools/watch_dog/`, `tools/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`. |
 | `platform/`           | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability. |
 | `config/`             | Shared constants, prompts, UI theme, and the web app entrypoint (`config/webapp.py`).              |
 | `infra/deployment/`         | Deployment operations, remote-hosted runtime code, and external runtime entrypoints.               |
@@ -77,8 +77,9 @@ The tool registry auto-discovers modules under `tools/`, so the normal path is t
 
 Files to touch:
 
-- `tools/<ToolName>/__init__.py` for the tool implementation, or `tools/<tool_file>.py` for a lighter-weight function tool.
-- `tools/utils/` if the tool needs shared helper code.
+- `integrations/<vendor>/tools/<tool_name>_tool/__init__.py` when the tool belongs to an existing vendor integration (most common path).
+- `tools/<ToolName>/__init__.py` only when the tool is not vendor-specific (e.g. cross-cutting helpers such as `tools/sre_guidance_tool/`).
+- `core/tool_framework/utils/` if the tool needs shared helper code reused across vendors.
 - `integrations/<name>/client.py` if the tool should reuse a dedicated integration API client instead of inlining requests.
 - `docs/<tool_name>.mdx` for user-facing usage, parameters, and examples.
 - `docs/docs.json` — add the page path (without `.mdx`) to the appropriate `pages` array so Mintlify navigation includes it.
@@ -86,10 +87,10 @@ Files to touch:
 
 Steps:
 
-1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass for richer behavior; use `@tool(...)` from `tools.tool_decorator` for a lightweight function tool.
+1. Pick the simplest shape that fits the tool. Use a `BaseTool` subclass (from `core.tool_framework.base`) for richer behavior; use `@tool(...)` from `core.tool_framework.tool_decorator` for a lightweight function tool.
 2. Declare clear metadata: `name`, `description`, `source`, `input_schema`, and any `use_cases`, `requires`, `outputs`, or `retrieval_controls` you need.
 3. Treat tool packages as production code, not registry placeholders. A tool package may not be an empty or nearly-empty `__init__.py` whose only purpose is discovery. Directionally, non-trivial tools should use focused sibling modules such as `tool.py`, `client.py`/`delivery.py`, `validation.py`, `models.py`, or `results.py`; `__init__.py` should usually be a small registry entrypoint that imports the public tool object.
-4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `tools/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
+4. Keep separation of concerns. Put reusable transport or integration-specific parsing code in `integrations/<name>/` or shared tool glue in `core/tool_framework/utils/` rather than copying it into the tool body. Split validation, credential/parameter resolution, dispatch/client calls, result normalization, and error handling into focused helpers or sibling files instead of tangling them inside `run()`.
 5. Return stable, planner-friendly results. Expected failures should produce a structured error shape; external side effects must declare `side_effect_level`, require approval when appropriate, and avoid leaking secrets through `extract_params`, return values, logs, or traceable tool-call kwargs.
 6. If the tool should appear in both investigation and chat surfaces, set `surfaces=("investigation", "chat")`.
 7. Add tests that cover schema shape, availability, extraction, success, failure, and the runtime behavior that the planner depends on.

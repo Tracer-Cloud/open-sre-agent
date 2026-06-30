@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.postgresql.tools.postgresql_locks_tool import get_postgresql_lock_status
 from tests.tools.conftest import BaseToolContract
-from tools.postgresql_locks_tool import get_postgresql_lock_status
 
 
 class TestPostgreSQLLocksToolContract(BaseToolContract):
@@ -44,7 +44,10 @@ def test_run_happy_path() -> None:
             {"locktype": "transactionid", "granted": 5, "waiting": 0},
         ],
     }
-    with patch("tools.postgresql_locks_tool.get_lock_status", return_value=fake_result):
+    with patch(
+        "integrations.postgresql.tools.postgresql_locks_tool.get_lock_status",
+        return_value=fake_result,
+    ):
         result = get_postgresql_lock_status(host="localhost", database="testdb")
     assert result["available"] is True
     assert result["blocked_query_count"] == 1
@@ -66,7 +69,10 @@ def test_run_no_locks() -> None:
             {"locktype": "relation", "granted": 3, "waiting": 0},
         ],
     }
-    with patch("tools.postgresql_locks_tool.get_lock_status", return_value=fake_result):
+    with patch(
+        "integrations.postgresql.tools.postgresql_locks_tool.get_lock_status",
+        return_value=fake_result,
+    ):
         result = get_postgresql_lock_status(host="localhost", database="testdb")
     assert result["blocked_query_count"] == 0
     assert result["blocked_queries"] == []
@@ -74,7 +80,7 @@ def test_run_no_locks() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.postgresql_locks_tool.get_lock_status",
+        "integrations.postgresql.tools.postgresql_locks_tool.get_lock_status",
         return_value={"source": "postgresql", "available": False, "error": "permission denied"},
     ):
         result = get_postgresql_lock_status(host="invalid", database="testdb")
@@ -84,7 +90,7 @@ def test_run_error_propagated() -> None:
 
 def test_default_db_warning_present_when_database_omitted() -> None:
     with patch(
-        "tools.postgresql_locks_tool.get_lock_status",
+        "integrations.postgresql.tools.postgresql_locks_tool.get_lock_status",
         return_value={
             "source": "postgresql",
             "available": True,
@@ -100,7 +106,7 @@ def test_default_db_warning_present_when_database_omitted() -> None:
 
 def test_no_default_db_warning_when_database_provided() -> None:
     with patch(
-        "tools.postgresql_locks_tool.get_lock_status",
+        "integrations.postgresql.tools.postgresql_locks_tool.get_lock_status",
         return_value={
             "source": "postgresql",
             "available": True,

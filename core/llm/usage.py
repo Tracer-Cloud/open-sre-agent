@@ -34,9 +34,6 @@ def emit_usage(model: str, tokens_in: int | None, tokens_out: int | None) -> Non
     hook(model, int(tokens_in or 0), int(tokens_out or 0))
 
 
-_emit_usage = emit_usage
-
-
 def coerce_usage_tokens(
     usage: Any,
     *,
@@ -54,9 +51,6 @@ def coerce_usage_tokens(
     inp = int(raw_in) if isinstance(raw_in, (int, float)) else None
     out = int(raw_out) if isinstance(raw_out, (int, float)) else None
     return inp, out
-
-
-_coerce_usage_tokens = coerce_usage_tokens
 
 
 def llm_response_with_usage(

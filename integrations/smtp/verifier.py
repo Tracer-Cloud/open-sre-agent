@@ -15,7 +15,7 @@ def verify_smtp(source: str, config: dict[str, Any]) -> dict[str, str]:
     except Exception as err:
         return result("smtp", source, "missing", str(err))
 
-    from platform.notifications.smtp_delivery import verify_smtp_connection
+    from integrations.smtp.delivery import verify_smtp_connection
 
     ok, detail = verify_smtp_connection(smtp_config.model_dump())
     return result("smtp", source, "passed" if ok else "failed", detail)

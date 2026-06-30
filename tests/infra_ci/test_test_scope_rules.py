@@ -52,9 +52,9 @@ def test_datadog_rule_includes_integration_and_tool_tests() -> None:
     assert len(targets) == 7
 
 
-def test_interactive_shell_routes_to_its_own_tests() -> None:
+def test_interactive_shell_surface_routes_to_its_own_tests() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["surfaces/interactive_shell/runtime/session.py"])
+    escalate, targets, _ = rules.classify(["surfaces/interactive_shell/controller.py"])
     assert not escalate
     assert targets == ["tests/interactive_shell/"]
 

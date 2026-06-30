@@ -5,8 +5,8 @@ from typing import Any, cast
 
 from core.context.state import AgentState
 from core.domain.types.retrieval import RetrievalControls
+from core.tool_framework.registered_tool import RegisteredTool
 from tools.investigation.stages.plan_evidence.node import plan_actions
-from tools.registered_tool import RegisteredTool
 
 
 def _tool(

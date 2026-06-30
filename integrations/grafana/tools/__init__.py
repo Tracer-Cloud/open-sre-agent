@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _query_grafana_alert_rules_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -119,8 +119,8 @@ def query_grafana_alert_rules(
 import time
 from datetime import UTC, datetime
 
+from core.tool_framework.tool_decorator import tool
 from integrations.grafana.base import _epoch_ms_to_iso, _map_annotation
-from tools.tool_decorator import tool
 
 
 def _query_grafana_annotations_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -261,6 +261,7 @@ def query_grafana_annotations(
 """Grafana Loki log query tool — primary owner of Grafana helpers."""
 
 
+from core.tool_framework.tool_decorator import tool
 from integrations.grafana.client import get_grafana_client_from_credentials
 from integrations.opensre.grafana_backend_queries import (
     query_logs_from_backend,
@@ -269,7 +270,6 @@ from integrations.opensre.grafana_backend_queries import (
 )
 from platform.common.evidence_compaction import summarize_counts
 from platform.common.log_compaction import build_error_taxonomy, deduplicate_logs
-from tools.tool_decorator import tool
 
 
 def _map_pipeline_to_service_name(pipeline_name: str) -> str:
@@ -487,7 +487,7 @@ def query_grafana_logs(
 
 from pydantic import BaseModel, Field
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 class QueryGrafanaMetricsInput(BaseModel):
@@ -618,7 +618,7 @@ def query_grafana_metrics(
 """Grafana Loki service name discovery tool."""
 
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 def _query_grafana_service_names_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -686,8 +686,8 @@ def query_grafana_service_names(
 
 
 from core.domain.pipeline_spans import extract_pipeline_spans as _extract_pipeline_spans
+from core.tool_framework.tool_decorator import tool
 from platform.common.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
-from tools.tool_decorator import tool
 
 
 def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.utils.compaction import (
+from core.tool_framework.utils.compaction import (
     DEFAULT_LOG_LIMIT,
     DEFAULT_MESSAGE_CHARS,
     compact_invocations,
@@ -165,7 +165,7 @@ class TestSummarizeCounts:
 class TestConstants:
     def test_default_limits_are_reasonable(self) -> None:
         """Ensure default limits prevent prompt overflow while preserving useful data."""
-        from tools.utils.compaction import (
+        from core.tool_framework.utils.compaction import (
             DEFAULT_ERROR_LOG_LIMIT,
             DEFAULT_LOG_LIMIT,
             DEFAULT_MESSAGE_CHARS,

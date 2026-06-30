@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
 from tools.python_execution_tool.credentials import execution_env, github_extract_params
 from tools.python_execution_tool.runner import run_python_execution
 

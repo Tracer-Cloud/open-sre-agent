@@ -4,13 +4,13 @@
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.dagster import (
     DagsterConfig,
     dagster_extract_params,
     dagster_is_available,
     list_assets_with_materialization,
 )
-from tools.tool_decorator import tool
 
 
 @tool(
@@ -38,12 +38,12 @@ def list_dagster_assets(
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
     get_run_logs,
 )
-from tools.tool_decorator import tool
 
 
 @tool(
@@ -88,12 +88,12 @@ def get_dagster_run_logs(
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
     list_runs,
 )
-from tools.tool_decorator import tool
 
 
 @tool(
@@ -133,12 +133,12 @@ def list_dagster_runs(
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
     list_schedule_ticks,
 )
-from tools.tool_decorator import tool
 
 
 @tool(
@@ -180,12 +180,12 @@ def list_dagster_schedule_ticks(
 
 from typing import Any
 
+from core.tool_framework.tool_decorator import tool
 from integrations.dagster import (
     dagster_extract_params,
     dagster_is_available,
     list_sensor_ticks,
 )
-from tools.tool_decorator import tool
 
 
 @tool(

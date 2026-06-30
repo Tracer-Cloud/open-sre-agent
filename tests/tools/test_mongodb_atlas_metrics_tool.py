@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.mongodb_atlas.tools.mongodb_atlas_metrics_tool import (
+    get_mongodb_atlas_cluster_metrics,
+)
 from tests.tools.conftest import BaseToolContract
-from tools.mongodb_atlas_metrics_tool import get_mongodb_atlas_cluster_metrics
 
 
 class TestMongoDBAtlasMetricsToolContract(BaseToolContract):
@@ -26,7 +28,10 @@ def test_run_happy_path() -> None:
         "process_id": "host:27017",
         "measurements": {"CONNECTIONS": {"value": 42, "units": "SCALAR"}},
     }
-    with patch("tools.mongodb_atlas_metrics_tool.get_cluster_metrics", return_value=fake_result):
+    with patch(
+        "integrations.mongodb_atlas.tools.mongodb_atlas_metrics_tool.get_cluster_metrics",
+        return_value=fake_result,
+    ):
         result = get_mongodb_atlas_cluster_metrics(
             api_public_key="pub",
             api_private_key="priv",
@@ -39,7 +44,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.mongodb_atlas_metrics_tool.get_cluster_metrics",
+        "integrations.mongodb_atlas.tools.mongodb_atlas_metrics_tool.get_cluster_metrics",
         return_value={"source": "mongodb_atlas", "available": False, "error": "auth failed"},
     ):
         result = get_mongodb_atlas_cluster_metrics(

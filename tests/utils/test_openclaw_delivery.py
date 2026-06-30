@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from platform.notifications.openclaw_delivery import send_openclaw_report
+from integrations.openclaw.delivery import send_openclaw_report
 
 
 def _state(**overrides: Any) -> dict[str, Any]:
@@ -35,7 +35,7 @@ def test_send_openclaw_report_success_creates_conversation(monkeypatch: pytest.M
     calls: list[tuple[str, dict[str, Any]]] = []
 
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda _config: None,
     )
 
@@ -43,7 +43,7 @@ def test_send_openclaw_report_success_creates_conversation(monkeypatch: pytest.M
         calls.append((tool_name, arguments))
         return {"is_error": False, "tool": tool_name, "arguments": arguments, "text": "ok"}
 
-    monkeypatch.setattr("platform.notifications.openclaw_delivery.call_openclaw_tool", _fake_call)
+    monkeypatch.setattr("integrations.openclaw.delivery.call_openclaw_tool", _fake_call)
 
     posted, error = send_openclaw_report(
         _state(),
@@ -84,7 +84,7 @@ def test_send_openclaw_report_runtime_unavailable_returns_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda _config: "Command not found: openclaw",
     )
 
@@ -98,11 +98,11 @@ def test_send_openclaw_report_runtime_unavailable_returns_false(
 
 def test_send_openclaw_report_tool_error_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda _config: None,
     )
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.call_openclaw_tool",
+        "integrations.openclaw.delivery.call_openclaw_tool",
         lambda _config, _tool_name, _arguments: {
             "is_error": True,
             "text": "route missing",
@@ -117,11 +117,11 @@ def test_send_openclaw_report_tool_error_returns_false(monkeypatch: pytest.Monke
 
 def test_send_openclaw_report_exception_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda _config: None,
     )
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.call_openclaw_tool",
+        "integrations.openclaw.delivery.call_openclaw_tool",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -136,7 +136,7 @@ def test_send_openclaw_report_forwards_conversation_id(monkeypatch: pytest.Monke
     calls: list[tuple[str, dict[str, Any]]] = []
 
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda _config: None,
     )
 
@@ -144,7 +144,7 @@ def test_send_openclaw_report_forwards_conversation_id(monkeypatch: pytest.Monke
         calls.append((tool_name, arguments))
         return {"is_error": False, "tool": tool_name, "arguments": arguments}
 
-    monkeypatch.setattr("platform.notifications.openclaw_delivery.call_openclaw_tool", _fake_call)
+    monkeypatch.setattr("integrations.openclaw.delivery.call_openclaw_tool", _fake_call)
 
     posted, error = send_openclaw_report(
         _state(openclaw_context={"conversation_id": "conv-1"}),
@@ -162,11 +162,11 @@ def test_send_openclaw_report_merges_transport_overrides(monkeypatch: pytest.Mon
     seen_configs: list[tuple[str, str]] = []
 
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.openclaw_runtime_unavailable_reason",
+        "integrations.openclaw.delivery.openclaw_runtime_unavailable_reason",
         lambda config: seen_configs.append((config.mode, config.command)) or None,
     )
     monkeypatch.setattr(
-        "platform.notifications.openclaw_delivery.call_openclaw_tool",
+        "integrations.openclaw.delivery.call_openclaw_tool",
         lambda _config, tool_name, arguments: {
             "is_error": False,
             "tool": tool_name,

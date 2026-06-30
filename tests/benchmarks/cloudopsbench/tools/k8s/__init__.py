@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 # --------------------------------------------------------------------------- #
 # Dataset conventions — change only when the upstream dataset format changes. #

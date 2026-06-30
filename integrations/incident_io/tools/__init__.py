@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.incident_io.client import make_incident_io_client
-from tools.base import BaseTool
 
 
 class IncidentIoIncidentsTool(BaseTool):

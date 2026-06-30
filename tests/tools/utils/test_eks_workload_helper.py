@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from tools.utils.eks_workload_helper import extract_cluster_params, extract_workload_params
+from integrations.eks.workload_helper import (
+    extract_cluster_params,
+    extract_workload_params,
+)
 
 
 def test_extract_workload_params_basic_params():

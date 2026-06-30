@@ -18,6 +18,7 @@ from core import (
 )
 from core.llm.agent_llm_client import CLIBackedAgentClient
 from core.llm.types import ToolCall
+from core.tool_framework.registered_tool import RegisteredTool
 from integrations.llm_cli.errors import CLITimeoutError
 from tools.investigation.stages.gather_evidence import (
     ConnectedInvestigationAgent,
@@ -33,7 +34,6 @@ from tools.investigation.stages.gather_evidence.tools import (
     availability_view,
     select_investigation_tools,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def _registered_tool(name: str, source: str) -> RegisteredTool:

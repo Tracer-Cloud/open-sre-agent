@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.mysql.tools.mysql_replication_status_tool import get_mysql_replication_status
 from tests.tools.conftest import BaseToolContract
-from tools.mysql_replication_status_tool import get_mysql_replication_status
 
 
 class TestMySQLReplicationStatusToolContract(BaseToolContract):
@@ -32,7 +32,8 @@ def test_run_happy_path_replica() -> None:
         "last_error": "",
     }
     with patch(
-        "tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result
+        "integrations.mysql.tools.mysql_replication_status_tool.get_replication_status",
+        return_value=fake_result,
     ):
         result = get_mysql_replication_status(host="replica.mysql.example.com", database="testdb")
     assert result["is_replica"] is True
@@ -48,7 +49,8 @@ def test_run_happy_path_primary() -> None:
         "note": "Server is not configured as a replica.",
     }
     with patch(
-        "tools.mysql_replication_status_tool.get_replication_status", return_value=fake_result
+        "integrations.mysql.tools.mysql_replication_status_tool.get_replication_status",
+        return_value=fake_result,
     ):
         result = get_mysql_replication_status(host="primary.mysql.example.com", database="testdb")
     assert result["is_replica"] is False
@@ -57,7 +59,7 @@ def test_run_happy_path_primary() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.mysql_replication_status_tool.get_replication_status",
+        "integrations.mysql.tools.mysql_replication_status_tool.get_replication_status",
         return_value={"source": "mysql", "available": False, "error": "connection timed out"},
     ):
         result = get_mysql_replication_status(host="invalid", database="testdb")

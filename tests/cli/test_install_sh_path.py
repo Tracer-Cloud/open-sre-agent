@@ -165,15 +165,32 @@ def test_install_sh_contains_auto_onboarding_launch_hook() -> None:
 
     assert "OPENSRE_AUTO_LAUNCH" in source
     assert "launch_onboarding_after_install" in source
-    assert '"$installed_binary" onboard </dev/tty >/dev/tty 2>&1' in source
+    assert '"$installed_binary" onboard' in source
+
+
+def test_install_sh_auto_onboarding_requires_interactive_stdin() -> None:
+    """Auto-launch must be gated on a real terminal on stdin (issue #3273).
+
+    The documented install path is ``curl … | bash``, where stdin is the curl
+    pipe rather than a terminal. Launching the full-screen wizard there fails
+    with a terminal I/O error mid-render, so the launch must be skipped unless
+    the installer itself is attached to an interactive terminal.
+    """
+    source = INSTALL_SH.read_text()
+
+    # Gate on stdin being a terminal, and no longer redirect from /dev/tty.
+    assert "[ ! -t 0 ]" in source
+    assert "</dev/tty >/dev/tty 2>&1" not in source
 
 
 def test_install_sh_auto_onboarding_noops_without_tty() -> None:
+    # stdin is redirected from /dev/null so the gate is exercised deterministically
+    # regardless of how the test runner's own stdin is wired.
     result = _run_logging_snippet(
         """
         INSTALL_DIR="/tmp"
         BIN_NAME="opensre"
-        launch_onboarding_after_install
+        launch_onboarding_after_install </dev/null
         """
     )
 

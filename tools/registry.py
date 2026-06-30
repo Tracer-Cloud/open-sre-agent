@@ -13,9 +13,9 @@ from pathlib import Path
 from types import ModuleType
 
 import tools as tools_package
-from tools.base import BaseTool
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
-from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
+from core.tool_framework.base import BaseTool
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool, ToolSurface
+from core.tool_framework.skill_guidance import format_tool_skill_guidance, load_tool_skill_guidance
 
 # Per-vendor tool packages — when a vendor consolidates its tool code under
 # ``integrations/<vendor>/tools/``, list the dotted package path here so the
@@ -28,26 +28,61 @@ from tools.skill_guidance import format_tool_skill_guidance, load_tool_skill_gui
 _INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.alertmanager.tools",
     "integrations.argocd.tools",
+    "integrations.aws.tools",
+    "integrations.aws_lambda.tools",
+    "integrations.azure.tools",
+    "integrations.azure_sql.tools",
+    "integrations.betterstack.tools",
+    "integrations.bitbucket.tools",
+    "integrations.clickhouse.tools",
+    "integrations.cloudtrail.tools",
+    "integrations.cloudwatch.tools",
     "integrations.coralogix.tools",
     "integrations.dagster.tools",
     "integrations.datadog.tools",
+    "integrations.ec2.tools",
     "integrations.eks.tools",
     "integrations.elasticsearch.tools",
+    "integrations.elb.tools",
+    "integrations.github.tools",
+    "integrations.gitlab.tools",
     "integrations.google_docs.tools",
     "integrations.grafana.tools",
     "integrations.groundcover.tools",
     "integrations.helm.tools",
+    "integrations.hermes.tools",
     "integrations.honeycomb.tools",
     "integrations.incident_io.tools",
     "integrations.jenkins.tools",
     "integrations.jira.tools",
+    "integrations.kafka.tools",
+    "integrations.mariadb.tools",
+    "integrations.mongodb.tools",
+    "integrations.mongodb_atlas.tools",
+    "integrations.mysql.tools",
+    "integrations.openclaw.tools",
+    "integrations.openobserve.tools",
+    "integrations.opensearch.tools",
     "integrations.opsgenie.tools",
     "integrations.pagerduty.tools",
+    "integrations.posthog_mcp.tools",
+    "integrations.postgresql.tools",
     "integrations.prefect.tools",
+    "integrations.rabbitmq.tools",
+    "integrations.rds.tools",
+    "integrations.redis.tools",
+    "integrations.s3.tools",
+    "integrations.sentry.tools",
+    "integrations.sentry_mcp.tools",
     "integrations.signoz.tools",
+    "integrations.snowflake.tools",
     "integrations.splunk.tools",
+    "integrations.supabase.tools",
+    "integrations.telegram.tools",
     "integrations.tempo.tools",
     "integrations.temporal.tools",
+    "integrations.tracer.tools",
+    "integrations.twilio.tools",
     "integrations.vercel.tools",
     "integrations.victoria_logs.tools",
 )
@@ -56,23 +91,21 @@ logger = logging.getLogger(__name__)
 
 _SKIP_MODULE_NAMES = {
     "__pycache__",
-    "base",
-    "registry",
-    "registered_tool",
-    "skill_guidance",
-    "tool_decorator",
     "investigation_registry",
-    "utils",
+    "registry",
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
 _TOOLS_PACKAGE_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _TOOLS_PACKAGE_DIR.parent
 
 
 def _skill_guidance_files() -> tuple[Path, ...]:
     """Return explicit and package-local SKILL.md files attached at registry load."""
 
-    explicit = (_TOOLS_PACKAGE_DIR / "github" / "workflow" / "SKILL.md",)
+    explicit = (
+        _REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",
+    )
     discovered = sorted(_TOOLS_PACKAGE_DIR.glob("python_execution_tool/skills/*/SKILL.md"))
     return (*explicit, *discovered)
 

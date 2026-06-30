@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.victoria_logs.client import make_victoria_logs_client
-from tools.base import BaseTool
 
 
 class VictoriaLogsTool(BaseTool):

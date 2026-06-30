@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from integrations.hermes.poller import HermesLogCursor
-from tools.hermes_logs_tool import get_hermes_logs
-from tools.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
+from integrations.hermes.tools.hermes_logs_tool import get_hermes_logs
 
 _LINES = [
     "2026-05-12 00:00:00,000 WARNING gateway.platforms.telegram: polling conflict (1/3)",

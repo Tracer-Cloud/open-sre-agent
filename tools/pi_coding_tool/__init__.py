@@ -31,8 +31,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.pi import is_pi_coding_enabled
-from tools.base import BaseTool
 from tools.pi_coding_tool.errors import PiCodingError
 from tools.pi_coding_tool.runner import (
     SOURCE,

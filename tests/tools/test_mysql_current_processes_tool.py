@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
+from integrations.mysql.tools.mysql_current_processes_tool import get_mysql_current_processes
 from tests.tools.conftest import BaseToolContract
-from tools.mysql_current_processes_tool import get_mysql_current_processes
 
 
 class TestMySQLCurrentProcessesToolContract(BaseToolContract):
@@ -50,7 +50,8 @@ def test_run_happy_path() -> None:
         ],
     }
     with patch(
-        "tools.mysql_current_processes_tool.get_current_processes", return_value=fake_result
+        "integrations.mysql.tools.mysql_current_processes_tool.get_current_processes",
+        return_value=fake_result,
     ):
         result = get_mysql_current_processes(
             host="localhost", database="testdb", threshold_seconds=2
@@ -63,7 +64,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_propagated() -> None:
     with patch(
-        "tools.mysql_current_processes_tool.get_current_processes",
+        "integrations.mysql.tools.mysql_current_processes_tool.get_current_processes",
         return_value={"source": "mysql", "available": False, "error": "access denied"},
     ):
         result = get_mysql_current_processes(host="invalid", database="testdb")
@@ -73,7 +74,7 @@ def test_run_error_propagated() -> None:
 
 def test_default_db_warning_present_when_database_omitted() -> None:
     with patch(
-        "tools.mysql_current_processes_tool.get_current_processes",
+        "integrations.mysql.tools.mysql_current_processes_tool.get_current_processes",
         return_value={"source": "mysql", "available": True, "processes": []},
     ):
         result = get_mysql_current_processes(host="localhost")
@@ -83,7 +84,7 @@ def test_default_db_warning_present_when_database_omitted() -> None:
 
 def test_no_default_db_warning_when_database_provided() -> None:
     with patch(
-        "tools.mysql_current_processes_tool.get_current_processes",
+        "integrations.mysql.tools.mysql_current_processes_tool.get_current_processes",
         return_value={"source": "mysql", "available": True, "processes": []},
     ):
         result = get_mysql_current_processes(host="localhost", database="mydb")

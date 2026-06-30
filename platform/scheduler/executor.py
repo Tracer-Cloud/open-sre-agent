@@ -111,7 +111,7 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
     if not bot_token or not task.chat_id:
         return False, "Missing bot_token or chat_id for Telegram", ""
 
-    from platform.notifications.telegram_delivery import (
+    from integrations.telegram.delivery import (
         post_telegram_message,
         truncate_for_telegram_html,
     )
@@ -180,7 +180,7 @@ def _deliver_discord(task: ScheduledTask, message: str) -> tuple[bool, str, str]
     if not bot_token or not task.chat_id:
         return False, "Missing bot_token or channel_id for Discord", ""
 
-    from platform.notifications.discord_delivery import send_discord_report
+    from integrations.discord.delivery import send_discord_report
 
     # Strip HTML tags — Discord uses embeds, not HTML
     plain_message = _strip_html(message)

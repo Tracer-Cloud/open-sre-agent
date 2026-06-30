@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.tool_framework.registered_tool import RegisteredTool
 from tests.benchmarks.cloudopsbench.bench_agent import (
     _DEFAULT_MIN_TOOL_CALLS,
     _ENV_MIN_TOOL_CALLS,
@@ -11,7 +12,6 @@ from tests.benchmarks.cloudopsbench.bench_agent import (
     _resolve_min_tool_calls,
 )
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
-from tools.registered_tool import RegisteredTool
 
 
 def _make_registered_tool(name: str, origin_module: str) -> RegisteredTool:
@@ -124,7 +124,7 @@ def test_production_agent_filter_tools_is_identity() -> None:
     silently disables tools across the entire product."""
     tools = [
         _make_registered_tool("EKSListClusters", "integrations.eks.tools"),
-        _make_registered_tool("HermesLogs", "tools.hermes_logs_tool"),
+        _make_registered_tool("HermesLogs", "integrations.hermes.tools.hermes_logs_tool"),
     ]
     assert ConnectedInvestigationAgent()._filter_tools(tools) == tools
 
@@ -136,7 +136,7 @@ def test_bench_agent_filter_keeps_only_bench_package_tools() -> None:
     ``tests/benchmarks/cloudopsbench/tools/`` is picked up automatically."""
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
     prod_eks = _make_registered_tool("EKSListClusters", "integrations.eks.tools")
-    prod_hermes = _make_registered_tool("HermesLogs", "tools.hermes_logs_tool")
+    prod_hermes = _make_registered_tool("HermesLogs", "integrations.hermes.tools.hermes_logs_tool")
     filtered = BenchInvestigationAgent()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool]
 
@@ -148,7 +148,7 @@ def test_bench_agent_filter_drops_everything_when_no_bench_tools_registered() ->
     The ``run`` loop already logs a warning when no tools are available."""
     only_prod = [
         _make_registered_tool("EKSListClusters", "integrations.eks.tools"),
-        _make_registered_tool("HermesLogs", "tools.hermes_logs_tool"),
+        _make_registered_tool("HermesLogs", "integrations.hermes.tools.hermes_logs_tool"),
     ]
     assert BenchInvestigationAgent()._filter_tools(only_prod) == []
 
@@ -276,7 +276,7 @@ def test_bench_agent_allowed_prefixes_is_class_attribute_for_override() -> None:
 
     bench_tool = _make_registered_tool("GetResources", "tests.benchmarks.cloudopsbench.tools.k8s")
     prod_eks = _make_registered_tool("EKSListClusters", "integrations.eks.tools")
-    prod_hermes = _make_registered_tool("HermesLogs", "tools.hermes_logs_tool")
+    prod_hermes = _make_registered_tool("HermesLogs", "integrations.hermes.tools.hermes_logs_tool")
     filtered = _MixedBench()._filter_tools([bench_tool, prod_eks, prod_hermes])
     assert filtered == [bench_tool, prod_eks]
 

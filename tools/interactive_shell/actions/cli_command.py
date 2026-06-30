@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     run_opensre_cli_command,
 )
@@ -14,7 +15,6 @@ from tools.interactive_shell.contracts import (
     object_schema,
     string_property,
 )
-from tools.registered_tool import RegisteredTool
 
 
 def execute_cli_command_tool(args: dict[str, Any], ctx: ToolContext) -> bool:

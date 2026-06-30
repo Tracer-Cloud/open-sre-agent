@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.base import BaseTool
 from integrations.opsgenie.client import make_opsgenie_client
-from tools.base import BaseTool
 
 
 class OpsGenieAlertDetailTool(BaseTool):
@@ -136,7 +136,7 @@ opsgenie_alert_detail = OpsGenieAlertDetailTool()
 """OpsGenie alert listing and search investigation tool."""
 
 
-from tools.base import BaseTool
+from core.tool_framework.base import BaseTool
 
 _OPEN_STATUSES = {"open"}
 

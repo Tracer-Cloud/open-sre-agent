@@ -108,6 +108,7 @@ def extract_retry_after_seconds(exc: BaseException) -> float | None:
                     if seconds >= 0:
                         return min(seconds, RETRY_AFTER_MAX_SEC)
                 except (ValueError, TypeError):
+                    # retry-after header was not a numeric delay; try other sources
                     pass
 
     structured = _structured_retry_delay_seconds(exc)

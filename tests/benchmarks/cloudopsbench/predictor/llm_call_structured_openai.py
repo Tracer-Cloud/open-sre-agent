@@ -60,8 +60,8 @@ from typing import Any, Literal
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.llm.llm_client import _emit_usage  # noqa: PLC2701 — bench needs cost tracking
 from core.llm.llm_retry import LLMCreditExhaustedError, retry_on_rate_limit
+from core.llm.usage import emit_usage
 from tests.benchmarks.cloudopsbench.predictor.llm_call import (
     _build_system_prompt,
     _build_user_prompt,
@@ -134,7 +134,7 @@ def emit_paper_predictions_structured(
     ``None``, the existing scorer fallback runs — same no-regression
     contract as the text predictor.
 
-    Cost: emits ``_emit_usage`` after a successful call so the bench
+    Cost: emits ``emit_usage`` after a successful call so the bench
     runner's CostTracker hook (registered via ``set_usage_hook``) sees
     structured-output token spend in the aggregate cost number.
 
@@ -196,7 +196,7 @@ def emit_paper_predictions_structured(
     # Emit cost — usage is on the chat completion's ``usage`` field.
     usage = getattr(completion, "usage", None)
     if usage is not None:
-        _emit_usage(
+        emit_usage(
             resolved_model,
             getattr(usage, "prompt_tokens", 0) or 0,
             getattr(usage, "completion_tokens", 0) or 0,

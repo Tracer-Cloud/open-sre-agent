@@ -736,17 +736,17 @@ def _setup_discord() -> None:
 
 
 def _setup_telegram() -> None:
-    from surfaces.cli.wizard.integration_health import validate_telegram_bot
+    from integrations.telegram.verifier import verify_telegram
 
     bot_token = _p("Telegram bot token", secret=True)
     if not bot_token:
         _die("bot_token is required.")
     default_chat_id = _p("Default chat ID (optional)")
     print("\n  Validating Telegram bot token...")
-    result = validate_telegram_bot(bot_token=bot_token)
-    if not result.ok:
-        _die(result.detail)
-    print(f"  {result.detail}")
+    result = verify_telegram("setup", {"bot_token": bot_token})
+    if result["status"] != "passed":
+        _die(result["detail"])
+    print(f"  {result['detail']}")
     upsert_integration(
         "telegram",
         {

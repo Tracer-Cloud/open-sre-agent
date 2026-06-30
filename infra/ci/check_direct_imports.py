@@ -50,56 +50,11 @@ _BASELINE_IGNORES: frozenset[str] = frozenset(
         # to be burned down by extracting shared runtime primitives out of
         # ``surfaces/interactive_shell/`` and into a layer below ``surfaces``.
         "gateway.storage.session.resolver -> surfaces.interactive_shell.runtime.context",
-        # Per-vendor integration tool packages still depend on shared tool
-        # primitives that live under ``tools/``: ``tools.base.BaseTool``
-        # (class-based vendors), ``tools.tool_decorator.tool`` (decorator-
-        # based vendors), and the payload helpers under ``tools.utils.*``.
-        # Burn down by moving these primitives to a lower layer (likely
-        # ``core/`` or ``platform/``) so vendor tools can import them
-        # without crossing into ``tools``.
-        "integrations.alertmanager.tools -> tools.base",
-        "integrations.argocd.tools -> tools.base",
-        "integrations.coralogix.tools -> tools.base",
-        "integrations.dagster.tools -> tools.tool_decorator",
-        "integrations.datadog.tools -> tools.tool_decorator",
-        "integrations.datadog.tools -> tools.utils.availability",
-        "integrations.datadog.tools -> tools.utils.compaction",
-        "integrations.eks.tools -> tools._telemetry",
-        "integrations.eks.tools -> tools.tool_decorator",
-        "integrations.eks.tools -> tools.utils.availability",
-        "integrations.eks.tools -> tools.utils.eks_workload_helper",
-        "integrations.elasticsearch.tools -> tools.base",
-        "integrations.elasticsearch.tools -> tools.utils.compaction",
-        "integrations.google_docs.tools -> tools._telemetry",
-        "integrations.google_docs.tools -> tools.tool_decorator",
-        "integrations.grafana.tools -> tools.tool_decorator",
-        "integrations.groundcover.tools -> tools.tool_decorator",
-        "integrations.groundcover.tools -> tools.utils.availability",
-        "integrations.groundcover.tools -> tools.utils.groundcover",
-        "integrations.helm.tools -> tools.base",
-        "integrations.helm.tools -> tools.utils.helm_tools",
-        "integrations.honeycomb.tools -> tools.base",
-        "integrations.incident_io.tools -> tools.base",
-        "integrations.jenkins.tools -> tools.tool_decorator",
-        "integrations.jira.tools -> tools.base",
-        "integrations.opsgenie.tools -> tools.base",
-        "integrations.pagerduty.tools -> tools.base",
-        "integrations.prefect.tools -> tools.base",
-        "integrations.signoz.tools -> tools.tool_decorator",
-        "integrations.signoz.tools -> tools.utils.availability",
-        "integrations.signoz.tools -> tools.utils.compaction",
-        "integrations.splunk.tools -> tools.base",
-        "integrations.splunk.tools -> tools.utils.compaction",
-        "integrations.tempo.tools -> tools.tool_decorator",
-        "integrations.tempo.tools -> tools.utils.availability",
-        "integrations.temporal.tools -> tools.base",
-        "integrations.vercel.tools -> tools.base",
-        "integrations.victoria_logs.tools -> tools.base",
-        # Hermes Telegram sink reuses watch-dog alarm dispatch (#1500 refactor).
-        "integrations.hermes.sinks -> tools.watch_dog.alarms",
-        # Integration setup UX still reaches into the CLI wizard.
-        "integrations.cli -> surfaces.cli.wizard.integration_health",
-        # tools/interactive_shell — pre-existing cross-layer reuse migrated from interactive_shell -> surfaces.interactive_shell (T-1 #3299). Burn down by extracting the shared subprocess-runner + execution-confirm primitives into surfaces/shared/.
+        # tools/interactive_shell action tools reach UP into surfaces/interactive_shell
+        # for runtime / command_registry / UI primitives. Clears when the action
+        # tools themselves are refactored to be UI-agnostic (e.g. return
+        # "approval-required" sentinels instead of calling execution_confirm
+        # directly) so the surface owns its own confirmation UX.
         "tools.interactive_shell.actions.cli_command -> surfaces.interactive_shell.runtime.subprocess_runner",
         "tools.interactive_shell.actions.investigation -> surfaces.interactive_shell.runtime",
         "tools.interactive_shell.actions.llm_provider -> surfaces.interactive_shell.command_registry",

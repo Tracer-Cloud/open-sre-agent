@@ -76,7 +76,7 @@ For simple tools, you do not need a class or `ClassVar` metadata. Add one file u
 Example (`tools/example_status_tool.py`):
 
 ```python
-from tools.tool_decorator import tool
+from core.tool_framework.tool_decorator import tool
 
 
 @tool(source="knowledge")

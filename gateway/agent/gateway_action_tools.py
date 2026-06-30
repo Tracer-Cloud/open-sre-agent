@@ -16,7 +16,7 @@ from tools.interactive_shell.shell.display import format_shell_command_for_displ
 from tools.interactive_shell.shell.execution import ShellExecutionResult, execute_shell_command
 from tools.interactive_shell.shell.parsing import parse_shell_command
 from tools.interactive_shell.shell.policy import plan_shell_execution
-from tools.registered_tool import RegisteredTool
+from core.tool_framework.registered_tool import RegisteredTool
 
 GATEWAY_RESOURCE_KEY = "gateway"
 _SHELL_COMMAND_TIMEOUT_SECONDS = 120

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from platform.notifications.whatsapp_delivery import (
+from integrations.whatsapp.delivery import (
     post_whatsapp_message_twilio,
     send_whatsapp_report,
 )
@@ -28,7 +28,7 @@ def test_post_whatsapp_message_twilio_success(monkeypatch: pytest.MonkeyPatch) -
         captured.update(kwargs)
         return _Resp()
 
-    monkeypatch.setattr("platform.notifications.whatsapp_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("integrations.whatsapp.delivery.httpx.post", _fake_post)
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+1234567890",
@@ -51,7 +51,7 @@ def test_post_whatsapp_message_twilio_transport_failure(monkeypatch: pytest.Monk
     def _fake_post(*args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("Connection refused")
 
-    monkeypatch.setattr("platform.notifications.whatsapp_delivery.httpx.post", _fake_post)
+    monkeypatch.setattr("integrations.whatsapp.delivery.httpx.post", _fake_post)
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+123",
@@ -75,9 +75,7 @@ def test_post_whatsapp_message_twilio_api_error(monkeypatch: pytest.MonkeyPatch)
         def json() -> dict[str, Any]:
             return {"message": "Invalid 'From' parameter"}
 
-    monkeypatch.setattr(
-        "platform.notifications.whatsapp_delivery.httpx.post", lambda *_a, **_kw: _Resp()
-    )
+    monkeypatch.setattr("integrations.whatsapp.delivery.httpx.post", lambda *_a, **_kw: _Resp())
 
     success, error, message_id = post_whatsapp_message_twilio(
         to="+123",
@@ -102,9 +100,7 @@ def test_send_whatsapp_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> tuple[bool, str, str]:
         return True, "", "SM456"
 
-    monkeypatch.setattr(
-        "platform.notifications.whatsapp_delivery.post_whatsapp_message_twilio", _fake_post
-    )
+    monkeypatch.setattr("integrations.whatsapp.delivery.post_whatsapp_message_twilio", _fake_post)
 
     success, error = send_whatsapp_report(
         report="Investigation summary",
@@ -144,9 +140,7 @@ def test_send_whatsapp_report_truncates_long_report(monkeypatch: pytest.MonkeyPa
         captured_text = text
         return True, "", "SM789"
 
-    monkeypatch.setattr(
-        "platform.notifications.whatsapp_delivery.post_whatsapp_message_twilio", _fake_post
-    )
+    monkeypatch.setattr("integrations.whatsapp.delivery.post_whatsapp_message_twilio", _fake_post)
 
     send_whatsapp_report(
         report="X" * 5000,

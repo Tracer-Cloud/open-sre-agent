@@ -1139,7 +1139,15 @@ launch_onboarding_after_install() {
   if auto_launch_disabled; then
     return
   fi
-  if [ ! -t 1 ] || [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
+
+  # Only auto-launch the interactive wizard when the installer itself is
+  # attached to a real terminal on both stdin and stdout. When the installer is
+  # piped (the documented `curl … | bash`), stdin is the pipe rather than a
+  # terminal, so onboarding's full-screen prompt cannot reliably take control of
+  # the terminal and exits with a "terminal I/O error" mid-render (issue #3273).
+  # In that case we skip the launch; the "Next steps" hint already tells the user
+  # to run `${BIN_NAME} onboard` in their own terminal, where it works.
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
     return
   fi
 
@@ -1150,7 +1158,7 @@ launch_onboarding_after_install() {
   fi
 
   log "Launching ${BIN_NAME} onboard..."
-  "$installed_binary" onboard </dev/tty >/dev/tty 2>&1 || \
+  "$installed_binary" onboard || \
     warn "Onboarding exited before completion. Run '${BIN_NAME} onboard' to retry."
 }
 

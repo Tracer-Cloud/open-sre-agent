@@ -12,16 +12,20 @@ from core.execution import (
     execute_tool_calls,
 )
 from core.llm.types import ToolCall
-from tests.tools.conftest import BaseToolContract
-from tools.github.work_status import (
+from core.tool_framework.registered_tool import RegisteredTool
+from integrations.github.tools.work_status import (
     execute_github_issue_mutation,
     list_github_security_alerts,
     list_github_work_items,
     propose_github_issue_mutation_from_slack,
     summarize_github_pr_status,
 )
-from tools.github.workflow import GitHubApiError, GitHubRestClient, build_work_status_report
-from tools.registered_tool import RegisteredTool
+from integrations.github.tools.workflow import (
+    GitHubApiError,
+    GitHubRestClient,
+    build_work_status_report,
+)
+from tests.tools.conftest import BaseToolContract
 from tools.work_status_report_tool import generate_work_status_report
 
 
@@ -487,7 +491,7 @@ def test_requires_approval_runs_without_hook() -> None:
 
 
 def test_requires_approval_allows_runtime_approval_hook() -> None:
-    from tools.registered_tool import RegisteredTool
+    from core.tool_framework.registered_tool import RegisteredTool
 
     def run() -> dict[str, str]:
         return {"ok": "true"}

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from platform.notifications import telegram_delivery
-from platform.notifications.telegram_delivery import (
+from integrations.telegram import delivery as telegram_delivery
+from integrations.telegram.delivery import (
     _TelegramTokenFilter,
     post_telegram_message,
     send_telegram_report,
@@ -352,7 +352,7 @@ class TestDelegatesToSharedTransport:
     httpx into ``telegram_delivery`` regresses loudly."""
 
     def test_module_does_not_import_httpx(self) -> None:
-        # Reuse the module-level ``from platform.notifications import telegram_delivery``
+        # Reuse the module-level ``from integrations.telegram_delivery import delivery as telegram_delivery`` (renamed for cleanliness)
         # to avoid importing the same module via both ``import`` and
         # ``from import`` styles (CodeQL py/import-and-import-from).
         assert not hasattr(telegram_delivery, "httpx"), (
@@ -372,7 +372,7 @@ class TestDelegatesToSharedTransport:
                 ok=True, status_code=200, data={"ok": True, "result": {"message_id": 42}}
             )
 
-        monkeypatch.setattr("platform.notifications.telegram_delivery.post_json", _stub_post_json)
+        monkeypatch.setattr("integrations.telegram.delivery.post_json", _stub_post_json)
         ok, err, mid = post_telegram_message("chat-1", "hello", "secret-bot-tok")
         assert ok is True
         assert err == ""
@@ -393,7 +393,7 @@ class TestDelegatesToSharedTransport:
         leak_msg = f"connect failed for url=https://api.telegram.org/bot{bot_token}/sendMessage"
 
         monkeypatch.setattr(
-            "platform.notifications.telegram_delivery.post_json",
+            "integrations.telegram.delivery.post_json",
             lambda *_a, **_kw: DeliveryResponse(ok=False, error=leak_msg),
         )
         ok, err, _ = post_telegram_message("chat-1", "hi", bot_token)

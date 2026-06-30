@@ -6,6 +6,7 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry.slash_catalog import (
     slash_invoke_input_schema,
@@ -20,7 +21,6 @@ from tools.interactive_shell.contracts import (
     execute_with_repl_context,
 )
 from tools.interactive_shell.shared import plan_foreground_tool
-from tools.registered_tool import RegisteredTool
 
 # Slash commands that drive a raw-stdin inline picker or wizard (questionary /
 # repl_choose_one). When the action agent resolves free text (e.g. "remove

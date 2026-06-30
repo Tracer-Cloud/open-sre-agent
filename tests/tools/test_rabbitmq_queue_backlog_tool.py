@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from integrations.rabbitmq.tools.rabbitmq_queue_backlog_tool import get_rabbitmq_queue_backlog
 from tests.tools.conftest import BaseToolContract
-from tools.rabbitmq_queue_backlog_tool import get_rabbitmq_queue_backlog
 
 
 class TestRabbitMQQueueBacklogToolContract(BaseToolContract):
@@ -28,7 +28,7 @@ def test_run_happy_path() -> None:
         "queues": [{"name": "orders", "messages_ready": 100, "messages_unacknowledged": 5}],
     }
     with patch(
-        "tools.rabbitmq_queue_backlog_tool.get_queue_backlog",
+        "integrations.rabbitmq.tools.rabbitmq_queue_backlog_tool.get_queue_backlog",
         return_value=fake_result,
     ):
         result = get_rabbitmq_queue_backlog(host="rmq", username="admin")
@@ -38,7 +38,7 @@ def test_run_happy_path() -> None:
 
 def test_run_error_path() -> None:
     with patch(
-        "tools.rabbitmq_queue_backlog_tool.get_queue_backlog",
+        "integrations.rabbitmq.tools.rabbitmq_queue_backlog_tool.get_queue_backlog",
         return_value={
             "source": "rabbitmq",
             "available": False,

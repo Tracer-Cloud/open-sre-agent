@@ -6,7 +6,11 @@ from typing import Any
 
 from rich.markup import escape
 
-from surfaces.interactive_shell.command_registry import switch_llm_provider, switch_reasoning_model
+from core.tool_framework.registered_tool import RegisteredTool
+from surfaces.interactive_shell.command_registry import (
+    switch_llm_provider,
+    switch_reasoning_model,
+)
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.contracts import (
     ToolContext,
@@ -15,7 +19,6 @@ from tools.interactive_shell.contracts import (
     object_schema,
 )
 from tools.interactive_shell.shared import allow_tool
-from tools.registered_tool import RegisteredTool
 
 
 def _provider_values() -> tuple[str, ...]:

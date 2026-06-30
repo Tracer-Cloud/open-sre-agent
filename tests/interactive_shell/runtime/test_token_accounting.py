@@ -108,9 +108,9 @@ def test_build_llm_run_info_records_tokens_and_metadata() -> None:
 
 
 def test_coerce_usage_tokens_accepts_float_counts() -> None:
-    from core.llm.llm_client import _coerce_usage_tokens
+    from core.llm.usage import coerce_usage_tokens
 
-    assert _coerce_usage_tokens(
+    assert coerce_usage_tokens(
         {"input_tokens": 512.0, "output_tokens": 64.0},
         input_key="input_tokens",
         output_key="output_tokens",

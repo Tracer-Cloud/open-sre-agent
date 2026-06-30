@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.github.client import resolve_github_token
-from tools.utils.github_helpers import github_creds
+from integrations.github.helpers import github_creds
 
 GITHUB_TOKEN_ENV = "GITHUB_TOKEN"
 
