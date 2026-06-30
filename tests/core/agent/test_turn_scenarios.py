@@ -12,6 +12,7 @@ import pytest
 from rich.console import Console
 
 from core import Agent, AgentTool, AgentToolContext
+from core.agent_harness.action_agent import _MAX_TOOL_CALLING_ITERATIONS
 from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_action_user_message,
@@ -69,7 +70,10 @@ _ALL_CASES = load_all_scenarios()
 _DEFAULT_GATE_CASES = select_representative(_ALL_CASES)
 _LIVE_CASES = iter_scenarios_for_shard(_DEFAULT_GATE_CASES)
 _NAME_TO_TOOL_KIND = {tool: kind for kind, tool in TOOL_KIND_TO_NAME.items()}
-_LIVE_PLANNING_MAX_ITERATIONS = 3
+# Mirror the production action loop budget so live planning can exercise the same
+# multi-step, data-dependent compound chains the real gateway/REPL turns allow,
+# instead of drifting from a stale hardcoded cap.
+_LIVE_PLANNING_MAX_ITERATIONS = _MAX_TOOL_CALLING_ITERATIONS
 _CREDIT_EXHAUSTED_MARKERS = (
     "credit exhausted",
     "credit balance is too low",

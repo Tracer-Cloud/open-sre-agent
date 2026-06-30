@@ -28,9 +28,28 @@ def test_normalize_investigation_alert_text_strips_quotes() -> None:
     assert normalize_investigation_alert_text('"hello world"') == "hello world"
 
 
-def test_gateway_action_tools_expose_shell_and_investigation() -> None:
-    names = {tool.name for tool in gateway_action_tools()}
-    assert names == {"shell_run", "investigation_start"}
+def test_gateway_action_tools_expose_local_tools_without_approval() -> None:
+    tools = gateway_action_tools()
+    names = {tool.name for tool in tools}
+
+    # Gateway-local, context-bound tools are always available.
+    assert {"shell_run", "investigation_start"} <= names
+    # No gateway turn tool may block on interactive approval.
+    assert all(not tool.requires_approval for tool in tools)
+    # Interactive-shell runtime-context tools are never exposed beyond the two
+    # gateway-local replacements (the gateway cannot supply that context).
+    runtime_context = {tool.name for tool in tools if tool.accepts_runtime_context}
+    assert runtime_context == {"shell_run", "investigation_start"}
+
+
+def test_gateway_action_tools_expose_available_registry_tools() -> None:
+    resolved = {"slack": {"webhook_url": "https://hooks.slack.test/abc"}}
+    tools = gateway_action_tools(resolved)
+    names = {tool.name for tool in tools}
+
+    assert {"shell_run", "investigation_start", "slack_send_message"} <= names
+    slack = next(tool for tool in tools if tool.name == "slack_send_message")
+    assert slack.requires_approval is False
 
 
 def test_gateway_prompt_context_provider_reads_grounding() -> None:
@@ -66,6 +85,7 @@ def test_gateway_run_record_factory_records_token_usage() -> None:
 
 def test_gateway_tool_provider_returns_action_tools_and_resources() -> None:
     session = ReplSession()
+    session.resolved_integrations_cache = {"slack": {"webhook_url": "https://hooks.slack.test/abc"}}
     sink = MagicMock(spec=GatewayOutputSink)
     provider = GatewayToolProvider(
         session=session,
@@ -77,7 +97,9 @@ def test_gateway_tool_provider_returns_action_tools_and_resources() -> None:
     tools = provider.action_tools(confirm_fn=lambda _p: "yes", is_tty=False)
     resources = provider.tool_resources()
 
-    assert {tool.name for tool in tools} == {"shell_run", "investigation_start"}
+    names = {tool.name for tool in tools}
+    assert {"shell_run", "investigation_start", "slack_send_message"} <= names
+    assert all(not tool.requires_approval for tool in tools)
     assert GATEWAY_RESOURCE_KEY in resources
     assert isinstance(resources[GATEWAY_RESOURCE_KEY], GatewayToolContext)
 
@@ -116,9 +138,10 @@ def test_execute_shell_tool_records_response_text(mock_execute: MagicMock) -> No
     sink = MagicMock(spec=GatewayOutputSink)
     ctx = GatewayToolContext(session=session, sink=sink, chat_id="42")
 
-    ok = execute_shell_tool({"command": "pwd"}, ctx)
+    ok, output = execute_shell_tool({"command": "pwd"}, ctx)
 
     assert ok is True
+    assert output == "/tmp"
     assert session.history[-1]["response_text"] == "/tmp"
 
 

@@ -38,10 +38,14 @@ from integrations.llm_cli.failure_explain import is_context_length_overflow
 log = logging.getLogger(__name__)
 
 # Some hosted tool-calling models emit one tool call per assistant turn even when
-# parallel tool calls are enabled. Keep the tool-calling loop bounded, but allow
-# the shared AgentTool path to continue through a two-action compound request and
-# a final no-tool response.
-_MAX_TOOL_CALLING_ITERATIONS = 3
+# parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
+# enough headroom for a *data-dependent* compound request that must run
+# sequentially: each step waits for the previous tool's result before the next
+# call can be emitted (e.g. "look up the weather and then send it to Slack" =
+# shell_run -> observe temperature -> slack_send_message -> final no-tool reply).
+# Independent compound turns still fit in a single response; this ceiling exists
+# for the producer -> consumer chains plus a couple of intermediate steps.
+_MAX_TOOL_CALLING_ITERATIONS = 6
 _EXECUTED_HISTORY_TYPES = {
     "slash",
     "shell",
