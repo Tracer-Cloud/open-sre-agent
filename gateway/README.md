@@ -8,7 +8,7 @@ Standalone inbound messaging gateway for chat platforms. v1 ships Telegram DM te
 # Allow your Telegram user id (from @userinfobot)
 uv run opensre messaging allow -p telegram -u 123456789
 
-# Option A: run the gateway as a dedicated process
+# Run the gateway as a dedicated process
 uv run opensre gateway telegram
 ```
 
