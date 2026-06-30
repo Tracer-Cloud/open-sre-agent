@@ -294,6 +294,40 @@ RULES: tuple[PathRule, ...] = (
         ),
     ),
     PathRule(
+        "integrations/bitbucket/",
+        (
+            "tests/integrations/test_bitbucket.py",
+            "tests/tools/test_bitbucket_commits_tool.py",
+            "tests/tools/test_bitbucket_file_contents_tool.py",
+            "tests/tools/test_bitbucket_search_code_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/telegram/tools/",
+        ("tests/tools/test_telegram_send_message_tool.py",),
+    ),
+    PathRule(
+        "integrations/tracer/tools/",
+        (
+            "tests/tools/test_tracer_airflow_metrics_tool.py",
+            "tests/tools/test_tracer_batch_statistics_tool.py",
+            "tests/tools/test_tracer_error_logs_tool.py",
+            "tests/tools/test_tracer_failed_jobs_tool.py",
+            "tests/tools/test_tracer_failed_run_tool.py",
+            "tests/tools/test_tracer_failed_tools_tool.py",
+            "tests/tools/test_tracer_host_metrics_tool.py",
+            "tests/tools/test_tracer_run_tool.py",
+            "tests/tools/test_tracer_tasks_tool.py",
+        ),
+    ),
+    PathRule(
+        "integrations/twilio/",
+        (
+            "tests/integrations/test_twilio.py",
+            "tests/tools/test_twilio_notify_tool.py",
+        ),
+    ),
+    PathRule(
         "integrations/opsgenie/",
         (
             "tests/integrations/opsgenie/",

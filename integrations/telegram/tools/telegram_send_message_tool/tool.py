@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
+from integrations.telegram.tools.telegram_send_message_tool.constants import SOURCE
+from integrations.telegram.tools.telegram_send_message_tool.delivery import (
+    dispatch_message,
+    resolve_target,
+)
+from integrations.telegram.tools.telegram_send_message_tool.results import (
+    failed_result,
+    sent_result,
+)
+from integrations.telegram.tools.telegram_send_message_tool.validation import (
+    normalize_optional_text,
+    validate_message,
+)
 from tools.base import BaseTool
-from tools.telegram_send_message_tool.constants import SOURCE
-from tools.telegram_send_message_tool.delivery import dispatch_message, resolve_target
-from tools.telegram_send_message_tool.results import failed_result, sent_result
-from tools.telegram_send_message_tool.validation import normalize_optional_text, validate_message
 from tools.tool_decorator import tool
 
 

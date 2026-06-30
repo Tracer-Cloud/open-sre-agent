@@ -1,11 +1,11 @@
-"""Bitbucket Commits Tool."""
+"""Bitbucket File Contents Tool."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from integrations.bitbucket import list_commits
-from tools.bitbucket_search_code_tool import (
+from integrations.bitbucket import get_file_contents
+from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_available,
     _bb_creds,
     _resolve_config,
@@ -13,37 +13,37 @@ from tools.bitbucket_search_code_tool import (
 from tools.tool_decorator import tool
 
 
-def _list_bitbucket_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+def _get_bitbucket_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     bb = sources["bitbucket"]
     return {
         "repo_slug": bb.get("repo_slug", bb.get("repo", "")),
-        "path": bb.get("path", ""),
-        "limit": 20,
+        "path": bb["path"],
+        "ref": bb.get("ref", ""),
         **_bb_creds(bb),
     }
 
 
-def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
+def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
     bb = sources.get("bitbucket", {})
-    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")))
+    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")) and bb.get("path"))
 
 
 @tool(
-    name="list_bitbucket_commits",
-    description="List recent commits for a Bitbucket repository, optionally filtered by file path.",
+    name="get_bitbucket_file_contents",
+    description="Retrieve the contents of a file from a Bitbucket repository at a specific revision.",
     source="bitbucket",
     surfaces=("investigation", "chat"),
     use_cases=[
-        "Checking whether a recent change could explain a failure",
-        "Reviewing commit history for a specific file or directory",
+        "Reading configuration files that may explain a failure",
+        "Comparing file contents between revisions during investigation",
     ],
-    requires=["repo_slug"],
+    requires=["repo_slug", "path"],
     input_schema={
         "type": "object",
         "properties": {
             "repo_slug": {"type": "string"},
-            "path": {"type": "string", "default": ""},
-            "limit": {"type": "integer", "default": 20},
+            "path": {"type": "string"},
+            "ref": {"type": "string", "default": ""},
             "workspace": {"type": "string"},
             "username": {"type": "string"},
             "app_password": {"type": "string"},
@@ -51,24 +51,24 @@ def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
             "max_results": {"type": "integer"},
             "integration_id": {"type": "string"},
         },
-        "required": ["repo_slug"],
+        "required": ["repo_slug", "path"],
     },
-    is_available=_list_bitbucket_commits_available,
-    extract_params=_list_bitbucket_commits_extract_params,
+    is_available=_get_bitbucket_file_contents_available,
+    extract_params=_get_bitbucket_file_contents_extract_params,
 )
-def list_bitbucket_commits(
+def get_bitbucket_file_contents(
     repo_slug: str,
+    path: str,
     workspace: str | None = None,
     username: str | None = None,
     app_password: str | None = None,
     base_url: str | None = None,
     max_results: int | None = None,
     integration_id: str | None = None,
-    path: str = "",
-    limit: int = 20,
+    ref: str = "",
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Fetch recent commits from a Bitbucket repository."""
+    """Fetch file contents from a Bitbucket repository."""
     config = _resolve_config(
         workspace,
         username,
@@ -82,6 +82,6 @@ def list_bitbucket_commits(
             "source": "bitbucket",
             "available": False,
             "error": "Bitbucket integration is not configured.",
-            "commits": [],
+            "file": {},
         }
-    return list_commits(config, repo_slug=repo_slug, path=path, limit=limit)
+    return get_file_contents(config, repo_slug=repo_slug, path=path, ref=ref)

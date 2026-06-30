@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from tools.telegram_send_message_tool.constants import SOURCE
-from tools.telegram_send_message_tool.models import TelegramDeliveryTarget
+from integrations.telegram.tools.telegram_send_message_tool.constants import SOURCE
+from integrations.telegram.tools.telegram_send_message_tool.models import TelegramDeliveryTarget
 
 
 def failed_result(

@@ -1,11 +1,11 @@
-"""Bitbucket File Contents Tool."""
+"""Bitbucket Commits Tool."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from integrations.bitbucket import get_file_contents
-from tools.bitbucket_search_code_tool import (
+from integrations.bitbucket import list_commits
+from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_available,
     _bb_creds,
     _resolve_config,
@@ -13,37 +13,37 @@ from tools.bitbucket_search_code_tool import (
 from tools.tool_decorator import tool
 
 
-def _get_bitbucket_file_contents_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
+def _list_bitbucket_commits_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     bb = sources["bitbucket"]
     return {
         "repo_slug": bb.get("repo_slug", bb.get("repo", "")),
-        "path": bb["path"],
-        "ref": bb.get("ref", ""),
+        "path": bb.get("path", ""),
+        "limit": 20,
         **_bb_creds(bb),
     }
 
 
-def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
+def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     bb = sources.get("bitbucket", {})
-    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")) and bb.get("path"))
+    return bool(_bb_available(sources) and bb.get("repo_slug", bb.get("repo")))
 
 
 @tool(
-    name="get_bitbucket_file_contents",
-    description="Retrieve the contents of a file from a Bitbucket repository at a specific revision.",
+    name="list_bitbucket_commits",
+    description="List recent commits for a Bitbucket repository, optionally filtered by file path.",
     source="bitbucket",
     surfaces=("investigation", "chat"),
     use_cases=[
-        "Reading configuration files that may explain a failure",
-        "Comparing file contents between revisions during investigation",
+        "Checking whether a recent change could explain a failure",
+        "Reviewing commit history for a specific file or directory",
     ],
-    requires=["repo_slug", "path"],
+    requires=["repo_slug"],
     input_schema={
         "type": "object",
         "properties": {
             "repo_slug": {"type": "string"},
-            "path": {"type": "string"},
-            "ref": {"type": "string", "default": ""},
+            "path": {"type": "string", "default": ""},
+            "limit": {"type": "integer", "default": 20},
             "workspace": {"type": "string"},
             "username": {"type": "string"},
             "app_password": {"type": "string"},
@@ -51,24 +51,24 @@ def _get_bitbucket_file_contents_available(sources: dict[str, dict]) -> bool:
             "max_results": {"type": "integer"},
             "integration_id": {"type": "string"},
         },
-        "required": ["repo_slug", "path"],
+        "required": ["repo_slug"],
     },
-    is_available=_get_bitbucket_file_contents_available,
-    extract_params=_get_bitbucket_file_contents_extract_params,
+    is_available=_list_bitbucket_commits_available,
+    extract_params=_list_bitbucket_commits_extract_params,
 )
-def get_bitbucket_file_contents(
+def list_bitbucket_commits(
     repo_slug: str,
-    path: str,
     workspace: str | None = None,
     username: str | None = None,
     app_password: str | None = None,
     base_url: str | None = None,
     max_results: int | None = None,
     integration_id: str | None = None,
-    ref: str = "",
+    path: str = "",
+    limit: int = 20,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Fetch file contents from a Bitbucket repository."""
+    """Fetch recent commits from a Bitbucket repository."""
     config = _resolve_config(
         workspace,
         username,
@@ -82,6 +82,6 @@ def get_bitbucket_file_contents(
             "source": "bitbucket",
             "available": False,
             "error": "Bitbucket integration is not configured.",
-            "file": {},
+            "commits": [],
         }
-    return get_file_contents(config, repo_slug=repo_slug, path=path, ref=ref)
+    return list_commits(config, repo_slug=repo_slug, path=path, limit=limit)

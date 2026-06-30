@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from integrations.azure.tools.azure_monitor_logs_tool import query_azure_monitor_logs
+from integrations.bitbucket.tools.bitbucket_search_code_tool import _resolve_config
 from integrations.openobserve.tools.openobserve_logs_tool import query_openobserve_logs
 from integrations.opensearch.tools.opensearch_analytics_tool import query_opensearch_analytics
 from integrations.snowflake.tools.snowflake_query_history_tool import query_snowflake_history
-from tools.bitbucket_search_code_tool import _resolve_config
 
 
 class _MockResponse:

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from integrations.telegram.tools.telegram_send_message_tool.models import TelegramDeliveryTarget
 from platform.notifications.telegram_delivery import send_telegram_report
-from tools.telegram_send_message_tool.models import TelegramDeliveryTarget
 from tools.watch_dog.alarms import load_credentials_from_env
 
 
