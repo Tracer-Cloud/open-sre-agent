@@ -10,15 +10,21 @@ from core.agent_harness.headless_agent import dispatch_message_to_headless_agent
 from core.agent_harness.session import ReplSession
 from core.agent_harness.turn_results import ShellTurnResult
 from core.execution import ToolExecutionHooks
-from gateway.approvals.telegram import TelegramApprovalService
-from gateway.core.error_handling import (
+from gateway.approvals.telegram import TelegramApprovalService, inject_gateway_chat_context
+from gateway.agent.error_handling import (
     EMPTY_RESPONSE_MESSAGE,
     USER_ERROR_MESSAGE,
     failed_turn_result,
     reply_text_for_unanswered_turn,
     report_turn_failure,
 )
-from gateway.core.gateway_output_sink import GatewayOutputSink
+from gateway.agent.gateway_agent_adapters import (
+    GatewayErrorReporter,
+    GatewayPromptContextProvider,
+    GatewayRunRecordFactory,
+    GatewayToolProvider,
+)
+from gateway.agent.gateway_output_sink import GatewayOutputSink
 
 
 def _gateway_reasoning_provider(logger: logging.Logger) -> StaticReasoningClientProvider:
@@ -45,6 +51,10 @@ def dispatch_gateway_msg_to_agent(
     """Run a full gateway turn and stream the answer through the provided sink."""
 
     hooks: ToolExecutionHooks = approval_service.hooks()
+    session.resolved_integrations_cache = inject_gateway_chat_context(
+        dict(session.resolved_integrations_cache or {}),
+        chat_id,
+    )
 
     try:
         result: ShellTurnResult = dispatch_message_to_headless_agent(
@@ -53,7 +63,16 @@ def dispatch_gateway_msg_to_agent(
             confirm_fn=lambda p: approval_service.wait_for_confirmation(chat_id=chat_id, prompt=p),
             is_tty=False,
             output=sink,
+            prompts=GatewayPromptContextProvider(session),
             reasoning=_gateway_reasoning_provider(logger),
+            tools=GatewayToolProvider(
+                session=session,
+                sink=sink,
+                chat_id=chat_id,
+                logger=logger,
+            ),
+            run_factory=GatewayRunRecordFactory(session),
+            error_reporter=GatewayErrorReporter(logger),
             gather_enabled=True,
             tool_hooks=hooks,
         )

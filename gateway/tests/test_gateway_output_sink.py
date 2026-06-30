@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from gateway.core.gateway_output_sink import GatewayOutputSink
-from gateway.core.telegram_poller.client import TelegramBotClient
+from gateway.agent.gateway_output_sink import GatewayOutputSink
+from gateway.polling.telegram_poller.client import TelegramBotClient
 
 
 def test_stream_throttles_edits() -> None:

@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 
 from gateway.config.get_gateway_settings import TelegramInboundMessage
-from gateway.core.telegram_poller.parse_telegram_update import parse_update
+from gateway.polling.telegram_poller.parse_telegram_update import parse_update
 
 logger = logging.getLogger(__name__)
 

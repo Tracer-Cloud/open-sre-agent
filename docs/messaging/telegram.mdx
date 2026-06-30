@@ -215,7 +215,13 @@ uv run opensre gateway telegram
 
 Send a DM to your bot. Use `/new` to start a fresh session; `/help` for built-in commands.
 
-External or mutating tool calls (for example `telegram_send_message`) prompt for **Approve / Deny** inline buttons in Telegram before running.
+The gateway uses the same headless agent harness as the interactive shell, with Telegram-specific wiring:
+
+- **Prompt grounding** — CLI reference, AGENTS.md, integration list, and investigation flow context
+- **Read-only evidence tools** — live integration queries (GitHub, logs, metrics, etc.) via the gather pass when integrations are configured
+- **Action tools** — `shell_run` and `investigation_start`, approval-gated over Telegram before execution
+
+External or mutating tool calls (for example `telegram_send_message`, shell commands, and investigations) prompt for **Approve / Deny** inline buttons in Telegram before running.
 
 Investigation delivery, watchdog alerts, and cron still use the outbound-only paths documented above — they do not require the gateway process.
 

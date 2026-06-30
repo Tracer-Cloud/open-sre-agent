@@ -67,7 +67,7 @@ def test_surfaces_cli_routes_to_cli_tests() -> None:
 
 def test_gateway_routes_to_package_local_tests() -> None:
     rules = _rules_module()
-    escalate, targets, _ = rules.classify(["gateway/core/turn_executor.py"])
+    escalate, targets, _ = rules.classify(["gateway/agent/dispatch_gateway_msg_to_agent.py"])
     assert not escalate
     assert targets == ["gateway/tests/"]
 

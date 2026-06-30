@@ -21,7 +21,7 @@ class GatewayAgentTurnError(Exception):
 def turn_tags(*, outcome: str) -> dict[str, str]:
     return {
         "surface": "gateway",
-        "component": "gateway.core.error_handling",
+        "component": "gateway.agent.error_handling",
         "gateway.turn_outcome": outcome,
     }
 

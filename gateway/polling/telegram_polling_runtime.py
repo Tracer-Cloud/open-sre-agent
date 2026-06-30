@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from gateway.approvals.store import ApprovalStore
 from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings
-from gateway.core.telegram_poller.client import TelegramBotClient
+from gateway.polling.telegram_poller.client import TelegramBotClient
 from gateway.storage import SessionBindingStore, SessionResolver, connect_gateway_db
 
 logger = logging.getLogger(__name__)

@@ -4,14 +4,14 @@ import logging
 from unittest.mock import MagicMock, patch
 
 from gateway.config.get_gateway_settings import GatewaySettings
-from gateway.core.telegram_gateway_background import start_telegram_gateway_background
-from gateway.core.telegram_polling_runtime import (
+from gateway.polling.telegram_gateway_background import start_telegram_gateway_background
+from gateway.polling.telegram_polling_runtime import (
     initialize_telegram_polling_runtime,
     shutdown_telegram_polling_runtime,
 )
 
 
-@patch("gateway.core.telegram_gateway_background.TelegramPoller")
+@patch("gateway.polling.telegram_gateway_background.TelegramPoller")
 def test_start_starts_poll_thread(mock_poller_cls: MagicMock) -> None:
     mock_poller_cls.return_value.poll_once.return_value = []
     logger = logging.getLogger("gateway.test")

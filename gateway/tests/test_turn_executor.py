@@ -10,7 +10,7 @@ from core.agent_harness.session.integrations_cache import (
 )
 from core.agent_harness.turn_results import ShellTurnResult, ToolCallingTurnResult
 from gateway.approvals.telegram import TelegramApprovalService
-from gateway.core.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
+from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
 
 
 def test_has_resolved_integrations_ignores_gateway_metadata() -> None:
@@ -33,8 +33,8 @@ def test_merge_resolved_integrations_preserves_gateway_metadata() -> None:
     assert merged["github"]["token"] == "x"
 
 
-@patch("gateway.core.error_handling.report_exception")
-@patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
+@patch("gateway.agent.error_handling.report_exception")
+@patch("gateway.agent.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
 def test_dispatch_gateway_msg_to_agent_reports_exception_and_renders_error(
     mock_turn: MagicMock,
     mock_report: MagicMock,
@@ -61,8 +61,8 @@ def test_dispatch_gateway_msg_to_agent_reports_exception_and_renders_error(
     assert result.final_intent == "gateway_error"
 
 
-@patch("gateway.core.error_handling.report_exception")
-@patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
+@patch("gateway.agent.error_handling.report_exception")
+@patch("gateway.agent.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
 def test_dispatch_gateway_msg_to_agent_reports_empty_response(
     mock_turn: MagicMock,
     mock_report: MagicMock,
@@ -92,8 +92,8 @@ def test_dispatch_gateway_msg_to_agent_reports_empty_response(
     assert result.final_intent == "gather_and_answer"
 
 
-@patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
-@patch("gateway.core.dispatch_gateway_msg_to_agent._gateway_reasoning_provider")
+@patch("gateway.agent.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
+@patch("gateway.agent.dispatch_gateway_msg_to_agent._gateway_reasoning_provider")
 def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
     mock_reasoning: MagicMock,
     mock_turn: MagicMock,
@@ -105,6 +105,7 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
         llm_run=MagicMock(response_text="hello"),
     )
     session = MagicMock()
+    session.resolved_integrations_cache = {"github": {"token": "x"}}
     sink = MagicMock()
     approval = MagicMock(spec=TelegramApprovalService)
     approval.hooks.return_value = MagicMock()
@@ -121,6 +122,8 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
     )
 
     session.warm_resolved_integrations.assert_not_called()
+    assert session.resolved_integrations_cache["_gateway_chat_id"] == "42"
+    assert session.resolved_integrations_cache["github"] == {"token": "x"}
     kwargs = mock_turn.call_args.kwargs
     assert mock_turn.call_args.args == ("hi",)
     assert kwargs["session"] is session
@@ -129,10 +132,14 @@ def test_dispatch_gateway_msg_to_agent_passes_sink_hooks_and_reasoning(
     assert kwargs["reasoning"] is mock_reasoning.return_value
     assert kwargs["gather_enabled"] is True
     assert kwargs["tool_hooks"] is approval.hooks.return_value
+    assert kwargs["prompts"] is not None
+    assert kwargs["tools"] is not None
+    assert kwargs["run_factory"] is not None
+    assert kwargs["error_reporter"] is not None
     mock_reasoning.assert_called_once()
 
 
-@patch("gateway.core.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
+@patch("gateway.agent.dispatch_gateway_msg_to_agent.dispatch_message_to_headless_agent")
 def test_dispatch_gateway_msg_to_agent_finalizes_unanswered_action_response(
     mock_turn: MagicMock,
 ) -> None:

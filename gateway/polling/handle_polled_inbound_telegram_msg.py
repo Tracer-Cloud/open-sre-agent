@@ -8,13 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from gateway.approvals.telegram import TelegramApprovalService
 from gateway.config.get_gateway_settings import GatewaySettings, TelegramInboundMessage
-from gateway.core.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
-from gateway.core.enforce_inbound_telegram_message_security import (
+from gateway.agent.dispatch_gateway_msg_to_agent import dispatch_gateway_msg_to_agent
+from gateway.agent.gateway_output_sink import GatewayOutputSink
+from gateway.polling.telegram_poller.client import TelegramBotClient
+from gateway.session.enforce_inbound_telegram_message_security import (
     enforce_inbound_telegram_message_security,
 )
-from gateway.core.gateway_output_sink import GatewayOutputSink
-from gateway.core.resolve_or_rotate_session import resolve_or_rotate_session
-from gateway.core.telegram_poller.client import TelegramBotClient
+from gateway.session.resolve_or_rotate_session import resolve_or_rotate_session
 from gateway.storage import SessionResolver
 
 logger = logging.getLogger(__name__)

@@ -7,11 +7,11 @@ import logging
 import threading
 
 from gateway.config.get_gateway_settings import GatewaySettings
-from gateway.core.handle_polled_inbound_telegram_msg import (
+from gateway.polling.handle_polled_inbound_telegram_msg import (
     handle_polled_inbound_telegram_message,
 )
-from gateway.core.telegram_poller.poller import TelegramPoller
-from gateway.core.telegram_polling_runtime import (
+from gateway.polling.telegram_poller.poller import TelegramPoller
+from gateway.polling.telegram_polling_runtime import (
     InitializeTelegramPollingRuntime,
     ShutdownTelegramPollingRuntime,
     TelegramPollingRuntime,

@@ -20,12 +20,14 @@ DM your bot from Telegram.
 
 ## Architecture
 
-- `gateway/core/handle_polled_inbound_telegram_msg.py` — auth, callbacks, session, and agent dispatch for polled updates
+- `gateway/polling/handle_polled_inbound_telegram_msg.py` — auth, callbacks, session, and agent dispatch for polled updates
 - `gateway/storage/` — SQLite state (`db.py`) and session bindings from Telegram user id → `ReplSession` JSONL file
-- `gateway/core/dispatch_gateway_msg_to_agent.py` — runs the headless agent with Telegram output sink
-- `gateway/core/telegram_gateway_background.py` — long-poll daemon thread (REPL auto-start and dedicated process)
+- `gateway/agent/dispatch_gateway_msg_to_agent.py` — runs the headless agent with gateway harness adapters (prompt grounding, action tools, reasoning, approvals)
+- `gateway/agent/gateway_agent_adapters.py` — Telegram-specific harness port implementations
+- `gateway/agent/gateway_action_tools.py` — gateway-local `shell_run` and `investigation_start` action tools
+- `gateway/polling/telegram_gateway_background.py` — long-poll daemon thread (REPL auto-start and dedicated process)
 - `gateway/approvals/` — inline Approve/Deny for external/mutating tools
-- `gateway/core/gateway_output_sink.py` — typing + throttled outbound message streaming
+- `gateway/agent/gateway_output_sink.py` — typing + throttled outbound message streaming
 - `gateway/tests/` — package-local gateway regression tests
 
 State lives in `~/.opensre/gateway/state.db`. Conversation transcripts use the normal `~/.opensre/sessions/*.jsonl` store.

@@ -87,8 +87,10 @@ def run_repl(
     if initial_input is None:
         from gateway.config.configure_gateway_logging import configure_gateway_logging
         from gateway.config.get_gateway_settings import try_load_gateway_settings_for_startup
-        from gateway.core.telegram_gateway_background import start_telegram_gateway_background
-        from gateway.core.telegram_polling_runtime import (
+        from gateway.polling.telegram_gateway_background import (
+            start_telegram_gateway_background,
+        )
+        from gateway.polling.telegram_polling_runtime import (
             initialize_telegram_polling_runtime,
             shutdown_telegram_polling_runtime,
         )

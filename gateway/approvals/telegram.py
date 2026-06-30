@@ -13,7 +13,7 @@ from typing import Any
 from core.execution import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
 from gateway.approvals.store import ApprovalStore
 from gateway.config.get_gateway_settings import GatewaySettings
-from gateway.core.telegram_poller.client import TelegramBotClient
+from gateway.polling.telegram_poller.client import TelegramBotClient
 
 logger = logging.getLogger(__name__)
 

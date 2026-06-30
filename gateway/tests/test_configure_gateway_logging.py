@@ -37,7 +37,7 @@ def _make_record(*, name: str, level: int, message: str) -> logging.LogRecord:
 def test_gateway_formatter_shortens_package_logger_names() -> None:
     formatter = _GatewayLogFormatter(fmt="%(name)s | %(message)s")
     record = _make_record(
-        name="gateway.core.handle_polled_inbound_telegram_msg",
+        name="gateway.polling.handle_polled_inbound_telegram_msg",
         level=logging.INFO,
         message="turn complete",
     )
@@ -73,7 +73,7 @@ def test_co_located_gateway_logging_does_not_propagate_to_root(
 ) -> None:
     caplog.set_level(logging.WARNING)
     configure_gateway_logging(co_located=True)
-    logging.getLogger("gateway.core.telegram_poller.poller").warning(
+    logging.getLogger("gateway.polling.telegram_poller.poller").warning(
         "[telegram-gateway] getUpdates not ok: {}",
     )
     assert not any("getUpdates not ok" in record.message for record in caplog.records)
