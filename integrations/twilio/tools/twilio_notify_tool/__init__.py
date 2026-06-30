@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
-from platform.notifications.twilio_delivery import send_twilio_sms_report
+from integrations.twilio.delivery import send_twilio_sms_report
 
 
 class TwilioNotifyTool(BaseTool):

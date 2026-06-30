@@ -96,14 +96,17 @@ _SKIP_MODULE_NAMES = {
 }
 _TOOL_MODULES_ATTR = "TOOL_MODULES"
 _MAX_TOOL_SKILL_GUIDANCE_CHARS = 2400
-_SKILL_GUIDANCE_FILES = (
-    Path(__file__).resolve().parent.parent
-    / "integrations"
-    / "github"
-    / "tools"
-    / "workflow"
-    / "SKILL.md",
-)
+_TOOLS_PACKAGE_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _TOOLS_PACKAGE_DIR.parent
+
+
+def _skill_guidance_files() -> tuple[Path, ...]:
+    """Return explicit and package-local SKILL.md files attached at registry load."""
+
+    explicit = (_REPO_ROOT / "integrations" / "github" / "tools" / "workflow" / "SKILL.md",)
+    discovered = sorted(_TOOLS_PACKAGE_DIR.glob("python_execution_tool/skills/*/SKILL.md"))
+    return (*explicit, *discovered)
+
 
 # Extension point: callers outside ``tools.*`` can register additional
 # tool packages by calling :func:`register_external_tool_package`.
@@ -316,7 +319,9 @@ def _with_skill_guidance(tool: RegisteredTool, guidance: str) -> RegisteredTool:
 
 def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
     known_tool_names = frozenset(tools_by_name)
-    for skill_path in _SKILL_GUIDANCE_FILES:
+    guidance_by_tool: dict[str, list[str]] = {}
+
+    for skill_path in _skill_guidance_files():
         result = load_tool_skill_guidance(skill_path, known_tool_names=known_tool_names)
         for diagnostic in result.diagnostics:
             logger.warning(
@@ -328,12 +333,15 @@ def _apply_skill_guidance(tools_by_name: dict[str, RegisteredTool]) -> None:
         skill = result.skill
         if skill is None or skill.disable_model_invocation:
             continue
-        guidance = _truncate_skill_guidance(format_tool_skill_guidance(skill))
+        guidance = format_tool_skill_guidance(skill)
         for tool_name in skill.tool_names:
-            tool_def = tools_by_name.get(tool_name)
-            if tool_def is None:
+            if tool_name not in tools_by_name:
                 continue
-            tools_by_name[tool_name] = _with_skill_guidance(tool_def, guidance)
+            guidance_by_tool.setdefault(tool_name, []).append(guidance)
+
+    for tool_name, guidances in guidance_by_tool.items():
+        combined = _truncate_skill_guidance("\n\n".join(guidances))
+        tools_by_name[tool_name] = _with_skill_guidance(tools_by_name[tool_name], combined)
 
 
 @lru_cache(maxsize=1)

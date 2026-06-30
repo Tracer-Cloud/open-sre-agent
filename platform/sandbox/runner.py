@@ -17,12 +17,20 @@ from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 DEFAULT_TIMEOUT: int = 30
 MAX_TIMEOUT: int = 60
 _SANDBOX_TMP_ROOT = os.path.realpath(os.fspath(OPENSRE_TMP_DIR))
+_BASE_ENV_KEYS = (
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "PATH",
+    "PYTHONPATH",
+    "REQUESTS_CA_BUNDLE",
+    "SSL_CERT_FILE",
+    "TMPDIR",
+)
 
-# Preamble injected before user code: blocks network and restricts filesystem writes.
-_SANDBOX_PREAMBLE = textwrap.dedent(f"""\
+# Preamble injected before user code when network access is disabled.
+_NETWORK_BLOCK_PREAMBLE = textwrap.dedent("""\
     import socket as _socket_module
-    import builtins as _builtins_module
-    import os as _os_module
 
     class _BlockedSocket:
         def __init__(self, *args, **kwargs):
@@ -38,6 +46,12 @@ _SANDBOX_PREAMBLE = textwrap.dedent(f"""\
 
     _socket_module.create_connection = _blocked_create_connection
     _socket_module.getaddrinfo = _blocked_getaddrinfo
+""")
+
+# Preamble always injected before user code: restricts filesystem writes and subprocesses.
+_SANDBOX_PREAMBLE = textwrap.dedent(f"""\
+    import builtins as _builtins_module
+    import os as _os_module
 
     _ALLOWED_WRITE_ROOTS = ({_SANDBOX_TMP_ROOT!r},)
 
@@ -99,6 +113,8 @@ def run_python_sandbox(
     code: str,
     inputs: dict[str, Any] | None = None,
     timeout: int = DEFAULT_TIMEOUT,
+    env: dict[str, str] | None = None,
+    allow_network: bool = False,
 ) -> SandboxResult:
     """Run Python code in a sandboxed subprocess with timeout and access restrictions.
 
@@ -114,6 +130,8 @@ def run_python_sandbox(
             ``inputs`` variable.
         timeout: Maximum wall-clock time in seconds.  Capped at
             :data:`MAX_TIMEOUT`.
+        env: Optional approved environment variables to expose to the subprocess.
+        allow_network: If True, do not inject the network-blocking preamble.
 
     Returns:
         :class:`SandboxResult` carrying captured stdout/stderr, exit code, and
@@ -129,7 +147,8 @@ def run_python_sandbox(
             f"import json as _json_module; inputs = _json_module.loads({inputs_json!r})\n"
         )
 
-    full_code = _SANDBOX_PREAMBLE + inputs_injection + code
+    network_preamble = "" if allow_network else _NETWORK_BLOCK_PREAMBLE
+    full_code = network_preamble + _SANDBOX_PREAMBLE + inputs_injection + code
 
     tmp_path: str | None = None
     try:
@@ -150,6 +169,7 @@ def run_python_sandbox(
             encoding="utf-8",
             errors="replace",
             timeout=effective_timeout,
+            env=_sandbox_env(env),
         )
         return SandboxResult(
             code=code,
@@ -183,3 +203,15 @@ def run_python_sandbox(
         if tmp_path is not None:
             with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
+
+
+def _sandbox_env(extra_env: dict[str, str] | None) -> dict[str, str]:
+    """Build a narrow subprocess environment plus explicitly approved values."""
+    sandbox_env: dict[str, str] = {}
+    for key in _BASE_ENV_KEYS:
+        value = os.environ.get(key)
+        if value:
+            sandbox_env[key] = value
+    if extra_env:
+        sandbox_env.update({key: str(value) for key, value in extra_env.items() if value})
+    return sandbox_env

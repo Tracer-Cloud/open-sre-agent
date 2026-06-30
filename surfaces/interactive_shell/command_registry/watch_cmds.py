@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
+from integrations.telegram.alarms import AlarmDispatcher
+from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.errors import OpenSREError
-from platform.notifications.telegram_alarms import AlarmDispatcher
-from platform.notifications.telegram_credentials import load_credentials_from_env
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )

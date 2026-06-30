@@ -6,8 +6,8 @@ a string key (e.g. a threshold name or incident fingerprint) and suppresses
 repeat deliveries for the same key within the cooldown window.
 
 Credential resolution lives in
-:mod:`platform.notifications.telegram_credentials`; raw transport in
-:mod:`platform.notifications.telegram_delivery`. This module owns only the
+:mod:`integrations.telegram.credentials`; raw transport in
+:mod:`integrations.telegram.delivery`. This module owns only the
 throttling + dispatch policy.
 """
 
@@ -17,12 +17,12 @@ import logging
 import threading
 import time
 
-from platform.common.truncation import truncate
-from platform.notifications.telegram_credentials import TelegramCredentials
-from platform.notifications.telegram_delivery import (
+from integrations.telegram.credentials import TelegramCredentials
+from integrations.telegram.delivery import (
     post_telegram_message,
     truncate_for_telegram_html,
 )
+from platform.common.truncation import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -71,12 +71,28 @@ class AlarmDispatcher:
         else:
             text = truncate(message, _TELEGRAM_MESSAGE_LIMIT, suffix="…")
 
-        ok, error, _ = post_telegram_message(
-            chat_id=self._creds.chat_id,
-            text=text,
-            bot_token=self._creds.bot_token,
-            parse_mode=self._parse_mode,
-        )
+        # The cooldown slot was reserved before this network call (see lock
+        # block above). If ``post_telegram_message`` returns ``ok=False`` OR
+        # raises, the slot stays armed for the cooldown window and the next
+        # caller for the same key is silently suppressed — emit the same
+        # warning in both paths so operators see the original failure
+        # instead of only the suppression debug line.
+        try:
+            ok, error, _ = post_telegram_message(
+                chat_id=self._creds.chat_id,
+                text=text,
+                bot_token=self._creds.bot_token,
+                parse_mode=self._parse_mode,
+            )
+        except Exception as exc:
+            logger.warning(
+                "alarm delivery raised and cooldown remains armed: name=%s error=%s",
+                threshold_name,
+                exc,
+                exc_info=True,
+            )
+            return False
+
         if ok:
             return True
 

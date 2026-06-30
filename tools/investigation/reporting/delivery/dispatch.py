@@ -24,7 +24,7 @@ def dispatch_report(
 
     Returns the Slack blocks sent, including the investigation action blocks.
     """
-    from platform.notifications.slack_delivery import build_action_blocks
+    from integrations.slack.delivery import build_action_blocks
 
     all_blocks = messages.slack_blocks + build_action_blocks(
         investigation_url or "", investigation_id
@@ -56,7 +56,7 @@ def _dispatch_discord(
         logger.debug("[publish] discord delivery: no discord integration configured")
         return
 
-    from platform.notifications.discord_delivery import send_discord_report
+    from integrations.discord.delivery import send_discord_report
 
     discord_ctx = state.get("discord_context") or {}
     bot_token = discord_ctx.get("bot_token") or discord_creds.get("bot_token", "")
@@ -100,7 +100,7 @@ def _dispatch_telegram(
         logger.debug("[publish] telegram delivery: no telegram integration configured")
         return
 
-    from platform.notifications.telegram_delivery import send_telegram_report
+    from integrations.telegram.delivery import send_telegram_report
 
     telegram_ctx = state.get("telegram_context") or {}
     bot_token = telegram_ctx.get("bot_token") or telegram_creds.get("bot_token", "")
@@ -142,7 +142,7 @@ def _dispatch_whatsapp(
         logger.debug("[publish] whatsapp delivery: no whatsapp integration configured")
         return
 
-    from platform.notifications.whatsapp_delivery import send_whatsapp_report
+    from integrations.whatsapp.delivery import send_whatsapp_report
 
     whatsapp_ctx: dict[str, Any] = state.get("whatsapp_context") or {}
     account_sid = whatsapp_ctx.get("account_sid") or whatsapp_creds.get("account_sid", "")
@@ -198,7 +198,7 @@ def _dispatch_twilio_sms(
     if not sms_cfg.get("enabled"):
         return
 
-    from platform.notifications.twilio_delivery import send_twilio_sms_report
+    from integrations.twilio.delivery import send_twilio_sms_report
 
     twilio_sms_ctx: dict[str, Any] = state.get("twilio_sms_context") or {}
     sms_to = twilio_sms_ctx.get("to") or sms_cfg.get("default_to") or ""
@@ -259,7 +259,7 @@ def _dispatch_openclaw(
         logger.debug("[publish] openclaw delivery: no openclaw integration configured")
         return
 
-    from platform.notifications.openclaw_delivery import send_openclaw_report
+    from integrations.openclaw.delivery import send_openclaw_report
 
     oc_posted, oc_error = send_openclaw_report(state, slack_message, openclaw_creds)
     logger.debug("[publish] openclaw delivery: posted=%s error=%s", oc_posted, oc_error)

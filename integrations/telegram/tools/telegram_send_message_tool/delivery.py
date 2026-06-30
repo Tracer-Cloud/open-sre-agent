@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from integrations.telegram.credentials import load_credentials_from_env
+from integrations.telegram.delivery import send_telegram_report
 from integrations.telegram.tools.telegram_send_message_tool.models import TelegramDeliveryTarget
-from platform.notifications.telegram_credentials import load_credentials_from_env
-from platform.notifications.telegram_delivery import send_telegram_report
 
 
 def resolve_target(

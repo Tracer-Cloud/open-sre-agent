@@ -15,7 +15,7 @@ def deliver_slack_report(
     blocks: list[dict],
 ) -> None:
     """Deliver a Slack report and preserve the threaded fail-closed behavior."""
-    from platform.notifications.slack_delivery import send_slack_report, swap_reaction
+    from integrations.slack.delivery import send_slack_report, swap_reaction
 
     slack_ctx = state.get("slack_context", {}) or {}
     thread_ts = slack_ctx.get("thread_ts") or slack_ctx.get("ts")

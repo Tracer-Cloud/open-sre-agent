@@ -799,9 +799,9 @@ def _check_memory_health() -> DeepHealthCheck:
 def _make_id(alert_name: str) -> str:
     """Build a unique investigation id.
 
-    The id keeps its sortable ``YYYYMMDD_HHMMSS_<slug>`` prefix (so ``GET
+    The id keeps its sortable ``YYYYMMDD_HHMMSS-<suffix>_<slug>`` prefix (so ``GET
     /investigations`` can list newest-first by filename and ``_id_to_iso`` can
-    recover the created-at timestamp) and appends 8 hex chars of randomness so
+    recover the created-at timestamp) and injects 8 hex chars of randomness so
     two investigations for the same alert name within the same second cannot
     collide. Without the suffix, a re-fire from the Vercel poller (or two
     concurrent ``/investigate`` calls) produced an identical id and
@@ -810,11 +810,11 @@ def _make_id(alert_name: str) -> str:
     ts = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
     slug = _slugify(alert_name) or "investigation"
     suffix = uuid.uuid4().hex[:8]
-    return f"{ts}_{slug}_{suffix}"
+    return f"{ts}-{suffix}_{slug}"
 
 
 def _id_to_iso(inv_id: str) -> str:
-    """Best-effort parse of ``YYYYMMDD_HHMMSS_slug[_suffix]`` into ISO 8601."""
+    """Best-effort parse of ``YYYYMMDD_HHMMSS[-suffix]_slug`` into ISO 8601."""
     try:
         date_part = inv_id[:15]  # YYYYMMDD_HHMMSS
         dt = datetime.strptime(date_part, "%Y%m%d_%H%M%S").replace(tzinfo=UTC)

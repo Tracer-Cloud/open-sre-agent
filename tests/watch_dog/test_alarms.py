@@ -1,4 +1,4 @@
-"""Tests for tools/watch_dog/alarms.py."""
+"""Tests for platform/notifications/telegram_credentials and telegram_alarms."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from platform.common.errors import OpenSREError
-from platform.notifications.telegram_alarms import AlarmDispatcher
-from platform.notifications.telegram_credentials import (
+from integrations.telegram.alarms import AlarmDispatcher
+from integrations.telegram.credentials import (
     TelegramCredentials,
     load_credentials_from_env,
 )
+from platform.common.errors import OpenSREError
 
 
 def _stub_telegram(
@@ -40,7 +40,7 @@ def _stub_telegram(
         return ok, error, "1" if ok else ""
 
     monkeypatch.setattr(
-        "platform.notifications.telegram_alarms.post_telegram_message",
+        "integrations.telegram.alarms.post_telegram_message",
         _fake_post,
     )
     return calls

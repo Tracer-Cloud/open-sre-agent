@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.agent_harness.session.background import BackgroundInvestigationRecord
-from platform.notifications.smtp_delivery import format_background_rca_email, send_smtp_report
+from integrations.smtp.delivery import format_background_rca_email, send_smtp_report
 
 
 def deliver_background_notifications(

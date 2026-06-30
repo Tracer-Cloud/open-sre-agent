@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from platform.notifications import ingest_delivery
+from platform.notifications import ingest_delivery as ingest_delivery
 
 
 @pytest.fixture

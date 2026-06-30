@@ -24,8 +24,8 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import ReplSession
+from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
-from platform.notifications.telegram_credentials import TelegramCredentials
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from tools.fleet_monitoring.probe import ProcessSnapshot
 
